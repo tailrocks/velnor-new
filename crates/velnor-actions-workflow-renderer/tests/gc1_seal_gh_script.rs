@@ -5,6 +5,7 @@ pub(super) const GH: &str = r#"#!/bin/sh
 d="${FAKE_GH_DIR:?}"
 printf '%s\n' "$*" >> "$d/invocations"
 [ -n "${GH_TOKEN-}" ] || : > "$d/token-missing"
+[ -n "${FAKE_GH_FORCE_PAYLOAD_MARKER-}" ] && : > "$d/supervisor-payload-leaked"
 env | while IFS= read -r entry; do
   name=${entry%%=*}
   case "$name" in

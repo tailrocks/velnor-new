@@ -72,16 +72,22 @@ fn shell_step(name: &str, argv: &[&str]) -> Result<Step, Box<dyn Error>> {
 fn gc1_t41_exec_scrubs_credentials_and_keeps_controls() -> Result<(), Box<dyn Error>> {
     let credential_names =
         velnor_actions_workflow_renderer::toolchain_env::CREDENTIAL_UNSET_VARS.join(" ");
-    let script = "for key in $VELNOR_TEST_CHECK_VARS; do if printenv \"$key\" >/dev/null; then exit 21; fi; done; [ \"$VELNOR_TEST_CONTROL\" = control-value ] && printf '%s' \"quoted value\"";
+    let script = "for key in $VELNOR_TEST_CHECK_VARS; do if printenv \"$key\" >/dev/null; then exit 21; fi; done; [ \"$VELNOR_TEST_CONTROL\" = control-value ] && printf '%s' \"$TOKEN\"";
     for (name, argv) in [
         ("Run direct quoted script", vec!["sh", "-c", script]),
         ("Run quoted script", vec!["exec", "sh", "-c", script]),
     ] {
         let yaml = render(shell_step(name, &argv)?)?;
         let run = rendered_run(&yaml, name)?;
-        let (_, output) =
-            execute_rendered_run(&run, &[("VELNOR_TEST_CHECK_VARS", &credential_names)])?;
-        if output != b"quoted value" {
+        let value = "literal $inner; * ' \" value";
+        let (_, output) = execute_rendered_run(
+            &run,
+            &[
+                ("VELNOR_TEST_CHECK_VARS", &credential_names),
+                ("TOKEN", value),
+            ],
+        )?;
+        if output != value.as_bytes() {
             return Err(fail(&format!(
                 "rendered run {run:?} produced stdout {:?}",
                 String::from_utf8_lossy(&output)
@@ -123,6 +129,36 @@ fn gc1_t41_exec_scrubs_credentials_and_keeps_controls() -> Result<(), Box<dyn Er
     if !error.to_string().contains("token_in_run") {
         return Err(fail(&format!(
             "plain exec token argument returned unexpected error:{error}"
+        )));
+    }
+    Ok(())
+}
+
+#[test]
+fn gc1_t41_direct_script_argument_preserves_apostrophe_bytes() -> Result<(), Box<dyn Error>> {
+    assert_script_argument_bytes("Run direct script", &["sh", "-c"], b"a'b")
+}
+
+#[test]
+fn gc1_t41_exec_script_argument_preserves_apostrophe_bytes() -> Result<(), Box<dyn Error>> {
+    assert_script_argument_bytes("Run exec script", &["exec", "sh", "-c"], b"a'b")
+}
+
+fn assert_script_argument_bytes(
+    name: &str,
+    argv_prefix: &[&str],
+    expected: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    let mut argv = argv_prefix.to_vec();
+    argv.push("printf \"%s\" \"a'b\"");
+    let yaml = render(shell_step(name, &argv)?)?;
+    let run = rendered_run(&yaml, name)?;
+    let (_, output) = execute_rendered_run(&run, &[])?;
+    if output != expected {
+        return Err(fail(&format!(
+            "rendered script {name:?} produced stdout {:?}, wanted {:?}",
+            String::from_utf8_lossy(&output),
+            String::from_utf8_lossy(expected)
         )));
     }
     Ok(())

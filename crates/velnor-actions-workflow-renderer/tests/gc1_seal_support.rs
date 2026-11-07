@@ -103,6 +103,12 @@ impl Gh {
         Ok(())
     }
 
+    pub(crate) fn relocate(&mut self, destination: &Path) -> Result<(), Box<dyn Error>> {
+        std::fs::rename(&self.dir, destination)?;
+        destination.clone_into(&mut self.dir);
+        Ok(())
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn fail_keys(&self, keys: &[&str]) -> Result<(), Box<dyn Error>> {
         std::fs::write(self.dir.join("fail-keys"), format!("{}\n", keys.join("\n")))?;
@@ -267,6 +273,15 @@ pub(crate) fn key(compat: char, snapshot: char, payload: char) -> Result<String,
 
 pub(crate) type ShellScriptWithEnv = (String, Vec<(String, String)>);
 
+pub(crate) fn reject_gh_dir_override(extra: &[(&str, &str)]) -> Result<(), Box<dyn Error>> {
+    if extra.iter().any(|(key, _)| *key == "FAKE_GH_DIR") {
+        return Err(fail(
+            "selector fixture cannot override its fake GH directory",
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn script_and_env_of(step: &Step) -> Result<ShellScriptWithEnv, Box<dyn Error>> {
     match &step.kind {
         StepKind::Shell { run, env } => {
@@ -338,6 +353,7 @@ pub(crate) fn run_select(
     root: &str,
     extra: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
+    reject_gh_dir_override(extra)?;
     clear_selector_markers(gh)?;
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),

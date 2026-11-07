@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-use std::thread;
 use std::time::Duration;
 
+use super::call_helpers::{spawn_fifo_reader, start_status_fifo_writer};
 use super::{RunningSelector, wait_until};
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_clock::{ReleaseMarker, SupervisorClock};
 use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 use crate::gc1_seal_units::{expect, expect_flag, produce_flag, selected_unit, unit_key};
 
@@ -54,6 +52,7 @@ fn run_aggregate_status_case(label: &str, advance: u64) -> Result<(), Box<dyn Er
         .join("group-log")
         .to_string_lossy()
         .into_owned();
+    let verify_release = ReleaseMarker::new(gate.clone());
     let mut selector = RunningSelector::new(
         crate::gc1_seal_units::spawn_select_units(
             &scene,
@@ -73,17 +72,18 @@ fn run_aggregate_status_case(label: &str, advance: u64) -> Result<(), Box<dyn Er
         )?,
         &gh,
     );
+    let mut verify_release = verify_release;
     wait_until(|| started.exists(), Duration::from_secs(10))?;
     let state_dir = scene.runner.join("velnor/state-select");
     hold_first_status_until_processed(&clock, &completed, &state_dir)?;
     let second_barrier = format!("second-{label}");
-    clock.block(&second_barrier)?;
+    let mut second_release = clock.block_guarded(&second_barrier)?;
     clock.wait_for_block(&second_barrier, Duration::from_secs(10))?;
-    fs::write(&gate, "release\n")?;
+    verify_release.release()?;
     let second_status = state_dir.join("status-u1");
     wait_until(|| second_status.exists(), Duration::from_secs(10))?;
     clock.advance(&second_barrier, advance)?;
-    clock.release_block(&second_barrier)?;
+    second_release.release()?;
     clock.wait_for_advance(&second_barrier, Duration::from_secs(10))?;
     wait_for_success(&mut selector)?;
     super::aggregate_cleanup::assert_groups_reaped(&group_log)?;
@@ -97,7 +97,6 @@ fn wait_for_success(selector: &mut RunningSelector) -> Result<(), Box<dyn Error>
     }
     Ok(())
 }
-
 fn assert_aggregate_outcome(
     scene: &Scene,
     completed: &str,
@@ -140,27 +139,25 @@ fn aggregate_expiry_after_status_read_rejects_late_acceptance() -> Result<(), Bo
     wait_until(|| started.exists(), Duration::from_secs(10))?;
     hold_first_status_until_processed(&case.clock, &case.completed, &state_dir)?;
     let read_barrier = "status-read";
-    case.clock.block(read_barrier)?;
+    let mut read_release = case.clock.block_guarded(read_barrier)?;
     case.clock
         .wait_for_block(read_barrier, Duration::from_secs(10))?;
-    fs::write(&case.gate, "release\n")?;
+    case.verify_release.release()?;
     let status_path = state_dir.join("status-u1");
     wait_until(|| status_path.exists(), Duration::from_secs(10))?;
-    let barrier = start_status_fifo_writer(status_path, &case.gh_dir)?;
-    case.clock.release_block(read_barrier)?;
-    wait_until(|| barrier.opened.exists(), Duration::from_secs(10))?;
+    let mut barrier = start_status_fifo_writer(&status_path, &case.gh_dir)?;
+    barrier.allow_open()?;
+    read_release.release()?;
+    wait_until(|| barrier.opened().exists(), Duration::from_secs(10))?;
     case.clock.advance(read_barrier, 6)?;
-    fs::write(&barrier.release, "release\n")?;
+    barrier.release_and_wait()?;
     case.clock
         .wait_for_advance(read_barrier, Duration::from_secs(10))?;
-    barrier
-        .writer
-        .join()
-        .map_err(|_| fail("status-read barrier writer panicked"))??;
     let status = case.selector.wait(Duration::from_secs(10))?;
     if !status.success() {
         return Err(fail("aggregate expiry failed the selector step"));
     }
+    case.verify_release.release()?;
     super::aggregate_cleanup::assert_groups_reaped(&case.group_log)?;
     expect(
         &selected_unit(&case.scene, StateUnit::Union, ".")?,
@@ -180,20 +177,90 @@ fn aggregate_expiry_after_status_read_rejects_late_acceptance() -> Result<(), Bo
     case.scene.finish()
 }
 
-struct AggregateStatusReadCase {
-    scene: Scene,
-    clock: SupervisorClock,
-    selector: RunningSelector,
-    completed: String,
-    gate: PathBuf,
-    gh_dir: PathBuf,
-    group_log: String,
+#[test]
+#[cfg(target_os = "linux")]
+fn status_fifo_custody_covers_preopen_cancel_postopen_cancel_and_delivery()
+-> Result<(), Box<dyn Error>> {
+    let scene = Scene::new("status-fifo-custody", crate::gc1_t53::scripts()?)?;
+    let directory = scene.scratch.join("fifo-custody");
+    fs::create_dir_all(&directory)?;
+
+    let pre = start_status_fifo_writer(&directory.join("pre-status"), &directory)?;
+    let mut pre_cleanup = pre.external_cleanup();
+    super::wait_until(|| pre.started().exists(), Duration::from_secs(5))?;
+    pre.allow_open()?;
+    let pre_blocked = observe_fifo_open_without_reader(pre.process_group(), pre.opened());
+    let pre_group = pre.process_group();
+    let pre_marker = pre.opened().to_owned();
+    drop(pre);
+    let pre_survived = crate::gc1_seal_units::group_is_live(pre_group);
+    pre_cleanup.terminate_and_reap()?;
+    if pre_marker.exists() || pre_survived || !pre_blocked {
+        return Err(fail(
+            "pre-open FIFO writer survived controlled cancellation",
+        ));
+    }
+
+    let post = start_status_fifo_writer(&directory.join("post-status"), &directory)?;
+    let mut post_cleanup = post.external_cleanup();
+    super::wait_until(|| post.started().exists(), Duration::from_secs(5))?;
+    post.allow_open()?;
+    let mut reader = spawn_fifo_reader(
+        &directory.join("post-status"),
+        &directory.join("post-output"),
+    )?;
+    super::wait_until(|| post.opened().exists(), Duration::from_secs(5))?;
+    let post_group = post.process_group();
+    drop(post);
+    let post_survived = crate::gc1_seal_units::group_is_live(post_group);
+    post_cleanup.terminate_and_reap()?;
+    reader.wait_success()?;
+    if post_survived || !fs::read(directory.join("post-output"))?.is_empty() {
+        return Err(fail("post-open FIFO cancellation did not close the reader"));
+    }
+
+    let normal = start_status_fifo_writer(&directory.join("normal-status"), &directory)?;
+    super::wait_until(|| normal.started().exists(), Duration::from_secs(5))?;
+    normal.allow_open()?;
+    let mut normal_reader = spawn_fifo_reader(
+        &directory.join("normal-status"),
+        &directory.join("normal-output"),
+    )?;
+    super::wait_until(|| normal.opened().exists(), Duration::from_secs(5))?;
+    let mut normal = normal;
+    normal.release_and_wait()?;
+    normal_reader.wait_success()?;
+    if fs::read(directory.join("normal-output"))? != b"0\n" {
+        return Err(fail("status FIFO did not deliver exact 0 newline bytes"));
+    }
+    scene.finish()
 }
 
-struct StatusFifoBarrier {
-    writer: thread::JoinHandle<std::io::Result<()>>,
-    opened: PathBuf,
-    release: PathBuf,
+fn observe_fifo_open_without_reader(group: u32, opened: &std::path::Path) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if opened.exists() {
+            return false;
+        }
+        let wait_channel = fs::read_to_string(format!("/proc/{group}/wchan")).unwrap_or_default();
+        if wait_channel.contains("wait_for_partner") {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+struct AggregateStatusReadCase {
+    verify_release: ReleaseMarker,
+    selector: RunningSelector,
+    clock: SupervisorClock,
+    completed: String,
+    gh_dir: PathBuf,
+    group_log: String,
+    scene: Scene,
 }
 
 fn aggregate_status_read_case() -> Result<AggregateStatusReadCase, Box<dyn Error>> {
@@ -226,6 +293,7 @@ fn aggregate_status_read_case() -> Result<AggregateStatusReadCase, Box<dyn Error
         .join("group-log")
         .to_string_lossy()
         .into_owned();
+    let verify_release = ReleaseMarker::new(gate.clone());
     let selector = RunningSelector::new(
         crate::gc1_seal_units::spawn_select_units(
             &scene,
@@ -246,13 +314,13 @@ fn aggregate_status_read_case() -> Result<AggregateStatusReadCase, Box<dyn Error
         &gh,
     );
     Ok(AggregateStatusReadCase {
-        scene,
-        clock,
+        verify_release,
         selector,
+        clock,
         completed,
-        gate,
         gh_dir,
         group_log,
+        scene,
     })
 }
 
@@ -264,7 +332,7 @@ fn hold_first_status_until_processed(
     let first_output = state_dir.join("u-r0/out");
     let first_status = state_dir.join("status-u0");
     let barrier = "first-read-boundary";
-    clock.block(barrier)?;
+    let mut release = clock.block_guarded(barrier)?;
     clock.wait_for_block(barrier, Duration::from_secs(10))?;
     let first_status_ready = wait_until(|| first_status.exists(), Duration::from_secs(1)).is_ok();
     if !first_status_ready
@@ -276,37 +344,9 @@ fn hold_first_status_until_processed(
             "first successful unit was neither pending nor complete",
         ));
     }
-    clock.release_block(barrier)?;
+    release.release()?;
     if first_status_ready {
         wait_until(|| !first_status.exists(), Duration::from_secs(10))?;
     }
     Ok(())
-}
-
-fn start_status_fifo_writer(
-    status_path: PathBuf,
-    gh_dir: &std::path::Path,
-) -> Result<StatusFifoBarrier, Box<dyn Error>> {
-    fs::remove_file(&status_path)?;
-    if !Command::new("mkfifo").arg(&status_path).status()?.success() {
-        return Err(fail("could not create the status-read barrier"));
-    }
-    let opened = gh_dir.join("status-fifo-opened");
-    let release = gh_dir.join("status-fifo-release");
-    let opened_for_writer = opened.clone();
-    let release_for_writer = release.clone();
-    let writer = thread::spawn(move || -> std::io::Result<()> {
-        let mut status = OpenOptions::new().write(true).open(status_path)?;
-        fs::write(opened_for_writer, "open\n")?;
-        while !release_for_writer.exists() {
-            thread::sleep(Duration::from_millis(10));
-        }
-        status.write_all(b"0\n")?;
-        Ok(())
-    });
-    Ok(StatusFifoBarrier {
-        writer,
-        opened,
-        release,
-    })
 }

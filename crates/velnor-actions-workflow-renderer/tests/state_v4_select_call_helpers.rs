@@ -6,40 +6,17 @@ use std::time::{Duration, Instant};
 
 use super::RunningSelector;
 use crate::gc1_scene::fail;
-use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_clock::{ClockBlock, SupervisorClock};
 use crate::gc1_seal_support::Gh;
 use crate::gc1_seal_units::{group_is_live, process_group, process_is_running};
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 
-pub(super) struct ClockBlockReleases {
-    directory: PathBuf,
-    labels: Vec<String>,
-}
+#[path = "state_v4_select_fifo_custody.rs"]
+mod fifo_custody;
 
-impl ClockBlockReleases {
-    pub(super) fn new(directory: &Path) -> Self {
-        Self {
-            directory: directory.to_owned(),
-            labels: Vec::new(),
-        }
-    }
-
-    pub(super) fn add(&mut self, label: &str) {
-        self.labels.push(label.to_owned());
-    }
-}
-
-impl Drop for ClockBlockReleases {
-    fn drop(&mut self) {
-        for label in &self.labels {
-            drop(fs::write(
-                self.directory
-                    .join(format!("clock-block-release-control-{label}")),
-                "release\n",
-            ));
-        }
-    }
-}
+pub(super) use fifo_custody::{
+    spawn_fifo_reader, start_status_fifo_writer, terminate_group_bounded,
+};
 
 pub(super) fn wait_for_block_or_completion(
     selector: &mut RunningSelector,
@@ -123,22 +100,19 @@ pub(super) fn await_budget_boundary(
     gh_dir: &Path,
     label: &str,
     before_expiry: u64,
-) -> Result<(Option<ExitStatus>, ClockBlockReleases), Box<dyn Error>> {
-    let mut releases = ClockBlockReleases::new(gh_dir);
-    clock.block("budget-one")?;
-    releases.add("budget-one");
+) -> Result<(Option<ExitStatus>, Vec<ClockBlock>), Box<dyn Error>> {
+    let mut releases = Vec::new();
+    releases.push(clock.block_guarded("budget-one")?);
     clock.wait_for_block("budget-one", Duration::from_secs(10))?;
-    clock.block("budget-two")?;
-    releases.add("budget-two");
+    releases.push(clock.block_guarded("budget-two")?);
     clock.advance(label, before_expiry)?;
-    clock.release_block("budget-one")?;
+    releases[0].release()?;
     clock.wait_for_advance(label, Duration::from_secs(10))?;
     let mut early_status =
         wait_for_block_or_completion(selector, gh_dir, "budget-two", Duration::from_secs(10))?;
     if early_status.is_none() {
-        clock.block("budget-three")?;
-        releases.add("budget-three");
-        clock.release_block("budget-two")?;
+        releases.push(clock.block_guarded("budget-three")?);
+        releases[1].release()?;
         early_status = wait_for_block_or_completion(
             selector,
             gh_dir,
@@ -146,8 +120,10 @@ pub(super) fn await_budget_boundary(
             Duration::from_secs(10),
         )?;
     }
-    clock.release_block("budget-two")?;
-    clock.release_block("budget-three")?;
+    releases[1].release()?;
+    if releases.len() == 3 {
+        releases[2].release()?;
+    }
     Ok((early_status, releases))
 }
 

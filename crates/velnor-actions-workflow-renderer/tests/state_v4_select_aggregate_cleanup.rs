@@ -10,12 +10,129 @@ use velnor_actions_contract::workflow::cache_family::StateUnit;
 
 use super::{RunningSelector, wait_until};
 use crate::gc1_scene::{Scene, fail};
+use crate::gc1_seal_clock::ReleaseMarker;
 use crate::gc1_seal_clock::SupervisorClock;
 use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 use crate::gc1_seal_units::{expect, expect_flag, produce_flag, selected_unit, unit_key};
 
 #[test]
 fn success_observed_before_expiry_survives_cleanup_after_expiry() -> Result<(), Box<dyn Error>> {
+    let (prepared, cleanup_release, verify_release) = prepare_cleanup_case()?;
+    let child = crate::gc1_seal_units::spawn_select_units(
+        &prepared.scene,
+        &prepared.gh,
+        &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
+        &[
+            ("VELNOR_STATE_GH_TIMEOUT", "30"),
+            ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
+            ("VELNOR_STATE_SELECT_DEADLINE", "5"),
+            ("FAKE_REAL_PYTHON3", &prepared.python),
+            ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
+            ("FAKE_SUPERVISOR_CLEANUP_GATE", &prepared.cleanup_gate),
+            ("FAKE_SUPERVISOR_GROUP_LOG", &prepared.group_log),
+            ("FAKE_GH_VERIFY_GATE", &prepared.verify_gate),
+            ("FAKE_GH_VERIFY_GATE_KEY", &prepared.second),
+            ("FAKE_GH_VERIFY_STARTED", &prepared.verify_started),
+        ],
+    )?;
+    let mut selector = RunningSelector::new(child, &prepared.gh);
+    let cleanup_release = cleanup_release;
+    let mut verify_release = verify_release;
+    run_cleanup_boundary(
+        &prepared,
+        &mut selector,
+        cleanup_release,
+        &mut verify_release,
+    )?;
+    prepared.scene.finish()
+}
+
+fn run_cleanup_boundary(
+    prepared: &CleanupPreparation,
+    selector: &mut RunningSelector,
+    cleanup_release: ReleaseMarker,
+    verify_release: &mut ReleaseMarker,
+) -> Result<(), Box<dyn Error>> {
+    wait_until(
+        || PathBuf::from(&prepared.verify_started).exists(),
+        Duration::from_secs(10),
+    )?;
+    wait_until(
+        || PathBuf::from(format!("{}.blocked", prepared.cleanup_gate)).exists(),
+        Duration::from_secs(10),
+    )?;
+    let cleanup_clock = &prepared.clock;
+    let cleanup_error = (move || -> Result<(), Box<dyn Error>> {
+        let _cleanup_release = cleanup_release;
+        cleanup_clock.advance("cleanup-crosses-expiry", 6)?;
+        Err(fail("forced early return while cleanup was held"))
+    })();
+    let cleanup_released = wait_until(
+        || PathBuf::from(&prepared.cleanup_gate).exists(),
+        Duration::from_secs(2),
+    )
+    .is_ok();
+    if !cleanup_released {
+        fs::write(&prepared.cleanup_gate, "release\n")?;
+    }
+    prepared
+        .clock
+        .wait_for_advance("cleanup-crosses-expiry", Duration::from_secs(10))?;
+    if !selector.wait(Duration::from_secs(10))?.success() {
+        return Err(fail("aggregate cleanup boundary failed the selector step"));
+    }
+    verify_release.release()?;
+    assert_groups_reaped(&prepared.group_log)?;
+    let Err(cleanup_error) = cleanup_error else {
+        return Err(fail("cleanup fixture must exercise the early-return path"));
+    };
+    if !cleanup_error
+        .to_string()
+        .contains("forced early return while cleanup was held")
+        || !cleanup_released
+    {
+        return Err(fail(
+            "cleanup release guard did not release after early return",
+        ));
+    }
+    expect(
+        &selected_unit(&prepared.scene, StateUnit::Union, ".")?,
+        std::slice::from_ref(&prepared.first),
+        "accepted before cleanup expiry",
+    )?;
+    expect_flag(
+        &produce_flag(&prepared.scene, StateUnit::Union, ".")?,
+        "false",
+        "accepted before cleanup expiry",
+    )?;
+    expect(
+        &selected_unit(&prepared.scene, StateUnit::Union, "b")?,
+        &[],
+        "unfinished at aggregate expiry",
+    )?;
+    expect_flag(
+        &produce_flag(&prepared.scene, StateUnit::Union, "b")?,
+        "true",
+        "unfinished at aggregate expiry",
+    )?;
+    Ok(())
+}
+
+struct CleanupPreparation {
+    scene: Scene,
+    gh: Gh,
+    clock: SupervisorClock,
+    first: String,
+    second: String,
+    cleanup_gate: String,
+    verify_gate: String,
+    group_log: String,
+    verify_started: String,
+    python: String,
+}
+
+fn prepare_cleanup_case()
+-> Result<(CleanupPreparation, ReleaseMarker, ReleaseMarker), Box<dyn Error>> {
     let scene = Scene::new("aggregate-cleanup-boundary", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
     let first = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
@@ -34,72 +151,26 @@ fn success_observed_before_expiry_survives_cleanup_after_expiry() -> Result<(), 
     let python = clock
         .real_python()
         .to_str()
-        .ok_or_else(|| fail("invalid Python path"))?;
-    let mut selector = RunningSelector::new(
-        crate::gc1_seal_units::spawn_select_units(
-            &scene,
-            &gh,
-            &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
-            &[
-                ("VELNOR_STATE_GH_TIMEOUT", "30"),
-                ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
-                ("VELNOR_STATE_SELECT_DEADLINE", "5"),
-                ("FAKE_REAL_PYTHON3", python),
-                ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
-                ("FAKE_SUPERVISOR_CLEANUP_GATE", &cleanup_gate),
-                ("FAKE_SUPERVISOR_GROUP_LOG", &group_log),
-                ("FAKE_GH_VERIFY_GATE", &verify_gate),
-                ("FAKE_GH_VERIFY_GATE_KEY", &second),
-                ("FAKE_GH_VERIFY_STARTED", &verify_started),
-            ],
-        )?,
-        &gh,
-    );
-    let _release_on_drop = CleanupGate(PathBuf::from(&cleanup_gate));
-    wait_until(
-        || PathBuf::from(&verify_started).exists(),
-        Duration::from_secs(10),
-    )?;
-    wait_until(
-        || PathBuf::from(format!("{cleanup_gate}.blocked")).exists(),
-        Duration::from_secs(10),
-    )?;
-    clock.advance("cleanup-crosses-expiry", 6)?;
-    fs::write(&cleanup_gate, "release\n")?;
-    clock.wait_for_advance("cleanup-crosses-expiry", Duration::from_secs(10))?;
-    if !selector.wait(Duration::from_secs(10))?.success() {
-        return Err(fail("aggregate cleanup boundary failed the selector step"));
-    }
-    assert_groups_reaped(&group_log)?;
-    expect(
-        &selected_unit(&scene, StateUnit::Union, ".")?,
-        std::slice::from_ref(&first),
-        "accepted before cleanup expiry",
-    )?;
-    expect_flag(
-        &produce_flag(&scene, StateUnit::Union, ".")?,
-        "false",
-        "accepted before cleanup expiry",
-    )?;
-    expect(
-        &selected_unit(&scene, StateUnit::Union, "b")?,
-        &[],
-        "unfinished at aggregate expiry",
-    )?;
-    expect_flag(
-        &produce_flag(&scene, StateUnit::Union, "b")?,
-        "true",
-        "unfinished at aggregate expiry",
-    )?;
-    scene.finish()
-}
-
-struct CleanupGate(PathBuf);
-
-impl Drop for CleanupGate {
-    fn drop(&mut self) {
-        drop(fs::write(&self.0, "release\n"));
-    }
+        .ok_or_else(|| fail("invalid Python path"))?
+        .to_owned();
+    let cleanup_release = ReleaseMarker::new(PathBuf::from(cleanup_gate.as_str()));
+    let verify_release = ReleaseMarker::new(PathBuf::from(verify_gate.as_str()));
+    Ok((
+        CleanupPreparation {
+            scene,
+            gh,
+            clock,
+            first,
+            second,
+            cleanup_gate,
+            verify_gate,
+            group_log,
+            verify_started,
+            python,
+        },
+        cleanup_release,
+        verify_release,
+    ))
 }
 
 pub(super) fn assert_groups_reaped(log: &str) -> Result<(), Box<dyn Error>> {

@@ -13,20 +13,38 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_contract::workflow::cache_family::{
     RootSlug, StateScope, StateTrust, StateUnit,
 };
 use velnor_actions_contract::workflow::state_seal::{state_attested_output, state_produce_output};
+use velnor_actions_contract::workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, state_select_step};
 
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{
     Gh, MAIN, OTHER_WORKFLOW_REF, REPO, check_selector_markers, clear_selector_markers,
-    require_selector_token_binding,
+    reject_gh_dir_override, require_selector_token_binding,
 };
 
 type SelectCommand = (String, Vec<(String, String)>);
+
+pub(crate) fn filler_rows(
+    count: usize,
+    offset: usize,
+) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    (0..count)
+        .map(|index| {
+            let key = unit_key(
+                StateUnit::Union,
+                "z",
+                0,
+                0x3000 + (offset + index) as u64,
+                9,
+            )?;
+            Ok((at(1000 + (offset + index)), key))
+        })
+        .collect()
+}
 
 #[cfg(target_os = "linux")]
 pub(crate) fn hang_keys(gh: &Gh, keys: &[&str]) -> Result<(), Box<dyn Error>> {
@@ -203,6 +221,7 @@ fn select_script_env(
     extra: &[(&str, &str)],
     timeout: JobTimeout,
 ) -> Result<SelectCommand, Box<dyn Error>> {
+    reject_gh_dir_override(extra)?;
     clear_selector_markers(gh)?;
     match std::fs::remove_file(&scene.github_output) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
@@ -218,7 +237,17 @@ fn select_script_env(
         })
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     let step = state_select_step(&roots, timeout)?;
-    require_selector_token_binding(&step)?;
+    selector_env_from_step(gh, units, extra, &step)
+}
+
+pub(crate) fn selector_env_from_step(
+    gh: &Gh,
+    units: &[(StateUnit, &str)],
+    extra: &[(&str, &str)],
+    step: &Step,
+) -> Result<SelectCommand, Box<dyn Error>> {
+    reject_gh_dir_override(extra)?;
+    require_selector_token_binding(step)?;
     let StepKind::Shell { run, env: step_env } = &step.kind else {
         return Err(fail("expected a shell step"));
     };

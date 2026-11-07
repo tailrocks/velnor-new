@@ -11,8 +11,8 @@ use velnor_actions_contract::workflow::state_seal::{
 use crate::gc1_scene::{Scene, fail};
 use crate::gc1_seal_support::{Attestation, Gh, REPO};
 use crate::gc1_seal_units::{
-    at, expect, expect_flag, produce_flag, rendezvous, rows_of, run_select_units, selected_unit,
-    unit_key, unit_scope,
+    at, expect, expect_flag, filler_rows, produce_flag, rendezvous, rows_of, run_select_units,
+    selected_unit, unit_key, unit_scope,
 };
 
 const T1: &str = "2026-11-04T01:00:00Z";
@@ -30,7 +30,6 @@ enum Kind {
 fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("seal-select-units", crate::gc1_t53::scripts()?)?;
     let gh = Gh::install(&scene)?;
-
     let mut units: Vec<(StateUnit, String, Kind)> = vec![
         (StateUnit::Union, ".".to_owned(), Kind::Attested),
         (StateUnit::Union, "a".to_owned(), Kind::ForgedUnattested),
@@ -49,7 +48,6 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
     if units.len() <= STATE_SEAL_SELECT_MAX_PARALLELISM {
         return Err(fail("the units must outnumber the parallelism"));
     }
-
     let mut rows: Vec<(String, String)> = Vec::new();
     let mut attested: Vec<Attestation> = Vec::new();
     let mut wanted: Vec<Vec<String>> = Vec::new();
@@ -82,13 +80,11 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
     gh.list(&rows_of(&rows))?;
     gh.attest(&attested)?;
     rendezvous(&gh, STATE_SEAL_SELECT_MAX_PARALLELISM)?;
-
     let targets: Vec<(StateUnit, &str)> = units
         .iter()
         .map(|(unit, root, _)| (*unit, root.as_str()))
         .collect();
     run_select_units(&scene, &gh, &targets, &[])?;
-
     let mut mismatches: Vec<String> = Vec::new();
     for (index, (unit, root, kind)) in units.iter().enumerate() {
         let label = format!("{} {root}", unit_scope(*unit, root)?.prefix());
@@ -114,21 +110,6 @@ fn plan_never_selects_another_units_attestation_for_a_forged_entry() -> Result<(
     scene.finish()
 }
 
-fn filler(count: usize, offset: usize) -> Result<Vec<(String, String)>, Box<dyn Error>> {
-    (0..count)
-        .map(|index| {
-            let key = unit_key(
-                StateUnit::Union,
-                "z",
-                0,
-                0x3000 + (offset + index) as u64,
-                9,
-            )?;
-            Ok((at(1000 + (offset + index)), key))
-        })
-        .collect()
-}
-
 #[test]
 #[cfg(unix)]
 fn plan_selects_nothing_when_the_listing_may_be_truncated_or_unavailable()
@@ -142,7 +123,7 @@ fn plan_selects_nothing_when_the_listing_may_be_truncated_or_unavailable()
 
     let listing = |total: usize| -> Result<Vec<(String, String)>, Box<dyn Error>> {
         let mut rows = vec![(at(0), first.clone()), (at(1), second.clone())];
-        rows.extend(filler(total - rows.len(), 0)?);
+        rows.extend(filler_rows(total - rows.len(), 0)?);
         Ok(rows)
     };
 
@@ -259,7 +240,7 @@ fn selector_validates_the_complete_listing_before_starting_any_verifier()
 fn selector_runner_shell_preserves_quoted_paths_and_environment_values()
 -> Result<(), Box<dyn Error>> {
     let scene = Scene::new("seal-select-rendered-wrapper", crate::gc1_t53::scripts()?)?;
-    let gh = Gh::install(&scene)?;
+    let mut gh = Gh::install(&scene)?;
     let valid = unit_key(StateUnit::Union, ".", 0, 0x1000, 1)?;
     gh.list(&rows_of(&[(T3.to_owned(), valid.clone())]))?;
     gh.attest(&[Attestation::signed(&valid)])?;
@@ -268,10 +249,32 @@ fn selector_runner_shell_preserves_quoted_paths_and_environment_values()
     let output_path = scene.scratch.join("github output's path");
     let gh_path = scene.scratch.join("fake gh's path");
     std::fs::create_dir_all(&runner_temp)?;
-    std::fs::rename(gh.dir(), &gh_path)?;
+    std::fs::write(runner_temp.join("occupied"), "occupied\n")?;
+    let original_gh_path = std::path::PathBuf::from(gh.dir());
+    if gh.relocate(&runner_temp).is_ok()
+        || std::path::Path::new(&gh.dir()) != original_gh_path.as_path()
+    {
+        return Err(fail("failed GH relocation changed its stored directory"));
+    }
+    gh.relocate(&gh_path)?;
+    let conflicting_dir = scene.scratch.join("fake-gh").to_string_lossy().into_owned();
+    let conflict = crate::gc1_seal_units::run_select_units(
+        &scene,
+        &gh,
+        &[(StateUnit::Union, ".")],
+        &[("FAKE_GH_DIR", &conflicting_dir)],
+    )
+    .expect_err("the selector fixture must reject a conflicting fake GH directory");
+    if !conflict
+        .to_string()
+        .contains("selector fixture cannot override its fake GH directory")
+    {
+        return Err(fail(&format!(
+            "unexpected fake GH override rejection: {conflict}"
+        )));
+    }
     let runner_temp = runner_temp.to_string_lossy().into_owned();
     let output_path_value = output_path.to_string_lossy().into_owned();
-    let gh_path_value = gh_path.to_string_lossy().into_owned();
     run_select_units(
         &scene,
         &gh,
@@ -279,7 +282,6 @@ fn selector_runner_shell_preserves_quoted_paths_and_environment_values()
         &[
             ("RUNNER_TEMP", &runner_temp),
             ("GITHUB_OUTPUT", &output_path_value),
-            ("FAKE_GH_DIR", &gh_path_value),
             ("GH_TOKEN", "literal $inner; * ' \" value"),
         ],
     )?;
@@ -288,6 +290,34 @@ fn selector_runner_shell_preserves_quoted_paths_and_environment_values()
         return Err(fail(
             "the rendered selector lost its output through the Bash wrapper",
         ));
+    }
+    std::fs::write(gh_path.join("token-missing"), "stale\n")?;
+    let token_error =
+        run_select_units(&scene, &gh, &[(StateUnit::Union, ".")], &[("GH_TOKEN", "")])
+            .expect_err("the relocated selector fixture must reject a missing token");
+    if !token_error
+        .to_string()
+        .contains("gh child did not receive GH_TOKEN")
+    {
+        return Err(fail(&format!(
+            "quoted path missed its token marker: {token_error}"
+        )));
+    }
+    std::fs::write(gh_path.join("supervisor-payload-leaked"), "stale\n")?;
+    let payload_error = run_select_units(
+        &scene,
+        &gh,
+        &[(StateUnit::Union, ".")],
+        &[("FAKE_GH_FORCE_PAYLOAD_MARKER", "1")],
+    )
+    .expect_err("the relocated selector fixture must reject a payload marker");
+    if !payload_error
+        .to_string()
+        .contains("selector internal environment reached a gh child")
+    {
+        return Err(fail(&format!(
+            "quoted path missed its payload marker: {payload_error}"
+        )));
     }
     scene.finish()
 }

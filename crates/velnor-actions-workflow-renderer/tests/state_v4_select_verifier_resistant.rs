@@ -11,7 +11,7 @@ use velnor_actions_contract::workflow::cache_family::StateUnit;
 
 use super::super::{RunningSelector, wait_until};
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_clock::{ReleaseMarker, SupervisorClock};
 use crate::gc1_seal_support::{Attestation, Gh, MAIN};
 use crate::gc1_seal_units::{
     expect, expect_flag, group_is_live, process_group, process_is_running, produce_flag,
@@ -43,17 +43,17 @@ fn resistant_verifier_timeout_clears_its_unit_and_keeps_sibling() -> Result<(), 
         || case.dir.join("sibling-started").exists(),
         Duration::from_secs(8),
     )?;
-    case.clock.block("sibling")?;
+    let mut sibling_release = case.clock.block_guarded("sibling")?;
     case.clock
         .wait_for_block("sibling", Duration::from_secs(8))?;
-    fs::write(case.dir.join("sibling-release"), "release\n")?;
+    case.sibling_release.release()?;
     wait_until(|| sibling_status.exists(), Duration::from_secs(8))?;
     if !group_is_live(group) {
         return Err(fail(
             "healthy sibling was not eligible before verifier timeout",
         ));
     }
-    case.clock.release_block("sibling")?;
+    sibling_release.release()?;
     match observe_cleanup_or_completion(&mut case, Duration::from_secs(15))? {
         CleanupObservation::GateHeld => {
             let published_while_alive = validate_cleanup_gate(&case, group)?;
@@ -138,7 +138,7 @@ fn observe_cleanup_or_completion(
 }
 
 fn cleanup_gate_blocked(case: &ResistantCase) -> bool {
-    PathBuf::from(format!("{}.blocked", case.cleanup_gate.0.display())).exists()
+    PathBuf::from(format!("{}.blocked", case.cleanup_gate.path().display())).exists()
 }
 
 fn validate_cleanup_gate(case: &ResistantCase, group: u32) -> Result<bool, Box<dyn Error>> {
@@ -214,14 +214,15 @@ fn read_pid(path: &std::path::Path) -> Result<u32, Box<dyn Error>> {
 }
 
 struct ResistantCase {
-    cleanup_gate: CleanupGate,
+    cleanup_gate: ReleaseMarker,
+    sibling_release: ReleaseMarker,
     selector: RunningSelector,
-    scene: Scene,
     clock: SupervisorClock,
     group_log: PathBuf,
     dir: PathBuf,
     sibling: String,
     earlier: String,
+    scene: Scene,
 }
 
 impl ResistantCase {
@@ -254,36 +255,36 @@ impl ResistantCase {
             .real_python()
             .to_str()
             .ok_or_else(|| fail("invalid Python path"))?;
-        let selector = RunningSelector::new(
-            crate::gc1_seal_units::spawn_select_units(
-                &scene,
-                &gh,
-                &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
-                &[
-                    ("VELNOR_STATE_GH_TIMEOUT", "10"),
-                    ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
-                    ("VELNOR_STATE_SELECT_DEADLINE", "30"),
-                    ("FAKE_REAL_PYTHON3", python),
-                    ("FAKE_GH_VERIFY_GATE", &gate),
-                    ("FAKE_GH_VERIFY_GATE_KEY", &sibling),
-                    ("FAKE_GH_VERIFY_STARTED", &started),
-                    ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
-                    ("FAKE_SUPERVISOR_CLEANUP_GATE", &cleanup_gate_value),
-                    ("FAKE_SUPERVISOR_GROUP_LOG", &group_log_value),
-                ],
-            )?,
+        let cleanup_guard = ReleaseMarker::new(cleanup_gate.clone());
+        let sibling_guard = ReleaseMarker::new(dir.join("sibling-release"));
+        let child = crate::gc1_seal_units::spawn_select_units(
+            &scene,
             &gh,
-        );
-        let cleanup_guard = CleanupGate(cleanup_gate.clone());
+            &[(StateUnit::Union, "."), (StateUnit::Union, "b")],
+            &[
+                ("VELNOR_STATE_GH_TIMEOUT", "10"),
+                ("VELNOR_STATE_UNIT_TIMEOUT", "20"),
+                ("VELNOR_STATE_SELECT_DEADLINE", "30"),
+                ("FAKE_REAL_PYTHON3", python),
+                ("FAKE_GH_VERIFY_GATE", &gate),
+                ("FAKE_GH_VERIFY_GATE_KEY", &sibling),
+                ("FAKE_GH_VERIFY_STARTED", &started),
+                ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
+                ("FAKE_SUPERVISOR_CLEANUP_GATE", &cleanup_gate_value),
+                ("FAKE_SUPERVISOR_GROUP_LOG", &group_log_value),
+            ],
+        )?;
+        let selector = RunningSelector::new(child, &gh);
         Ok(Self {
             cleanup_gate: cleanup_guard,
+            sibling_release: sibling_guard,
             selector,
-            scene,
             clock,
             group_log,
             dir,
             sibling,
             earlier,
+            scene,
         })
     }
 
@@ -308,20 +309,5 @@ impl ResistantCase {
             "false",
             "healthy sibling",
         )
-    }
-}
-
-struct CleanupGate(PathBuf);
-
-impl CleanupGate {
-    fn release(&self) -> Result<(), Box<dyn Error>> {
-        fs::write(&self.0, "release\n")?;
-        Ok(())
-    }
-}
-
-impl Drop for CleanupGate {
-    fn drop(&mut self) {
-        drop(fs::write(&self.0, "release\n"));
     }
 }

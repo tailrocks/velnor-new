@@ -12,7 +12,7 @@ use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::state_seal::STATE_SEAL_SELECT_MAX_PARALLELISM;
 
 use crate::gc1_scene::{Scene, fail};
-use crate::gc1_seal_clock::SupervisorClock;
+use crate::gc1_seal_clock::{ReleaseMarker, SupervisorClock};
 use crate::gc1_seal_support::{Attestation, Gh, MAIN, check_selector_markers};
 use crate::gc1_seal_units::{
     at, expect, expect_flag, group_is_live, hang_keys, hung_processes_gone, process_group,
@@ -225,6 +225,7 @@ fn run_late_status_case(label: &str, advance_seconds: u64) -> Result<(), Box<dyn
     let started = PathBuf::from(gh.dir()).join("verify-started");
     let gate_value = gate.to_string_lossy().into_owned();
     let started_value = started.to_string_lossy().into_owned();
+    let verify_release = ReleaseMarker::new(gate.clone());
     let mut selector = RunningSelector::new(spawn_select_units(
         &scene,
         &gh,
@@ -240,18 +241,19 @@ fn run_late_status_case(label: &str, advance_seconds: u64) -> Result<(), Box<dyn
             ("FAKE_SUPERVISOR_CLOCK_FREEZE", "1"),
         ],
     )?);
+    let mut verify_release = verify_release;
     wait_until(|| started.exists(), Duration::from_secs(10))?;
     wait_for_completed_neighbor(&scene, &gh, &completed)?;
     let state_dir = scene.runner.join("velnor/state-select");
-    clock.block(label)?;
+    let mut release = clock.block_guarded(label)?;
     clock.wait_for_block(label, Duration::from_secs(10))?;
-    fs::write(&gate, "release\n")?;
+    verify_release.release()?;
     wait_until(
         || state_dir.join("status-u1").exists(),
         Duration::from_secs(10),
     )?;
     clock.advance(label, advance_seconds)?;
-    clock.release_block(label)?;
+    release.release()?;
     clock.wait_for_advance(label, Duration::from_secs(10))?;
     let status = selector.wait(Duration::from_secs(10))?;
     check_selector_markers(&gh)?;
