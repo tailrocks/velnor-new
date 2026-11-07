@@ -30,6 +30,8 @@ pub(super) struct StoredSource {
     workflow: StoredWorkflow,
     workflow_source_sha: Option<String>,
     run_attempt: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    already_assigned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,9 +50,14 @@ impl StoredSource {
         receipt: &AuthorizedSourceReceipt,
         expected_repository_id: i64,
     ) -> Result<Self, HostError> {
-        let value = Self::from_verified(receipt.source());
+        let mut value = Self::from_verified(receipt.source());
+        value.already_assigned = receipt.already_assigned();
         value.validate(expected_repository_id)?;
         Ok(value)
+    }
+
+    pub(super) const fn already_assigned(&self) -> bool {
+        self.already_assigned
     }
 
     pub(super) fn parse(value: &str, expected_repository_id: i64) -> Result<Self, HostError> {
@@ -104,6 +111,7 @@ impl StoredSource {
             },
             workflow_source_sha: source.workflow_source_sha.clone(),
             run_attempt: source.run_attempt,
+            already_assigned: false,
         }
     }
 

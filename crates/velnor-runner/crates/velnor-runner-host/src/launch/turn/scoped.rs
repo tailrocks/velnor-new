@@ -223,7 +223,7 @@ where
 }
 
 fn has_available_offer(polled: &Poll) -> bool {
-    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| job.kind == InnerKind::Available))
+    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| crate::assign::is_active_offer_job(batch, job)))
 }
 
 pub(super) async fn poll_scoped_queue(

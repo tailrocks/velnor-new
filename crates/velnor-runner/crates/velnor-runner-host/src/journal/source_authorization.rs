@@ -17,6 +17,13 @@ pub(in crate::journal) fn validate_stored_source(
     StoredSource::parse(source_json, expected_repository_id).map(|_source| ())
 }
 
+pub(in crate::journal) fn stored_source_already_assigned(
+    source_json: &str,
+    expected_repository_id: i64,
+) -> Result<bool, HostError> {
+    StoredSource::parse(source_json, expected_repository_id).map(|source| source.already_assigned())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SourceAuthorizationResult {
     Recorded,

@@ -87,6 +87,7 @@ pub use resource_probe::{
     WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
     verify_worker_runtime_config,
 };
+pub use steps::resume_deferred_offer_acquire_with_transport;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
 pub(crate) async fn startup_storage_profile(
