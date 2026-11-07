@@ -50,11 +50,13 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+printf "maintenance-phase: pin-mirror\n"
 VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=pin-mirror \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
+printf "maintenance-phase: diagnostics-build\n"
 ARTIFACT_MESSAGES="$(mktemp)"
 trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
 cargo --config build.jobs=2 build --locked -p velnor-actions-cli \
@@ -77,17 +79,20 @@ if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
   exit 1
 fi
 export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+printf "maintenance-phase: test-members\n"
 TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=test-members \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_MANIFEST_PATH='' \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
 (
   cd "$ROOT/crates/velnor-runner"
   cargo fetch --locked
 )
 for package in velnor-actions-freshness velnor-archive-guard; do
+  printf "maintenance-phase: %s\n" "$package"
   case " $TEST_MEMBERS " in
     *" $package "*)
       cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package "$package" --no-tests fail --jobs 2
