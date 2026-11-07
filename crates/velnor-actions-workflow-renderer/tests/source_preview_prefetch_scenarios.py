@@ -32,30 +32,45 @@ def run_case(missing):
         home.mkdir()
         outside = root / 'outside'
         outside.mkdir()
-        environment = os.environ.copy()
-        for key in ('GITHUB_TOKEN', 'GH_TOKEN', 'MISE_GITHUB_TOKEN', 'ACTIONS_RUNTIME_TOKEN',
-                    'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL'):
-            environment.pop(key, None)
-        environment.update(CARGO_HOME=str(home), GITHUB_WORKSPACE=str(workspace),
-                           RUNNER_TEMP=str(outside), MISE_EXEC_AUTO_INSTALL='0', CARGO_NET_RETRY='0',
-                           GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull)
-        rust_cargo = invoke(['rustup', 'which', '--toolchain', version, 'cargo'], outside, environment).stdout.strip()
-        environment['PATH'] = str(Path(rust_cargo).parent) + os.pathsep + environment['PATH']
+        rust_cargo = invoke(['rustup', 'which', '--toolchain', version, 'cargo'],
+                            outside, os.environ.copy()).stdout.strip()
         mise = Path(shutil.which('mise')).resolve()
         rust_bin = Path(rust_cargo).parent
         private_bin = home / 'bin'
         private_bin.mkdir()
         for tool in ('cargo', 'rustc', 'rustdoc'):
             (private_bin / tool).symlink_to(rust_bin / tool)
+        rustup = root / 'rustup'
+        (rustup / 'toolchains').mkdir(parents=True)
+        (rustup / 'toolchains' / rust_bin.parent.name).symlink_to(rust_bin.parent,
+                                                                 target_is_directory=True)
+        user_home = root / 'home'
+        user_home.mkdir()
         mise_data = root / 'mise-data'
         installations = mise_data / 'installs/rust'
         installations.mkdir(parents=True)
         (installations / version).symlink_to(private_bin, target_is_directory=True)
-        environment.update(MISE_DATA_DIR=str(mise_data), MISE_CACHE_DIR=str(root / 'mise-cache'),
-                           MISE_STATE_DIR=str(root / 'mise-state'), MISE_CONFIG_DIR=str(root / 'mise-config'),
-                           RUSTUP_HOME=environment.get('RUSTUP_HOME', str(Path.home() / '.rustup')),
-                           RUSTUP_TOOLCHAIN=version)
-        environment['PATH'] = str(mise.parent) + os.pathsep + environment['PATH']
+        environment = {
+            'HOME': str(user_home),
+            'PATH': os.pathsep.join((str(mise.parent), str(rust_bin), os.defpath)),
+            'CARGO_HOME': str(home),
+            'MISE_CARGO_HOME': str(home),
+            'RUSTUP_HOME': str(rustup),
+            'MISE_RUSTUP_HOME': str(rustup),
+            'RUSTUP_TOOLCHAIN': version,
+            'MISE_DATA_DIR': str(mise_data),
+            'MISE_CACHE_DIR': str(root / 'mise-cache'),
+            'MISE_STATE_DIR': str(root / 'mise-state'),
+            'MISE_CONFIG_DIR': str(root / 'mise-config'),
+            'MISE_AUTO_INSTALL': '0',
+            'MISE_EXEC_AUTO_INSTALL': '0',
+            'CARGO_NET_RETRY': '0',
+            'GIT_CONFIG_NOSYSTEM': '1',
+            'GIT_CONFIG_GLOBAL': os.devnull,
+            'GIT_TEMPLATE_DIR': '',
+            'GITHUB_WORKSPACE': str(workspace),
+            'RUNNER_TEMP': str(outside),
+        }
         cargo = [str(mise), '--no-config', '--no-env', '--no-hooks', 'exec',
                  'rust@' + version, '--', 'cargo']
         (index / 'config.json').write_text(json.dumps({

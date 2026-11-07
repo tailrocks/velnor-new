@@ -247,6 +247,7 @@ fn qualification_provisions_both_workspaces_for_offline_metadata() -> Result<(),
     }
     let script = scripts.first().ok_or("no qualification")?;
     let output = Command::new("python3")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/source_preview_prefetch_parent.py"))
         .arg(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/source_preview_prefetch_scenarios.py"),
