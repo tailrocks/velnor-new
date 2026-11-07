@@ -8,17 +8,22 @@ use std::path::Path;
 
 pub(crate) fn exercise() -> Result<(), Box<dyn Error>> {
     for bad_recovery in 0..=2 {
-        exercise_case("workflow_dispatch", bad_recovery)?;
+        exercise_case("workflow_dispatch", bad_recovery, false)?;
     }
-    exercise_case("push", 0)?;
+    exercise_case("push", 0, false)?;
+    exercise_case("workflow_dispatch", 0, true)?;
+    creation::exercise()?;
     Ok(())
 }
 
-fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Error>> {
+fn exercise_case(
+    event: &'static str,
+    bad_recovery: u8,
+    two_link: bool,
+) -> Result<(), Box<dyn Error>> {
     let fixture = super::historical_authority::signed_historical_fixture(event, bad_recovery)?;
     configure_fixture_git(fixture.workflow.path())?;
-    let previous = fixture.previous_intent.clone();
-    let prior = fixture.prior_sha.clone();
+    let (previous, prior, older) = recovery::prepare_chain(&fixture, two_link)?;
     let mut intent = fixture.intent.clone();
     intent.generator_version = "0.1.5".into();
     intent.journal_predecessor = Some(velnor_actions_contract::config::CrateReleasePredecessor {
@@ -50,6 +55,8 @@ fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Er
             "release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport",
         ])
         .env("VELNOR_TEST_CONTROLLER_SIGNED_CHILD", "1")
+        .env_remove("VELNOR_CONTROLLER_RECOVERY_CASE")
+        .env("VELNOR_CONTROLLER_OLDER", serde_json::to_string(&older)?)
         .env("VELNOR_CONTROLLER_INTENT", serde_json::to_string(&intent)?)
         .env(
             "VELNOR_CONTROLLER_PREVIOUS",
@@ -115,6 +122,11 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         fixture_storage::seed_started_record, record_journal_intent,
     };
     use crate::release::package_release_signer::AdmittedStart;
+    match std::env::var("VELNOR_CONTROLLER_RECOVERY_CASE") {
+        Ok(case) if case == "creation" => return creation::run_child(),
+        Err(std::env::VarError::NotPresent) => {}
+        _ => return Err("invalid signed recovery case".into()),
+    }
     let intent: CrateReleaseIntent =
         serde_json::from_str(&std::env::var("VELNOR_CONTROLLER_INTENT")?)?;
     let previous: CrateReleaseIntent =
@@ -136,19 +148,9 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
     github.policy_sha.clone_from(&request.workflow_sha);
     github.approved.set(true);
     let initial = super::prepare_crate_release(&intent, &request, &github, &registry, &source)?;
-    let (_, mut prior) = super::fixture_journal_plan(&source, &previous, &request, &initial)?;
-    prior.identity.run_id = 11;
-    prior.identity.workflow_sha.clone_from(&prior_sha);
-    prior.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
-    prior
-        .generator_version
-        .clone_from(&previous.generator_version);
-    prior
-        .release_plz_version
-        .clone_from(&previous.release_plz_version);
-    prior.rust_version.clone_from(&previous.rust_version);
-    pin_previous_tools(&mut prior, &previous)?;
+    let mut prior = prior_receipt(&source, &previous, &request, &initial, &prior_sha)?;
     let journal = super::JournalRegistryFake::default();
+    let older = recovery::seed_older(&journal, &mut prior, &request, &initial, &source)?;
     seed_started_record(&journal, &prior.identity, &prior)?;
     record_journal_intent(
         &journal,
@@ -159,7 +161,7 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
     let auth = super::HistoricalAuthority {
         base: &github,
         workflow: prior_sha,
-        older: None,
+        older,
         event,
         defect: std::cell::Cell::new(0),
     };
@@ -182,6 +184,9 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         workflow_root: &workspace,
         generator: &generator,
     };
+    if input.github.older.is_some() {
+        return recovery::verify_two_link(&input, &prior);
+    }
     super::historical_authority::check_historical_authority(&input, event, bad_recovery)?;
     if event == "workflow_dispatch" && bad_recovery == 0 {
         verify_real_tool_measurement(&input, generator_dir.path())?;
@@ -189,6 +194,28 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         verify_frozen_predecessor_drift(&input, &prior)?;
     }
     Ok(())
+}
+
+fn prior_receipt(
+    source: &Path,
+    previous: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    initial: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+    prior_sha: &str,
+) -> Result<crate::crate_release_journal::JournalReceipt, Box<dyn Error>> {
+    let (_, mut prior) = super::fixture_journal_plan(source, previous, request, initial)?;
+    prior.identity.run_id = 11;
+    prior_sha.clone_into(&mut prior.identity.workflow_sha);
+    prior.workflow_run_url = "https://github.com/example/demo/actions/runs/11".into();
+    prior
+        .generator_version
+        .clone_from(&previous.generator_version);
+    prior
+        .release_plz_version
+        .clone_from(&previous.release_plz_version);
+    prior.rust_version.clone_from(&previous.rust_version);
+    pin_previous_tools(&mut prior, previous)?;
+    Ok(prior)
 }
 
 fn pin_previous_tools(
@@ -214,3 +241,8 @@ fn pin_previous_tools(
 #[path = "crate_release_controller_signed_history_verify.rs"]
 mod verify;
 use verify::*;
+
+#[path = "crate_release_controller_signed_history_creation.rs"]
+mod creation;
+#[path = "crate_release_controller_signed_history_recovery.rs"]
+mod recovery;

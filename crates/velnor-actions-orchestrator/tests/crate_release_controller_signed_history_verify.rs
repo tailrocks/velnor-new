@@ -168,9 +168,8 @@ pub(super) fn verify_prior_observation(
     >,
     prior: &crate::crate_release_journal::JournalReceipt,
 ) -> Result<(), Box<dyn Error>> {
-    use crate::crate_release_controller::{
-        CrateReleaseObservation, RecoveryState, observe_prior_recovery,
-    };
+    use crate::crate_release_controller::observation::RecoveryState;
+    use crate::crate_release_controller::{CrateReleaseObservation, observe_prior_recovery};
     use crate::crate_release_journal::{JournalStage, inspect_journal};
     let (identity, _) = super::super::fixture_journal_plan(
         input.source,

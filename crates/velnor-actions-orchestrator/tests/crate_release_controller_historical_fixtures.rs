@@ -53,8 +53,8 @@ pub(super) fn assert_two_link_recovery(
         inspect_journal(input.journal, &identity, JournalStage::Started)?.ok_or("start")?;
     assert_eq!(started.receipt.predecessor, Some(previous.identity.clone()));
     let observation = CrateReleaseObservation {
-        source_execution: &crate::UnprivilegedSourceExecution,
-        git: test_git(),
+        source_execution: input.source_execution,
+        git: input.git,
         journal: input.journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -68,13 +68,16 @@ pub(super) fn assert_two_link_recovery(
     };
     let writes = input.journal.write_calls.get();
     let attempted = Cell::new(false);
+    let semver_called = Cell::new(false);
     assert!(
         coordinate_release(
             &observation,
-            |name| crate::release::crate_release_semver::fixture_verified_semver(
-                input.admission,
-                name
-            ),
+            |_| {
+                semver_called.set(true);
+                Err(OrchestratorError::Contract {
+                    problem: "unexpected SemVer check during recovery".into(),
+                })
+            },
             |_| {
                 attempted.set(true);
                 Err(OrchestratorError::Contract {
@@ -85,6 +88,7 @@ pub(super) fn assert_two_link_recovery(
         )
         .is_err()
     );
+    assert!(!semver_called.get());
     assert!(!attempted.get());
     assert_eq!(input.journal.write_calls.get(), writes);
     assert_eq!(input.github.base.writes.get(), 0);
@@ -93,7 +97,12 @@ pub(super) fn assert_two_link_recovery(
     input.github.base.release_variant.set(4);
     let result = coordinate_release(
         &observation,
-        |name| crate::release::crate_release_semver::fixture_verified_semver(input.admission, name),
+        |_| {
+            semver_called.set(true);
+            Err(OrchestratorError::Contract {
+                problem: "unexpected SemVer check during recovery".into(),
+            })
+        },
         |_| {
             attempted.set(true);
             Err(OrchestratorError::Contract {
@@ -102,6 +111,7 @@ pub(super) fn assert_two_link_recovery(
         },
         || {},
     )?;
+    assert!(!semver_called.get());
     assert!(!attempted.get());
     assert_eq!(result.packages.len(), 1);
     assert_eq!(input.github.base.writes.get(), 2);

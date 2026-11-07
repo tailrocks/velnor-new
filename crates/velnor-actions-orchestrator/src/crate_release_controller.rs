@@ -19,7 +19,7 @@ pub(crate) use observation::{
     repair_verified_metadata, verify_and_record_upload_intent,
 };
 #[cfg(test)]
-pub(crate) use observation::{RecoveryState, UploadAttempt, reconciled_completion_packages};
+pub(crate) use observation::{UploadAttempt, reconciled_completion_packages};
 pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 
 mod inventory;

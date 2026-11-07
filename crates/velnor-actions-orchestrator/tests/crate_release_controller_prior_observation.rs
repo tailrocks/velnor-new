@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    BTreeMap, Digest, Github, JournalIo, JournalRegistryFake, JournalTag, Registry, Sha256,
-    fixture_archive, fixture_journal_plan, fixture_no_baseline, fs, journal_existing_owners, json,
-    make_fixture, prepare_crate_release, test_git, test_hex, velnor_actions_orchestrator,
+    Digest, Github, JournalRegistryFake, Registry, Sha256, fixture_archive, fixture_journal_plan,
+    fixture_no_baseline, fs, make_fixture, prepare_crate_release, test_git, test_hex,
+    velnor_actions_orchestrator,
 };
 
 #[test]
@@ -30,7 +30,7 @@ pub(super) fn journal_observation_runtime_is_blocked_until_authority_is_qualifie
 }
 
 #[test]
-pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
+pub(super) fn prior_upload_recovery_requires_qualified_history_custody()
 -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation;
     use velnor_actions_orchestrator::crate_release_journal::{
@@ -85,58 +85,27 @@ pub(super) fn prior_upload_recovery_reobserves_registry_without_writes()
         source: root,
         sequence: 2,
     };
-    assert_prior_observation_states(&input, &previous)?;
+    let before = journal.write_calls.get();
+    let error = crate::crate_release_controller::observe_prior_recovery(&input, &previous.identity)
+        .expect_err("unqualified history must reject");
+    assert!(
+        error
+            .to_string()
+            .contains("crate_release_history_custody_required"),
+        "{error}"
+    );
+    assert_eq!(journal.write_calls.get(), before);
+    assert_eq!(github.writes.get(), 0);
     Ok(())
 }
 
-pub(super) fn assert_prior_observation_states(
-    input: &velnor_actions_orchestrator::crate_release_controller::CrateReleaseObservation<
-        '_,
-        JournalRegistryFake,
-        Github,
-        Registry,
-    >,
-    previous: &velnor_actions_orchestrator::crate_release_journal::JournalReceipt,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use velnor_actions_orchestrator::crate_release_controller::{
-        RecoveryState, observe_prior_recovery,
-    };
-    let before = input.journal.refs.borrow().len();
-    let missing = observe_prior_recovery(input, &previous.identity)?;
-    assert_eq!(missing.len(), 1);
-    assert_eq!(missing[0].state, RecoveryState::Missing);
-    assert_eq!(
-        serde_json::to_value(&missing[0])?["prior_record"],
-        "intention-only"
-    );
-    assert_eq!(input.journal.refs.borrow().len(), before);
-    *input.registry.archive.borrow_mut() = fixture_archive(input.source)?;
-    input.registry.absent.set(false);
-    let present = observe_prior_recovery(input, &previous.identity)?;
-    assert_eq!(present[0].state, RecoveryState::Present);
-    assert_eq!(input.journal.refs.borrow().len(), before);
-    append_fixture_prior_upload_observation(input.journal, previous)?;
-    let before = input.journal.refs.borrow().len();
-    let recorded = observe_prior_recovery(input, &previous.identity)?;
-    assert_eq!(
-        serde_json::to_value(&recorded[0])?["prior_record"],
-        "observation-recorded"
-    );
-    assert_eq!(recorded[0].state, RecoveryState::Present);
-    assert_eq!(input.journal.refs.borrow().len(), before);
-    input.github.approved.set(false);
-    assert!(observe_prior_recovery(input, &previous.identity).is_err());
-    input.github.approved.set(true);
-    input.registry.archive.borrow_mut().push(0);
-    assert!(observe_prior_recovery(input, &previous.identity).is_err());
-    assert_eq!(input.journal.refs.borrow().len(), before);
-    Ok(())
-}
-
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(super) fn append_fixture_prior_upload_observation(
     journal: &JournalRegistryFake,
     receipt: &velnor_actions_orchestrator::crate_release_journal::JournalReceipt,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    use super::{BTreeMap, journal_existing_owners, json};
+    use crate::crate_release_journal::{JournalIo, JournalTag};
     use velnor_actions_orchestrator::crate_release_journal::{
         JournalFile, JournalFileKind, JournalMutation, JournalMutationKind, JournalMutationPhase,
         JournalMutationResult,

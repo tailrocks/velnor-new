@@ -35,8 +35,8 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     };
     let started = inspect_journal(journal, &identity, JournalStage::Started)?.ok_or("start")?;
     let observation = CrateReleaseObservation {
-        source_execution: &crate::UnprivilegedSourceExecution,
-        git: test_git(),
+        source_execution: input.source_execution,
+        git: input.git,
         journal,
         identity: &identity,
         journal_receipt: &started.receipt,
@@ -52,7 +52,11 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     let attempted = Cell::new(false);
     let result = coordinate_release(
         &observation,
-        |name| crate::release::crate_release_semver::fixture_verified_semver(admission, name),
+        |_| {
+            Err(OrchestratorError::Contract {
+                problem: "unexpected recovery SemVer check".into(),
+            })
+        },
         |_| {
             attempted.set(true);
             Err(OrchestratorError::Contract {
@@ -63,6 +67,7 @@ pub(super) fn verify_created_crate_recovers_without_reupload(
     )?;
     assert!(!attempted.get());
     assert_eq!(result.packages.len(), 1);
+    assert_eq!(github.writes.get(), 2);
     Ok(())
 }
 
@@ -112,6 +117,7 @@ pub(super) fn reject_untrusted_prior_creation(
     assert!(record_admitted_start(input).is_err());
     assert_eq!(journal.write_calls.get(), before);
     *registry.base.archive.borrow_mut() = original_archive;
+    assert_eq!(github.writes.get(), 0);
     Ok(())
 }
 

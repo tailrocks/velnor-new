@@ -216,7 +216,7 @@ def stage_release_git(source_tools, tools, validation):
         for name, member in (("pinned-git", "./usr/bin/git"), ("pinned-git-remote-http", "./usr/lib/git-core/git-remote-http")):
             extracted = extract_git_member(
                 ["/usr/bin/ar", "-p", str(package), "data.tar.zst"],
-                ["/usr/bin/tar", "-xOf", "-", member],
+                ["/usr/bin/tar", "--zstd", "-xOf", "-", member],
             )
             candidate = pathlib.Path(directory) / name
             candidate.write_bytes(extracted)

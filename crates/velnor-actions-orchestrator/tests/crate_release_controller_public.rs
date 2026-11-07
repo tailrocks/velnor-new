@@ -8,7 +8,6 @@ fn test_git() -> &'static crate::crate_release_git::ReleaseGit {
 }
 
 use crate as velnor_actions_orchestrator;
-use crate::crate_release_journal::{JournalIo, JournalTag};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
