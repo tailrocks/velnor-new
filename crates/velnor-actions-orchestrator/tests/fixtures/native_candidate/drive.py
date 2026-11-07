@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tomllib
 import urllib.request
 
 from evidence import read_bounded, write_evidence
@@ -78,6 +79,7 @@ if real_cargo:
     if (len(pathlib.Path("/proc/net/route").read_text().splitlines()) != 1
             or {name for _, name in socket.if_nameindex()} != {"lo"}):
         raise RuntimeError("real Cargo rehearsal requires a network-isolated namespace")
+runner = pathlib.Path("/runner") / mode
 journal = coordinate or mode in ("journal", "journal-bad-bundle")
 if coordinate:
     for host in ("api.github.com", "github.com", "crates.io", "index.crates.io", "fixture.actions.githubusercontent.com") if real_cargo else ("api.github.com", "github.com", "crates.io", "fixture.actions.githubusercontent.com"):
@@ -93,7 +95,6 @@ if journal:
         if mode == "journal-bad-bundle"
         else ""
     )
-    runner = pathlib.Path("/runner") / mode
     bootstrap = runner / "velnor/bootstrap"
     bootstrap.mkdir(parents=True, exist_ok=multi)
     for name in (
@@ -241,12 +242,13 @@ try:
         {
             "VELNOR_TEST_NATIVE_REHEARSAL": "1",
             "VELNOR_NATIVE_EXPECT_SUCCESS": "0"
-            if mode in ("checksum", "source", "coordinate-corrupt-git")
+            if mode in ("checksum", "source", "coordinate-corrupt-git", "dispatch-mismatch")
             else "1",
             "VELNOR_NATIVE_EXPECT_ERROR": {
                 "checksum": "crate_release_semver_unverified",
                 "source": "crate_release_source_content_mismatch",
                 "coordinate-corrupt-git": "release_git_bundle_invalid",
+                "dispatch-mismatch": "crate_release_dispatch_inputs",
             }.get(mode, ""),
             "VELNOR_NATIVE_VERIFY_ERROR": {
                 "approval": "crate_release_environment_approval",
@@ -272,6 +274,20 @@ try:
             "RUNNER_TEMP": "/runner/" + mode,
         }
     )
+    if not multi:
+        intent_path = pathlib.Path(info["workspace"]) / ".github/velnor-release-intent.toml"
+        with intent_path.open("rb") as intent_file:
+            intent = tomllib.load(intent_file)
+        inputs = {"plan": "release-" + info["source_sha"][:12],
+                  "source_sha": info["source_sha"], "version": info["version"]}
+        if intent.get("oidc_qualification", False):
+            inputs["mode"] = "release"
+        if mode == "dispatch-mismatch":
+            inputs["version"] = "0.0.0"
+        runner.mkdir(parents=True, exist_ok=True)
+        event_path = runner / "github-event.json"
+        event_path.write_text(json.dumps({"inputs": inputs}))
+        env["GITHUB_EVENT_PATH"] = str(event_path)
     if mode == "verify-source":
         env["VELNOR_NATIVE_MUTATE_AFTER_RECEIPT"] = "1"
     subprocess.run(
@@ -407,6 +423,8 @@ try:
         assert record["receipt"]["generator_version"] == "0.1.73"
     else:
         assert state["mutations"] == 0
+        if mode == "dispatch-mismatch":
+            assert state["uploads"] == state["upload_attempts"] == 0
 finally:
     if "registry_server" in locals() and registry_server:
         registry_server.terminate()
