@@ -6,11 +6,13 @@ Detected stacks
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-direct-release: test-hosted-direct-release (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator, velnor-actions-workflow-renderer]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
@@ -48,11 +50,13 @@ Workflow to generate
   .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
-  Runner: ubuntu-26.04 (latest pinned default)
+  Runner: ubuntu-26.04 (config override)
   Jobs:
     - alint (2 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
+    - check-hosted-direct-release (7 steps)
+    - check-hosted-gh-config-custody (7 steps)
     - check-maintenance-helpers (7 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)
@@ -62,12 +66,12 @@ Workflow to generate
     - rust-velnor-actions-actionlint (30 steps)
     - rust-velnor-actions-ansible (30 steps)
     - rust-velnor-actions-bun (30 steps)
-    - rust-velnor-actions-cli (33 steps)
+    - rust-velnor-actions-cli (35 steps)
     - rust-velnor-actions-contract (31 steps)
     - rust-velnor-actions-dbt (30 steps)
     - rust-velnor-actions-gradle (30 steps)
     - rust-velnor-actions-mise (31 steps)
-    - rust-velnor-actions-orchestrator (32 steps)
+    - rust-velnor-actions-orchestrator (34 steps)
     - rust-velnor-actions-rust (31 steps)
     - rust-velnor-actions-tofu (30 steps)
     - rust-velnor-actions-workflow-renderer (32 steps)

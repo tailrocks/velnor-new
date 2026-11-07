@@ -21,8 +21,14 @@ mod budget;
 #[path = "homebrew_qualification_prepare.rs"]
 mod prepare;
 use budget::absolute_deadline;
+#[path = "homebrew_qualification_handoff.rs"]
+mod handoff;
 #[path = "homebrew_qualification_record.rs"]
 mod record;
+
+pub use handoff::{
+    admit_homebrew_qualification_from_env, finalize_homebrew_qualification_from_env,
+};
 
 use record::{HistoricalRecord, admission};
 
@@ -41,11 +47,11 @@ pub fn execute_homebrew_qualification_from_env() -> Result<(), OrchestratorError
     let deadline = absolute_deadline()?;
     let candidate = crate::homebrew::hosted_profile::verify_release_qualification_candidate()?;
     let (plan, spec, a, d) = load_catalog()?;
-    let (verified_a, verified_d) = verify_historical_pair(&plan, &a, &d, deadline)?;
-    let _hosted_profile_evidence =
-        crate::homebrew::hosted_profile::prepare_for_release_qualification(&candidate, deadline)?;
-    install_preview_transition(&spec, &plan, &verified_a, &verified_d, &a, &d, deadline)?;
-    verify_stable_fixture(&spec, &plan)
+    handoff::require_credential_free_environment()?;
+    let admitted = handoff::read_admission(&candidate, &plan, &spec, &a, &d)?;
+    install_preview_transition(&spec, &plan, &candidate, &admitted, &a, &d, deadline)?;
+    verify_stable_fixture(&spec, &plan)?;
+    handoff::write_result(&admitted)
 }
 
 fn load_catalog() -> Result<
@@ -85,21 +91,22 @@ fn verify_historical_pair(
     deadline: CheckDeadline,
 ) -> Result<
     (
-        crate::package_release_public::VerifiedPublicPackageRelease,
-        crate::package_release_public::VerifiedPublicPackageRelease,
+        crate::release::package_release_public::VerifiedPublicPackageRelease,
+        crate::release::package_release_public::VerifiedPublicPackageRelease,
     ),
     OrchestratorError,
 > {
-    let current_main = crate::package_release_publish::verify_public_protected_main_lineage(
-        REPOSITORY,
-        REPOSITORY_ID,
-        "main",
-        &a.release.source_sha,
-        &a.producer.authority_sha,
-        deadline,
-    )?;
+    let current_main =
+        crate::release::package_release_publish::verify_public_protected_main_lineage(
+            REPOSITORY,
+            REPOSITORY_ID,
+            "main",
+            &a.release.source_sha,
+            &a.producer.authority_sha,
+            deadline,
+        )?;
     let policy =
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             plan.clone(),
             REPOSITORY_ID,
             current_main.clone(),
@@ -113,7 +120,7 @@ fn verify_historical_pair(
     verify_custody_pair(plan, &verified_a, &verified_d, &current_main)?;
     check_receipt(&verified_a, a)?;
     check_receipt(&verified_d, d)?;
-    let final_main = crate::package_release_publish::verify_public_protected_main_lineage(
+    let final_main = crate::release::package_release_publish::verify_public_protected_main_lineage(
         REPOSITORY,
         REPOSITORY_ID,
         "main",
@@ -129,8 +136,8 @@ fn verify_historical_pair(
 
 fn verify_custody_pair(
     plan: &velnor_actions_contract::PackageReleasePlan,
-    verified_a: &crate::package_release_public::VerifiedPublicPackageRelease,
-    verified_d: &crate::package_release_public::VerifiedPublicPackageRelease,
+    verified_a: &crate::release::package_release_public::VerifiedPublicPackageRelease,
+    verified_d: &crate::release::package_release_public::VerifiedPublicPackageRelease,
     current_main: &str,
 ) -> Result<(), OrchestratorError> {
     if !verified_a.is_historical_admission()
@@ -148,8 +155,8 @@ fn verify_custody_pair(
 fn install_preview_transition(
     spec: &HomebrewFormulaSpec,
     plan: &velnor_actions_contract::PackageReleasePlan,
-    verified_a: &crate::package_release_public::VerifiedPublicPackageRelease,
-    verified_d: &crate::package_release_public::VerifiedPublicPackageRelease,
+    candidate: &crate::homebrew::hosted_profile::VerifiedReleaseQualificationCandidate,
+    admitted: &handoff::AdmittedQualification,
     a: &HistoricalRecord,
     d: &HistoricalRecord,
     deadline: CheckDeadline,
@@ -157,8 +164,10 @@ fn install_preview_transition(
     let runner_temp = std::env::var_os("RUNNER_TEMP")
         .ok_or_else(|| internal("homebrew_qualification_runner_temp"))?;
     let base = private_tempdir_in(Path::new(&runner_temp), "velnor-homebrew-ad")?;
-    let prepared_a = prepare::make_request(spec, plan, verified_a, a, &base.path().join("a"))?;
-    let prepared_d = prepare::make_request(spec, plan, verified_d, d, &base.path().join("d"))?;
+    let prepared_a = prepare::make_request(spec, plan, admitted.a(), a, &base.path().join("a"))?;
+    let prepared_d = prepare::make_request(spec, plan, admitted.d(), d, &base.path().join("d"))?;
+    let _hosted_profile_evidence =
+        crate::homebrew::hosted_profile::prepare_for_release_qualification(candidate, deadline)?;
     let request_a = prepared_a.request(spec, deadline);
     let request_d = prepared_d.request(spec, deadline);
     let (_evidence_a, custody_a) =
@@ -320,23 +329,40 @@ fn validate_record_release(
 }
 
 fn verify(
-    policy: &crate::package_release_public::PackageReleasePublicPolicy,
+    policy: &crate::release::package_release_public::PackageReleasePublicPolicy,
     record: &HistoricalRecord,
     deadline: CheckDeadline,
-) -> Result<crate::package_release_public::VerifiedPublicPackageRelease, OrchestratorError> {
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+) -> Result<crate::release::package_release_public::VerifiedPublicPackageRelease, OrchestratorError>
+{
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         PackageReleaseChannel::Preview,
         record.release.tag.clone(),
         record.release.source_sha.clone(),
     )?;
-    crate::package_release_public::verify_public_package_release(policy, &selection, deadline)
+    crate::release::package_release_public::verify_public_package_release(
+        policy, &selection, deadline,
+    )
 }
 
 fn check_receipt(
-    verified: &crate::package_release_public::VerifiedPublicPackageRelease,
+    verified: &crate::release::package_release_public::VerifiedPublicPackageRelease,
     record: &HistoricalRecord,
 ) -> Result<(), OrchestratorError> {
     let receipt = verified.receipt();
+    check_receipt_identity(receipt, record)?;
+    let receipt_bytes = verified.asset_bytes("release.json")?;
+    if receipt_bytes.len() as u64 != record.release.receipt_size
+        || sha256(&receipt_bytes) != record.release.receipt_sha256
+    {
+        return Err(internal("homebrew_qualification_receipt_bytes"));
+    }
+    Ok(())
+}
+
+fn check_receipt_identity(
+    receipt: &velnor_actions_contract::package_release::PackageReleaseReceipt,
+    record: &HistoricalRecord,
+) -> Result<(), OrchestratorError> {
     if receipt.channel != PackageReleaseChannel::Preview
         || receipt.repository.slug != REPOSITORY
         || receipt.repository.id != REPOSITORY_ID
@@ -352,12 +378,6 @@ fn check_receipt(
         || receipt.version.commit_count != Some(record.release.commit_count)
     {
         return Err(internal("homebrew_qualification_receipt_expectation"));
-    }
-    let receipt_bytes = verified.asset_bytes("release.json")?;
-    if receipt_bytes.len() as u64 != record.release.receipt_size
-        || sha256(&receipt_bytes) != record.release.receipt_sha256
-    {
-        return Err(internal("homebrew_qualification_receipt_bytes"));
     }
     Ok(())
 }

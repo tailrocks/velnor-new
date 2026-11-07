@@ -15,12 +15,12 @@ use super::{
     optional_checked_source, validate_config_shape, validate_mbx_tool_closure,
     validate_task_source_shape, validate_task_tool_selection,
 };
-use crate::build_task_tools::resolve_selected_tools;
-use crate::native_tool_input::{NativeMiseConfig, NativeToolSource};
-use crate::native_tool_lock::{NativeMiseLock, rust_toolchain_options};
-use crate::pins::resolve_build_task_mise_setup;
+use crate::planner::build_task_tools::resolve_selected_tools;
+use crate::planner::native_tool_input::{NativeMiseConfig, NativeToolSource};
+use crate::planner::native_tool_lock::{NativeMiseLock, rust_toolchain_options};
+use crate::planner::pins::resolve_build_task_mise_setup;
 use crate::toolcheck::ToolInputCheck;
-use crate::{OrchestratorError, discover::Discovery};
+use crate::{OrchestratorError, planner::discover::Discovery};
 
 pub(crate) fn policies(
     config: &VelnorConfig,
@@ -168,9 +168,11 @@ fn selected_task_tools(
 ) -> Result<TaskToolSelection, OrchestratorError> {
     let mut merged_tasks = root.mise_config.clone();
     merged_tasks.tasks.extend(task_config.tasks.clone());
-    let local_task_tools =
-        crate::native_mise_tasks::selected_build_task_tools(&merged_tasks, &task.mise_task)
-            .map_err(|problem| failure(build_task_graph_problem(problem)))?;
+    let local_task_tools = crate::planner::native_mise_tasks::selected_build_task_tools(
+        &merged_tasks,
+        &task.mise_task,
+    )
+    .map_err(|problem| failure(build_task_graph_problem(problem)))?;
     let selected_tools = resolve_selected_tools(
         task,
         root.mise_config,

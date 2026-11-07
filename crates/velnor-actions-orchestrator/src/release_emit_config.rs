@@ -1,24 +1,100 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::config::RustReleaseConfig;
+use crate::OrchestratorError;
+use velnor_actions_contract::config::{ReleaseRegistry, RustReleaseConfig};
 use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};
+use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, ReleaseRenderContext};
 
-pub(super) fn plz_config(
+pub(crate) fn plz_config(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
-) -> ReleasePlzConfig {
-    ReleasePlzConfig {
+) -> Result<ReleasePlzConfig, OrchestratorError> {
+    if release.publish_features.keys().any(|name| {
+        !selection
+            .packages
+            .iter()
+            .any(|package| &package.name == name)
+    }) {
+        return Err(OrchestratorError::unsupported(
+            "publish_features",
+            "feature package is not selected for release",
+        ));
+    }
+    if release.version_groups.values().flatten().any(|name| {
+        !selection
+            .packages
+            .iter()
+            .any(|package| &package.name == name)
+    }) {
+        return Err(OrchestratorError::unsupported(
+            "version_groups",
+            "group package is not selected for release",
+        ));
+    }
+    Ok(ReleasePlzConfig {
         tag_pattern: release.tag_name.clone(),
         semver_check: true,
         packages: selection
             .packages
             .iter()
             .map(|package| ReleasePlzPackage {
+                version_group: release.version_groups.iter().find_map(|(group, members)| {
+                    members.contains(&package.name).then(|| group.clone())
+                }),
                 name: package.name.clone(),
-                publish_features: Vec::new(),
+                publish_features: release
+                    .publish_features
+                    .get(&package.name)
+                    .cloned()
+                    .unwrap_or_default(),
             })
             .collect(),
+    })
+}
+
+pub(super) fn release_render_context() -> ReleaseRenderContext {
+    ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        runs_on: RELEASE_HOSTED_RUNNER.to_owned(),
     }
+}
+
+use crate::{config::CONFIG_REL, planner::prepare::GenerationPreparation};
+use velnor_actions_contract::WorkflowPolicy;
+
+pub(crate) fn enabled_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
+    let Some(release) = release else {
+        return Ok(None);
+    };
+    if !release.enabled {
+        return Ok(None);
+    }
+    if prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "stacks.rust.release.enabled",
+            "release_requires_consumer_policy",
+        ));
+    }
+    Ok(Some(release))
+}
+
+pub(crate) fn git_tag_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    if prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.binary_release.stable.enabled)
+    {
+        return Ok(None);
+    }
+    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
 }

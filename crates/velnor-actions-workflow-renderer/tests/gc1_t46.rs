@@ -48,6 +48,8 @@ mod gc1_t46_driver_b;
 mod gc1_t46_envelopes;
 #[path = "gc1_t46_inputs.rs"]
 mod gc1_t46_inputs;
+#[path = "gc1_t46_real_attestation.rs"]
+mod gc1_t46_real_attestation;
 #[path = "gc1_t46_reject_a.rs"]
 mod gc1_t46_reject_a;
 #[path = "gc1_t46_reject_b.rs"]

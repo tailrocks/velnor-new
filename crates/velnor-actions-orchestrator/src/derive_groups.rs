@@ -15,7 +15,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::{PlannedWorkspace, workspace_manifest};
+use crate::planner::discover::{PlannedWorkspace, workspace_manifest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeatureFallback {

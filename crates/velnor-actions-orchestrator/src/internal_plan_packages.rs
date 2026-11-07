@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_actions_contract::PlanPackage;
 
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
     let mut packages = Vec::new();
@@ -76,7 +76,7 @@ fn package_row(
 }
 
 fn tofu_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPackage> {
-    let mut roots = crate::select_tofu::tofu_selected_roots(&discovery.statuses);
+    let mut roots = crate::planner::select_tofu::tofu_selected_roots(&discovery.statuses);
     roots.dedup();
     roots
         .iter()

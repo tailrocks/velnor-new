@@ -12,7 +12,7 @@ crate they cover; every file stays under the 400-line gate.
 | One-crate root package, default registry | `impl_rust_release::single_root_package_selects_with_default_registry` |
 | Virtual multi-member workspace | `impl_rust_release_modes::virtual_workspace_multi_member_selects_explicit` |
 | Independent versions unforced without groups | `impl_rust_release_modes::independent_versions_stay_unforced_without_groups` |
-| Groups take max, unchanged stay | `impl_rust_release::version_groups_take_max_while_unchanged_stay` |
+| Group assignments reach release-plz; single-package uploads omit groups | `crate_upload_config_public::upload_config_selects_one_package_and_preserves_policy` |
 | Explicit subset ignores CI affected-state | `impl_rust_release::explicit_subset_ignores_ci_affected_state` |
 | `publish = false` never publishes | `impl_rust_release::publishable_workspace_skips_private_helpers` |
 | Bad/restricted registries fail closed | `impl_rust_release::unsupported_registry_fails_closed_until_supported`, `impl_rust_release_modes::publishable_workspace_fails_on_restricted_registries` |
@@ -32,8 +32,7 @@ crate they cover; every file stays under the 400-line gate.
 
 `impl_contract_release.rs`: disabled-by-default, unknown-field rejection,
 duplicate/unsorted/unsafe selection, contradictory auth modes, bootstrap
-mismatch fail-closed, manifest/environment/tag validation, non-lockstep
-allowlist-bound groups, stack key paths, determinism, IR permission rules,
+mismatch fail-closed, manifest/environment/tag validation, allowlist-bound version groups, stack key paths, determinism, IR permission rules,
 dispatch charset/order, schedule and environment safety.
 
 ## Coordinator argv (`velnor-actions-mise`)
@@ -52,7 +51,7 @@ semantics, spaced-path argv safety, coordinator payload equality past `--`.
 | Scalar validators (env, repo, SHA, plan, package, version) | `impl_renderer_release_spec` (5 tests) |
 | Dispatch binds approved plan + source SHA | `impl_renderer_release_spec::dispatch_inputs_bind_the_approved_plan_and_source` |
 | Exact branches; no PR/fork event shapes | `impl_renderer_release_spec::triggers_pin_exact_branches_without_pr_or_fork_events` |
-| Stable lock queues; never cancels | `impl_renderer_release_spec::concurrency_queues_on_a_stable_lock_and_never_cancels` |
+| Stable lock queues up to 100 pending runs without canceling a running release | `impl_renderer_release_spec::concurrency_queues_on_a_stable_lock_and_never_cancels` |
 | Lock anchors on repository identity | `impl_renderer_release_spec::lock_anchor_requires_the_repository_identity` |
 | Publish gate binds repo/plan/source | `impl_renderer_release_spec::publish_gate_binds_repo_plan_and_source_exactly` |
 | Effective config validation + golden TOML | `impl_renderer_release_config` (6 tests incl. golden snapshot) |

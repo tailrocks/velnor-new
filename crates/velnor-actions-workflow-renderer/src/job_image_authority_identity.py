@@ -218,7 +218,7 @@ def select_ci_run(value, source):
     return {"run_id": latest["id"], "run_attempt": latest["run_attempt"]}
 
 
-def validate_attestation_output(value, source):
+def validate_attestation_output(value, identity, expected_subjects):
     if not isinstance(value, list) or not value:
         raise AuthorityError("Attestation verification output has no records.")
     for item in value:
@@ -234,13 +234,35 @@ def validate_attestation_output(value, source):
             raise AuthorityError("Attestation certificate repository ID is incorrect.")
         if (
             certificate.get("githubWorkflowRepository") != REPOSITORY
-            or certificate.get("githubWorkflowSHA") != source
+            or certificate.get("githubWorkflowSHA") != identity["source"]
             or certificate.get("githubWorkflowRef") != "refs/heads/main"
-            or certificate.get("githubWorkflowTrigger") != "workflow_dispatch"
+            or certificate.get("githubWorkflowTrigger") != identity["event"]
             or certificate.get("sourceRepositoryRef") != "refs/heads/main"
-            or certificate.get("sourceRepositoryDigest") != source
+            or certificate.get("sourceRepositoryDigest") != identity["source"]
         ):
             raise AuthorityError("Attestation certificate source or workflow identity is incorrect.")
+        invocation = (
+            f"https://github.com/{REPOSITORY}/actions/runs/"
+            f"{identity['run_id']}/attempts/{identity['run_attempt']}"
+        )
+        if certificate.get("runInvocationURI") != invocation:
+            raise AuthorityError("Attestation certificate run identity is incorrect.")
+        try:
+            subjects = item["verificationResult"]["statement"]["subject"]
+        except (KeyError, TypeError) as error:
+            raise AuthorityError("Attestation subjects are incorrect.") from error
+        if not isinstance(subjects, list) or len(subjects) != len(expected_subjects):
+            raise AuthorityError("Attestation subjects are incorrect.")
+        actual = {}
+        for subject in subjects:
+            if not isinstance(subject, dict) or set(subject) != {"name", "digest"}:
+                raise AuthorityError("Attestation subjects are incorrect.")
+            name, digest = subject["name"], subject["digest"]
+            if not isinstance(name, str) or name in actual or not isinstance(digest, dict) or set(digest) != {"sha256"}:
+                raise AuthorityError("Attestation subjects are incorrect.")
+            actual[name] = digest["sha256"]
+        if actual != expected_subjects:
+            raise AuthorityError("Attestation subjects are incorrect.")
     return len(value)
 
 

@@ -6,9 +6,11 @@ use std::path::Path;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::generate::guards::prepare_preview_dir;
-use crate::generate::{check_tree_paths, leaf_links::is_symlink, preserve, swap_directories};
-use crate::prepare::GenerationPreparation;
+use crate::planner::generate::guards::prepare_preview_dir;
+use crate::planner::generate::{
+    check_tree_paths, leaf_links::is_symlink, preserve, swap_directories,
+};
+use crate::planner::prepare::GenerationPreparation;
 
 pub(super) fn write_preview(
     prep: &GenerationPreparation,

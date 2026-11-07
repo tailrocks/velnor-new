@@ -168,7 +168,7 @@ pub(crate) fn check_rejects_bad_setup_and_identity(
     }
     let unsupported = payload(
         setup,
-        "ubuntu-20.04",
+        "macos-15",
         "x86_64-unknown-linux-gnu",
         &["gh@2.103.2", "opentofu@1.13.2"],
         None,

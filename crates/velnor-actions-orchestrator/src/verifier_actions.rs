@@ -67,7 +67,7 @@ impl InlineVerifierTemplate {
 pub(crate) fn producer_cargo_env(
     catalog: &ToolCatalog,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    let mut env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let mut env = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     for (native, mise) in [
         ("CARGO_HOME", "MISE_CARGO_HOME"),
         ("RUSTUP_HOME", "MISE_RUSTUP_HOME"),
@@ -105,6 +105,22 @@ struct InlineVerifierTemplates {
 }
 
 impl VerifierActionSet {
+    pub(crate) fn add_release_rust_template(
+        &mut self,
+        catalog: &ToolCatalog,
+    ) -> Result<(), OrchestratorError> {
+        let step = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+            catalog,
+            crate::workflow::ToolchainPhase::Installed,
+        )?;
+        let template = InlineVerifierTemplate::wrapped(&step, &["RUSTUP_HOME", "CARGO_HOME"])?;
+        self.inline_rust_templates
+            .entry(crate::workflow::VERIFY_RUST_MANIFEST_STEP)
+            .or_default()
+            .push(template.clone());
+        self.inline_installed_rust_templates.push(template);
+        Ok(())
+    }
     pub(crate) fn build(
         catalog: &ToolCatalog,
         generator_version: &str,

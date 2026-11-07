@@ -9,8 +9,8 @@ use velnor_actions_rust::WorkspaceRecord;
 use super::require_metadata_tools;
 use crate::OrchestratorError;
 use crate::decisions::{metadata_failure_error, transient_problem};
-use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
-use crate::generate::ToolSnapshot;
+use crate::planner::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
+use crate::planner::generate::ToolSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkspaceResolve {
@@ -28,7 +28,7 @@ fn lockless_graph(record: &WorkspaceRecord) -> Result<velnor_actions_rust::Resol
         .filter(|package| !package.external)
         .map(|package| velnor_actions_rust::ResolvedPathPackage {
             id: package.id.clone(),
-            dir: crate::select_affected::manifest_dir(&package.manifest),
+            dir: crate::planner::select_affected::manifest_dir(&package.manifest),
         })
         .collect();
     path_packages.sort();

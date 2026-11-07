@@ -137,9 +137,17 @@ impl GitHubApi {
     }
 
     pub(super) fn download_asset(&self, id: u64) -> Result<Vec<u8>, OrchestratorError> {
+        self.download_asset_bounded(id, ASSET_LIMIT)
+    }
+
+    pub(super) fn download_asset_bounded(
+        &self,
+        id: u64,
+        limit: usize,
+    ) -> Result<Vec<u8>, OrchestratorError> {
         self.request_accept(
             vec![OsString::from(self.route(&format!("releases/assets/{id}")))],
-            ASSET_LIMIT,
+            limit.min(ASSET_LIMIT),
             "application/octet-stream",
         )
     }
@@ -286,12 +294,35 @@ impl GitHubApi {
         self.request_accept(request_args, limit, "application/vnd.github+json")
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_read_fixture(responses: std::collections::BTreeMap<String, Vec<u8>>) {
+        READ_FIXTURE.with(|fixture| *fixture.borrow_mut() = Some(responses));
+    }
+
     fn request_accept(
         &self,
         request_args: Vec<OsString>,
         limit: usize,
         accept: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
+        #[cfg(test)]
+        if let Some(result) = READ_FIXTURE.with(|fixture| {
+            let fixture = fixture.borrow();
+            fixture.as_ref().map(|responses| {
+                let raw = request_args
+                    .first()
+                    .and_then(|arg| arg.to_str())
+                    .unwrap_or("");
+                let route = raw.split("&_velnor_read_nonce=").next().unwrap_or(raw);
+                let route = route.split("?_velnor_read_nonce=").next().unwrap_or(route);
+                responses
+                    .get(route)
+                    .cloned()
+                    .ok_or_else(|| internal("fixture_route_missing"))
+            })
+        }) {
+            return result;
+        }
         let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
@@ -307,7 +338,7 @@ impl GitHubApi {
             .unwrap_or(API_TIMEOUT);
         let diagnostic = diagnostics::RequestDiagnostic::new(exec.args(), timeout, limit);
         let result = exec
-            .command(&self.catalog)
+            .command_with_optional_environment_token(&self.catalog)
             .and_then(|command| command.run_bounded(limit, timeout))
             .map_err(|error| diagnostic.command_error(&error))?;
         if !result.success {
@@ -315,4 +346,9 @@ impl GitHubApi {
         }
         Ok(result.stdout)
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static READ_FIXTURE: std::cell::RefCell<Option<std::collections::BTreeMap<String, Vec<u8>>>> = const { std::cell::RefCell::new(None) };
 }

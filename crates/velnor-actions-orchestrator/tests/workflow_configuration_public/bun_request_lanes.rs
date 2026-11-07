@@ -118,6 +118,9 @@ fn assert_writer_request_reaches_plan_internal(
         )
         .into());
     }
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed; 0 failed;")
+    );
     let request: Value = serde_json::from_slice(&fs::read(request_path)?)?;
     assert!(request.get("bun_job_lanes").is_none());
     let response_json = fs::read_to_string(response_path)?;

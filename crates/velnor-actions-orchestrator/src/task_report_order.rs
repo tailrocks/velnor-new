@@ -18,7 +18,11 @@ pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec
             };
             for id in ids {
                 ordered.push((
-                    crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id),
+                    crate::planner::obligation_order::obligation_order_key(
+                        &entry.stack_id,
+                        kind,
+                        id,
+                    ),
                     kind.as_str(),
                 ));
             }

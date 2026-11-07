@@ -201,12 +201,6 @@ pub(crate) fn artifact_response_json() -> String {
     )
 }
 
-pub(crate) fn attestation_json() -> String {
-    format!(
-        "[{{\"verificationResult\":{{\"signature\":{{\"certificate\":{{\"sourceRepositoryIdentifier\":1390620900,\"githubWorkflowRepository\":\"tailrocks/velnor-new\",\"githubWorkflowSHA\":\"{SOURCE_SHA}\",\"githubWorkflowRef\":\"refs/heads/main\",\"githubWorkflowTrigger\":\"workflow_dispatch\",\"sourceRepositoryRef\":\"refs/heads/main\",\"sourceRepositoryDigest\":\"{SOURCE_SHA}\"}}}}}}}}]"
-    )
-}
-
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,
     pub(crate) driver: std::path::PathBuf,
@@ -277,12 +271,12 @@ pub(crate) fn pins() -> ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
         macos_x86_64_setup: setup,
-        install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
+        install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.3"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
         install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: install_runner_build_tools_argv(),
-        install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),
+        install_gh_argv: argv(&["mise", "install", "gh@2.103.3"]),
         build_argv: argv(&[
             "mbx",
             "build",
@@ -315,11 +309,23 @@ pub(crate) fn pins() -> ProductReleasePins {
         resource_probe_release_test_argv: resource_probe_release_test_argv(),
         lint_argv: argv(&["bash", "-c", "exit 0"]),
         verify_lint_argv: verify_lint_argv(),
-        gh_argv: argv(&["gh"]),
+        gh_argv: argv(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            &format!(
+                "gh@{}",
+                velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version
+            ),
+            "--",
+            "gh",
+        ]),
         rust_version: "1.91.0".to_owned(),
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
-        gh_version: "2.103.2".to_owned(),
+        gh_version: "2.103.3".to_owned(),
     }
 }
 
@@ -356,3 +362,24 @@ pub(crate) use gc1_t51_stream::*;
 mod gc1_t51_argv;
 
 use gc1_t51_argv::*;
+
+#[test]
+fn image_candidate_runs_on_branches_and_dispatch_but_not_tags() -> Result<(), Box<dyn Error>> {
+    let workflow: serde_json::Value = serde_saphyr::from_str(&candidate_text()?)?;
+    assert_eq!(
+        workflow["on"]["push"]["branches"],
+        serde_json::json!(["**"])
+    );
+    assert!(workflow["on"]["push"].get("tags").is_none());
+    assert!(workflow["on"].get("workflow_dispatch").is_some());
+    let permissions = &workflow["jobs"]["attest-image-candidate"]["permissions"];
+    assert_eq!(permissions["attestations"], "write");
+    assert_eq!(permissions["artifact-metadata"], "write");
+    assert_eq!(permissions["id-token"], "write");
+    let condition = workflow["jobs"]["publish-job-image"]["if"]
+        .as_str()
+        .ok_or("publish condition")?;
+    assert!(condition.contains("github.event_name == 'workflow_dispatch'"));
+    assert!(condition.contains("github.ref == 'refs/heads/main'"));
+    Ok(())
+}

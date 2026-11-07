@@ -77,7 +77,11 @@ pub(super) fn source_files(
     paths
         .iter()
         .map(|path| {
-            let bytes = if profile == FixtureProfile::Job && !semantic.contains(path) {
+            let bytes = if profile == FixtureProfile::Job
+                && !semantic.contains(path)
+                && *path
+                    != "crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt"
+            {
                 format!("fixture source: {path}\n").into_bytes()
             } else {
                 fs::read(root.join(path))?

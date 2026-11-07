@@ -29,7 +29,7 @@ impl SealedArchive {
         size: u64,
         digest: &str,
     ) -> Result<Self, OrchestratorError> {
-        crate::check_evidence::reject_link_components(
+        crate::planner::check_evidence::reject_link_components(
             Path::new("/"),
             parent
                 .strip_prefix("/")

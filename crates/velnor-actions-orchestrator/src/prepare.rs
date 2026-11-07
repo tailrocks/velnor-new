@@ -12,9 +12,9 @@ use velnor_actions_mise::{GitRequest, OperatorToolchainGuard, ToolCatalog};
 use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
-use crate::discover::{Discovery, discover_with_options};
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::source_prep::lockful_roots;
+use crate::planner::discover::{Discovery, discover_with_options};
+use crate::planner::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
@@ -111,8 +111,7 @@ fn prepare_inner(
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_verification_branch(&config, &default_branch)?;
-    let mut discovery =
-        discover_with_options(&canonical, &config, &catalog, phases, guard)?;
+    let mut discovery = discover_with_options(&canonical, &config, &catalog, phases, guard)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
@@ -202,7 +201,9 @@ fn load_published_generator_lock(
         }
     })?;
     match approved {
-        Some(approved) => crate::finalized::validate_approved_generator_lock(&lock, approved)?,
+        Some(approved) => {
+            crate::planner::finalized::validate_approved_generator_lock(&lock, approved)?;
+        }
         None => {
             return Err(OrchestratorError::Contract {
                 problem: "controller_approvals:missing_approval".to_owned(),
@@ -299,7 +300,8 @@ pub(crate) fn check_velnor_identity(
         return Ok(());
     }
     if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
-        && velnor_actions_contract::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
+        && velnor_actions_contract::validate_repository_slug(&hint).as_deref()
+            != Some(VELNOR_IDENTITY)
     {
         return Err(OrchestratorError::IdentityRejected {
             problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"
@@ -315,7 +317,7 @@ pub(crate) fn check_velnor_identity(
 }
 
 fn origin_matches(root: &Path) -> bool {
-    crate::origin::origin_url_via_git(root).is_some_and(|url| url_matches_identity(&url))
+    crate::planner::origin::origin_url_via_git(root).is_some_and(|url| url_matches_identity(&url))
 }
 
 fn url_matches_identity(value: &str) -> bool {

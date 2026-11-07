@@ -41,7 +41,7 @@ pub(super) fn cargo_workspaces(input: &WorkflowBuildInput<'_>) -> Vec<CargoWorks
         .iter()
         .map(|workspace| {
             let root = workspace.record.workspace_root.clone();
-            let lock = crate::discover::workspace_lock(&root);
+            let lock = crate::planner::discover::workspace_lock(&root);
             CargoWorkspaceFact {
                 root,
                 test_runner: workspace.profile.test_runner,

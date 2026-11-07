@@ -47,7 +47,7 @@ fn prepare_admitted(
     {
         return Err(internal("tap_static_policy_mismatch"));
     }
-    let source_repository = crate::release_identity::origin_repository(&workspace)?;
+    let source_repository = crate::release::release_identity::origin_repository(&workspace)?;
     let spec = static_formula_policy()?;
     match (config.distribution.homebrew_formula.as_ref(), spec.as_ref()) {
         (Some(source_spec), Some(spec))
@@ -58,7 +58,7 @@ fn prepare_admitted(
         (None, None) => {}
         _ => return Err(internal("tap_static_formula_spec_mismatch")),
     }
-    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+    let sdk_artifact_digest = crate::planner::generator::current_exe_sha256()
         .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let release = super::VerifiedPackageRelease {
         receipt_digest,

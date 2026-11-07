@@ -4,7 +4,7 @@
 use velnor_actions_contract::ReleaseTarget;
 use velnor_actions_workflow_renderer::{EvidenceHelperProvenance, release_helpers};
 
-use crate::{OrchestratorError, discover::Discovery};
+use crate::{OrchestratorError, planner::discover::Discovery};
 
 pub(crate) fn consumer_evidence_helper(
     label: &str,

@@ -190,7 +190,7 @@ fn matches_executables(
     }
     for executable in &qualified.executables {
         check_deadline(deadline)?;
-        crate::check_evidence::reject_link_components(root, &executable.path)?;
+        crate::planner::check_evidence::reject_link_components(root, &executable.path)?;
         match std::fs::symlink_metadata(root.join(&executable.path)) {
             Ok(metadata) if metadata.is_file() => {}
             Ok(_) => return Ok(false),

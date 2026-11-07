@@ -133,7 +133,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 &files,
             ),
             publish_job(
-                hosted,
+                runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,
                 &Publish {
                     id: "publish-images",
                     name: "Publish runner images",
@@ -190,7 +190,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 &files,
             ),
             publish_job(
-                macos,
+                runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,
                 &Publish {
                     id: "publish-binary",
                     name: "Publish velnor-host",

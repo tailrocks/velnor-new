@@ -9,7 +9,7 @@ use velnor_actions_contract::{
 };
 
 use super::super::MergeRequest;
-use crate::cover::Signals;
+use crate::planner::cover::Signals;
 
 pub(crate) fn check_group_ledgers(
     plan: &Plan,

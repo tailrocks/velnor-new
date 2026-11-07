@@ -12,7 +12,7 @@ use velnor_actions_contract::{
 };
 
 use crate::OrchestratorError;
-use crate::config_stacks::PartialStacks;
+use crate::planner::config_stacks::PartialStacks;
 #[path = "config_workflow.rs"]
 mod workflow;
 use workflow::PartialWorkflow;
@@ -319,12 +319,10 @@ mod tests {
                 .expect("clock must advance")
                 .as_nanos()
         ));
-        let source =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
         let config_text = std::fs::read_to_string(&source).expect("repo config must exist");
         std::fs::create_dir_all(dir.join(".velnor")).expect("fixture must build");
-        std::fs::write(dir.join(".velnor/config.toml"), config_text)
-            .expect("fixture must write");
+        std::fs::write(dir.join(".velnor/config.toml"), config_text).expect("fixture must write");
         dir
     }
 
@@ -339,10 +337,9 @@ mod tests {
     #[test]
     fn policy_load_reads_config_with_live_deadline() {
         let dir = fixture_root_with_repo_config("live");
-        let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
-            60,
-        ))
-        .expect("test deadline must build");
+        let deadline =
+            velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+                .expect("test deadline must build");
         let policy =
             load_workflow_policy_until(&dir, deadline).expect("live policy load must succeed");
         assert_eq!(policy, WorkflowPolicy::VelnorRepositoryV1);

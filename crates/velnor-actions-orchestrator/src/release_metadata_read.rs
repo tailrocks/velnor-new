@@ -4,7 +4,9 @@
 use crate::{OrchestratorError, internal::internal};
 use std::{fs, io::Read as _, os::unix::fs::MetadataExt as _, path::Path};
 
-pub(in crate::package_release_publish) fn read(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
+pub(in crate::release::package_release_publish) fn read(
+    path: &Path,
+) -> Result<Vec<u8>, OrchestratorError> {
     read_after_open(path, || {})
 }
 

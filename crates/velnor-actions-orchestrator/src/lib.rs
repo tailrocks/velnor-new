@@ -6,94 +6,90 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
-macro_rules! private_mods {
-    ($($module:ident),* $(,)?) => {
-        $(mod $module;)*
-    };
-}
-
-private_mods!(affected_inputs, api, attach);
-private_mods!(binary_preview_emit, binary_release_emit);
-private_mods!(build_task_tools, build_tasks);
-private_mods!(bun_assets_handoff, cache_admission);
-private_mods!(cache_archive, cache_inventory);
-private_mods!(cache_snapshot);
-private_mods!(check_evidence, check_runtime);
-private_mods!(clippy_groups, config);
-private_mods!(
-    config_stacks,
-    controller_approval,
-    controller_manifest_digest,
-    cover
-);
-private_mods!(crate_job_ids, crate_jobs);
-private_mods!(critical_path, derive_groups);
-private_mods!(discover, discover_index);
-private_mods!(discover_tofu, error, evidence);
-private_mods!(extension_schemas);
-private_mods!(filesystem_owner, finalized);
-private_mods!(freshness_emit, generate);
-private_mods!(generator, gh_download, git_paths);
 #[cfg(test)]
-mod git_fixture;
-private_mods!(github_authority_read, github_landed_pull, homebrew);
-private_mods!(image_build_tasks, image_maintenance);
-private_mods!(image_prebuilt, init, internal);
-private_mods!(internal_plan, internal_request);
-private_mods!(inventory, inventory_reuse);
-private_mods!(lock_audit, matrix_step);
-private_mods!(mbx_preflight, merge);
-private_mods!(merge_request, native_image_tasks);
-private_mods!(native_mise_tasks, native_mise_version);
-private_mods!(
-    native_tool_input,
-    native_tool_lock,
-    native_validator_tool_qualification
-);
-private_mods!(non_inputs, noop_report, obligation_order);
-private_mods!(origin, owned_tool_preview);
-private_mods!(owned_tool_publication);
-private_mods!(package_publication);
-private_mods!(package_release_artifacts);
-private_mods!(package_release_public);
-private_mods!(package_release_publish);
-private_mods!(package_release_signer);
-private_mods!(parallel_target_seed);
-private_mods!(pins, plan, plan_dispositions);
-private_mods!(plan_output_limits, plan_stacks);
-private_mods!(prepare, preseed_manifest);
-private_mods!(preview_producer, product_release_pins);
-private_mods!(provenance, publish_emit);
-private_mods!(publish_release_steps, publish_steps);
-private_mods!(qualification_candidate, selected_preview_identity);
-private_mods!(qualification_resolver);
-private_mods!(qualify, recommendations);
-private_mods!(release_checkouts, release_emit);
-private_mods!(release_identity, release_steps);
-private_mods!(release_task_identity);
-private_mods!(required_dispositions);
-private_mods!(retrieve_reports, retrieve_retry);
-private_mods!(review_completion_workflow_emit);
-private_mods!(root, routing, safe_read);
-private_mods!(select, select_affected);
-private_mods!(select_edges, select_reads);
-private_mods!(select_reads_lex, select_reads_scan);
-private_mods!(select_symlinks, select_tofu);
-private_mods!(source_cache, source_prep, state_roots);
-private_mods!(stable_release_emit, tap_history_relevance, tap_merge);
-private_mods!(
-    tap_prepare,
-    tap_source_freshness,
-    tap_writer_history_timestamp
-);
-private_mods!(task_execution, task_report_aggregate);
-private_mods!(tofu_apply_emit, tofu_cache);
-private_mods!(toolcheck, toolfindings, utf8);
-private_mods!(validate, validate_shell);
-private_mods!(validators, vectors);
-private_mods!(verification_tasks, verify);
-private_mods!(workflow, workflow_jobs);
-private_mods!(workflow_task_jobs);
+extern crate self as velnor_actions_orchestrator;
+#[cfg(test)]
+mod libtest_case;
+
+mod api;
+mod bun_assets_handoff;
+mod cache_admission;
+mod cache_archive;
+mod cache_inventory;
+mod cache_snapshot;
+mod config;
+mod controller_approval;
+mod controller_manifest_digest;
+pub mod crate_release_checkout;
+pub mod crate_release_controller;
+pub mod crate_release_github;
+pub mod crate_release_http;
+pub mod crate_release_pr_artifact;
+pub mod crate_release_qualification_approval;
+pub mod crate_release_qualification_bundle;
+pub mod crate_release_qualification_capture;
+pub mod crate_release_qualification_checks;
+pub mod crate_release_qualification_inputs;
+pub mod crate_release_qualification_intent;
+pub mod crate_release_qualification_manifest;
+pub mod crate_release_qualification_observation;
+pub mod crate_release_qualification_package;
+pub mod crate_release_qualification_provider;
+pub mod crate_release_qualification_snapshot;
+pub mod crate_release_qualification_source;
+pub mod crate_release_qualification_witness;
+pub mod crate_release_qualification_workflow;
+pub mod crate_release_registry;
+pub mod crate_release_tool_artifact;
+pub mod crate_release_tool_download;
+mod error;
+mod filesystem_owner;
+mod gh_download;
+mod git_paths;
+mod github_authority_read;
+mod github_landed_pull;
+pub mod github_review_feedback;
+mod homebrew;
+mod image_build_tasks;
+mod image_maintenance;
+mod image_prebuilt;
+mod init;
+mod internal;
+mod internal_plan;
+mod internal_request;
+mod lock_audit;
+mod mbx_preflight;
+mod package_publication;
+mod planner;
+mod preview_producer;
+mod release;
+mod required_dispositions;
+mod review_completion_workflow_emit;
+mod safe_read;
+mod state_roots;
+mod tap_history_relevance;
+mod tap_merge;
+mod tap_prepare;
+mod tap_source_freshness;
+mod tap_writer_history_timestamp;
+mod task_execution;
+mod task_report_aggregate;
+mod tofu_apply_emit;
+mod tofu_cache;
+mod toolcheck;
+mod toolfindings;
+mod utf8;
+mod validate;
+mod validate_shell;
+mod validators;
+mod vectors;
+mod verification_tasks;
+mod verify;
+mod workflow;
+mod workflow_jobs;
+mod workflow_task_jobs;
+pub use release::crate_release_runtime::{parse_crate_release_intent, run_crate_release};
+
 #[expect(
     missing_debug_implementations,
     reason = "T52 binds the T26-owned publication interface; the Debug derive stays with the owning task"
@@ -104,7 +100,10 @@ pub mod cache_publication;
     reason = "T52 binds the T26-owned recovery interface; the Debug derive stays with the owning task"
 )]
 pub mod cache_recovery;
+pub mod crate_release_git;
 pub mod decisions;
+#[cfg(test)]
+mod git_fixture;
 pub mod local_release_manifest;
 pub(crate) mod project_tool_sources;
 pub(crate) mod rust_suites_emit;
@@ -114,3 +113,27 @@ pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
 
 pub use api::*;
+
+pub mod crate_registry_inventory;
+pub use crate_registry_inventory::{
+    CrateInventoryError, CrateRegistryInventory, CrateRegistryVersion, inspect_crate_versions,
+};
+pub mod crate_release_journal;
+pub mod crate_release_journal_adapter;
+pub mod fd_tool_extract;
+
+#[cfg(test)]
+#[path = "../tests/crate_archive_public.rs"]
+mod crate_archive_public;
+#[cfg(test)]
+#[path = "../tests/crate_release_pr_artifact_public.rs"]
+mod crate_release_pr_artifact_public;
+#[cfg(test)]
+#[path = "../tests/crate_source_public.rs"]
+mod crate_source_public;
+#[cfg(test)]
+#[path = "../tests/crate_workspace_plan_public.rs"]
+mod crate_workspace_plan_public;
+
+#[cfg(test)]
+mod offline_attestation_test;

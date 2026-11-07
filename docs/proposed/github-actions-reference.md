@@ -8,6 +8,14 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 
 ---
 
+### Branch-only image candidate trigger (checked 2026-11-05)
+
+GitHub's [push filter syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore) says a branch-only filter does not run for tag pushes. Its [filter pattern reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#filter-pattern-cheat-sheet) defines `**` to include slash-separated names. The job-image candidate workflow uses `branches: ["**"]` to retain branch candidate runs without rebuilding or attesting on a tag push. Manual dispatch remains available; publication retains its separate main-branch dispatch gate.
+
+### Sparse checkout with complete blobs (checked 2026-11-06)
+
+At pinned checkout commit `3d3c42e5aac5ba805825da76410c181273ba90b1`, the [source fetch logic](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/src/git-source-provider.ts) and [shipped bundle](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/dist/index.js) select an explicit `filter` before the implicit `blob:none` filter, then separately configure sparse checkout. A real GitHub sparse clone using `blob:limit=18446744073709551615` retained excluded paths as absent while their indexed blobs remained readable with lazy fetching disabled. Checkout retains its existing `persist-credentials: false` setting.
+
 ## Official Source Repositories
 
 ### 1. Runner Core & Execution Protocol
@@ -544,7 +552,7 @@ GitHub's [repository tarball API](https://docs.github.com/en/rest/repos/contents
 
 GitHub's [repository attestation endpoint](https://docs.github.com/en/rest/repos/attestations#list-attestations) lists attestations for a `sha256:<digest>` subject and paginates using Link headers, with at most 100 entries per page. The response may include an inline bundle or a signed `bundle_url`; GitHub's [breaking changes](https://docs.github.com/en/enterprise-cloud@latest/rest/about-the-rest-api/breaking-changes) describe removing inline bundles. The pinned [GitHub CLI 2.102.0 client](https://github.com/cli/cli/blob/v2.102.0/pkg/cmd/attestation/api/client.go) fetches URL bundles without GitHub API credentials and decodes raw Snappy data. Its attestation lookup limit is finite and capped at 1,000, so an exact run cannot be selected reliably from a fixed prefix of subject history. The [verification command](https://cli.github.com/manual/gh_attestation_verify) accepts a JSONL bundle file containing multiple attestations.
 
-Velnor enumerates the bounded history to completion, retrieves signed bundles without the GitHub token, verifies a bounded JSONL batch cryptographically, and then enforces the exact source, signer, run and attempt on the selected certificate. Oversized, invalid or incomplete evidence fails closed.
+Velnor enumerates the bounded history to completion, retrieves signed bundles without the GitHub token, verifies each distinct bundle cryptographically under one shared deadline and a combined output limit, and then enforces the exact source, signer, run and attempt on the selected certificate. Oversized, invalid or incomplete evidence fails closed.
 
 ## Image publication inventory and registry errors
 
@@ -553,6 +561,10 @@ GitHub's REST endpoints list [workflow-run artifacts](https://docs.github.com/en
 The image publisher requests 100 entries per page and admits at most 20 pages, 2,000 entries, and 16 MiB of cumulative serialized response JSON for an inventory. It requires the same `total_count` on every page, the expected number of entries per page, and unique nonzero IDs. Missing, inconsistent, duplicated, or over-budget evidence fails publication. Each API response is also bounded before JSON parsing.
 
 The [OCI Distribution Specification error table](https://github.com/opencontainers/distribution-spec/blob/4f7750b2ee7ab20238c4e866072e2178d746560b/spec.md#error-codes) distinguishes `NAME_UNKNOWN`, an unknown repository, from `MANIFEST_UNKNOWN`, an unknown manifest. Both represent absence for the authenticated image tag lookup; `UNAUTHORIZED` and `DENIED` do not. The pinned [Crane 0.22.1 error formatter](https://github.com/google/go-containerregistry/blob/v0.22.1/pkg/v1/remote/transport/error.go#L43-L70) prints a single structured error's code and message without its HTTP status. Velnor therefore binds the exact requested reference and manifest URL, accepts only those two absence codes with a bounded single-line message, and rejects other or ambiguous diagnostics. This relies on the registry's OCI error-code semantics; the Crane output does not establish that the response had a particular HTTP status.
+
+## Release concurrency queue
+
+GitHub's [workflow concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) specifies that the default queue retains only one pending run and replaces it when a later run enters the group. `queue: max` retains up to 100 pending runs; runs beyond that limit can be canceled. Queue order follows the time runs start waiting and is not a guarantee of dispatch or commit order. `queue: max` cannot be combined with `cancel-in-progress: true`.
 
 ## Generator publication concurrency
 

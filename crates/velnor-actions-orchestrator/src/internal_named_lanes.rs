@@ -7,7 +7,7 @@ use velnor_actions_contract::{ExecutionMode, NamedCheckLane, named_check_lanes};
 
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::prepare::GenerationPreparation;
+use crate::planner::prepare::GenerationPreparation;
 
 pub(crate) fn resolve_routes(
     prep: &GenerationPreparation,

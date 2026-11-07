@@ -7,10 +7,12 @@ use std::time::Duration;
 use velnor_actions_mise::CheckDeadline;
 
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
 use crate::config::deps_layout::deps_root;
 use crate::config::private_fetch_session::scrub_dir;
 use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition::archive::{
+    ArchiveBudget, extract_archive,
+};
 
 pub(crate) fn prepare_deps_root(workspace: &Path) -> Result<PathBuf, OrchestratorError> {
     let io = |path: &Path, err: std::io::Error| {

@@ -1,0 +1,191 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use super::{
+    BTreeMap, JobParts, JobPermissions, JobTimeout, OrchestratorError, RUST_ARCHIVE, RUST_ARTIFACT,
+    ReleaseJobSpec, ReleaseRole, Step, StepId, StepRole, UPLOAD_ARTIFACT_USES, action_step,
+    ambient_shell_step, conditional, controller_step, receipt_step, upload_record_step,
+};
+use velnor_actions_contract::StepKind;
+
+fn common_source_steps(
+    parts: &JobParts<'_>,
+    require: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = vec![
+        parts.acquire.clone(),
+        parts.policy.clone(),
+        controller_step(
+            parts,
+            if require {
+                "source-require"
+            } else {
+                "source-admit"
+            },
+        )?,
+        conditional(parts.source.clone()),
+    ];
+    if require {
+        steps.push(controller_step(parts, "toolchain-acquire")?);
+    } else {
+        steps.push(conditional(parts.setup.clone()));
+        steps.push(conditional(parts.prepare_rust.clone()));
+    }
+    steps.push(if require {
+        parts.verify_rust.clone()
+    } else {
+        conditional(parts.verify_rust.clone())
+    });
+    Ok(steps)
+}
+
+pub(super) fn preflight_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
+    let mut steps = common_source_steps(parts, false)?;
+    steps.push(conditional(parts.semver.clone()));
+    steps.push(controller_step(parts, "candidate-receipt")?);
+    steps.push(receipt_step()?);
+    steps.push(conditional(
+        velnor_actions_workflow_renderer::release_gates::release_rust_archive_step(
+            parts.rust_version,
+            parts.label,
+        )?,
+    ));
+    let mut upload = action_step(
+        "Upload release Rust toolchain",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), RUST_ARTIFACT.to_owned()),
+            ("path".to_owned(), RUST_ARCHIVE.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("retention-days".to_owned(), "36".to_owned()),
+        ]),
+    )?;
+    upload.id = Some(StepId::ReleaseRustUpload);
+    upload.role = Some(StepRole::ReleaseRustUpload);
+    steps.push(conditional(upload));
+    steps.push(controller_step(parts, "verify-preflight-retention")?);
+    Ok(ReleaseJobSpec {
+        role: ReleaseRole::Preflight,
+        display_name: "Release preflight".to_owned(),
+        runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::CRATE_RELEASE,
+        needs: Vec::new(),
+        outputs: BTreeMap::from([
+            (
+                "rust_artifact_id".to_owned(),
+                "${{ steps.release-rust-upload.outputs.artifact-id }}".to_owned(),
+            ),
+            (
+                "receipt_artifact_id".to_owned(),
+                "${{ steps.release-receipt-upload.outputs.artifact-id }}".to_owned(),
+            ),
+            (
+                "eligible".to_owned(),
+                "${{ steps.release-admission.outputs.eligible }}".to_owned(),
+            ),
+            (
+                "source_sha".to_owned(),
+                "${{ steps.release-admission.outputs.source_sha }}".to_owned(),
+            ),
+        ]),
+        condition: None,
+        environment: None,
+        permissions: JobPermissions::expected(ReleaseRole::Preflight),
+        steps,
+    })
+}
+
+fn publish_steps(parts: &JobParts<'_>, bootstrap: bool) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = common_source_steps(parts, true)?;
+    steps.push(conditional(parts.semver.clone()));
+    steps.push(controller_step(parts, "receipt-acquire")?);
+    steps.push(controller_step(parts, "verify-admission")?);
+    let coordinate = velnor_actions_workflow_renderer::release_gates::COORDINATE_CONDITION;
+    let mut reject = ambient_shell_step(
+        "Reject unsupported release action",
+        vec!["false".into()],
+        BTreeMap::new(),
+    )?;
+    reject.condition =
+        Some(velnor_actions_workflow_renderer::release_gates::REJECT_MODE_CONDITION.into());
+    steps.push(reject);
+    let mut release_plz = parts.release_plz.clone();
+    release_plz.condition = Some(coordinate.into());
+    steps.push(release_plz);
+    for operation in ["journal-start", "journal-coordinate"] {
+        let mut step = controller_step(parts, operation)?;
+        step.condition = Some(coordinate.into());
+        if let StepKind::Shell { env, .. } = &mut step.kind {
+            env.insert("GH_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into());
+            if bootstrap && operation == "journal-coordinate" {
+                env.insert(
+                    "CARGO_REGISTRY_TOKEN".into(),
+                    "${{ secrets.CARGO_REGISTRY_TOKEN }}".into(),
+                );
+            }
+        }
+        steps.push(step);
+    }
+    Ok(steps)
+}
+
+pub(super) fn publish_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
+    Ok(ReleaseJobSpec {
+        role: ReleaseRole::PublishOidc,
+        display_name: "Release publish".to_owned(),
+        runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::CRATE_RELEASE,
+        needs: vec!["release-preflight".to_owned()],
+        outputs: BTreeMap::new(),
+        condition: Some(parts.gate.to_owned()),
+        environment: Some(parts.environment.to_owned()),
+        permissions: JobPermissions::expected(ReleaseRole::PublishOidc),
+        steps: publish_steps(parts, false)?,
+    })
+}
+
+pub(super) fn bootstrap_job(parts: &JobParts<'_>) -> Result<ReleaseJobSpec, OrchestratorError> {
+    Ok(ReleaseJobSpec {
+        role: ReleaseRole::PublishBootstrap,
+        display_name: "Release bootstrap publish".to_owned(),
+        runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::CRATE_RELEASE,
+        needs: vec!["release-preflight".to_owned()],
+        outputs: BTreeMap::new(),
+        condition: Some(parts.gate.to_owned()),
+        environment: Some(parts.environment.to_owned()),
+        permissions: JobPermissions::expected(ReleaseRole::PublishBootstrap),
+        steps: publish_steps(parts, true)?,
+    })
+}
+
+pub(super) fn reconcile_job(
+    parts: &JobParts<'_>,
+    bootstrap: bool,
+) -> Result<ReleaseJobSpec, OrchestratorError> {
+    let publisher = if bootstrap {
+        "release-publish-bootstrap"
+    } else {
+        "release-publish"
+    };
+    let mut steps = common_source_steps(parts, true)?;
+    steps.push(controller_step(parts, "reconciliation-receipt-acquire")?);
+    steps.push(controller_step(parts, "reconcile")?);
+    steps.push(upload_record_step(
+        "Upload reconciliation record",
+        "velnor-crate-release-reconciled",
+        "${{ runner.temp }}/velnor-crate-release-reconciled.json",
+    )?);
+    Ok(ReleaseJobSpec {
+        role: ReleaseRole::Reconcile,
+        display_name: "Release reconcile".to_owned(),
+        runs_on: parts.label.to_owned(),
+        timeout_minutes: JobTimeout::CRATE_RELEASE,
+        needs: vec!["release-preflight".to_owned(), publisher.to_owned()],
+        outputs: BTreeMap::new(),
+        condition: Some(format!("always() && needs.{publisher}.result != 'skipped'")),
+        environment: None,
+        permissions: JobPermissions::expected(ReleaseRole::Reconcile),
+        steps,
+    })
+}

@@ -11,7 +11,7 @@ use velnor_actions_contract::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_signer::{
+    release::package_release_signer::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
         verify_attested_signed_package,
     },
@@ -37,7 +37,7 @@ const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::package_release_publish) enum PreviewRecoveryVerificationStage {
+pub(in crate::release::package_release_publish) enum PreviewRecoveryVerificationStage {
     SourceSelection,
     Finalization,
 }
@@ -80,7 +80,7 @@ pub(crate) fn verify_original_for_promotion()
     })
 }
 
-pub(in crate::package_release_publish) fn verify_preview_original_for_source_selection(
+pub(in crate::release::package_release_publish) fn verify_preview_original_for_source_selection(
     seed: &PackageReleasePolicy,
     stage: PreviewRecoveryVerificationStage,
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
@@ -211,12 +211,13 @@ fn verified_original(
         original_attempt,
         repository_id,
     )?;
-    let signed = crate::package_release_signer::verify_attested_signed_package_with_owned_tempdir(
-        input_owner,
-        &plan,
-        &identity,
-        custody_deadline,
-    )?;
+    let signed =
+        crate::release::package_release_signer::verify_attested_signed_package_with_owned_tempdir(
+            input_owner,
+            &plan,
+            &identity,
+            custody_deadline,
+        )?;
     let mode = OriginalVerification::RetainedRun {
         directory: Box::new(input),
         plan: Box::new(plan),

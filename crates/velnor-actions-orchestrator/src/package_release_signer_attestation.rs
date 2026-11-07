@@ -113,6 +113,10 @@ fn verify_one_with_bundle(
         path.as_os_str().to_owned(),
     ];
     args.extend([OsString::from("--bundle"), bundle.as_os_str().to_owned()]);
+    #[cfg(test)]
+    if let Some(root) = env::var_os("VELNOR_TEST_ATTESTATION_ROOT") {
+        args.extend([OsString::from("--custom-trusted-root"), root]);
+    }
     args.extend([
         OsString::from("--repo"),
         OsString::from(identity.repository),
@@ -315,51 +319,13 @@ fn validate_certificate(
     parse_attestation_invocation(&certificate.run_invocation_uri, expected.repository_uri)
 }
 
-fn parse_attestation_invocation(
-    value: &str,
-    repository_uri: &str,
-) -> Result<AttestationRunIdentity, OrchestratorError> {
-    if repository_uri
-        .strip_prefix("https://github.com/")
-        .is_none_or(str::is_empty)
-    {
-        return Err(internal("package_attestation_repository_invalid"));
-    }
-    let prefix = format!("{repository_uri}/actions/runs/");
-    let identity = value
-        .strip_prefix(&prefix)
-        .ok_or_else(|| internal("package_attestation_run_identity_mismatch"))?;
-    let (run_id, run_attempt) = identity
-        .split_once("/attempts/")
-        .ok_or_else(|| internal("package_attestation_run_identity_mismatch"))?;
-    if run_id.contains('/') || run_attempt.contains('/') {
-        return Err(internal("package_attestation_run_identity_mismatch"));
-    }
-    let run_id = parse_positive_canonical_integer(run_id)?;
-    let run_attempt = u32::try_from(parse_positive_canonical_integer(run_attempt)?)
-        .map_err(|_| internal("package_attestation_run_identity_mismatch"))?;
-    Ok(AttestationRunIdentity {
-        run_id,
-        run_attempt,
-    })
-}
+#[path = "package_release_signer_attestation_invocation.rs"]
+mod invocation;
+use invocation::parse_attestation_invocation;
 
-fn parse_positive_canonical_integer(value: &str) -> Result<u64, OrchestratorError> {
-    let parsed = value
-        .parse::<u64>()
-        .map_err(|_| internal("package_attestation_run_identity_mismatch"))?;
-    if parsed == 0 || parsed.to_string() != value {
-        return Err(internal("package_attestation_run_identity_mismatch"));
-    }
-    Ok(parsed)
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
+#[path = "package_release_signer_attestation_digest.rs"]
+mod digest;
+use digest::is_sha256;
 
 fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -370,7 +336,6 @@ fn sha256(bytes: &[u8]) -> String {
     }
     output
 }
-
 #[path = "package_release_signer_attestation_fetch.rs"]
 mod fetch;
 #[path = "package_release_signer_attestation_output.rs"]
@@ -380,9 +345,24 @@ mod sdk;
 use output::validate_output_with_additional_names;
 #[path = "package_release_signer_attestation_image.rs"]
 mod image;
+#[cfg(test)]
+#[path = "package_release_signer_attestation_image_fixture_tests.rs"]
+mod image_fixture_tests;
+#[cfg(test)]
+#[path = "package_release_signer_attestation_image_transport_tests.rs"]
+pub(crate) mod image_transport_tests;
 pub(crate) use image::{ImageAttestationIdentity, verify_image_file_attestation};
 #[path = "package_release_signer_attestation_subjects.rs"]
 mod subjects;
-
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use sdk::verified_generator_fixture;
+#[cfg(target_os = "linux")]
+pub(crate) use sdk::verify_historical_tool_expectations;
+pub(crate) use sdk::{
+    AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, ValidatedStart,
+    measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation,
+};
 pub(crate) use sdk::{SdkManifestAttestationExpectation, verify_published_manifest_attestation};
+#[cfg(test)]
+pub(crate) use sdk::{fixture_attested_generator, fixture_measured_tools};
 use subjects::expected_subjects;

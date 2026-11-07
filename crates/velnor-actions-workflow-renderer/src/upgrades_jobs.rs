@@ -3,7 +3,10 @@
 
 use velnor_actions_contract::{JobTimeout, StepRole};
 
-use super::scripts::{GATE, PUBLISH, RELEASE, prepare_script, publish_check_script, verify_script};
+use super::scripts::{
+    gate_script, prepare_script, publish_check_script, publish_script, release_script,
+    verify_script,
+};
 use super::{
     CARGO_EDIT_VERSION, CATALOG_BUMPER, ON_DEFAULT_BRANCH, UPGRADES_ARTIFACT, UPGRADES_BRANCH,
     UpgradesSpec, WORK_DIR,
@@ -59,7 +62,7 @@ fn velnor_release(spec: &UpgradesSpec) -> Yaml {
             ("VELNOR_UPGRADE_DIR", WORK_DIR),
             ("VELNOR_GH_VERSION", &spec.gh_version),
         ],
-        RELEASE.to_owned(),
+        release_script(),
     )
 }
 
@@ -200,6 +203,17 @@ pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
     push_env.extend(verified);
     push_env.extend([
         ("VELNOR_UPGRADE_BRANCH", UPGRADES_BRANCH),
+        ("BASH_ENV", ""),
+        ("BASHOPTS", ""),
+        ("SHELLOPTS", ""),
+        ("ENV", ""),
+        ("LD_PRELOAD", ""),
+        ("LD_LIBRARY_PATH", ""),
+        ("LD_AUDIT", ""),
+        ("LD_DEBUG", ""),
+        ("LD_PROFILE", ""),
+        ("GCONV_PATH", ""),
+        ("LOCPATH", ""),
         (
             "VELNOR_DEFAULT_BRANCH",
             "${{ github.event.repository.default_branch }}",
@@ -210,7 +224,7 @@ pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
         "Push the upgrade branch and open or update its pull request",
         None,
         &push_env,
-        PUBLISH.to_owned(),
+        publish_script(),
     );
     job(
         "Open or update the upgrade pull request",
@@ -296,7 +310,7 @@ pub(super) fn gate_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
                 ("VELNOR_GH_VERSION", &spec.gh_version),
             ]),
         ),
-        ("run".to_owned(), Yaml::str(GATE)),
+        ("run".to_owned(), Yaml::str(gate_script())),
     ]);
     job(
         "Freshness gate",

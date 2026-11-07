@@ -20,7 +20,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
-pub(in crate::package_release_publish::release_policy_admission) fn finalize()
+pub(in crate::release::package_release_publish::release_policy_admission) fn finalize()
 -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::after(Duration::from_secs(300))
         .map_err(|_| internal("preview_source_deadline"))?;

@@ -5,13 +5,14 @@ use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
-    ImageCandidateSourceClosure, serialize_image_candidate_source_closure,
+    IMAGE_NATIVE_INVENTORY_PATH, ImageCandidateSourceClosure, NativeImageSourceInventory,
+    serialize_image_candidate_source_closure,
 };
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{
     OrchestratorError,
-    package_release_signer::{ImageAttestationIdentity, verify_image_file_attestation},
+    release::package_release_signer::{ImageAttestationIdentity, verify_image_file_attestation},
 };
 
 use super::{ImagePublicationProfile, PublishImageRequest, authority};
@@ -41,12 +42,19 @@ pub(super) fn verify(
         (record_name.to_owned(), candidate.record_sha256.clone()),
     ]);
     if request.profile == ImagePublicationProfile::Job {
-        let closure = ImageCandidateSourceClosure::new(
+        let inventory = NativeImageSourceInventory::parse(
+            source_files
+                .get(IMAGE_NATIVE_INVENTORY_PATH)
+                .ok_or_else(|| crate::internal::internal("image_publication_closure_inventory"))?,
+        )
+        .map_err(|_| crate::internal::internal("image_publication_closure_inventory"))?;
+        let closure = ImageCandidateSourceClosure::from_source_inventory(
             candidate.source_commit.clone(),
             source_files
                 .iter()
                 .map(|(path, bytes)| (path.clone(), super::authority::hex(&Sha256::digest(bytes))))
                 .collect(),
+            &inventory,
         )
         .map_err(|_| crate::internal::internal("image_publication_closure_invalid"))?;
         let bytes = serialize_image_candidate_source_closure(&closure)

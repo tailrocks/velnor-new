@@ -20,7 +20,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::utf8::strings_of_env;
 
 #[must_use]
@@ -177,8 +177,8 @@ pub(crate) fn workspace_format_report_steps(
         return Ok(Vec::new());
     };
     let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
-    let start = crate::matrix_step::start_path_for_key(&matrix_key);
+    let outcome = crate::planner::matrix_step::outcome_path_for_key(&matrix_key);
+    let start = crate::planner::matrix_step::start_path_for_key(&matrix_key);
     let report = velnor_actions_workflow_renderer::workspace_format_report_step(
         controller,
         &outcome,
@@ -186,7 +186,7 @@ pub(crate) fn workspace_format_report_steps(
         fmt.task_id.clone(),
     )
     .map_err(OrchestratorError::from)?;
-    let upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
+    let upload = crate::planner::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
     Ok(vec![report, upload])
 }
 

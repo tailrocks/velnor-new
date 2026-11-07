@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
-    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_qualification_cache_generation,
-    toolchain_id,
+    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id,
+    mbx_qualification_cache_generation, toolchain_id,
 };
 use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
@@ -13,7 +13,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::{CompileDriver, DepKind, WorkspaceRecord, tool_needs};
 
 use super::snapshot::{ExecutionSnapshot, canonical_digest, platform_id_for};
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::toolcheck::ToolInputCheck;
 
 const CACHE_FORMAT_LABEL: &str = "velnor-cache-v1";

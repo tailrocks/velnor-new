@@ -143,7 +143,11 @@ fn gh_step(name: &str, script: &str, env: BTreeMap<String, String>) -> Result<St
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            crate::state_script::one_line(script),
+            format!(
+                "gh() {{ {} \"$@\"; }}; {}",
+                crate::verified_gh_shell::command(),
+                crate::state_script::one_line(script)
+            ),
         ],
         env,
     )

@@ -28,7 +28,7 @@ const FULL_TREE: [(&str, &str); 3] = [
 
 const STEP_START: &str = "\n      - ";
 
-const CONFIG: &str = r#"schema = 2
+pub(super) const CONFIG: &str = r#"schema = 2
 [workflow]
 name = "CI"
 policy = "consumer-v1"
@@ -106,7 +106,7 @@ app_id_variable = "REVIEW_APP_ID"
 app_id_variable = "CODEX_REVIEWER_APP_ID"
 "#;
 
-const QUALIFIED_RUST: &str = r#"[[qualified_tools]]
+pub(super) const QUALIFIED_RUST: &str = r#"[[qualified_tools]]
 id = "rust"
 backend = { kind = "core", tool = "rust" }
 version = "1.99.1"

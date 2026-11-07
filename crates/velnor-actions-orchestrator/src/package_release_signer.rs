@@ -11,13 +11,14 @@ use velnor_actions_contract::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_artifacts::{
+    release::package_release_artifacts::{
         PackageOutputIdentity, VerifiedPackageArtifact, verify_package_output,
     },
 };
 
 #[path = "package_release_signer_request.rs"]
 mod request;
+#[path = "package_release_signer/runtime.rs"]
 mod runtime;
 #[path = "package_release_signer_subjects.rs"]
 mod subjects;
@@ -30,6 +31,8 @@ use subjects::append_attestation_subject_paths;
 
 #[path = "package_release_signer_attestation.rs"]
 mod attestation;
+#[cfg(test)]
+pub(crate) use attestation::image_transport_tests;
 #[path = "package_release_signer_cosign.rs"]
 mod cosign;
 #[path = "package_release_signer_publication.rs"]
@@ -37,10 +40,20 @@ mod publication;
 
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use attestation::verified_generator_fixture;
+#[cfg(target_os = "linux")]
+pub(crate) use attestation::verify_historical_tool_expectations;
 pub(crate) use attestation::{
-    ImageAttestationIdentity, SdkManifestAttestationExpectation,
-    verify_image_file_attestation, verify_published_manifest_attestation,
+    AdmittedStart, AttestedLinuxGenerator, MeasuredReleaseTools, ValidatedStart,
+    measure_release_tools, record_admitted_start, verify_published_linux_binary_attestation,
 };
+pub(crate) use attestation::{
+    ImageAttestationIdentity, SdkManifestAttestationExpectation, verify_image_file_attestation,
+    verify_published_manifest_attestation,
+};
+#[cfg(test)]
+pub(crate) use attestation::{fixture_attested_generator, fixture_measured_tools};
 
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir_and_deadlines;
@@ -138,7 +151,7 @@ pub(crate) fn verify_attested_signed_package_from_env_with_deadline(
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     match request::verification_route()? {
         request::VerificationRoute::Retained => {
-            crate::package_release_publish::verify_original_for_promotion()
+            crate::release::package_release_publish::verify_original_for_promotion()
         }
         request::VerificationRoute::DirectTap => {
             let root = absolute_env("RUNNER_TEMP")?.join("velnor");
@@ -230,7 +243,7 @@ pub(crate) fn verify_signer_input(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
     root: &Path,
-) -> Result<crate::package_release_artifacts::VerifiedPackageOutput, OrchestratorError> {
+) -> Result<crate::release::package_release_artifacts::VerifiedPackageOutput, OrchestratorError> {
     let input_dir = root.join(SIGNER_INPUT_DIR);
     require_private_directory(&input_dir)?;
     let (version, _, _, _) = release_version(plan, identity)?;

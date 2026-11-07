@@ -77,7 +77,8 @@ pub(crate) fn check(
                 source_sha: identity.source_sha.clone(),
                 receipt_sha256: identity.receipt_sha256.clone(),
             })
-        || crate::generator::current_exe_sha256().as_deref() != Some(identity.sha256.as_str())
+        || crate::planner::generator::current_exe_sha256().as_deref()
+            != Some(identity.sha256.as_str())
     {
         return Err(internal("preview_controller_identity_mismatch"));
     }

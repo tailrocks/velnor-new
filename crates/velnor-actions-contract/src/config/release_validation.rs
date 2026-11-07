@@ -4,7 +4,7 @@
 use crate::errors::ContractError;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::release::BootstrapRelease;
+use super::release::{CrateReleasePredecessor, RecoveryRelease};
 
 pub(super) fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
     let key = "stacks.rust.release.manifest_path";
@@ -73,8 +73,11 @@ pub(super) fn validate_environment(file: &str, name: &str) -> Result<(), Contrac
     if name != name.trim() {
         return Err(ContractError::config(file, key, "padded_environment"));
     }
-    if !name.bytes().all(is_environment_byte)
-        || name.split('/').any(|seg| seg.is_empty() || seg == "..")
+    if name.len() > 255
+        || !name.bytes().all(is_environment_byte)
+        || name
+            .split('/')
+            .any(|seg| seg.is_empty() || seg == "." || seg == "..")
     {
         return Err(ContractError::config(
             file,
@@ -94,6 +97,9 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
             format!("bad_charset:{tag}"),
         ));
     }
+    if !valid_tag_reference_template(tag) {
+        return Err(ContractError::config(file, key, "invalid_git_reference"));
+    }
     if is_stable_tag_name(tag) {
         return Ok(());
     }
@@ -110,36 +116,57 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
     Ok(())
 }
 
+fn valid_tag_reference_template(mut template: &str) -> bool {
+    let mut rendered = String::from("refs/tags/");
+    while let Some((literal, remainder)) = template.split_once("{{") {
+        rendered.push_str(literal);
+        let Some((variable, tail)) = remainder.split_once("}}") else {
+            return false;
+        };
+        rendered.push_str(match variable.trim_matches(' ') {
+            "package" => "package",
+            "version" => "1.2.3",
+            _ => return false,
+        });
+        template = tail;
+    }
+    if template.contains(['{', '}']) {
+        return false;
+    }
+    rendered.push_str(template);
+    crate::vcs::is_valid_git_ref_name(&rendered)
+}
+
 pub(super) fn is_stable_tag_name(tag: &str) -> bool {
     tag.strip_prefix("v{{")
         .and_then(|body| body.strip_suffix("}}"))
         .is_some_and(|body| body.trim_matches(' ') == "version")
 }
 
-pub(super) fn validate_bootstrap(
+pub(super) fn validate_recovery(
     file: &str,
-    bootstrap: &BootstrapRelease,
+    recovery: &RecoveryRelease,
 ) -> Result<(), ContractError> {
-    if !is_package_name(&bootstrap.package) {
-        let package = bootstrap.package.as_str();
+    if !is_package_name(&recovery.package) {
+        let package = recovery.package.as_str();
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.package",
+            "stacks.rust.release.recovery.package",
             format!("unsafe_package:{package}"),
         ));
     }
-    if !is_bootstrap_version(&bootstrap.version) {
-        let version = bootstrap.version.as_str();
+    if !is_recovery_version(&recovery.version) {
+        let version = recovery.version.as_str();
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.version",
+            "stacks.rust.release.recovery.version",
             format!("bad_version:{version}"),
         ));
     }
-    if !is_full_sha(&bootstrap.source_sha) {
+    if !is_full_sha(&recovery.source_sha) {
         return Err(ContractError::config(
             file,
-            "stacks.rust.release.bootstrap.source_sha",
+            "stacks.rust.release.recovery.source_sha",
             "bad_source_sha",
         ));
     }
@@ -156,7 +183,7 @@ pub(super) fn validate_version_groups(
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     for (group, members) in groups {
         let key = format!("stacks.rust.release.version_groups.{group}");
-        if !is_package_name(group) {
+        if !is_release_identifier(group) {
             return Err(ContractError::config(
                 file,
                 "stacks.rust.release.version_groups",
@@ -203,6 +230,10 @@ pub(super) fn validate_version_groups(
 }
 
 pub(super) fn is_package_name(name: &str) -> bool {
+    name.len() <= 64 && is_release_identifier(name)
+}
+
+fn is_release_identifier(name: &str) -> bool {
     let mut bytes = name.bytes();
     let Some(first) = bytes.next() else {
         return false;
@@ -211,7 +242,7 @@ pub(super) fn is_package_name(name: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
-pub(super) fn is_bootstrap_version(version: &str) -> bool {
+pub(super) fn is_recovery_version(version: &str) -> bool {
     version.len() <= 150 && semver::Version::parse(version).is_ok()
 }
 
@@ -232,4 +263,125 @@ pub(super) fn is_environment_byte(byte: u8) -> bool {
 
 pub(super) fn is_tag_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'-' | b'_' | b'.' | b'/' | b'{' | b'}')
+}
+
+#[must_use]
+pub fn is_release_feature_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'.' | b'/' | b'-')
+        })
+}
+
+pub(super) fn validate_publish_features(
+    file: &str,
+    features: &BTreeMap<String, Vec<String>>,
+    packages: &[String],
+    publishable: bool,
+) -> Result<(), ContractError> {
+    if features.len() > super::release::MAX_CRATE_RELEASE_PACKAGES {
+        return Err(ContractError::config(
+            file,
+            "publish_features",
+            "too_many_packages",
+        ));
+    }
+    for (package, selected) in features {
+        if !is_package_name(package) || (!publishable && !packages.contains(package)) {
+            return Err(ContractError::config(
+                file,
+                "publish_features",
+                format!("unknown_package:{package}"),
+            ));
+        }
+        if selected.len() > 64
+            || selected
+                .iter()
+                .any(|feature| !is_release_feature_name(feature))
+            || selected.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(ContractError::config(
+                file,
+                "publish_features",
+                format!("invalid_features:{package}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn valid_release_workflow_path(path: &str) -> bool {
+    path.strip_prefix(".github/workflows/").is_some_and(|name| {
+        !name.starts_with('.')
+            && std::path::Path::new(name)
+                .extension()
+                .is_some_and(|ext| ext == "yml" || ext == "yaml")
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    })
+}
+
+pub(super) fn supported_crate_tag_template(tag: &str) -> bool {
+    tag.strip_prefix("{{")
+        .and_then(|value| value.strip_suffix("}}"))
+        .and_then(|value| value.split_once("}}-v{{"))
+        .is_some_and(|(package, version)| {
+            package.trim_matches(' ') == "package" && version.trim_matches(' ') == "version"
+        })
+}
+
+pub(crate) fn validate_journal_predecessor(
+    file: &str,
+    predecessor: Option<&CrateReleasePredecessor>,
+    exact_source: bool,
+) -> Result<(), ContractError> {
+    if predecessor.is_some_and(|prior| {
+        !exact_source
+            || prior.run_id == 0
+            || prior.run_attempt != 1
+            || !is_full_sha(&prior.workflow_sha)
+    }) {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "invalid_predecessor",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_continuation_source(
+    file: &str,
+    source: Option<&str>,
+    predecessor: bool,
+) -> Result<(), ContractError> {
+    if source.is_some_and(|value| !predecessor || !is_full_sha(value)) {
+        return Err(ContractError::config(
+            file,
+            "continuation_source_sha",
+            "invalid_continuation_source",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_exact_source_agreement(
+    file: &str,
+    recovery: Option<&str>,
+    creation: Option<&str>,
+    predecessor: Option<&str>,
+) -> Result<(), ContractError> {
+    let mut sources = [recovery, creation, predecessor].into_iter().flatten();
+    if let Some(first) = sources.next()
+        && sources.any(|source| source != first)
+    {
+        return Err(ContractError::config(
+            file,
+            "journal_predecessor",
+            "source_mismatch",
+        ));
+    }
+    Ok(())
 }

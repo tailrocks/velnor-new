@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES as MAX_MANIFEST_BYTES;
 
-pub(in crate::package_release_publish) struct SourceFiles<'a> {
+pub(in crate::release::package_release_publish) struct SourceFiles<'a> {
     api: &'a GitHubApi,
     root_tree: String,
     trees: BTreeMap<String, Tree>,
@@ -20,7 +20,7 @@ pub(in crate::package_release_publish) struct SourceFiles<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(in crate::package_release_publish) struct SourceFileEntry {
+pub(in crate::release::package_release_publish) struct SourceFileEntry {
     pub path: String,
     pub mode: String,
     pub sha: String,
@@ -67,7 +67,7 @@ struct Blob {
 }
 
 impl<'a> SourceFiles<'a> {
-    pub(in crate::package_release_publish) fn new(
+    pub(in crate::release::package_release_publish) fn new(
         api: &'a GitHubApi,
         source_sha: &str,
     ) -> Result<Self, OrchestratorError> {
@@ -89,7 +89,7 @@ impl<'a> SourceFiles<'a> {
         self.read_bounded(path, MAX_MANIFEST_BYTES)
     }
 
-    pub(in crate::package_release_publish) fn read_bounded(
+    pub(in crate::release::package_release_publish) fn read_bounded(
         &mut self,
         path: &str,
         max_bytes: usize,
@@ -98,7 +98,7 @@ impl<'a> SourceFiles<'a> {
             .ok_or_else(|| internal("release_version_manifest_missing"))
     }
 
-    pub(in crate::package_release_publish) fn read_bounded_if_present(
+    pub(in crate::release::package_release_publish) fn read_bounded_if_present(
         &mut self,
         path: &str,
         max_bytes: usize,
@@ -121,20 +121,20 @@ impl<'a> SourceFiles<'a> {
         })
     }
 
-    pub(in crate::package_release_publish) fn regular_files(
+    pub(in crate::release::package_release_publish) fn regular_files(
         &self,
     ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
         self.complete_inventory().map(|(regular, _, _)| regular)
     }
 
-    pub(in crate::package_release_publish) fn nonregular_entries(
+    pub(in crate::release::package_release_publish) fn nonregular_entries(
         &self,
     ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
         self.complete_inventory()
             .map(|(_, nonregular, _)| nonregular)
     }
 
-    pub(in crate::package_release_publish) fn directory_entries(
+    pub(in crate::release::package_release_publish) fn directory_entries(
         &self,
     ) -> Result<Vec<SourceFileEntry>, OrchestratorError> {
         self.complete_inventory()
@@ -208,7 +208,7 @@ impl<'a> SourceFiles<'a> {
         Ok((entries.into_values().collect(), nonregular, directories))
     }
 
-    pub(in crate::package_release_publish) fn root_tree_sha(&self) -> &str {
+    pub(in crate::release::package_release_publish) fn root_tree_sha(&self) -> &str {
         &self.root_tree
     }
 

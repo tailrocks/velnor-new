@@ -9,8 +9,8 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_rust::PackageRecord;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
 use crate::image_build_tasks::PrebuiltInputs;
+use crate::planner::discover::Discovery;
 use crate::utf8::strings_of;
 
 const BUILD_STEP: &str = "Build release binary";
@@ -43,26 +43,31 @@ pub(crate) fn steps(
         ));
     }
     let record = locate(discovery, package, bin, &image.id)?;
-    let roots = crate::source_prep::crate_fetch_roots(&record.manifest, fetch_roots, false);
+    let roots =
+        crate::planner::source_prep::crate_fetch_roots(&record.manifest, fetch_roots, false);
     if roots.is_empty() {
         return Err(failure(&image.id, "image_prebuilt_workspace_unresolved"));
     }
-    let mut env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let mut env = crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     for (native, mise) in [
         ("CARGO_HOME", "MISE_CARGO_HOME"),
         ("RUSTUP_HOME", "MISE_RUSTUP_HOME"),
     ] {
         env.insert(native.to_owned(), env[mise].clone());
     }
-    let source_steps = crate::source_prep::fetch_steps_for_crate(catalog, &roots, false)?;
+    let source_steps = crate::planner::source_prep::fetch_steps_for_crate(catalog, &roots, false)?;
     let mut steps = vec![
         crate::workflow::verify_restored_rust_step(catalog),
-        crate::matrix_step::prepare_crate_tools_step(catalog, lane)?,
+        crate::planner::matrix_step::prepare_crate_tools_step(catalog, lane)?,
     ];
-    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
+    steps.extend(crate::planner::matrix_step::verify_validators_step(
+        catalog, lane,
+    ));
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
-    steps.extend(crate::source_cache::restore_step_for_crate(&roots, true)?);
+    steps.extend(crate::planner::source_cache::restore_step_for_crate(
+        &roots, true,
+    )?);
     let block = match private {
         Some(private) => private.steps_for_roots(&roots)?,
         None => Vec::new(),

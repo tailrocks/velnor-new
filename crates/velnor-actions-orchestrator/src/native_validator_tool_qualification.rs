@@ -135,7 +135,7 @@ fn run_owned_phase(
     let work_dir = phase.join("work");
     let candidate = phase.join("candidate.json");
     if let Err(error) =
-        crate::qualification_candidate::qualify_tools(&request, &work_dir, &candidate)
+        crate::release::qualification_candidate::qualify_tools(&request, &work_dir, &candidate)
     {
         append_log(&mut log, error.to_string().as_bytes())?;
         append_log(&mut log, b"\n")?;

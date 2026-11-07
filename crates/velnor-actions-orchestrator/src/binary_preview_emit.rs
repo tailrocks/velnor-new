@@ -4,12 +4,12 @@
 use crate::{
     OrchestratorError,
     internal::internal,
-    pins::{
+    planner::pins::{
         consumer_acquire_for_runner, consumer_acquire_step, resolve_mise_setup_for_release_target,
         resolve_verification_mise_setup,
     },
-    prepare::GenerationPreparation,
-    release_identity::origin_repository,
+    planner::prepare::GenerationPreparation,
+    release::release_identity::origin_repository,
     utf8::strings_of,
 };
 use std::{
@@ -64,7 +64,7 @@ pub(crate) fn specification(
         return Err(internal("preview_default_branch_must_be_main"));
     }
     release.validate(".velnor/config.toml")?;
-    crate::binary_release_emit::require_tracked_lockfile(prep, release)?;
+    crate::release::binary_release_emit::require_tracked_lockfile(prep, release)?;
     let policy = release_policy(prep, release, channel)?;
     let version = env!("CARGO_PKG_VERSION");
     let linux_acquire = consumer_acquire_step("ubuntu-26.04", version, &prep.discovery)?;
@@ -76,7 +76,7 @@ pub(crate) fn specification(
         for target in ReleaseTarget::ALL {
             producer_acquire_by_target.insert(
                 target,
-                crate::pins::consumer_acquire_for_target(
+                crate::planner::pins::consumer_acquire_for_target(
                     target,
                     version,
                     prep.discovery.consumer_manifest_json.as_deref(),
@@ -102,7 +102,7 @@ pub(crate) fn specification(
     let emission = prep.emission_catalog();
     let (producer_source_prep, producer_cargo_env) = source_preparation::for_roots(
         &emission,
-        &crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
+        &crate::planner::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
     )?;
     let spec = ConsumerReleaseSpec {
         checkout_lfs: prep.config.workflow.checkout_lfs,

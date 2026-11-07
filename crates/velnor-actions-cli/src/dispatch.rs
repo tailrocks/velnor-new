@@ -9,23 +9,25 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP,
-    BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP,
-    BUN_ASSETS_REPOSITORY_CHECK_OP, BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP,
-    DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
-    EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP,
-    GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_ASSETS_REPOSITORY_CHECK_OP,
+    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
+    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP,
+    FINALIZE_PREVIEW_SOURCE_OP, GITHUB_EVIDENCE_FETCH_OP, GITHUB_EVIDENCE_IMPORT_OP, GRADLE_RUN_OP,
+    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
+    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
+    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
+    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
     WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
-    WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
-    plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
-    response_path_for, retrieve_reports, run_bun_registry_install, run_github_evidence_fetch,
-    run_github_evidence_import, run_gradle_run, run_playwright_install, run_private_fetch,
-    run_private_revoke, seed_parallel_targets_from_env, write_preseed_manifest, write_request,
+    WRITE_STABLE_TAG_ORIGIN_OP,
+    admit_homebrew_qualification_from_env as admit_homebrew_qualification, execute_check,
+    execute_homebrew_qualification_from_env,
+    finalize_homebrew_qualification_from_env as finalize_homebrew_qualification, merge_internal,
+    merge_passed, plan_internal, plan_outputs, publish_final_report, publish_plan_files,
+    resolve_task_execution, response_path_for, retrieve_reports, run_bun_registry_install,
+    run_github_evidence_fetch, run_github_evidence_import, run_gradle_run, run_playwright_install,
+    run_private_fetch, run_private_revoke, write_preseed_manifest, write_request,
     write_task_report,
 };
 
@@ -176,6 +178,8 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::ExecuteCheck
         | InternalOp::ExecuteNativeHomebrewCheck
         | InternalOp::QualifyHomebrew
+        | InternalOp::AdmitHomebrewQualification
+        | InternalOp::FinalizeHomebrewQualification
         | InternalOp::SeedParallelTargets
         | InternalOp::ResolveTaskExecution => {}
     }
@@ -210,10 +214,12 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             velnor_actions_orchestrator::acquire_preview_source_from_env(),
         ),
         InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
-        InternalOp::SeedParallelTargets => unit_exit(seed_parallel_targets_from_env()),
-        InternalOp::QualifyHomebrew => {
-            unit_exit(velnor_actions_orchestrator::execute_homebrew_qualification_from_env())
+        InternalOp::SeedParallelTargets => {
+            unit_exit(velnor_actions_orchestrator::seed_parallel_targets_from_env())
         }
+        InternalOp::QualifyHomebrew => unit_exit(execute_homebrew_qualification_from_env()),
+        InternalOp::AdmitHomebrewQualification => unit_exit(admit_homebrew_qualification()),
+        InternalOp::FinalizeHomebrewQualification => unit_exit(finalize_homebrew_qualification()),
         InternalOp::NativeValidatorToolQualification => qualify_validator_tools(),
         InternalOp::ExecuteNativeHomebrewCheck => unit_exit(
             velnor_actions_orchestrator::execute_native_homebrew_check_from_env().map(|_| ()),

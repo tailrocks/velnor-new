@@ -14,7 +14,7 @@ use crate::OrchestratorError;
 #[path = "cache_recipes.rs"]
 pub(crate) mod cache_recipes;
 use crate::mbx_preflight::steps_for_catalog;
-use crate::pins::resolve_mise_setup_for_release_target;
+use crate::planner::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
 use velnor_actions_workflow_renderer::steps::MbxTransport;
 

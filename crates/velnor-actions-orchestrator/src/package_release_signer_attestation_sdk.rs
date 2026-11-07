@@ -1,14 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
-use serde::Deserialize;
 use velnor_actions_mise::CheckDeadline;
 
 use super::{
-    AttestationCommandIdentity, OIDC_ISSUER, OrchestratorError, PREDICATE, SignatureResult,
-    Subject, source_attestation_token, verify_one_with_bundle,
+    AttestationCommandIdentity, OrchestratorError, source_attestation_token, verify_one_with_bundle,
 };
 use crate::internal::internal;
 
@@ -27,6 +23,7 @@ pub(crate) struct VerifiedManifestAttestation {
     pub(crate) run_id: u64,
     pub(crate) run_attempt: u32,
     pub(crate) event: String,
+    subject_sha256: String,
 }
 
 pub(crate) fn verify_published_manifest_attestation(
@@ -75,250 +72,162 @@ pub(crate) fn verify_published_manifest_attestation(
     )
 }
 
-pub(crate) fn parse_verified_manifest_attestation(
-    raw: &[u8],
-    repository: &str,
-    repository_id: u64,
-    owner_id: u64,
-    source_sha: &str,
-    manifest_sha256: &str,
-) -> Result<VerifiedManifestAttestation, OrchestratorError> {
-    if repository != "tailrocks/velnor-new"
-        || repository_id != 1_390_620_900
-        || owner_id != 78_806_509
-        || !is_sha(source_sha)
-        || !is_sha256(manifest_sha256)
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct AttestedLinuxGenerator {
+    version: String,
+    sha256: String,
+    source_sha: String,
+    run_id: u64,
+    run_attempt: u32,
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_attested_generator() -> AttestedLinuxGenerator {
+    AttestedLinuxGenerator {
+        version: "0.1.72".into(),
+        sha256: "1".repeat(64),
+        source_sha: "f1041f322c54cd7edfdef06afd307799eeaa801a".into(),
+        run_id: 1,
+        run_attempt: 1,
+    }
+}
+
+#[path = "package_release_signer_attestation_sdk_start.rs"]
+mod start;
+#[cfg(test)]
+pub(crate) use start::fixture_measured_tools;
+pub(crate) use start::{
+    AdmittedStart, MeasuredReleaseTools, ValidatedStart, measure_release_tools,
+    record_admitted_start,
+};
+
+#[cfg(any(target_os = "linux", test))]
+#[path = "package_release_signer_attestation_sdk_historical.rs"]
+mod historical;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use historical::verify_historical_tool_expectations;
+#[cfg(test)]
+use start::{derive_attested_tool_expectations, match_attested_tool_expectations};
+
+pub(crate) fn verify_published_linux_binary_attestation(
+    path: &std::path::Path,
+    bundle_path: &std::path::Path,
+    manifest_bytes: &[u8],
+    manifest_attestation: &VerifiedManifestAttestation,
+    deadline: CheckDeadline,
+) -> Result<AttestedLinuxGenerator, OrchestratorError> {
+    let manifest = bound_release_manifest(manifest_bytes, manifest_attestation)?;
+    if manifest.repository != "tailrocks/velnor-new"
+        || manifest.commit != manifest_attestation.source_sha
+        || manifest_attestation.workflow_sha != manifest.commit
+        || manifest_attestation.event != "workflow_dispatch"
     {
-        return Err(internal("sdk_manifest_attestation_expectation_invalid"));
+        return Err(internal("sdk_binary_manifest_mismatch"));
     }
-    let attestations: Vec<SdkManifestAttestation> = serde_json::from_slice(raw)
-        .map_err(|_| internal("sdk_manifest_attestation_output_invalid"))?;
-    if attestations.len() != 1 {
-        return Err(internal("sdk_manifest_attestation_ambiguous"));
+    let target = manifest
+        .record_for_target("x86_64-unknown-linux-gnu")
+        .ok_or_else(|| internal("sdk_binary_target_missing"))?;
+    let name = format!(
+        "velnor-actions-{}-x86_64-unknown-linux-gnu",
+        manifest.version
+    );
+    if path.file_name().and_then(std::ffi::OsStr::to_str) != Some(name.as_str()) {
+        return Err(internal("sdk_binary_name_invalid"));
     }
-    let result = &attestations[0].verification_result;
-    let run = validate_sdk_manifest_identity(
-        result,
-        repository,
-        repository_id,
-        owner_id,
-        source_sha,
-        manifest_sha256,
+    let parent = path
+        .parent()
+        .ok_or_else(|| internal("sdk_binary_path_invalid"))?;
+    let bytes = match crate::safe_read::read_repo_bytes(parent, &name, 128 * 1024 * 1024)? {
+        crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
+        crate::safe_read::RepoBytes::Absent => return Err(internal("sdk_binary_missing")),
+    };
+    if crate::planner::generator::sha256_hex(&bytes) != target.sha256 {
+        return Err(internal("sdk_binary_digest_mismatch"));
+    }
+    let source_token = source_attestation_token()?;
+    let identity = AttestationCommandIdentity {
+        repository: "tailrocks/velnor-new",
+        workflow_uri: "github.com/tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main",
+        workflow_sha: &manifest.commit,
+        source_sha: &manifest.commit,
+        source_ref: "refs/heads/main",
+        source_token: &source_token,
+    };
+    let raw = verify_one_with_bundle(
+        path,
+        bundle_path,
+        &identity,
+        deadline,
+        super::VerificationPolicy::ExactSigner,
     )?;
-    Ok(VerifiedManifestAttestation {
-        source_sha: source_sha.to_owned(),
-        workflow_sha: source_sha.to_owned(),
-        run_id: run.0,
-        run_attempt: run.1,
-        event: result
-            .statement
-            .predicate
-            .build_definition
-            .internal_parameters
-            .github
-            .event_name
-            .clone(),
+    let binary = parse_verified_release_attestation(
+        &raw,
+        "tailrocks/velnor-new",
+        1_390_620_900,
+        78_806_509,
+        &manifest.commit,
+        &SubjectExpectation {
+            name: &name,
+            sha256: &target.sha256,
+            binary: true,
+        },
+    )?;
+    if !same_release_run(&binary, manifest_attestation) {
+        return Err(internal("sdk_binary_attestation_mismatch"));
+    }
+    Ok(AttestedLinuxGenerator {
+        version: manifest.version.clone(),
+        sha256: target.sha256.clone(),
+        source_sha: binary.source_sha,
+        run_id: binary.run_id,
+        run_attempt: binary.run_attempt,
     })
 }
 
-fn validate_sdk_manifest_identity(
-    result: &SdkVerificationResult,
-    repository: &str,
-    repository_id: u64,
-    owner_id: u64,
-    source_sha: &str,
-    manifest_sha256: &str,
-) -> Result<(u64, u32), OrchestratorError> {
-    let source_ref = "refs/heads/main";
-    let signer_path = ".github/workflows/product-release-generator.yml";
-    let signer_uri = format!("https://github.com/{repository}/{signer_path}@{source_ref}");
-    let statement = &result.statement;
-    let cert = &result.signature.certificate;
-    let github = &statement
-        .predicate
-        .build_definition
-        .internal_parameters
-        .github;
-    let external = &statement
-        .predicate
-        .build_definition
-        .external_parameters
-        .workflow;
-    let build = &statement.predicate.build_definition;
-    let dependencies = &build.resolved_dependencies;
-    let run = parse_run_invocation(&cert.run_invocation_uri, repository)?;
-    if statement.predicate_type != PREDICATE
-        || build.build_type != "https://actions.github.io/buildtypes/workflow/v1"
-        || dependencies.len() != 1
-        || dependencies[0].uri != format!("git+https://github.com/{repository}@{source_ref}")
-        || dependencies[0].digest.len() != 1
-        || dependencies[0].digest.get("gitCommit").map(String::as_str) != Some(source_sha)
-        || statement.predicate.run_details.metadata.invocation_id != cert.run_invocation_uri
-        || statement.predicate.run_details.builder.id != signer_uri
-        || statement.subject.len() != 1
-        || statement.subject[0].name != "release-manifest.json"
-        || statement.subject[0].digest.len() != 1
-        || statement.subject[0]
-            .digest
-            .get("sha256")
-            .map(String::as_str)
-            != Some(manifest_sha256)
-        || github.event_name != "workflow_dispatch"
-        || github.repository_id != repository_id.to_string()
-        || github.repository_owner_id != owner_id.to_string()
-        || github.runner_environment != "github-hosted"
-        || external.path != ".github/workflows/product-release.yml"
-        || external.ref_name != source_ref
-        || external.repository != format!("https://github.com/{repository}")
-        || cert.issuer != OIDC_ISSUER
-        || cert.subject_alternative_name != signer_uri
-        || cert.source_repository_uri != format!("https://github.com/{repository}")
-        || cert.source_repository_owner_uri != "https://github.com/tailrocks"
-        || cert.source_repository_identifier != repository_id.to_string()
-        || cert.source_repository_digest != source_sha
-        || cert.source_repository_ref != source_ref
-        || cert.build_signer_uri != signer_uri
-        || cert.build_signer_digest != source_sha
-        || cert.build_config_uri
-            != format!(
-                "https://github.com/{repository}/.github/workflows/product-release.yml@{source_ref}"
-            )
-        || cert.build_config_digest != source_sha
-        || cert.build_trigger != "workflow_dispatch"
-        || cert.runner_environment != "github-hosted"
+fn bound_release_manifest(
+    bytes: &[u8],
+    attestation: &VerifiedManifestAttestation,
+) -> Result<velnor_actions_contract::ReleaseManifest, OrchestratorError> {
+    if bytes.len() > 1024 * 1024
+        || crate::planner::generator::sha256_hex(bytes) != attestation.subject_sha256
     {
-        return Err(internal("sdk_manifest_attestation_identity_mismatch"));
+        return Err(internal("sdk_binary_manifest_mismatch"));
     }
-    Ok(run)
+    let text = std::str::from_utf8(bytes).map_err(|_| internal("sdk_binary_manifest_invalid"))?;
+    let manifest = velnor_actions_contract::ReleaseManifest::parse_json_with_limit(
+        text,
+        "release-manifest.json",
+        1024 * 1024,
+    )
+    .map_err(|_| internal("sdk_binary_manifest_invalid"))?;
+    manifest
+        .validate("release-manifest.json")
+        .map_err(|_| internal("sdk_binary_manifest_invalid"))?;
+    Ok(manifest)
 }
 
-#[derive(Deserialize)]
-struct SdkManifestAttestation {
-    #[serde(rename = "verificationResult")]
-    verification_result: SdkVerificationResult,
+fn same_release_run(
+    left: &VerifiedManifestAttestation,
+    right: &VerifiedManifestAttestation,
+) -> bool {
+    left.source_sha == right.source_sha
+        && left.workflow_sha == right.workflow_sha
+        && left.run_id == right.run_id
+        && left.run_attempt == right.run_attempt
+        && left.event == right.event
 }
 
-#[derive(Deserialize)]
-struct SdkVerificationResult {
-    statement: SdkStatement,
-    signature: SignatureResult,
-}
+#[path = "package_release_signer_attestation_sdk_parse.rs"]
+mod parse;
+pub(crate) use parse::parse_verified_manifest_attestation;
+use parse::{SubjectExpectation, is_sha, is_sha256, parse_verified_release_attestation};
 
-#[derive(Deserialize)]
-struct SdkStatement {
-    #[serde(rename = "predicateType")]
-    predicate_type: String,
-    subject: Vec<Subject>,
-    predicate: SdkPredicate,
-}
+#[cfg(test)]
+#[path = "package_release_signer_attestation_sdk_tests.rs"]
+mod subject_tests;
 
-#[derive(Deserialize)]
-struct SdkPredicate {
-    #[serde(rename = "buildDefinition")]
-    build_definition: SdkBuildDefinition,
-    #[serde(rename = "runDetails")]
-    run_details: SdkRunDetails,
-}
-
-#[derive(Deserialize)]
-struct SdkBuildDefinition {
-    #[serde(rename = "buildType")]
-    build_type: String,
-    #[serde(rename = "externalParameters")]
-    external_parameters: SdkExternalParameters,
-    #[serde(rename = "internalParameters")]
-    internal_parameters: SdkInternalParameters,
-    #[serde(rename = "resolvedDependencies")]
-    resolved_dependencies: Vec<SdkResolvedDependency>,
-}
-
-#[derive(Deserialize)]
-struct SdkResolvedDependency {
-    uri: String,
-    digest: BTreeMap<String, String>,
-}
-
-#[derive(Deserialize)]
-struct SdkExternalParameters {
-    workflow: SdkWorkflow,
-}
-
-#[derive(Deserialize)]
-struct SdkWorkflow {
-    path: String,
-    #[serde(rename = "ref")]
-    ref_name: String,
-    repository: String,
-}
-
-#[derive(Deserialize)]
-struct SdkInternalParameters {
-    github: SdkGitHubParameters,
-}
-
-#[derive(Deserialize)]
-struct SdkGitHubParameters {
-    event_name: String,
-    repository_id: String,
-    repository_owner_id: String,
-    runner_environment: String,
-}
-
-#[derive(Deserialize)]
-struct SdkRunDetails {
-    builder: SdkBuilder,
-    metadata: SdkRunMetadata,
-}
-
-#[derive(Deserialize)]
-struct SdkBuilder {
-    id: String,
-}
-
-#[derive(Deserialize)]
-struct SdkRunMetadata {
-    #[serde(rename = "invocationId")]
-    invocation_id: String,
-}
-
-fn parse_run_invocation(value: &str, repository: &str) -> Result<(u64, u32), OrchestratorError> {
-    let prefix = format!("https://github.com/{repository}/actions/runs/");
-    let remainder = value
-        .strip_prefix(&prefix)
-        .ok_or_else(|| internal("sdk_manifest_attestation_invocation_invalid"))?;
-    let (run, attempt) = remainder
-        .split_once("/attempts/")
-        .ok_or_else(|| internal("sdk_manifest_attestation_invocation_invalid"))?;
-    if run.is_empty()
-        || attempt.is_empty()
-        || run.bytes().any(|byte| !byte.is_ascii_digit())
-        || attempt.bytes().any(|byte| !byte.is_ascii_digit())
-    {
-        return Err(internal("sdk_manifest_attestation_invocation_invalid"));
-    }
-    let run_id = run
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("sdk_manifest_attestation_invocation_invalid"))?;
-    let run_attempt = attempt
-        .parse::<u32>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("sdk_manifest_attestation_invocation_invalid"))?;
-    Ok((run_id, run_attempt))
-}
-
-fn is_sha(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
+#[cfg(test)]
+#[path = "package_release_signer_attestation_fixture_tests.rs"]
+mod fixture_tests;
+#[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
+pub(crate) use fixture_tests::verified_generator_fixture;

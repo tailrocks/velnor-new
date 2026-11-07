@@ -33,6 +33,23 @@ impl std::fmt::Debug for PinnedToolExec {
 
 const FORBIDDEN_PROGRAM_STEM: &str = "rustup";
 
+pub(crate) fn select_environment_token<'a>(
+    primary: Option<&'a str>,
+    fallback: Option<&'a str>,
+) -> Result<Option<&'a str>, MiseError> {
+    let token = [primary, fallback]
+        .into_iter()
+        .flatten()
+        .find(|value| !value.is_empty());
+    if token.is_some_and(|value| !crate::command::is_safe_credential_value(value)) {
+        return Err(MiseError::InvalidStepInput {
+            field: "GH_TOKEN".to_owned(),
+            value: "credential_rejected".to_owned(),
+        });
+    }
+    Ok(token)
+}
+
 impl PinnedToolExec {
     pub fn new(
         tools: Vec<PinnedTool>,
@@ -84,9 +101,16 @@ impl PinnedToolExec {
     }
 
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+        let gh_program = self.program == OsStr::new("gh");
+        if gh_program != (self.tools.as_slice() == [PinnedTool::Gh]) {
+            return Err(MiseError::ForbiddenPayload {
+                program: self.program.to_string_lossy().into_owned(),
+                reason: "gh_requires_single_verified_tool".to_owned(),
+            });
+        }
         let specs = catalog.tool_specs(&self.tools);
         let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
-        if self.tools.as_slice() == [PinnedTool::Gh] {
+        if gh_program {
             return Ok(command.with_policy(crate::command::EnvPolicy::GhApi));
         }
         Ok(command)
@@ -104,6 +128,19 @@ impl PinnedToolExec {
             });
         }
         self.command(catalog)?.with_github_token(token)
+    }
+
+    pub fn command_with_optional_environment_token(
+        &self,
+        catalog: &ToolCatalog,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let primary = std::env::var("GH_TOKEN").ok();
+        let fallback = std::env::var("GITHUB_TOKEN").ok();
+        let token = select_environment_token(primary.as_deref(), fallback.as_deref())?;
+        match token {
+            Some(token) => self.command_with_github_token(catalog, token),
+            None => self.command(catalog),
+        }
     }
 
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {

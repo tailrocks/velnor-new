@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod api_server;
 mod ci_publication;
 mod encoding;
 mod journal;
@@ -29,10 +30,7 @@ pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
 pub(crate) use promotion::PromotionCase;
 pub(crate) use registry_state::{BlobFault, ExistingTag, MovedTag};
-pub(crate) use rejections::{
-    AttemptArtifactCase, RejectionCase, current_attestation, invalid_invocation_uri,
-    with_invocation, with_uri,
-};
+pub(crate) use rejections::{AttemptArtifactCase, RejectionCase};
 
 const RUN_ATTEMPT: u32 = 1;
 
@@ -261,6 +259,7 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
+        let _server = api_server::start_for_isolated_worker(self)?;
         runtime::publication_command(self)?.output()
     }
 

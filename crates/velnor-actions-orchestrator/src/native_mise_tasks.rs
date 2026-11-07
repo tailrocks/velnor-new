@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::is_valid_mise_task_name;
 
-use crate::native_tool_input::NativeMiseTask;
+use crate::planner::native_tool_input::NativeMiseTask;
 
 const MAX_TASK_CLOSURE: usize = 128;
 
@@ -44,21 +44,21 @@ pub(crate) fn parse_task(value: &toml::Value) -> NativeMiseTask {
 }
 
 pub(crate) fn selected_task_tools(
-    config: &crate::native_tool_input::NativeMiseConfig,
+    config: &crate::planner::native_tool_input::NativeMiseConfig,
     task_name: &str,
 ) -> Result<BTreeMap<String, String>, &'static str> {
     selected_task_tools_with_run_policy(config, task_name, true)
 }
 
 pub(crate) fn selected_build_task_tools(
-    config: &crate::native_tool_input::NativeMiseConfig,
+    config: &crate::planner::native_tool_input::NativeMiseConfig,
     task_name: &str,
 ) -> Result<BTreeMap<String, String>, &'static str> {
     selected_task_tools_with_run_policy(config, task_name, false)
 }
 
 fn selected_task_tools_with_run_policy(
-    config: &crate::native_tool_input::NativeMiseConfig,
+    config: &crate::planner::native_tool_input::NativeMiseConfig,
     task_name: &str,
     require_inline_run: bool,
 ) -> Result<BTreeMap<String, String>, &'static str> {

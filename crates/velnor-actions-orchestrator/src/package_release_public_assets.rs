@@ -10,8 +10,8 @@ use velnor_actions_contract::{
 
 use super::OrchestratorError;
 use crate::{
-    internal::internal, package_release_publish::PublicReleaseSnapshot,
-    package_release_signer::PackageReleaseSigningIdentity,
+    internal::internal, release::package_release_publish::PublicReleaseSnapshot,
+    release::package_release_signer::PackageReleaseSigningIdentity,
 };
 
 pub(super) fn verified_file_inventory(

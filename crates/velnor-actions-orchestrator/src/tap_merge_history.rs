@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::github_review_feedback::{FeedbackContext, capture_feedback};
 #[path = "tap_merge_history_identity.rs"]
 mod identity;
 #[path = "tap_merge_history_landed.rs"]
@@ -13,7 +14,6 @@ use crate::{OrchestratorError, internal::internal};
 
 use super::{
     candidate::MergeCandidate,
-    feedback::{FeedbackContext, capture_feedback},
     github::TapMergeGitHub,
     observation::MergeAuthority,
     observation::{check_runs, contents, expected_pr_body_for, expected_pr_title},

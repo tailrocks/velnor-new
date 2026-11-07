@@ -276,70 +276,11 @@ pub(crate) fn read_public_release_snapshot(
     public_release_snapshot(release, tag_identity, downloaded)
 }
 
-fn download_release_assets(
-    api: &GitHubApi,
-    assets: Vec<ReleaseAssetResponse>,
-    deadline: CheckDeadline,
-) -> Result<Vec<PublicReleaseAsset>, OrchestratorError> {
-    let mut downloaded = Vec::with_capacity(assets.len());
-    for asset in assets {
-        deadline
-            .remaining()
-            .map_err(|_| internal("package_public_verification_deadline"))?;
-        let bytes = api.download_asset(asset.id)?;
-        if bytes.len() as u64 != asset.size {
-            return Err(internal("package_public_asset_size_mismatch"));
-        }
-        let sha256 = github::sha256(&bytes);
-        if asset
-            .digest
-            .as_deref()
-            .is_some_and(|digest| digest != format!("sha256:{sha256}"))
-        {
-            return Err(internal("package_public_asset_digest_mismatch"));
-        }
-        downloaded.push(PublicReleaseAsset {
-            id: asset.id,
-            name: asset.name,
-            size: asset.size,
-            sha256,
-            api_digest: asset.digest,
-            bytes,
-        });
-    }
-    Ok(downloaded)
-}
-
-fn verify_public_release_unchanged(
-    api: &GitHubApi,
-    tag: &str,
-    release: &ReleaseResponse,
-    tag_identity: &github::TagObservation,
-    downloaded: &[PublicReleaseAsset],
-) -> Result<(), OrchestratorError> {
-    let final_release = api
-        .release_by_tag(tag)?
-        .ok_or_else(|| internal("package_public_release_disappeared"))?;
-    let final_assets = api.complete_release_assets(release.id)?;
-    if final_release.id != release.id
-        || final_release.tag_name != release.tag_name
-        || final_release.draft != release.draft
-        || final_release.prerelease != release.prerelease
-        || final_release.immutable != release.immutable
-        || final_release.body != release.body
-        || asset_tuples(&final_assets) != asset_tuples_from_downloads(downloaded)
-    {
-        return Err(internal("package_public_release_changed"));
-    }
-    let final_tag = api
-        .tag_identity(tag)?
-        .ok_or_else(|| internal("package_public_tag_disappeared"))?;
-    if final_tag.source_sha != tag_identity.source_sha || final_tag.message != tag_identity.message
-    {
-        return Err(internal("package_public_tag_changed"));
-    }
-    Ok(())
-}
+#[path = "package_release_publish_public_assets.rs"]
+mod assets;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use assets::read_historical_sdk_attestation_assets;
+use assets::{download_release_assets, verify_public_release_unchanged};
 
 fn public_release_snapshot(
     release: ReleaseResponse,

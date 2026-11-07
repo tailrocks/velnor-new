@@ -13,8 +13,8 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
+use crate::planner::discover::Discovery;
+use crate::planner::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, plan_job};
 
 #[path = "workflow_native_authority.rs"]
@@ -119,10 +119,10 @@ fn lane_workflow_tasks(
     Vec<velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy>,
     OrchestratorError,
 > {
-    let lane = crate::matrix_step::LaneTools::union(
+    let lane = crate::planner::matrix_step::LaneTools::union(
         input.config.workflow.policy,
         input.catalog,
-        &crate::crate_job_ids::group_runnable(&input.discovery.proposals)?,
+        &crate::planner::crate_job_ids::group_runnable(&input.discovery.proposals)?,
     );
     crate::workflow_task_jobs::policies(
         input.root,
@@ -181,7 +181,7 @@ fn controller_acquisition(
             if lock.source_preview.is_some() {
                 Some(velnor_actions_workflow_renderer::steps::protected_preview_acquire_step()?)
             } else {
-                Some(crate::attach::published_lock_acquire_step(
+                Some(crate::planner::attach::published_lock_acquire_step(
                     lock,
                     input.label,
                     &lock.generator.version,
@@ -311,7 +311,7 @@ fn build_workflow_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
+    let built = crate::planner::crate_jobs::build_for_workflow(
         input.config,
         input.label,
         input.discovery,
@@ -326,13 +326,9 @@ fn build_workflow_jobs(
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
+    jobs.extend(built.jobs);
     prepared.state_recipes = built.state_recipes;
-    for (id, job) in built.producers.into_iter().chain(built.ledger_cli) {
-        jobs.insert(id, job);
-    }
+    jobs.extend(built.producers.into_iter().chain(built.ledger_cli));
     for (id, job) in check_jobs::build_check_jobs(
         prepared.policy,
         input.discovery,
@@ -359,9 +355,7 @@ fn build_workflow_jobs(
         input.discovery,
         &prepared.catalog,
     )?;
-    for (id, job) in suite_build.jobs {
-        jobs.insert(id, job);
-    }
+    jobs.extend(suite_build.jobs);
     required_ids.extend(suite_build.required_ids);
     attach_state_roots(input, prepared, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;

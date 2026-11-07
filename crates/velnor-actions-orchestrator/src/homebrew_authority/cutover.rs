@@ -21,7 +21,7 @@ pub(crate) fn load_cutover_replay_authority(
     {
         return Err(internal("homebrew_cutover_replay_selection"));
     }
-    crate::package_release_publish::verify_public_protected_main_lineage(
+    crate::release::package_release_publish::verify_public_protected_main_lineage(
         repository,
         repository_id,
         "main",

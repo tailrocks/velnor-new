@@ -10,7 +10,7 @@ use velnor_actions_workflow_renderer::verification_jobs::{StackJobKind, StackJob
 use super::dbt_steps::project_steps;
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 const POSTGRES_MAJOR: u8 = 18;
 
@@ -27,7 +27,7 @@ pub(crate) fn policies(
         .map_or(Ok(config.workflow.crate_timeout_minutes), u16::try_from)
         .map_err(|_| failure("dbt_timeout"))?;
     let timeout = JobTimeout::new(timeout)?;
-    let setup = crate::pins::resolve_mise_setup_for_release_target(
+    let setup = crate::planner::pins::resolve_mise_setup_for_release_target(
         config,
         velnor_actions_contract::ReleaseTarget::LinuxX86_64,
     )?;

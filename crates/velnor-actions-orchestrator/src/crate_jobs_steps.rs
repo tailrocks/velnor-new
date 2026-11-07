@@ -4,8 +4,78 @@
 use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};
-use velnor_actions_contract::{CrateJob, CrateObligation, Step, WorkflowPolicy};
+use velnor_actions_contract::{CrateJob, CrateObligation, Step, StepKind, WorkflowPolicy};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
+
+#[cfg(test)]
+#[path = "crate_jobs_steps_tuf_tests.rs"]
+mod tuf_tests;
+
+pub(super) fn fixture_checkout(needs_fixture: bool) -> Result<Step, OrchestratorError> {
+    let mut checkout = crate::workflow::wire_w1::checkout_step()?;
+    if needs_fixture {
+        let StepKind::Action { with, .. } = &mut checkout.kind else {
+            return Err(OrchestratorError::Contract {
+                problem: "fixture checkout is not an action".to_owned(),
+            });
+        };
+        with.insert(
+            "filter".to_owned(),
+            velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER
+                .to_owned(),
+        );
+    }
+    Ok(checkout)
+}
+
+pub(super) fn gh_fixture_step(
+    policy: WorkflowPolicy,
+    model: &CrateJob,
+) -> Result<Option<Step>, OrchestratorError> {
+    if policy == WorkflowPolicy::VelnorRepositoryV1
+        && matches!(
+            model.package_name.as_str(),
+            "velnor-actions-cli" | "velnor-actions-orchestrator"
+        )
+        && model.obligations.iter().any(|obligation| {
+            obligation.kind == "test" || obligation.run.iter().any(|arg| arg == "nextest")
+        })
+    {
+        let mut argv = vec![
+            "/usr/bin/python3".to_owned(),
+            "-I".to_owned(),
+            "scripts/prepare-gh-fixture-tools.py".to_owned(),
+        ];
+        if model.package_name == "velnor-actions-cli"
+            && model.obligations.iter().any(image_publication_test)
+        {
+            argv.push("--with-image-tuf".to_owned());
+        }
+        return Ok(Some(velnor_actions_workflow_renderer::shell_step(
+            "Stage isolated GitHub CLI test tools",
+            argv,
+            BTreeMap::new(),
+        )?));
+    }
+    Ok(None)
+}
+
+fn image_publication_test(obligation: &CrateObligation) -> bool {
+    if obligation.kind == "nextest" {
+        return true;
+    }
+    if obligation.kind != "test" {
+        return false;
+    }
+    obligation.run.iter().any(|arg| {
+        matches!(arg.as_str(), "--tests" | "--test" | "--all-targets") || arg.starts_with("--test=")
+    }) || !obligation.run.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--lib" | "--bins" | "--examples" | "--benches"
+        )
+    })
+}
 
 pub(super) fn image_publication_fixture_step(
     input: &CrateJobInputs<'_>,
@@ -16,7 +86,7 @@ pub(super) fn image_publication_fixture_step(
     {
         return Ok(Vec::new());
     }
-    let env = crate::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
+    let env = crate::planner::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
     let build = mbx_image_fixture_argv(
         input.catalog,
         &[
@@ -56,8 +126,12 @@ fn mbx_image_fixture_argv(
     catalog: &ToolCatalog,
     cargo_args: &[&str],
 ) -> Result<String, OrchestratorError> {
-    let argv =
-        crate::product_release_pins::exec_argv(&[PinnedTool::Rust], "mbx", cargo_args, catalog)?;
+    let argv = crate::release::product_release_pins::exec_argv(
+        &[PinnedTool::Rust],
+        "mbx",
+        cargo_args,
+        catalog,
+    )?;
     velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
 }
 
@@ -82,8 +156,10 @@ pub(super) fn obligation_steps(
         .filter(|obligation| concurrent && !sequential(obligation))
         .map(|obligation| obligation.task_id.as_str())
         .collect();
-    let target_root =
-        crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+    let target_root = crate::planner::source_prep::workspace_root_for_manifest(
+        &model.manifest,
+        input.fetch_roots,
+    );
     let seed = seed_step(input, model, concurrent, target_root)?;
     let mut steps = Vec::with_capacity(model.obligations.len() + usize::from(seed.is_some()));
     let mut seed = seed;
@@ -112,7 +188,7 @@ pub(super) fn obligation_steps(
             .map(|later| later.task_id.clone())
             .collect();
         let cap = (index == 0 && use_opentofu).then_some(input.max_parallel_jobs);
-        let mut step = crate::matrix_step::obligation_step(
+        let mut step = crate::planner::matrix_step::obligation_step(
             obligation,
             input.catalog,
             &downstream,

@@ -124,8 +124,11 @@ pub(super) fn admission(
     record: &HistoricalRecord,
     plan: &velnor_actions_contract::PackageReleasePlan,
     durable_admission: Option<&[u8]>,
-) -> Result<crate::package_release_public::HistoricalPackageReleaseAdmission, OrchestratorError> {
-    let mut admission = crate::package_release_public::HistoricalPackageReleaseAdmission::new_from_protected_policy(
+) -> Result<
+    crate::release::package_release_public::HistoricalPackageReleaseAdmission,
+    OrchestratorError,
+> {
+    let mut admission = crate::release::package_release_public::HistoricalPackageReleaseAdmission::new_from_protected_policy(
         plan, record.release.source_sha.clone(), record.release.tag.clone(), record.release.id,
         record.release.receipt_asset_id, record.release.receipt_sha256.clone(), record.plan_sha256.clone(),
     )?;
@@ -133,8 +136,8 @@ pub(super) fn admission(
         let admission_bytes = durable_admission
             .ok_or_else(|| crate::internal::internal("homebrew_qualification_admission_missing"))?;
         let artifact = &recovery.source_admission_artifact;
-        let recovery = crate::package_release_public::HistoricalPackageReleaseRecovery::new_from_protected_policy(
-            crate::package_release_public::HistoricalPackageReleaseRecoveryInput {
+        let recovery = crate::release::package_release_public::HistoricalPackageReleaseRecovery::new_from_protected_policy(
+            crate::release::package_release_public::HistoricalPackageReleaseRecoveryInput {
                 original_publisher_job_id: record.producer.publisher_job.id,
                 run_id: recovery.run_id,
                 run_attempt: recovery.attempt,

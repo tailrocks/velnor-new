@@ -6,9 +6,9 @@ use crate::{OrchestratorError, internal::internal};
 use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 
-pub(in crate::package_release_publish) const API_VERSION: &str = "2026-03-10";
+pub(in crate::release::package_release_publish) const API_VERSION: &str = "2026-03-10";
 
-pub(in crate::package_release_publish) fn graphql_arguments(
+pub(in crate::release::package_release_publish) fn graphql_arguments(
     query: &str,
     fields: &[(&str, String)],
 ) -> Vec<OsString> {
@@ -24,7 +24,7 @@ pub(in crate::package_release_publish) fn graphql_arguments(
     args
 }
 
-pub(in crate::package_release_publish) fn gh_api_arguments(
+pub(in crate::release::package_release_publish) fn gh_api_arguments(
     request_args: Vec<OsString>,
     accept: &str,
 ) -> Vec<OsString> {
@@ -39,14 +39,14 @@ pub(in crate::package_release_publish) fn gh_api_arguments(
     args
 }
 
-pub(in crate::package_release_publish) fn verify_tap_update_environment(
+pub(in crate::release::package_release_publish) fn verify_tap_update_environment(
     repository: &str,
     branch: &str,
 ) -> Result<(), OrchestratorError> {
     preflight::tap_update_environment(repository, branch)
 }
 
-pub(in crate::package_release_publish) fn annotated_tag_observation(
+pub(in crate::release::package_release_publish) fn annotated_tag_observation(
     expected_tag: &str,
     annotated: GitTagResponse,
 ) -> Result<TagObservation, OrchestratorError> {
@@ -63,14 +63,14 @@ pub(in crate::package_release_publish) fn annotated_tag_observation(
     })
 }
 
-pub(in crate::package_release_publish) fn is_lowercase_git_sha(value: &str) -> bool {
+pub(in crate::release::package_release_publish) fn is_lowercase_git_sha(value: &str) -> bool {
     value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
-pub(in crate::package_release_publish) fn sha256(bytes: &[u8]) -> String {
+pub(in crate::release::package_release_publish) fn sha256(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(64);
     for byte in Sha256::digest(bytes) {
         push_hex_byte(&mut out, byte, false);
@@ -78,7 +78,7 @@ pub(in crate::package_release_publish) fn sha256(bytes: &[u8]) -> String {
     out
 }
 
-pub(in crate::package_release_publish) fn encode_segment(value: &str) -> String {
+pub(in crate::release::package_release_publish) fn encode_segment(value: &str) -> String {
     let mut out = String::new();
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {

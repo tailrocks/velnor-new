@@ -11,10 +11,10 @@ pub(super) fn verify_cutover_author(
     root: &Path,
     identity: &crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,
     event: velnor_actions_contract::WorkflowEvent,
-    merge_group: Option<&crate::package_release_publish::MergeGroupSelection>,
+    merge_group: Option<&crate::release::package_release_publish::MergeGroupSelection>,
     deadline: CheckDeadline,
     read_merge_group_responses: impl FnOnce(
-        &crate::package_release_publish::MergeGroupSelection,
+        &crate::release::package_release_publish::MergeGroupSelection,
         CheckDeadline,
     ) -> Result<(Vec<u8>, Vec<u8>), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
@@ -44,7 +44,7 @@ pub(super) fn verify_cutover_author(
     }
     let number = crate::internal_plan::native_homebrew_checks::pull_request_number_from_env(event)?
         .ok_or_else(|| internal("homebrew_cutover_pull_request_missing"))?;
-    let pull = crate::package_release_publish::read_public_pull_request(
+    let pull = crate::release::package_release_publish::read_public_pull_request(
         &transition.transition().tap_repository,
         transition.transition().tap_repository_id,
         number,
@@ -63,7 +63,7 @@ pub(super) fn verify_cutover_author(
 
 pub(super) fn admit_cutover_author_pull(
     root: &Path,
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     transition: &velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition,
     expected_base: &str,
     checkout_head: &str,
@@ -99,17 +99,18 @@ pub(super) fn admit_cutover_author_pull(
 
 fn verify_cutover_author_merge_group_responses(
     identity: &crate::internal_plan::native_homebrew_checks::NativeCheckIdentityExtension,
-    selection: &crate::package_release_publish::MergeGroupSelection,
+    selection: &crate::release::package_release_publish::MergeGroupSelection,
     queue_response: &[u8],
     pull_response: &[u8],
     expected_author: &crate::github_landed_pull::GitHubRestUser,
 ) -> Result<(), OrchestratorError> {
     let transition = crate::homebrew::structural_cutover::protected_transition()?;
-    let associated = crate::package_release_publish::parse_merge_group_pull_request_response(
-        queue_response,
-        selection,
-    )?;
-    let pull = crate::package_release_publish::parse_public_pull_request_response(
+    let associated =
+        crate::release::package_release_publish::parse_merge_group_pull_request_response(
+            queue_response,
+            selection,
+        )?;
+    let pull = crate::release::package_release_publish::parse_public_pull_request_response(
         pull_response,
         &transition.transition().tap_repository,
         transition.transition().tap_repository_id,
@@ -127,9 +128,9 @@ fn verify_cutover_author_merge_group_responses(
 }
 
 fn admit_cutover_author_merge_group_pull(
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
-    associated: &crate::package_release_publish::MergeGroupPullRequest,
-    selection: &crate::package_release_publish::MergeGroupSelection,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
+    associated: &crate::release::package_release_publish::MergeGroupPullRequest,
+    selection: &crate::release::package_release_publish::MergeGroupSelection,
     transition: &velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition,
     expected_base: &str,
     checkout_head: &str,

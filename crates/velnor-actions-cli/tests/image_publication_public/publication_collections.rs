@@ -47,6 +47,10 @@ fn public_publication_selects_the_attempt_artifact_from_later_pages() -> Result<
 #[test]
 fn public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "publication_collections::public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     let cases = [
         (
             json!([{"total_count":2001,"artifacts":[]}]),
@@ -112,6 +116,7 @@ fn public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_wri
         Ok(())
     })?;
     assert_rejected_before_write(&fixture, "image_publication_artifact_identity")?;
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
@@ -324,12 +329,33 @@ fn public_publication_selects_latest_matching_ci_run_from_later_page() -> Result
 #[test]
 fn public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "publication_collections::public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     let fixture = Fixture::new_for(FixtureProfile::Job)?;
     fixture.update_github_state(|state| {
-        state["ci_run_pages"] = json!([{"total_count":1000,"workflow_runs":[]}]);
+        let prototype = state["ci_run"].clone();
+        let pages = (0..10)
+            .map(|page| {
+                let runs = (0..100)
+                    .map(|index| {
+                        let mut run = prototype.clone();
+                        let number = page * 100 + index + 1;
+                        run["id"] = json!(number);
+                        run["run_number"] = json!(number);
+                        run
+                    })
+                    .collect::<Vec<_>>();
+                json!({"total_count":1000,"workflow_runs":runs})
+            })
+            .collect::<Vec<_>>();
+        state["ci_run_pages"] = json!(pages);
         Ok(())
     })?;
-    assert_rejected_before_write(&fixture, "image_publication_ci_run_inventory")
+    assert_rejected_before_write(&fixture, "image_publication_ci_run_inventory")?;
+    super::isolated_worker::record_success("image_publication", scenario)?;
+    Ok(())
 }
 
 fn artifact(id: u64) -> Value {

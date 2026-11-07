@@ -16,11 +16,11 @@ use super::{
     MAX_ATTESTATION_BYTES, MAX_BINARY_BYTES, MAX_CALLEE_BYTES, MAX_MANIFEST_BYTES,
     MAX_PROVENANCE_BYTES, MAX_SIDECAR_BYTES, SDK_OWNER_ID, SDK_REPOSITORY, SDK_REPOSITORY_ID,
 };
-use crate::package_release_publish::{
+use crate::release::package_release_publish::{
     PublicReleaseAsset, PublicReleaseSnapshot, read_public_release_snapshot,
     verify_public_sdk_release_producer,
 };
-use crate::package_release_signer::verify_published_manifest_attestation;
+use crate::release::package_release_signer::verify_published_manifest_attestation;
 use crate::{OrchestratorError, internal::internal};
 
 #[path = "homebrew_adoption_sdk_binding_assets_temp.rs"]
@@ -161,7 +161,7 @@ pub(super) fn verify_sdk_release_attestation(
     let attestation = verify_published_manifest_attestation(
         &manifest_path,
         &bundle_path,
-        &crate::package_release_signer::SdkManifestAttestationExpectation {
+        &crate::release::package_release_signer::SdkManifestAttestationExpectation {
             repository: SDK_REPOSITORY,
             repository_id: SDK_REPOSITORY_ID,
             owner_id: SDK_OWNER_ID,
@@ -177,7 +177,7 @@ pub(super) fn verify_sdk_release_attestation(
         return Err(internal("sdk_manifest_attestation_binding_mismatch"));
     }
     verify_public_sdk_release_producer(
-        &crate::package_release_publish::PublicSdkProducerSelection {
+        &crate::release::package_release_publish::PublicSdkProducerSelection {
             repository: SDK_REPOSITORY.to_owned(),
             repository_id: SDK_REPOSITORY_ID,
             source_sha: source_sha.to_owned(),
@@ -193,11 +193,11 @@ pub(super) fn verify_published_adoption_callee(
     source_sha: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let pins = crate::product_release_pins::homebrew_adoption_pins()?;
+    let pins = crate::release::product_release_pins::homebrew_adoption_pins()?;
     let rendered =
         velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
             .map_err(|_| internal("sdk_adoption_callee_template_invalid"))?;
-    let source = crate::package_release_publish::read_protected_source_file(
+    let source = crate::release::package_release_publish::read_protected_source_file(
         SDK_REPOSITORY,
         SDK_REPOSITORY_ID,
         "main",

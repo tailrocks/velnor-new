@@ -8,10 +8,6 @@ use sha2::{Digest, Sha256};
 
 use super::{Fixture, FixtureProfile, hex};
 mod apply;
-mod attestation;
-pub(crate) use attestation::{
-    current_attestation, invalid_invocation_uri, with_invocation, with_uri,
-};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum AttemptArtifactCase {
@@ -120,14 +116,6 @@ impl Fixture {
         })
     }
 
-    pub(crate) fn attestation_output(&self) -> Result<Value, Box<dyn Error>> {
-        let state = self.read_state()?;
-        state
-            .get("attestation")
-            .cloned()
-            .ok_or_else(|| "fixture has no attestation output".into())
-    }
-
     pub(crate) fn qualification_attestation_output(&self) -> Result<Value, Box<dyn Error>> {
         let state = self.read_state()?;
         state
@@ -137,19 +125,9 @@ impl Fixture {
             .ok_or_else(|| "fixture has no qualification attestation output".into())
     }
 
-    pub(crate) fn set_attestation_output(&self, output: Value) -> Result<(), Box<dyn Error>> {
-        let mut state = self.read_state()?;
-        state["attestation_response"] = output;
-        self.write_state(&state)
-    }
-
     pub(crate) fn set_attestation_pages(&self, pages: Value) -> Result<(), Box<dyn Error>> {
         let mut state = self.read_state()?;
         state["attestation_pages"] = pages;
-        state
-            .as_object_mut()
-            .ok_or("fixture state is not an object")?
-            .remove("attestation_response");
         self.write_state(&state)
     }
 

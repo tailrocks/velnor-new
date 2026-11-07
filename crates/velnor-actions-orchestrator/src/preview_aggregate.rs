@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use crate::filesystem_owner::held_file::HeldFile;
+use velnor_actions_contract::exclusive_write::write_exclusive_until;
 
 use super::{
     handoff::{self, AssetProof, TaskInput},
@@ -11,11 +11,11 @@ use super::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_artifacts::{
+    release::package_release_artifacts::{
         PackageOutputManifest, PackageOutputPayload, PackageOutputSbom,
         preview_payload::verify_payload_output,
     },
-    package_release_publish::{
+    release::package_release_publish::{
         acquire_release_artifacts,
         artifact_zip::{self, ExpectedZipEntry, ZipProfile},
     },
@@ -111,7 +111,7 @@ fn admit_leaf(
     root: &Path,
     request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
-    mut artifact: crate::package_release_publish::AdmittedReleaseArtifact,
+    mut artifact: crate::release::package_release_publish::AdmittedReleaseArtifact,
     admitted: &mut AdmittedLeaves,
 ) -> Result<(), OrchestratorError> {
     let index = admitted.manifests.len();
@@ -162,14 +162,14 @@ fn admit_leaf(
 fn retain_verified(
     admitted: &mut AdmittedLeaves,
     expected: &ReleaseProductionRequest,
-    verified: crate::package_release_artifacts::preview_payload::VerifiedPayload,
+    verified: crate::release::package_release_artifacts::preview_payload::VerifiedPayload,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     for asset in [verified.archive, verified.sbom] {
         admitted.asset_bytes = admitted
             .asset_bytes
             .checked_add(asset.size)
-            .filter(|n| *n <= crate::package_release_artifacts::MAX_TOTAL_BYTES)
+            .filter(|n| *n <= crate::release::package_release_artifacts::MAX_TOTAL_BYTES)
             .ok_or_else(|| internal("preview_leaf_asset_total"))?;
         let proof = AssetProof {
             name: asset.name.clone(),

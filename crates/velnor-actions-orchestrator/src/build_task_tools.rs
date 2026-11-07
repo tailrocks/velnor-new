@@ -7,8 +7,10 @@ use velnor_actions_contract::BuildTask;
 use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskArtifact, BuildTaskTool};
 
 use crate::OrchestratorError;
-use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock, valid_rust_toolchain_options};
+use crate::planner::native_tool_input::NativeMiseConfig;
+use crate::planner::native_tool_lock::{
+    NativeLockedTool, NativeMiseLock, valid_rust_toolchain_options,
+};
 
 pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 

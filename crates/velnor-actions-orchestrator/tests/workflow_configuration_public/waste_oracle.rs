@@ -192,36 +192,53 @@ pub(super) fn run_scalar(
     Ok(value.trim_matches('\'').to_owned())
 }
 
-fn scalars_of(text: &str, label: &str) -> Result<(Vec<String>, Vec<String>), Box<dyn Error>> {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut scalars = Vec::new();
-    let mut actions = Vec::new();
-    for (at, line) in lines.iter().enumerate() {
-        let trimmed = line.trim().trim_start_matches("- ");
-        if line.trim().starts_with("- *") {
-            return Err(format!("{label}: unresolved step alias {}", line.trim()).into());
+fn scalars_of(
+    value: &serde_json::Value,
+    scalars: &mut Vec<String>,
+    actions: &mut Vec<String>,
+) -> Result<(), Box<dyn Error>> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                if key == "steps" {
+                    let steps = value.as_array().ok_or("steps is not an array")?;
+                    for step in steps {
+                        let step = step.as_object().ok_or("step is not a mapping")?;
+                        if let Some(run) = step.get("run") {
+                            scalars.push(run.as_str().ok_or("run is not a string")?.to_owned());
+                        }
+                        if let Some(uses) = step.get("uses")
+                            && let Some(name) = uses
+                                .as_str()
+                                .ok_or("uses is not a string")?
+                                .strip_prefix(ACTION_PREFIX)
+                        {
+                            actions.push(name.to_owned());
+                        }
+                    }
+                } else {
+                    scalars_of(value, scalars, actions)?;
+                }
+            }
         }
-        if let Some(value) = trimmed.strip_prefix("run:") {
-            scalars.push(run_scalar(&lines, at, value.trim(), label)?);
-        } else if let Some(value) = trimmed.strip_prefix("uses:")
-            && let Some(name) = value
-                .split_whitespace()
-                .next()
-                .and_then(|uses| uses.strip_prefix(ACTION_PREFIX))
-        {
-            actions.push(name.to_owned());
+        serde_json::Value::Array(values) => {
+            for value in values {
+                scalars_of(value, scalars, actions)?;
+            }
         }
+        _ => {}
     }
-    Ok((scalars, actions))
+    Ok(())
 }
 
 fn job_scalars(
     files: &Files,
-    block: &str,
-    label: &str,
+    value: &serde_json::Value,
     depth: usize,
 ) -> Result<Vec<String>, Box<dyn Error>> {
-    let (mut scalars, actions) = scalars_of(block, label)?;
+    let mut scalars = Vec::new();
+    let mut actions = Vec::new();
+    scalars_of(value, &mut scalars, &mut actions)?;
     if depth == 0 {
         return Ok(scalars);
     }
@@ -229,8 +246,9 @@ fn job_scalars(
         let path = format!(".github/actions/{name}/action.yml");
         let text = files
             .get(&path)
-            .ok_or_else(|| format!("{label}: local action {path} is missing"))?;
-        scalars.extend(job_scalars(files, text, &path, depth - 1)?);
+            .ok_or_else(|| format!("local action {path} is missing"))?;
+        let action: serde_json::Value = serde_saphyr::from_str(text)?;
+        scalars.extend(job_scalars(files, &action, depth - 1)?);
     }
     Ok(scalars)
 }
@@ -245,7 +263,9 @@ pub(super) fn file_tokens(files: &Files, path: &str) -> Result<BTreeSet<String>,
     let text = files
         .get(path)
         .ok_or_else(|| format!("{path} is not rendered"))?;
-    let (scalars, _) = scalars_of(text, path)?;
+    let value: serde_json::Value = serde_saphyr::from_str(text)?;
+    let mut scalars = Vec::new();
+    scalars_of(&value, &mut scalars, &mut Vec::new())?;
     Ok(scalars
         .iter()
         .flat_map(|scalar| tokens(scalar))
@@ -274,7 +294,12 @@ pub(super) fn installs_toolchain(scalar: &str) -> bool {
 fn scan_job(files: &Files, file: &str, workflow: &str, id: &str) -> Result<JobUse, Box<dyn Error>> {
     let label = format!("{file} {id}");
     let block = rendered_job_block(workflow, id)?;
-    let scalars = job_scalars(files, block, &label, ACTION_DEPTH)?;
+    let document: serde_json::Value = serde_saphyr::from_str(workflow)?;
+    let job = document
+        .get("jobs")
+        .and_then(|jobs| jobs.get(id))
+        .ok_or_else(|| format!("{label}: job missing"))?;
+    let scalars = job_scalars(files, job, ACTION_DEPTH)?;
     let words = scalars
         .iter()
         .flat_map(|scalar| tokens(scalar))

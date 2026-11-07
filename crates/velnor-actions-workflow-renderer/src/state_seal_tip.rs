@@ -59,7 +59,12 @@ fi
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            crate::state_script::one_line(&script),
+            format!(
+                "set -eu; {}; printf 'VELNOR_VERIFIED_GH_DATA_DIR=%s\\n' \"$VELNOR_VERIFIED_GH_DATA_DIR\" >> \"$GITHUB_ENV\"; gh() {{ {} \"$@\"; }}; {}",
+                crate::verified_gh_shell::bootstrap(),
+                crate::verified_gh_shell::command(),
+                crate::state_script::one_line(&script)
+            ),
         ],
         BTreeMap::from([
             (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),

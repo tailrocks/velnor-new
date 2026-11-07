@@ -15,14 +15,14 @@ const MAX_API_JSON_BYTES: usize = 1_048_576;
 const GH_API_TIMEOUT: Duration = Duration::from_secs(60);
 const UPPER_HEX: &[u8; 16] = b"0123456789ABCDEF";
 
-pub(in crate::qualification_resolver) struct GitHub<'a> {
+pub(in crate::release::qualification_resolver) struct GitHub<'a> {
     catalog: &'a ToolCatalog,
     repository: String,
     default_branch: String,
 }
 
 impl<'a> GitHub<'a> {
-    pub(in crate::qualification_resolver) fn for_repository(
+    pub(in crate::release::qualification_resolver) fn for_repository(
         catalog: &'a ToolCatalog,
         repository: &str,
     ) -> Result<Self, OrchestratorError> {
@@ -42,19 +42,19 @@ impl<'a> GitHub<'a> {
         })
     }
 
-    pub(in crate::qualification_resolver) fn repository(&self) -> &str {
+    pub(in crate::release::qualification_resolver) fn repository(&self) -> &str {
         &self.repository
     }
 
-    pub(in crate::qualification_resolver) fn catalog(&self) -> &ToolCatalog {
+    pub(in crate::release::qualification_resolver) fn catalog(&self) -> &ToolCatalog {
         self.catalog
     }
 
-    pub(in crate::qualification_resolver) fn default_branch(&self) -> &str {
+    pub(in crate::release::qualification_resolver) fn default_branch(&self) -> &str {
         &self.default_branch
     }
 
-    pub(in crate::qualification_resolver) fn validate_current_branch(
+    pub(in crate::release::qualification_resolver) fn validate_current_branch(
         &self,
         expected: &str,
     ) -> Result<(), OrchestratorError> {
@@ -70,7 +70,7 @@ impl<'a> GitHub<'a> {
         Ok(())
     }
 
-    pub(in crate::qualification_resolver) fn json<T: DeserializeOwned>(
+    pub(in crate::release::qualification_resolver) fn json<T: DeserializeOwned>(
         catalog: &ToolCatalog,
         route: &str,
     ) -> Result<T, OrchestratorError> {
@@ -78,7 +78,7 @@ impl<'a> GitHub<'a> {
         serde_json::from_slice(&bytes).map_err(|_| internal("qualification_api_json"))
     }
 
-    pub(in crate::qualification_resolver) fn api_bytes(
+    pub(in crate::release::qualification_resolver) fn api_bytes(
         catalog: &ToolCatalog,
         route: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
@@ -89,7 +89,7 @@ impl<'a> GitHub<'a> {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("qualification_gh_unavailable"))?;
         let output = exec
-            .command(catalog)
+            .command_with_optional_environment_token(catalog)
             .and_then(|command| command.run_bounded(MAX_API_JSON_BYTES, GH_API_TIMEOUT))
             .map_err(|_| internal("qualification_api_unavailable"))?;
         if !output.success {

@@ -76,6 +76,12 @@ impl CheckDeadline {
             .map_or(Ok(()), |deadline| deadline.remaining().map(|_| ()))
     }
 
+    pub fn cap_to_scope(timeout: Duration) -> Result<Duration, MiseError> {
+        OPERATION_DEADLINE.get().map_or(Ok(timeout), |deadline| {
+            deadline.remaining().map(|remaining| timeout.min(remaining))
+        })
+    }
+
     pub fn from_start(start: Instant, timeout: Duration) -> Result<Self, MiseError> {
         start
             .checked_add(timeout)

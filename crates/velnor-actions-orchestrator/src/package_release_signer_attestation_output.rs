@@ -92,3 +92,42 @@ fn validate_attestation(
     let invocation = validate_certificate(&verified.signature.certificate, expected)?;
     Ok((invocation, found))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AttestationExpectation, BTreeMap, validate_output_with_additional_names};
+    use serde_json::json;
+
+    #[test]
+    fn rejects_empty_and_malformed_verified_attestation_output() {
+        let expected = AttestationExpectation {
+            repository_uri: "https://github.com/tailrocks/velnor-new",
+            owner_uri: "https://github.com/tailrocks",
+            caller_workflow_uri: "https://github.com/tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main",
+            caller_workflow_sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            signer_workflow_uri: "https://github.com/tailrocks/velnor-new/.github/workflows/job-image-candidate.yml@refs/heads/main",
+            signer_workflow_sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            source_sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            source_ref: "refs/heads/main",
+            run_id: 40_613_392_798,
+            run_attempt: 2,
+            repository_id: "1390620900".to_owned(),
+            trigger: "push",
+        };
+        for (response, expected_error) in [
+            (json!([]), "package_attestation_ambiguous"),
+            (json!(null), "package_attestation_output_invalid"),
+            (json!({}), "package_attestation_output_invalid"),
+            (json!([null]), "package_attestation_output_invalid"),
+        ] {
+            let error = validate_output_with_additional_names(
+                &serde_json::to_vec(&response).expect("test response"),
+                &BTreeMap::new(),
+                &[],
+                &expected,
+            )
+            .expect_err("empty or malformed verified output must fail closed");
+            assert!(error.to_string().contains(expected_error), "{error}");
+        }
+    }
+}

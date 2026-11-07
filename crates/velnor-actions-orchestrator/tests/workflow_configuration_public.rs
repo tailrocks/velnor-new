@@ -63,6 +63,8 @@ mod family_save_suppression;
 mod feature_toggles;
 #[path = "workflow_configuration_public/final_fanin.rs"]
 mod final_fanin;
+#[path = "workflow_configuration_public/fixture_checkout_filter.rs"]
+mod fixture_checkout_filter;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
 #[path = "workflow_configuration_public/lane_inventory_dispatch.rs"]
@@ -260,3 +262,6 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+
+#[path = "workflow_configuration_public/git_tag_version_groups.rs"]
+mod git_tag_version_groups;

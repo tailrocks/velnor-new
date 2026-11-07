@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{CompiledStateMode, RustCrateConfig, Step, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 #[derive(Clone, Copy)]
 pub(crate) struct CrateJobInputs<'a> {

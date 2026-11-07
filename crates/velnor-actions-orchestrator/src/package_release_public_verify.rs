@@ -18,8 +18,8 @@ use super::{
 };
 use crate::{
     internal::internal,
-    package_release_publish::{PublicReleaseSnapshot, read_public_release_snapshot},
-    package_release_signer::{
+    release::package_release_publish::{PublicReleaseSnapshot, read_public_release_snapshot},
+    release::package_release_signer::{
         VerifiedAttestedSignedPackage,
         verify_attested_signed_package_with_owned_tempdir_and_deadlines,
     },
@@ -136,7 +136,7 @@ fn verify_public_receipt_authority(
     .map_err(|_| internal("package_public_receipt_invalid"))?;
     verify_receipt_authority(policy, selection, &receipt)?;
     let observed_authority_tip =
-        crate::package_release_publish::verify_public_protected_main_lineage(
+        crate::release::package_release_publish::verify_public_protected_main_lineage(
             &policy.plan.repository,
             policy.repository_id,
             &policy.plan.default_branch,
@@ -147,14 +147,15 @@ fn verify_public_receipt_authority(
     require_policy_authority_tip(&observed_authority_tip, &policy.authority_sha)?;
     let recovery = historical_pin.and_then(|pin| pin.recovery.clone());
     if let Some(recovery) = &recovery {
-        let recovery_tip = crate::package_release_publish::verify_public_protected_main_lineage(
-            &policy.plan.repository,
-            policy.repository_id,
-            &policy.plan.default_branch,
-            &receipt.workflow.authority_sha,
-            &recovery.authority_sha,
-            deadline,
-        )?;
+        let recovery_tip =
+            crate::release::package_release_publish::verify_public_protected_main_lineage(
+                &policy.plan.repository,
+                policy.repository_id,
+                &policy.plan.default_branch,
+                &receipt.workflow.authority_sha,
+                &recovery.authority_sha,
+                deadline,
+            )?;
         require_policy_authority_tip(&recovery_tip, &policy.authority_sha)?;
         require_policy_authority_tip(&recovery_tip, &observed_authority_tip)?;
     }
@@ -178,7 +179,7 @@ fn verify_public_release_custody(
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
     let plan = &policy.plan;
     let files = verified_file_inventory(snapshot, &authority.receipt)?;
-    crate::package_release_artifacts::validate_authenticated_release_content(
+    crate::release::package_release_artifacts::validate_authenticated_release_content(
         plan,
         &authority.receipt,
         &files,
@@ -207,7 +208,7 @@ fn verify_public_release_custody(
         authority.recovery.as_ref(),
         verification_deadline,
     )?;
-    crate::package_release_publish::verify_publication_snapshot(&signed, snapshot)?;
+    crate::release::package_release_publish::verify_publication_snapshot(&signed, snapshot)?;
     verification_deadline
         .remaining()
         .map_err(|_| internal("package_public_verification_deadline"))?;
@@ -229,7 +230,7 @@ fn verify_public_runs(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     if let Some(recovery) = recovery {
-        crate::package_release_publish::verify_public_historical_release_recovery(
+        crate::release::package_release_publish::verify_public_historical_release_recovery(
             &policy.plan.repository,
             policy.repository_id,
             &policy.plan.default_branch,
@@ -239,7 +240,7 @@ fn verify_public_runs(
             deadline,
         )
     } else {
-        crate::package_release_publish::verify_public_release_runs(
+        crate::release::package_release_publish::verify_public_release_runs(
             &policy.plan.repository,
             policy.repository_id,
             &policy.plan.default_branch,
@@ -289,7 +290,7 @@ pub(super) fn require_policy_authority_tip(
 fn verify_historical_envelope_pin(
     pin: &HistoricalPackageReleaseAdmission,
     snapshot: &PublicReleaseSnapshot,
-    receipt_asset: &crate::package_release_publish::PublicReleaseAsset,
+    receipt_asset: &crate::release::package_release_publish::PublicReleaseAsset,
     plan: &PackageReleasePlan,
 ) -> Result<(), OrchestratorError> {
     let plan_digest = sha256(

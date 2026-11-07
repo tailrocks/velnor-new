@@ -108,7 +108,7 @@ fn project_binary_until(
 }
 
 fn verify_binary_bytes(bytes: &[u8], expected: &str) -> Result<(), OrchestratorError> {
-    if bytes.is_empty() || crate::generator::sha256_hex(bytes) != expected {
+    if bytes.is_empty() || crate::planner::generator::sha256_hex(bytes) != expected {
         return Err(internal("mise_binary_unqualified_sha256"));
     }
     Ok(())

@@ -158,7 +158,7 @@ pub(crate) fn read_formula(root: &Path, path: &str) -> Result<Vec<u8>, Orchestra
     if !safe_relative_path(path) {
         return Err(internal("tap_formula_path_invalid"));
     }
-    crate::check_evidence::reject_link_components(root, path)?;
+    crate::planner::check_evidence::reject_link_components(root, path)?;
     let file = root.join(path);
     let metadata = fs::symlink_metadata(&file).map_err(|_| internal("tap_formula_missing"))?;
     if !metadata.is_file() || metadata.len() > FORMULA_LIMIT {

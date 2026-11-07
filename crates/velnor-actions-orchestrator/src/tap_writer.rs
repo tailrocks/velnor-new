@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 
 use crate::{
     OrchestratorError, internal::internal,
-    package_release_signer::verify_attested_signed_package_from_env,
+    release::package_release_signer::verify_attested_signed_package_from_env,
     tap_prepare::HomebrewTapPreparationProof,
 };
 
@@ -113,13 +113,13 @@ fn already_promoted(
 
 fn verify_promotion_authority(inputs: &WriterInputs) -> Result<bool, OrchestratorError> {
     let signed = verify_attested_signed_package_from_env()?;
-    crate::package_release_publish::verify_published_release(&signed)?;
+    crate::release::package_release_publish::verify_published_release(&signed)?;
     if signed.receipt().canonical_digest().ok().as_deref()
         != Some(inputs.release.receipt_digest.as_str())
     {
         return Err(internal("tap_writer_release_changed"));
     }
-    crate::package_release_publish::verify_tap_update_environment(
+    crate::release::package_release_publish::verify_tap_update_environment(
         &inputs.plan.repository,
         &inputs.plan.default_branch,
     )?;
@@ -155,7 +155,7 @@ struct WriterInputs {
 
 fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     let signed = verify_attested_signed_package_from_env()?;
-    crate::package_release_publish::verify_published_release(&signed)?;
+    crate::release::package_release_publish::verify_published_release(&signed)?;
     let plan = signed.plan().clone();
     crate::tap_prepare::release_policy_from_env()?
         .validate_plan(&plan)
@@ -170,7 +170,7 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     let root = runner_root()?;
     let policy = super::execute::static_tap_policy()?;
     let spec = super::execute::static_formula_policy()?;
-    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+    let sdk_artifact_digest = crate::planner::generator::current_exe_sha256()
         .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let proof = read_candidate_proof(&root)?;
@@ -295,7 +295,7 @@ fn read_regular_limited(
     let relative = relative
         .to_str()
         .ok_or_else(|| internal("tap_writer_path_encoding"))?;
-    crate::check_evidence::reject_link_components(root, relative)?;
+    crate::planner::check_evidence::reject_link_components(root, relative)?;
     let metadata = fs::symlink_metadata(path).map_err(|_| internal("tap_writer_file_missing"))?;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > limit {
         return Err(internal("tap_writer_file_invalid"));

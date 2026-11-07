@@ -16,7 +16,7 @@ use super::{resolve_policy_at_source, source_files::SourceFiles};
 
 const MAX_SOURCE_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 
-pub(in crate::package_release_publish) fn read_preview_policy_at_source(
+pub(in crate::release::package_release_publish) fn read_preview_policy_at_source(
     api: &GitHubApi,
     source_sha: &str,
     repository: &str,

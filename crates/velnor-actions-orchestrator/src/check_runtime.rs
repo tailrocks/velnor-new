@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
 use crate::internal::{internal, internal_contract};
+use crate::planner::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
 use std::env;
 use std::ffi::OsString;
 use std::path::Path;
@@ -78,7 +78,7 @@ pub(crate) fn execute_check_to(
         Duration::from_secs(u64::from(definition.timeout_minutes) * 60),
     )
     .map_err(|e| internal(&e.to_string()))?;
-    crate::select::verify_checkout_until(root, plan.event, &plan.head, deadline)?;
+    crate::planner::select::verify_checkout_until(root, plan.event, &plan.head, deadline)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, &config)?;
     let mut discovered = discover_checks_until(
         root,
@@ -214,16 +214,16 @@ fn parse_lane_variant(value: &str) -> Result<Option<LaneVariant>, OrchestratorEr
 
 struct CheckOutcome {
     evidence: Option<EvidenceReceipt>,
-    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+    container: Option<crate::planner::check_evidence::gate::container::ContainerReceipt>,
     system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    qualified_tools: Vec<crate::planner::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 
 struct ChildExecution {
     evidence: Option<EvidenceReceipt>,
-    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+    container: Option<crate::planner::check_evidence::gate::container::ContainerReceipt>,
     system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    qualified_tools: Vec<crate::planner::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 
 fn run_check(

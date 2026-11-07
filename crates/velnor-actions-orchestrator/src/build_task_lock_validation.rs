@@ -6,10 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::is_valid_build_tool_key;
 
 use crate::OrchestratorError;
-use crate::build_task_tools::selected_version_and_options;
-use crate::native_mise_tasks::safe_task_tool_version;
-use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::NativeMiseLock;
+use crate::planner::build_task_tools::selected_version_and_options;
+use crate::planner::native_mise_tasks::safe_task_tool_version;
+use crate::planner::native_tool_input::NativeMiseConfig;
+use crate::planner::native_tool_lock::NativeMiseLock;
 
 use super::failure;
 
@@ -55,8 +55,8 @@ pub(super) fn validate_source_lock_subset(
 }
 
 fn lock_row_is_subset(
-    source: &crate::native_tool_lock::NativeLockedTool,
-    root: &crate::native_tool_lock::NativeLockedTool,
+    source: &crate::planner::native_tool_lock::NativeLockedTool,
+    root: &crate::planner::native_tool_lock::NativeLockedTool,
 ) -> bool {
     source.version == root.version
         && source.backend == root.backend
@@ -68,7 +68,7 @@ fn lock_row_is_subset(
             .all(|(platform, artifact)| root.platforms.get(platform) == Some(artifact))
 }
 
-fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
+fn supported_lock_row(row: &crate::planner::native_tool_lock::NativeLockedTool) -> bool {
     row.valid_shape
         && row.unsupported_fields.is_empty()
         && row

@@ -14,7 +14,7 @@ use velnor_actions_rust::{
 };
 
 use crate::OrchestratorError;
-use crate::discover::PlannedWorkspace;
+use crate::planner::discover::PlannedWorkspace;
 
 pub(crate) fn profile_for_workspace(
     root: &Path,

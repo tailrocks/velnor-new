@@ -7,18 +7,19 @@ use super::{
     fixed_path, observe_tag,
 };
 use crate::{
-    OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
+    OrchestratorError, internal::internal,
+    release::package_release_signer::VerifiedAttestedSignedPackage,
 };
 use velnor_actions_contract::preview_production::ReleaseProductionContext;
 
-pub(in crate::package_release_publish) fn verify_signed_origin(
+pub(in crate::release::package_release_publish) fn verify_signed_origin(
     signed: &VerifiedAttestedSignedPackage,
 ) -> Result<(), OrchestratorError> {
     let api = GitHubApi::new(signed.plan().repository.clone());
     admit_signed_origin(&api, signed).map(|_| ())
 }
 
-pub(in crate::package_release_publish) struct StableOriginProof {
+pub(in crate::release::package_release_publish) struct StableOriginProof {
     seal: String,
     expected: Authorization,
     policy: velnor_actions_contract::PackageReleasePolicy,
@@ -30,7 +31,7 @@ pub(in crate::package_release_publish) struct StableOriginProof {
 }
 
 impl StableOriginProof {
-    pub(in crate::package_release_publish) fn verify_local(
+    pub(in crate::release::package_release_publish) fn verify_local(
         &self,
         signed: &VerifiedAttestedSignedPackage,
     ) -> Result<(), OrchestratorError> {
@@ -77,7 +78,7 @@ impl StableOriginProof {
         ))?))
     }
 
-    pub(in crate::package_release_publish) fn verify_tag(
+    pub(in crate::release::package_release_publish) fn verify_tag(
         &self,
         api: &GitHubApi,
     ) -> Result<(), OrchestratorError> {
@@ -88,7 +89,7 @@ impl StableOriginProof {
     }
 }
 
-pub(in crate::package_release_publish) fn admit_signed_origin(
+pub(in crate::release::package_release_publish) fn admit_signed_origin(
     api: &GitHubApi,
     signed: &VerifiedAttestedSignedPackage,
 ) -> Result<StableOriginProof, OrchestratorError> {

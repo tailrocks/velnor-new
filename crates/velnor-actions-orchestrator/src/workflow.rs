@@ -21,8 +21,9 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::JactionlintConfigInput;
 use velnor_actions_contract::{
-    CheckoutHistory, Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step, StepKind, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    CheckoutHistory, Concurrency, ExecutionMode, Job, Permissions, ScaleSetSelector, Step,
+    StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
@@ -31,7 +32,7 @@ use velnor_actions_workflow_renderer::render::{
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 use crate::workflow_jobs::{final_job, lint_job};
 
 #[path = "workflow_policy.rs"]

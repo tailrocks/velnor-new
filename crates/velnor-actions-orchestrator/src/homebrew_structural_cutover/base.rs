@@ -151,7 +151,7 @@ fn render_seed_files(
             manifest_sha256: &sdk.manifest_sha256,
             host_target_sha256: &sdk.seed_runner_binary_sha256,
         },
-        &crate::product_release_pins::homebrew_adoption_pins()?,
+        &crate::release::product_release_pins::homebrew_adoption_pins()?,
     )
     .map_err(|_| internal("homebrew_seed_output_render_invalid"))?;
     Ok(rendered

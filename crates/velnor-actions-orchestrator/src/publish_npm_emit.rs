@@ -8,8 +8,8 @@ use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::prepare::GenerationPreparation;
-use crate::publish_steps::{NpmPlan, VersionCheck};
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::publish_steps::{NpmPlan, VersionCheck};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::workflow_task_jobs::bun_steps::{bun_words, dir_arg, prepare_step};
 

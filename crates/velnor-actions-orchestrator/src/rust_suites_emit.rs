@@ -16,9 +16,9 @@ use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::{Discovery, PlannedWorkspace, workspace_manifest};
-use crate::pins::resolve_mise_setup;
-use crate::prepare::GenerationPreparation;
+use crate::planner::discover::{Discovery, PlannedWorkspace, workspace_manifest};
+use crate::planner::pins::resolve_mise_setup;
+use crate::planner::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
 pub(crate) struct OrchestratorCiSuiteBuild {
@@ -99,7 +99,8 @@ fn validate_single_suite(
         ));
     }
     if suite.profile != "default" {
-        let inputs = crate::evidence::nextest_inputs(root, &workspace.record.workspace_root)?;
+        let inputs =
+            crate::planner::evidence::nextest_inputs(root, &workspace.record.workspace_root)?;
         let declared = inputs
             .iter()
             .any(|cfg| cfg.profiles.iter().any(|profile| profile == &suite.profile));

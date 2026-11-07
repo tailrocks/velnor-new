@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{FeedbackRecords, TapMergeGitHub, dispositions, time};
+use super::{FeedbackRecords, ProviderQuery, ProviderRead, dispositions, time};
 use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-const QUERY: &str = "query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id fullDatabaseId body createdAt updatedAt lastEditedAt author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}} pullRequestReview{fullDatabaseId} replyTo{id fullDatabaseId author{__typename ... on User{databaseId} ... on Bot{databaseId}}}} pageInfo{hasNextPage endCursor}}}}}";
+pub(super) const QUERY: &str = "query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100,after:$cursor){nodes{id fullDatabaseId body createdAt updatedAt lastEditedAt author{__typename ... on User{databaseId} ... on Bot{databaseId}} editor{__typename ... on User{databaseId} ... on Bot{databaseId}} pullRequestReview{fullDatabaseId} replyTo{id fullDatabaseId author{__typename ... on User{databaseId} ... on Bot{databaseId}}}} pageInfo{hasNextPage endCursor}}}}}";
 
 pub(super) struct Findings {
     pub(super) latest: Option<time::Timestamp>,
@@ -21,7 +21,7 @@ struct HumanReview {
 }
 
 pub(super) fn authenticate(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     records: &FeedbackRecords,
     location: (&str, u64),
 ) -> Result<Findings, OrchestratorError> {
@@ -57,7 +57,7 @@ pub(super) fn authenticate(
 }
 
 fn collect_thread(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     id: &str,
     records: &FeedbackRecords,
     location: (&str, u64),
@@ -74,7 +74,7 @@ fn collect_thread(
         if !cursor.is_empty() {
             fields.push(("cursor", cursor.clone()));
         }
-        let response: Value = api.graphql(QUERY, &fields)?;
+        let response: Value = api.provider_graphql(ProviderQuery::ThreadComments, &fields)?;
         let node = &response["data"]["node"];
         if response.get("errors").is_some()
             || node["id"].as_str() != Some(id)
@@ -171,7 +171,7 @@ fn authenticate_thread(
 }
 
 fn authenticate_human_reviews(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     records: &FeedbackRecords,
     result: &mut Findings,
 ) -> Result<(), OrchestratorError> {

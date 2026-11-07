@@ -10,8 +10,8 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::generate::write_tree;
-use crate::prepare::AdmissionLeg;
+use crate::planner::generate::write_tree;
+use crate::planner::prepare::AdmissionLeg;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
 
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";

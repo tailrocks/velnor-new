@@ -17,9 +17,10 @@ pub(crate) const MISSING_SOURCE_CODE: &str = "rust_not_declared_in_mise";
 pub(crate) fn enforce_when_opted_in(
     root: &std::path::Path,
     config: &VelnorConfig,
+    nested: &[String],
 ) -> Result<(), OrchestratorError> {
     if mise_authoritative(config) {
-        enforce_mise_authority(root, config, &read_project_sources(root)?)?;
+        enforce_mise_authority(root, config, &read_project_sources(root)?, nested)?;
     }
     Ok(())
 }
@@ -37,6 +38,7 @@ fn enforce_mise_authority(
     root: &std::path::Path,
     config: &VelnorConfig,
     sources: &[SourceDeclarations],
+    nested: &[String],
 ) -> Result<(), OrchestratorError> {
     let Some((mise_file, mise_version)) = sources
         .iter()
@@ -56,7 +58,7 @@ fn enforce_mise_authority(
         .iter()
         .filter(|source| !is_mise_config(&source.file))
         .cloned()
-        .chain(read_nested_toolchains(root)?);
+        .chain(read_nested_toolchains(root, nested)?);
     for source in others {
         if let Some(version) = rust_of(&source).filter(|version| *version != mise_version) {
             return Err(OrchestratorError::config(

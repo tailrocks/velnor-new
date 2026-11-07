@@ -62,7 +62,9 @@ pub(super) enum JobRole {
     Build(ReleaseTarget),
     CandidateManifest,
     Qualify(ReleaseTarget),
+    AdmitHomebrew,
     QualifyHomebrew,
+    FinalizeHomebrew,
     Attest(ReleaseTarget),
     AttestManifest,
     Publish,
@@ -72,7 +74,9 @@ pub(super) fn job_role(id: &str) -> Option<JobRole> {
     match id {
         "verify-release-source" => return Some(JobRole::SourceGate),
         "candidate-manifest" => return Some(JobRole::CandidateManifest),
+        "qualify-homebrew-admit" => return Some(JobRole::AdmitHomebrew),
         "qualify-homebrew-macos" => return Some(JobRole::QualifyHomebrew),
+        "qualify-homebrew-finalize" => return Some(JobRole::FinalizeHomebrew),
         "attest-manifest" => return Some(JobRole::AttestManifest),
         "publish-generator" => return Some(JobRole::Publish),
         _ => {}
@@ -188,6 +192,7 @@ pub(super) fn generator_release(
     )?);
     jobs.extend(macos_arm64_jobs(
         macos.clone(),
+        hosted.clone(),
         pins,
         &source_step,
         &mut actions,
@@ -195,13 +200,19 @@ pub(super) fn generator_release(
     jobs.extend(macos_x86_64_jobs(
         macos,
         macos_intel,
+        hosted.clone(),
         pins,
         &source_step,
         &mut actions,
     )?);
     jobs.push(candidate_manifest::job(hosted.clone(), pins)?);
+    jobs.push(qualification::homebrew_admission_job(pins)?);
+    jobs.push(qualification::homebrew_finalization_job(pins)?);
     jobs.push(manifest::job(hosted.clone(), pins)?);
-    jobs.push(jobs::publish_job(hosted, pins)?);
+    jobs.push(jobs::publish_job(
+        runs_on_yaml(crate::release_tree::RELEASE_HOSTED_RUNNER)?,
+        pins,
+    )?);
     Ok(GeneratorRelease {
         workflow: document(jobs),
         actions,
@@ -256,6 +267,7 @@ fn linux_jobs(
 
 fn macos_arm64_jobs(
     macos: Yaml,
+    attestation_runs_on: Yaml,
     pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
@@ -282,7 +294,7 @@ fn macos_arm64_jobs(
                 id: "qualify-macos",
                 name: "Qualify macOS velnor-actions",
                 action: "generator-release-qualify-macos",
-                runs_on: macos.clone(),
+                runs_on: macos,
                 build_job: "build-macos",
                 product: assets::MACOS_ARM64,
                 source_step,
@@ -294,7 +306,7 @@ fn macos_arm64_jobs(
         jobs::attest_job(
             "attest-macos",
             "Attest macOS velnor-actions",
-            macos,
+            attestation_runs_on,
             assets::MACOS_ARM64,
             pins,
         )?,
@@ -304,6 +316,7 @@ fn macos_arm64_jobs(
 fn macos_x86_64_jobs(
     build_runs_on: Yaml,
     native_runs_on: Yaml,
+    attestation_runs_on: Yaml,
     pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
@@ -330,7 +343,7 @@ fn macos_x86_64_jobs(
                 id: "qualify-macos-intel",
                 name: "Qualify macOS x86_64 velnor-actions",
                 action: "generator-release-qualify-macos-intel",
-                runs_on: native_runs_on.clone(),
+                runs_on: native_runs_on,
                 build_job: "build-macos-intel",
                 product: assets::MACOS_X86_64,
                 source_step,
@@ -341,7 +354,7 @@ fn macos_x86_64_jobs(
         jobs::attest_job(
             "attest-macos-intel",
             "Attest macOS x86_64 velnor-actions",
-            native_runs_on,
+            attestation_runs_on,
             assets::MACOS_X86_64,
             pins,
         )?,

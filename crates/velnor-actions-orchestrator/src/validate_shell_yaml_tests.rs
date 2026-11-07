@@ -12,7 +12,8 @@ use crate::OrchestratorError;
 const RETIRED_VERIFIER_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
 
 fn staged(shell: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
-    let staging = tempfile::tempdir().map_err(|err| OrchestratorError::io("staging", err.to_string()))?;
+    let staging =
+        tempfile::tempdir().map_err(|err| OrchestratorError::io("staging", err.to_string()))?;
     let workflow = format!(
         "name: probe\non: push\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Probe\n        shell: {shell}\n        run: echo probe\n"
     );
@@ -22,7 +23,8 @@ fn staged(shell: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
 }
 
 #[test]
-fn only_the_hermetic_verifier_shell_is_accepted_among_verifier_shells() -> Result<(), Box<dyn Error>> {
+fn only_the_hermetic_verifier_shell_is_accepted_among_verifier_shells() -> Result<(), Box<dyn Error>>
+{
     for shell in ["bash", VERIFY_VERIFIER_SHELL] {
         let runs = staged(shell)?;
         assert_eq!(runs.len(), 1, "{shell}");

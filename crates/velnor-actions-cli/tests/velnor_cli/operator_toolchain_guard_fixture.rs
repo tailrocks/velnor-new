@@ -232,6 +232,12 @@ impl Fixture {
             contents,
             "\n[stacks.rust.release]\nenabled = true\npackages = [\"probe\"]\nregistry = \"{registry}\""
         )?;
+        if registry == "crates-io" {
+            writeln!(
+                contents,
+                "required_workflow_path = \".github/workflows/ci.yml\"\ntrusted_reviewer_id = 12345"
+            )?;
+        }
         fs::write(config, contents)?;
         Ok(())
     }

@@ -7,6 +7,110 @@ use std::process::Output;
 
 #[path = "product_release_binary_fixture.rs"]
 mod product_release_binary_fixture;
+
+#[test]
+fn binary_publisher_uses_linux_setup_while_build_remains_macos()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::BTreeSet;
+    use velnor_actions_contract::RoutingWorkflow;
+    use velnor_actions_workflow_renderer::schema2::{
+        Schema2WorkflowRequest, render_schema2_workflows,
+    };
+    let mut pins = product_release_binary_fixture::pins();
+    pins.linux_x86_64_setup.sha256 = "a".repeat(64);
+    pins.macos_arm64_setup.sha256 = "b".repeat(64);
+    let request = Schema2WorkflowRequest {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        hosted_label: "ubuntu-26.04".to_owned(),
+        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
+        mbx_qualification: None,
+        mise_pin_qualification: None,
+        product_release: Some(pins),
+    };
+    let files = render_schema2_workflows(&request)?;
+    let workflow = files
+        .iter()
+        .find(|file| file.path == ".github/workflows/product-release-binary.yml")
+        .ok_or("missing workflow")?;
+    let body = &workflow.bytes;
+    let build = body
+        .split("  build-binary:")
+        .nth(1)
+        .ok_or("missing build job")?
+        .split("\n  attest-binary:")
+        .next()
+        .ok_or("missing build end")?;
+    let publish = body
+        .split("  publish-binary:")
+        .nth(1)
+        .ok_or("missing publish job")?;
+    let attest = body
+        .split("  attest-binary:")
+        .nth(1)
+        .ok_or("missing attest job")?
+        .split("\n  publish-binary:")
+        .next()
+        .ok_or("missing attest end")?;
+    assert!(build.contains("macos-15"));
+    assert!(attest.contains("macos-15"));
+    assert!(publish.contains("ubuntu-26.04"));
+    assert!(publish.contains(&"a".repeat(64)));
+    assert!(!publish.contains(&"b".repeat(64)));
+    Ok(())
+}
+
+#[test]
+fn release_authority_jobs_use_qualified_linux_for_all_hosted_labels()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::BTreeSet;
+    use velnor_actions_contract::RoutingWorkflow;
+    use velnor_actions_workflow_renderer::schema2::{
+        Schema2WorkflowRequest, render_schema2_workflows,
+    };
+    for label in ["ubuntu-26.04", "ubuntu-26.04-arm"] {
+        let request = Schema2WorkflowRequest {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            hosted_label: label.to_owned(),
+            scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+            workflows: BTreeSet::from([
+                RoutingWorkflow::ImageRelease,
+                RoutingWorkflow::GeneratorRelease,
+            ]),
+            mbx_qualification: None,
+            mise_pin_qualification: None,
+            product_release: Some(product_release_binary_fixture::pins()),
+        };
+        let files = render_schema2_workflows(&request)?;
+        for (path, jobs) in [
+            (
+                ".github/workflows/product-release-images.yml",
+                &["publish-images"][..],
+            ),
+            (
+                ".github/workflows/product-release-generator.yml",
+                &["publish-generator"][..],
+            ),
+            (
+                ".github/workflows/job-image-candidate.yml",
+                &["attest-image-candidate", "publish-job-image"][..],
+            ),
+        ] {
+            let file = files
+                .iter()
+                .find(|file| file.path == path)
+                .ok_or("missing workflow")?;
+            let workflow: serde_json::Value = serde_saphyr::from_str(&file.bytes)?;
+            for job in jobs {
+                assert_eq!(
+                    workflow["jobs"][*job]["runs-on"], "ubuntu-26.04",
+                    "{path}:{job} for {label}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
 use product_release_binary_fixture::{BinaryReleaseFixture, BuildMode, HELPER_SUFFIX, SOURCE_SHA};
 #[path = "product_release_binary_hash_fixture.rs"]
 mod product_release_binary_hash_fixture;

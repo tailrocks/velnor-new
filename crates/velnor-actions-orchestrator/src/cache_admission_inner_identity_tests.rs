@@ -4,11 +4,11 @@ use velnor_actions_contract::workflow::cache_identity::{Gc1Family, GenerationId}
 
 use super::*;
 use crate::cache_archive::cache_archive_envelope::{
-    OUTER_MEMBER_NAME, OPERATING_CEILING_BYTES, FrozenInnerPayload, OuterEnvelopeIdentity,
+    FrozenInnerPayload, OPERATING_CEILING_BYTES, OUTER_MEMBER_NAME, OuterEnvelopeIdentity,
     PreflightMeasurement, measure_envelope,
 };
 use crate::cache_inventory::measured_bytes;
-use crate::source_prep::cache_source_projection::sha256_hex;
+use crate::planner::source_prep::cache_source_projection::sha256_hex;
 
 const SMALL_INNER: u64 = 1024;
 const LARGE_CANDIDATE: u64 = 6_000_000_000;
@@ -91,11 +91,8 @@ fn admission_request(candidate_inner: u64, envelope: OuterEnvelope) -> Admission
 
 #[test]
 fn bound_candidate_admits_when_it_fits() {
-    let admission = decide_admission(&admission_request(
-        SMALL_INNER,
-        small_payload_envelope(),
-    ))
-    .expect("bound candidate decides");
+    let admission = decide_admission(&admission_request(SMALL_INNER, small_payload_envelope()))
+        .expect("bound candidate decides");
     assert_eq!(admission.decision, AdmissionDecision::Admitted);
     assert_eq!(admission.candidate_inner_bytes.value, Some(SMALL_INNER));
 }

@@ -35,7 +35,7 @@ mod source_validation;
 pub use source::{
     FINALIZE_PREVIEW_SOURCE_OP, finalize_preview_source_from_env, select_preview_source_from_env,
 };
-pub(in crate::package_release_publish) use source_policy_projection::read_preview_policy_at_source;
+pub(in crate::release::package_release_publish) use source_policy_projection::read_preview_policy_at_source;
 pub(crate) use source_validation::validate_admitted_source_checkout;
 
 pub const SELECT_PREVIEW_SOURCE_OP: &str = "select-preview-source-v1";

@@ -21,7 +21,7 @@ use super::bun_steps::{LegArgs, MemberInputs, member_steps};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::config::private_wiring::PrivateWiring;
-use crate::discover::Discovery;
+use crate::planner::discover::Discovery;
 
 #[derive(Debug, Default)]
 pub(crate) struct BunPolicies {

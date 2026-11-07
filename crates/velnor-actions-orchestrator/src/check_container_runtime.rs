@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use crate::generator::sha256_hex;
 use crate::internal::internal;
+use crate::planner::generator::sha256_hex;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract::config::{HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES};

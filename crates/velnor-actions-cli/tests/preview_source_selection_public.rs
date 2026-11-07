@@ -12,6 +12,8 @@ use velnor_actions_contract::{
 };
 
 mod preview_source_selection_fixture;
+#[path = "api2026_pull_context_fixture/worker.rs"]
+mod worker;
 use preview_source_selection_fixture::{
     AUTHORITY_SHA, CI_RUN_ID, PROTECTED_SHA, REPOSITORY, REPOSITORY_ID, SOURCE_SHA, TestResult,
     invoke,
@@ -22,6 +24,10 @@ const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 
 #[test]
 fn public_preview_selection_uses_sha_media_and_preserves_parent_proofs() -> TestResult<()> {
+    const TEST: &str = "public_preview_selection_uses_sha_media_and_preserves_parent_proofs";
+    if !preview_source_selection_fixture::enter(TEST)? {
+        return Ok(());
+    }
     let large_json = invoke("large-json")?;
     if !large_json.status.success() {
         let stderr = String::from_utf8_lossy(&large_json.stderr);
@@ -78,12 +84,25 @@ fn public_preview_selection_uses_sha_media_and_preserves_parent_proofs() -> Test
         "failed selection must not emit partial outputs"
     );
     assert_identity_media(&wrong_sha.requests, &mut BTreeSet::new(), false)?;
+    let wrong_repository = invoke("wrong-repository")?;
+    assert!(!wrong_repository.status.success());
+    assert!(
+        String::from_utf8_lossy(&wrong_repository.stderr)
+            .contains("package_publish_repository_mismatch")
+    );
+    assert_eq!(wrong_repository.output, "");
+    worker::record_success("preview", TEST)?;
     Ok(())
 }
 
 #[test]
 fn public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment()
 -> TestResult<()> {
+    const TEST: &str =
+        "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment";
+    if !preview_source_selection_fixture::enter(TEST)? {
+        return Ok(());
+    }
     let accepted = invoke("stable-self-review-disabled")?;
     assert!(
         accepted.status.success(),
@@ -104,6 +123,7 @@ fn public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_env
         String::from_utf8_lossy(&rejected.stderr)
     );
     assert_eq!(rejected.output, "");
+    worker::record_success("preview", TEST)?;
     Ok(())
 }
 fn assert_identity_media(

@@ -34,23 +34,48 @@ const LANE_TOOLS: [&str; 7] = [
     " bun@",
 ];
 
-const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[1];
-const OTHER_LANE_RUNS_ON: &str = "ubuntu-24.04";
+const OTHER_LANE_USES: &str = TOOLS_CACHE_PRELUDE_USES[2];
+const OTHER_LANE_RUNS_ON: &str = "scale-set:velnor+ubuntu-26.04-scale-set";
 
 pub(super) fn lane_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
     Ok(lane_jobs_with_catalog()?.0)
 }
 
 fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<dyn Error>> {
+    lane_jobs_for_runner(false)
+}
+
+fn lane_jobs_for_runner(
+    cargo_test: bool,
+) -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<dyn Error>> {
     let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let root = repo.path();
+    if cargo_test {
+        let path = root.join(".velnor/config.toml");
+        let config = fs::read_to_string(&path)?;
+        fs::write(
+            path,
+            format!("{config}\n[stacks.rust]\ntest_runner = \"cargo_test\"\n"),
+        )?;
+        fs::remove_file(root.join(".mise/tasks/test"))?;
+        fs::remove_file(root.join("crates/nested/.mise/tasks/test"))?;
+    }
     for (dir, name) in [
         ("crates/cli", "velnor-actions-cli"),
         ("crates/orchestrator", "velnor-actions-orchestrator"),
         ("crates/mise", "velnor-actions-mise"),
     ] {
         workflow_configuration_fixture::add_independent_mbx_package(root, dir, name)?;
-        workflow_configuration_fixture::write_nextest_task(&root.join(dir))?;
+        if !cargo_test {
+            workflow_configuration_fixture::write_nextest_task(&root.join(dir))?;
+        }
+    }
+    if cargo_test {
+        fs::create_dir_all(root.join("crates/cli/tests"))?;
+        fs::write(
+            root.join("crates/cli/tests/image_publication_public.rs"),
+            "#[test] fn fixture() {}\n",
+        )?;
     }
     fs::write(
         root.join("mise.toml"),
@@ -61,6 +86,13 @@ fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<
         include_str!("../../../../mise.lock"),
     )?;
     let prepared = prepare(root)?;
+    if cargo_test {
+        assert!(prepared.discovery.proposals.iter().any(|task| {
+            task.identity.unit_path == "crates/cli/Cargo.toml"
+                && task.task_kind == "test"
+                && task.payload.iter().any(|arg| arg == "--tests")
+        }));
+    }
     Ok((finalized_jobs(&prepared)?, prepared.emission_catalog()))
 }
 
@@ -200,7 +232,8 @@ fn w7_refuses_two_tools_identities_in_one_lane() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Error>> {
+fn unqualified_lane_rejects_tools_identity_and_same_lane_stays_bound() -> Result<(), Box<dyn Error>>
+{
     let mut jobs = lane_jobs()?;
     let id = crate_id(&jobs)?;
     let own = identity_digest(&jobs[&id])
@@ -219,7 +252,15 @@ fn a_rust_job_in_another_lane_keeps_its_own_identity() -> Result<(), Box<dyn Err
         }
     }
     jobs.insert("rust-other-lane".to_owned(), other_lane);
-    assert_eq!(of(&jobs, WasteRule::SplitToolsIdentity), Vec::new());
+    let unqualified = of(&jobs, WasteRule::SplitToolsIdentity);
+    assert_eq!(unqualified.len(), 1, "{unqualified:?}");
+    assert!(unqualified[0].to_string().contains("rust-other-lane"));
+    assert!(
+        unqualified[0]
+            .to_string()
+            .contains("tools_cache_identity_shape")
+    );
+    jobs.remove("rust-other-lane");
     jobs.insert("rust-same-lane".to_owned(), same_lane);
     let found = of(&jobs, WasteRule::SplitToolsIdentity);
     assert_eq!(found.len(), 1, "{found:?}");
@@ -319,3 +360,6 @@ fn an_install_only_mbx_selector_must_equal_the_catalog_version() -> Result<(), B
     assert!(message.contains(id.as_str()), "{message}");
     Ok(())
 }
+
+#[path = "waste_tools_fixture.rs"]
+mod fixture;

@@ -6,9 +6,9 @@ mod capture;
 #[path = "review_completion_emit.rs"]
 mod emit;
 #[path = "review_completion_provider.rs"]
-mod provider;
+pub(crate) mod provider;
 #[path = "review_completion_state.rs"]
-mod state;
+pub(crate) mod state;
 
 pub use capture::{CAPTURE_REVIEW_COMPLETION_OP, capture_review_completion};
 pub use emit::{EMIT_REVIEW_COMPLETION_OP, emit_review_completion};

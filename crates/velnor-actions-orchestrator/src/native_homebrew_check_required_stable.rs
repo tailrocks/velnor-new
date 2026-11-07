@@ -49,7 +49,7 @@ pub(super) fn protected_stable_head_is_activated(
         .iter()
         .find(|channel| channel.channel == PackageReleaseChannel::Stable)
         .ok_or_else(|| internal("native_stable_formula_policy_missing"))?;
-    let bytes = crate::package_release_publish::read_protected_source_file(
+    let bytes = crate::release::package_release_publish::read_protected_source_file(
         &authority.tap().repository,
         authority.tap_repository_id(),
         "main",

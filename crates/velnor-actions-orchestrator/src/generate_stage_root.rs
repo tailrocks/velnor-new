@@ -116,6 +116,7 @@ pub(super) struct StageRoot {
     spare: PathBuf,
     spare_identity: FsIdentity,
     owner: OwnerId,
+    recovered: Option<PathBuf>,
 }
 
 impl StageRoot {
@@ -145,7 +146,20 @@ impl StageRoot {
             }
             Err(error) => return Err(io(&container, &error)),
         }
-        Self::validate(identity, container)
+        let stage = Self::validate(identity.clone(), container.clone())?;
+        let recovered = stage.retain_spare()?;
+        let mut fresh = Self::validate(identity, container).map_err(|error| {
+            OrchestratorError::io(
+                recovered.display().to_string(),
+                format!("prior_staging_tree_retained; stage_validation_failed:{error}"),
+            )
+        })?;
+        fresh.recovered = Some(recovered);
+        Ok(fresh)
+    }
+
+    pub(super) fn recovered(&self) -> Option<&Path> {
+        self.recovered.as_deref()
     }
 
     pub(super) fn spare(&self) -> &Path {
@@ -193,7 +207,7 @@ impl StageRoot {
         Self::clear_children(&self.spare, self.spare_identity)
     }
 
-    pub(super) fn clean_retired_root(&self, expected: FsIdentity) -> Result<(), OrchestratorError> {
+    pub(super) fn validate_exchanged(&self, expected: FsIdentity) -> Result<(), OrchestratorError> {
         self.validate_container()?;
         let published = self.root.path.join(".github");
         Self::require_identity(&published, self.spare_identity)
@@ -205,7 +219,31 @@ impl StageRoot {
         self.require_same_filesystem(&self.spare)?;
         self.require_owner(&self.spare, &metadata)?;
         validate_directory_owners(&self.spare, self.owner, &self.root.mount)?;
-        Self::clear_children(&self.spare, expected)
+        Ok(())
+    }
+
+    pub(super) fn retain_spare(&self) -> Result<PathBuf, OrchestratorError> {
+        self.validate_container_and_spare(false)?;
+        let held = tempfile::Builder::new()
+            .prefix("retained-")
+            .tempdir_in(&self.container)
+            .map_err(|error| io(&self.container, &error))?
+            .keep();
+        let retained = held.join("tree");
+        fs::rename(&self.spare, &retained).map_err(|error| io(&self.spare, &error))?;
+        fs::create_dir(&self.spare).map_err(|error| {
+            OrchestratorError::io(
+                retained.display().to_string(),
+                format!("retained_tree_requires_spare_recovery:{error}"),
+            )
+        })?;
+        fs_ops::set_mode(&self.spare, PRIVATE_DIR_MODE).map_err(|error| {
+            OrchestratorError::io(
+                retained.display().to_string(),
+                format!("retained_tree_spare_mode_failed:{error}"),
+            )
+        })?;
+        Ok(retained)
     }
 
     pub(super) fn validate_staged(

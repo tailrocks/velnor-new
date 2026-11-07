@@ -8,10 +8,10 @@ use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_rust::SelectionBroadening;
 
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
-use crate::discover::Discovery;
 use crate::git_paths::NON_UTF8_PATH;
-use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
-use crate::select_edges::{base_edges, head_edges};
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::{Ownership, affected_packages, has_unowned_file};
+use crate::planner::select_edges::{base_edges, head_edges};
 
 #[path = "select_ansible.rs"]
 pub(crate) mod ansible;
@@ -53,7 +53,7 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
-    crate::select_tofu::push_chdir_findings(discovery, warnings)?;
+    crate::planner::select_tofu::push_chdir_findings(discovery, warnings)?;
     Ok(kept)
 }
 
@@ -166,7 +166,7 @@ fn affected_from_changed(
             warnings.push(warning);
             return all_packages;
         }
-        let Some(keys) = crate::select_tofu::tofu_keys_or_broaden(
+        let Some(keys) = crate::planner::select_tofu::tofu_keys_or_broaden(
             root, base, head, discovery, changed, warnings,
         ) else {
             return all_packages;
@@ -196,7 +196,10 @@ fn affected_from_changed(
                     toolfiles
                         || check.check.selection
                             == velnor_actions_contract::config::CheckSelection::RustChanges
-                        || check.config_inputs.iter().any(|path| changed.contains(path))
+                        || check
+                            .config_inputs
+                            .iter()
+                            .any(|path| changed.contains(path))
                 })
                 .map(|check| check.check.id.clone()),
         );
@@ -247,15 +250,17 @@ fn rust_affected(
         warnings.push("unclassified_files:all_changed".to_owned());
         return None;
     }
-    let forced = match crate::select_reads::forced_packages(root, discovery, &ownership) {
+    let forced = match crate::planner::select_reads::forced_packages(root, discovery, &ownership) {
         Ok(forced) => forced,
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             return None;
         }
     };
-    warnings.extend(crate::select_reads::forced_warnings(&ownership, &forced));
-    let forced = crate::select_reads::forced_ids(&forced);
+    warnings.extend(crate::planner::select_reads::forced_warnings(
+        &ownership, &forced,
+    ));
+    let forced = crate::planner::select_reads::forced_ids(&forced);
     if changed.is_empty() && forced.is_empty() {
         return Some(BTreeSet::new());
     }

@@ -35,7 +35,7 @@ fn no_seed_match<T>(required: bool) -> Result<Option<T>, crate::OrchestratorErro
 struct SeedPullContext {
     number: u64,
     repository_id: u64,
-    pull: crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: crate::release::package_release_publish::PublicPullRequestSnapshot,
     transition: crate::homebrew::adoption::ProtectedHomebrewAdoptionTransition,
 }
 
@@ -57,9 +57,10 @@ fn seed_pull_context(
     let Some(number) = pull_request.filter(|number| *number > 0) else {
         return Ok(None);
     };
-    let repository_id =
-        crate::package_release_publish::read_public_repository_identity(repository, deadline)?;
-    let pull = crate::package_release_publish::read_public_pull_request(
+    let repository_id = crate::release::package_release_publish::read_public_repository_identity(
+        repository, deadline,
+    )?;
+    let pull = crate::release::package_release_publish::read_public_pull_request(
         repository,
         repository_id,
         number,
@@ -79,7 +80,7 @@ fn seed_pull_context(
     ) {
         return Ok(None);
     }
-    crate::package_release_publish::verify_public_pull_request_lineage(
+    crate::release::package_release_publish::verify_public_pull_request_lineage(
         repository,
         repository_id,
         "main",
@@ -141,8 +142,8 @@ fn admit_seed_transition(
     let run_id = positive_env_u64("GITHUB_RUN_ID")?;
     let run_attempt = u32::try_from(positive_env_u64("GITHUB_RUN_ATTEMPT")?)
         .map_err(|_| internal("sdk_adoption_caller_run_invalid"))?;
-    crate::package_release_publish::verify_public_sdk_adoption_caller(
-        &crate::package_release_publish::PublicSdkCallerSelection {
+    crate::release::package_release_publish::verify_public_sdk_adoption_caller(
+        &crate::release::package_release_publish::PublicSdkCallerSelection {
             repository: repository.to_owned(),
             repository_id: context.repository_id,
             head_repository: context.pull.head_repository.clone(),
@@ -190,7 +191,7 @@ fn render_and_validate_seed(
     use crate::internal::internal;
 
     let sdk = binding.identity().clone();
-    let seed_pins = crate::product_release_pins::homebrew_adoption_pins()?;
+    let seed_pins = crate::release::product_release_pins::homebrew_adoption_pins()?;
     let generated = velnor_actions_workflow_renderer::render_homebrew_adoption_seed(
         context.transition.transition(),
         &velnor_actions_workflow_renderer::HomebrewAdoptionSeedSdkIdentity {
@@ -240,7 +241,7 @@ pub(crate) fn seed_pull_context_matches(
     requested_transition_id: &str,
     repository: &str,
     repository_id: u64,
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     expected_head: &str,
 ) -> bool {
     transition.transition_id == requested_transition_id

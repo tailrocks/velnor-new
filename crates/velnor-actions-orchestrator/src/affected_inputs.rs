@@ -7,8 +7,8 @@ use velnor_actions_contract::{NonInputs, RustStackConfig};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::PlannedWorkspace;
-pub(crate) use crate::inventory::WorkspaceResolve;
+use crate::planner::discover::PlannedWorkspace;
+pub(crate) use crate::planner::inventory::WorkspaceResolve;
 
 #[derive(Debug, Clone, Default)]
 pub struct AffectedInputs {

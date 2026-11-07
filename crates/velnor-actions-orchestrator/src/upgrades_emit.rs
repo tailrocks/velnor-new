@@ -6,7 +6,7 @@ use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::upgrades::{UpgradesSpec, render_upgrades_workflow};
 
 use crate::OrchestratorError;
-use crate::prepare::GenerationPreparation;
+use crate::planner::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
 pub(crate) fn upgrades_enabled(prep: &GenerationPreparation) -> bool {
@@ -26,7 +26,7 @@ pub(crate) fn upgrades_files(
         config: config.clone(),
         runs_on: prep.runner_label.clone(),
         checkout_uses: CHECKOUT_USES.to_owned(),
-        mise_setup: crate::pins::resolve_mise_setup(&prep.config, &prep.runner_label)?,
+        mise_setup: crate::planner::pins::resolve_mise_setup(&prep.config, &prep.runner_label)?,
         gh_version: velnor_actions_mise::ToolCatalog::pinned()
             .version(PinnedTool::Gh)
             .to_owned(),

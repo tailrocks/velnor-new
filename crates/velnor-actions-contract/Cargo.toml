@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "crate_release_intent_public"
+path = "tests/crate_release_intent_public.rs"
+
+[[test]]
 name = "velnor_contract"
 path = "tests/velnor_contract.rs"
 
@@ -21,6 +25,7 @@ test = false
 workspace = true
 
 [dependencies]
+toml = { version = "=1.1.8" }
 semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }

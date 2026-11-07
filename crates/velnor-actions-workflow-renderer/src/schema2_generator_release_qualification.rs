@@ -20,6 +20,18 @@ pub(super) fn homebrew_job(
     homebrew::job(pins, actions)
 }
 
+pub(super) fn homebrew_admission_job(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    homebrew::admission_job(pins)
+}
+
+pub(super) fn homebrew_finalization_job(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    homebrew::finalization_job(pins)
+}
+
 pub(super) struct QualificationJob<'a> {
     pub id: &'a str,
     pub name: &'a str,
@@ -47,6 +59,9 @@ pub(super) fn job(
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset files",
+    ));
+    action_steps.push(workflow_steps::validate_artifact_id(
+        "${{ inputs.manifest_artifact_id }}",
     ));
     action_steps.push(workflow_steps::download_step_by_id(
         "Download canonical same-run candidate manifest",

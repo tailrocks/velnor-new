@@ -9,7 +9,7 @@ set -euo pipefail
 # `main` at the manifest's commit, and the binary must match the manifest's
 # SHA-256. Runs before any repository code; the read-only `github.token` it
 # holds never reaches a later step.
-velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@$VELNOR_GH_VERSION" -- gh "$@"; }
+@VERIFIED_GH_FUNCTION@
 repository=tailrocks/velnor-new
 signer="$repository/.github/workflows/product-release-generator.yml"
 out=$VELNOR_UPGRADE_DIR/velnor

@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use super::{context, handoff, leaf_manifest::PreviewAggregateManifest};
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_artifacts::{PackageOutputIdentity, verify_package_output},
-    package_release_publish::{
+    release::package_release_artifacts::{PackageOutputIdentity, verify_package_output},
+    release::package_release_publish::{
         acquire_release_aggregate,
         artifact_zip::{self, ExpectedZipEntry, ZipProfile},
     },
@@ -16,6 +15,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+use velnor_actions_contract::exclusive_write::write_exclusive_until;
 use velnor_actions_mise::CheckDeadline;
 
 pub const ADMIT_RELEASE_AGGREGATE_OP: &str = "admit-release-aggregate-v1";
@@ -96,7 +96,7 @@ fn extract_aggregate(
         &mut *archive,
         ZipProfile::PreviewAggregate,
         "package-output.json",
-        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+        crate::planner::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
         deadline,
     )?;
     let downloaded = handoff::fresh_directory(temp, "preview-aggregate-acquired")?;
@@ -121,7 +121,10 @@ fn stage_signer_input(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     validate_destinations(plan)?;
-    let input = handoff::fresh_directory(temp, crate::package_release_signer::SIGNER_INPUT_DIR)?;
+    let input = handoff::fresh_directory(
+        temp,
+        crate::release::package_release_signer::SIGNER_INPUT_DIR,
+    )?;
     copy_full_input(downloaded, &input, proof, source_manifest, plan, deadline)?;
     let companions = preview_companions(plan);
     let verified = verify_package_output(

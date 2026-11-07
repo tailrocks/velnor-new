@@ -4,7 +4,7 @@
 use velnor_actions_contract::PullRequestCachePolicy;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
-use crate::{OrchestratorError, prepare::GenerationPreparation};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation};
 
 #[path = "cache_prune_emit.rs"]
 mod prune;

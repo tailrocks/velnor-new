@@ -51,7 +51,7 @@ fn step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, Orchestra
         ("UV_NO_PROGRESS".to_owned(), "1".to_owned()),
         ("UV_PYTHON_DOWNLOADS".to_owned(), "never".to_owned()),
     ]);
-    crate::matrix_step::task_step_env(catalog, &extra, false)
+    crate::planner::matrix_step::task_step_env(catalog, &extra, false)
 }
 
 fn archive_step(

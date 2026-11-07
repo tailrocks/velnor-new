@@ -21,7 +21,7 @@ use velnor_actions_contract::{
 
 use crate::OrchestratorError;
 use crate::internal::internal;
-use crate::root::resolve_root;
+use crate::planner::root::resolve_root;
 
 pub const QUALIFICATION_ADMISSION_FILENAME: &str = "qualification-cache-admission.json";
 pub const QUALIFICATION_RESOLVER_OP: &str = "resolve-qualification-v1";
@@ -98,7 +98,11 @@ fn stage_admission(bytes: &[u8]) -> Result<(), OrchestratorError> {
         .parent()
         .ok_or_else(|| internal("bad_qualification_admission_path"))?;
     velnor_actions_contract::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
-    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")?;
+    velnor_actions_contract::exclusive_write::write_exclusive(
+        &path,
+        bytes,
+        "qualification_admission",
+    )?;
     Ok(())
 }
 

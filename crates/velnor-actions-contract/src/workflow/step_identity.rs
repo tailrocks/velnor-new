@@ -7,6 +7,8 @@ use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_
 pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_cache_scrub};
 use crate::errors::ContractError;
 
+pub const FIXTURE_CHECKOUT_BLOB_FILTER: &str = "blob:limit=18446744073709551615";
+
 #[path = "step_identity_payload.rs"]
 mod payload;
 #[path = "step_identity_sequence.rs"]
@@ -142,6 +144,10 @@ impl StepRole {
                 internal_operation(kind, GITHUB_EVIDENCE_IMPORT_OPERATION)
             }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
+            Self::ReleaseRustUpload | Self::ReleaseReceiptUpload | Self::ReleasePrArtifact => {
+                action_has_prefix_for_kind(kind, "actions/upload-artifact@")
+            }
+            Self::ReleasePrCandidate => matches!(kind, StepKind::Shell { .. }),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::BunAssetsHandoff => valid_bun_assets_handoff(kind),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
@@ -154,6 +160,12 @@ impl StepRole {
 
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
+            Self::ReleaseAdmission => Some(StepId::ReleaseAdmission),
+            Self::ReleaseVerification => Some(StepId::ReleaseVerification),
+            Self::ReleaseRustUpload => Some(StepId::ReleaseRustUpload),
+            Self::ReleaseReceiptUpload => Some(StepId::ReleaseReceiptUpload),
+            Self::ReleasePrCandidate => Some(StepId::ReleasePrCandidate),
+            Self::ReleasePrArtifact => Some(StepId::ReleasePrArtifact),
             Self::PlanProducer => Some(StepId::Plan),
             Self::BuildTaskRun => Some(StepId::BuildTaskRun),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
@@ -163,9 +175,6 @@ impl StepRole {
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
             Self::MbxBundleKey => Some(StepId::MbxBundleKey),
-            // No pinned id: the writer's queue-slot recheck re-runs the
-            // bundle restore without an id (a job carries one canonical
-            // restore id), like the other restore roles below.
             Self::MbxBundleImport => Some(StepId::MbxBundleImport),
             Self::MbxBundleExport => Some(StepId::MbxBundleExport),
             Self::FamilyKeys => Some(StepId::FamilyKeys),
@@ -185,6 +194,12 @@ impl StepRole {
 
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
+            StepId::ReleaseAdmission => Self::ReleaseAdmission,
+            StepId::ReleaseVerification => Self::ReleaseVerification,
+            StepId::ReleaseRustUpload => Self::ReleaseRustUpload,
+            StepId::ReleaseReceiptUpload => Self::ReleaseReceiptUpload,
+            StepId::ReleasePrCandidate => Self::ReleasePrCandidate,
+            StepId::ReleasePrArtifact => Self::ReleasePrArtifact,
             StepId::Plan => Self::PlanProducer,
             StepId::BuildTaskRun => Self::BuildTaskRun,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,

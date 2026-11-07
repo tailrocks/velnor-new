@@ -6,7 +6,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{FileIndex, VelnorConfig};
 
-use crate::discover::PlannedWorkspace;
+use crate::planner::discover::PlannedWorkspace;
 use crate::toolcheck::ToolInputCheck;
 use crate::toolfindings::{finding_line, tool_check_lines, tool_conflicts};
 
@@ -35,7 +35,9 @@ pub(crate) fn collect_recommendations(
             out.insert(finding_line(&finding));
         }
     }
-    for line in crate::discover_tofu::tofu_diagnostic_lines(root, config, tool_checks, reads) {
+    for line in
+        crate::planner::discover_tofu::tofu_diagnostic_lines(root, config, tool_checks, reads)
+    {
         out.insert(line);
     }
     if index.contains("mise.toml") || index.contains(".mise.toml") {

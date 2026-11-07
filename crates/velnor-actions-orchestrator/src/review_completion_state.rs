@@ -1,11 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
-use super::super::{
-    feedback::{CapturedFeedback, FeedbackContext},
-    github::TapMergeGitHub,
-};
+use super::super::github::TapMergeGitHub;
+use crate::github_review_feedback::{CapturedFeedback, FeedbackContext};
 use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,13 +12,14 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use velnor_actions_contract::{
     canonical_json_bytes, digest_b3,
     review_completion::{ReviewCompletionPolicy, parse_review_completion_policy},
 };
 use velnor_actions_mise::CheckDeadline;
 
-pub(super) const PROVIDER_APP: u64 = 1_144_995;
+pub(crate) const PROVIDER_APP: u64 = 1_144_995;
 pub(super) const PROVIDER_OWNER: u64 = 14_957_082;
 pub(super) const PROVIDER_BOT: u64 = 199_175_422;
 pub(super) const PROPOSAL_NAME: &str = "review-completion-proposal.json";
@@ -29,7 +27,7 @@ const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum CompletionState {
+pub(crate) enum CompletionState {
     Pending,
     Blocked,
     Ready,
@@ -175,7 +173,7 @@ pub(super) fn feedback(
     head: &str,
 ) -> Result<CapturedFeedback, OrchestratorError> {
     let reviewers = BTreeSet::from([PROVIDER_APP]);
-    super::super::feedback::capture_feedback(
+    crate::github_review_feedback::capture_feedback(
         &operation.api,
         &FeedbackContext {
             repository: &operation.policy.repository,

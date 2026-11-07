@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::cache_snapshot::{SnapshotManifestV1, SnapshotPlan, StateEntryV1};
-use crate::source_prep::cache_source_projection::ProjectionEntry;
+use crate::planner::source_prep::cache_source_projection::ProjectionEntry;
 
 pub const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 

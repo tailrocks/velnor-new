@@ -6,8 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::config::analyze_dockerfile;
 use velnor_actions_contract::{
-    RUNNER_PUBLICATION_SOURCE_INPUTS, RunnerPublicationDockerfileContext,
-    native_image_candidate_inputs, runner_publication_dockerfile_context,
+    IMAGE_NATIVE_INVENTORY_PATH, NativeImageSourceInventory, RUNNER_PUBLICATION_SOURCE_INPUTS,
+    RunnerPublicationDockerfileContext, native_image_candidate_inputs,
+    runner_publication_dockerfile_context,
 };
 
 use crate::{OrchestratorError, internal::internal};
@@ -18,7 +19,23 @@ pub(super) fn verify_source_inputs(
     candidate: &CandidateRecord,
     source_files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(), OrchestratorError> {
-    if source_files.len() != source_paths(candidate.profile).len()
+    let expected_paths = match candidate.profile {
+        super::ImagePublicationProfile::Job => {
+            let bytes = source_files
+                .get(IMAGE_NATIVE_INVENTORY_PATH)
+                .ok_or_else(|| internal("image_publication_source_inventory"))?;
+            NativeImageSourceInventory::parse(bytes)
+                .map_err(|_| internal("image_publication_source_inventory"))?
+                .paths()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+        }
+        _ => source_paths(candidate.profile)
+            .iter()
+            .map(|path| (*path).to_owned())
+            .collect(),
+    };
+    if source_files.keys().ne(expected_paths.iter())
         || candidate
             .source_inputs
             .keys()

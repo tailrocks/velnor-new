@@ -10,7 +10,7 @@ use std::{
 };
 use velnor_actions_contract::package_release::PackageReleaseReceipt;
 
-pub(in crate::package_release_signer) fn validate_release_directory(
+pub(in crate::release::package_release_signer) fn validate_release_directory(
     directory: &Path,
     receipt: &PackageReleaseReceipt,
 ) -> Result<(), OrchestratorError> {
@@ -49,7 +49,7 @@ pub(in crate::package_release_signer) fn validate_release_directory(
     Ok(())
 }
 
-pub(in crate::package_release_signer) fn read_regular_file(
+pub(in crate::release::package_release_signer) fn read_regular_file(
     path: &Path,
     max_bytes: u64,
 ) -> Result<Vec<u8>, OrchestratorError> {
@@ -65,7 +65,7 @@ pub(in crate::package_release_signer) fn read_regular_file(
     fs::read(path).map_err(|_| internal("package_signer_file_read_failed"))
 }
 
-pub(in crate::package_release_signer) fn require_private_directory(
+pub(in crate::release::package_release_signer) fn require_private_directory(
     path: &Path,
 ) -> Result<(), OrchestratorError> {
     let metadata =
@@ -76,7 +76,7 @@ pub(in crate::package_release_signer) fn require_private_directory(
     Ok(())
 }
 
-pub(in crate::package_release_signer) fn absolute_env(
+pub(in crate::release::package_release_signer) fn absolute_env(
     name: &str,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = PathBuf::from(required_env(name)?);
@@ -86,7 +86,7 @@ pub(in crate::package_release_signer) fn absolute_env(
     Ok(path)
 }
 
-pub(in crate::package_release_signer) fn required_env(
+pub(in crate::release::package_release_signer) fn required_env(
     name: &str,
 ) -> Result<String, OrchestratorError> {
     env::var(name)
@@ -95,7 +95,7 @@ pub(in crate::package_release_signer) fn required_env(
         .ok_or_else(|| internal("package_signer_context_missing"))
 }
 
-pub(in crate::package_release_signer) fn positive_u64(
+pub(in crate::release::package_release_signer) fn positive_u64(
     name: &str,
 ) -> Result<u64, OrchestratorError> {
     required_env(name)?
@@ -105,7 +105,7 @@ pub(in crate::package_release_signer) fn positive_u64(
         .ok_or_else(|| internal("package_signer_run_identity_invalid"))
 }
 
-pub(in crate::package_release_signer) fn positive_u32(
+pub(in crate::release::package_release_signer) fn positive_u32(
     name: &str,
 ) -> Result<u32, OrchestratorError> {
     required_env(name)?
@@ -115,14 +115,14 @@ pub(in crate::package_release_signer) fn positive_u32(
         .ok_or_else(|| internal("package_signer_run_identity_invalid"))
 }
 
-pub(in crate::package_release_signer) fn is_full_sha(value: &str) -> bool {
+pub(in crate::release::package_release_signer) fn is_full_sha(value: &str) -> bool {
     value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-pub(in crate::package_release_signer) fn write_new_file(
+pub(in crate::release::package_release_signer) fn write_new_file(
     path: &Path,
     bytes: &[u8],
 ) -> Result<(), OrchestratorError> {
@@ -143,7 +143,7 @@ pub(in crate::package_release_signer) fn write_new_file(
         .map_err(|_| internal("package_signer_sync_failed"))
 }
 
-pub(in crate::package_release_signer) fn sha256(bytes: &[u8]) -> String {
+pub(in crate::release::package_release_signer) fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut result = String::with_capacity(64);
     for byte in Sha256::digest(bytes) {

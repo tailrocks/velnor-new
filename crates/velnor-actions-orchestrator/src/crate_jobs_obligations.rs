@@ -9,8 +9,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
-use crate::matrix_step::step_name_for;
-use crate::obligation_order::obligation_order_key;
+use crate::planner::matrix_step::step_name_for;
+use crate::planner::obligation_order::obligation_order_key;
 
 pub(super) fn obligations_for(
     tasks: &[&ProposedTask],

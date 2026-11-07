@@ -8,5 +8,5 @@ mod client;
 #[path = "api/run.rs"]
 mod run;
 
-pub(in crate::qualification_resolver) use artifact::{FetchedNode, resolve_chain};
-pub(in crate::qualification_resolver) use client::GitHub;
+pub(in crate::release::qualification_resolver) use artifact::{FetchedNode, resolve_chain};
+pub(in crate::release::qualification_resolver) use client::GitHub;

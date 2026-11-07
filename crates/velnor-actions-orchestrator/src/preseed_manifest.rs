@@ -128,8 +128,7 @@ mod input_digest_binding {
 
     const TARGET: &str = "x86_64-unknown-linux-gnu";
     const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const DIGEST: &str =
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     fn staged_binary() -> (tempfile::TempDir, String, String, std::path::PathBuf) {
         let root = tempfile::tempdir().expect("preseed test root");
@@ -149,20 +148,10 @@ mod input_digest_binding {
     #[test]
     fn manifest_serializes_input_digest() {
         let (_root, binary, out, temp) = staged_binary();
-        write_preseed_manifest_to(
-            &binary,
-            &out,
-            TARGET,
-            "rust@1.91.0",
-            DIGEST,
-            COMMIT,
-            &temp,
-        )
-        .expect("preseed manifest with input digest");
-        let text = std::fs::read_to_string(
-            std::path::Path::new(&out).join(super::MANIFEST_FILE),
-        )
-        .expect("preseed manifest text");
+        write_preseed_manifest_to(&binary, &out, TARGET, "rust@1.91.0", DIGEST, COMMIT, &temp)
+            .expect("preseed manifest with input digest");
+        let text = std::fs::read_to_string(std::path::Path::new(&out).join(super::MANIFEST_FILE))
+            .expect("preseed manifest text");
         assert!(
             text.contains(&format!("\"input_digest\":\"{DIGEST}\"")),
             "preseed manifest left its input digest:{text}"
@@ -174,15 +163,8 @@ mod input_digest_binding {
         let upper = "B".repeat(64);
         for bad in ["", "not-a-digest", upper.as_str()] {
             let (_root, binary, out, temp) = staged_binary();
-            let result = write_preseed_manifest_to(
-                &binary,
-                &out,
-                TARGET,
-                "rust@1.91.0",
-                bad,
-                COMMIT,
-                &temp,
-            );
+            let result =
+                write_preseed_manifest_to(&binary, &out, TARGET, "rust@1.91.0", bad, COMMIT, &temp);
             match result {
                 Ok(()) => panic!("preseed manifest accepted its bad input digest:{bad}"),
                 Err(error) => {

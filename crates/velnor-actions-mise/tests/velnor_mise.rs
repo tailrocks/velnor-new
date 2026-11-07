@@ -9,6 +9,9 @@ mod gc1_t17;
 mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
+#[cfg(unix)]
+mod prepared_runner_stdin;
+mod release_runner_catalog;
 mod rust_spec_kind;
 mod source_preview_lock;
 

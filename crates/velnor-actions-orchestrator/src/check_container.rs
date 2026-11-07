@@ -111,8 +111,11 @@ pub(crate) fn receipt(
     owned: Option<&OwnedContainer>,
     before: ObservedContainer,
     after: ObservedContainer,
-) -> Result<Option<crate::check_evidence::gate::container::ContainerReceipt>, OrchestratorError> {
-    crate::check_evidence::gate::container::container_receipt(
+) -> Result<
+    Option<crate::planner::check_evidence::gate::container::ContainerReceipt>,
+    OrchestratorError,
+> {
+    crate::planner::check_evidence::gate::container::container_receipt(
         runner,
         before.proof,
         after.proof,
@@ -128,7 +131,7 @@ fn verify_owned_cli(
     deadline: Option<CheckDeadline>,
 ) -> Result<(), OrchestratorError> {
     checkpoint(deadline)?;
-    crate::check_evidence::reject_link_components(&prepared.home, "bin/docker")?;
+    crate::planner::check_evidence::reject_link_components(&prepared.home, "bin/docker")?;
     let metadata = std::fs::symlink_metadata(&prepared.docker_program)
         .map_err(|_| internal("container_owned_cli_unreadable"))?;
     if !metadata.is_file() || metadata.permissions().mode() & 0o7_777 != 0o500 {
@@ -140,7 +143,7 @@ fn verify_owned_cli(
         || read_deadline_checkpoint(deadline),
     )
     .map_err(|_| internal("container_owned_cli_unreadable"))?;
-    if crate::generator::sha256_hex(&bytes) != prepared.docker_sha256 {
+    if crate::planner::generator::sha256_hex(&bytes) != prepared.docker_sha256 {
         return Err(internal("container_owned_cli_changed"));
     }
     Ok(())
@@ -161,7 +164,7 @@ fn project_executable(
     {
         return Err(internal("container_cli_canonical_path"));
     }
-    crate::check_evidence::reject_link_components(
+    crate::planner::check_evidence::reject_link_components(
         Path::new("/"),
         source
             .to_str()
@@ -174,7 +177,7 @@ fn project_executable(
         || read_deadline_checkpoint(Some(deadline)),
     )
     .map_err(|_| internal("container_cli_unreadable"))?;
-    let observed = crate::generator::sha256_hex(&bytes);
+    let observed = crate::planner::generator::sha256_hex(&bytes);
     if bytes.is_empty() || observed != expected {
         return Err(internal("container_cli_sha256"));
     }

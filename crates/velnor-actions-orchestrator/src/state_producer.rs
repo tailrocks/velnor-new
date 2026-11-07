@@ -25,7 +25,7 @@ use velnor_actions_workflow_renderer::steps::{
 use super::CrateJobInputs;
 use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
-use crate::matrix_step::LaneTools;
+use crate::planner::matrix_step::LaneTools;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ProducerRoot {
@@ -100,19 +100,23 @@ fn producer_job(
     timeout: JobTimeout,
 ) -> Result<Job, OrchestratorError> {
     let catalog = input.catalog;
-    crate::source_prep::validate_root(&producer.root)?;
+    crate::planner::source_prep::validate_root(&producer.root)?;
     let mut steps = vec![
         velnor_actions_workflow_renderer::state_seal::tip::stale_tip_stops_job_step()?,
         crate::workflow::wire_w1::checkout_step()?,
     ];
     steps.extend(input.acquire.cloned());
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(crate::planner::matrix_step::download_plan_step()?);
     steps.push(crate::workflow::verify_restored_rust_step(catalog));
-    steps.push(crate::matrix_step::prepare_crate_tools_step(catalog, lane)?);
-    steps.extend(crate::matrix_step::verify_validators_step(catalog, lane));
+    steps.push(crate::planner::matrix_step::prepare_crate_tools_step(
+        catalog, lane,
+    )?);
+    steps.extend(crate::planner::matrix_step::verify_validators_step(
+        catalog, lane,
+    ));
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     steps.push(crate::workflow::verify_rust_manifest_step(catalog));
-    steps.extend(crate::source_cache::restore_step_for_crate(
+    steps.extend(crate::planner::source_cache::restore_step_for_crate(
         input.fetch_roots,
         true,
     )?);
@@ -126,13 +130,14 @@ fn producer_job(
     if let Some(private) = private {
         steps.extend(private.steps_for_roots(&roots)?);
     }
-    steps.extend(crate::source_prep::fetch_steps_for_crate(
+    steps.extend(crate::planner::source_prep::fetch_steps_for_crate(
         catalog,
         &roots,
         lanes_use_all_features(&producer.lanes),
     )?);
     let toolchain = catalog.version(PinnedTool::Rust).to_owned();
-    let toolchain_env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let toolchain_env =
+        crate::planner::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     steps.push(state_skeleton_step(
         &toolchain,
         &producer.root_argument(),
@@ -143,7 +148,10 @@ fn producer_job(
     steps.extend(lane_steps(&producer.lanes));
     steps.push(velnor_actions_workflow_renderer::mbx_stats::mbx_stats_step(
         &state_producer_job_id(slug),
-        &crate::source_prep::workspace_crate_names(&input.discovery.workspaces, &producer.root),
+        &crate::planner::source_prep::workspace_crate_names(
+            &input.discovery.workspaces,
+            &producer.root,
+        ),
     )?);
     let mut mark = mbx_producer_mark_step()?;
     mark.condition = Some(STATE_PRODUCER_LANE_CONDITION.to_owned());
@@ -233,7 +241,7 @@ mod tests {
             },
             run: argv.iter().map(|arg| (*arg).to_owned()).collect(),
         };
-        Ok(crate::matrix_step::obligation_step(
+        Ok(crate::planner::matrix_step::obligation_step(
             &obligation,
             &ToolCatalog::pinned(),
             &[],
@@ -246,7 +254,7 @@ mod tests {
     fn producer(id: &str, argv: &[&str]) -> Result<(String, Job), Box<dyn Error>> {
         let catalog = ToolCatalog::pinned();
         let toolchain = catalog.version(PinnedTool::Rust).to_owned();
-        let env = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
+        let env = crate::planner::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
         let steps = vec![state_skeleton_step(&toolchain, ".", env)?, lane(argv)?];
         let job = Job {
             services: Vec::new(),

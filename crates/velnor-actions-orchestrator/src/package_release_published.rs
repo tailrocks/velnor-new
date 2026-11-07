@@ -8,7 +8,8 @@ use super::{
     stable_tag_origin,
 };
 use crate::{
-    OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
+    OrchestratorError, internal::internal,
+    release::package_release_signer::VerifiedAttestedSignedPackage,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},

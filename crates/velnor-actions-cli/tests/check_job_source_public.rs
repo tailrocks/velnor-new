@@ -261,6 +261,27 @@ fn ambient_git_routing_cannot_select_clean_decoy_for_dirty_source() -> Result<()
     Ok(())
 }
 
+#[test]
+fn modified_release_plz_acquisition_cannot_reuse_clean_source_closure() -> Result<(), Box<dyn Error>>
+{
+    let path = "crates/velnor-actions-workflow-renderer/src/release_plz_acquire.rs";
+    assert!(native_image_candidate_inputs().contains(&path));
+    let fixture = CheckJobFixture::new()?;
+    let mut changed = fs::read(fixture.root.join(path))?;
+    changed.extend_from_slice(b"\n// modified acquisition fixture\n");
+    fs::write(fixture.root.join(path), changed)?;
+    let output = fixture.invoke()?;
+    assert!(
+        !output.status.success(),
+        "accepted modified release-plz acquisition"
+    );
+    assert!(
+        !fixture.closure.exists(),
+        "wrote a source closure for modified bootstrap"
+    );
+    Ok(())
+}
+
 fn sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(64);

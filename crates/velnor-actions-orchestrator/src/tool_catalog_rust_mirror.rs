@@ -6,7 +6,7 @@ use std::path::Path;
 use velnor_actions_contract::config::project_tool_refs::RUST_TOOLCHAIN_SOURCE_FILES;
 
 use crate::OrchestratorError;
-use crate::project_tool_sources::{is_mise_config, nested_toolchain_paths, source_paths};
+use crate::project_tool_sources::{is_mise_config, source_paths};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
 pub(crate) const MIRROR_CODE: &str = "rust_toolchain_mirror_mismatch";
@@ -19,7 +19,10 @@ struct RustShape {
     profile: Option<String>,
 }
 
-pub(crate) fn check_toolchain_mirror(root: &Path) -> Result<(), OrchestratorError> {
+pub(crate) fn check_toolchain_mirror(
+    root: &Path,
+    nested: &[String],
+) -> Result<(), OrchestratorError> {
     let mut mise_entries = Vec::new();
     for file in source_paths(root)? {
         if !is_mise_config(&file) {
@@ -55,7 +58,7 @@ pub(crate) fn check_toolchain_mirror(root: &Path) -> Result<(), OrchestratorErro
         .iter()
         .map(|file| (*file).to_owned())
         .collect();
-    toolchain_files.extend(nested_toolchain_paths(root));
+    toolchain_files.extend_from_slice(nested);
     for file in toolchain_files {
         let Some(shape) = toolchain_shape(root, &file)? else {
             continue;

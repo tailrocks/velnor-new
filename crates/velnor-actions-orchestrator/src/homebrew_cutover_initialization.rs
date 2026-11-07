@@ -74,7 +74,7 @@ pub(super) fn observe(
     {
         return Err(internal("homebrew_cutover_initialization_selection"));
     }
-    let tip = crate::package_release_publish::read_public_branch_tip(
+    let tip = crate::release::package_release_publish::read_public_branch_tip(
         &policy.tap_repository,
         policy.tap_repository_id,
         "main",
@@ -103,7 +103,7 @@ fn read_marker(
     tip: &str,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    let bytes = crate::package_release_publish::read_protected_source_file(
+    let bytes = crate::release::package_release_publish::read_protected_source_file(
         repository,
         repository_id,
         "main",
@@ -112,7 +112,7 @@ fn read_marker(
         MARKER_LIMIT,
         deadline,
     )?;
-    let tree = crate::package_release_publish::read_protected_source_tree_identity(
+    let tree = crate::release::package_release_publish::read_protected_source_tree_identity(
         repository,
         repository_id,
         tip,
@@ -138,7 +138,7 @@ fn verify_current(
 ) -> Result<(), OrchestratorError> {
     let transition = crate::homebrew::structural_cutover::protected_transition()?;
     let policy = transition.transition();
-    let current_formula = crate::package_release_publish::read_protected_source_file(
+    let current_formula = crate::release::package_release_publish::read_protected_source_file(
         &policy.tap_repository,
         policy.tap_repository_id,
         "main",
@@ -147,7 +147,7 @@ fn verify_current(
         1024 * 1024,
         deadline,
     )?;
-    let final_tip = crate::package_release_publish::verify_public_protected_main_lineage(
+    let final_tip = crate::release::package_release_publish::verify_public_protected_main_lineage(
         &policy.tap_repository,
         policy.tap_repository_id,
         "main",

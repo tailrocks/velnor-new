@@ -17,11 +17,11 @@ use velnor_actions_rust::{SelectionBroadening, is_known_toolfile, selection_broa
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
-use crate::select_affected::Ownership;
-use crate::select_reads::{UnverifiedKind, read_summary};
-use crate::select_symlinks::tracked_links;
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::Ownership;
+use crate::planner::select_reads::{UnverifiedKind, read_summary};
+use crate::planner::select_symlinks::tracked_links;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Overlap {
@@ -148,10 +148,11 @@ impl<'a> Claims<'a> {
                         path: link.link,
                         tree: false,
                     });
-                    linked.extend(link.chain.into_iter().map(|path| LinkedPath {
-                        path,
-                        tree: false,
-                    }));
+                    linked.extend(
+                        link.chain
+                            .into_iter()
+                            .map(|path| LinkedPath { path, tree: false }),
+                    );
                     linked.push(LinkedPath {
                         path: link.target,
                         tree: true,
@@ -207,7 +208,11 @@ impl<'a> Claims<'a> {
             Some(Overlap::DeclaredInput)
         } else if self.read_targets.iter().any(|target| reaches(target, true)) {
             Some(Overlap::ReadTarget)
-        } else if self.linked.iter().any(|link| reaches(&link.path, link.tree)) {
+        } else if self
+            .linked
+            .iter()
+            .any(|link| reaches(&link.path, link.tree))
+        {
             Some(Overlap::Symlink)
         } else if tracked_hit(&|file| {
             selection_broadening(file) == Some(SelectionBroadening::Lockfile)

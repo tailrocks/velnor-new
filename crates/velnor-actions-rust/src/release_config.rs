@@ -6,7 +6,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::release_error::ReleaseError;
 use crate::release_facts::validate_registry_name;
 use crate::release_select::ReleaseSelection;
-use semver::Version;
 
 pub const DEFAULT_TAG_PATTERN: &str = "{{ package }}-v{{ version }}";
 
@@ -153,83 +152,6 @@ fn check_groups<'a>(
         }
     }
     Ok(grouped)
-}
-
-pub fn resolve_version_groups(
-    groups: &[VersionGroup],
-    current: &BTreeMap<String, String>,
-    planned: &BTreeMap<String, String>,
-    changed: &BTreeSet<String>,
-) -> Result<BTreeMap<String, String>, ReleaseError> {
-    let known: BTreeSet<&str> = current.keys().map(String::as_str).collect();
-    check_groups(groups, &known)?;
-    let mut resolved = BTreeMap::new();
-    for group in groups {
-        resolve_group(group, current, planned, changed, &mut resolved)?;
-    }
-    Ok(resolved)
-}
-
-fn resolve_group(
-    group: &VersionGroup,
-    current: &BTreeMap<String, String>,
-    planned: &BTreeMap<String, String>,
-    changed: &BTreeSet<String>,
-    resolved: &mut BTreeMap<String, String>,
-) -> Result<(), ReleaseError> {
-    let changed_members: Vec<&str> = group
-        .members
-        .iter()
-        .map(String::as_str)
-        .filter(|member| changed.contains(*member))
-        .collect();
-    let mut next: Option<String> = None;
-    for member in &changed_members {
-        let text = planned
-            .get(*member)
-            .ok_or_else(|| ReleaseError::InvalidGroupVersion {
-                group: group.name.clone(),
-                member: (*member).to_owned(),
-                version: String::new(),
-            })?;
-        let parsed = Version::parse(text).map_err(|_| ReleaseError::InvalidGroupVersion {
-            group: group.name.clone(),
-            member: (*member).to_owned(),
-            version: text.clone(),
-        })?;
-        let keep = next.as_ref().is_none_or(|held: &String| {
-            Version::parse(held).map_or(true, |current_max| {
-                parsed.cmp_precedence(&current_max).is_gt()
-            })
-        });
-        if keep {
-            next = Some(text.clone());
-        }
-    }
-    for member in &group.members {
-        if changed.contains(member) {
-            if let Some(winner) = next.as_deref() {
-                resolved.insert(member.clone(), winner.to_owned());
-            }
-        } else {
-            let held = current
-                .get(member)
-                .ok_or_else(|| ReleaseError::InvalidGroupVersion {
-                    group: group.name.clone(),
-                    member: member.clone(),
-                    version: String::new(),
-                })?;
-            if Version::parse(held).is_err() {
-                return Err(ReleaseError::InvalidGroupVersion {
-                    group: group.name.clone(),
-                    member: member.clone(),
-                    version: held.clone(),
-                });
-            }
-            resolved.insert(member.clone(), held.clone());
-        }
-    }
-    Ok(())
 }
 
 #[must_use]

@@ -15,7 +15,7 @@ use super::types::{
 };
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::{
+use crate::planner::source_prep::cache_source_projection::{
     CheckoutState, ProjectionEntry, RestoreDecision, authenticate_entry, decide, is_git_path,
     reconcile, validate_relative_path,
 };

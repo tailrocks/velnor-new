@@ -9,8 +9,8 @@ use velnor_actions_mise::{
 };
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::CrateGroupKey;
-use crate::crate_jobs::{is_nextest, is_opentofu, is_rust};
+use crate::planner::crate_job_ids::CrateGroupKey;
+use crate::planner::crate_jobs::{is_nextest, is_opentofu, is_rust};
 use crate::utf8::{strings_of, strings_of_env};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -90,10 +90,18 @@ impl CrateSuite {
 }
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
-const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::CraneExecution];
+const CLI_TOOLS: &[SuiteTool] = &[
+    SuiteTool::GenerateValidators,
+    SuiteTool::GhAttestation,
+    SuiteTool::CraneExecution,
+];
+const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[
+    SuiteTool::GenerateValidators,
+    SuiteTool::BunExecution,
+    SuiteTool::GhAttestation,
+];
 const MISE_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const RENDERER_TOOLS: &[SuiteTool] = &[SuiteTool::GhAttestation];
-const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
@@ -304,3 +312,7 @@ pub(crate) fn prepare_crate_tools_step(
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
 }
+
+#[cfg(test)]
+#[path = "matrix_tools_tests.rs"]
+mod tests;

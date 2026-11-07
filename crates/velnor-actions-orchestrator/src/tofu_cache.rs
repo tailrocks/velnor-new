@@ -13,13 +13,13 @@ pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
 
 pub(crate) fn tofu_cache_roots(
-    discovery: &crate::discover::Discovery,
+    discovery: &crate::planner::discover::Discovery,
 ) -> Result<Vec<String>, OrchestratorError> {
     let mut roots = std::collections::BTreeSet::new();
     for task in &discovery.proposals {
         if velnor_actions_contract::Stack::from_id(&task.stack_id)
             != Some(velnor_actions_contract::Stack::Tofu)
-            || !crate::crate_jobs::is_runnable(task)
+            || !crate::planner::crate_jobs::is_runnable(task)
         {
             continue;
         }
@@ -91,7 +91,7 @@ pub(crate) fn tofu_root_for_obligations(
     use velnor_actions_tofu::TofuTaskKind;
 
     let mut tofu = obligations.iter().filter(|obligation| {
-        crate::extension_schemas::task_stack_segment(&obligation.task_id)
+        crate::planner::extension_schemas::task_stack_segment(&obligation.task_id)
             == Some(velnor_actions_tofu::STACK_ID)
     });
     let first = tofu

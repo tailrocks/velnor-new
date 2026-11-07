@@ -82,7 +82,7 @@ pub use propose::{
 };
 pub use release_config::{
     DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,
-    classify_tag, emit_bootstrap_config, emit_release_plz_config, resolve_version_groups,
+    classify_tag, emit_bootstrap_config, emit_release_plz_config,
 };
 pub use release_error::ReleaseError;
 pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};

@@ -17,8 +17,8 @@ use velnor_actions_workflow_renderer::guard;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::prepare::GenerationPreparation;
-use crate::provenance::{ProfileProvenance, profile_provenance};
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
 
 #[path = "generate_guards.rs"]
@@ -77,10 +77,11 @@ pub fn generate_dispatched(
     opts: &GenerateOptions,
     dispatch: Option<ExecutionMode>,
 ) -> Result<GenerateReport, OrchestratorError> {
+    preflight::reject_unmarked_workflows(prep)?;
     preflight::fail_on_blocking_findings(prep)?;
     let notices = preflight::unmanaged_notices(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
-    let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
+    let tofu_roots = crate::planner::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
     let tree = render_staged_tree_with(prep, dispatch)?;
     let validated_by = validate_staged(&tree, &prep.catalog)?;
@@ -161,21 +162,34 @@ fn replace_in_place(
     let target = root.join(".github");
     reject_symlink(&target)?;
     let staging = stage_root::StageRoot::open(root)?;
-    let target_identity = staging.validate_target(&target)?;
-    staging.validate_target_directories(&target, target_identity)?;
-    reject_symlink(&target.join("workflows"))?;
-    for rel in check_tree_paths(tree)? {
-        check_no_symlink_or_emitted_leaf(root, &rel)?;
+    let result = (|| -> Result<Vec<String>, OrchestratorError> {
+        let target_identity = staging.validate_target(&target)?;
+        staging.validate_target_directories(&target, target_identity)?;
+        reject_symlink(&target.join("workflows"))?;
+        for rel in check_tree_paths(tree)? {
+            check_no_symlink_or_emitted_leaf(root, &rel)?;
+        }
+        staging.clear_spare_before_staging()?;
+        let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
+            Ok(path) => path,
+            Err(error) => return Err(staging.abort_before_commit(error)),
+        };
+        if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
+            return Err(staging.abort_before_commit(error));
+        }
+        publish_in_place(&staging, &target, target_identity, &staged)
+    })();
+    match (result, staging.recovered()) {
+        (Ok(mut warnings), Some(path)) => {
+            warnings.push(format!("prior_staging_tree_retained:{}", path.display()));
+            Ok(warnings)
+        }
+        (Err(error), Some(path)) => Err(OrchestratorError::io(
+            path.display().to_string(),
+            format!("generation_failed:{error}; prior_staging_tree_retained"),
+        )),
+        (result, None) => result,
     }
-    staging.clear_spare_before_staging()?;
-    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
-        Ok(path) => path,
-        Err(error) => return Err(staging.abort_before_commit(error)),
-    };
-    if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
-        return Err(staging.abort_before_commit(error));
-    }
-    publish_in_place(&staging, &target, target_identity, &staged)
 }
 
 fn publish_in_place(
@@ -196,18 +210,51 @@ fn publish_existing_in_place(
     retired: stage_root::FsIdentity,
     staged: &Path,
 ) -> Result<Vec<String>, OrchestratorError> {
+    publish_existing_with(staging, target, retired, staged, exchange_directories)
+}
+
+fn publish_existing_with(
+    staging: &stage_root::StageRoot,
+    target: &Path,
+    retired: stage_root::FsIdentity,
+    staged: &Path,
+    exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<Vec<String>, OrchestratorError> {
     if let Err(error) = staging.validate_target_directories(target, Some(retired)) {
         return Err(staging.abort_before_commit(error));
     }
-    if let Err(error) = exchange_directories(staged, target) {
+    if let Err(error) = exchange(staged, target) {
         return Err(staging.abort_before_commit(OrchestratorError::io(
             target.display().to_string(),
             error.to_string(),
         )));
     }
-    match staging.clean_retired_root(retired) {
-        Ok(()) => Ok(Vec::new()),
-        Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
+    if let Err(cause) = staging.validate_exchanged(retired) {
+        return Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!(
+                "exchange_identity_changed:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile",
+                target.display(),
+                staged.display()
+            ),
+        ));
+    }
+    if let Err(cause) = preflight::reject_unmarked_workflows_at(staged) {
+        return Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!(
+                "workflow_changed_during_generation:{cause}; live_tree:{}; retained_tree:{}; stop_writers_and_reconcile",
+                target.display(),
+                staged.display()
+            ),
+        ));
+    }
+    match staging.retain_spare() {
+        Ok(path) => Ok(vec![format!("retired_tree_retained:{}", path.display())]),
+        Err(error) => Err(OrchestratorError::io(
+            staged.display().to_string(),
+            format!("retired_tree_retention_failed:{error}"),
+        )),
     }
 }
 
@@ -272,3 +319,7 @@ fn exchange_directories(_staged: &Path, _target: &Path) -> std::io::Result<()> {
 pub(crate) mod write;
 
 pub(crate) use write::write_tree;
+
+#[cfg(all(test, unix))]
+#[path = "generate_workflow_race_tests.rs"]
+mod workflow_race_tests;

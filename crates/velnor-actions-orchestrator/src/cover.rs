@@ -14,7 +14,7 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2;
-use crate::merge::MergeRequest;
+use crate::planner::merge::MergeRequest;
 
 #[derive(Debug, Default)]
 #[expect(

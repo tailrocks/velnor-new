@@ -69,6 +69,9 @@ pub(super) fn publication_command(fixture: &Fixture) -> Result<Command, std::io:
         .arg(&fixture.scratch)
         .arg("--receipt-output")
         .arg(&fixture.receipt);
+    if std::env::var("VELNOR_GH_FIXTURE_TARGET").as_deref() == Ok("image_publication") {
+        command.env("MISE_DATA_DIR", "/tools/mise");
+    }
     if let Some(proof) = &fixture.qualification_proof {
         command.arg("--qualification-proof").arg(proof);
     }

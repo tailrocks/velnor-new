@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use crate::filesystem_owner::held_file::HeldFile;
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 
 use super::{
     aggregate::{self, AdmittedLeaves},
@@ -185,7 +185,7 @@ fn restore(
         }
         total = total
             .checked_add(proof.size)
-            .filter(|size| *size <= crate::package_release_artifacts::MAX_TOTAL_BYTES)
+            .filter(|size| *size <= crate::release::package_release_artifacts::MAX_TOTAL_BYTES)
             .ok_or_else(|| internal("preview_leaf_asset_total"))?;
         pinned.push(HeldFile::new(
             Path::new(&input.path),

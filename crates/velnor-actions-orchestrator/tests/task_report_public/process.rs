@@ -96,6 +96,23 @@ pub(super) fn run_child(
     for (name, value) in variables {
         command.env(name, value);
     }
+    if test_name == super::SHARED_ARTIFACT_TEST {
+        for name in [
+            "MISE_DATA_DIR",
+            "VELNOR_GH_TEST_TLS_ROOT",
+            "VELNOR_GH_FIXTURE_WORKER",
+            "VELNOR_GH_FIXTURE_SCENARIO",
+            "VELNOR_GH_FIXTURE_TARGET",
+            "VELNOR_GH_FIXTURE_CACHE_KEY",
+            "VELNOR_GH_FIXTURE_ARCH",
+            "VELNOR_GH_FIXTURE_NONCE",
+        ] {
+            command.env(
+                name,
+                env::var_os(name).ok_or("isolated fixture context missing")?,
+            );
+        }
+    }
     let child = command.spawn()?;
     let mut guard = ChildGuard::new(child, process_group);
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -125,13 +142,22 @@ pub(super) fn run_child(
             }
         }
     };
+    check_child(status, &stdout_path, &stderr_path)?;
+    Ok(())
+}
+
+fn check_child(
+    status: std::process::ExitStatus,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> TestResult<()> {
     if !status.success() {
-        return Err(child_error(
-            &format!("child exited {status}"),
-            &stdout_path,
-            &stderr_path,
-        )
-        .into());
+        return Err(
+            child_error(&format!("child exited {status}"), stdout_path, stderr_path).into(),
+        );
+    }
+    if !fs::read_to_string(stdout_path)?.contains("test result: ok. 1 passed; 0 failed;") {
+        return Err(child_error("child did not run one test", stdout_path, stderr_path).into());
     }
     Ok(())
 }

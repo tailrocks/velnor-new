@@ -13,13 +13,13 @@ use super::plan::{
     required_output_index_digest, state_index_digest, validate_required_outputs,
 };
 use super::types::{
-    LaneRoot, PROJECTION_ARCHIVE_PREFIX, SNAPSHOT_ARCHIVE_FORMAT, SNAPSHOT_MTIME_PRECISION,
-    SNAPSHOT_SCHEMA, SnapshotInputs, SnapshotManifestV1, SnapshotPlan, StateEntryV1,
-    PlannedProjectionEntry,
+    LaneRoot, PROJECTION_ARCHIVE_PREFIX, PlannedProjectionEntry, SNAPSHOT_ARCHIVE_FORMAT,
+    SNAPSHOT_MTIME_PRECISION, SNAPSHOT_SCHEMA, SnapshotInputs, SnapshotManifestV1, SnapshotPlan,
+    StateEntryV1,
 };
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::source_prep::cache_source_projection::EntryKind;
+use crate::planner::source_prep::cache_source_projection::EntryKind;
 
 fn planned_payload_bytes(
     planned: &[PlannedProjectionEntry],

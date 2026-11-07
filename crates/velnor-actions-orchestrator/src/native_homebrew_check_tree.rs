@@ -106,11 +106,11 @@ pub(crate) fn tool_profile(operation: NativeHomebrewOperation, platform: CheckPl
 pub(crate) fn caller_repository(root: &Path) -> Result<String, crate::OrchestratorError> {
     use crate::internal::internal;
 
-    let repository = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+    let repository = std::env::var(crate::planner::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .filter(|value| velnor_actions_contract::vcs::is_safe_github_repository(value))
         .ok_or_else(|| internal("native_check_repository_missing"))?;
-    let origin = crate::release_identity::origin_repository(root)?;
+    let origin = crate::release::release_identity::origin_repository(root)?;
     if !caller_repository_matches(&repository, &origin) {
         return Err(internal("native_check_repository_origin_mismatch"));
     }
@@ -121,5 +121,6 @@ pub(crate) fn caller_repository_matches(repository: &str, origin: &str) -> bool 
     let Some(repository) = velnor_actions_contract::validate_repository_slug(repository) else {
         return false;
     };
-    velnor_actions_contract::validate_repository_slug(origin).as_deref() == Some(repository.as_str())
+    velnor_actions_contract::validate_repository_slug(origin).as_deref()
+        == Some(repository.as_str())
 }

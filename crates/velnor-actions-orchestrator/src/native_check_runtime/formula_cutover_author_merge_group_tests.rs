@@ -7,7 +7,7 @@ use serde_json::Value;
 struct RouteResponses {
     fixture: GitFixture,
     identity: NativeCheckIdentityExtension,
-    selection: crate::package_release_publish::MergeGroupSelection,
+    selection: crate::release::package_release_publish::MergeGroupSelection,
     queue: Value,
     pull: Value,
 }

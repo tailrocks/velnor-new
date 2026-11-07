@@ -11,7 +11,6 @@ use velnor_actions_workflow_renderer::private_source_steps::{
 };
 
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::ArchiveBudget;
 use crate::config::deps_layout::maven_bundle_dir;
 use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, read_deps_lock};
 use crate::config::load_config;
@@ -19,8 +18,9 @@ use crate::config::private_fetch_root::{extract_into, prepare_deps_root};
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
 use crate::config::private_fetch_verified::{Verified, VerifiedSource};
 use crate::config::private_sources::{SourceKind, job_allowlist};
-use crate::discover::workspace_manifest;
 use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition::archive::ArchiveBudget;
+use crate::planner::discover::workspace_manifest;
 
 pub const PRIVATE_FETCH_OP: &str = velnor_actions_contract::PRIVATE_FETCH_OPERATION;
 pub const PRIVATE_REVOKE_OP: &str = velnor_actions_contract::PRIVATE_REVOKE_OPERATION;
@@ -312,7 +312,7 @@ fn fetch_asset(
     )?;
     let bytes = std::fs::read(&archive)
         .map_err(|err| OrchestratorError::io(archive.display().to_string(), err.to_string()))?;
-    if crate::generator::sha256_hex(&bytes) != asset.sha256 {
+    if crate::planner::generator::sha256_hex(&bytes) != asset.sha256 {
         return Err(internal(&format!(
             "private_asset_sha256_mismatch:{}",
             asset.id

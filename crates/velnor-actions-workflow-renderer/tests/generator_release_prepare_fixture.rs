@@ -14,9 +14,8 @@ use tempfile::TempDir;
 use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::{
-    PRODUCT_RELEASE_WORKFLOW, ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
+    PRODUCT_RELEASE_WORKFLOW, Schema2WorkflowRequest, render_schema2_workflows,
 };
-use velnor_actions_workflow_renderer::setup::MiseSetup;
 
 #[path = "generator_release_prepare_fixture/fixture_pins.rs"]
 mod fixture_pins;
@@ -25,7 +24,7 @@ const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const RUST_VERSION: &str = "1.99.1";
 const MBX_VERSION: &str = "1.29.2";
-const GH_VERSION: &str = "2.83.1";
+const GH_VERSION: &str = velnor_actions_mise::catalog::QUALIFIED_GH_LINUX_AMD64.version;
 
 pub(crate) struct Fixture {
     root: TempDir,
@@ -67,9 +66,15 @@ impl Fixture {
         permissions.set_mode(0o755);
         fs::set_permissions(&fake_gh, permissions)?;
 
-        let files = render_schema2_workflows(&request(&fake_gh)?)?;
+        let files = render_schema2_workflows(&request()?)?;
         let workflow = rendered_file(&files, PRODUCT_RELEASE_WORKFLOW)?;
         let (script, asset_names) = extract_prepare_script(workflow)?;
+        let quoted = format!("'{}'", fake_gh.display().to_string().replace('\'', "'\\''"));
+        let verified_command = velnor_actions_workflow_renderer::verified_gh_shell::command();
+        if !script.contains(&verified_command) {
+            return Err("verified gh function missing".into());
+        }
+        let script = script.replace(&verified_command, &quoted);
 
         create_release_assets(&release_assets)?;
         let manifest_assets = release_assets.join("manifest-assets");
@@ -134,7 +139,7 @@ impl Fixture {
     }
 }
 
-fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
+fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
         version: "1".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
@@ -142,58 +147,8 @@ fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
         workflows: BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,
-        product_release: Some(pins(fake_gh)),
+        product_release: Some(fixture_pins::pins()),
     })
-}
-
-fn pins(fake_gh: &Path) -> ProductReleasePins {
-    let setup = MiseSetup {
-        uses: "jdx/mise-action@f1f6d8a6c2a1f6a79d5216a1d7e3f1b0e4d7c1a9".to_owned(),
-        version: "2026.10.19".to_owned(),
-        sha256: "c".repeat(64),
-    };
-    ProductReleasePins {
-        linux_x86_64_setup: setup.clone(),
-        macos_arm64_setup: setup.clone(),
-        macos_x86_64_setup: setup,
-        install_gate_tools_argv: fixture_pins::command_argv(),
-        install_build_tools_argv: fixture_pins::command_argv(),
-        install_qualify_tools_argv: fixture_pins::command_argv(),
-        qualify_mbx_action_steps: std::array::from_fn(|_| fixture_pins::fixture_step()),
-        install_runner_build_tools_argv: fixture_pins::command_argv(),
-        install_gh_argv: fixture_pins::command_argv(),
-        build_argv: fixture_pins::command_argv(),
-        intel_build_argv: fixture_pins::command_argv(),
-        install_intel_target_argv: fixture_pins::command_argv(),
-        install_resource_probe_target_argv: fixture_pins::command_argv(),
-        runner_build_argv: fixture_pins::command_argv(),
-        attestation_helper_build_argv: fixture_pins::command_argv(),
-        resource_probe_build_argv: fixture_pins::command_argv(),
-        install_resource_probe_release_tools_argv: fixture_pins::command_argv(),
-        resource_probe_release_build_argv: fixture_pins::command_argv(),
-        resource_probe_release_test_argv: fixture_pins::command_argv(),
-        lint_argv: fixture_pins::command_argv(),
-        verify_lint_argv: vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script(
-                GH_VERSION,
-                velnor_actions_workflow_renderer::VERIFY_PATH,
-            ),
-        ],
-        gh_argv: vec![fake_gh.display().to_string()],
-        rust_version: RUST_VERSION.to_owned(),
-        verify_rust_argv: vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            format!(
-                "{} true",
-                velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
-            ),
-        ],
-        mr_boxington_version: MBX_VERSION.to_owned(),
-        gh_version: GH_VERSION.to_owned(),
-    }
 }
 
 fn rendered_file<'a>(files: &'a [RenderedFile], path: &str) -> Result<&'a str, Box<dyn Error>> {

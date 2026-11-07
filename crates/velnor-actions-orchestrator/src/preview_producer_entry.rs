@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use super::PreviewProducerProof;
 use crate::{
-    OrchestratorError, internal::internal, prepare::prepare_for_candidate_with_config,
+    OrchestratorError, internal::internal, planner::prepare::prepare_for_candidate_with_config,
 };
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use velnor_actions_contract::exclusive_write::create_dir_no_symlink;
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy,
     config::{RustBinaryReleaseConfig, RustBinaryReleaseProducer},
@@ -134,7 +134,8 @@ fn source_preview(
         .map(|rust| &rust.binary_release)
         .ok_or_else(|| internal("preview_config_missing"))?;
     release.validate(".velnor/config.toml")?;
-    let expected = crate::binary_preview_emit::release_policy(prep, release, plan.channel)?;
+    let expected =
+        crate::release::binary_preview_emit::release_policy(prep, release, plan.channel)?;
     if !release.channel_enabled(plan.channel) || policy != &expected {
         return Err(internal("preview_plan_config_mismatch"));
     }

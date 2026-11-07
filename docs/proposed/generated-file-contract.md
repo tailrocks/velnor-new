@@ -114,7 +114,7 @@ none of their workflows; successful generation retires their prior marked files.
 | .github/jactionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
-| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
+| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; marked paths are replaced or retired, and unmarked workflows block generation |
 | .github/dco.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only when `[dco]` is configured; a file whose first line carries the Velnor generated marker is owned (replaced, or retired when `[dco]` is removed); an unmarked file stays repository-owned and makes generation refuse to overwrite it |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
@@ -255,19 +255,21 @@ requires kernel 5.8 or newer and `statx` reporting `STATX_MNT_ID`. Ubuntu
 22.04 and newer are supported when the running kernel reports this field;
 older kernels or missing mount identity fail closed before staging. Preview
 generation does not use this restriction.
-It contains a root-bound owner record and one persistent same-filesystem spare
-directory; generation clears spare children but never removes or recreates
-either root. This container is runtime state, not generated output. `plan`
+It contains a root-bound owner record and a same-filesystem spare directory.
+Generation retains each retired tree under a unique private `retained-*/tree`
+path and reports that path. On startup, it retains even an empty existing spare
+before creating a fresh spare, so an interrupted exchange and late writes via
+open directory handles cannot be erased by the next generation. The container
+is private to the effective user. Retained trees consume unbounded disk space;
+inspect their contents and stop all processes that may hold directory handles
+before manually removing any retained tree. Removing a tree while a writer still
+has an open handle can lose that writer's later changes. This container is runtime state, not generated output. `plan`
 and preview generation never create or modify it. The orchestrator owns only
 the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
-successful generation no longer emits them. The workflows namespace is fully
-generator-owned; manually maintained workflows placed there are retired, and
-no configuration key exempts one. Every workflow is generator output, so the
-`Check generated files` diff covers the whole namespace and no hand-owned
-workflow can hide from it.
+successful generation no longer emits them. The workflows namespace is fully generator-owned. Generation fails before writing if any workflow lacks a Velnor generated marker. Remove or migrate that workflow to supported configuration; stale marked workflows are retired.
 
 All other entries under `.github` are unmanaged repository content. Successful
 generation MUST preserve their file bytes, hidden names, symbolic links and
@@ -301,10 +303,10 @@ allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
   with `contract: unmanaged_github_entries:<path>,...`, so the drift step fails.
 - Each `allow` entry MUST be a normalized path starting with `.github/`, without
   empty, `.` or `..` segments or backslashes, without duplicates, and not under
-  `.github/workflows/`. It exempts that exact path and everything below it when
-  it names a directory.
+  `.github/workflows/`. It exempts that exact path and
+  everything below it when it names a directory.
 - `velnor-actions unmanaged` prints the same list, one path per line on stdout,
-  after applying the `allow` list. It never writes, lists regardless of the
+  after applying the allowlist. It never writes, lists regardless of the
   configured policy, and exits 1 only under `deny` with at least one entry.
 - A velnor release that predates `[github]` rejects the table as an unknown
   field, so repositories must pin a velnor release that supports it.
@@ -319,6 +321,15 @@ contract. An out-of-band ownership change after the final scan can make retired
 tree cleanup fail after publication; the command reports that cleanup failure,
 leaves the published output in place, and requires safe operator recovery before
 the next in-place generation.
+
+After exchange, generation checks the retired workflow directory again. If it
+finds an unmarked entry or a changed root identity, it does not exchange either
+tree again. Generation reports failure even though the live `.github` tree may
+have changed, and identifies the displaced tree in the private staging path.
+Stop concurrent writers, inspect both trees, and reconcile them manually before
+removing either. A later generation retains any interrupted spare under a unique
+recovery path. Retained trees protect later writes through open handles from
+automatic cleanup.
 
 In-place generation identifies the repository mount using Linux `STATX_MNT_ID`
 or the macOS mount-point name returned by `fstatfs`; device IDs alone do not

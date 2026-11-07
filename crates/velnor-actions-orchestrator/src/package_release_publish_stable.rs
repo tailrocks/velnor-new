@@ -18,7 +18,7 @@ struct Snapshot {
     assets: Vec<(u64, String, u64, Option<String>)>,
 }
 
-pub(in crate::package_release_publish) struct Observation {
+pub(in crate::release::package_release_publish) struct Observation {
     state: PublicationState,
     release: Option<Snapshot>,
 }

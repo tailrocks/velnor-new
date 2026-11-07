@@ -58,6 +58,12 @@ pub(crate) struct VerifiedReleaseQualificationCandidate {
     target_sha256: String,
 }
 
+impl VerifiedReleaseQualificationCandidate {
+    pub(crate) fn manifest_sha256(&self) -> &str {
+        &self.manifest_sha256
+    }
+}
+
 pub(crate) fn prepare_for_release_qualification(
     candidate: &VerifiedReleaseQualificationCandidate,
     deadline: CheckDeadline,

@@ -10,7 +10,7 @@ use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_spec::validate_source_sha;
 
 use crate::OrchestratorError;
-use crate::origin::origin_url_via_git;
+use crate::planner::origin::origin_url_via_git;
 
 pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError> {
     let Some(url) = origin_url_via_git(root) else {
@@ -27,7 +27,7 @@ pub(crate) fn origin_repository(root: &Path) -> Result<String, OrchestratorError
 fn normalize_origin(url: &str) -> Option<String> {
     let trimmed = url.trim().trim_end_matches('/');
     let base = trimmed.strip_suffix(".git").unwrap_or(trimmed);
-    if let Some((host, path)) = crate::prepare::split_host_path(base) {
+    if let Some((host, path)) = crate::planner::prepare::split_host_path(base) {
         if host.eq_ignore_ascii_case("github.com") && is_owner_repo(path) {
             return Some(path.to_owned());
         }
@@ -41,6 +41,16 @@ fn is_owner_repo(path: &str) -> bool {
         return false;
     };
     !name.contains('/') && is_repo_segment(owner) && is_repo_segment(name)
+}
+
+pub(crate) fn same_repository(left: &str, right: &str) -> bool {
+    let valid = |value: &str| {
+        value.split_once('/').is_some_and(|(owner, name)| {
+            velnor_actions_contract::config::is_valid_github_owner(owner)
+                && velnor_actions_contract::config::is_valid_github_repo_name(name)
+        })
+    };
+    valid(left) && valid(right) && left.eq_ignore_ascii_case(right)
 }
 
 fn is_repo_segment(segment: &str) -> bool {
@@ -93,27 +103,81 @@ pub(crate) fn common_registry(selection: &ReleaseSelection) -> Result<String, Or
         })
 }
 
-pub(crate) fn workspace_slug(manifest_path: &str) -> String {
-    let dir = manifest_path.rsplit_once('/').map_or("", |(head, _)| head);
-    let mut slug: String = dir
-        .chars()
-        .map(|char| {
-            if char.is_ascii_alphanumeric() {
-                char.to_ascii_lowercase()
-            } else if matches!(char, '-' | '_') {
-                char
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    if slug.len() > 64 {
-        slug.truncate(64);
+pub(crate) fn release_lock(
+    metadata: &str,
+    root: &Path,
+    manifest_hint: &str,
+    known_manifests: &BTreeSet<String>,
+    registry: &str,
+    repository: &str,
+) -> Result<
+    velnor_actions_workflow_renderer::release_spec::lock::ReleaseConcurrency,
+    OrchestratorError,
+> {
+    let record = velnor_actions_rust::metadata::parse_metadata_json(
+        metadata,
+        root,
+        manifest_hint,
+        known_manifests,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let root = root
+        .canonicalize()
+        .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
+    let workspace = root
+        .join(&record.workspace_root)
+        .canonicalize()
+        .map_err(|err| OrchestratorError::io(record.workspace_root.clone(), err.to_string()))?;
+    let relative = workspace
+        .strip_prefix(&root)
+        .map_err(|_| OrchestratorError::Contract {
+            problem: "release_workspace_outside_root".to_owned(),
+        })?;
+    let manifest = root
+        .join(manifest_hint)
+        .canonicalize()
+        .map_err(|err| OrchestratorError::io(manifest_hint, err.to_string()))?;
+    let reported_member = record
+        .packages
+        .iter()
+        .filter(|package| package.in_workspace)
+        .any(|package| {
+            root.join(&package.manifest)
+                .canonicalize()
+                .is_ok_and(|path| path == manifest)
+        });
+    let members_within_workspace = record
+        .packages
+        .iter()
+        .filter(|package| package.in_workspace)
+        .all(|package| {
+            root.join(&package.manifest)
+                .canonicalize()
+                .is_ok_and(|path| path.starts_with(&workspace))
+        });
+    if !workspace.is_dir()
+        || !manifest.is_file()
+        || !manifest.starts_with(&workspace)
+        || !members_within_workspace
+        || (manifest != workspace.join("Cargo.toml") && !reported_member)
+    {
+        return Err(OrchestratorError::Contract {
+            problem: "release_workspace_manifest_mismatch".to_owned(),
+        });
     }
-    let slug = slug.trim_matches('-');
-    if slug.is_empty() {
-        "root".to_owned()
-    } else {
-        slug.to_owned()
-    }
+    relative
+        .components()
+        .map(|part| part.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "release_workspace_invalid_path".to_owned(),
+        })?;
+    velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(registry, repository)
+        .map_err(Into::into)
 }
+
+#[cfg(test)]
+#[path = "release_identity_tests.rs"]
+mod tests;

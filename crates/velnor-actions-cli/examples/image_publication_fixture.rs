@@ -1,15 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    env,
-    ffi::{OsStr, OsString},
-    fs,
-    path::PathBuf,
-    process::ExitCode,
-};
-
-use sha2::{Digest, Sha256};
+use std::{env, ffi::OsString, fs, path::PathBuf, process::ExitCode};
 
 #[path = "image_publication_fixture/crane.rs"]
 mod crane;
@@ -56,7 +48,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
         .join("fixture-state.json");
     let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
     let result = match program {
-        "gh" => gh(&payload[1..], &state).map(|()| ExitCode::SUCCESS),
+        "github-api" if payload.get(1).is_some_and(|argument| argument == "api") => {
+            github_api(&payload[1..], &state).map(|()| ExitCode::SUCCESS)
+        }
         "crane" => crane::run(&payload[1..], &mut state, &state_path),
         other => Err(format!("unsupported fixture payload: {other}").into()),
     };
@@ -70,62 +64,11 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     }
 }
 
-fn gh(args: &[OsString], state: &serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
-    let output = if args.first().is_some_and(|arg| arg == "api") {
-        gh_api(args, state)?
-    } else if args.first().is_some_and(|arg| arg == "attestation")
-        && args.get(1).is_some_and(|arg| arg == "verify")
-    {
-        if args
-            .get(2)
-            .and_then(|arg| arg.to_str())
-            .is_some_and(|arg| arg.starts_with("oci://"))
-        {
-            let repository = state["crane"]["tag_reference"]
-                .as_str()
-                .and_then(|reference| reference.rsplit_once(':'))
-                .map(|(repository, _)| repository)
-                .ok_or("promotion source repository is missing")?;
-            let digest = state["crane"]["tag_digest"]
-                .as_str()
-                .ok_or("promotion source digest is missing")?;
-            let source = state["source_commit"]
-                .as_str()
-                .ok_or("promotion source commit is missing")?;
-            let expected = [
-                "attestation",
-                "verify",
-                &format!("oci://{repository}@{digest}"),
-                "--repo",
-                "tailrocks/velnor-new",
-                "--signer-workflow",
-                "tailrocks/velnor-new/.github/workflows/publish.yml",
-                "--signer-digest",
-                source,
-                "--source-digest",
-                source,
-                "--source-ref",
-                "refs/heads/main",
-                "--predicate-type",
-                "https://slsa.dev/provenance/v1",
-            ];
-            let actual = args
-                .iter()
-                .map(|arg| arg.to_string_lossy())
-                .collect::<Vec<_>>();
-            if state["promotion"]["attestation_failure"] == true
-                || actual.iter().map(std::convert::AsRef::as_ref).ne(expected)
-            {
-                return Err("fixture promotion attestation rejected".into());
-            }
-            Some(serde_json::json!([]))
-        } else {
-            Some(attestation(args, state)?)
-        }
-    } else {
-        return Err("unsupported gh request".into());
-    };
-    if let Some(output) = output {
+fn github_api(
+    args: &[OsString],
+    state: &serde_json::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(output) = gh_api(args, state)? {
         println!("{}", serde_json::to_string(&output)?);
     }
     Ok(())
@@ -244,63 +187,6 @@ fn api(
     api_run_data(route, state)
 }
 
-fn attestation(
-    args: &[OsString],
-    state: &serde_json::Value,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let path = PathBuf::from(args.get(2).ok_or("missing attestation subject path")?);
-    let subject = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("invalid attestation subject filename")?
-        .to_owned();
-    let subject_digest = hex(&Sha256::digest(fs::read(&path)?));
-    let attestation = if subject == "RUNNER_IMAGE_QUALIFICATION.json" {
-        &state["qualification_attestation"]
-    } else {
-        &state["attestation"]
-    };
-    let subjects = attestation[0]["verificationResult"]["statement"]["subject"]
-        .as_array()
-        .ok_or("fixture attestation has no subjects")?;
-    if !subjects
-        .iter()
-        .any(|value| value["name"] == subject && value["digest"]["sha256"] == subject_digest)
-    {
-        return Err("attestation requested for an unattested subject".into());
-    }
-    let bundle = args
-        .windows(2)
-        .find(|pair| pair[0] == "--bundle")
-        .and_then(|pair| pair.get(1))
-        .and_then(|path| path.to_str())
-        .ok_or("attestation bundle path is missing")?;
-    let bundle_path = PathBuf::from(bundle);
-    match bundle_path.extension().and_then(OsStr::to_str) {
-        Some("json" | "jsonl") => {}
-        _ => return Err("fixture attestation bundle filename extension rejected".into()),
-    }
-    let bundles = fs::read_to_string(&bundle_path)?;
-    let mut outputs = Vec::new();
-    let bundle_values = if bundle_path.extension().and_then(OsStr::to_str) == Some("json") {
-        vec![serde_json::from_str(&bundles)?]
-    } else {
-        bundles
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(serde_json::from_str)
-            .collect::<Result<Vec<serde_json::Value>, _>>()?
-    };
-    for bundle in bundle_values {
-        let bundle_outputs = bundle
-            .get("fixtureOutput")
-            .and_then(serde_json::Value::as_array)
-            .ok_or("fixture attestation bundle rejected")?;
-        outputs.extend(bundle_outputs.iter().cloned());
-    }
-    Ok(serde_json::Value::Array(outputs))
-}
-
 fn attestation_pages(
     route: &str,
     state: &serde_json::Value,
@@ -313,6 +199,9 @@ fn attestation_pages(
         .split_once("sha256:")
         .map(|(_, digest)| digest)
         .ok_or("attestation digest is missing")?;
+    if let Some(pages) = state.get("signed_attestation_pages") {
+        return Ok(pages.clone());
+    }
     let qualification = state
         .get("qualification_attestation")
         .and_then(serde_json::Value::as_array)
@@ -335,7 +224,6 @@ fn attestation_pages(
     let response = qualification
         .cloned()
         .map(serde_json::Value::Array)
-        .or_else(|| state.get("attestation_response").cloned())
         .or_else(|| state.get("attestation").cloned())
         .ok_or("fixture attestation output is missing")?;
     let outputs = response

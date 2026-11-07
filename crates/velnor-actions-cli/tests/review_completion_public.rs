@@ -6,6 +6,8 @@ use std::error::Error;
 
 #[path = "review_completion_fixture.rs"]
 mod fixture;
+#[path = "api2026_pull_context_fixture/worker.rs"]
+mod worker;
 
 const CODEX: &str = "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"07c2e751b1720fddb8c02649c08792eaa53e7bbe\",\"has_any_findings\":false,\"has_unresolved_findings\":false,\"status\":\"completed\"},\"security_review\":{\"commit_sha\":\"07c2e751b1720fddb8c02649c08792eaa53e7bbe\",\"has_any_findings\":false,\"has_unresolved_findings\":false,\"status\":\"completed\"}} -->\n<!-- codex-security-review:v1 {\"blockingSeverityThreshold\":\"P0\",\"headSha\":\"07c2e751b1720fddb8c02649c08792eaa53e7bbe\",\"mergeGateEnabled\":false,\"pullRequestNumber\":514,\"repository\":\"jackin-project/homebrew-tap\",\"status\":\"completed\"} -->\n## Codex Review Summary\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| 📝 **Code Review** | ✅ **Completed** <relative-time datetime=\"2026-10-27T14:58:52.571265Z\">2026-10-27T14:58:52.571265Z</relative-time> | `07c2e75` | Draft marked ready |\n| 🔒 **Security Review** | ✅ **Completed** <relative-time datetime=\"2026-10-27T15:03:24.469197Z\">2026-10-27T15:03:24.469197Z</relative-time> | `07c2e75` | Draft marked ready |\n";
 const REQUEST: &str = "@codex review\n\nPlease review the current head 609a9267b28545e460d913ab266e79ed1375dce4, including the native hk workspace configuration, custody fixes, and combined main-branch Rust migrations. All prior accepted review threads have fixes and replies. Local combined verification passed 890 tests with two expected skips, strict Clippy, formatting, all 12 policy families, and the real native security-scanner fixtures. Exact-head CI is running.";
@@ -277,105 +279,106 @@ fn sonar_edit(scenario: Scenario) -> (Value, Value, Value, Value, Value) {
 #[test]
 fn contextual_requests_and_authenticated_sonar_reports_preserve_admission()
 -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::Ready, true, "ready"),
-        (Scenario::SonarBotEditedBeforeUpdate, true, "ready"),
-        (Scenario::SonarFinding, false, "blocked"),
-        (Scenario::SonarMissingTimestamp, false, "blocked"),
-        (Scenario::SonarMalformedTimestamps, false, "blocked"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
+    fixture::with_test(
+        "contextual_requests_and_authenticated_sonar_reports_preserve_admission",
+        || {
+            for (scenario, success, state) in [
+                (Scenario::Ready, true, "ready"),
+                (Scenario::SonarBotEditedBeforeUpdate, true, "ready"),
+                (Scenario::SonarFinding, false, "blocked"),
+                (Scenario::SonarMissingTimestamp, false, "blocked"),
+                (Scenario::SonarMalformedTimestamps, false, "blocked"),
+            ] {
+                fixture::run(scenario, success, state)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 #[test]
 fn late_contextual_requests_stay_pending_and_unknown_feedback_stays_blocked()
 -> Result<(), Box<dyn Error>> {
-    fixture::run(Scenario::LateRequest, false, "pending")?;
-    fixture::run(Scenario::UnknownFeedback, false, "blocked")?;
-    Ok(())
+    fixture::with_test(
+        "late_contextual_requests_stay_pending_and_unknown_feedback_stays_blocked",
+        || {
+            fixture::run(Scenario::LateRequest, false, "pending")?;
+            fixture::run(Scenario::UnknownFeedback, false, "blocked")?;
+            Ok(())
+        },
+    )
 }
 
 #[test]
 fn authenticated_edit_timestamps_preserve_custody() -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::LiteralRequestNoSonar, true, "ready"),
-        (Scenario::CodexEditorOneSecondEarly, true, "ready"),
-        (Scenario::CodexEditBeforeCreated, false, "blocked"),
-        (Scenario::CodexEditAfterUpdated, false, "blocked"),
-        (Scenario::CodexForeignEditor, false, "blocked"),
-        (Scenario::CodexBodyMismatch, false, "blocked"),
-        (Scenario::CodexUpdatedAtMismatch, false, "blocked"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
+    fixture::with_test("authenticated_edit_timestamps_preserve_custody", || {
+        for (scenario, success, state) in [
+            (Scenario::LiteralRequestNoSonar, true, "ready"),
+            (Scenario::CodexEditorOneSecondEarly, true, "ready"),
+            (Scenario::CodexEditBeforeCreated, false, "blocked"),
+            (Scenario::CodexEditAfterUpdated, false, "blocked"),
+            (Scenario::CodexForeignEditor, false, "blocked"),
+            (Scenario::CodexBodyMismatch, false, "blocked"),
+            (Scenario::CodexUpdatedAtMismatch, false, "blocked"),
+        ] {
+            fixture::run(scenario, success, state)?;
+        }
+        Ok(())
+    })
 }
 
 #[test]
 fn deleting_absent_contextual_request_uses_current_live_feedback() -> Result<(), Box<dyn Error>> {
-    fixture::run(Scenario::DeletedContextualRequest, true, "ready")
+    fixture::with_test(
+        "deleting_absent_contextual_request_uses_current_live_feedback",
+        || fixture::run(Scenario::DeletedContextualRequest, true, "ready"),
+    )
 }
 
 #[test]
 fn deleting_absent_literal_request_uses_current_live_feedback() -> Result<(), Box<dyn Error>> {
-    fixture::run(Scenario::DeletedLiteralRequest, true, "ready")
+    fixture::with_test(
+        "deleting_absent_literal_request_uses_current_live_feedback",
+        || fixture::run(Scenario::DeletedLiteralRequest, true, "ready"),
+    )
 }
 
 #[test]
 fn created_and_edited_requests_keep_the_live_inventory_race_guard() -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::CreatedContextualRequestAbsent, false, "pending"),
-        (Scenario::EditedContextualRequestAbsent, false, "pending"),
-        (Scenario::DeletedWithLiveLateRequest, false, "pending"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
+    fixture::with_test(
+        "created_and_edited_requests_keep_the_live_inventory_race_guard",
+        || {
+            for (scenario, success, state) in [
+                (Scenario::CreatedContextualRequestAbsent, false, "pending"),
+                (Scenario::EditedContextualRequestAbsent, false, "pending"),
+                (Scenario::DeletedWithLiveLateRequest, false, "pending"),
+            ] {
+                fixture::run(scenario, success, state)?;
+            }
+            Ok(())
+        },
+    )
 }
 
 #[test]
 fn fork_sonar_associations_require_authenticated_fork_metadata() -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::ForkEmptyAssociation, true, "ready"),
-        (Scenario::SameRepositoryEmptyAssociation, false, "blocked"),
-        (Scenario::ForkWrongHead, false, "blocked"),
-        (Scenario::ForkWrongApp, false, "blocked"),
-        (Scenario::ForkMissingFlag, false, "blocked"),
-        (Scenario::ForkFalseFlag, false, "blocked"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
+    fixture::with_test(
+        "fork_sonar_associations_require_authenticated_fork_metadata",
+        || {
+            for (scenario, success, state) in [
+                (Scenario::ForkEmptyAssociation, true, "ready"),
+                (Scenario::SameRepositoryEmptyAssociation, false, "blocked"),
+                (Scenario::ForkWrongHead, false, "blocked"),
+                (Scenario::ForkWrongApp, false, "blocked"),
+                (Scenario::ForkMissingFlag, false, "blocked"),
+                (Scenario::ForkFalseFlag, false, "blocked"),
+            ] {
+                fixture::run(scenario, success, state)?;
+            }
+            Ok(())
+        },
+    )
 }
 
-#[test]
-fn issue_comment_full_database_ids_support_wide_values_and_reject_invalid_values()
--> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::CodexFullDatabaseId, true, "ready"),
-        (Scenario::SonarFullDatabaseId, true, "ready"),
-        (Scenario::SonarMalformedFullDatabaseId, false, "blocked"),
-        (Scenario::SonarOverflowFullDatabaseId, false, "blocked"),
-        (Scenario::SonarZeroFullDatabaseId, false, "blocked"),
-        (Scenario::SonarMismatchedFullDatabaseId, false, "blocked"),
-        (Scenario::SonarLeadingZeroFullDatabaseId, false, "blocked"),
-        (Scenario::SonarNumericFullDatabaseId, false, "blocked"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
-}
-
-#[test]
-fn sonar_check_requires_one_matching_pr_association() -> Result<(), Box<dyn Error>> {
-    for (scenario, success, state) in [
-        (Scenario::SonarTargetWithForeignAssociation, true, "ready"),
-        (Scenario::SonarDuplicateTargetAssociation, false, "blocked"),
-        (Scenario::SonarForeignAssociationOnly, false, "blocked"),
-    ] {
-        fixture::run(scenario, success, state)?;
-    }
-    Ok(())
-}
+#[path = "review_completion_fixture/id_cases.rs"]
+mod id_cases;

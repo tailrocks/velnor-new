@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::{action_step, mise_setup_step};
 
 use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
-use crate::publish_release_steps::BRANCH_AUTHORITY_JOB;
+use crate::release::publish_release_steps::BRANCH_AUTHORITY_JOB;
 use crate::utf8::strings_of;
 
 pub(crate) const IMAGE_ENVIRONMENT: &str = "images";

@@ -17,12 +17,12 @@ use super::run::load_run_metadata;
 const MAX_LINEAGE_NODES: usize = 3;
 
 #[derive(Debug, serde::Serialize)]
-pub(in crate::qualification_resolver) struct FetchedNode {
-    pub(in crate::qualification_resolver) metadata: QualificationCacheRunMetadata,
-    pub(in crate::qualification_resolver) artifact: QualificationCacheArtifact,
-    pub(in crate::qualification_resolver) producer: QualificationCacheProducerContext,
-    pub(in crate::qualification_resolver) receipt: QualificationCacheReceipt,
-    pub(in crate::qualification_resolver) previous: Option<Box<Self>>,
+pub(in crate::release::qualification_resolver) struct FetchedNode {
+    pub(in crate::release::qualification_resolver) metadata: QualificationCacheRunMetadata,
+    pub(in crate::release::qualification_resolver) artifact: QualificationCacheArtifact,
+    pub(in crate::release::qualification_resolver) producer: QualificationCacheProducerContext,
+    pub(in crate::release::qualification_resolver) receipt: QualificationCacheReceipt,
+    pub(in crate::release::qualification_resolver) previous: Option<Box<Self>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +48,7 @@ struct ArtifactRun {
     head_sha: Option<String>,
 }
 
-pub(in crate::qualification_resolver) fn resolve_chain(
+pub(in crate::release::qualification_resolver) fn resolve_chain(
     client: &GitHub<'_>,
     run: QualificationRunRef,
     depth: usize,
@@ -185,7 +185,7 @@ fn download_document(
         artifact.id
     );
     let bytes = GitHub::api_bytes(client.catalog(), &route)?;
-    let receipt = crate::qualification_resolver::archive::receipt_bytes(&bytes, artifact)?;
+    let receipt = crate::release::qualification_resolver::archive::receipt_bytes(&bytes, artifact)?;
     if receipt.len() > MAX_QUALIFICATION_RECEIPT_BYTES {
         return Err(internal("qualification_receipt_oversize"));
     }

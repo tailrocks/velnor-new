@@ -9,13 +9,13 @@ use velnor_actions_workflow_renderer::{
     verification_jobs::{BuildTaskArtifact, BuildTaskTool},
 };
 
-use crate::native_tool_input::{NativeMiseConfig, NativeToolInput, NativeToolSource};
-use crate::native_tool_lock::{
+use crate::planner::native_tool_input::{NativeMiseConfig, NativeToolInput, NativeToolSource};
+use crate::planner::native_tool_lock::{
     NativeLockedTool, NativeMiseLock, rust_toolchain_options, valid_rust_toolchain_options,
 };
-use crate::pins::resolve_verification_mise_setup;
+use crate::planner::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
-use crate::{OrchestratorError, discover::Discovery};
+use crate::{OrchestratorError, planner::discover::Discovery};
 
 #[path = "verification_task_backend.rs"]
 mod backend;
@@ -102,8 +102,8 @@ pub(crate) fn resolve_mise_task_tools(
     };
     validate_config_shape(mise_config)?;
     validate_settings(mise_config)?;
-    let requested =
-        crate::native_mise_tasks::selected_task_tools(mise_config, mise_task).map_err(failure)?;
+    let requested = crate::planner::native_mise_tasks::selected_task_tools(mise_config, mise_task)
+        .map_err(failure)?;
     if requested.is_empty() {
         if let Some(lock) = lock {
             let NativeToolSource::MiseLock(lock) = &lock.source else {

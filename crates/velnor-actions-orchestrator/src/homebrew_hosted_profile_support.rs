@@ -23,6 +23,11 @@ use velnor_actions_mise::CheckDeadline;
 
 pub(crate) fn verify_release_qualification_candidate()
 -> Result<VerifiedReleaseQualificationCandidate, OrchestratorError> {
+    let target = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        _ => return Err(internal("homebrew_profile_candidate_platform")),
+    };
     let path = Path::new("manifest-assets/release-manifest.json");
     let bytes = read_regular_bounded(path, 8 * 1024 * 1024)?;
     let manifest_sha256 = std::env::var("VELNOR_RELEASE_MANIFEST_SHA256")
@@ -47,7 +52,7 @@ pub(crate) fn verify_release_qualification_candidate()
     let target = manifest
         .targets
         .iter()
-        .find(|target| target.target == "aarch64-apple-darwin")
+        .find(|entry| entry.target == target)
         .ok_or_else(|| internal("homebrew_profile_target_missing"))?;
     let executable = std::env::current_exe()
         .map_err(|error| OrchestratorError::io("current_exe", error.to_string()))?;

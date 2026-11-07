@@ -8,6 +8,14 @@ use super::authority;
 use super::native;
 use super::{ARCHIVE, ARTIFACT_NAME, PUBLICATION_EVIDENCE, RECORD};
 
+fn verified_script(script: &str) -> String {
+    format!(
+        "set -eu\n{}\ngh() {{ {} \"$@\"; }}\n{script}",
+        crate::verified_gh_shell::bootstrap(),
+        crate::verified_gh_shell::command()
+    )
+}
+
 pub(super) fn gh_env() -> Yaml {
     // `gh` also reads GITHUB_TOKEN; GH_TOKEN stays out of the rendered jobs so
     // the data-only gates keep passing unchanged.
@@ -27,10 +35,10 @@ pub(super) fn fetch_ci_runs_step() -> Yaml {
         ("env".to_owned(), gh_env()),
         (
             "run".to_owned(),
-            Yaml::str(format!(
+            Yaml::str(verified_script(&format!(
                 "set -euo pipefail\ngh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\" > \"{}\"",
                 authority::CI_RUNS_PATH
-            )),
+            ))),
         ),
     ])
 }
@@ -45,17 +53,17 @@ pub(super) fn fetch_artifact_response_step() -> Yaml {
         ("env".to_owned(), gh_env()),
         (
             "run".to_owned(),
-            Yaml::str(format!(
+            Yaml::str(verified_script(&format!(
                 "set -euo pipefail\ngh api \"repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100\" > \"{}\"",
                 authority::ARTIFACT_RESPONSE_PATH
-            )),
+            ))),
         ),
     ])
 }
 
 pub(super) fn fetch_source_inputs_step() -> Yaml {
     const RUN: &str = r#"set -euo pipefail
-python3 - <<'VELNOR_SOURCE_INPUTS_EOF'
+LD_PRELOAD="" LD_LIBRARY_PATH="" LD_AUDIT="" LD_DEBUG="" LD_PROFILE="" GCONV_PATH="" LOCPATH="" /usr/bin/python3 -I -S - <<'VELNOR_SOURCE_INPUTS_EOF'
 import base64
 import hashlib
 import json
@@ -77,7 +85,7 @@ if not re.fullmatch(r"[0-9a-f]{40}", sha or ""):
 inputs = {}
 for name in paths:
     raw = subprocess.check_output(
-        ["gh", "api", f"repos/{repo}/contents/{name}?ref={sha}"],
+        ["/bin/sh", "-c", os.environ["VELNOR_VERIFIED_GH_COMMAND"] + ' "$@"', "velnor-gh", "api", f"repos/{repo}/contents/{name}?ref={sha}"],
         timeout=60,
     )
     if len(raw) > 1048576:
@@ -119,7 +127,13 @@ VELNOR_SOURCE_INPUTS_EOF"#;
                 ),
             ]),
         ),
-        ("run".to_owned(), Yaml::str(RUN)),
+        (
+            "run".to_owned(),
+            Yaml::str(verified_script(&format!(
+                "export VELNOR_VERIFIED_GH_COMMAND='{}'\n{RUN}",
+                crate::verified_gh_shell::command().replace('\'', "'\\''")
+            ))),
+        ),
     ])
 }
 
@@ -133,11 +147,11 @@ pub(super) fn verify_attestations_step(archive: &str, record: &str) -> Yaml {
         ("env".to_owned(), gh_env()),
         (
             "run".to_owned(),
-            Yaml::str(format!(
+            Yaml::str(verified_script(&format!(
                 "set -euo pipefail\nrepo=\"$GITHUB_REPOSITORY\"\nsha=\"$GITHUB_SHA\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"",
                 authority::ARCHIVE_ATTESTATION_PATH,
                 authority::RECORD_ATTESTATION_PATH
-            )),
+            ))),
         ),
     ])
 }

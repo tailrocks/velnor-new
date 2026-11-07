@@ -16,7 +16,12 @@ impl StepRole {
     pub(super) const fn is_shell_only(self) -> bool {
         matches!(
             self,
-            Self::PreparePinnedTools
+            Self::ReleaseAdmission
+                | Self::ReleaseRustArchive
+                | Self::ReleaseVerification
+                | Self::AcquireReleasePlz
+                | Self::AcquireCargoSemverChecks
+                | Self::PreparePinnedTools
                 | Self::MbxVersionCheck
                 | Self::MbxWorkspaceCleanup
                 | Self::MbxBundleKey

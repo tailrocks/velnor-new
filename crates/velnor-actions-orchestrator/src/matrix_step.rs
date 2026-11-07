@@ -46,7 +46,7 @@ pub(crate) fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
 }
 
 fn obligation_stack(task_id: &str) -> Option<Stack> {
-    crate::extension_schemas::task_stack_segment(task_id).and_then(Stack::from_id)
+    crate::planner::extension_schemas::task_stack_segment(task_id).and_then(Stack::from_id)
 }
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";

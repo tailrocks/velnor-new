@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(unix)]
+#[path = "task_report_public/artifact_fixture.rs"]
+mod artifact_fixture;
 #[path = "task_report_public/fixture.rs"]
 mod fixture;
 #[path = "task_report_public/process.rs"]
@@ -9,6 +12,9 @@ mod process;
 mod report_files;
 #[path = "task_report_public/tofu_job.rs"]
 mod tofu_job;
+#[cfg(unix)]
+#[path = "../../velnor-actions-cli/tests/api2026_pull_context_fixture/worker.rs"]
+mod worker;
 
 use velnor_actions_contract::{EdgeKind, FinalStatus, NotSelectedReason, TaskStatus};
 
@@ -213,9 +219,16 @@ fn valid_selected_noop_reports_block_tasks() -> TestResult<()> {
 #[cfg(unix)]
 #[test]
 fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
+    if std::env::var_os("VELNOR_TASK_REPORT_CHILD_CASE").is_some() {
+        worker::validate_worker("task_report", Some(SHARED_ARTIFACT_TEST))?;
+    }
     if process::child_mode(SHARED_ARTIFACT_TEST)? {
         return Ok(());
     }
+    if std::env::var_os("VELNOR_GH_FIXTURE_WORKER").is_none() {
+        return artifact_fixture::dispatch(SHARED_ARTIFACT_TEST);
+    }
+    worker::validate_worker("task_report", Some(SHARED_ARTIFACT_TEST))?;
     let scenario = fixture::Scenario::new(&[("clippy", "crate_clippy"), ("test", "crate_clippy")])?;
     let entries = &scenario.plan.matrix.include;
     assert_eq!(entries.len(), 2);
@@ -237,18 +250,14 @@ fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
     let payload = scenario.root().join("artifact-payload");
     fs::create_dir_all(&payload)?;
     report_files::stage_artifact_payload(&scenario, &payload)?;
-    let mise_data_dir = fixture::install_fake_gh(&scenario)?;
-    let fake_mise_bin = report_files::install_fake_mise(&scenario)?;
     let request_log = scenario.root().join("gh-requests.tsv");
+    let _server = artifact_fixture::start(scenario.root(), &payload, &entries[0].artifact_id)?;
     assert_eq!(
         report_files::retrieve(
             &scenario,
             SHARED_ARTIFACT_TEST,
             "retrieve-shared",
-            &mise_data_dir,
-            &fake_mise_bin,
-            &payload,
-            &request_log,
+            "tailrocks/velnor-new",
         )?,
         1
     );
@@ -276,6 +285,8 @@ fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
         final_report.downloaded_artifact_ids,
         [entries[0].artifact_id.clone()]
     );
+    artifact_fixture::assert_negative_cases(&scenario)?;
+    worker::record_success("task_report", SHARED_ARTIFACT_TEST)?;
     Ok(())
 }
 

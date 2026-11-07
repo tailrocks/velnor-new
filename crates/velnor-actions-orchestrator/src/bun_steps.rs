@@ -129,7 +129,7 @@ pub(crate) fn step_env(
     catalog: &ToolCatalog,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
     let extra = BTreeMap::from([("BUN_INSTALL_CACHE_DIR".to_owned(), CACHE_DIR.to_owned())]);
-    crate::matrix_step::task_step_env(catalog, &extra, false)
+    crate::planner::matrix_step::task_step_env(catalog, &extra, false)
 }
 
 pub(crate) fn bash(script: &str) -> Vec<String> {

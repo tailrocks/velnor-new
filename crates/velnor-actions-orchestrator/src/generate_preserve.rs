@@ -220,7 +220,7 @@ pub(super) fn retired_marked_lint_config(
     first_line_is_generated_marker(source)
 }
 
-fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
+pub(super) fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
     let limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
@@ -342,4 +342,34 @@ where
 
 fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
+}
+
+#[cfg(test)]
+mod release_cleanup_tests {
+    #[test]
+    fn obsolete_publish_config_is_removed_from_generated_preview()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = tempfile::tempdir()?;
+        let output = tempfile::tempdir()?;
+        let github = source.path().join(".github");
+        std::fs::create_dir(&github)?;
+        std::fs::write(github.join("release-plz-publish.toml"), "obsolete")?;
+        std::fs::write(github.join("manual.txt"), "keep")?;
+        let tree = velnor_actions_workflow_renderer::render::RenderedTree {
+            files: vec![],
+            symlinks: vec![],
+        };
+        super::write_preview(&github, &output.path().join(".github"), &tree)?;
+        assert!(
+            !output
+                .path()
+                .join(".github/release-plz-publish.toml")
+                .exists()
+        );
+        assert_eq!(
+            std::fs::read_to_string(output.path().join(".github/manual.txt"))?,
+            "keep"
+        );
+        Ok(())
+    }
 }

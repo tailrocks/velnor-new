@@ -13,9 +13,9 @@ use velnor_actions_workflow_renderer::plan_sources::cache_keys::StateRootPlan;
 use velnor_actions_workflow_renderer::plan_sources::state_select::{SealRoot, StateSealPlan};
 
 use crate::OrchestratorError;
-use crate::affected_inputs::InputRule;
-use crate::discover::{Discovery, PlannedWorkspace};
-use crate::select_affected::manifest_dir;
+use crate::planner::affected_inputs::InputRule;
+use crate::planner::discover::{Discovery, PlannedWorkspace};
+use crate::planner::select_affected::manifest_dir;
 
 pub(crate) fn plans(
     discovery: &Discovery,

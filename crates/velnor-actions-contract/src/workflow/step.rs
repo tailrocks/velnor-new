@@ -213,8 +213,14 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         }
         StepId::BuildTaskRun => matches!(kind, StepKind::Shell { .. }),
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
+        StepId::ReleaseRustUpload | StepId::ReleaseReceiptUpload | StepId::ReleasePrArtifact => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
+        }
         StepId::TofuProviders => super::step_protocol::valid_provider_restore(kind),
-        StepId::MbxReady
+        StepId::ReleasePrCandidate
+        | StepId::ReleaseAdmission
+        | StepId::ReleaseVerification
+        | StepId::MbxReady
         | StepId::CacheKeys
         | StepId::MbxBundleKey
         | StepId::MbxBundleExport

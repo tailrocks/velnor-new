@@ -6,6 +6,13 @@ mod cancellable;
 pub use cancellable::run_command_bounded;
 #[path = "check_command.rs"]
 mod check;
+#[path = "command_crate_publish.rs"]
+mod crate_publish;
+#[cfg(test)]
+#[path = "command_crate_tests.rs"]
+mod crate_tests;
+#[path = "command_crate_update.rs"]
+mod crate_update;
 #[path = "command_credential.rs"]
 mod credential;
 #[path = "command_env.rs"]
@@ -29,7 +36,11 @@ mod release_signer;
 mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
+#[path = "command_verified_gh.rs"]
+mod verified_gh;
+pub use cancellable::run_prepared_quiescent_until;
 pub use check::resolve_program as resolve_check_program;
+pub use crate_publish::CratePublishCredential;
 pub use credential::is_safe_credential_value;
 pub use private_fetch::{
     CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, FETCH_REDIRECT_ENV_KEYS, PrivateFetchCredential,
@@ -37,12 +48,12 @@ pub use private_fetch::{
 };
 
 pub use self::env::{
-    CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ALLOWLIST_GH_API, CREDENTIAL_ENV_KEYS,
-    ENDPOINT_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
-    NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV,
-    TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
-    TF_PLUGIN_CACHE_DIR_ENV, is_denied_credential_key, is_denied_endpoint_key, is_reserved_env_key,
-    proxy_passthrough, toolchain_env,
+    CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS, ENDPOINT_ENV_KEYS, EnvPolicy,
+    ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS,
+    RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV,
+    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV,
+    is_denied_credential_key, is_denied_endpoint_key, is_reserved_env_key, proxy_passthrough,
+    toolchain_env,
 };
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
@@ -62,38 +73,9 @@ use std::time::Duration;
 
 use crate::OperatorToolchainGuard;
 use crate::error::MiseError;
-
-fn cleared_parent_passthrough(
-    policy: EnvPolicy,
-    parent: &[(OsString, OsString)],
-) -> Vec<(OsString, OsString)> {
-    match policy {
-        EnvPolicy::GitHubToken => {
-            let mut env: Vec<_> = parent
-                .iter()
-                .filter(|(key, _)| key == "PATH" || key == "HOME")
-                .cloned()
-                .collect();
-            let last_env = |name: &str| {
-                parent
-                    .iter()
-                    .rfind(|(key, _)| key == name)
-                    .map(|(_, value)| value.clone())
-            };
-            let data_dir = last_env("MISE_DATA_DIR")
-                .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    last_env("XDG_DATA_HOME")
-                        .filter(|value| !value.is_empty())
-                        .map(|value| PathBuf::from(value).join("mise").into_os_string())
-                });
-            env.extend(data_dir.map(|value| (OsString::from("MISE_DATA_DIR"), value)));
-            env
-        }
-        policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
-        _ => Vec::new(),
-    }
-}
+#[path = "command_context.rs"]
+mod context;
+use context::{cleared_parent_passthrough, with_pinned_git};
 
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
@@ -211,7 +193,8 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key)
+            if matches!(self.policy, EnvPolicy::GhApi | EnvPolicy::GitHubToken)
+                || is_reserved_env_key(&key)
                 || (self.policy == EnvPolicy::Discovery
                     && self.program == "git"
                     && key == "GIT_OPTIONAL_LOCKS")
@@ -313,9 +296,9 @@ impl IsolatedCommand {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
     }
 
-    fn command(&self) -> Command {
-        let mut command = Command::new(&self.program);
-        command.args(&self.args);
+    fn command_for(&self, program: &OsStr, args: &[OsString]) -> Command {
+        let mut command = Command::new(program);
+        command.args(args);
         if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
         } else {
@@ -325,6 +308,9 @@ impl IsolatedCommand {
         }
         for (key, value) in self.full_env() {
             command.env(key, value);
+        }
+        if matches!(self.policy, EnvPolicy::GhApi | EnvPolicy::GitHubToken) {
+            command.envs(context::GH_ISOLATION_ENV);
         }
         if self.operator_guarded {
             command.env_remove("MBX_CARGO_SHIM_MODE");

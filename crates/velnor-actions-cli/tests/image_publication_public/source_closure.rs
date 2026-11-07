@@ -77,6 +77,11 @@ fn public_runner_family_accepts_the_independent_complete_input_inventory()
 #[test]
 fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
 -> Result<(), Box<dyn Error>> {
+    let scenario =
+        "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for (profile, path) in [
         (
             FixtureProfile::Runner,
@@ -106,11 +111,17 @@ fn public_runner_family_rejects_drift_in_previously_omitted_copy_inputs()
         assert!(!fixture.receipt.exists());
         assert_eq!(fixture.registry_state()?, registry_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
 #[test]
 fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(), Box<dyn Error>> {
+    let scenario =
+        "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for case in context_cases() {
         let fixture = Fixture::new_for(case.profile)?;
         let mut dockerfile = source_bytes(case.dockerfile)?;
@@ -133,12 +144,18 @@ fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(
         assert!(!fixture.receipt.exists());
         assert_eq!(fixture.registry_state()?, registry_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
 #[test]
 fn public_runner_family_rejects_decoy_pins_and_later_tool_replacement() -> Result<(), Box<dyn Error>>
 {
+    let scenario =
+        "source_closure::public_runner_family_rejects_decoy_pins_and_later_tool_replacement";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for (profile, path, mutation) in [
         (
             FixtureProfile::Runner,
@@ -184,6 +201,7 @@ fn public_runner_family_rejects_decoy_pins_and_later_tool_replacement() -> Resul
         assert!(!fixture.receipt.exists());
         assert_eq!(fixture.registry_state()?, registry_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 

@@ -10,8 +10,7 @@ mod cutover;
 #[path = "tap_merge_initialized.rs"]
 mod initialized;
 pub(crate) use cutover::{CutoverInput, observe_cutover_initialization};
-#[path = "tap_merge_feedback.rs"]
-mod feedback;
+
 #[path = "tap_merge_github.rs"]
 mod github;
 #[path = "tap_merge_history.rs"]
@@ -52,7 +51,7 @@ pub enum TapMergeOutcome {
 }
 
 pub fn merge_homebrew_tap_from_env() -> Result<TapMergeOutcome, OrchestratorError> {
-    crate::package_release_publish::artifact_zip::within_operation(merge_once)
+    crate::release::package_release_publish::artifact_zip::within_operation(merge_once)
 }
 
 fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
@@ -102,15 +101,16 @@ fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
     attempt_once(
         &authority.policy,
         || {
-            crate::package_release_publish::verify_tap_update_environment(
+            crate::release::package_release_publish::verify_tap_update_environment(
                 &candidate.plan.repository,
                 &candidate.plan.default_branch,
             )?;
             observation::observe(&candidate, &authority, &api, &observer)
         },
         || {
-            let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
-            crate::package_release_publish::verify_published_release(&signed)?;
+            let signed =
+                crate::release::package_release_signer::verify_attested_signed_package_from_env()?;
+            crate::release::package_release_publish::verify_published_release(&signed)?;
             if signed.receipt().canonical_digest().ok().as_deref()
                 != Some(candidate.release.receipt_digest.as_str())
             {

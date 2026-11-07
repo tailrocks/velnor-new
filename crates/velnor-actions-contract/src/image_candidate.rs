@@ -26,7 +26,8 @@ mod runner_publication_context;
 mod runner_qualification;
 
 pub use image_candidate_closure::{
-    IMAGE_NATIVE_CLOSURE_SCHEMA, ImageCandidateSourceClosure, native_image_candidate_inputs,
+    IMAGE_NATIVE_CLOSURE_SCHEMA, IMAGE_NATIVE_INVENTORY_PATH, ImageCandidateSourceClosure,
+    NativeImageSourceInventory, native_image_candidate_inputs,
     parse_image_candidate_source_closure, serialize_image_candidate_source_closure,
     validate_image_candidate_source_closure,
 };

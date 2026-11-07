@@ -132,9 +132,10 @@ fn preview_signing_authorities(
         }
         let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(300))
             .map_err(|_| internal("package_signer_deadline"))?;
-        let admitted = crate::package_release_publish::release_policy_admission::admitted_context(
-            &temp, deadline,
-        )?;
+        let admitted =
+            crate::release::package_release_publish::release_policy_admission::admitted_context(
+                &temp, deadline,
+            )?;
         let expected_version = velnor_actions_contract::preview_identity::PreviewIdentity::derive(
             &plan.base_version,
             &source_sha,

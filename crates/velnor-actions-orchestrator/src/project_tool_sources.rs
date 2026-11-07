@@ -206,13 +206,14 @@ pub(crate) fn read_project_sources(
 
 pub(crate) fn read_nested_toolchains(
     root: &Path,
+    paths: &[String],
 ) -> Result<Vec<SourceDeclarations>, OrchestratorError> {
     let mut out = Vec::new();
-    for file in nested_toolchain_paths(root) {
-        let RepoRead::Text(text) = read_repo_file(root, &file, MAX_REPO_FILE_BYTES)? else {
+    for file in paths {
+        let RepoRead::Text(text) = read_repo_file(root, file, MAX_REPO_FILE_BYTES)? else {
             continue;
         };
-        let name = file.rsplit('/').next().unwrap_or(&file);
+        let name = file.rsplit('/').next().unwrap_or(file);
         let declarations = parse_source(name, &text).map_err(|problem| {
             OrchestratorError::config(
                 file.as_str(),
@@ -220,7 +221,10 @@ pub(crate) fn read_nested_toolchains(
                 format!("malformed_project_tool_source:{problem}"),
             )
         })?;
-        out.push(SourceDeclarations { file, declarations });
+        out.push(SourceDeclarations {
+            file: file.clone(),
+            declarations,
+        });
     }
     Ok(out)
 }

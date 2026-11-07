@@ -48,7 +48,7 @@ impl<'a> JobOwners<'a> {
             assigned,
             runnable: tasks
                 .iter()
-                .filter(|task| crate::crate_jobs::is_runnable(task))
+                .filter(|task| crate::planner::crate_jobs::is_runnable(task))
                 .map(|task| (task.task_id.as_str(), task))
                 .collect(),
         })
@@ -124,7 +124,7 @@ pub(crate) fn group_runnable(
 ) -> Result<BTreeMap<CrateGroupKey, Vec<&ProposedTask>>, ContractError> {
     let mut grouped: BTreeMap<CrateGroupKey, Vec<&ProposedTask>> = BTreeMap::new();
     for task in tasks {
-        if crate::crate_jobs::is_runnable(task) {
+        if crate::planner::crate_jobs::is_runnable(task) {
             grouped
                 .entry(CrateGroupKey::for_member(task)?)
                 .or_default()

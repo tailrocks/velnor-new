@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{OrchestratorError, prepare::GenerationPreparation, utf8::strings_of};
+use crate::{OrchestratorError, planner::prepare::GenerationPreparation, utf8::strings_of};
 use std::ffi::OsStr;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 pub(crate) fn release_plz_argv(

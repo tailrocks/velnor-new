@@ -116,10 +116,10 @@ fn capture_feedback(
     api: &TapMergeGitHub,
     observed: &cutover::ObservedCutoverInitialization,
     runs: &[serde_json::Value],
-) -> Result<super::feedback::CapturedFeedback, OrchestratorError> {
-    super::feedback::capture_feedback(
+) -> Result<crate::github_review_feedback::CapturedFeedback, OrchestratorError> {
+    crate::github_review_feedback::capture_feedback(
         api,
-        &super::feedback::FeedbackContext {
+        &crate::github_review_feedback::FeedbackContext {
             repository: &candidate.policy.repository,
             pull_request_number: observed.pull.number,
             head_sha: &observed.pull.head,
@@ -133,7 +133,7 @@ fn capture_feedback(
 
 fn completion_observation(
     observed: &cutover::ObservedCutoverInitialization,
-    captured: super::feedback::CapturedFeedback,
+    captured: crate::github_review_feedback::CapturedFeedback,
     protection: &super::protection::ProtectionFacts,
     checks: Vec<velnor_actions_contract::homebrew_merge_gate::TapRequiredCheck>,
 ) -> TapCompletedPromotionObservation {

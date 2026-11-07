@@ -4,8 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
@@ -16,7 +14,6 @@ use velnor_actions_contract::{
     ProposedTask, RunnerSelection, TaskEdge, Trust, WorkflowEvent, assign_crate_job_ids, digest_b3,
     matrix_json_bytes, plan_id_for_run, plan_json_bytes, run_key_for_ci, task_id_for_stack,
 };
-use velnor_actions_mise::GH_VERSION;
 use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind, entry_metadata_for_task, propose_task};
 
 use super::TestResult;
@@ -113,50 +110,6 @@ impl Scenario {
         fs::write(path, serde_json::to_vec(&plan)?)?;
         Ok(())
     }
-}
-
-#[cfg(unix)]
-pub(super) fn install_fake_gh(scenario: &Scenario) -> TestResult<PathBuf> {
-    let mise_data_dir = scenario.root().join("mise-data");
-    let executable = mise_data_dir
-        .join("installs")
-        .join("gh")
-        .join(GH_VERSION)
-        .join("bin")
-        .join("gh");
-    fs::create_dir_all(
-        executable
-            .parent()
-            .ok_or_else(|| io::Error::other("fake gh executable parent missing"))?,
-    )?;
-    fs::write(
-        &executable,
-        "#!/bin/sh\n\
-set -eu\n\
-[ \"$#\" -eq 9 ] || exit 64\n\
-[ \"$1\" = run ] || exit 65\n\
-[ \"$2\" = download ] || exit 66\n\
-[ \"$3\" = \"$GITHUB_RUN_ID\" ] || exit 67\n\
-[ \"$4\" = --name ] || exit 68\n\
-[ \"$6\" = --dir ] || exit 69\n\
-[ \"$8\" = --repo ] || exit 70\n\
-[ \"$9\" = \"$GITHUB_REPOSITORY\" ] || exit 71\n\
-printf '%s\\t%s\\t%s\\n' \"$3\" \"$5\" \"$9\" >> \"$VELNOR_TEST_GH_LOG\"\n\
-for source in \"$VELNOR_TEST_ARTIFACT_PAYLOAD\"/*; do\n\
-    [ -d \"$source\" ] || continue\n\
-    matrix_key=${source##*/}\n\
-    mkdir -p \"$7/$matrix_key/tasks\"\n\
-    cp \"$source/matrix-report.json\" \"$7/$matrix_key/matrix-report.json\"\n\
-    for task in \"$source/tasks\"/*; do\n\
-        [ -f \"$task\" ] || continue\n\
-        cp \"$task\" \"$7/$matrix_key/tasks/\"\n\
-    done\n\
-done\n",
-    )?;
-    let mut permissions = fs::metadata(&executable)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&executable, permissions)?;
-    Ok(mise_data_dir)
 }
 
 pub(super) fn task_id(kind: &str) -> TestResult<String> {

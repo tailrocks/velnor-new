@@ -8,7 +8,7 @@ use crate::{OrchestratorError, internal::internal};
 use super::{GitHubApi, JSON_LIMIT, ReleaseAssetResponse, ReleaseResponse, graphql_arguments};
 
 impl GitHubApi {
-    pub(in crate::package_release_publish) fn complete_release_assets(
+    pub(in crate::release::package_release_publish) fn complete_release_assets(
         &self,
         release_id: u64,
     ) -> Result<Vec<ReleaseAssetResponse>, OrchestratorError> {
@@ -51,7 +51,7 @@ impl GitHubApi {
         Err(internal("published_asset_inventory_pages"))
     }
 
-    pub(in crate::package_release_publish) fn release_by_tag(
+    pub(in crate::release::package_release_publish) fn release_by_tag(
         &self,
         tag: &str,
     ) -> Result<Option<ReleaseResponse>, OrchestratorError> {
@@ -103,7 +103,7 @@ impl GitHubApi {
         Ok(response)
     }
 
-    pub(in crate::package_release_publish) fn graphql_bytes(
+    pub(in crate::release::package_release_publish) fn graphql_bytes(
         &self,
         query: &str,
         fields: &[(&str, String)],

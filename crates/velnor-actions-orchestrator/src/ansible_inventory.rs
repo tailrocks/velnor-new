@@ -15,7 +15,7 @@ use velnor_actions_contract::{FileIndex, VelnorConfig, slugify_segment};
 use super::stack_support::{declared_version, read_lock, read_text};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::generator::sha256_hex;
+use crate::planner::generator::sha256_hex;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 
 pub(crate) const CFG_NAME: &str = "ansible.cfg";

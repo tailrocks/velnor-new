@@ -10,10 +10,10 @@ use flate2::write::GzEncoder;
 use tar::{Builder, EntryType, Header};
 
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::{
+use crate::internal::internal;
+use crate::planner::check_runtime::preparation::acquisition::archive::{
     ArchiveBudget, MAX_ARCHIVE_BYTES, MAX_ENTRIES, MAX_ENTRY_BYTES,
 };
-use crate::internal::internal;
 
 use super::io_error;
 

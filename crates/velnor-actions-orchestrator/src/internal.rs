@@ -23,22 +23,23 @@ use velnor_actions_mise::ToolCatalog;
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
 use crate::decisions::dedupe_sorted;
-use crate::discover::Discovery;
 use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
 use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
+use crate::planner::discover::Discovery;
+use crate::planner::select;
 
 pub use self::plan_response::validate_plan_response;
-use crate::prepare::{prepare_for_controller, prepare_for_controller_with_phase_timings};
-use crate::select::{ChangeEvidence, classify_changed, select_universe};
-use crate::select_edges::plan_task_graph;
+use crate::planner::prepare::{prepare_for_controller, prepare_for_controller_with_phase_timings};
+use crate::planner::select_edges::plan_task_graph;
+use select::{ChangeEvidence, classify_changed, select_universe};
 
 pub use crate::internal_request::{
     merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
     write_request_parts,
 };
-pub use crate::plan_output_limits::{
+pub use crate::planner::plan_output_limits::{
     PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
 };
 
@@ -82,7 +83,7 @@ fn plan_internal_inner(
         named_lanes::resolve_routes(&prep, request.lane_inventory.as_ref(), &named_check_lanes)?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
-    warnings.extend(crate::evidence::workspace_drift_warnings(
+    warnings.extend(crate::planner::evidence::workspace_drift_warnings(
         &prep.root,
         &prep.discovery.workspaces,
         &prep.runner_label,
@@ -113,7 +114,7 @@ fn plan_internal_inner(
         warnings,
         timings.as_deref_mut(),
     )?;
-    plan.jobs.extend(crate::select::images::dispositions(
+    plan.jobs.extend(select::images::dispositions(
         &prep.root,
         &prep.config.images,
         &prep.discovery,
@@ -122,9 +123,9 @@ fn plan_internal_inner(
         &evidence,
     ));
     for dispositions in [
-        crate::select::ansible::dispositions,
-        crate::select::bun::dispositions,
-        crate::select::dbt::dispositions,
+        select::ansible::dispositions,
+        select::bun::dispositions,
+        select::dbt::dispositions,
     ] {
         plan.jobs.extend(dispositions(
             &prep.config,
@@ -240,9 +241,9 @@ fn build_plan(
         reason = "the original Option must remain available after this call"
     )]
     let mut generator = default_generator_with_phase_timings(timings.as_deref_mut());
-    crate::selected_preview_identity::bind_ambient(&mut generator)?;
+    crate::release::selected_preview_identity::bind_ambient(&mut generator)?;
     let snapshot = ExecutionSnapshot::build(discovery);
-    let job_owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals)?;
+    let job_owners = crate::planner::crate_job_ids::JobOwners::new(&discovery.proposals)?;
     let mut reads = velnor_actions_tofu::FileCache::new();
     for task in universe {
         let wire = GroupWire {
@@ -276,8 +277,8 @@ fn build_plan(
     obligations.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     entries.sort_by(|left, right| left.id.cmp(&right.id));
     let edges = finish_task_graph(universe, &lanes, &digests, &mut task_ids)?;
-    let needs = crate::plan_dispositions::job_needs(universe, &job_owners)?;
-    let jobs = crate::plan_dispositions::finalize_dispositions(
+    let needs = crate::planner::plan_dispositions::job_needs(universe, &job_owners)?;
+    let jobs = crate::planner::plan_dispositions::finalize_dispositions(
         &mut obligations,
         &mut entries,
         &needs,

@@ -30,6 +30,8 @@ impl JobTimeout {
 
     pub const RELEASE: Self = Self::DEFAULT;
 
+    pub const CRATE_RELEASE: Self = Self(30);
+
     pub const MSRV: Self = Self::DEFAULT;
 
     pub const PUBLISH: Self = Self::DEFAULT;

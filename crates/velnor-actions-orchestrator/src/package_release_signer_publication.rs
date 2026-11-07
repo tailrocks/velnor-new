@@ -74,8 +74,8 @@ pub(super) fn hold_signed_directory_for_publication<T>(
     custody_deadline: velnor_actions_mise::CheckDeadline,
     verify: impl FnOnce() -> Result<T, OrchestratorError>,
 ) -> Result<(T, crate::filesystem_owner::held_directory::HeldDirectory), OrchestratorError> {
-    crate::package_release_publish::budget::with_default_scope(|_| {
-        crate::package_release_publish::budget::hold_signed_directory(
+    crate::release::package_release_publish::budget::with_default_scope(|_| {
+        crate::release::package_release_publish::budget::hold_signed_directory(
             directory,
             custody_deadline,
             verify,
@@ -88,7 +88,7 @@ pub(crate) fn hold_owned_signed_directory_for_publication<T>(
     custody_deadline: velnor_actions_mise::CheckDeadline,
     verify: impl FnOnce() -> Result<T, OrchestratorError>,
 ) -> Result<(T, crate::filesystem_owner::held_directory::HeldDirectory), OrchestratorError> {
-    crate::package_release_publish::budget::with_default_scope(|_| {
+    crate::release::package_release_publish::budget::with_default_scope(|_| {
         crate::filesystem_owner::held_directory::HeldDirectory::admit_owned(
             owner,
             custody_deadline,

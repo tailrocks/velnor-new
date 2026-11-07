@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use super::{absolute_env, static_tap_policy};
 use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
@@ -11,6 +10,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy, canonical_json_bytes, config::HomebrewTapConfig,
     package_release::PackageReleaseReceipt,
@@ -55,8 +55,9 @@ pub fn admit_homebrew_tap_from_env() -> Result<String, OrchestratorError> {
                 return Err(internal("tap_admission_read_token_missing"));
             }
             let root = absolute_env("RUNNER_TEMP", "tap_runner_temp")?.join("velnor");
-            let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
-            crate::package_release_publish::verify_published_release(&signed)?;
+            let signed =
+                crate::release::package_release_signer::verify_attested_signed_package_from_env()?;
+            crate::release::package_release_publish::verify_published_release(&signed)?;
             let release_policy = release_policy_request()?;
             release_policy
                 .validate_plan(signed.plan())

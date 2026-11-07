@@ -50,7 +50,7 @@ impl PreparedInstall {
 pub(super) fn make_request(
     spec: &HomebrewFormulaSpec,
     plan: &velnor_actions_contract::PackageReleasePlan,
-    release: &crate::package_release_public::VerifiedPublicPackageRelease,
+    release: &super::handoff::AdmittedLocalRelease,
     record: &super::HistoricalRecord,
     root: &Path,
 ) -> Result<PreparedInstall, OrchestratorError> {
@@ -121,13 +121,13 @@ fn selected_payload_hashes(
 }
 
 fn extract_expected_members(
-    release: &crate::package_release_public::VerifiedPublicPackageRelease,
+    release: &super::handoff::AdmittedLocalRelease,
     grouped: BTreeMap<String, BTreeSet<String>>,
 ) -> Result<BTreeMap<(String, String), Vec<u8>>, OrchestratorError> {
     let mut extracted = BTreeMap::new();
     for (asset, members) in grouped {
         let bytes = release.asset_bytes(&asset)?;
-        for (member, contents) in crate::package_release_artifacts::extract_tar_gz_members(
+        for (member, contents) in crate::release::package_release_artifacts::extract_tar_gz_members(
             &bytes,
             &members,
             Instant::now(),

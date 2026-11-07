@@ -83,7 +83,7 @@ pub(super) fn authenticate(
         .filter(|number| *number > 0)
         .ok_or_else(|| internal("homebrew_authority_pull_request_missing"))?;
     let runner = capture_runner(event, number, repository)?;
-    let pull = crate::package_release_publish::read_public_pull_request(
+    let pull = crate::release::package_release_publish::read_public_pull_request(
         repository,
         repository_id,
         number,
@@ -98,7 +98,7 @@ pub(super) fn authenticate(
         checkout_head,
         &runner,
     )?;
-    crate::package_release_publish::verify_public_pull_request_lineage(
+    crate::release::package_release_publish::verify_public_pull_request_lineage(
         repository,
         repository_id,
         "main",
@@ -165,7 +165,7 @@ pub(super) fn recheck(
     {
         return Err(internal("homebrew_authority_pull_request_runner_changed"));
     }
-    let pull = crate::package_release_publish::read_public_pull_request(
+    let pull = crate::release::package_release_publish::read_public_pull_request(
         repository,
         repository_id,
         selection.number,
@@ -188,7 +188,7 @@ pub(super) fn recheck(
     ) {
         return Err(internal("homebrew_authority_pull_request_changed"));
     }
-    crate::package_release_publish::verify_public_pull_request_lineage(
+    crate::release::package_release_publish::verify_public_pull_request_lineage(
         repository,
         repository_id,
         "main",
@@ -208,7 +208,7 @@ pub(super) fn recheck(
 }
 
 fn admit_snapshot(
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     event: WorkflowEvent,
     repository: &str,
     repository_id: u64,
@@ -355,7 +355,7 @@ fn parse_runner(
 
 pub(in crate::homebrew::authority) fn verify_checkout(
     root: &Path,
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     base_sha: &str,
     head_sha: &str,
     checkout_head: &str,

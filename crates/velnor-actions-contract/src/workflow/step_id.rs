@@ -8,6 +8,12 @@ pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepId {
+    ReleaseAdmission,
+    ReleaseVerification,
+    ReleaseRustUpload,
+    ReleaseReceiptUpload,
+    ReleasePrCandidate,
+    ReleasePrArtifact,
     Plan,
 
     BuildTaskRun,
@@ -71,6 +77,12 @@ impl StepId {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ReleaseAdmission => "release-admission",
+            Self::ReleaseVerification => "release-verification",
+            Self::ReleaseRustUpload => "release-rust-upload",
+            Self::ReleaseReceiptUpload => "release-receipt-upload",
+            Self::ReleasePrCandidate => "release-pr-candidate",
+            Self::ReleasePrArtifact => "release-pr-artifact",
             Self::Plan => "plan",
             Self::BuildTaskRun => "build-task-run",
             Self::ToolsCacheIdentity => "v2",

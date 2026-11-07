@@ -100,7 +100,7 @@ fn verify_bundle_with_inventory(
         let mut file = File::open(&path).map_err(|_| internal("github_evidence_archive_read"))?;
         check_deadline(deadline)?;
         let unpacked_result =
-            crate::package_release_publish::artifact_zip::validate_evidence_archive(
+            crate::release::package_release_publish::artifact_zip::validate_evidence_archive(
                 &mut file, deadline,
             );
         check_deadline(deadline)?;

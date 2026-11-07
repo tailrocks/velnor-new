@@ -10,7 +10,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    OrchestratorError, internal::internal, package_release_signer::VerifiedAttestedSignedPackage,
+    OrchestratorError, internal::internal,
+    release::package_release_signer::VerifiedAttestedSignedPackage,
 };
 
 const PUBLIC_VERIFY_BUDGET: Duration = Duration::from_mins(5);
@@ -28,17 +29,17 @@ pub(crate) struct HistoricalPackageReleaseAdmission {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct HistoricalPackageReleaseRecovery {
-    pub(super) original_publisher_job_id: u64,
-    pub(super) run_id: u64,
-    pub(super) run_attempt: u32,
-    pub(super) authority_sha: String,
-    pub(super) recovery_job_id: u64,
-    pub(super) artifact_id: u64,
-    pub(super) artifact_name: String,
-    pub(super) admission_size: u64,
-    pub(super) admission_sha256: String,
-    pub(super) policy_sha256: String,
-    pub(super) admission_bytes: Vec<u8>,
+    pub(crate) original_publisher_job_id: u64,
+    pub(crate) run_id: u64,
+    pub(crate) run_attempt: u32,
+    pub(crate) authority_sha: String,
+    pub(crate) recovery_job_id: u64,
+    pub(crate) artifact_id: u64,
+    pub(crate) artifact_name: String,
+    pub(crate) admission_size: u64,
+    pub(crate) admission_sha256: String,
+    pub(crate) policy_sha256: String,
+    pub(crate) admission_bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

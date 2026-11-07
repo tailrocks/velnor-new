@@ -17,7 +17,7 @@ fn decode_json_bounded<T: serde::de::DeserializeOwned>(
 }
 
 impl GitHubApi {
-    pub(in crate::package_release_publish) fn verify_repository_identity(
+    pub(in crate::release::package_release_publish) fn verify_repository_identity(
         &self,
         expected_id: u64,
     ) -> Result<(), OrchestratorError> {
@@ -30,7 +30,7 @@ impl GitHubApi {
         Ok(())
     }
 
-    pub(in crate::package_release_publish) fn verify_preview_repository_identity(
+    pub(in crate::release::package_release_publish) fn verify_preview_repository_identity(
         &self,
         expected_id: u64,
         expected_default_branch: &str,
@@ -51,14 +51,14 @@ impl GitHubApi {
         self.get_json(&format!("repos/{}", self.repository))
     }
 
-    pub(in crate::package_release_publish) fn get_json<T: serde::de::DeserializeOwned>(
+    pub(in crate::release::package_release_publish) fn get_json<T: serde::de::DeserializeOwned>(
         &self,
         route: &str,
     ) -> Result<T, OrchestratorError> {
         self.get_json_bounded(route, JSON_LIMIT)
     }
 
-    pub(in crate::package_release_publish) fn get_json_bytes(
+    pub(in crate::release::package_release_publish) fn get_json_bytes(
         &self,
         route: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
@@ -67,7 +67,9 @@ impl GitHubApi {
         Ok(bytes)
     }
 
-    pub(in crate::package_release_publish) fn get_json_bounded<T: serde::de::DeserializeOwned>(
+    pub(in crate::release::package_release_publish) fn get_json_bounded<
+        T: serde::de::DeserializeOwned,
+    >(
         &self,
         route: &str,
         limit: usize,

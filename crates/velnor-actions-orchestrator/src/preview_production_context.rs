@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use crate::{OrchestratorError, internal::internal};
 use serde::Deserialize;
 use std::{collections::BTreeMap, env, path::Path};
+use velnor_actions_contract::staged_reads::read_staged_bytes_until;
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy,
     preview_identity::PreviewIdentity,
@@ -85,7 +85,7 @@ pub(super) fn derive_context(
     deadline: CheckDeadline,
 ) -> Result<ReleaseProductionContext, OrchestratorError> {
     let context = workflow_context(plan, deadline)?;
-    let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
+    let identity = crate::release::release_task_identity::ReleaseTaskIdentity::derive(
         plan,
         &context.source_sha,
         context.commit_count,

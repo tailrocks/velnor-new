@@ -6,6 +6,10 @@ use std::{error::Error, fs};
 
 #[test]
 fn rejects_untrusted_commit_snapshots_before_registry_mutation() -> Result<(), Box<dyn Error>> {
+    let scenario = "source_snapshot::rejects_untrusted_commit_snapshots_before_registry_mutation";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for (fault, expected) in [
         ("tree_truncated", "image_publication_source_tree"),
         ("tree_missing", "image_publication_source_inventory"),
@@ -47,5 +51,6 @@ fn rejects_untrusted_commit_snapshots_before_registry_mutation() -> Result<(), B
         assert_eq!(fs::read(&fixture.archive)?, archive_before);
         assert_eq!(fs::read(&fixture.record)?, record_before);
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }

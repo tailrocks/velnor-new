@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::reverse_closure;
 
-use crate::discover::Discovery;
-use crate::select_symlinks::ResolvedLink;
+use crate::planner::discover::Discovery;
+use crate::planner::select_symlinks::ResolvedLink;
 
 const UPWARD_CONFIG_BASENAMES: &[&str] = &[
     "clippy.toml",

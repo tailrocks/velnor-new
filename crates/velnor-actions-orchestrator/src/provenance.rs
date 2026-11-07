@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::prepare::GenerationPreparation;
+use crate::planner::prepare::GenerationPreparation;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvidenceProvenance {

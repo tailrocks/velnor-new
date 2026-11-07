@@ -7,7 +7,7 @@ use crate::{OrchestratorError, internal::internal};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
-pub(in crate::package_release_publish) struct CurrentRun<'a> {
+pub(in crate::release::package_release_publish) struct CurrentRun<'a> {
     pub id: u64,
     pub attempt: u32,
     pub source: RunSource<'a>,
@@ -32,7 +32,7 @@ struct ActiveJob {
 }
 
 impl GitHubApi {
-    pub(in crate::package_release_publish) fn verify_current_role(
+    pub(in crate::release::package_release_publish) fn verify_current_role(
         &self,
         identity: &CurrentRun<'_>,
         name: &str,
@@ -59,7 +59,7 @@ impl GitHubApi {
         self.require_active_job(identity, name)
     }
 
-    pub(in crate::package_release_publish) fn require_active_job(
+    pub(in crate::release::package_release_publish) fn require_active_job(
         &self,
         identity: &CurrentRun<'_>,
         name: &str,

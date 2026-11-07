@@ -15,7 +15,7 @@ pub(super) fn protected_locator(
     tap_base_sha: &str,
     deadline: CheckDeadline,
 ) -> Result<Option<Vec<u8>>, OrchestratorError> {
-    crate::package_release_publish::try_read_protected_source_file(
+    crate::release::package_release_publish::try_read_protected_source_file(
         expected_tap_repository,
         tap_repository_id,
         "main",
@@ -32,7 +32,7 @@ fn read_source(
     path: &str,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    crate::package_release_publish::read_protected_source_file(
+    crate::release::package_release_publish::read_protected_source_file(
         &locator.repository,
         locator.repository_id,
         &locator.default_branch,
@@ -154,20 +154,21 @@ pub(super) fn load_source_projection(
     expected_tap_repository: &str,
     deadline: CheckDeadline,
 ) -> Result<SourceProjection, OrchestratorError> {
-    let source_tip = crate::package_release_publish::read_public_branch_tip(
+    let source_tip = crate::release::package_release_publish::read_public_branch_tip(
         &locator.repository,
         locator.repository_id,
         &locator.default_branch,
         deadline,
     )?;
-    let verified_source_tip = crate::package_release_publish::verify_public_protected_main_lineage(
-        &locator.repository,
-        locator.repository_id,
-        &locator.default_branch,
-        &source_tip,
-        &source_tip,
-        deadline,
-    )?;
+    let verified_source_tip =
+        crate::release::package_release_publish::verify_public_protected_main_lineage(
+            &locator.repository,
+            locator.repository_id,
+            &locator.default_branch,
+            &source_tip,
+            &source_tip,
+            deadline,
+        )?;
     if verified_source_tip != source_tip {
         return Err(internal("homebrew_authority_source_tip_mismatch"));
     }
@@ -194,14 +195,15 @@ pub(super) fn load_source_projection(
         &plan,
     )?;
 
-    let final_source_tip = crate::package_release_publish::verify_public_protected_main_lineage(
-        &locator.repository,
-        locator.repository_id,
-        &locator.default_branch,
-        &source_tip,
-        &source_tip,
-        deadline,
-    )?;
+    let final_source_tip =
+        crate::release::package_release_publish::verify_public_protected_main_lineage(
+            &locator.repository,
+            locator.repository_id,
+            &locator.default_branch,
+            &source_tip,
+            &source_tip,
+            deadline,
+        )?;
     if final_source_tip != source_tip {
         return Err(internal("homebrew_authority_source_tip_changed"));
     }

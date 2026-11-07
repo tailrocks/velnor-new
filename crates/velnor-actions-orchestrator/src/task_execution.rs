@@ -236,7 +236,6 @@ pub(crate) fn resolve_project_tool_refs(
     }))
 }
 
-
 fn read_manifest(
     root: &Path,
     expected_generator_version: &str,
@@ -291,7 +290,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn project_tool_refs_resolve_non_rust_pins_and_reject_missing_or_invalid_versions() -> Result<(), Box<dyn std::error::Error>> {
+    fn project_tool_refs_resolve_non_rust_pins_and_reject_missing_or_invalid_versions()
+    -> Result<(), Box<dyn std::error::Error>> {
         let versions = BTreeMap::from([
             ("VELNOR_TOOL_JAVA", "21.0.1"),
             ("VELNOR_TOOL_DBT_FUSION", "2.0.9"),
@@ -306,7 +306,9 @@ mod tests {
         ];
         let resolved = argv
             .iter()
-            .map(|arg| resolve_project_tool_refs(arg, |name| versions.get(name).map(ToString::to_string)))
+            .map(|arg| {
+                resolve_project_tool_refs(arg, |name| versions.get(name).map(ToString::to_string))
+            })
             .collect::<Result<Vec<_>, _>>()?;
         assert_eq!(
             resolved,
@@ -319,10 +321,12 @@ mod tests {
         );
         for name in versions.keys() {
             assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| None).is_err());
-            assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| {
-                Some("not-an-exact-version".to_owned())
-            })
-            .is_err());
+            assert!(
+                resolve_project_tool_refs(&format!("${{{name}}}"), |_| {
+                    Some("not-an-exact-version".to_owned())
+                })
+                .is_err()
+            );
         }
         Ok(())
     }

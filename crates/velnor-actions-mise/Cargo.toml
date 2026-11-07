@@ -30,3 +30,12 @@ toml = { version = "=1.1.8" }
 
 [dev-dependencies]
 velnor-actions-tofu = { version = "=0.1.78", path = "../velnor-actions-tofu" }
+tempfile = { version = "=3.27.0" }
+
+[features]
+release-git-rehearsal = []
+
+[[test]]
+name = "release_git_rehearsal"
+path = "tests/release_git_rehearsal.rs"
+required-features = ["release-git-rehearsal"]

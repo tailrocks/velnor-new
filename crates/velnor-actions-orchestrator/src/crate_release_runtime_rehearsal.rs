@@ -1,0 +1,258 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::error::Error;
+use std::io::Write as _;
+use std::os::unix::fs::PermissionsExt as _;
+use std::path::Path;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
+
+const CANDIDATE_CASE: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::generated_candidate_receipt_rejects_unprotected_environment"
+));
+const SOURCE_CASE: &str = crate::libtest_case::name(concat!(
+    module_path!(),
+    "::generated_source_require_rehearsal"
+));
+
+#[test]
+fn qualified_runtime_rejects_missing_git_without_fallback() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_MISSING_GIT_CHILD").is_some() {
+        assert!(
+            matches!(super::run_qualified_crate_release("source-require"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "release_git_bundle_invalid")
+        );
+        return Ok(());
+    }
+    let temp = tempfile::tempdir()?;
+    let output = std::process::Command::new(std::env::current_exe()?)
+        .arg("--exact")
+        .arg(crate::libtest_case::name(concat!(
+            module_path!(),
+            "::qualified_runtime_rejects_missing_git_without_fallback"
+        )))
+        .env("VELNOR_MISSING_GIT_CHILD", "1")
+        .env("RUNNER_TEMP", temp.path())
+        .env("GITHUB_WORKSPACE", temp.path())
+        .output()?;
+    assert!(output.status.success());
+    crate::libtest_case::assert_one_passed(&output);
+    Ok(())
+}
+
+#[test]
+fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_SOURCE_CHILD").is_some() {
+        assert_eq!(
+            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
+            "crate-release source-require"
+        );
+        return super::run_qualified_with_fixture_git("source-require").map_err(Into::into);
+    }
+    for event in ["push", "workflow_dispatch"] {
+        rehearse_source_require(event, false)?;
+        rehearse_source_require(event, true)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
+    if let Some(temp) = std::env::var_os("VELNOR_NATIVE_ACQUIRE_GIT") {
+        let root = std::path::PathBuf::from(temp);
+        let git = crate::release::crate_release_git_bundle::acquire(
+            &root,
+            velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))?,
+        )?;
+        assert_eq!(git.exec_path(), root.join("velnor/git-bundle"));
+        return Ok(());
+    }
+    if std::env::var_os("VELNOR_NATIVE_RECEIPT_CHILD").is_some() {
+        let operation = std::env::var("VELNOR_NATIVE_OPERATION")?;
+        assert!(matches!(
+            operation.as_str(),
+            "candidate-receipt" | "verify-admission" | "journal-start" | "journal-coordinate"
+        ));
+        assert_eq!(
+            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
+            format!("crate-release {operation}")
+        );
+        assert!(matches!(super::run_crate_release(&operation),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
+        if operation == "journal-coordinate"
+            && std::env::var_os("VELNOR_NATIVE_NO_TOKEN_ON_RETRY").is_some()
+            && std::env::var_os("VELNOR_NATIVE_PID_FILE")
+                .is_some_and(|path| Path::new(&path).exists())
+        {
+            assert!(std::env::var_os("ACTIONS_ID_TOKEN_REQUEST_TOKEN").is_none());
+            assert!(std::env::var_os("ACTIONS_ID_TOKEN_REQUEST_URL").is_none());
+        }
+        if operation == "journal-coordinate"
+            && let Some(path) = std::env::var_os("VELNOR_NATIVE_PID_FILE")
+        {
+            std::fs::write(path, std::process::id().to_string())?;
+        }
+        return super::run_qualified_crate_release(&operation).map_err(Into::into);
+    }
+    if std::env::var_os("VELNOR_CANDIDATE_CHILD").is_some() {
+        assert_eq!(
+            std::env::var("VELNOR_TEST_COMMAND_ARGS")?,
+            "crate-release candidate-receipt"
+        );
+        assert!(matches!(super::run_crate_release("candidate-receipt"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_authority_not_qualified"));
+        assert!(
+            matches!(super::run_qualified_with_fixture_git("candidate-receipt"),
+            Err(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_environment_bypass")
+        );
+        return Ok(());
+    }
+    rehearse_candidate_denial()?;
+    if std::env::var_os("VELNOR_TEST_NATIVE_REHEARSAL").is_some() {
+        let publisher = generated_script("release-publish", "Release journal-coordinate")?;
+        assert!(publisher.contains("crate-release journal-coordinate"));
+        rehearse_supplied_candidate()?;
+    }
+    Ok(())
+}
+
+fn prepare_supplied_runner() -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let root = std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").ok_or("runner temp")?);
+    let bin = root.join("velnor/bin");
+    std::fs::create_dir_all(&bin)?;
+    let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
+    std::fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nexport VELNOR_TEST_COMMAND_ARGS=\"$*\"\nexec \"$VELNOR_TEST_BINARY\" --exact {CANDIDATE_CASE}\n"
+        ),
+    )?;
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    Ok(root)
+}
+
+fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
+    let root = prepare_supplied_runner()?;
+    let output = supplied_step(&root, "release-preflight", "candidate-receipt")?;
+    let receipt = root.join("velnor-crate-release-receipt.json");
+    if std::env::var("VELNOR_NATIVE_EXPECT_SUCCESS")? != "1" {
+        assert!(!output.status.success());
+        let actual = String::from_utf8_lossy(&output.stdout).to_string()
+            + &String::from_utf8_lossy(&output.stderr);
+        assert!(
+            actual.contains(&std::env::var("VELNOR_NATIVE_EXPECT_ERROR")?),
+            "{actual}"
+        );
+        assert!(!receipt.exists());
+        return Ok(());
+    }
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: crate::crate_release_controller::CrateReleaseAdmissionReceipt =
+        serde_json::from_slice(&std::fs::read(receipt)?)?;
+    assert_eq!(
+        receipt.github.request.workflow_sha,
+        std::env::var("GITHUB_SHA")?
+    );
+    assert_eq!(
+        receipt.github.request.source_sha,
+        std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
+    );
+    let multi = std::env::var_os("VELNOR_NATIVE_MULTI").is_some();
+    if multi {
+        assert_eq!(receipt.packages.len(), 58);
+    } else {
+        assert_eq!(receipt.packages.len(), 1);
+        assert_eq!(
+            receipt.packages[0].source.name,
+            std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
+        );
+        assert_eq!(
+            receipt.packages[0].source.version,
+            std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
+        );
+        if std::env::var_os("VELNOR_NATIVE_NEW_RUN_PHASE2").is_some() {
+            let intent = velnor_actions_contract::canonical_json_bytes(&receipt.intent)?;
+            let expected_intent_sha = crate::planner::generator::sha256_hex(&intent);
+            assert!(
+                matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+                Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { package, version, source_sha, intent_sha256, target_checksum })
+                if package == &std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
+                && version == &std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
+                && source_sha == &std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
+                && intent_sha256 == &expected_intent_sha
+                && target_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_TARGET_CHECKSUM")?)
+            );
+        } else {
+            assert!(
+                matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+        Some(crate::release::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
+        if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
+        && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
+        && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04").ok_or("checker")?.executable_sha256)
+            );
+        }
+    }
+    if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
+        rehearse_journal_start(&root)?;
+        if std::env::var_os("VELNOR_NATIVE_COORDINATE").is_some() {
+            rehearse_journal_coordinate(&root)?;
+        }
+    }
+    Ok(())
+}
+
+fn verify_supplied_admission(root: &Path) -> Result<bool, Box<dyn Error>> {
+    if std::env::var_os("VELNOR_NATIVE_MUTATE_AFTER_RECEIPT").is_some() {
+        let workspace =
+            std::path::PathBuf::from(std::env::var_os("GITHUB_WORKSPACE").ok_or("workspace")?);
+        std::fs::write(
+            workspace.join("release-source/src/lib.rs"),
+            b"pub fn changed() {}\n",
+        )?;
+    }
+    let output_path = root.join("github-output");
+    std::fs::write(&output_path, "")?;
+    let output = supplied_step(root, "release-publish", "verify-admission")?;
+    let actual = String::from_utf8_lossy(&output.stdout).to_string()
+        + &String::from_utf8_lossy(&output.stderr);
+    let expected_error = std::env::var("VELNOR_NATIVE_VERIFY_ERROR")?;
+    if expected_error.is_empty() {
+        assert!(output.status.success(), "{actual}");
+        assert_eq!(
+            std::fs::read_to_string(output_path)?,
+            if std::env::var_os("VELNOR_NATIVE_MULTI").is_some() {
+                "release_mode=none\n"
+            } else if std::env::var_os("VELNOR_NATIVE_NEW_RUN_PHASE2").is_some() {
+                "release_mode=repair\n"
+            } else {
+                "release_mode=publish\n"
+            }
+        );
+    } else {
+        assert!(!output.status.success());
+        assert!(actual.contains(&expected_error), "{actual}");
+        assert_eq!(std::fs::read_to_string(output_path)?, "");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+#[path = "crate_release_runtime_rehearsal_cases.rs"]
+mod cases;
+use cases::*;
+
+#[path = "crate_release_runtime_rehearsal/crate_release_runtime_rehearsal_support.rs"]
+mod support;
+use support::{
+    committed_intent, generated_script, serve_admission, source_require_script, supplied_step,
+};

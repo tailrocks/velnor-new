@@ -9,7 +9,7 @@ use velnor_actions_contract::{QualificationDispatch, WorkflowEvent, parse_strict
 
 use crate::OrchestratorError;
 use crate::internal::{check_schema, internal};
-use crate::prepare::prepare_for_controller;
+use crate::planner::prepare::prepare_for_controller;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -82,7 +82,7 @@ fn validate_runner_request(
         &event_name,
         &value,
         velnor_actions_contract::request_event::QualificationRunnerContext {
-            repository: env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+            repository: env::var(crate::planner::origin::GITHUB_REPOSITORY_ENV)
                 .ok()
                 .as_deref(),
             git_ref: env::var("GITHUB_REF").ok().as_deref(),

@@ -24,7 +24,7 @@ pub(super) fn author(
     if !manifest_path.is_absolute() {
         return Err(internal("homebrew_adoption_sdk_manifest_path"));
     }
-    let root = crate::root::resolve_root(
+    let root = crate::planner::root::resolve_root(
         &std::env::current_dir().map_err(|_| internal("homebrew_adoption_current_directory"))?,
     )?;
     let (parent, target) = output::fresh_output_path(output_dir, &root)?;
@@ -52,7 +52,7 @@ fn protected_base_tip(
     transition: &HomebrewAdoptionTransition,
     deadline: CheckDeadline,
 ) -> Result<String, OrchestratorError> {
-    let base_sha = crate::package_release_publish::read_public_branch_tip(
+    let base_sha = crate::release::package_release_publish::read_public_branch_tip(
         &transition.tap_repository,
         transition.tap_repository_id,
         "main",
@@ -71,16 +71,17 @@ fn read_seed_base(
 ) -> Result<VerifiedBaseInventory, OrchestratorError> {
     let symlink_sha =
         crate::release_policy_admission::git_blob_sha1(transition.claude_source_path.as_bytes())?;
-    let tree = crate::package_release_publish::read_protected_adoption_seed_base_tree_identity(
-        &transition.tap_repository,
-        transition.tap_repository_id,
-        base_sha,
-        "CLAUDE.md",
-        &symlink_sha,
-        deadline,
-    )?;
+    let tree =
+        crate::release::package_release_publish::read_protected_adoption_seed_base_tree_identity(
+            &transition.tap_repository,
+            transition.tap_repository_id,
+            base_sha,
+            "CLAUDE.md",
+            &symlink_sha,
+            deadline,
+        )?;
     let inventory = verified_base_inventory(transition, &tree)?;
-    let claude = crate::package_release_publish::read_protected_source_file(
+    let claude = crate::release::package_release_publish::read_protected_source_file(
         &transition.tap_repository,
         transition.tap_repository_id,
         "main",
@@ -107,7 +108,7 @@ fn ensure_locator_absent(
     let locator_path =
         velnor_actions_contract::homebrew_authority::HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH;
     if inventory.contains_key(locator_path)
-        || crate::package_release_publish::try_read_protected_source_file(
+        || crate::release::package_release_publish::try_read_protected_source_file(
             &transition.tap_repository,
             transition.tap_repository_id,
             "main",
@@ -139,7 +140,7 @@ fn render_seed_files(
             manifest_sha256: &sdk.manifest_sha256,
             host_target_sha256: &sdk.seed_runner_binary_sha256,
         },
-        &crate::product_release_pins::homebrew_adoption_pins()?,
+        &crate::release::product_release_pins::homebrew_adoption_pins()?,
     )
     .map_err(|_| internal("homebrew_adoption_seed_render_invalid"))?;
     let mut files = rendered
@@ -173,7 +174,7 @@ fn ensure_base_tip(
     base_sha: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let final_tip = crate::package_release_publish::read_public_branch_tip(
+    let final_tip = crate::release::package_release_publish::read_public_branch_tip(
         &transition.tap_repository,
         transition.tap_repository_id,
         "main",
@@ -236,7 +237,7 @@ pub(super) fn authenticate_sdk(
 
 fn verified_base_inventory(
     transition: &HomebrewAdoptionTransition,
-    tree: &crate::package_release_publish::ProtectedSourceTreeIdentity,
+    tree: &crate::release::package_release_publish::ProtectedSourceTreeIdentity,
 ) -> Result<VerifiedBaseInventory, OrchestratorError> {
     let symlink_sha =
         crate::release_policy_admission::git_blob_sha1(transition.claude_source_path.as_bytes())?;

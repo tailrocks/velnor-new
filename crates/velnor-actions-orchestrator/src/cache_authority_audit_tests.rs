@@ -84,3 +84,44 @@ fn a_writer_job_cannot_enable_mise_config() -> Result<(), Box<dyn Error>> {
     }
     Ok(())
 }
+
+#[test]
+fn anchored_writer_environment_keeps_isolation_mandatory() -> Result<(), Box<dyn Error>> {
+    let mut safe = committed()?;
+    safe[0].bytes = safe[0]
+        .bytes
+        .replacen("\nenv:\n", "\nenv: &writer_env\n", 1);
+    let writer = safe[0]
+        .bytes
+        .find("\n  sources-producer:\n")
+        .ok_or("writer missing")?;
+    let start = writer
+        + safe[0].bytes[writer..]
+            .find("\n    env:\n")
+            .ok_or("writer env missing")?;
+    let values = start + "\n    env:\n".len();
+    let length: usize = safe[0].bytes[values..]
+        .split_inclusive('\n')
+        .take_while(|line| line.starts_with("      "))
+        .map(str::len)
+        .sum();
+    safe[0]
+        .bytes
+        .replace_range(start..values + length, "\n    env: *writer_env\n");
+    audit(&safe)?;
+    for (from, to) in [
+        ("MISE_NO_CONFIG: \"1\"", "MISE_NO_CONFIG: \"0\""),
+        ("env: &writer_env", "env: *missing_writer_env"),
+        ("    env:\n", "    env: &writer_env\n"),
+        ("MISE_NO_CONFIG: \"1\"", "MISE_NO_CONFIG: 1"),
+        (
+            "MISE_NO_CONFIG: \"1\"",
+            "MISE_NO_CONFIG: \"1\"\n  MISE_NO_CONFIG: \"0\"",
+        ),
+    ] {
+        let mut files = safe.clone();
+        files[0].bytes = files[0].bytes.replacen(from, to, 1);
+        assert!(audit(&files).is_err(), "accepted {to}");
+    }
+    Ok(())
+}

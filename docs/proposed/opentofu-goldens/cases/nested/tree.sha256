@@ -12,6 +12,6 @@
 - 39f02a432b6092e8eeb37a2a17e0405868291fc0cb6ca5843d36d0f0ec90e7a4  ./.github/jactionlint.yaml
 - 289ca5d4e368c416e2cd308a1df05b949cd3690b2db0cc608e02579498ae68e8  ./.github/scripts/velnor-tools-cache-identity.sh
 - f0a05c4efc26de39c62f7814aa2d6862812345c02d55cbecccaffbc975d53226  ./.github/velnor/task-execution-manifest-v1.json
-- 434f4ff8f91d912cfcadc9dfb8aa3dca90d6d8d38f930088bae01c61cb7e6a2a  ./.github/workflows/cache-prune.yml
+- 32406a8befb4d8ffa8644c148de4510ab4398d4306bcbb4c7a4198f48423a4ba  ./.github/workflows/cache-prune.yml
 - 6660d33dab1c95911a93edbfb0129eb23accafa27979fd638a04c6c99d8bb0e6  ./.github/workflows/ci.yml
-- 5f8b058a17ea1034864a7ace9e472efc04e3b90bd4ffdc8ff37ffed6aa5be68a  ./.github/workflows/state-seal.yml
+- e636c4ddd9c9ca7b0405a17514c8ce3253dc2c3f3569e44e7ace01e767edaa37  ./.github/workflows/state-seal.yml

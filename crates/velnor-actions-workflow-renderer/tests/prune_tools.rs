@@ -50,3 +50,24 @@ fn rendered_workflow_hands_the_head_branch_to_the_script_through_env()
     );
     Ok(())
 }
+
+#[test]
+fn maintenance_jobs_use_linux_without_changing_repository_targets()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::{cache_cleanup, cache_prune};
+    for runner in ["ubuntu-26.04", "macos-15", "windows-2025"] {
+        let prune = cache_prune::render_cache_prune_yml(runner, "main", "CI", "1.0.0")?;
+        let cleanup = cache_cleanup::render_cache_cleanup_yml(runner, "1.0.0")?;
+        let prune = prune.bytes;
+        let cleanup = cleanup.bytes;
+        assert!(prune.contains("runs-on: ubuntu-26.04"));
+        assert!(cleanup.contains("runs-on: ubuntu-26.04"));
+        assert!(prune.contains("GH_REPO: ${{ github.repository }}"));
+        assert!(cleanup.contains("GH_REPO: ${{ github.repository }}"));
+        assert!(prune.contains(TOOLS_PRUNE_PREFIX));
+        assert!(cleanup.contains("refs/pull/${{ github.event.pull_request.number }}/merge"));
+    }
+    assert!(cache_prune::render_cache_prune_yml("bad label", "main", "CI", "1.0.0").is_err());
+    assert!(cache_cleanup::render_cache_cleanup_yml("bad label", "1.0.0").is_err());
+    Ok(())
+}

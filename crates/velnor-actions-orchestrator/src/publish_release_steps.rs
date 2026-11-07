@@ -12,9 +12,9 @@ use velnor_actions_workflow_renderer::release_tree::RELEASE_CONFIG_PATH;
 use velnor_actions_workflow_renderer::{ambient_shell_step, mise_setup_step};
 
 use crate::OrchestratorError;
-use crate::publish_steps::{Inputs, bundle_job, plain, script_step};
-use crate::release_checkouts::{forge_env, policy_checkout};
-use crate::release_steps::{Phase, phase_argv};
+use crate::release::publish_steps::{Inputs, bundle_job, plain, script_step};
+use crate::release::release_checkouts::{forge_env, publish_policy_checkout};
+use crate::release::release_steps::{Phase, phase_argv};
 
 pub(crate) const BRANCH_AUTHORITY_JOB: &str = "publish-branch-authority";
 const TAG_RELEASE_JOB: &str = "rust-tag-release";
@@ -80,7 +80,7 @@ fn tag_release_job(
         inputs.catalog,
     )?;
     let steps = vec![
-        plain(policy_checkout(true)?),
+        plain(publish_policy_checkout()?),
         plain(mise_setup_step(inputs.mise)?),
         plain(ambient_shell_step(
             "Create tags and releases",

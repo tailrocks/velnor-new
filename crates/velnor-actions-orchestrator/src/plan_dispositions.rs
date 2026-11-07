@@ -9,8 +9,8 @@ use velnor_actions_contract::{
 };
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::JobOwners;
 use crate::internal::internal_contract;
+use crate::planner::crate_job_ids::JobOwners;
 
 pub(crate) const JOB_RUNS_REASON: &str = "job_runs";
 pub(crate) const NEEDED_REASON: &str = "needed_by_running_job";

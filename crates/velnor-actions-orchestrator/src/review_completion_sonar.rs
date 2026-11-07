@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::super::{feedback::FeedbackRecords, github::TapMergeGitHub};
 use super::time;
+use super::{ProviderApp, ProviderQuery, ProviderRead};
+use crate::github_review_feedback::FeedbackRecords;
 use crate::{OrchestratorError, internal::internal};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -12,12 +13,11 @@ const APP_OWNER: u64 = 545_988;
 const BOT_ID: u64 = 39_514_782;
 const APP: &str = "sonarqubecloud";
 const OWNER: &str = "SonarSource";
-const EDITOR: &str = "query($id:ID!){node(id:$id){... on IssueComment{fullDatabaseId body updatedAt lastEditedAt author{__typename ... on Bot{databaseId}} editor{__typename ... on Bot{databaseId}}}}}";
 const COMMENT_TEMPLATE: &str = "## [![Quality Gate Passed](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/checks/QualityGateBadge/qg-passed-20px.png 'Quality Gate Passed')](https://sonarcloud.io/dashboard?id={project}&pullRequest={number}) **Quality Gate passed**  \nIssues  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 New issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted-16px.png '') [0 Accepted issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=ACCEPTED)\n\nMeasures  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [{coverage}% Coverage on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_coverage&view=list)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed-16px.png '') [{duplication}% Duplication on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_duplicated_lines_density&view=list)  \n  \n<!-- sqra-placement-anchor -->\n[See analysis details on SonarQube Cloud](https://sonarcloud.io/dashboard?id={project}&pullRequest={number})\n\n";
 const CHECK_TEMPLATE: &str = "Issues  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [0 New issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted.svg '') [0 Accepted issues](https://sonarcloud.io/project/issues?id={project}&pullRequest={number}&issueStatuses=ACCEPTED)\n\nMeasures  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [0 Security Hotspots](https://sonarcloud.io/project/security_hotspots?id={project}&pullRequest={number}&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [{coverage}% Coverage on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_coverage&view=list)  \n![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [{duplication}% Duplication on New Code](https://sonarcloud.io/component_measures?id={project}&pullRequest={number}&metric=new_duplicated_lines_density&view=list)  \n  \n[See analysis details on SonarQube Cloud](https://sonarcloud.io/dashboard?id={project}&pullRequest={number})\n\n";
 
 pub(super) fn classify(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     records: &FeedbackRecords,
     summary: &Value,
     head: &str,
@@ -70,7 +70,7 @@ pub(super) fn classify(
 }
 
 fn authenticate(
-    api: &TapMergeGitHub,
+    api: &dyn ProviderRead,
     comment: &Value,
     head: &str,
     location: (&str, u64, u64, Option<u64>),
@@ -78,7 +78,7 @@ fn authenticate(
     if !candidate(comment) {
         return Ok(None);
     }
-    let app: Value = api.get("apps/sonarqubecloud")?;
+    let app: Value = api.provider_app(ProviderApp::Sonar)?;
     if app["id"].as_u64() != Some(APP_ID)
         || app["slug"].as_str() != Some(APP)
         || app["owner"]["id"].as_u64() != Some(APP_OWNER)
@@ -110,12 +110,13 @@ fn authenticate(
     let node_id = comment["node_id"]
         .as_str()
         .ok_or_else(|| internal("review_sonar_node"))?;
-    let editor: Value = api.graphql(EDITOR, &[("id", node_id.to_owned())])?;
+    let editor: Value =
+        api.provider_graphql(ProviderQuery::IssueEditor, &[("id", node_id.to_owned())])?;
     authenticate_editor(comment, &editor)?;
     let body = comment["body"]
         .as_str()
         .ok_or_else(|| internal("review_sonar_body"))?;
-    let checks = super::super::super::observation::check_runs(api, location.0, head)?;
+    let checks = api.provider_check_runs(location.0, head)?;
     let matches = checks
         .iter()
         .filter(|check| {

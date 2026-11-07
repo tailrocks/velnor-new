@@ -14,7 +14,7 @@ pub(super) fn write_execution_receipt(
     item: &DiscoveredCheck,
     outcome: &CheckOutcome,
 ) -> Result<(), OrchestratorError> {
-    let mut execution = crate::check_evidence::gate::execution_receipt(
+    let mut execution = crate::planner::check_evidence::gate::execution_receipt(
         plan,
         entry,
         &item.check.id,

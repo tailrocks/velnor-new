@@ -29,10 +29,13 @@ enum FreshnessChange {
     FailedRun,
     FailedRequired,
 }
-
 #[test]
 fn public_publication_requires_one_successful_required_job_with_complete_identity()
 -> Result<(), Box<dyn Error>> {
+    let scenario = "required_ci::public_publication_requires_one_successful_required_job_with_complete_identity";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
         for (failure, expected) in [
             (
@@ -85,9 +88,9 @@ fn public_publication_requires_one_successful_required_job_with_complete_identit
             assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
         }
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
-
 #[test]
 fn public_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates()
 -> Result<(), Box<dyn Error>> {
@@ -130,7 +133,6 @@ fn public_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_dup
     assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
     Ok(())
 }
-
 #[test]
 fn public_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<(), Box<dyn Error>>
 {
@@ -176,7 +178,6 @@ fn public_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<
     }
     Ok(())
 }
-
 #[test]
 fn public_idempotent_publication_revalidates_before_accepting_existing_tag()
 -> Result<(), Box<dyn Error>> {
@@ -358,6 +359,10 @@ fn assert_materialized_layout(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn publication_requires_protected_default_branch_and_event_ref() -> Result<(), Box<dyn Error>> {
+    let scenario = "required_ci::publication_requires_protected_default_branch_and_event_ref";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
+    }
     for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
         for value in [None, Some("false")] {
             let fixture = Fixture::new_for(profile)?;
@@ -390,5 +395,6 @@ fn publication_requires_protected_default_branch_and_event_ref() -> Result<(), B
             assert_eq!(fixture.registry_state()?, registry);
         }
     }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }

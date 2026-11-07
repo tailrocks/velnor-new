@@ -1,0 +1,258 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use super::{CratePublishCredential, IsolatedCommand};
+use std::{ffi::OsString, path::Path, time::Duration};
+
+fn fixture_git()
+-> Result<(tempfile::TempDir, crate::release_git_pin::VerifiedGit), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().canonicalize()?;
+    std::fs::write(root.join("git"), b"fixture")?;
+    Ok((temp, crate::release_git_pin::fixture_git(&root)))
+}
+
+#[cfg(unix)]
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "The complete child isolation fixture is reviewed together"
+)]
+fn crate_update_exposes_no_credentials_or_write_handles() -> Result<(), Box<dyn std::error::Error>>
+{
+    use std::os::unix::fs::PermissionsExt;
+    if std::env::var_os("VELNOR_TEST_UPDATE_CHILD").is_none() {
+        return run_update_with_poisoned_environment();
+    }
+    let (_git_dir, git) = fixture_git()?;
+    let root = tempfile::tempdir()?;
+    let source = root.path().join("source");
+    let home = root.path().join("home");
+    std::fs::create_dir(&source)?;
+    std::fs::create_dir(&home)?;
+    let config = source.join("release-plz.toml");
+    let manifest = source.join("Cargo.toml");
+    std::fs::write(&config, "")?;
+    std::fs::write(&manifest, "")?;
+    let program = root.path().join("release-plz");
+    std::fs::write(
+        &program,
+        "#!/bin/sh\ntest \"$1\" = update && test -z \"${GIT_TOKEN+x}${GITHUB_TOKEN+x}${GH_TOKEN+x}${CARGO_REGISTRY_TOKEN+x}${ACTIONS_ID_TOKEN_REQUEST_TOKEN+x}${GITHUB_OUTPUT+x}${HTTP_PROXY+x}\"\n",
+    )?;
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))?;
+    let env: Vec<(OsString, OsString)> = [
+        ("PATH", "/usr/bin:/bin"),
+        ("CARGO", "/usr/bin/true"),
+        ("RUSTC", "/usr/bin/true"),
+        ("RUSTDOC", "/usr/bin/true"),
+        ("HOME", home.to_str().ok_or("home")?),
+        ("CARGO_HOME", home.to_str().ok_or("home")?),
+        ("CARGO_TARGET_DIR", home.to_str().ok_or("home")?),
+        ("RUSTUP_HOME", home.to_str().ok_or("home")?),
+        ("RUSTUP_AUTO_INSTALL", "0"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value.into()))
+    .collect();
+    let args = vec![
+        "update".into(),
+        "--config".into(),
+        config.into_os_string(),
+        "--manifest-path".into(),
+        manifest.into_os_string(),
+    ];
+    let command = IsolatedCommand::crate_update(&program, args.clone(), &source, &env, &git)?;
+    let parent = [
+        "GIT_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "CARGO_REGISTRY_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "GITHUB_OUTPUT",
+        "HTTP_PROXY",
+    ]
+    .into_iter()
+    .map(|key| (OsString::from(key), OsString::from("fixture")))
+    .collect::<Vec<_>>();
+    assert!(
+        !command
+            .spawn_env(&parent)
+            .iter()
+            .any(|(key, _)| parent.iter().any(|(forbidden, _)| key == forbidden))
+    );
+    let child_env = command.spawn_env(&parent);
+    assert!(
+        child_env
+            .iter()
+            .any(|(key, value)| key == "GIT_EXEC_PATH" && value == git.exec_path().as_os_str())
+    );
+    let path = child_env
+        .iter()
+        .find(|(key, _)| key == "PATH")
+        .ok_or("path")?;
+    assert_eq!(
+        std::env::split_paths(&path.1).next().as_deref(),
+        Some(git.exec_path())
+    );
+    assert!(command.run_bounded(1024, Duration::from_secs(5))?.success);
+    let mut release_pr = args.clone();
+    release_pr[0] = "release-pr".into();
+    assert!(IsolatedCommand::crate_update(&program, release_pr, &source, &env, &git).is_err());
+    let mut dirty = args.clone();
+    dirty.push("--allow-dirty".into());
+    assert!(IsolatedCommand::crate_update(&program, dirty, &source, &env, &git).is_err());
+    let mut source_target = env.clone();
+    source_target
+        .iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("target")?
+        .1 = source.as_os_str().to_owned();
+    assert!(
+        IsolatedCommand::crate_update(&program, args.clone(), &source, &source_target, &git)
+            .is_err()
+    );
+    let mut injected = env.clone();
+    injected.push(("GIT_EXEC_PATH".into(), "/usr/bin".into()));
+    assert!(
+        IsolatedCommand::crate_update(&program, args.clone(), &source, &injected, &git).is_err()
+    );
+    let mut hostile = env;
+    hostile.push(("GIT_TOKEN".into(), "fixture".into()));
+    assert!(IsolatedCommand::crate_update(&program, args, &source, &hostile, &git).is_err());
+    Ok(())
+}
+
+#[cfg(unix)]
+fn run_update_with_poisoned_environment() -> Result<(), Box<dyn std::error::Error>> {
+    let mut child = std::process::Command::new(std::env::current_exe()?);
+    child.args([
+        "--exact",
+        "crate_update_exposes_no_credentials_or_write_handles",
+    ]);
+    child.env("VELNOR_TEST_UPDATE_CHILD", "1");
+    for key in [
+        "GIT_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "CARGO_REGISTRY_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "GITHUB_OUTPUT",
+        "HTTP_PROXY",
+    ] {
+        child.env(key, "fixture");
+    }
+    assert!(child.status()?.success());
+    Ok(())
+}
+
+fn tool_env() -> Vec<(OsString, OsString)> {
+    let target = std::fs::canonicalize("/tmp").expect("fixture target");
+    let home = target.parent().expect("fixture target parent");
+    let mut env: Vec<(OsString, OsString)> = [
+        ("PATH", "/usr/bin:/bin"),
+        ("CARGO", "/bin/true"),
+        ("RUSTC", "/bin/true"),
+        ("RUSTDOC", "/bin/true"),
+        ("CARGO_HOME", "/tmp"),
+        ("RUSTUP_HOME", "/tmp"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.into(), v.into()))
+    .collect();
+    env.push(("HOME".into(), home.as_os_str().into()));
+    env.push(("CARGO_TARGET_DIR".into(), target.into_os_string()));
+    env
+}
+
+#[test]
+fn crate_publish_target_must_stay_outside_source() -> Result<(), Box<dyn std::error::Error>> {
+    let (_git_dir, git) = fixture_git()?;
+    let source = tempfile::tempdir()?;
+    let target = tempfile::tempdir()?;
+    let mut env = tool_env();
+    env.iter_mut()
+        .find(|(key, _)| key == "HOME")
+        .ok_or("missing home")?
+        .1 = target
+        .path()
+        .canonicalize()?
+        .parent()
+        .ok_or("target parent")?
+        .as_os_str()
+        .into();
+    env.iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("missing target")?
+        .1 = target.path().as_os_str().into();
+    let command = IsolatedCommand::crate_publish(
+        Path::new("/bin/sh"),
+        vec![
+            "-c".into(),
+            "printf fixture > \"$CARGO_TARGET_DIR/output\"".into(),
+        ],
+        source.path(),
+        &env,
+        "fixture_git_987",
+        CratePublishCredential::Bootstrap {
+            cargo_token: "fixture_cargo_654",
+        },
+        &git,
+    )?;
+    assert!(command.run_bounded(1024, Duration::from_secs(5))?.success);
+    assert_eq!(std::fs::read(target.path().join("output"))?, b"fixture");
+    assert!(!source.path().join("output").exists());
+    assert_target_rejections(source.path(), target.path(), &env, &git)?;
+    Ok(())
+}
+
+fn assert_target_rejections(
+    source: &Path,
+    target: &Path,
+    env: &[(OsString, OsString)],
+    git: &crate::release_git_pin::VerifiedGit,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = |env: &[(OsString, OsString)]| {
+        IsolatedCommand::crate_publish(
+            Path::new("/bin/sh"),
+            vec!["-c".into(), "true".into()],
+            source,
+            env,
+            "fixture_git_987",
+            CratePublishCredential::Bootstrap {
+                cargo_token: "fixture_cargo_654",
+            },
+            git,
+        )
+        .is_err()
+    };
+    let mut missing = env.to_vec();
+    missing.retain(|(key, _)| key != "CARGO_TARGET_DIR");
+    assert!(rejected(&missing));
+    let inside = source.join("target");
+    std::fs::create_dir(&inside)?;
+    let mut changed = env.to_vec();
+    changed
+        .iter_mut()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .ok_or("missing target")?
+        .1 = inside.as_os_str().into();
+    assert!(rejected(&changed));
+    #[cfg(unix)]
+    {
+        let link = target.join("inside-link");
+        std::os::unix::fs::symlink(&inside, &link)?;
+        changed
+            .iter_mut()
+            .find(|(key, _)| key == "CARGO_TARGET_DIR")
+            .ok_or("missing target")?
+            .1 = link.into_os_string();
+        assert!(rejected(&changed));
+    }
+    Ok(())
+}
+
+#[path = "command_crate_publish_tests.rs"]
+mod publish_tests;
+
+#[path = "command_gh_environment_tests.rs"]
+mod gh_environment;

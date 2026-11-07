@@ -30,7 +30,7 @@ pub(crate) const RELEASE_TARGETS: [&str; 4] = [
     "x86_64-unknown-linux-gnu",
 ];
 
-pub(crate) const MAX_PACKAGE_RELEASE_PRODUCTS: usize = 64;
+pub const MAX_PACKAGE_RELEASE_PRODUCTS: usize = 64;
 
 pub(crate) const MAX_PACKAGE_RELEASE_ARCHIVES: usize = 256;
 

@@ -1,0 +1,437 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+import fcntl
+import hashlib
+import json
+import os
+import pathlib
+import platform
+import re
+import secrets
+import select
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from docker_host import docker_environment, local_daemon, trusted_docker, verify_image
+import source_snapshot
+
+MANIFEST = json.loads(pathlib.Path(__file__).with_name("tools.json").read_text())
+IMAGE = MANIFEST["image"]
+MAX_FILE = 128 * 1024 * 1024
+MAX_DEPENDENCY_TOTAL = 2 * 1024 * 1024 * 1024
+
+
+def command(args, **kwargs):
+    return subprocess.run(args, check=True, **kwargs)
+
+
+def read_fd(fd, max_size=MAX_FILE):
+    before = os.fstat(fd)
+    if not stat.S_ISREG(before.st_mode) or before.st_size > max_size:
+        raise RuntimeError("fixture input is not a bounded regular file")
+    with os.fdopen(fd, "rb", closefd=False) as f:
+        data = f.read(max_size + 1)
+    after = os.fstat(fd)
+    if len(data) != before.st_size or (before.st_size, before.st_mtime_ns, before.st_ino, before.st_mode) != (after.st_size, after.st_mtime_ns, after.st_ino, after.st_mode):
+        raise RuntimeError("fixture input changed while reading")
+    return data, stat.S_IMODE(before.st_mode)
+
+
+def read_regular(path, max_size=MAX_FILE):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        return read_fd(fd, max_size)[0]
+    finally:
+        os.close(fd)
+
+
+def read_tracked(root, raw_name):
+    parts = raw_name.split(b"/")
+    if any(part in (b"", b".", b"..") for part in parts):
+        raise RuntimeError("unsafe tracked fixture input")
+    current = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
+            os.close(current)
+            current = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=current)
+        try:
+            return read_fd(fd)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(current)
+
+
+def checked_directory(path):
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    meta = path.lstat()
+    if not stat.S_ISDIR(meta.st_mode) or meta.st_uid != os.getuid() or meta.st_mode & 0o077:
+        raise RuntimeError("fixture cache must be a private owned directory")
+
+
+def registry_fingerprint(packages, registry):
+    digest = hashlib.sha256()
+    total = 0
+    count = 0
+    for package in sorted(packages):
+        directory = registry / package
+        if not directory.is_dir() or directory.is_symlink():
+            raise RuntimeError("fixture dependency source is unavailable")
+        def fail_walk(error):
+            raise error
+        for parent, dirs, files in os.walk(directory, followlinks=False, onerror=fail_walk):
+            dirs.sort(); files.sort()
+            for name in dirs:
+                if (pathlib.Path(parent) / name).is_symlink():
+                    raise RuntimeError("dependency symlink prevents complete fixture fingerprint")
+            for name in files:
+                relative = (pathlib.Path(parent) / name).relative_to(registry)
+                raw_name = os.fsencode(relative)
+                data, mode = read_tracked(registry, raw_name)
+                count += 1; total += len(data)
+                if count > 100000 or total > MAX_DEPENDENCY_TOTAL:
+                    raise RuntimeError("fixture dependency sources exceed fingerprint bounds")
+                digest.update(len(raw_name).to_bytes(8, "big")); digest.update(raw_name)
+                digest.update(mode.to_bytes(4, "big")); digest.update(len(data).to_bytes(8, "big")); digest.update(data)
+    return digest.digest()
+
+
+def dependency_packages(metadata):
+    packages = set()
+    prefix = pathlib.PurePosixPath("/usr/local/cargo/registry")
+    for package in metadata["packages"]:
+        manifest = pathlib.PurePosixPath(package["manifest_path"])
+        source = package["source"]
+        if source is None:
+            if not manifest.is_relative_to("/work"):
+                raise RuntimeError("external path dependency prevents complete fixture fingerprint")
+        elif source.startswith("registry+") and manifest.is_relative_to(prefix / "src"):
+            packages.add(str(manifest.parent.relative_to(prefix)))
+        else:
+            raise RuntimeError("unsupported dependency source prevents complete fixture fingerprint")
+    return packages
+
+
+def fingerprint(entries, arch, profile, target_name, dependency_digest):
+    digest = hashlib.sha256()
+    digest.update(("velnor-gh-fixture-v2\0" + arch + "\0" + profile + "\0" + target_name + "\0" + IMAGE + "\0").encode())
+    digest.update(dependency_digest)
+    digest.update(source_snapshot.digest(entries))
+    return digest.hexdigest()
+
+
+def verify_sources(root, snapshot, entries, patterns=()):
+    if source_snapshot.collect(root, None, read_tracked, patterns) != entries:
+        raise RuntimeError("fixture tracked sources changed")
+    source_snapshot.verify_snapshot(snapshot, entries, read_tracked)
+
+
+def install_tool(source, target, expected, max_size=MAX_FILE):
+    data = read_regular(source, max_size)
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise RuntimeError("fixture tool does not match its qualified digest")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if hashlib.sha256(read_regular(target, max_size)).hexdigest() != expected:
+            raise RuntimeError("fixture tool cache is corrupt")
+        return
+    fd, name = tempfile.mkstemp(dir=target.parent, prefix=".tool-")
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+        os.chmod(name, 0o500)
+        os.replace(name, target)
+    finally:
+        if os.path.exists(name): os.unlink(name)
+
+
+
+def extract_git_member(ar_command, tar_command, timeout=60):
+    deadline = time.monotonic() + timeout
+    source = subprocess.Popen(ar_command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    extracted = None
+    try:
+        extracted = subprocess.Popen(tar_command, stdin=source.stdout, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        source.stdout.close()
+        data = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([extracted.stdout], [], [], remaining)[0]:
+                raise RuntimeError("release Git package extraction timed out")
+            block = os.read(extracted.stdout.fileno(), min(65536, 16 * 1024 * 1024 + 1 - len(data)))
+            if not block:
+                break
+            data.extend(block)
+            if len(data) > 16 * 1024 * 1024:
+                raise RuntimeError("release Git package extraction exceeded its limit")
+        remaining = max(0, deadline - time.monotonic())
+        if extracted.wait(timeout=remaining) != 0 or source.wait(timeout=max(0, deadline - time.monotonic())) != 0:
+            raise RuntimeError("release Git package extraction failed")
+        return bytes(data)
+    finally:
+        if source.stdout and not source.stdout.closed:
+            source.stdout.close()
+        for process in (extracted, source):
+            if process is not None:
+                if process.stdout and not process.stdout.closed:
+                    process.stdout.close()
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+
+
+def stage_release_git(source_tools, tools, validation):
+    pin_source = read_regular(validation / "crates/velnor-actions-mise/src/release_git_pin.rs", 65536).decode()
+    def pin(name):
+        matches = re.findall(r"pub const " + name + r': &str\s*=\s*"([^"\n]+)";', pin_source)
+        if len(matches) != 1:
+            raise RuntimeError("release Git catalog pin is missing or ambiguous")
+        return matches[0]
+    pins = {"pinned-git": pin("GIT_SHA256"), "pinned-git-remote-http": pin("GIT_HTTP_SHA256")}
+    if all((source_tools / name).is_file() for name in pins):
+        for name, expected in pins.items():
+            install_tool(source_tools / name, tools / name, expected)
+        return
+    url, expected_package = pin("GIT_PACKAGE_URL"), pin("GIT_PACKAGE_SHA256")
+    if not url.startswith("https://snapshot.ubuntu.com/"):
+        raise RuntimeError("release Git package URL is not trusted")
+    with tempfile.TemporaryDirectory(prefix="fixture-git-") as directory:
+        package = pathlib.Path(directory) / "git.deb"
+        subprocess.run(
+            ["/usr/bin/curl", "-q", "--proto", "=https", "--max-redirs", "0", "--max-time", "60", "--max-filesize", str(8 * 1024 * 1024), "--fail", "--silent", "--output", str(package), url],
+            check=True, timeout=65, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        data = read_regular(package, 8 * 1024 * 1024)
+        if hashlib.sha256(data).hexdigest() != expected_package:
+            raise RuntimeError("release Git package digest mismatch")
+        for name, member in (("pinned-git", "./usr/bin/git"), ("pinned-git-remote-http", "./usr/lib/git-core/git-remote-http")):
+            extracted = extract_git_member(
+                ["/usr/bin/ar", "-p", str(package), "data.tar.zst"],
+                ["/usr/bin/tar", "-xOf", "-", member],
+            )
+            candidate = pathlib.Path(directory) / name
+            candidate.write_bytes(extracted)
+            install_tool(candidate, tools / name, pins[name])
+
+
+def docker_base(client, root, target, tools, registry, image_platform):
+    for path in [root, target, tools, registry]:
+        if ":" in str(path) or "," in str(path):
+            raise RuntimeError("fixture mount path is unsupported")
+    return [client, "run", "--rm", "--pull=never", "--network=none", "--platform", image_platform,
+            "--add-host", "api.github.com:127.0.0.1", "--add-host", "tuf-repo.github.com:127.0.0.1", "--add-host", "tuf-repo-cdn.sigstore.dev:127.0.0.1", "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=SETUID", "--cap-add=SETGID", "--security-opt=no-new-privileges", "--mount", f"type=bind,src={root},dst=/work,readonly",
+            "--mount", f"type=bind,src={target},dst=/target", "--mount", f"type=bind,src={tools},dst=/tools,readonly",
+            "--mount", f"type=bind,src={registry},dst=/usr/local/cargo/registry,readonly", "-w", "/work", IMAGE]
+
+
+def main():
+    if len(sys.argv) != 4 or sys.argv[3] not in ("debug", "release"):
+        raise RuntimeError("invalid isolated fixture invocation")
+    kind, test, profile = sys.argv[1:]
+    patterns = json.loads(os.environ["VELNOR_FIXTURE_NON_INPUTS"])
+    if not isinstance(patterns, list) or len(patterns) > 1024:
+        raise RuntimeError("invalid reviewed fixture exclusions")
+    targets = {
+        "cli": ("velnor-actions-cli", "api2026_pull_context_public"),
+        "task_report": ("velnor-actions-orchestrator", "task_report_public"),
+        "preview": ("velnor-actions-cli", "preview_source_selection_public"),
+        "review": ("velnor-actions-cli", "review_completion_public"),
+        "image_attestation": ("velnor-actions-orchestrator", None),
+        "image_publication": ("velnor-actions-cli", "image_publication_public"),
+    }
+    if kind not in targets or (kind == "task_report" and test != "shared_job_artifact_is_downloaded_once") or (kind == "preview" and test not in ("public_preview_selection_uses_sha_media_and_preserves_parent_proofs", "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment")) or (kind == "cli" and test in ("shared_job_artifact_is_downloaded_once", "public_preview_selection_uses_sha_media_and_preserves_parent_proofs", "public_stable_intent_accepts_disabled_self_review_and_rejects_unprotected_environment")):
+        raise RuntimeError("fixture scenario does not belong to target")
+    package, test_target = targets[kind]
+    image_attestation_tests = {
+        "release::package_release_signer::attestation::image_transport_tests::same_base_history_rejects_forged_tool",
+        "release::package_release_signer::attestation::image_transport_tests::signed_controller_dispatch_rechecks_historical_authority",
+        "release::package_release_signer::attestation::image_transport_tests::historical_release_assets_use_pinned_github_transport",
+        "crate_release_qualification_manifest::tests::authenticates_real_historical_manifest_and_rejects_mutations",
+        "release::package_release_signer::attestation::sdk::fixture_tests::verifies_public_manifest_and_linux_binary",
+        "release::package_release_signer::attestation::image_transport_tests::real_github_transport_verifies_the_signed_record",
+        "release::package_release_signer::attestation::image_fixture_tests::signed_image_record_binds_source_run_and_subjects",
+    }
+    if kind == "image_attestation" and test not in image_attestation_tests:
+        raise RuntimeError("fixture scenario does not belong to target")
+    if kind == "image_publication" and test not in (
+        "signed_attestation::public_publication_rejects_an_unverified_certificate_before_registry_mutation",
+        "attempt_identity::public_runner_publication_rejects_empty_and_malformed_attestation_output",
+        "attempt_identity::public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts",
+        "required_ci::public_publication_requires_one_successful_required_job_with_complete_identity",
+        "required_ci::publication_requires_protected_default_branch_and_event_ref",
+        "source_snapshot::rejects_untrusted_commit_snapshots_before_registry_mutation",
+        "source_closure::public_runner_family_rejects_drift_in_previously_omitted_copy_inputs",
+        "source_closure::public_runner_family_rejects_unbound_dockerfile_context_sources",
+        "source_closure::public_runner_family_rejects_decoy_pins_and_later_tool_replacement",
+        "publication_collections::public_publication_rejects_incomplete_and_ambiguous_artifact_pages_before_writing",
+        "runner_source::public_runner_family_publication_rejects_producer_head_outside_selected_source",
+        "publication_collections::public_publication_rejects_saturated_filtered_ci_run_inventory_before_writing",
+        "runner_source::runner_publication_rejects_lock_pins_inconsistent_with_image_source",
+    ):
+        raise RuntimeError("fixture scenario does not belong to target")
+    if not re.fullmatch(r"[a-z_]+(?:::[a-z_]+)*", test):
+        raise RuntimeError("invalid isolated fixture scenario")
+    signed_history_tests = (
+        "::same_base_history_rejects_forged_tool",
+        "::signed_controller_dispatch_rechecks_historical_authority",
+    )
+    machine = "x86_64" if test.endswith(signed_history_tests) else platform.machine().lower()
+    arch = {"arm64":"aarch64", "aarch64":"aarch64", "x86_64":"x86_64", "amd64":"x86_64"}.get(machine)
+    if arch is None:
+        raise RuntimeError("unsupported isolated fixture host architecture")
+    selected = MANIFEST[arch]
+    image_platform, gh_platform = selected["container_platform"], selected["tool_platform"]
+    gh_digest, nextest_digest = selected["gh_sha256"], selected["nextest_sha256"]
+    expected_platform = "amd64" if arch == "x86_64" else "arm64"
+    if (image_platform != f"linux/{expected_platform}"
+            or gh_platform != f"linux_{expected_platform}"
+            or not re.fullmatch(r"[0-9]{1,8}\.[0-9]{1,8}\.[0-9]{1,8}", MANIFEST["gh_version"])):
+        raise RuntimeError("invalid fixture tool platform or version")
+    client = trusted_docker()
+    docker_env = docker_environment()
+    local_daemon(client, docker_env)
+    root = pathlib.Path(os.environ["VELNOR_FIXTURE_LIVE_ROOT"])
+    validation = pathlib.Path(os.environ["VELNOR_FIXTURE_VALIDATION_ROOT"])
+    manifest_path = pathlib.Path(os.environ["VELNOR_FIXTURE_CAPTURE_MANIFEST"])
+    if not root.is_absolute() or not validation.is_absolute() or not manifest_path.is_absolute():
+        raise RuntimeError("invalid captured fixture paths")
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError("duplicate captured fixture manifest key")
+            result[key] = value
+        return result
+    manifest = json.loads(read_regular(manifest_path, 64 * 1024 * 1024), object_pairs_hook=unique_pairs)
+    import raw_capture
+    configured_tools = os.environ.get("VELNOR_GH_FIXTURE_TOOLS")
+    if not configured_tools and os.environ.get("RUNNER_TEMP"):
+        configured_tools = str(pathlib.Path(os.environ["RUNNER_TEMP"]) / "velnor-gh-fixture-tools")
+    source_tools = pathlib.Path(configured_tools or "")
+    if not source_tools.is_absolute():
+        raise RuntimeError("set VELNOR_GH_FIXTURE_TOOLS to an absolute directory with qualified Linux gh and nextest")
+    signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
+    required = [f"gh_{gh_platform}", f"cargo-nextest_{gh_platform}"]
+    if signed_controller:
+        required.extend(["mise_linux_amd64", "release-plz-0.4.3", "channel-rust-1.99.1.toml"])
+    if any(not (source_tools / name).is_file() for name in required):
+        runner_temp = os.environ.get("RUNNER_TEMP")
+        if not runner_temp or source_tools != pathlib.Path(runner_temp) / "velnor-gh-fixture-tools":
+            raise RuntimeError("fixture tool directory is incomplete")
+        staging_env = {key: os.environ[key] for key in (
+            "PATH", "HOME", "RUNNER_TEMP", "MISE_DATA_DIR", "MISE_CACHE_DIR", "MISE_STATE_DIR"
+        ) if key in os.environ}
+        args = ["/usr/bin/python3", "-I", str(validation / "scripts/prepare-gh-fixture-tools.py")]
+        if signed_controller:
+            args.append("--with-signed-controller")
+        subprocess.run(args, env=staging_env, check=True, timeout=780)
+    cargo_home = pathlib.Path(os.environ.get("CARGO_HOME") or (pathlib.Path.home() / ".cargo"))
+    registry = (cargo_home / "registry").resolve(strict=True)
+    if not registry.is_dir(): raise RuntimeError("offline Cargo registry is unavailable")
+    cache = pathlib.Path(tempfile.gettempdir()) / f"velnor-gh-fixture-{os.getuid()}"
+    checked_directory(cache)
+    lock = os.open(cache / "build.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    snapshot_dir = tempfile.TemporaryDirectory(prefix="source-", dir=cache)
+    snapshot = pathlib.Path(snapshot_dir.name)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        tools = cache / "tools"; checked_directory(tools)
+        tuf = source_tools / "image-attestation-tuf"
+        if kind == "image_publication":
+            if not tuf.is_dir():
+                raise RuntimeError("provision TUF replay with scripts/prepare-image-attestation-tuf.py before image_publication")
+            shutil.copytree(tuf, tools / "image-attestation-tuf", dirs_exist_ok=True)
+        gh_version = MANIFEST["gh_version"]
+        install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
+        install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
+        if test.endswith(signed_history_tests):
+            stage_release_git(source_tools, tools, validation)
+        if signed_controller:
+            install_tool(source_tools / "release-plz-0.4.3", tools / "signed-controller/release-plz", "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466", 128 * 1024 * 1024)
+            install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024)
+            catalog = read_regular(validation / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
+            versions = re.findall(r'pub const MISE_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
+            digests = re.findall(r'pub const MISE_BINARY_SHA256_LINUX_X64: &str\s*=\s*"([0-9a-f]{64})";', catalog)
+            rust_versions = re.findall(r'pub const RUST_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
+            if (len(versions) != 1 or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", versions[0])
+                    or len(rust_versions) != 1 or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", rust_versions[0])
+                    or len(digests) != 1):
+                raise RuntimeError("fixture mise catalog identity is invalid")
+            install_tool(source_tools / "mise_linux_amd64", tools / "bin/mise", digests[0], 192 * 1024 * 1024)
+            rust = tools / "mise/installs/rust" / rust_versions[0]
+            rust.parent.mkdir(parents=True, exist_ok=True)
+            target = f"/usr/local/rustup/toolchains/{rust_versions[0]}-x86_64-unknown-linux-gnu"
+            if rust.is_symlink():
+                if os.readlink(rust) != target:
+                    raise RuntimeError("fixture Rust installation link changed")
+            else:
+                rust.symlink_to(target, target_is_directory=True)
+        verify_image(client, docker_env, IMAGE)
+        entries = raw_capture.project(validation, snapshot, manifest, patterns)
+        verify_sources(root, snapshot, entries, patterns)
+        metadata_target = cache / "metadata"; checked_directory(metadata_target)
+        metadata_docker = docker_base(client, snapshot, metadata_target, tools, registry, image_platform)
+        triple = "x86_64-unknown-linux-gnu" if arch == "x86_64" else "aarch64-unknown-linux-gnu"
+        metadata_script = f"export HOME=/tmp PATH=/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true; exec cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1"
+        with tempfile.TemporaryFile() as output:
+            command(metadata_docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", metadata_script], stdout=output, env=docker_env)
+            output.seek(0)
+            metadata_bytes = output.read(128 * 1024 * 1024 + 1)
+        if len(metadata_bytes) > 128 * 1024 * 1024:
+            raise RuntimeError("fixture dependency metadata exceeds its bound")
+        packages = dependency_packages(json.loads(metadata_bytes))
+        dependency_digest = registry_fingerprint(packages, registry)
+        key = fingerprint(entries, arch, profile, kind, dependency_digest)
+        target = cache / key; checked_directory(target)
+        docker = docker_base(client, snapshot, target, tools, registry, image_platform)
+        binary_meta = target / "fixture-binaries.json"; cargo_meta = target / "fixture-cargo.json"
+        if not binary_meta.is_file() or not cargo_meta.is_file():
+            release = "--release" if profile == "release" else ""
+            selection = "--lib" if test_target is None else f"--test {test_target}"
+            fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release};" if kind == "image_publication" else ""
+            build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if signed_controller else ""
+            build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true {build_settings}; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
+            command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
+            verify_sources(root, snapshot, entries, patterns)
+            if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
+                binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
+                raise RuntimeError("fixture sources changed during isolated build")
+            (target / "fixture-key").write_text(key)
+        verify_sources(root, snapshot, entries, patterns)
+        if read_regular(target / "fixture-key", 64).decode() != key:
+            raise RuntimeError("fixture cache identity mismatch")
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        nonce = secrets.token_hex(32)
+        receipt = target / f"receipt-{nonce}"
+        fixture_path = "/tools/bin:" if signed_controller else ""
+        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
+        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}"]
+        try:
+            command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)
+            if read_regular(receipt, 256).decode() != f"{nonce}\n{kind}\n{test}\n":
+                raise RuntimeError("fixture worker success receipt does not match scenario")
+        finally:
+            receipt.unlink(missing_ok=True)
+        verify_sources(root, snapshot, entries, patterns)
+        if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
+            raise RuntimeError("fixture sources changed during isolated execution")
+    finally:
+        snapshot_dir.cleanup()
+        os.close(lock)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print(f"isolated GitHub fixture: {error}", file=sys.stderr)
+        sys.exit(1)

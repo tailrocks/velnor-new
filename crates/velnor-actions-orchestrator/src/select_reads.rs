@@ -7,10 +7,10 @@ use std::path::Path;
 
 use velnor_actions_mise::GitRequest;
 
-use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
-use crate::select_affected::Ownership;
-use crate::select_reads_scan::{ReadTarget, SourceRead, scan_source};
+use crate::planner::discover::Discovery;
+use crate::planner::select_affected::Ownership;
+use crate::planner::select_reads_scan::{ReadTarget, SourceRead, scan_source};
 
 pub(crate) type Forced = BTreeMap<String, String>;
 
@@ -59,10 +59,7 @@ pub(crate) struct ReadSummary {
     pub(crate) unverified: BTreeSet<(String, UnverifiedKind)>,
 }
 
-pub(crate) fn read_summary(
-    root: &Path,
-    ownership: &Ownership<'_>,
-) -> Result<ReadSummary, String> {
+pub(crate) fn read_summary(root: &Path, ownership: &Ownership<'_>) -> Result<ReadSummary, String> {
     let mut summary = ReadSummary::default();
     for (id, read) in source_reads(root, ownership)? {
         let kind = match read.target {

@@ -53,6 +53,11 @@ impl StageRoot {
         require_owner_id(&container, &container_metadata, owner)?;
         validate_container_files(&container, &root, owner)?;
         let spare = container.join(SPARE_DIR);
+        match fs::create_dir(&spare) {
+            Ok(()) => set_mode(&spare, PRIVATE_DIR_MODE)?,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(io(&spare, &error)),
+        }
         let (spare_identity, spare_metadata) = FsIdentity::capture(&spare)?;
         if !same_device(container_identity, spare_identity) {
             return Err(unsafe_path(&spare, "cross_filesystem_staging"));
@@ -66,6 +71,7 @@ impl StageRoot {
             spare,
             spare_identity,
             owner,
+            recovered: None,
         };
         stage.validate_container_and_spare(true)?;
         Ok(stage)
@@ -158,9 +164,7 @@ pub(super) fn validate_container_files(
         owner,
         "owner_record_mismatch",
     )?;
-    let spare = container.join(SPARE_DIR);
-    let (_, metadata) = FsIdentity::capture(&spare)?;
-    require_owner_id(&spare, &metadata, owner)
+    Ok(())
 }
 
 pub(super) fn validate_directory_owners(
@@ -266,7 +270,7 @@ pub(super) fn metadata_owner(metadata: &Metadata) -> OwnerId {
     }
 }
 
-fn set_mode(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
+pub(super) fn set_mode(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

@@ -5,7 +5,7 @@ use crate::{
     OrchestratorError,
     internal::internal,
     package_publication::{PackagePublicationOutcome, publish_package_release},
-    package_release_signer::{
+    release::package_release_signer::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
         verify_attested_signed_package_from_env_with_deadline,
     },
@@ -95,6 +95,8 @@ pub(crate) use preview_artifacts::{
 
 #[path = "package_release_publish_public_read.rs"]
 mod public_read;
+#[cfg(any(target_os = "linux", test))]
+pub(crate) use public_read::read_historical_sdk_attestation_assets;
 pub(crate) use public_read::{
     PublicPullRequestSnapshot, PublicReleaseAsset, PublicReleaseSnapshot,
     parse_public_pull_request_response, read_public_branch_tip,
@@ -353,4 +355,9 @@ fn current_ci_from_env() -> Result<(u64, u32), OrchestratorError> {
         .filter(|value| *value > 0)
         .ok_or_else(|| internal("package_publish_current_ci_attempt_invalid"))?;
     Ok((run_id, attempt))
+}
+
+#[cfg(test)]
+pub(crate) fn set_github_read_fixture(responses: std::collections::BTreeMap<String, Vec<u8>>) {
+    github::GitHubApi::set_read_fixture(responses);
 }

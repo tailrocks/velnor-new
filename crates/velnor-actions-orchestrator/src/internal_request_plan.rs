@@ -54,7 +54,7 @@ pub(crate) fn checked_plan_request(
         return Err(internal("empty_head"));
     }
     let root = plan_root(request.root.as_deref())?;
-    crate::select::verify_checkout(&root, request.event, &request.head)?;
+    crate::planner::select::verify_checkout(&root, request.event, &request.head)?;
     Ok((request, root))
 }
 
@@ -67,5 +67,5 @@ fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError>
     let cwd = env::current_dir().map_err(|err| OrchestratorError::RootDiscovery {
         problem: err.to_string(),
     })?;
-    crate::root::resolve_root(&cwd)
+    crate::planner::root::resolve_root(&cwd)
 }

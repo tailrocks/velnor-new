@@ -36,6 +36,10 @@ name = "ledger_helper_public"
 path = "tests/ledger_helper_public.rs"
 
 [[test]]
+name = "crate_release_prepare_pr_public"
+path = "tests/crate_release_prepare_pr_public.rs"
+
+[[test]]
 name = "lane_execution_both"
 path = "tests/lane_execution_both.rs"
 required-features = ["generator"]
@@ -127,6 +131,8 @@ clap = { version = "=4.6.7", features = ["derive"], optional = true }
 workspace = true
 
 [dev-dependencies]
+lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
+velnor-actions-workflow-renderer = { version = "=0.1.78", path = "../velnor-actions-workflow-renderer" }
 base64 = { workspace = true }
 serde-saphyr = "=2.1.0"
 velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
@@ -134,8 +140,8 @@ velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 tar = { version = "=0.4.46", default-features = false }
-sha1-checked = { version = "=0.10.0", default-features = false }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
+sha1-checked = { version = "=0.10.0", default-features = false }
 sha2 = "=0.11.1"
 syn = { version = "=3.0.9", features = ["full", "visit"] }
 tempfile = "=3.27.0"

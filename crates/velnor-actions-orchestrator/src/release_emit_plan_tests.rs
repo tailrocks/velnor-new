@@ -1,0 +1,149 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use super::{ReleasePlan, check_release_selection, release_triggers};
+use std::collections::{BTreeMap, BTreeSet};
+use velnor_actions_contract::config::{NewCrateRelease, RustReleaseConfig};
+use velnor_actions_rust::release_select::{ReleaseRequest, ReleaseScope, select_release_set};
+
+#[test]
+fn bootstrap_scope_matches_every_expanded_workspace_package()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    std::fs::write(
+        temp.path().join("Cargo.toml"),
+        "[workspace]\nmembers=['alpha','beta']\nresolver='3'\n",
+    )?;
+    for name in ["alpha", "beta"] {
+        let path = temp.path().join(name);
+        std::fs::create_dir_all(path.join("src"))?;
+        std::fs::write(
+            path.join("Cargo.toml"),
+            format!("[package]\nname='{name}'\nversion='0.1.0'\nedition='2024'\n"),
+        )?;
+        std::fs::write(path.join("src/lib.rs"), "")?;
+    }
+    let output = std::process::Command::new(env!("CARGO"))
+        .args([
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--offline",
+        ])
+        .current_dir(temp.path())
+        .output()?;
+    assert!(output.status.success());
+    let metadata = String::from_utf8(output.stdout)?;
+    let root = temp.path().canonicalize()?;
+    let empty = BTreeSet::new();
+    let scope = ReleaseScope::PublishableWorkspace;
+    let selected = select_release_set(&ReleaseRequest {
+        metadata_json: &metadata,
+        repo_root: &root,
+        manifest_hint: "Cargo.toml",
+        scope: &scope,
+        enabled: true,
+        affected: &empty,
+        known_manifests: &empty,
+        supported_registries: &[],
+    })?;
+    assert_eq!(selected.len(), 2);
+    let mut release = RustReleaseConfig {
+        new_crates: Some(NewCrateRelease {
+            source_sha: "a".repeat(40),
+            packages: [("alpha".into(), "0.1.0".into())].into(),
+        }),
+        ..RustReleaseConfig::default()
+    };
+    assert!(check_release_selection(&release, &selected).is_err());
+    release
+        .new_crates
+        .as_mut()
+        .ok_or("creation")?
+        .packages
+        .insert("beta".into(), "0.1.0".into());
+    assert!(check_release_selection(&release, &selected).is_ok());
+    release.new_crates = None;
+    release.registry = velnor_actions_contract::config::ReleaseRegistry::CratesIo;
+    let mut expanded = selected.clone();
+    expanded.packages.resize(65, selected.packages[0].clone());
+    assert!(check_release_selection(&release, &expanded).is_err());
+    expanded.packages.truncate(64);
+    assert!(check_release_selection(&release, &expanded).is_ok());
+    Ok(())
+}
+
+#[test]
+fn first_publication_is_dispatch_only() {
+    let plan = ReleasePlan {
+        plan_id: "test".into(),
+        repository: "owner/repo".into(),
+        source_sha: "a".repeat(40),
+        registry: "crates-io".into(),
+        packages: BTreeMap::new(),
+        version: None,
+        dispatch: true,
+        qualification_dispatch:
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Disabled,
+    };
+    let creation = release_triggers("main", &plan);
+    assert_eq!(creation.push_branches, Vec::<String>::new());
+    assert_eq!(creation.dispatch_inputs.len(), 2);
+    let recovery = release_triggers("main", &plan);
+    assert_eq!(recovery.push_branches, Vec::<String>::new());
+    let ordinary = ReleasePlan {
+        dispatch: false,
+        ..plan
+    };
+    assert_eq!(release_triggers("main", &ordinary).push_branches, ["main"]);
+}
+
+#[test]
+fn qualification_dispatch_requires_explicit_mode_and_cannot_be_rendered_unwired()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_workflow_renderer::release_spec::{
+        QualificationDispatch, preflight_gate_condition, publish_gate_condition,
+    };
+    let (mut spec, _) = crate::release::release_steps::tests::fixture()?;
+    spec.plan.qualification_dispatch = QualificationDispatch::Enabled;
+    let triggers = release_triggers("main", &spec.plan);
+    assert!(triggers.validate(&spec.plan).is_ok());
+    assert!(triggers.dispatch_inputs.iter().any(|input| {
+        input.name == "mode" && input.required && input.default.as_deref() == Some("release")
+    }));
+    let mut missing_mode = triggers.clone();
+    missing_mode
+        .dispatch_inputs
+        .retain(|input| input.name != "mode");
+    assert!(missing_mode.validate(&spec.plan).is_err());
+    let gate =
+        preflight_gate_condition(&spec.repository, "main", &spec.plan).ok_or("preflight gate")?;
+    assert!(gate.contains("github.event.inputs.mode == 'release'"));
+    let publish = publish_gate_condition(&spec.repository, "main", &spec.plan);
+    assert!(publish.contains("github.event.inputs.mode == 'release'"));
+    spec.triggers = triggers;
+    assert!(
+        spec.validate().is_err(),
+        "unwired qualification must fail closed"
+    );
+    spec.plan.qualification_dispatch = QualificationDispatch::Disabled;
+    spec.triggers = release_triggers("main", &spec.plan);
+    spec.qualification = Some(
+        velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+            repository: spec.repository.clone(),
+            default_branch: "main".into(),
+            environment: "release".into(),
+            required_workflow_path: ".github/workflows/ci.yml".into(),
+            trusted_reviewer_id: 1,
+            generator_version: "0.1.78".into(),
+            generator_source_sha: "b".repeat(40),
+            generator_manifest_sha256: "c".repeat(64),
+        },
+    );
+    assert!(
+        spec.validate().is_err(),
+        "unbound qualification must fail closed"
+    );
+    Ok(())
+}

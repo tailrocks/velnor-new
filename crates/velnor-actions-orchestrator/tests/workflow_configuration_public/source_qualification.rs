@@ -22,19 +22,7 @@ const UNRELATED_CONTENT: &str = "name: preserved user content\n";
 fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn Error>> {
     let repo = generator_repo(true)?;
     let root = repo.path();
-    let source_workflow = root.join(WORKFLOW_PATH);
-    fs::create_dir_all(
-        source_workflow
-            .parent()
-            .ok_or("workflow path has no parent")?,
-    )?;
-    fs::write(&source_workflow, "name: stale user-owned workflow\n")?;
-    fs::create_dir_all(
-        root.join(UNRELATED_PATH)
-            .parent()
-            .ok_or("unrelated path has no parent")?,
-    )?;
-    fs::write(root.join(UNRELATED_PATH), UNRELATED_CONTENT)?;
+    seed_stale_workflow(root)?;
 
     let prepared = prepare(root)?;
     let tree = render_staged_tree(&prepared)?;
@@ -50,6 +38,7 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
     assert!(!rendered.contains("workflow_run:"));
     assert!(rendered.contains("permissions:\n  contents: read"));
     assert!(!rendered.contains("contents: write"));
+    assert!(!rendered.contains("stale generated workflow"));
     assert!(!rendered.contains("stale user-owned workflow"));
     assert_manual_native_validator_step(rendered)?;
 
@@ -102,6 +91,27 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
         fs::read(retired.join(&unrelated))?,
         UNRELATED_CONTENT.as_bytes()
     );
+    Ok(())
+}
+
+fn seed_stale_workflow(root: &Path) -> Result<(), Box<dyn Error>> {
+    let source_workflow = root.join(WORKFLOW_PATH);
+    fs::create_dir_all(
+        source_workflow
+            .parent()
+            .ok_or("workflow path has no parent")?,
+    )?;
+    fs::write(
+        &source_workflow,
+        format!("{MARKER_PREFIX} 0.1.0\nname: stale generated workflow\n"),
+    )?;
+    fs::create_dir_all(
+        root.join(UNRELATED_PATH)
+            .parent()
+            .ok_or("unrelated path has no parent")?,
+    )?;
+    fs::write(root.join(UNRELATED_PATH), UNRELATED_CONTENT)?;
+
     Ok(())
 }
 
@@ -181,4 +191,55 @@ fn preview_generation(
         },
     )?;
     Ok(destination)
+}
+
+#[test]
+fn handwritten_workflow_blocks_generation_without_modifying_existing_files()
+-> Result<(), Box<dyn Error>> {
+    let repo = generator_repo(true)?;
+    let root = repo.path();
+    let workflow = root.join(".github/workflows/custom.yml");
+    fs::create_dir_all(workflow.parent().ok_or("parent")?)?;
+    fs::write(&workflow, "name: custom\n")?;
+    let other = root.join(".github/notes.txt");
+    fs::write(&other, "preserve me\n")?;
+    let prepared = prepare(root)?;
+    assert!(generate(&prepared, &GenerateOptions::default()).is_err());
+    assert_eq!(fs::read_to_string(&workflow)?, "name: custom\n");
+    assert_eq!(fs::read_to_string(other)?, "preserve me\n");
+    let config = root.join(".velnor/config.toml");
+    fs::write(
+        &config,
+        format!(
+            "{}\n[github]\nallow = [\".github/workflows/custom.yml\"]\n",
+            generator_config(true)
+        ),
+    )?;
+    assert!(prepare(root).is_err());
+    fs::write(&config, generator_config(true).replace("default_branch = \"testmain\"", "default_branch = \"testmain\"\npreserve_workflows = [\".github/workflows/custom.yml\"]"))?;
+    assert!(prepare(root).is_err());
+    fs::write(&config, generator_config(true))?;
+    fs::write(&workflow, format!("{MARKER_PREFIX} 0.1.0\nname: stale\n"))?;
+    let prepared = prepare(root)?;
+    let preview = tempfile::tempdir()?;
+    let destination = preview.path().join("preview");
+    generate(
+        &prepared,
+        &GenerateOptions {
+            output_dir: Some(destination.clone()),
+        },
+    )?;
+    assert!(!destination.join(".github/workflows/custom.yml").exists());
+    assert!(workflow.exists());
+    #[cfg(unix)]
+    {
+        let outside = tempfile::tempdir()?;
+        let outside_file = outside.path().join("keep.yml");
+        fs::write(&outside_file, "outside\n")?;
+        fs::remove_dir_all(root.join(".github/workflows"))?;
+        std::os::unix::fs::symlink(outside.path(), root.join(".github/workflows"))?;
+        assert!(generate(&prepared, &GenerateOptions::default()).is_err());
+        assert_eq!(fs::read_to_string(&outside_file)?, "outside\n");
+    }
+    Ok(())
 }

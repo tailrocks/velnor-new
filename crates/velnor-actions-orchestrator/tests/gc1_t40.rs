@@ -47,7 +47,7 @@ fn closure_source() -> &'static str {
 }
 
 fn resolve(task: &str, source: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    crate::native_mise_tasks::resolve_preview_producer_tools(source, task).map_err(fail)
+    crate::planner::native_mise_tasks::resolve_preview_producer_tools(source, task).map_err(fail)
 }
 
 fn check_closure_union() -> Result<(), Box<dyn Error>> {

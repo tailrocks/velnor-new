@@ -10,9 +10,10 @@ use crate::error::MiseError;
 
 const GIT_PROGRAM: &str = "git";
 
-pub const ALLOWED_GIT_VERBS: [&str; 6] = [
+pub const ALLOWED_GIT_VERBS: [&str; 7] = [
     "rev-parse",
     "ls-files",
+    "ls-tree",
     "diff",
     "show",
     "config",
@@ -54,6 +55,11 @@ impl GitRequest {
     }
 
     #[must_use]
+    pub fn ls_tree(args: Vec<OsString>) -> Self {
+        Self::allowed("ls-tree", args)
+    }
+
+    #[must_use]
     pub fn diff(args: Vec<OsString>) -> Self {
         Self::allowed("diff", args)
     }
@@ -87,6 +93,24 @@ impl GitRequest {
         Ok(Self {
             verb: "rev-list".to_owned(),
             args: vec![OsString::from("--count"), OsString::from(source_sha)],
+        })
+    }
+
+    pub fn object(kind: &str, id: &str) -> Result<Self, MiseError> {
+        if !matches!(kind, "commit" | "tree" | "blob")
+            || id.len() != 40
+            || !id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(MiseError::InvalidStepInput {
+                field: "git_object".to_owned(),
+                value: "requires_kind_and_full_lowercase_sha1".to_owned(),
+            });
+        }
+        Ok(Self {
+            verb: "cat-file".to_owned(),
+            args: vec![kind.into(), id.into()],
         })
     }
 
@@ -125,6 +149,68 @@ impl GitRequest {
 
     pub fn run_in(&self, cwd: &Path) -> Result<ProcessOutput, MiseError> {
         self.command_in(cwd).run()
+    }
+
+    pub fn run_release_in(
+        &self,
+        cwd: &Path,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run_release_in_bounded(
+            cwd,
+            git,
+            OUTPUT_CAPTURE_LIMIT_BYTES,
+            std::time::Duration::from_secs(crate::command::RUN_TIMEOUT_SECS),
+        )
+    }
+
+    pub fn run_release_in_bounded(
+        &self,
+        cwd: &Path,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
+        cap: usize,
+        timeout: std::time::Duration,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run_release_in_until(cwd, git, cap, CheckDeadline::after(timeout)?)
+    }
+
+    pub fn run_release_in_until(
+        &self,
+        cwd: &Path,
+        git: &impl crate::release_git_pin::ReleaseGitExecutable,
+        cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        deadline.remaining()?;
+        git.revalidate().map_err(|_| MiseError::InvalidStepInput {
+            field: "release_git".to_owned(),
+            value: "unverified_bundle".to_owned(),
+        })?;
+        let mut args: Vec<OsString> = [
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "core.attributesFile=/dev/null",
+            "-c",
+            "diff.external=",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        args.extend(self.git_args());
+        let mut command = IsolatedCommand::release_git(args, git)?.with_cwd(cwd.to_path_buf());
+        if self.verb == "cat-file" {
+            command = command.with_env(&[
+                ("GIT_NO_LAZY_FETCH".into(), "1".into()),
+                ("GIT_ALLOW_PROTOCOL".into(), "".into()),
+                ("GIT_TERMINAL_PROMPT".into(), "0".into()),
+            ])?;
+        }
+        let (output, _drain) = command.run_quiescent_until(cap, deadline)?;
+        deadline.remaining()?;
+        Ok(output)
     }
 
     pub fn run_in_until(

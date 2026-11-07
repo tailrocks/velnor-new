@@ -4,7 +4,7 @@
 use super::{GenerationPreparation, push};
 use velnor_actions_contract::config::ReleaseRegistry;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, TOFU_APPLY_WORKFLOW_PATH};
-use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS};
+use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, RELEASE_CURRENT_PATHS};
 
 pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     release_file_lines(out, prep);
@@ -45,19 +45,19 @@ pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
 }
 
 fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    let enabled = crate::release_emit::enabled_release(prep)
+    let enabled = crate::release::release_emit::enabled_release(prep)
         .ok()
         .flatten()
         .is_some_and(|release| release.registry == ReleaseRegistry::CratesIo);
     if enabled {
-        for path in RELEASE_TREE_PATHS {
+        for path in RELEASE_CURRENT_PATHS {
             push(out, &format!("  {path}"));
         }
     }
 }
 
 fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    let git_tag = crate::release_emit::git_tag_release(prep)
+    let git_tag = crate::release::release_emit::git_tag_release(prep)
         .ok()
         .flatten()
         .is_some();
@@ -76,10 +76,10 @@ fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
 }
 
 fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    if crate::freshness_emit::freshness_enabled(prep) {
+    if crate::planner::freshness_emit::freshness_enabled(prep) {
         push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
     }
-    if crate::freshness_emit::upgrades::upgrades_enabled(prep) {
+    if crate::planner::freshness_emit::upgrades::upgrades_enabled(prep) {
         push(
             out,
             &format!(
@@ -97,7 +97,7 @@ fn tofu_apply_file_lines(out: &mut String, prep: &GenerationPreparation) {
 }
 
 fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    if let Ok(files) = crate::owned_tool_publication::files(prep) {
+    if let Ok(files) = crate::release::owned_tool_publication::files(prep) {
         for file in files {
             push(out, &format!("  {}", file.path));
         }

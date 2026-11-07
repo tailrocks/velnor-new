@@ -112,7 +112,7 @@ fn seed_base_tree(
     .map_err(|error| internal(&error.to_string()))?;
     validate_helper_pin(&base)?;
     let projection = materialize_seed_workflows(root, witness, &base, deadline)?;
-    let unmanaged = crate::generate::unmanaged::list(
+    let unmanaged = crate::planner::generate::unmanaged::list(
         projection.path(),
         &velnor_actions_contract::GithubConfig::default(),
     )?;
@@ -199,8 +199,9 @@ fn overlay_normal_renderer(
     config: &velnor_actions_contract::VelnorConfig,
     expected: &mut RegularTree,
 ) -> Result<(), OrchestratorError> {
-    let preparation = crate::prepare::prepare_for_candidate_with_config(root, config.clone())?;
-    let rendered = crate::generate::render_staged_tree(&preparation)?;
+    let preparation =
+        crate::planner::prepare::prepare_for_candidate_with_config(root, config.clone())?;
+    let rendered = crate::planner::generate::render_staged_tree(&preparation)?;
     if !rendered.symlinks.is_empty() {
         return Err(internal("homebrew_cutover_generated_symlink"));
     }

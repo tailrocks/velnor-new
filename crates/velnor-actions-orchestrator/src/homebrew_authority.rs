@@ -46,7 +46,7 @@ pub(crate) struct VerifiedHomebrewAuthority {
     tap_repository_id: u64,
     tap_base_sha: String,
     tap_head_sha: String,
-    merge_group: Option<crate::package_release_publish::MergeGroupSelection>,
+    merge_group: Option<crate::release::package_release_publish::MergeGroupSelection>,
     locator_blob_sha: String,
 }
 
@@ -89,7 +89,7 @@ impl VerifiedHomebrewAuthority {
 
     pub(crate) fn merge_group(
         &self,
-    ) -> Option<&crate::package_release_publish::MergeGroupSelection> {
+    ) -> Option<&crate::release::package_release_publish::MergeGroupSelection> {
         self.merge_group.as_ref()
     }
 
@@ -106,7 +106,7 @@ impl VerifiedHomebrewAuthority {
         if !safe_source_path(path) || max_bytes == 0 || max_bytes > SOURCE_DOCUMENT_LIMIT {
             return Err(internal("homebrew_authority_tap_file_selection"));
         }
-        crate::package_release_publish::read_protected_source_file(
+        crate::release::package_release_publish::read_protected_source_file(
             &self.tap_repository,
             self.tap_repository_id,
             "main",
@@ -119,8 +119,9 @@ impl VerifiedHomebrewAuthority {
 
     pub(crate) fn public_policy(
         &self,
-    ) -> Result<crate::package_release_public::PackageReleasePublicPolicy, OrchestratorError> {
-        crate::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
+    ) -> Result<crate::release::package_release_public::PackageReleasePublicPolicy, OrchestratorError>
+    {
+        crate::release::package_release_public::PackageReleasePublicPolicy::from_trusted_source_authority(
             self.plan.clone(),
             self.source_repository_id,
             self.authority_sha.clone(),
@@ -185,7 +186,9 @@ pub(crate) fn probe_protected_homebrew_authority(
         return Ok(None);
     };
     let locator_blob_sha =
-        crate::package_release_publish::release_policy_admission::git_blob_sha1(&locator_bytes)?;
+        crate::release::package_release_publish::release_policy_admission::git_blob_sha1(
+            &locator_bytes,
+        )?;
     let locator = parse_homebrew_source_authority_locator(&locator_bytes)
         .map_err(|_| internal("homebrew_authority_locator_invalid"))?;
     if locator.default_branch != "main" {
@@ -233,7 +236,7 @@ pub(crate) fn probe_protected_homebrew_authority(
 
 pub(crate) fn verify_homebrew_authority_pull_request_checkout(
     root: &Path,
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     base_sha: &str,
     head_sha: &str,
     checkout_head: &str,
@@ -253,15 +256,16 @@ pub(crate) fn protected_locator_absent_on_default_branch(
     repository: &str,
     deadline: CheckDeadline,
 ) -> Result<bool, OrchestratorError> {
-    let before =
-        crate::package_release_publish::read_public_repository_snapshot(repository, deadline)?;
-    let before_tip = crate::package_release_publish::read_public_branch_tip(
+    let before = crate::release::package_release_publish::read_public_repository_snapshot(
+        repository, deadline,
+    )?;
+    let before_tip = crate::release::package_release_publish::read_public_branch_tip(
         repository,
         before.id,
         &before.default_branch,
         deadline,
     )?;
-    let locator = crate::package_release_publish::try_read_protected_source_file(
+    let locator = crate::release::package_release_publish::try_read_protected_source_file(
         repository,
         before.id,
         &before.default_branch,
@@ -270,14 +274,15 @@ pub(crate) fn protected_locator_absent_on_default_branch(
         MAX_HOMEBREW_SOURCE_AUTHORITY_LOCATOR_BYTES,
         deadline,
     )?;
-    let after_tip = crate::package_release_publish::read_public_branch_tip(
+    let after_tip = crate::release::package_release_publish::read_public_branch_tip(
         repository,
         before.id,
         &before.default_branch,
         deadline,
     )?;
-    let after =
-        crate::package_release_publish::read_public_repository_snapshot(repository, deadline)?;
+    let after = crate::release::package_release_publish::read_public_repository_snapshot(
+        repository, deadline,
+    )?;
     applicability::confirm_locator_absence(
         repository,
         &before,
@@ -306,7 +311,7 @@ fn safe_source_path(path: &str) -> bool {
 }
 
 fn admit_pull_request_context(
-    pull: &crate::package_release_publish::PublicPullRequestSnapshot,
+    pull: &crate::release::package_release_publish::PublicPullRequestSnapshot,
     event: WorkflowEvent,
     repository: &str,
     repository_id: u64,

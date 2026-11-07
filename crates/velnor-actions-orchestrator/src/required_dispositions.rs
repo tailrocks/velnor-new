@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     plan_skips_work, selects_affected_work,
 };
 
-use crate::cover::Signals;
+use crate::planner::cover::Signals;
 
 pub(crate) const PLANNED_JOB_SKIPPED: &str = "planned_job_skipped";
 pub(crate) const GATE_MISMATCH: &str = "gate_mismatch";

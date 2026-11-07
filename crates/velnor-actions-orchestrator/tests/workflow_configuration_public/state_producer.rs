@@ -16,6 +16,7 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+use super::mbx_job_env::assert_build_script_execution;
 use super::seed_off::seed_repo;
 use super::state_producer_eval::{seal_runs, simulate};
 use super::support::rendered_job_block;
@@ -182,11 +183,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
                 .all(|step| !step.name.contains("ledger") && !step.name.contains("reports")),
             "{root}: the producer has no ledger or report step"
         );
-        let block = rendered_job_block(text_of(&built, producer_id), producer_id)?;
-        assert!(
-            block.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""),
-            "{producer_id}"
-        );
+        assert_build_script_execution(text_of(&built, producer_id), producer_id, "0")?;
         for consumer in crate_jobs_of(&built.jobs, root) {
             assert!(
                 consumer.steps.iter().all(|step| !matches!(
@@ -198,7 +195,6 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
         }
     }
     for (id, consumer) in built.jobs.iter().filter(|(id, _)| id.starts_with("rust-")) {
-        let block = rendered_job_block(text_of(&built, id), id)?;
         assert!(
             consumer
                 .needs
@@ -207,7 +203,7 @@ fn producer_runs_the_crate_job_lane_records() -> Result<(), Box<dyn Error>> {
             "{id} needs a state writer"
         );
         if root_of(consumer).is_some() {
-            assert!(block.contains("MBX_BUILD_SCRIPT_EXECUTION: \"1\""), "{id}");
+            assert_build_script_execution(text_of(&built, id), id, "1")?;
         }
     }
     Ok(())

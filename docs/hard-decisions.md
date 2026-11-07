@@ -422,11 +422,12 @@ a credential binding in any step other than the fetch step, a fetch that
 runs build scripts or repository hooks while the token is live, or
 `pull_request_target` to obtain secrets.
 
-## 8. Publication only from the default branch or a release tag
+## 8. Publication authority and source boundaries
 
-**Decision.** Container images (and later packages) are published only from a
+**Decision.** Container images and packages are published only from a
 `push` to the default branch or from a release tag, after `Required` succeeded
-for that SHA, by jobs that check out and execute no repository code. Tags
+for that SHA, by jobs that check out and execute no repository code, except
+for the Rust crate release exception below. Tags
 promote the digest built and attested on the default branch; a tag never
 rebuilds an image. Pull requests build and validate images but hold neither
 `packages: write` nor `id-token: write`.
@@ -468,9 +469,28 @@ per group and a per-artifact group would silently drop a queued release.
 **Release-asset Maven bundle choice.** See the preserved decision in
 [release publication decisions](release-publication-decisions.md).
 
+**Rust crate release exception (owner-approved 2026-11-04).** A consumer Rust
+crate publisher may check out and execute the approved package source and its
+dependencies in the publishing job so that release-plz can run Cargo's normal
+package verification and publication. This exception permits a reviewed
+release-PR push on the default branch or an explicitly approved, bounded
+exact-source recovery or first-publication dispatch. It does not authorize
+publication from a pull request or fork event, or privileged source execution
+by other publishers.
+The workflow must establish the repository identity, reviewed source ancestry,
+successful required checks for the exact package source, and the authorized
+package and version before publication. It must use a preconfigured protected
+environment with restricted eligible refs, pinned tooling, and the minimum
+job permissions. Existing crates use release-plz's native crates.io Trusted
+Publishing exchange; do not supply a long-lived Cargo token to that job.
+Independently verify the registry artifact and tag after publication. A
+successful command or skipped release alone is not evidence of publication.
+See the [consumer release contract](proposed/release-contract.md).
+
 **Must not be reintroduced without owner approval:** publishing from a pull
 request or fork event, a privileged job that checks out or runs repository
-code, a release tag that rebuilds instead of promoting, BuildKit cache
+code outside the Rust crate exception above, a release tag that rebuilds
+instead of promoting, BuildKit cache
 backends and mounts that hand a credential to the build, or overwriting or
 deleting a published release asset or moving a published tag.
 

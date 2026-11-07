@@ -137,13 +137,21 @@ impl GhFake {
 
     pub(crate) fn run_prune_for(&self, head_branch: &str) -> Result<PruneRun, Box<dyn Error>> {
         let root: &Path = self.dir.path();
+        let script = prune_script();
+        let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
+        let command = velnor_actions_workflow_renderer::verified_gh_shell::command();
+        assert!(script.contains(&bootstrap));
+        assert!(script.contains(&command));
+        let script = script
+            .replace(&bootstrap, ":")
+            .replace(&command, "command gh");
         let mut command = Command::new("sh");
         if let Some(locale) = self.locale {
             command.env("LC_ALL", locale);
         }
         let output = command
             .arg("-c")
-            .arg(prune_script())
+            .arg(script)
             .env("PATH", format!("{}:/usr/bin:/bin", root.display()))
             .env("GITHUB_REF", "refs/heads/main")
             .env("HEAD_BRANCH", head_branch)

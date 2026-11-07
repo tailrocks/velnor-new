@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     preview_production::{expected_release_payload_pairs, release_payload_job_id},
 };
 
-pub(in crate::package_release_publish) fn release_job_name(
+pub(in crate::release::package_release_publish) fn release_job_name(
     plan: &PackageReleasePlan,
     job: &str,
 ) -> Result<String, OrchestratorError> {
@@ -76,7 +76,7 @@ pub(super) fn preview_payload_job_name(
     Ok(format!("Build {} / {}", pair.product_id, pair.target))
 }
 
-pub(in crate::package_release_publish) fn continuation_job_name(
+pub(in crate::release::package_release_publish) fn continuation_job_name(
     channel: PackageReleaseChannel,
     job: &str,
 ) -> Result<&'static str, OrchestratorError> {
@@ -115,7 +115,7 @@ pub(in crate::package_release_publish) fn continuation_job_name(
 }
 
 impl super::super::github::GitHubApi {
-    pub(in crate::package_release_publish) fn verify_direct_release_caller(
+    pub(in crate::release::package_release_publish) fn verify_direct_release_caller(
         &self,
         plan: &PackageReleasePlan,
         receipt: &velnor_actions_contract::package_release::PackageReleaseReceipt,

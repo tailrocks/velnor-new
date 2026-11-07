@@ -23,6 +23,8 @@ impl PermissionLevel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JobPermissions {
+    pub actions: PermissionLevel,
+    pub checks: PermissionLevel,
     pub contents: PermissionLevel,
     pub pull_requests: PermissionLevel,
     pub id_token: PermissionLevel,
@@ -34,27 +36,37 @@ impl JobPermissions {
         use PermissionLevel::{None, Read, Write};
         match role {
             ReleaseRole::Preparation => Self {
-                contents: Write,
-                pull_requests: Write,
-                id_token: None,
-            },
-            ReleaseRole::Preflight => Self {
+                actions: None,
+                checks: None,
                 contents: Read,
                 pull_requests: None,
                 id_token: None,
             },
+            ReleaseRole::PrCreate => Self {
+                actions: Read,
+                checks: None,
+                contents: Write,
+                pull_requests: Write,
+                id_token: None,
+            },
+            ReleaseRole::Preflight | ReleaseRole::Reconcile => Self {
+                actions: Read,
+                checks: Read,
+                contents: Read,
+                pull_requests: Read,
+                id_token: None,
+            },
             ReleaseRole::PublishOidc => Self {
+                actions: Read,
+                checks: Read,
                 contents: Write,
                 pull_requests: Read,
                 id_token: Write,
             },
             ReleaseRole::PublishBootstrap => Self {
+                actions: Read,
+                checks: Read,
                 contents: Write,
-                pull_requests: Read,
-                id_token: None,
-            },
-            ReleaseRole::Reconcile => Self {
-                contents: Read,
                 pull_requests: Read,
                 id_token: None,
             },

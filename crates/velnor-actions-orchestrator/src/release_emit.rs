@@ -1,40 +1,44 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
-use velnor_actions_mise::{GitRequest, MetadataDiscovery};
-use velnor_actions_rust::release_select::{
-    DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
-    select_release_set,
+use velnor_actions_contract::config::{
+    CrateReleaseIntent, CrateReleaseRecovery, ReleaseRegistry, RustReleaseConfig,
 };
-use velnor_actions_workflow_renderer::release_config::BootstrapReleasePlzConfig;
+use velnor_actions_rust::release_select::DEFAULT_REGISTRY;
 use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
-use velnor_actions_workflow_renderer::release_spec::{
-    BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
-    validate_source_sha,
-};
-use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
+use velnor_actions_workflow_renderer::release_spec::publish_gate_condition;
+use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, render_release_files};
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
 use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
-use crate::prepare::GenerationPreparation;
-use crate::release_identity::{
-    common_registry, head_sha, origin_repository, plan_id_for_source, workspace_slug,
+use crate::planner::prepare::GenerationPreparation;
+use crate::release::release_identity::{
+    common_registry, origin_repository, plan_id_for_source, release_lock,
 };
-use crate::release_steps::{JobInputs, assemble_jobs};
+use crate::release::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
-mod config;
-use config::plz_config;
+pub(super) mod config;
+pub(crate) use config::{enabled_release, git_tag_release};
+use config::{plz_config, release_render_context};
+
+#[path = "release_emit_plan.rs"]
+mod plan;
+use plan::{
+    approved_source, check_recovery_record, check_release_selection, release_plan,
+    release_triggers, reviewed_generator_manifest,
+};
+
+#[path = "release_emit_selection.rs"]
+mod selection;
+use selection::tracked_manifests;
+pub(crate) use selection::{release_metadata_json, select_from_json};
 
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 
 pub(crate) fn release_files(
     prep: &GenerationPreparation,
-    mise: &MiseSetup,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
@@ -42,334 +46,345 @@ pub(crate) fn release_files(
     if release.registry == ReleaseRegistry::GitTag {
         return Ok(Vec::new());
     }
-    if !release.version_groups.is_empty() {
+    if release.registry == ReleaseRegistry::CratesIo {
         return Err(OrchestratorError::unsupported(
-            "version_groups",
-            "native groups need renderer config support: remove version_groups",
+            "crate_release_admission",
+            "trusted publication is disabled until runtime admission and reconciliation are available",
         ));
     }
-    let selection = select_packages(prep, release)?;
-    if selection.is_empty() {
-        return Err(OrchestratorError::Contract {
-            problem: "release_nothing_selected".to_owned(),
-        });
-    }
-    check_bootstrap_record(release, &selection)?;
-    let registry = common_registry(&selection)?;
-    let repository = origin_repository(&prep.root)?;
-    let source_sha = approved_source(&prep.root, release)?;
+    let mise = crate::planner::pins::resolve_mise_setup(&prep.config, RELEASE_HOSTED_RUNNER)?;
+    release_files_for_config(prep, &mise, release)
+}
+
+fn release_files_for_config(
+    prep: &GenerationPreparation,
+    mise: &MiseSetup,
+    release: &RustReleaseConfig,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    let ReleaseIntentInputs {
+        metadata,
+        known,
+        selection,
+        registry,
+        repository,
+        source_sha,
+        pin,
+        config,
+        intent,
+        source_snapshot,
+        catalog,
+    } = derive_release_inputs(prep, release)?;
+    let source_root = source_snapshot
+        .as_ref()
+        .map_or(prep.root.as_path(), |source| source.root());
     let plan_id = plan_id_for_source(&source_sha);
     let version = release
-        .bootstrap
+        .recovery
         .as_ref()
         .map(|record| record.version.as_str());
-    let bootstrap = bootstrap_plan(
+    let mut plan = release_plan(
         &selection,
         &repository,
         &source_sha,
         &plan_id,
         &registry,
         version,
+        release.exact_source_sha().is_some(),
     );
-    let gate = publish_gate_condition(&repository, &bootstrap);
-    let catalog = &prep.emission_catalog();
-    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
-    let jobs = assemble_jobs(&JobInputs {
-        release,
-        gate,
-        sha: &source_sha,
-        registry: registry_arg,
-        label: &prep.runner_label,
+    if intent.oidc_qualification {
+        plan.qualification_dispatch =
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Enabled;
+    }
+    let jobs = build_release_jobs(
+        prep,
         mise,
-        catalog,
-    })?;
-    let concurrency = stable_lock_group(
+        release,
         &registry,
         &repository,
-        &workspace_slug(&release.manifest_path),
+        &plan,
+        ((&pin.0, &pin.1), &catalog),
+    )?;
+    let concurrency = release_lock(
+        &metadata,
+        source_root,
+        &release.manifest_path,
+        &known,
+        &registry,
+        &repository,
     )?;
     let spec = ReleaseWorkflowSpec {
         name: RELEASE_WORKFLOW_NAME.to_owned(),
         repository,
-        triggers: release_triggers(&prep.default_branch, &bootstrap),
+        default_branch: prep.default_branch.clone(),
+        triggers: release_triggers(&prep.default_branch, &plan),
         concurrency,
         jobs,
-        bootstrap,
+        plan,
         publish_environment: release.environment.clone(),
         bootstrap_environment: release.environment.clone(),
+        journal_predecessor: release.journal_predecessor.clone(),
+        new_crates: release.new_crates.clone(),
+        qualification: intent.oidc_qualification.then(|| {
+            velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+                repository: intent.repository.clone(),
+                default_branch: intent.default_branch.clone(),
+                environment: intent.environment.clone(),
+                required_workflow_path: intent.required_workflow_path.clone(),
+                trusted_reviewer_id: intent.trusted_reviewer_id,
+                generator_version: intent.generator_version.clone(),
+                generator_source_sha: intent.generator_source_sha.clone(),
+                generator_manifest_sha256: intent.generator_manifest_sha256.clone(),
+            }
+        }),
+        release_plz_version: catalog
+            .version(velnor_actions_mise::PinnedTool::ReleasePlz)
+            .to_owned(),
     };
-    let ctx = ReleaseRenderContext {
+    let ctx = release_render_context();
+    Ok(render_release_files(&spec, &ctx, &config, &intent)?.as_sorted_vec())
+}
+
+fn build_release_jobs(
+    prep: &GenerationPreparation,
+    mise: &MiseSetup,
+    release: &RustReleaseConfig,
+    registry: &str,
+    repository: &str,
+    plan: &velnor_actions_workflow_renderer::release_spec::ReleasePlan,
+    inputs: ((&str, &str), &velnor_actions_mise::ToolCatalog),
+) -> Result<
+    std::collections::BTreeMap<
+        String,
+        velnor_actions_workflow_renderer::release_jobs::ReleaseJobSpec,
+    >,
+    OrchestratorError,
+> {
+    let gate = publish_gate_condition(repository, &prep.default_branch, plan);
+    let preparation_gate = format!(
+        "github.repository == '{repository}' && github.event_name == 'push' && github.ref == 'refs/heads/{}' && needs.release-preflight.result == 'success' && needs.release-preflight.outputs.eligible == 'false'",
+        prep.default_branch
+    );
+    let (generator, source_catalog) = inputs;
+    let catalog = source_catalog.clone().with_export_rustup_toolchain(false);
+    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry);
+    let generator_version = env!("CARGO_PKG_VERSION");
+    let acquire = velnor_actions_workflow_renderer::release_generator_bootstrap::acquire_step(
+        generator_version,
+        RELEASE_HOSTED_RUNNER,
+        generator.0,
+        generator.1,
+    )?;
+    let mut jobs = assemble_jobs(&JobInputs {
+        release,
+        gate,
+        preparation_gate,
+        registry: registry_arg,
+        label: RELEASE_HOSTED_RUNNER,
+        mise,
+        catalog: &catalog,
+        acquire: &acquire,
+        generator_version,
+        generator_source_sha: generator.0,
+        generator_manifest_sha256: generator.1,
+    })?;
+    if let Some(preflight) = jobs.get_mut("release-preflight") {
+        preflight.condition =
+            velnor_actions_workflow_renderer::release_spec::preflight_gate_condition(
+                repository,
+                &prep.default_branch,
+                plan,
+            );
+    }
+    Ok(jobs)
+}
+
+struct IntentSettings<'a> {
+    default_branch: &'a str,
+    catalog: &'a velnor_actions_mise::ToolCatalog,
+}
+
+fn crate_release_intent(
+    settings: &IntentSettings<'_>,
+    release: &RustReleaseConfig,
+    repository: &str,
+    registry: &str,
+    generator_pin: (&str, &str),
+    config: &velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
+    pr_write_paths: Vec<String>,
+) -> CrateReleaseIntent {
+    CrateReleaseIntent {
+        schema: 1,
+        oidc_qualification: release.oidc_qualification.is_enabled(),
+        repository: repository.to_owned(),
+        default_branch: settings.default_branch.to_owned(),
+        environment: release.environment.clone(),
+        required_workflow_path: release.required_workflow_path.clone(),
+        trusted_reviewer_id: release.trusted_reviewer_id,
+        rust_version: settings
+            .catalog
+            .version(velnor_actions_mise::PinnedTool::Rust)
+            .to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        runs_on: prep.runner_label.clone(),
-    };
-    let config = plz_config(release, &selection);
-    let bootstrap_config = BootstrapReleasePlzConfig::new(config.clone())?;
-    Ok(render_release_files(&spec, &ctx, &config, &bootstrap_config)?.as_sorted_vec())
+        generator_source_sha: generator_pin.0.to_owned(),
+        generator_manifest_sha256: generator_pin.1.to_owned(),
+        release_plz_version: settings
+            .catalog
+            .version(velnor_actions_mise::PinnedTool::ReleasePlz)
+            .to_owned(),
+        runner: RELEASE_HOSTED_RUNNER.to_owned(),
+        authentication: release.effective_authentication(),
+        manifest_path: release.manifest_path.clone(),
+        pr_write_paths,
+        registry: registry.to_owned(),
+        packages: config
+            .packages
+            .iter()
+            .map(|package| package.name.clone())
+            .collect(),
+        publish_features: config
+            .packages
+            .iter()
+            .map(|package| (package.name.clone(), package.publish_features.clone()))
+            .collect(),
+        version_groups: release.version_groups.clone(),
+        new_crates: release.new_crates.clone(),
+        tag_template: release.tag_name.clone(),
+        journal_predecessor: release.journal_predecessor.clone(),
+        continuation_source_sha: release.continuation_source_sha.clone(),
+        recovery: release
+            .recovery
+            .as_ref()
+            .map(|recovery| CrateReleaseRecovery {
+                package: recovery.package.clone(),
+                version: recovery.version.clone(),
+                source_sha: recovery.source_sha.clone(),
+            }),
+    }
 }
 
-pub(crate) fn enabled_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
-    let Some(release) = release else {
-        return Ok(None);
-    };
-    if !release.enabled {
-        return Ok(None);
-    }
-    if prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.enabled",
-            "release_requires_consumer_policy",
-        ));
-    }
-    Ok(Some(release))
+#[path = "release_emit_snapshot.rs"]
+mod snapshot;
+pub(crate) use snapshot::derive_intent_from_snapshot;
+
+struct ReleaseIntentInputs {
+    metadata: String,
+    known: BTreeSet<String>,
+    selection: velnor_actions_rust::release_select::ReleaseSelection,
+    registry: String,
+    repository: String,
+    source_sha: String,
+    pin: (String, String),
+    config: velnor_actions_workflow_renderer::release_config::ReleasePlzConfig,
+    intent: CrateReleaseIntent,
+    source_snapshot: Option<crate::crate_release_qualification_snapshot::SourceSnapshot>,
+    catalog: velnor_actions_mise::ToolCatalog,
 }
 
-pub(crate) fn git_tag_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    if prep
-        .config
-        .stacks
-        .rust
-        .as_ref()
-        .is_some_and(|rust| rust.binary_release.stable.enabled)
-    {
-        return Ok(None);
-    }
-    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
-}
-
-fn select_packages(
+fn derive_release_inputs(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
-) -> Result<ReleaseSelection, OrchestratorError> {
-    let json = release_metadata_json(prep, release.manifest_path.as_str())?;
-    select_from_json(prep, release, &json)
-}
-
-pub(crate) fn select_from_json(
-    prep: &GenerationPreparation,
-    release: &RustReleaseConfig,
-    json: &str,
-) -> Result<ReleaseSelection, OrchestratorError> {
-    let manifest = release.manifest_path.as_str();
-    let scope = if release.publishable_workspace {
-        ReleaseScope::PublishableWorkspace
-    } else if release.registry == ReleaseRegistry::GitTag {
-        ReleaseScope::GitTagPackages(release.packages.clone())
+) -> Result<ReleaseIntentInputs, OrchestratorError> {
+    let source_sha = approved_source(&prep.root, release)?;
+    let source_snapshot = if release.exact_source_sha().is_some() {
+        let git = crate::crate_release_git::ReleaseGit::system().map_err(|_| {
+            OrchestratorError::Contract {
+                problem: "release_source_git_unavailable".to_owned(),
+            }
+        })?;
+        Some(
+            crate::crate_release_qualification_snapshot::snapshot_git_objects(
+                &prep.root,
+                &source_sha,
+                &git,
+            )?,
+        )
     } else {
-        ReleaseScope::Packages(release.packages.clone())
+        None
     };
-    let affected = BTreeSet::new();
-    let known_manifests = tracked_manifests(&prep.root)?;
-    let supported: &[String] = &[];
-    let request = SelectRequest {
-        metadata_json: json,
-        repo_root: &prep.root,
-        manifest_hint: manifest,
-        scope: &scope,
-        enabled: true,
-        affected: &affected,
-        known_manifests: &known_manifests,
-        supported_registries: supported,
+    let source_root = source_snapshot
+        .as_ref()
+        .map_or(prep.root.as_path(), |source| source.root());
+    let catalog = if let Some(source) = &source_snapshot {
+        crate::tool_catalog_resolve::resolve_snapshot_catalog(
+            source.root(),
+            &prep.config,
+            source.nested_toolchains(),
+        )?
+    } else {
+        prep.catalog.clone()
     };
+    let metadata = selection::release_metadata_json_at(
+        prep,
+        source_root,
+        &catalog,
+        release.manifest_path.as_str(),
+    )?;
+    let known = if let Some(source) = &source_snapshot {
+        source.manifests().clone()
+    } else {
+        tracked_manifests(source_root)?
+    };
+    let snapshot::SourceInputs {
+        selection,
+        registry,
+        config,
+        paths,
+    } = snapshot::derive_source_inputs(source_root, release, &metadata, &known)?;
+    let repository = origin_repository(&prep.root)?;
+    let pin = reviewed_generator_manifest(
+        prep.discovery.consumer_manifest_json.as_deref(),
+        prep.discovery.consumer_manifest_stand_in,
+        env!("CARGO_PKG_VERSION"),
+    )?;
+    let intent = crate_release_intent(
+        &IntentSettings {
+            default_branch: &prep.default_branch,
+            catalog: &catalog,
+        },
+        release,
+        &repository,
+        &registry,
+        (&pin.0, &pin.1),
+        &config,
+        paths,
+    );
+    Ok(ReleaseIntentInputs {
+        metadata,
+        known,
+        selection,
+        registry,
+        repository,
+        source_sha,
+        pin,
+        config,
+        intent,
+        source_snapshot,
+        catalog,
+    })
+}
+
+fn reviewed_pr_write_paths(
+    root: &std::path::Path,
+    release: &RustReleaseConfig,
+    metadata: &str,
+    known: &BTreeSet<String>,
+) -> Result<Vec<String>, OrchestratorError> {
     let record = velnor_actions_rust::metadata::parse_metadata_json(
-        json,
-        &prep.root,
-        manifest,
-        &known_manifests,
+        metadata,
+        root,
+        &release.manifest_path,
+        known,
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    let workspace_manifest = if record.workspace_root.is_empty() {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{}/Cargo.toml", record.workspace_root)
-    };
-    if !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, manifest)
-        || !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, &workspace_manifest)
-        || record.packages.iter().any(|package| {
-            !package.external
-                && !velnor_actions_rust::tracked_manifest_in_source(&prep.root, &known_manifests, &package.manifest)
-        })
-    {
-        return Err(OrchestratorError::Contract {
-            problem: "release_manifest_not_tracked".to_owned(),
-        });
-    }
-    select_release_set(&request).map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })
+    Ok(release_pr_write_paths(&record))
 }
 
-fn tracked_manifests(root: &std::path::Path) -> Result<BTreeSet<String>, OrchestratorError> {
-    let failure = || OrchestratorError::Contract {
-        problem: "release_tracked_manifests_unavailable".to_owned(),
-    };
-    let output = GitRequest::ls_files(vec!["-z".into()])
-        .run_in(root)
-        .map_err(|_| failure())?;
-    if !output.success {
-        return Err(failure());
-    }
-    let paths: BTreeSet<String> =
-        crate::git_paths::split_nul_paths(&output.stdout).map_err(|_| failure())?;
-    Ok(paths
-        .into_iter()
-        .filter(|path| {
-            std::path::Path::new(path)
-                .file_name()
-                .is_some_and(|name| name == "Cargo.toml")
-        })
-        .collect())
-}
+#[path = "release_emit_write_paths.rs"]
+mod write_paths;
+use write_paths::release_pr_write_paths;
 
-pub(crate) fn release_metadata_json(
-    prep: &GenerationPreparation,
-    manifest: &str,
-) -> Result<String, OrchestratorError> {
-    let catalog = &prep.catalog;
-    if let Some(guard) = prep.operator_toolchain_guard() {
-        crate::inventory::require_metadata_tools(catalog, Some(guard))?;
-        return MetadataDiscovery::new(prep.root.join(manifest))
-            .and_then(|request| request.run_with_operator_guard(catalog, guard))
-            .map_err(|_| OrchestratorError::ToolchainGuard {
-                problem: "operator toolchain guard rejected metadata".to_owned(),
-            });
-    }
-    let incomplete = |problem: String| OrchestratorError::PreparationIncomplete {
-        manifest: manifest.to_owned(),
-        problem,
-    };
-    crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
-    let request = MetadataDiscovery::new(prep.root.join(manifest))
-        .map_err(|err| incomplete(err.to_string()))?;
-    let command = request
-        .command(catalog)
-        .map_err(|err| incomplete(err.to_string()))?;
-    let output = command.run().map_err(|err| incomplete(err.to_string()))?;
-    if !output.success {
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let first: String = stderr
-            .lines()
-            .next()
-            .unwrap_or("metadata_failed")
-            .chars()
-            .take(160)
-            .collect();
-        return Err(incomplete(format!("metadata_failed:{first}")));
-    }
-    output
-        .stdout_text("mise")
-        .map_err(|err| incomplete(err.to_string()))
-}
-
-fn check_bootstrap_record(
-    release: &RustReleaseConfig,
-    selection: &ReleaseSelection,
-) -> Result<(), OrchestratorError> {
-    if release.effective_authentication() != ReleaseAuthentication::BootstrapToken {
-        return Ok(());
-    }
-    let Some(record) = release.bootstrap.as_ref() else {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.bootstrap",
-            "missing_bootstrap_record",
-        ));
-    };
-    let selected = selection
-        .packages
-        .iter()
-        .find(|package| package.name == record.package);
-    let Some(selected) = selected else {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.bootstrap.package",
-            "bootstrap_package_not_selected",
-        ));
-    };
-    if selected.version != record.version {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.bootstrap.version",
-            format!("bootstrap_version_mismatch:{}", selected.version),
-        ));
-    }
-    Ok(())
-}
-
-fn approved_source(
-    root: &std::path::Path,
-    release: &RustReleaseConfig,
-) -> Result<String, OrchestratorError> {
-    if release.effective_authentication() == ReleaseAuthentication::BootstrapToken {
-        let Some(record) = release.bootstrap.as_ref() else {
-            return Err(OrchestratorError::config(
-                CONFIG_REL,
-                "stacks.rust.release.bootstrap",
-                "missing_bootstrap_record",
-            ));
-        };
-        validate_source_sha(&record.source_sha)?;
-        return Ok(record.source_sha.clone());
-    }
-    head_sha(root)
-}
-
-fn bootstrap_plan(
-    selection: &ReleaseSelection,
-    repository: &str,
-    sha: &str,
-    plan_id: &str,
-    registry: &str,
-    version: Option<&str>,
-) -> BootstrapPlan {
-    let packages: BTreeMap<String, String> = selection
-        .packages
-        .iter()
-        .map(|package| (package.name.clone(), package.version.clone()))
-        .collect();
-    BootstrapPlan {
-        plan_id: plan_id.to_owned(),
-        repository: repository.to_owned(),
-        source_sha: sha.to_owned(),
-        registry: registry.to_owned(),
-        packages,
-        version: version.map(str::to_owned),
-    }
-}
-
-fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers {
-    let mut dispatch_inputs = vec![
-        DispatchInput {
-            name: "plan".to_owned(),
-            description: "Approved release plan".to_owned(),
-            required: true,
-            default: Some(bootstrap.plan_id.clone()),
-        },
-        DispatchInput {
-            name: "source_sha".to_owned(),
-            description: "Approved source SHA".to_owned(),
-            required: true,
-            default: Some(bootstrap.source_sha.clone()),
-        },
-    ];
-    if let Some(version) = &bootstrap.version {
-        dispatch_inputs.push(DispatchInput {
-            name: "version".to_owned(),
-            description: "Approved crate version".to_owned(),
-            required: true,
-            default: Some(version.clone()),
-        });
-    }
-    ReleaseTriggers {
-        push_branches: vec![branch.to_owned()],
-        schedule: None,
-        dispatch_inputs,
-    }
-}
+#[cfg(test)]
+#[path = "release_emit_tests.rs"]
+mod tests;

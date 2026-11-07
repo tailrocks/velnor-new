@@ -93,8 +93,8 @@ impl MergeCandidate {
 }
 
 pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
-    let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
-    crate::package_release_publish::verify_published_release(&signed)?;
+    let signed = crate::release::package_release_signer::verify_attested_signed_package_from_env()?;
+    crate::release::package_release_publish::verify_published_release(&signed)?;
     let plan = signed.plan().clone();
     plan.validate()
         .map_err(|_| internal("tap_merge_plan_invalid"))?;
@@ -113,7 +113,7 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
         .map_err(|_| internal("tap_merge_receipt_invalid"))?;
     let policy = crate::tap_prepare::writer_policy_from_env()?;
     let spec = crate::tap_prepare::formula_policy_from_env()?;
-    let sdk_artifact_digest = crate::generator::current_exe_sha256()
+    let sdk_artifact_digest = crate::planner::generator::current_exe_sha256()
         .ok_or_else(|| internal("tap_sdk_artifact_digest_unavailable"))?;
     let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let root = runner_root()?;
@@ -284,7 +284,7 @@ fn read_regular(root: &Path, path: &Path) -> Result<Vec<u8>, OrchestratorError> 
     let relative = relative
         .to_str()
         .ok_or_else(|| internal("tap_merge_path_encoding"))?;
-    crate::check_evidence::reject_link_components(root, relative)?;
+    crate::planner::check_evidence::reject_link_components(root, relative)?;
     let metadata = fs::symlink_metadata(path).map_err(|_| internal("tap_merge_file_missing"))?;
     if !metadata.is_file()
         || metadata.file_type().is_symlink()

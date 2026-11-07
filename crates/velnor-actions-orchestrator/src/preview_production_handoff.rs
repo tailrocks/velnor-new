@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::exclusive_write::{create_dir_no_symlink, write_exclusive_until};
 use crate::filesystem_owner::held_file::HeldFile;
 use crate::{
-    OrchestratorError,
-    internal::internal,
-    package_release_artifacts::VerifiedPackageArtifact,
+    OrchestratorError, internal::internal,
+    release::package_release_artifacts::VerifiedPackageArtifact,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -14,6 +12,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use velnor_actions_contract::exclusive_write::{create_dir_no_symlink, write_exclusive_until};
 use velnor_actions_contract::{
     canonical_json_bytes,
     preview_production::{ReleasePayloadPair, ReleaseProductionRequest},
@@ -25,7 +24,7 @@ pub(super) const PRODUCTION_REQUEST: &str = "release-production-request.json";
 pub(crate) const LEAF_MANIFEST: &str = "release-payload.json";
 pub(crate) const AGGREGATE_MANIFEST: &str = "release-aggregate.json";
 pub(crate) const MAX_NATIVE_MANIFEST: u64 =
-    crate::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
+    crate::release::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
 #[path = "preview_production_handoff_copy.rs"]
 mod copy;
 pub(super) use copy::copy_verified;

@@ -6,6 +6,7 @@ use velnor_actions_contract::RunsOn;
 use crate::RenderError;
 use crate::marker::with_marker;
 use crate::render::RenderedFile;
+use crate::yaml::quote_scalar;
 
 pub const CACHE_CLEANUP_PATH: &str = ".github/workflows/cache-cleanup.yml";
 pub const CACHE_CLEANUP_FALLBACK_RUNNER: &str = "ubuntu-26.04";
@@ -34,16 +35,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_REF: refs/pull/${{ github.event.pull_request.number }}/merge
-        run: "set -eu; gh cache list --ref \"$PR_REF\" --limit 1000 --json id --jq '.[].id' > \"$RUNNER_TEMP/cache-ids\"; while read -r id; do if gh cache delete \"$id\"; then printf 'velnor: deleted cache entry %s of %s\\n' \"$id\" \"$PR_REF\"; else printf '::warning::cache_unavailable: could not delete cache entry %s\\n' \"$id\"; fi; done < \"$RUNNER_TEMP/cache-ids\""
+        run: @SCRIPT@
 "#;
 
 pub fn render_cache_cleanup_yml(runs_on: &str, version: &str) -> Result<RenderedFile, RenderError> {
-    let label = match RunsOn::parse(runs_on).map_err(RenderError::Contract)? {
-        RunsOn::Hosted(label) => label,
-        RunsOn::ScaleSet(_) => CACHE_CLEANUP_FALLBACK_RUNNER.to_owned(),
-    };
+    RunsOn::parse(runs_on).map_err(RenderError::Contract)?;
+    let label = CACHE_CLEANUP_FALLBACK_RUNNER;
+    let script = format!(
+        "set -eu\n{}\ngh() {{ {} \"$@\"; }}\ngh cache list --ref \"$PR_REF\" --limit 1000 --json id --jq '.[].id' > \"$RUNNER_TEMP/cache-ids\"; while read -r id; do if gh cache delete \"$id\"; then printf 'velnor: deleted cache entry %s of %s\\n' \"$id\" \"$PR_REF\"; else printf '::warning::cache_unavailable: could not delete cache entry %s\\n' \"$id\"; fi; done < \"$RUNNER_TEMP/cache-ids\"",
+        crate::verified_gh_shell::bootstrap(),
+        crate::verified_gh_shell::command()
+    );
     Ok(RenderedFile {
         path: CACHE_CLEANUP_PATH.to_owned(),
-        bytes: with_marker(version, &BODY.replace("@RUNS_ON@", &label))?,
+        bytes: with_marker(
+            version,
+            &BODY
+                .replace("@RUNS_ON@", label)
+                .replace("@SCRIPT@", &quote_scalar(&script)),
+        )?,
     })
 }

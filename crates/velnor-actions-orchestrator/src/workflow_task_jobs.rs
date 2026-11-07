@@ -56,8 +56,8 @@ pub(crate) fn policies(
         ..
     } = *inputs;
     let verification_policies = crate::verification_tasks::policies(config, discovery)?;
-    let build_policies = crate::build_tasks::policies(config, discovery)?;
-    let native_image_policies = crate::native_image_tasks::policies(root, config)?;
+    let build_policies = crate::planner::build_tasks::policies(config, discovery)?;
+    let native_image_policies = crate::planner::native_image_tasks::policies(root, config)?;
     let image_policies = crate::image_build_tasks::policies(root, config, inputs)?;
     let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
     let dbt_policies = dbt_tasks::policies(config, discovery, catalog)?;

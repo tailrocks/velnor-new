@@ -20,7 +20,7 @@ impl GhDownload {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|err| err.to_string())?;
         let output = exec
-            .command(catalog)
+            .command_with_optional_environment_token(catalog)
             .map_err(|err| err.to_string())?
             .with_cwd(PathBuf::from(root))
             .run()

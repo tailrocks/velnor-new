@@ -267,7 +267,7 @@ pub(super) fn read_captured_source_locator(
         .filter(|entry| !entry.directory && entry.mode == 0o644)
         .ok_or_else(|| internal("tap_source_locator_checkout_entry_invalid"))?;
     let path = checkout.join(HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH);
-    crate::check_evidence::reject_link_components(
+    crate::planner::check_evidence::reject_link_components(
         checkout,
         HOMEBREW_SOURCE_AUTHORITY_LOCATOR_PATH,
     )?;

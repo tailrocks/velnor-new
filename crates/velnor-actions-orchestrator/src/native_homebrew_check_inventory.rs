@@ -127,12 +127,12 @@ pub(crate) fn protected_stable_is_activated(
         return Err(internal("native_stable_selector_missing"));
     }
     let policy = authority.public_policy()?;
-    let selection = crate::package_release_public::PackageReleasePublicSelection::new(
+    let selection = crate::release::package_release_public::PackageReleasePublicSelection::new(
         PackageReleaseChannel::Stable,
         tag,
         source_sha,
     )?;
-    let release = crate::package_release_public::verify_public_package_release(
+    let release = crate::release::package_release_public::verify_public_package_release(
         &policy, &selection, deadline,
     )?;
     if release.receipt().channel != PackageReleaseChannel::Stable {

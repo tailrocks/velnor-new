@@ -6,6 +6,7 @@ schema = 2
 [workflow]
 name = "CI"
 policy = "velnor-repository-v1"
+runner_label = "ubuntu-26.04"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
@@ -252,7 +253,6 @@ inputs = [
   "crates/velnor-actions-cli/tests/image_publication_public/support/subjects.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/records/qualification.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/rejections/apply.rs",
-  "crates/velnor-actions-cli/tests/image_publication_public/support/rejections/attestation.rs",
   "crates/velnor-actions-cli/examples/image_publication_fixture/registry.rs",
   "crates/velnor-actions-cli/examples/qualification_diagnostics.rs",
   "crates/velnor-actions-cli/examples/qualification_diagnostics/collector.rs",
@@ -320,6 +320,8 @@ inputs = [
   "crates/velnor-actions-cli/tests/gc1_t53/support.rs",
   "crates/velnor-actions-cli/tests/image_publication_public.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/attempt_identity.rs",
+  "crates/velnor-actions-cli/tests/image_publication_public/authority_rejections.rs",
+  "crates/velnor-actions-cli/tests/image_publication_public/signed_attestation.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/readback_retention.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/promotion.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/registry_cases.rs",
@@ -664,7 +666,7 @@ inputs = [
   "crates/velnor-actions-mise/src/catalog_mise_binary.rs",
   "crates/velnor-actions-mise/src/catalog_owned_source.rs",
   "crates/velnor-actions-mise/src/catalog_project.rs",
-  "crates/velnor-actions-mise/src/catalog_rust_manifests.rs",
+  "crates/velnor-actions-contract/src/config/rust_channel_manifests.rs",
   "crates/velnor-actions-mise/src/catalog_source_build_bootstrap.rs",
   "crates/velnor-actions-mise/src/catalog_tool.rs",
   "crates/velnor-actions-mise/src/catalog_versions.rs",
@@ -866,6 +868,34 @@ inputs = [
 ]
 tools = ["cargo-nextest", "jactionlint-linux-x64", "rust", "shellcheck-linux-x64"]
 timeout_minutes = 15
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+
+[[checks]]
+id = "hosted-gh-config-custody"
+task = "test-hosted-gh-config-custody"
+inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-contract/Cargo.toml", "crates/velnor-actions-mise/Cargo.toml", "crates/velnor-actions-mise/src/catalog.rs", "crates/velnor-actions-workflow-renderer/Cargo.toml", "crates/velnor-actions-workflow-renderer/src/lib.rs", "crates/velnor-actions-workflow-renderer/src/publish_scripts.rs", "crates/velnor-actions-workflow-renderer/src/verified_gh_acquire.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_launcher.py", "crates/velnor-actions-workflow-renderer/src/verified_gh_shell.rs", "crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_procfs_cases.py", "crates/velnor-actions-workflow-renderer/tests/verified_gh_shell_public.rs", "mise.toml", "rust-toolchain.toml"]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 15
+[checks.evidence]
+path = "hosted-gh-config-evidence.json"
+expected_scenarios = ["procfs-gh-custody", "ubuntu-26.04"]
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+
+[[checks]]
+id = "hosted-direct-release"
+task = "test-hosted-direct-release"
+inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-orchestrator/src/crate_release_direct_history.rs", "crates/velnor-actions-orchestrator/src/crate_release_runtime_tests.rs", "crates/velnor-actions-orchestrator/src/release_steps_jobs.rs", "crates/velnor-actions-workflow-renderer/src/release_gates.rs", "mise.toml", "rust-toolchain.toml", "scripts/check-hosted-direct-release.py"]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 15
+[checks.evidence]
+path = "hosted-direct-release-evidence.json"
+expected_scenarios = ["generated-workflow", "interrupted-journal", "oidc-bindings", "source-admission", "ubuntu-26.04"]
 [checks.runner]
 label = "ubuntu-26.04"
 platform = "linux_x64"

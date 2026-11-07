@@ -119,7 +119,7 @@ pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
             .ok_or_else(|| RenderError::BadCommand("invalid_utf8_boundary".to_owned()))?;
         if ch == '\'' {
             flush_run_literal(&mut literal, &mut out);
-            out.push_str("'\\''");
+            out.push_str("\\'");
         } else {
             literal.push(ch);
         }

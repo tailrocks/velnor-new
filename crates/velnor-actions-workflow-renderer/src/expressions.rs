@@ -160,6 +160,34 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !is_private_env_binding(key, inner)
             && !is_plan_gh_token_binding(key, inner)
             && !is_mbx_bundle_key_binding(key, inner)
+            && !(key == "VELNOR_RUST_ARTIFACT_ID"
+                && matches!(
+                    inner,
+                    "needs.release-preflight.outputs.rust_artifact_id"
+                        | "steps.release-rust-upload.outputs.artifact-id"
+                ))
+            && !(key == "VELNOR_RECEIPT_ARTIFACT_ID"
+                && matches!(
+                    inner,
+                    "needs.release-preflight.outputs.receipt_artifact_id"
+                        | "steps.release-receipt-upload.outputs.artifact-id"
+                ))
+            && !matches!(
+                (key, inner),
+                (
+                    "VELNOR_SOURCE_SHA",
+                    "steps.release-admission.outputs.source_sha"
+                ) | (
+                    "VELNOR_PR_ARTIFACT_ID",
+                    "needs.release-preparation.outputs.artifact_id"
+                ) | (
+                    "VELNOR_PR_ARTIFACT_DIGEST",
+                    "needs.release-preparation.outputs.artifact_digest"
+                ) | (
+                    "VELNOR_PR_CONTENT_SHA256",
+                    "needs.release-preparation.outputs.content_sha256"
+                )
+            )
             && !is_state_producer_output(inner)
             && !is_state_identity_binding(key, inner)
         {
@@ -320,7 +348,11 @@ pub(crate) fn check_with_action_value(
     value: &str,
 ) -> Result<(), RenderError> {
     if uses.starts_with("actions/checkout@")
-        && ((key == "ref" && value == "${{ github.sha }}")
+        && ((key == "ref"
+            && matches!(
+                value,
+                "${{ github.sha }}" | "${{ steps.release-admission.outputs.source_sha }}"
+            ))
             || (key == "fetch-depth" && CheckoutHistory::parse_fetch_depth(value).is_some()))
     {
         return Ok(());

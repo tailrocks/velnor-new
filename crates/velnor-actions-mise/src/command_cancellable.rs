@@ -17,6 +17,71 @@ mod bounded;
 pub use bounded::run_command_bounded;
 
 #[cfg(unix)]
+pub fn run_prepared_quiescent_until(
+    command: &mut std::process::Command,
+    cap: usize,
+    deadline: CheckDeadline,
+) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+    use std::os::unix::process::CommandExt as _;
+    use std::process::Stdio;
+
+    let invalid = || MiseError::SpawnFailed {
+        program: "release-checkout".to_owned(),
+        message: "prepared_command_failed".to_owned(),
+    };
+    let remaining = deadline.remaining()?;
+    let work = remaining
+        .checked_sub(IsolatedCommand::PROCESS_CLEANUP_GRACE)
+        .filter(|duration| !duration.is_zero())
+        .ok_or_else(invalid)?;
+    let work_deadline = CheckDeadline::after(work)?;
+    let cleanup_deadline = Instant::now().checked_add(remaining).ok_or_else(invalid)?;
+    let mut anchor = Some(ProcessGroupAnchor::spawn().map_err(|_| invalid())?);
+    let pgid = anchor.as_ref().ok_or_else(invalid)?.pgid();
+    let Ok(mut child) = command
+        .process_group(pgid)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    else {
+        helpers::cleanup_anchor(&mut anchor, None, cleanup_deadline).map_err(|_| {
+            MiseError::SpawnFailed {
+                program: "release-checkout".to_owned(),
+                message: "prepared_command_failed;cleanup_failed:uncertain".to_owned(),
+            }
+        })?;
+        return Err(invalid());
+    };
+    let cancel = CancelHandle::new();
+    let mut streams = Streams::memory(cap);
+    let mut context = ChildRunContext {
+        program: "release-checkout",
+        streams: &mut streams,
+        deadline: work_deadline,
+        cancel: &cancel,
+        timeout_message: super::SPAWN_DEADLINE_MESSAGE,
+        quiescent: true,
+        reserved_cleanup_deadline: Some(cleanup_deadline),
+    };
+    let (mut output, receipt) = finish_child_process(&mut context, &mut child, &mut anchor)?;
+    output.stdout = streams.into_memory();
+    receipt.map(|proof| (output, proof)).ok_or_else(invalid)
+}
+
+#[cfg(not(unix))]
+pub fn run_prepared_quiescent_until(
+    _command: &mut std::process::Command,
+    _cap: usize,
+    _deadline: CheckDeadline,
+) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+    Err(MiseError::SpawnFailed {
+        program: "release-checkout".to_owned(),
+        message: "quiescent_process_groups_require_unix".to_owned(),
+    })
+}
+
+#[cfg(unix)]
 #[path = "command_cancellable_helpers.rs"]
 mod helpers;
 #[cfg(unix)]
@@ -192,8 +257,9 @@ impl IsolatedCommand {
         } else {
             None
         };
-        let mut child = spawn_child(self, &mut anchor, reserved_cleanup_deadline)
-            .map_err(|problem| fail(&problem))?;
+        let (mut child, _verified_launch) =
+            spawn_child(self, &mut anchor, reserved_cleanup_deadline)
+                .map_err(|problem| fail(&problem))?;
         let mut context = ChildRunContext {
             program: &program,
             streams,

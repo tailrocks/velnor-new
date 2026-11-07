@@ -33,7 +33,7 @@ pub(super) fn authenticate(
         return Err(internal("homebrew_authority_qualification_checkout"));
     }
     let selection = public_selection(&dispatch, repository_id);
-    crate::package_release_publish::verify_public_qualification_run(&selection, deadline)?;
+    crate::release::package_release_publish::verify_public_qualification_run(&selection, deadline)?;
     Ok(QualificationSelection {
         dispatch,
         repository_id,
@@ -57,7 +57,7 @@ pub(super) fn recheck(
     if observed != selection.dispatch {
         return Err(internal("homebrew_authority_qualification_runner_changed"));
     }
-    crate::package_release_publish::verify_public_qualification_run(
+    crate::release::package_release_publish::verify_public_qualification_run(
         &public_selection(&observed, repository_id),
         deadline,
     )
@@ -95,9 +95,12 @@ fn capture_dispatch(
         run_id: run_id.as_deref(),
         run_attempt: run_attempt.as_deref(),
     };
-    let dispatch =
-        velnor_actions_contract::request_event::qualification_dispatch_for_parts(&event_name, &payload, runner)?
-            .ok_or_else(|| internal("homebrew_authority_qualification_event"))?;
+    let dispatch = velnor_actions_contract::request_event::qualification_dispatch_for_parts(
+        &event_name,
+        &payload,
+        runner,
+    )?
+    .ok_or_else(|| internal("homebrew_authority_qualification_event"))?;
     if !dispatch_is_admitted(&dispatch, repository, expected_head, &event_name) {
         return Err(internal("homebrew_authority_qualification_runner_context"));
     }
@@ -124,8 +127,8 @@ fn dispatch_is_admitted(
 fn public_selection(
     dispatch: &QualificationDispatch,
     repository_id: u64,
-) -> crate::package_release_publish::QualificationRunSelection {
-    crate::package_release_publish::QualificationRunSelection::new(
+) -> crate::release::package_release_publish::QualificationRunSelection {
+    crate::release::package_release_publish::QualificationRunSelection::new(
         dispatch.repository.clone(),
         repository_id,
         dispatch.source_sha.clone(),

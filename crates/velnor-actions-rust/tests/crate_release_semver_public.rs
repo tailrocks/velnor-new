@@ -6,7 +6,6 @@ use std::{
     fs,
     process::Command,
 };
-use velnor_actions_rust::release_config::{VersionGroup, resolve_version_groups};
 use velnor_actions_rust::release_select::{ReleaseRequest, ReleaseScope, select_release_set};
 
 #[test]
@@ -44,30 +43,6 @@ fn cargo_prerelease_version_can_be_selected() -> Result<(), Box<dyn std::error::
         supported_registries: &[],
     };
     assert_eq!(select_release_set(&request)?.names(), vec!["probe"]);
-    Ok(())
-}
-
-#[test]
-fn groups_order_unbounded_numeric_prereleases_and_ignore_build_metadata()
--> Result<(), Box<dyn std::error::Error>> {
-    let groups = vec![VersionGroup {
-        name: "group".into(),
-        members: vec!["a".into(), "b".into()],
-    }];
-    let current = BTreeMap::from([("a".into(), "1.0.0".into()), ("b".into(), "1.0.0".into())]);
-    let changed = BTreeSet::from(["a".into(), "b".into()]);
-    let planned = BTreeMap::from([
-        ("a".into(), "1.2.3-18446744073709551616".into()),
-        ("b".into(), "1.2.3-9999999999999999999".into()),
-    ]);
-    let resolved = resolve_version_groups(&groups, &current, &planned, &changed)?;
-    assert_eq!(resolved["b"], planned["a"]);
-    let planned = BTreeMap::from([
-        ("a".into(), "1.2.3+z".into()),
-        ("b".into(), "1.2.3+a".into()),
-    ]);
-    let resolved = resolve_version_groups(&groups, &current, &planned, &changed)?;
-    assert_eq!(resolved["b"], planned["a"]);
     Ok(())
 }
 

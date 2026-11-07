@@ -62,7 +62,7 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
         crate::safe_read::MAX_REPO_FILE_BYTES,
     )?;
     let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
-    let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+    let repository = env::var(crate::planner::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .filter(|slug| !slug.is_empty());
     let named_check_lanes = env::var(NAMED_CHECK_LANES_ENV)
@@ -128,7 +128,7 @@ fn write_request_parts_with_lanes(
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
     if op == MERGE_OP {
-        return crate::merge_request::write_merge_request(&path);
+        return crate::planner::merge_request::write_merge_request(&path);
     }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
