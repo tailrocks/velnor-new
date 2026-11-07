@@ -35,7 +35,8 @@ for marker, name in (('__VELNOR_MANAGER_PAYLOAD__', 'release_manager_bus.py'),
                      ('__VELNOR_WATCH_PROGRAM_PAYLOAD__', 'release_launcher_watch.py'),
                      ('__VELNOR_WATCH_CLAIM_PAYLOAD__', 'release_supervisor_claim.py')):
     source = source.replace(marker, base64.b64encode((source_root / name).read_bytes()).decode())
-source = source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+source = (source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+          .replace('__VELNOR_CRATE_RELEASE_WORKFLOW_PATH__', '.github/workflows/crate-release.yml'))
 bundle = {key: base64.b64encode((source_root / name).read_bytes()).decode('ascii')
           for key, name in (('coordinator', 'release_coordinator_exec.py'),
                             ('retained', 'release_retained_parent.py'),
