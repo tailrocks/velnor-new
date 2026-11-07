@@ -71,6 +71,7 @@ fn candidate_steps(
             &pins.install_qualify_tools_argv,
         )?,
         workflow_steps::verify_rust_step(pins)?,
+        workflow_steps::provision_qualification_cargo_sources(&pins.rust_version),
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
         workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];

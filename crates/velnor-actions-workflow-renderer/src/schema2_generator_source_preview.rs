@@ -214,6 +214,7 @@ fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError>
             &pins.install_qualify_tools_argv,
         )?,
         steps::verify_rust_step(pins)?,
+        steps::provision_qualification_cargo_sources(&pins.rust_version),
         steps::download_step_by_id(
             "Download exact source preview payload",
             "${{ needs.source-preview-build.outputs.artifact_id }}",

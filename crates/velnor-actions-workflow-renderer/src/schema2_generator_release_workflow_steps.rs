@@ -101,6 +101,15 @@ fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<Str
 pub(super) fn install_gh_step(install_argv: &[String]) -> Result<Yaml, RenderError> {
     command_step("Install pinned GitHub CLI", install_argv)
 }
+pub(super) fn provision_qualification_cargo_sources(rust_version: &str) -> Yaml {
+    bash_step(
+        "Provision Cargo sources for offline qualification",
+        &format!(
+            "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ncd \"$RUNNER_TEMP\"\nmise --no-config --no-env --no-hooks exec rust@{rust_version} -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"\nmise --no-config --no-env --no-hooks exec rust@{rust_version} -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\""
+        ),
+    )
+}
+
 pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
