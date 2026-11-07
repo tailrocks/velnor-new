@@ -146,6 +146,7 @@ crates/velnor-actions-contract/src/config/qualified_tool_validation.rs
 crates/velnor-actions-contract/src/config/qualified_tools.rs
 crates/velnor-actions-contract/src/config/release.rs
 crates/velnor-actions-contract/src/config/release_intent.rs
+crates/velnor-actions-contract/src/config/release_policy.rs
 crates/velnor-actions-contract/src/config/release_rehearsal.rs
 crates/velnor-actions-contract/src/config/release_validation.rs
 crates/velnor-actions-contract/src/config/resources.rs
