@@ -251,6 +251,59 @@ fn history_source_context(
     Ok((root, git, files))
 }
 
+fn verify_changed_predecessor(
+    journal: &crate::crate_release_journal_adapter::JournalAdapter<
+        crate::crate_release_github::NativeGitHubAdmissionRead,
+    >,
+    prior: &JournalReceipt,
+    current: &JournalReceipt,
+    root: &Path,
+    git: &crate::crate_release_git::ReleaseGit,
+    edge: &crate::crate_release_journal::PriorTransition<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let completion_ref = format!(
+        "refs/tags/velnor-receipt/{}/{}/reconciled",
+        current.identity.run_id, current.identity.run_attempt
+    );
+    let completion_before = journal.get_ref("owner/project", &completion_ref)?;
+    let blob = journal
+        .create_blob("owner/project", b"invalid changed predecessor history")
+        .map_err(|error| format!("create drift blob: {error}"))?;
+    let name = format!(
+        "velnor-receipt/{}/{}/operation-2",
+        prior.identity.run_id, prior.identity.run_attempt
+    );
+    let tag = JournalTag {
+        name: name.clone(),
+        object_type: "blob".into(),
+        object_sha: blob,
+        message: "velnor-release-receipt-v1".into(),
+    };
+    let tag_sha = journal
+        .create_tag_object("owner/project", &tag)
+        .map_err(|error| format!("create drift tag: {error}"))?;
+    journal
+        .create_ref("owner/project", &format!("refs/tags/{name}"), &tag_sha)
+        .map_err(|error| format!("create drift ref: {error}"))?;
+    assert!(
+        crate::crate_release_journal::inspect_prior_chain_with(
+            &journal,
+            current,
+            root,
+            git,
+            Some(edge),
+        )
+        .is_err(),
+        "a valid signed predecessor with changed operation history must be rejected"
+    );
+    assert_eq!(
+        journal.get_ref("owner/project", &completion_ref)?,
+        completion_before,
+        "a rejected predecessor must not change the completion ref"
+    );
+    Ok(())
+}
+
 fn exercise_interrupted_journal(
     prior: &JournalReceipt,
     current: &JournalReceipt,
@@ -299,45 +352,6 @@ fn exercise_interrupted_journal(
         1,
         "pending upload must remain visible to recovery"
     );
-    let completion_ref = format!(
-        "refs/tags/velnor-receipt/{}/{}/reconciled",
-        current.identity.run_id, current.identity.run_attempt
-    );
-    let completion_before = journal.get_ref("owner/project", &completion_ref)?;
-    let blob = journal
-        .create_blob("owner/project", b"invalid changed predecessor history")
-        .map_err(|error| format!("create drift blob: {error}"))?;
-    let name = format!(
-        "velnor-receipt/{}/{}/operation-2",
-        prior.identity.run_id, prior.identity.run_attempt
-    );
-    let tag = JournalTag {
-        name: name.clone(),
-        object_type: "blob".into(),
-        object_sha: blob,
-        message: "velnor-release-receipt-v1".into(),
-    };
-    let tag_sha = journal
-        .create_tag_object("owner/project", &tag)
-        .map_err(|error| format!("create drift tag: {error}"))?;
-    journal
-        .create_ref("owner/project", &format!("refs/tags/{name}"), &tag_sha)
-        .map_err(|error| format!("create drift ref: {error}"))?;
-    assert!(
-        crate::crate_release_journal::inspect_prior_chain_with(
-            &journal,
-            &current,
-            &root,
-            &git,
-            Some(&edge),
-        )
-        .is_err(),
-        "a valid signed predecessor with changed operation history must be rejected"
-    );
-    assert_eq!(
-        journal.get_ref("owner/project", &completion_ref)?,
-        completion_before,
-        "a rejected predecessor must not change the completion ref"
-    );
+    verify_changed_predecessor(&journal, &prior, &current, &root, &git, &edge)?;
     Ok(())
 }
