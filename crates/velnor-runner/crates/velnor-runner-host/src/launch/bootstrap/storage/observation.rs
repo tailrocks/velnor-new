@@ -269,7 +269,7 @@ fn validate_observation(
     images: &VerifiedWorkerImages,
 ) -> Result<(), HostError> {
     if observation.wire_mode != "self_storage"
-        || observation.schema_version != 1
+        || !matches!(observation.schema_version, 1 | 2)
         || observation.operation_id != operation_id
         || observation.container_id != container_id
         || observation.role != role

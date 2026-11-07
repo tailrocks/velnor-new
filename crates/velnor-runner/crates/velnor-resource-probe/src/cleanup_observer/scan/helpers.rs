@@ -175,3 +175,11 @@ pub(super) fn add_issue(issues: &mut Vec<String>, value: &str) {
         issues.push(value.to_owned());
     }
 }
+
+pub(super) fn vanished(error: &ProbeError) -> bool {
+    matches!(error, ProbeError::Read(_, source) if io_vanished(source))
+}
+
+pub(super) fn io_vanished(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::NotFound || error.raw_os_error() == Some(3)
+}

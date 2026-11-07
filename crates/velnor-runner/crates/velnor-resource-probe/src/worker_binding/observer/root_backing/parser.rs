@@ -7,11 +7,11 @@ pub(super) const ROOT_PATH_LIMIT: usize = 4096;
 #[cfg(target_os = "linux")]
 const MOUNTINFO_LIMIT: usize = 65_536;
 #[cfg(target_os = "linux")]
-const MAX_LOWER_DIRS: usize = 16;
+const MAX_LOWER_DIRS: usize = 128;
 #[cfg(target_os = "linux")]
 const MAX_OVERLAY_OPTIONS: usize = 128;
 #[cfg(target_os = "linux")]
-const MAX_OVERLAY_PATH_BYTES: usize = 12_288;
+const MAX_OVERLAY_PATH_BYTES: usize = 32_768;
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg(target_os = "linux")]

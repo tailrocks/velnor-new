@@ -72,12 +72,34 @@ pub(super) fn verify_observed_spec(
         || !has_no_published_ports(host)
         || !security_matches(host, expected_host)
         || host.tmpfs != expected_host.tmpfs
-        || host.mounts != expected_host.mounts
+        || !mounts_match(host.mounts.as_deref(), expected_host.mounts.as_deref())
         || host.log_config != expected_host.log_config
     {
         return Err(HostError::Ownership);
     }
     Ok(())
+}
+
+fn mounts_match(
+    actual: Option<&[bollard::models::Mount]>,
+    expected: Option<&[bollard::models::Mount]>,
+) -> bool {
+    let Some((actual, expected)) = actual.zip(expected) else {
+        return actual.is_none() && expected.is_none();
+    };
+    actual.len() == expected.len()
+        && actual
+            .iter()
+            .zip(expected)
+            .all(|(left, right)| normalize_mount(left) == normalize_mount(right))
+}
+
+fn normalize_mount(mount: &bollard::models::Mount) -> bollard::models::Mount {
+    let mut normalized = mount.clone();
+    if normalized.read_only.is_none() {
+        normalized.read_only = Some(false);
+    }
+    normalized
 }
 
 fn has_no_published_ports(host: &bollard::models::HostConfig) -> bool {

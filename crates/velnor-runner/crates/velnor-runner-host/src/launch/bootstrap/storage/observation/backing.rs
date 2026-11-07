@@ -27,7 +27,9 @@ pub(super) fn validate_owned_sample(
         || live.target != sampled.mount_target()
         || live.mount_source != sampled.mount_source()
         || live.mount_root != sampled.mount_root()
-        || live.mount_id != sampled.mount_id()
+        || sampled.mount_id() == 0
+        || live.mount_id == 0
+        || live.mount_id != live.statx_mount_id
         || live.mount_device_major != sampled.device_major()
         || live.mount_device_minor != sampled.device_minor()
         || live.statx_device_major != sampled.statx_device_major()
@@ -123,7 +125,7 @@ fn validate_root_backing<'a>(
         || row.mount_id != logical.binding.mount_id()
         || row.mount_source.is_empty()
         || row.filesystem_type != "overlay"
-        || row.read_only
+        || !row.read_only
         || row.upperdir.is_empty()
         || row.workdir.is_empty()
     {
@@ -199,7 +201,7 @@ fn directory_matches_upper(
         && item.mount_source == upper.mount_source
         && item.mount_root == upper.mount_root
         && item.mount_filesystem_type == upper.mount_filesystem_type
-        && !item.mount_read_only
+        && item.mount_read_only
         && item.mount_device_major == upper.mount_device_major
         && item.mount_device_minor == upper.mount_device_minor
         && item.statx_mount_id == upper.statx_mount_id

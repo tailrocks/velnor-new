@@ -258,7 +258,7 @@ fn public_verify_worker_build_source_accepts_base_and_named_contexts_and_rejects
     Ok(())
 }
 
-fn directory_and_mount(
+pub(crate) fn directory_and_mount(
     target: &str,
     subpath: &str,
     inode: u64,
