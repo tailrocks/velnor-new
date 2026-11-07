@@ -42,6 +42,7 @@ pub(super) async fn resume(
         allocation,
         context,
         offer.request_id(),
+        offer.already_assigned(),
         connection,
         policy,
     )
@@ -66,6 +67,7 @@ async fn resume_offer(
     allocation: &HeaderAllocation,
     context: &PositivePollContext<'_>,
     request_id: i64,
+    already_assigned: bool,
     connection: &RepositoryConnection,
     policy: &ApprovedJobAuthorityPolicy,
 ) -> Result<(), HostError> {
@@ -106,7 +108,15 @@ async fn resume_offer(
         },
     );
     drive.docker_engine_id = Some(context.selected_engine.engine_id().to_owned());
-    let outcome = acquire_offer(context, &mut credentials.link, &drive, request_id, permit).await?;
+    let outcome = acquire_offer(
+        context,
+        &mut credentials.link,
+        &drive,
+        request_id,
+        already_assigned,
+        permit,
+    )
+    .await?;
     if let crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) = outcome {
         start_acquired(prepared, acquired, context).await?;
     }
@@ -118,6 +128,7 @@ async fn acquire_offer(
     link: &mut crate::listen::Link,
     drive: &Drive,
     request_id: i64,
+    already_assigned: bool,
     permit: crate::launch::StartPermit,
 ) -> Result<crate::launch::steps::ScopedProvisioningOutcome, HostError> {
     let admin = link.base().to_owned();
@@ -126,6 +137,7 @@ async fn acquire_offer(
         &mut lane,
         drive,
         request_id,
+        already_assigned,
         permit,
         context.selected_engine,
     )

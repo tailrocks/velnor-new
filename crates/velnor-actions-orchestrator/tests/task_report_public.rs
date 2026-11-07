@@ -276,7 +276,14 @@ fn shared_job_artifact_is_downloaded_once() -> TestResult<()> {
         final_report.downloaded_artifact_ids,
         [entries[0].artifact_id.clone()]
     );
-    Ok(())
+    report_files::check_dual_lane_shared_artifact_retrieval(
+        &scenario,
+        SHARED_ARTIFACT_TEST,
+        &entries[0].artifact_id,
+        &mise_data_dir,
+        &fake_mise_bin,
+        &payload,
+    )
 }
 
 #[test]

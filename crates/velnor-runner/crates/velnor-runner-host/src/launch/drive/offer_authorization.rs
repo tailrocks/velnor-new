@@ -3,7 +3,7 @@
 
 use std::future::Future;
 
-use velnor_runner_github::{InnerKind, Poll};
+use velnor_runner_github::Poll;
 
 use crate::config::RepositoryConnection;
 use crate::journal::{AssignmentKey, ConnectionJournal, SourceAuthorizationResult};
@@ -178,7 +178,7 @@ pub(crate) async fn authorize_deferred_offers(
     for job in batch
         .jobs
         .iter()
-        .filter(|job| matches!(job.kind, InnerKind::Available | InnerKind::Assigned))
+        .filter(|job| crate::assign::is_active_offer_job(batch, job))
     {
         let Some(request_id) = job.request_id.filter(|request_id| *request_id > 0) else {
             return Err(EnsureError::Uncertain);

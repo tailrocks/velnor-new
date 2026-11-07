@@ -129,10 +129,9 @@ fn expected_artifact_ids_for_workspace(
             "{artifact_id}{}",
             velnor_actions_contract::workflow::lanes::SCALE_SUFFIX
         );
-        if artifact_id.starts_with("velnor-crate-")
-            && ci_yml
-                .as_deref()
-                .is_some_and(|text| text.contains(&hosted) && text.contains(&local))
+        if ci_yml
+            .as_deref()
+            .is_some_and(|text| has_dual_lane_uploads(text, artifact_id, &hosted, &local))
         {
             ids.push(hosted);
             ids.push(local);
@@ -141,6 +140,44 @@ fn expected_artifact_ids_for_workspace(
         }
     }
     ids
+}
+
+fn has_dual_lane_uploads(ci_yml: &str, artifact_id: &str, hosted: &str, local: &str) -> bool {
+    let Some(rest) = artifact_id.strip_prefix("velnor-crate-") else {
+        return false;
+    };
+    if ci_yml.contains(hosted) && ci_yml.contains(local) {
+        return true;
+    }
+    let Some(job_id) = crate_job_id_from_artifact_suffix(rest) else {
+        return false;
+    };
+    let template_base = format!(
+        "velnor-crate-{}-{job_id}",
+        velnor_actions_workflow_renderer::steps::RUN_KEY_EXPR
+    );
+    let template_hosted = format!(
+        "{template_base}{}",
+        velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX
+    );
+    let template_local = format!(
+        "{template_base}{}",
+        velnor_actions_contract::workflow::lanes::SCALE_SUFFIX
+    );
+    ci_yml.contains(&template_hosted) && ci_yml.contains(&template_local)
+}
+
+fn crate_job_id_from_artifact_suffix(rest: &str) -> Option<&str> {
+    for (idx, _) in rest.match_indices('-') {
+        let (run_key, tail) = rest.split_at(idx);
+        let job_id = tail.strip_prefix('-')?;
+        if velnor_actions_contract::validate_run_key(run_key).is_ok()
+            && velnor_actions_contract::validate_job_id(job_id).is_ok()
+        {
+            return Some(job_id);
+        }
+    }
+    None
 }
 
 fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {

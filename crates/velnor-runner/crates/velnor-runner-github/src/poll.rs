@@ -201,11 +201,12 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         .and_then(Value::as_str)
         .ok_or(WireError::Malformed)?;
     let job_id = job_id_of(value);
+    let assign_time = assign_time_of(value)?;
     let request_id = match value.get("runnerRequestId").and_then(Value::as_i64) {
         Some(0) => Some(
             job_id
                 .as_deref()
-                .map(derive_request_id_from_job_id)
+                .map(|id| derive_request_id(id, assign_time.as_deref()))
                 .ok_or(WireError::Malformed)?,
         ),
         other => other,
@@ -278,9 +279,28 @@ fn message_runner_fields(
     }
 }
 
-fn derive_request_id_from_job_id(job_id: &str) -> i64 {
+fn assign_time_of(value: &Value) -> Result<Option<String>, WireError> {
+    let scale_set_time = optional_string(value, "scaleSetAssignTime")?;
+    let request_time = optional_string(value, "requestAssignedTime")?;
+    Ok(scale_set_time
+        .filter(|time| !is_empty_assign_time(time))
+        .or_else(|| request_time.filter(|time| !is_empty_assign_time(time))))
+}
+
+fn is_empty_assign_time(value: &str) -> bool {
+    let trimmed = value.trim();
+    trimmed.is_empty() || trimmed == "0001-01-01T00:00:00Z"
+}
+
+fn derive_request_id(job_id: &str, assign_time: Option<&str>) -> i64 {
     use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(job_id.as_bytes());
+    let mut hasher = Sha256::new();
+    hasher.update(job_id.as_bytes());
+    if let Some(assign_time) = assign_time {
+        hasher.update(b"\0");
+        hasher.update(assign_time.as_bytes());
+    }
+    let digest = hasher.finalize();
     let mut bytes = [0_u8; 8];
     bytes.copy_from_slice(&digest[..8]);
     let raw = i64::from_be_bytes(bytes) & i64::MAX;

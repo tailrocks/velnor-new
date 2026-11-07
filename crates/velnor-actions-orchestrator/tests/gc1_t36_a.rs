@@ -265,6 +265,63 @@ fn check_dual_lane_staged_reports() -> Result<(), Box<dyn Error>> {
             "mismatched dual-lane status did not record mismatch error",
         ));
     }
+    check_dual_lane_corrupt_task(
+        both.path(),
+        &tree,
+        &local_art,
+        &matrix,
+        &report,
+        &entry,
+        &report_id,
+    )
+}
+
+fn check_dual_lane_corrupt_task(
+    base: &Path,
+    tree: &StagedTree<'_>,
+    local_art: &str,
+    matrix: &Value,
+    report: &Value,
+    entry: &MatrixEntry,
+    report_id: &str,
+) -> Result<(), Box<dyn Error>> {
+    stage_lane_report(base, tree, local_art, matrix)?;
+    let mut corrupt_local_task = report.clone();
+    corrupt_local_task["exit_code"] = json!(1);
+    let local_task_path = base
+        .join("reports")
+        .join(local_art)
+        .join(&entry.matrix_key)
+        .join("tasks")
+        .join(format!("{report_id}.json"));
+    fs::write(
+        &local_task_path,
+        serde_json::to_string(&corrupt_local_task)?,
+    )?;
+    let mut corrupt_task_req = assembled(base)?;
+    if !assembly_errors(&corrupt_task_req).contains(&format!("corrupt_report:{local_art}"))
+        || corrupt_task_req["matrix_reports"]
+            .as_array()
+            .is_none_or(|arr| !arr.is_empty())
+    {
+        return Err(fail(
+            "corrupt local task report with passed status did not fail closed",
+        ));
+    }
+    let (hosted_job, local_job) = (format!("{JOB_ID}__hosted"), format!("{JOB_ID}__local"));
+    corrupt_task_req["required_job_ids"] = json!([hosted_job, local_job]);
+    corrupt_task_req["required_jobs"] = json!([
+        {"job_id": hosted_job, "conclusion": "success"},
+        {"job_id": local_job, "conclusion": "success"}
+    ]);
+    corrupt_task_req["actual_event"] = json!("pull_request");
+    let corrupt_merged: FinalReport = serde_json::from_str(&merge_internal_with_context(
+        &corrupt_task_req.to_string(),
+        &MergeContext::detached(),
+    )?)?;
+    if corrupt_merged.status != FinalStatus::PlanningFailed {
+        return Err(fail("corrupt local task report did not fail Required"));
+    }
     Ok(())
 }
 

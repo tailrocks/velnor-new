@@ -12,12 +12,14 @@ fn zero_request_id_job_messages_derive_stable_request_id_and_normalize_empty_run
         {
             "messageType": "JobAssigned",
             "runnerRequestId": 0,
-            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67"
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "scaleSetAssignTime": "2026-11-06T22:55:21.7495747Z"
         },
         {
             "messageType": "JobStarted",
             "runnerRequestId": 0,
             "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "scaleSetAssignTime": "2026-11-06T22:55:21.7495747Z",
             "runnerId": 29,
             "runnerName": "velnor-1"
         },
@@ -25,9 +27,16 @@ fn zero_request_id_job_messages_derive_stable_request_id_and_normalize_empty_run
             "messageType": "JobCompleted",
             "runnerRequestId": 0,
             "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "scaleSetAssignTime": "2026-11-06T22:55:21.7495747Z",
             "runnerId": 0,
             "runnerName": "",
             "result": "succeeded"
+        },
+        {
+            "messageType": "JobAssigned",
+            "runnerRequestId": 0,
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "scaleSetAssignTime": "2026-11-06T23:05:00.0000000Z"
         },
         {
             "messageType": "JobAssigned",
@@ -41,7 +50,7 @@ fn zero_request_id_job_messages_derive_stable_request_id_and_normalize_empty_run
     else {
         panic!("expected valid poll batch");
     };
-    assert_eq!(batch.jobs.len(), 4);
+    assert_eq!(batch.jobs.len(), 5);
     let derived_id = batch.jobs[0].request_id.expect("derived request_id");
     assert!(derived_id > 0);
     assert_eq!(batch.jobs[0].kind, InnerKind::Assigned);
@@ -54,12 +63,15 @@ fn zero_request_id_job_messages_derive_stable_request_id_and_normalize_empty_run
     assert_eq!(batch.jobs[2].runner_id, None);
     assert_eq!(batch.jobs[2].runner_name, None);
     assert_eq!(batch.jobs[2].result.as_deref(), Some("succeeded"));
-    let other_id = batch.jobs[3].request_id.expect("other derived request_id");
-    assert!(other_id > 0 && other_id != derived_id);
+    let reassigned_id = batch.jobs[3].request_id.expect("reassigned request_id");
+    assert!(reassigned_id > 0 && reassigned_id != derived_id);
+    let other_id = batch.jobs[4].request_id.expect("other derived request_id");
+    assert!(other_id > 0 && other_id != derived_id && other_id != reassigned_id);
 
     for invalid_body in [
         r#"[{"messageType":"JobAssigned","runnerRequestId":0}]"#,
         r#"[{"messageType":"JobAssigned","runnerRequestId":0,"jobId":""}]"#,
+        r#"[{"messageType":"JobAssigned","runnerRequestId":0,"jobId":"67c5c946-116b-52aa-9566-1d8de67a2a67","scaleSetAssignTime":123}]"#,
     ] {
         assert_eq!(
             parse_inner_messages(invalid_body),

@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "dual_lane.rs"]
+mod dual_lane;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -8,6 +11,8 @@ use velnor_actions_contract::staged_reads::{path_is_symlink, read_staged_text};
 use velnor_actions_contract::{
     parse_strict_json, task_report_id_for_task, validate_artifact_id, validate_matrix_key,
 };
+
+use dual_lane::read_dual_lane_crate_entry;
 
 const MAX_STAGED_REPORT_BYTES: u64 = 1 << 20;
 
@@ -91,69 +96,9 @@ pub(crate) fn read_staged_reports(
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "dual-lane crate staging threads run context, both lane artifact IDs, and output accumulators"
-)]
-fn read_dual_lane_crate_entry(
-    run_key: &str,
-    plan: &serde_json::Value,
-    entry: &serde_json::Value,
-    dir: &Path,
-    hosted_artifact: &str,
-    local_artifact: &str,
-    matrix_key: &str,
-    digests: &BTreeMap<&str, &str>,
-    reports: &mut Vec<serde_json::Value>,
-    tasks: &mut Vec<serde_json::Value>,
-    errors: &mut Vec<String>,
-) {
-    let hosted = read_single_lane_entry(
-        run_key,
-        plan,
-        entry,
-        dir,
-        hosted_artifact,
-        matrix_key,
-        digests,
-        errors,
-    );
-    let local = read_single_lane_entry(
-        run_key,
-        plan,
-        entry,
-        dir,
-        local_artifact,
-        matrix_key,
-        digests,
-        errors,
-    );
-    if let (Some((hosted_report, hosted_tasks)), Some((local_report, local_tasks))) =
-        (hosted, local)
-    {
-        if staged_id(&hosted_report, "status") != staged_id(&local_report, "status") {
-            let base_artifact = hosted_artifact
-                .strip_suffix(velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX)
-                .unwrap_or(hosted_artifact);
-            errors.push(format!("corrupt_dual_lane_mismatch:{base_artifact}"));
-        }
-        let local_failed = staged_id(&local_report, "status") != "passed"
-            || local_tasks
-                .iter()
-                .any(|task| staged_id(task, "status") != "executed");
-        if local_failed {
-            reports.push(local_report);
-            tasks.extend(local_tasks);
-        } else {
-            reports.push(hosted_report);
-            tasks.extend(hosted_tasks);
-        }
-    }
-}
-
-#[expect(
-    clippy::too_many_arguments,
     reason = "single-lane report reader validates matrix report, observation bindings, and expected task reports"
 )]
-fn read_single_lane_entry(
+pub(super) fn read_single_lane_entry(
     run_key: &str,
     plan: &serde_json::Value,
     entry: &serde_json::Value,
@@ -371,7 +316,7 @@ fn read_bounded(path: &Path) -> Result<String, &'static str> {
     read_staged_text(path, MAX_STAGED_REPORT_BYTES)
 }
 
-fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
+pub(super) fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
     report
         .get(field)
         .and_then(serde_json::Value::as_str)
