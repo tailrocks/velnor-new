@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess
 import tempfile
+from collections import Counter
 
 with open('/etc/os-release', encoding='utf-8') as release_file:
     release = release_file.read().splitlines()
@@ -83,8 +84,6 @@ def unique(pairs):
 
 try:
     records = [json.loads(line, object_pairs_hook=unique) for line in result.stdout.splitlines()]
-    suites = [r for r in records if r.get('type') == 'suite']
-    events = [r for r in records if r.get('type') == 'test']
     expected = {'velnor-actions-orchestrator::velnor_actions_orchestrator$release::release_steps::tests::publish::'
                 'publisher_runs_guarded_durable_coordinator_in_order',
                 'velnor-actions-orchestrator::velnor_actions_orchestrator$release::release_steps::tests::publish::'
@@ -95,14 +94,53 @@ try:
                 'generated_source_require_rehearsal',
                 'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_runtime::tests::'
                 'test_only_dispatch_and_loopback_transport'}
-    started = [r.get('name') for r in events if r.get('event') == 'started']
-    passed = [r.get('name') for r in events if r.get('event') == 'ok']
-    if (len(records) != 12 or len(suites) != 2
-            or suites[0].get('event') != 'started' or suites[0].get('test_count') != len(tests)
-            or suites[1].get('event') != 'ok' or suites[1].get('passed') != len(tests)
-            or suites[1].get('failed') != 0 or len(events) != 10
-            or len(started) != len(tests) or set(started) != expected
-            or len(passed) != len(tests) or set(passed) != expected):
+    ignored = {
+        'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::promotion',
+        'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::publication',
+    }
+    starts, passes, skips = Counter(), Counter(), Counter()
+    suite_open = False
+    suite_count = 0
+    suite_passed = 0
+    suite_events = 0
+    suite_actual_passed = 0
+    for record in records:
+        kind, event = record.get('type'), record.get('event')
+        if kind == 'suite' and event == 'started' and not suite_open:
+            if record.get('test_count') != len(expected) + len(ignored):
+                raise ValueError('unexpected suite size')
+            suite_open = True
+            suite_count += 1
+            suite_events = 0
+            suite_actual_passed = 0
+        elif kind == 'suite' and event == 'ok' and suite_open:
+            passed = record.get('passed')
+            if (type(passed) is not int or passed < 0 or type(record.get('failed')) is not int
+                    or record.get('failed') != 0 or suite_events == 0
+                    or passed != suite_actual_passed
+                    or record.get('ignored') != len(ignored)):
+                raise ValueError('unexpected suite result')
+            suite_passed += passed
+            suite_open = False
+        elif kind == 'test' and suite_open:
+            suite_events += 1
+            name = record.get('name')
+            if event == 'started' and name in expected | ignored:
+                starts[name] += 1
+            elif event == 'ok' and name in expected and starts[name] == 1:
+                passes[name] += 1
+                suite_actual_passed += 1
+            elif event == 'ignored' and name in ignored and starts[name] == 1:
+                skips[name] += 1
+            else:
+                raise ValueError('unexpected test event')
+        else:
+            raise ValueError('unexpected record')
+    if (suite_open or not 1 <= suite_count <= len(expected) + len(ignored)
+            or suite_passed != len(expected)
+            or starts != Counter({name: 1 for name in expected | ignored})
+            or passes != Counter({name: 1 for name in expected})
+            or skips != Counter({name: 1 for name in ignored})):
         raise ValueError('unexpected test results')
 except (ValueError, TypeError, AttributeError):
     raise SystemExit('direct-release qualification returned incomplete results') from None
