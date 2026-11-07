@@ -868,6 +868,14 @@ printf '%s\n' "$artifact_status" >"$evidence/logs/external-capture.artifact.exit
 printf '%s\n' "$final_status" >"$evidence/logs/external-capture.exit"
 exit "$final_status"
     ;;
+  observe-hosted-docker-identity)
+    probe_home="$(mktemp -d "$RUNNER_TEMP/velnor-docker-probe.XXXXXX")"
+    trap 'rm -rf -- "$probe_home"' EXIT
+    env -i PATH=/usr/bin:/bin HOME="$probe_home" DOCKER_CONFIG="$probe_home" \
+      DOCKER_HOST=unix:///run/docker.sock \
+      python3 -I scripts/generator-release/test-observe-hosted-docker.py
+    python3 -I scripts/generator-release/observe-hosted-docker.py
+    ;;
   qualify-linux-x64-native-validator-tools)
 if [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ]; then printf 'FATAL: native validator authoring requires a workflow_dispatch event\n' >&2; exit 64; fi
 for path in "${RUNNER_TEMP:-}" "${CARGO_TARGET_DIR:-}"; do case "$path" in /*) ;; *) printf 'FATAL: qualification paths must be absolute\n' >&2; exit 1 ;; esac; done
