@@ -121,7 +121,7 @@ fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), B
     Ok(())
 }
 
-fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
+fn prepare_supplied_runner() -> Result<std::path::PathBuf, Box<dyn Error>> {
     let root = std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").ok_or("runner temp")?);
     let bin = root.join("velnor/bin");
     std::fs::create_dir_all(&bin)?;
@@ -133,6 +133,11 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         ),
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    Ok(root)
+}
+
+fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
+    let root = prepare_supplied_runner()?;
     let output = supplied_step(&root, "release-preflight", "candidate-receipt")?;
     let receipt = root.join("velnor-crate-release-receipt.json");
     if std::env::var("VELNOR_NATIVE_EXPECT_SUCCESS")? != "1" {
