@@ -67,58 +67,40 @@ pub use rehearsal::{
 pub struct RustReleaseConfig {
     #[serde(default)]
     pub enabled: bool,
-
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub oidc_qualification: bool,
-
     #[serde(default = "default_manifest_path")]
     pub manifest_path: String,
-
     #[serde(default)]
     pub packages: Vec<String>,
-
     #[serde(default)]
     pub publishable_workspace: bool,
-
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub publish_features: BTreeMap<String, Vec<String>>,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub new_crates: Option<NewCrateRelease>,
-
     #[serde(default = "default_environment")]
     pub environment: String,
-
     #[serde(default)]
     pub required_workflow_path: String,
-
     #[serde(default)]
     pub trusted_reviewer_id: u64,
-
     #[serde(default, skip_serializing_if = "is_default_registry")]
     pub registry: ReleaseRegistry,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authentication: Option<ReleaseAuthentication>,
-
     #[serde(default = "default_true")]
     pub release_pr: bool,
-
     #[serde(default = "default_tag_name")]
     pub tag_name: String,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery: Option<RecoveryRelease>,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal_predecessor: Option<CrateReleasePredecessor>,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continuation_source_sha: Option<String>,
-
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rehearsal: Option<ReleaseRehearsalConfig>,
-
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
 }

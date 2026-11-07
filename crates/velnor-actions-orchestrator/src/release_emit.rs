@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{
     CrateReleaseIntent, CrateReleaseRecovery, ReleaseRegistry, RustReleaseConfig,
 };
@@ -13,7 +12,6 @@ use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, rend
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
 use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
 use crate::planner::prepare::GenerationPreparation;
 use crate::release::release_identity::{
     common_registry, origin_repository, plan_id_for_source, release_lock,
@@ -22,6 +20,7 @@ use crate::release::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
 pub(super) mod config;
+pub(crate) use config::{enabled_release, git_tag_release};
 use config::{plz_config, release_render_context};
 
 #[path = "release_emit_plan.rs"]
@@ -385,41 +384,6 @@ fn reviewed_pr_write_paths(
 #[path = "release_emit_write_paths.rs"]
 mod write_paths;
 use write_paths::release_pr_write_paths;
-
-pub(crate) fn enabled_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
-    let Some(release) = release else {
-        return Ok(None);
-    };
-    if !release.enabled {
-        return Ok(None);
-    }
-    if prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.enabled",
-            "release_requires_consumer_policy",
-        ));
-    }
-    Ok(Some(release))
-}
-
-pub(crate) fn git_tag_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    if prep
-        .config
-        .stacks
-        .rust
-        .as_ref()
-        .is_some_and(|rust| rust.binary_release.stable.enabled)
-    {
-        return Ok(None);
-    }
-    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
-}
 
 #[cfg(test)]
 #[path = "release_emit_tests.rs"]
