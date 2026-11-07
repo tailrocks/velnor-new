@@ -116,6 +116,62 @@ def verify_git_staging_uses_bound_catalog():
             raise AssertionError("tampered Git executable accepted")
 
 
+def verify_historical_rust_manifest_staging():
+    script = pathlib.Path(__file__).with_name("prepare-gh-fixture-tools.py")
+    spec = importlib.util.spec_from_file_location("historical_staging", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    catalog_path = "crates/velnor-actions-contract/src/config/rust_channel_manifests.rs"
+    actual = script.parents[1] / catalog_path
+    expected = "03569b1886ceb5c05276b50c8431ab111de944cd6140fe1fa7d821dd8e0f29cf"
+    assert module.re.findall(r'\(\s*"1\.97\.1"\s*,\s*"([^"]*)"', actual.read_text()) == [expected]
+    payload = b"historical rust channel"
+    digest = hashlib.sha256(payload).hexdigest()
+    class Response:
+        status = 200
+        url = "https://static.rust-lang.org/dist/channel-rust-1.97.1.toml"
+        def __init__(self, data): self.stream = io.BytesIO(data)
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, amount): return self.stream.read(amount)
+    class Opener:
+        def __init__(self, data): self.data = data
+        def open(self, *_args, **_kwargs): return Response(self.data)
+    with tempfile.TemporaryDirectory() as work:
+        root = pathlib.Path(work)
+        catalog = root / catalog_path
+        catalog.parent.mkdir(parents=True)
+        entry = f'("1.97.1", "{digest}", "2026-07-16")'
+        catalog.write_text(entry)
+        destination = root / "staged"
+        destination.mkdir()
+        output = destination / "channel-rust-1.97.1.toml"
+        with mock.patch.object(module.ssl, "create_default_context", return_value=object()), \
+             mock.patch.object(module.urllib.request, "HTTPSHandler", return_value=object()), \
+             mock.patch.object(module.urllib.request, "build_opener", return_value=Opener(payload)):
+            module.stage_historical_rust_manifest(root, destination)
+            assert output.read_bytes() == payload
+        with mock.patch.object(module.ssl, "create_default_context", return_value=object()), \
+             mock.patch.object(module.urllib.request, "HTTPSHandler", return_value=object()), \
+             mock.patch.object(module.urllib.request, "build_opener", return_value=Opener(b"tampered")):
+            try:
+                module.stage_historical_rust_manifest(root, destination)
+            except ValueError as error:
+                assert "digest mismatch" in str(error)
+            else:
+                raise AssertionError("tampered Rust channel accepted")
+            assert not output.exists()
+        for contents in ("", entry + entry, '("1.97.1", "bad", "2026-07-16")'):
+            catalog.write_text(contents)
+            try:
+                module.stage_historical_rust_manifest(root, destination)
+            except ValueError as error:
+                assert "pin is invalid" in str(error)
+            else:
+                raise AssertionError("invalid historical Rust catalog accepted")
+
+
 def main():
     with tempfile.TemporaryDirectory() as work:
         root = pathlib.Path(work)
@@ -187,6 +243,7 @@ def main():
 
 
 if __name__ == "__main__":
+    verify_historical_rust_manifest_staging()
     verify_download_and_archive_guards()
     verify_git_staging_uses_bound_catalog()
     main()

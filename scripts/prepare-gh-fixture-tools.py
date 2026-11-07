@@ -144,11 +144,27 @@ def stage_signed_controller(root, destination, env):
                        "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466")
 
 
+def stage_historical_rust_manifest(root, destination):
+    catalog = (root / "crates/velnor-actions-contract/src/config/rust_channel_manifests.rs").read_text()
+    matches = re.findall(r'\(\s*"1\.97\.1"\s*,\s*"([^"]*)"', catalog)
+    if len(matches) != 1 or re.fullmatch(r'[0-9a-f]{64}', matches[0]) is None:
+        raise ValueError("historical Rust manifest pin is invalid")
+    output = destination / "channel-rust-1.97.1.toml"
+    output.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(dir=destination, prefix=".historical-") as directory:
+        manifest = pathlib.Path(directory) / "channel.toml"
+        download("https://static.rust-lang.org/dist/channel-rust-1.97.1.toml", manifest,
+                 16 * 1024 * 1024, matches[0])
+        copy_verified(manifest, output, matches[0],
+                      16 * 1024 * 1024)
+
+
 def main():
-    if sys.argv[1:] not in ([], ["--with-image-tuf"], ["--with-signed-controller"]):
+    if sys.argv[1:] not in ([], ["--with-image-tuf"], ["--with-signed-controller"], ["--with-recovery-fixture"]):
         raise ValueError("unsupported fixture staging arguments")
     with_image_tuf = sys.argv[1:] == ["--with-image-tuf"]
-    with_signed_controller = sys.argv[1:] == ["--with-signed-controller"]
+    with_recovery_fixture = sys.argv[1:] == ["--with-recovery-fixture"]
+    with_signed_controller = sys.argv[1:] == ["--with-signed-controller"] or with_recovery_fixture
     if sys.platform != "linux":
         raise ValueError("CI fixture staging requires Linux")
     arch = {"x86_64": "x86_64", "aarch64": "aarch64"}.get(platform.machine())
@@ -196,6 +212,8 @@ def main():
         if arch != "x86_64":
             raise ValueError("signed controller fixture requires Linux x86_64")
         stage_signed_controller(root, destination, env)
+        if with_recovery_fixture:
+            stage_historical_rust_manifest(root, destination)
     if with_image_tuf:
         subprocess.run([sys.executable, str(root / "scripts/prepare-image-attestation-tuf.py"), "--gh", str(staged_gh), "--cache-root", str(destination / "image-attestation-tuf")], check=True, timeout=900)
     image = manifest["image"]
