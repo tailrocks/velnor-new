@@ -94,3 +94,31 @@ pub(super) fn assert_bootstrap_sources(bundle: &serde_json::Value) {
         assert_eq!(bundle[key].as_str(), Some(expected));
     }
 }
+
+pub(super) fn hosted_managed_export(
+    workspace: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = std::process::Command::new("cargo")
+        .args([
+            "nextest",
+            "run",
+            "--locked",
+            "-p",
+            "velnor-actions-cli",
+            "--test",
+            "crate_release_prepare_pr_public",
+            "--run-ignored",
+            "only",
+            "-E",
+            "test(hosted_managed_publisher_export_is_bounded_and_quiescent)",
+            "--no-tests",
+            "fail",
+        ])
+        .current_dir(workspace)
+        .status()?;
+    assert!(
+        result.success(),
+        "hosted managed-export qualification failed"
+    );
+    Ok(())
+}

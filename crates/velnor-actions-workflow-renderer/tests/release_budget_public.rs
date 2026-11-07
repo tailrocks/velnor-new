@@ -68,18 +68,8 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
     assert!(release.lines().any(|line| line == "VERSION_ID=\"26.04\""));
     let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = crate_root.join("tests");
-    let (directory, entry) = rendered_entry()?;
+    let directory = staged_qualification(crate_root)?;
     let staged = directory.path().join("staged");
-    std::fs::create_dir(&staged)?;
-    let status = std::process::Command::new("/usr/bin/python3")
-        .args(["-I", "-S", "-B"])
-        .arg(root.join("release_qualification_source.py"))
-        .arg("--stage")
-        .arg(crate_root)
-        .arg(&staged)
-        .arg(entry)
-        .status()?;
-    assert!(status.success(), "qualification source staging failed");
     for (file, arguments) in [
         ("release_bootstrap_watch_systemd_test.py", &[][..]),
         ("release_manager_scenario_controller_test.py", &[][..]),
@@ -136,29 +126,26 @@ fn hosted_supervisor_runs_candidate_scenarios_and_controller_regressions()
         .status()?;
     assert!(status.success(), "hermetic release scenarios failed");
     hosted_nested_workspace_qualification(&root)?;
-    let result = std::process::Command::new("cargo")
-        .args([
-            "nextest",
-            "run",
-            "--locked",
-            "-p",
-            "velnor-actions-cli",
-            "--test",
-            "crate_release_prepare_pr_public",
-            "--run-ignored",
-            "only",
-            "-E",
-            "test(hosted_managed_publisher_export_is_bounded_and_quiescent)",
-            "--no-tests",
-            "fail",
-        ])
-        .current_dir(workspace)
+    export_contract::hosted_managed_export(workspace)
+}
+
+fn staged_qualification(
+    crate_root: &std::path::Path,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let root = crate_root.join("tests");
+    let (directory, entry) = rendered_entry()?;
+    let staged = directory.path().join("staged");
+    std::fs::create_dir(&staged)?;
+    let status = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-B"])
+        .arg(root.join("release_qualification_source.py"))
+        .arg("--stage")
+        .arg(crate_root)
+        .arg(&staged)
+        .arg(entry)
         .status()?;
-    assert!(
-        result.success(),
-        "hosted managed-export qualification failed"
-    );
-    Ok(())
+    assert!(status.success(), "qualification source staging failed");
+    Ok(directory)
 }
 
 fn hosted_nested_workspace_qualification(
