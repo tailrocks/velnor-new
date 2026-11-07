@@ -200,13 +200,6 @@ class RealReplyLossTest(unittest.TestCase):
         scratch = Path(tempfile.mkdtemp(prefix="velnor-proxy-", dir="/run"))
         self.addCleanup(shutil.rmtree, scratch, ignore_errors=True)
         scratch.chmod(0o755)
-        shared = Path("/run/systemd/system/velnor-release-.service.d")
-        shared.mkdir(mode=0o700)
-        def remove_shared():
-            if shared.exists():
-                (shared / "wait.conf").unlink(missing_ok=True)
-                shared.rmdir()
-        self.addCleanup(remove_shared)
         blocker = "velnor-test-blocker-" + secrets.token_hex(16) + ".service"
         ident = secrets.token_hex(16)
         unit = "velnor-release-" + ident + ".service"
@@ -249,8 +242,7 @@ class RealReplyLossTest(unittest.TestCase):
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
             self.assertTrue(select.select([parent.stdout], [], [], 10)[0], "watch was not established")
             self.assertEqual(parent.stdout.readline(), b"watch-ready\n")
-            (shared / "wait.conf").write_text("[Unit]\nAfter=" + blocker + "\n", encoding="ascii")
-            start_blocker(blocker, 4)
+            start_blocker(blocker, 4, unit)
             blocker_started = True
             parent.stdin.write(b"start\n")
             parent.stdin.flush()
@@ -295,8 +287,6 @@ class RealReplyLossTest(unittest.TestCase):
             if blocker_started:
                 finish_blocker(blocker)
             shutil.rmtree(unit_dir, ignore_errors=True)
-            (shared / "wait.conf").unlink(missing_ok=True)
-            shared.rmdir()
             shutil.rmtree(scratch)
 
 

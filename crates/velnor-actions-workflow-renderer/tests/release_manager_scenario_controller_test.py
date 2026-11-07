@@ -137,7 +137,7 @@ class ScenarioControllerTest(unittest.TestCase):
         started = False
         try:
             (directory / "after.conf").write_text("[Unit]\nAfter=" + blocker + "\nJobTimeoutSec=30s\n")
-            controller.start_blocker(blocker, 20)
+            controller.start_blocker(blocker, 20, unit)
             started = True
             properties = controller.command(["show", blocker, "--property=JobTimeoutUSec",
                                              "--property=TimeoutStartUSec", "--property=TimeoutStopUSec"])

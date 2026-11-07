@@ -28,7 +28,7 @@ from unittest.mock import patch
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from release_manager_scenario_controller import finish_blocker, start_blocker
+from release_manager_scenario_controller import UnitInventory, finish_blocker, start_blocker
 from release_watch_fixture import RootWatch, snapshot_roots, cleanup_orphans
 
 
@@ -69,129 +69,77 @@ class RealManagerTest(unittest.TestCase):
         self.addCleanup(self.watch.close)
 
     def test_dependent_cleanup_policy_rejects_effective_overrides(self):
-        end = deadline(60)
-        watch_manager = self.watch.watch.manager
-        watch_path = watch_manager._method(watch_manager.owner, '/org/freedesktop/systemd1',
-            'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', self.watch.unit)], end, 'o')
-        self.assertEqual(watch_manager._get(watch_path, 'org.freedesktop.systemd1.Service',
-                                           'KillSignal', 'i', end), signal.SIGTERM)
         shared = Path('/run/systemd/system/velnor-release-.service.d')
         shared.mkdir(mode=0o700)
         override = shared / 'cleanup-policy.conf'
-        safe = True
         try:
-            for section, setting, expected_signal, expected_mode, expected_collect in (
-                    ('Service', 'KillSignal=SIGTERM', signal.SIGTERM, 'control-group', 'inactive-or-failed'),
-                    ('Service', 'KillMode=mixed', signal.SIGKILL, 'mixed', 'inactive-or-failed'),
-                    ('Unit', 'CollectMode=inactive', signal.SIGKILL, 'control-group', 'inactive')):
-                override.write_text('[' + section + ']\n' + setting + '\n', encoding='ascii')
-                unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
-                manager = bus.Manager(str(self.helper), 25, self.watch.authority, root_bootstrap=True)
-                observer = bus.Manager(str(self.helper), 25, self.watch.authority, root_bootstrap=True)
-                reader, writer = os.pipe()
-                error_text = None
-                safe = False
-                try:
-                    owner = manager.subscribe(end)
-                    self.assertEqual(observer.subscribe(end), owner)
+            for section, setting in (
+                    ('Service', 'KillSignal=SIGTERM'),
+                    ('Service', 'KillMode=mixed'),
+                    ('Unit', 'CollectMode=inactive')):
+                with self.subTest(setting=setting):
+                    policy = '[' + section + ']\n' + setting + '\n'
+                    override.write_text(policy, encoding='ascii')
+                    ident = secrets.token_hex(16)
+                    unit = 'velnor-release-' + ident + '.service'
+                    manager = bus.Manager(str(self.helper), 25, self.watch.authority, root_bootstrap=True)
+                    reader, writer = os.pipe()
                     try:
-                        manager.start(unit, reader, end)
-                    except bus.ManagerError as error:
-                        error_text = str(error)
-                    unit_path = observer._method(owner, '/org/freedesktop/systemd1',
-                        'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', unit)], end, 'o')
-                    effective_signal = observer._get(unit_path, 'org.freedesktop.systemd1.Service', 'KillSignal', 'i', end)
-                    effective_mode = observer._get(unit_path, 'org.freedesktop.systemd1.Service', 'KillMode', 's', end)
-                    effective_collect = observer._get(unit_path, 'org.freedesktop.systemd1.Unit', 'CollectMode', 's', end)
-                    os.close(writer)
-                    writer = None
-                    stop = manager.stop(unit, end)
-                    lifecycle.wait_job(manager, unit, stop, end)
-                    current = lifecycle.state(observer, owner, unit, end)
-                    if (current['active'] not in ('inactive', 'failed') or current['job'] is not None
-                            or current['populated']):
-                        raise RuntimeError('cleanup uncertain')
-                    manager.release(unit, end)
-                    safe = True
-                    subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit], stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL, check=False, timeout=5)
-                    self.assertEqual(error_text, 'unit cleanup policy unverified')
-                    self.assertEqual(effective_signal, expected_signal)
-                    self.assertEqual(effective_mode, expected_mode)
-                    self.assertEqual(effective_collect, expected_collect)
-                finally:
-                    os.close(reader)
-                    if writer is not None:
+                        end = deadline(60)
+                        manager.subscribe(end)
+                        with self.assertRaises(bus.StartRejected) as rejected:
+                            manager.start(unit, reader, end)
+                        self.assertIn('unreviewed applicable manager policy', str(rejected.exception.__cause__))
+                        self.assertFalse((Path('/run/systemd/system') / (unit + '.d')).exists())
+                        UnitInventory().check(ident, unused=True)
+                        self.assertEqual(override.read_text(encoding='ascii'), policy)
+                    finally:
+                        os.close(reader)
                         os.close(writer)
-                    manager.close()
-                    observer.close()
-                    if safe:
-                        override.unlink(missing_ok=True)
+                        manager.close()
         finally:
-            if safe:
-                shared.rmdir()
+            override.unlink(missing_ok=True)
+            shared.rmdir()
 
     def test_refused_policy_never_delivers_frame_and_watch_drains(self):
         shared = Path('/run/systemd/system/velnor-release-.service.d')
-        shared.mkdir(mode=0o700)
-        override = shared / 'cleanup-policy.conf'
-        safe = True
-        try:
-            for section, setting, prop, expected, signature in (
-                    ('Service', 'KillSignal=SIGTERM', 'KillSignal', signal.SIGTERM, 'i'),
-                    ('Service', 'KillMode=mixed', 'KillMode', 'mixed', 's'),
-                    ('Unit', 'CollectMode=inactive', 'CollectMode', 'inactive', 's')):
-                override.write_text('[' + section + ']\n' + setting + '\n', encoding='ascii')
-                before = set(Path('/run/systemd/system').glob('velnor-release-*.service.d'))
+        for section, setting in (
+                ('Service', 'KillSignal=SIGTERM'),
+                ('Service', 'KillMode=mixed'),
+                ('Unit', 'CollectMode=inactive')):
+            with self.subTest(setting=setting):
                 watch = RootWatch(bus, lifecycle, root / 'src')
                 manager = bus.Manager(str(self.helper), 40, watch.authority, root_bootstrap=True)
-                observer = bus.Manager(str(self.helper), 40, watch.authority, root_bootstrap=True)
-                end = deadline(30)
+                ident = secrets.token_hex(16)
+                unit = 'velnor-release-' + ident + '.service'
                 marker = self.directory / ('executed-' + secrets.token_hex(8))
+                end = deadline(30)
                 body = json.dumps({'program': '/usr/bin/python3',
                     'args': ['-c', f"open({str(marker)!r}, 'w').write('executed')"],
                     'cwd': str(self.directory), 'env': {'PATH': '/usr/bin:/bin',
                     'HOME': str(self.directory)}, 'stdin': ''}, separators=(',', ':')).encode()
                 frame = struct.pack('>QQI', end, os.stat('/proc/self/ns/time').st_ino, len(body)) + body
-                safe = False
+                shared.mkdir(mode=0o700)
+                override = shared / 'cleanup-policy.conf'
+                policy = '[' + section + ']\n' + setting + '\n'
                 try:
-                    owner = observer.subscribe(end)
-                    with self.assertRaisesRegex(lifecycle.SupervisorError, '^unit cleanup uncertain$'):
-                        lifecycle.supervise(manager, frame, end)
-                    units = set(Path('/run/systemd/system').glob('velnor-release-*.service.d')) - before
-                    units = {path for path in units if path.name != watch.unit + '.d'}
-                    self.assertEqual(len(units), 1)
-                    unit = next(iter(units)).name[:-2]
-                    path = observer._method(owner, '/org/freedesktop/systemd1',
-                        'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', unit)], end, 'o')
-                    interface = 'org.freedesktop.systemd1.' + section
-                    self.assertEqual(observer._get(path, interface, prop, signature, end), expected)
-                    initial = lifecycle.state(observer, owner, unit, end)
+                    override.write_text(policy, encoding='ascii')
+                    with patch.object(lifecycle.secrets, 'token_hex', return_value=ident):
+                        with self.assertRaisesRegex(lifecycle.SupervisorError, '^unit cleanup uncertain$'):
+                            lifecycle.supervise(manager, frame, end)
                     self.assertFalse(marker.exists())
+                    self.assertFalse((Path('/run/systemd/system') / (unit + '.d')).exists())
+                    UnitInventory().check(ident, unused=True)
+                    self.assertEqual(override.read_text(encoding='ascii'), policy)
                     watch.close()
-                    while True:
-                        final = lifecycle.state(observer, owner, unit, end)
-                        self.assertEqual(final['invocation'], initial['invocation'])
-                        if (final['active'] in ('inactive', 'failed') and final['job'] is None
-                                and not final['populated']):
-                            break
-                        remaining = end - time.clock_gettime_ns(time.CLOCK_BOOTTIME)
-                        if remaining <= 0:
-                            self.fail('watch did not drain unit before deadline')
-                        time.sleep(min(0.01, remaining / 1_000_000_000))
                     self.assertFalse(marker.exists())
-                    manager.release(unit, end)
-                    safe = True
+                    self.assertEqual(override.read_text(encoding='ascii'), policy)
                 finally:
                     manager.close()
-                    observer.close()
-                    if safe:
-                        subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit], stdout=subprocess.DEVNULL,
-                                       stderr=subprocess.DEVNULL, check=False, timeout=5)
-                        override.unlink(missing_ok=True)
-        finally:
-            if safe:
-                shared.rmdir()
+                    override.unlink(missing_ok=True)
+                    shared.rmdir()
+                    if not watch.watch.closed:
+                        watch.close()
 
     def test_failed_dependent_unit_is_observed_before_release_then_collected(self):
         unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
@@ -303,8 +251,10 @@ class RealManagerTest(unittest.TestCase):
         reader, writer = os.pipe()
         try:
             manager.subscribe(deadline(5))
-            with self.assertRaises(FileExistsError):
+            with self.assertRaises(bus.StartRejected) as rejected:
                 manager.start(unit, reader, deadline(5))
+            self.assertIsInstance(rejected.exception.__cause__, FileExistsError)
+            self.assertTrue(directory.is_symlink())
             self.assertEqual(sentinel.read_text(encoding="ascii"), "unchanged")
         finally:
             os.close(reader)
@@ -550,8 +500,6 @@ class RealManagerTest(unittest.TestCase):
             shutil.rmtree(unit_dir, ignore_errors=True)
 
     def test_parent_death_while_accepted_start_is_queued(self):
-        shared = Path("/run/systemd/system/velnor-release-.service.d")
-        shared.mkdir(mode=0o700)
         blocker = "velnor-test-blocker-" + secrets.token_hex(16) + ".service"
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         unit_dir = Path("/run/systemd/system") / (unit + ".d")
@@ -571,8 +519,7 @@ class RealManagerTest(unittest.TestCase):
                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             self.assertTrue(select.select([parent.stdout], [], [], 10)[0], "watch was not established")
             self.assertEqual(parent.stdout.readline(), b"watch-ready\n")
-            (shared / "wait.conf").write_text("[Unit]\nRequires=" + blocker + "\nAfter=" + blocker + "\n", encoding="ascii")
-            start_blocker(blocker, 20)
+            start_blocker(blocker, 20, unit)
             blocker_started = True
             parent.stdin.write(b"start\n")
             parent.stdin.flush()
@@ -605,26 +552,25 @@ class RealManagerTest(unittest.TestCase):
             if blocker_started:
                 finish_blocker(blocker)
             shutil.rmtree(unit_dir, ignore_errors=True)
-            (shared / "wait.conf").unlink(missing_ok=True)
-            shared.rmdir()
 
     def test_real_queued_start_times_out_then_stop_converges(self):
-        shared = Path("/run/systemd/system/velnor-release-.service.d")
-        shared.mkdir(mode=0o700)
         blocker = "velnor-test-blocker-" + secrets.token_hex(16) + ".service"
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         manager = None
         reader = writer = None
         blocker_started = False
         try:
-            (shared / "wait.conf").write_text("[Unit]\nRequires=" + blocker + "\nAfter=" + blocker + "\n", encoding="ascii")
-            start_blocker(blocker, 20)
+            start_blocker(blocker, 20, unit)
             blocker_started = True
             manager = bus.Manager(str(self.helper), 2, self.watch.authority)
             end = deadline(15)
             owner = manager.subscribe(end)
             reader, writer = os.pipe()
             job = manager.start(unit, reader, end)
+            jobs = subprocess.run(["/usr/bin/systemctl", "list-jobs", "--no-legend", "--plain"],
+                                  capture_output=True, check=True, timeout=5).stdout
+            self.assertIn(unit.encode(), jobs, "candidate start was not queued")
+            self.assertIn(blocker.encode(), jobs, "blocker start was not running")
             os.close(reader)
             reader = None
             while True:
@@ -653,8 +599,6 @@ class RealManagerTest(unittest.TestCase):
                            stderr=subprocess.DEVNULL, check=False, timeout=10)
             if blocker_started:
                 finish_blocker(blocker)
-            (shared / "wait.conf").unlink(missing_ok=True)
-            shared.rmdir()
 
 
 if __name__ == "__main__":

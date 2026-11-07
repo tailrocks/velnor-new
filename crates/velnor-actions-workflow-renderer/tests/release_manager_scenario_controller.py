@@ -118,9 +118,10 @@ def existing_dropins():
             for entry in root.glob(pattern)}
 
 
-def start_blocker(unit, duration):
+def start_blocker(unit, duration, before):
     if (not re.fullmatch(r"velnor-test-blocker-[0-9a-f]{32}\.service", unit)
-            or duration not in (4, 20)):
+            or duration not in (4, 20)
+            or not re.fullmatch(r"velnor-release-[0-9a-f]{32}\.service", before)):
         raise ScenarioError("invalid scenario blocker")
     directory = Path("/run/systemd/system") / (unit + ".d")
     directory.mkdir(mode=0o700)
@@ -128,7 +129,7 @@ def start_blocker(unit, duration):
     with os.fdopen(descriptor, "w", encoding="ascii") as output:
         output.write("[Unit]\nJobTimeoutSec=30s\n")
     subprocess.run(["/usr/bin/systemd-run", "--no-block", "--unit=" + unit,
-                    "--property=Type=oneshot", "--property=TimeoutStartSec=30s",
+                    "--property=Type=oneshot", "--property=Before=" + before, "--property=TimeoutStartSec=30s",
                     "--property=TimeoutStopSec=5s", "/usr/bin/sleep", str(duration)],
                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    timeout=5, check=True)
