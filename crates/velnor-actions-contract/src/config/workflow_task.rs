@@ -28,6 +28,13 @@ impl WorkflowTask {
     }
 
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if self.id() == crate::JOB_IMAGE_CANDIDATE_UNIT_ID {
+            return Err(ContractError::config(
+                file,
+                "workflow.tasks.id",
+                "reserved_job_image_candidate_identity",
+            ));
+        }
         match self {
             Self::Verification(task) => task.validate(file),
             Self::Build(task) => task.validate(file),

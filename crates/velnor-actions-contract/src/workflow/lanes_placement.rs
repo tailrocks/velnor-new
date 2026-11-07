@@ -47,7 +47,9 @@ pub(in crate::workflow) fn placement_for(
             .get(job_id)
             .is_some_and(|over| over.profile == execution.scale_set_profile)
         {
-            let hosted_only = config.image_for_build_job(job_id).is_some()
+            let hosted_only = (job_id == crate::JOB_IMAGE_CANDIDATE_JOB_ID
+                && crate::job_image_candidate_enabled(config))
+                || config.image_for_build_job(job_id).is_some()
                 || config.workflow.tasks.iter().any(|task| {
                     matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
                         && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id

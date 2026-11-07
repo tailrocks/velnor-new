@@ -1,6 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "image_candidate/task.rs"]
+mod task;
+pub use task::*;
+#[path = "image_candidate/operation.rs"]
+mod operation;
+pub use operation::{JobImageCandidateInputs, job_image_candidate_source_script};
+pub(crate) use operation::{
+    is_job_image_candidate_identity, validate_job_image_candidate_operation,
+};
+#[path = "image_candidate/native_task.rs"]
+mod native_task;
+pub use native_task::NativeTaskKind;
+
 #[path = "image_candidate/closure.rs"]
 mod image_candidate_closure;
 #[path = "image_candidate/record.rs"]

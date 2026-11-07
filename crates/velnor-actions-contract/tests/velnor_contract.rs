@@ -9,3 +9,4 @@ mod image_source_inventory;
 mod mbx_generation;
 mod runner_image_publication;
 mod ubuntu_runner_public;
+mod workflow_task_namespace;
