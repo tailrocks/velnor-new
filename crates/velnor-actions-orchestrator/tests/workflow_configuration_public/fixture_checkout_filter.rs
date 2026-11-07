@@ -86,7 +86,7 @@ fn finalized_sparse_owners_keep_guard_and_qualified_filter() -> Result<(), Box<d
     std::fs::write(
         &config_path,
         format!(
-            "{config}\n[[checks]]\nid = \"with-blob-closure\"\ntask = \"fixture-check\"\ninputs = [\"crates/demo/Cargo.toml\"]\ntools = []\ncheckout_blob_closure = true\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
+            "{config}\n[[checks]]\nid = \"with-blob-closure\"\ntask = \"fixture-check\"\ninputs = [\"crates/demo/Cargo.toml\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
         ),
     )?;
     let jobs = finalized_jobs(&prepare(root)?)?;
@@ -98,10 +98,9 @@ fn finalized_sparse_owners_keep_guard_and_qualified_filter() -> Result<(), Box<d
         let StepKind::Action { with, env, .. } = &job.steps[0].kind else {
             return Err("named check checkout missing".into());
         };
-        let opted_in = job.display_name.contains("with-blob-closure");
         assert_eq!(
             with.get("filter").map(String::as_str),
-            opted_in.then_some(FIXTURE_CHECKOUT_BLOB_FILTER)
+            Some(FIXTURE_CHECKOUT_BLOB_FILTER)
         );
         assert_eq!(
             with.get("sparse-checkout").map(String::as_str),

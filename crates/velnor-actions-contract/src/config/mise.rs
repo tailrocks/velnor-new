@@ -43,9 +43,6 @@ pub struct MiseCheck {
 
     #[serde(default, skip_serializing_if = "CheckoutHistory::is_full")]
     pub history: CheckoutHistory,
-
-    #[serde(default, skip_serializing_if = "super::workflow_flags::is_false")]
-    pub checkout_blob_closure: bool,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]

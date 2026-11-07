@@ -1,5 +1,4 @@
 mod check_admission;
-mod check_blob_closure;
 mod checkout_history_tamper;
 mod gc1_contract_cases;
 mod gc1_t04;

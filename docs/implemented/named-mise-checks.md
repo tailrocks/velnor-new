@@ -16,10 +16,11 @@ and `check-<id>` job. IDs must be unique. There is no custom argv, environment,
 plugin URL, command, or YAML field. The obsolete Rust `custom_tasks` option is
 removed.
 
-For checks that must read Git objects for sparse-excluded paths without network
-access, set `checkout_blob_closure = true`. The default is false. This fetches
-all blobs while retaining sparse checkout and its guard; checkout credentials
-are not persisted. Checkout history selection remains independent.
+Named checks fetch all blobs reachable in the selected checkout history, even
+when sparse checkout excludes paths.
+This lets checks inspect excluded objects offline while retaining the sparse
+checkout guard. Checkout credentials are not persisted, and history selection
+remains independent.
 
 Example profiles below assume matching native tasks and declared input files
 exist. Every `tools` entry references an explicit root `qualified_tools` ID;
