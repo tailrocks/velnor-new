@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import urllib.parse
 import urllib.request
 
@@ -64,23 +65,30 @@ class FixtureRedirect(urllib.request.HTTPRedirectHandler):
     max_redirections = 5
     max_repeats = 2
 
+    def __init__(self, allowed_host=None):
+        super().__init__()
+        self.allowed_host = allowed_host
+
     def redirect_request(self, request, response, code, message, headers, new_url):
-        if not valid_download_url(new_url):
+        if (not valid_download_url(new_url)
+                or (self.allowed_host is not None and urllib.parse.urlsplit(new_url).hostname != self.allowed_host)):
             raise ValueError("fixture download redirect is untrusted")
         return super().redirect_request(request, response, code, message, headers, new_url)
 
 
-def download(url, destination, limit, expected):
-    if not valid_download_url(url):
+def download(url, destination, limit, expected, allowed_host=None):
+    if (not valid_download_url(url)
+            or (allowed_host is not None and urllib.parse.urlsplit(url).hostname != allowed_host)):
         raise ValueError("fixture download origin is untrusted")
     os.environ.pop("SSLKEYLOGFILE", None)
     context = ssl.create_default_context(cafile="/etc/ssl/certs/ca-certificates.crt")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), FixtureRedirect(),
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), FixtureRedirect(allowed_host),
                                          urllib.request.HTTPSHandler(context=context))
     digest = hashlib.sha256()
     size = 0
     with opener.open(urllib.request.Request(url, headers={"User-Agent": "velnor-fixture"}), timeout=120) as response:
-        if response.status != 200 or not valid_download_url(response.url):
+        if (response.status != 200 or not valid_download_url(response.url)
+                or (allowed_host is not None and urllib.parse.urlsplit(response.url).hostname != allowed_host)):
             raise ValueError("fixture download response is invalid")
         with destination.open("xb") as output:
             while chunk := response.read(1024 * 1024):
@@ -144,19 +152,68 @@ def stage_signed_controller(root, destination, env):
                        "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466")
 
 
-def stage_historical_rust_manifest(root, destination):
+def historical_rust_manifest_digest(root):
     catalog = (root / "crates/velnor-actions-contract/src/config/rust_channel_manifests.rs").read_text()
     matches = re.findall(r'\(\s*"1\.97\.1"\s*,\s*"([^"]*)"', catalog)
     if len(matches) != 1 or re.fullmatch(r'[0-9a-f]{64}', matches[0]) is None:
         raise ValueError("historical Rust manifest pin is invalid")
+    return matches[0]
+
+
+def stage_historical_rust_manifest(root, destination):
+    digest = historical_rust_manifest_digest(root)
     output = destination / "channel-rust-1.97.1.toml"
     output.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(dir=destination, prefix=".historical-") as directory:
         manifest = pathlib.Path(directory) / "channel.toml"
         download("https://static.rust-lang.org/dist/channel-rust-1.97.1.toml", manifest,
-                 16 * 1024 * 1024, matches[0])
-        copy_verified(manifest, output, matches[0],
+                 16 * 1024 * 1024, digest)
+        copy_verified(manifest, output, digest,
                       16 * 1024 * 1024)
+
+
+def stage_historical_rust_components(root, destination):
+    digest = historical_rust_manifest_digest(root)
+    manifest_path = destination / "channel-rust-1.97.1.toml"
+    fd = os.open(manifest_path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size <= 16 * 1024 * 1024:
+            raise ValueError("historical Rust manifest is invalid")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            raw = stream.read(16 * 1024 * 1024 + 1)
+        if len(raw) != metadata.st_size or hashlib.sha256(raw).hexdigest() != digest:
+            raise ValueError("historical Rust manifest digest mismatch")
+    finally:
+        os.close(fd)
+    manifest = tomllib.loads(raw.decode("utf-8"))
+    target = "x86_64-unknown-linux-gnu"
+    components = {}
+    for name in ("cargo", "rustc", "rust-std"):
+        item = manifest["pkg"][name]["target"][target]
+        url = f"https://static.rust-lang.org/dist/2026-07-16/{name}-1.97.1-{target}.tar.xz"
+        sha = item["xz_hash"]
+        if (item.get("available") is not True or item["xz_url"] != url
+                or not isinstance(sha, str) or re.fullmatch(r'[0-9a-f]{64}', sha) is None):
+            raise ValueError("historical Rust component identity is invalid")
+        components[name] = (url, sha)
+    output = destination / "recovery-rust-components"
+    if output.exists() or output.is_symlink():
+        raise ValueError("recovery Rust component destination already exists")
+    with tempfile.TemporaryDirectory(dir=destination, prefix=".recovery-rust-") as directory:
+        stage = pathlib.Path(directory)
+        for name, (url, sha) in components.items():
+            download(url, stage / (name + ".tar.xz"), 256 * 1024 * 1024, sha,
+                     allowed_host="static.rust-lang.org")
+        try:
+            output.mkdir(mode=0o700)
+        except FileExistsError as error:
+            raise ValueError("recovery Rust component destination already exists") from error
+        try:
+            os.rename(stage, output / "verified")
+        except BaseException:
+            shutil.rmtree(output)
+            raise
 
 
 RECOVERY_RELEASE_ASSETS = {
@@ -249,6 +306,14 @@ def main():
         stage_signed_controller(root, destination, env)
         if with_recovery_fixture:
             stage_historical_rust_manifest(root, destination)
+            stage_historical_rust_components(root, destination)
+            stage_executable(
+                "cargo-semver-checks", destination / "cargo-semver-checks-0.51.0",
+                "bc9eb06ce04e97d6160c875ffdee1f6e56793e423dea025f344826be03e66829",
+                "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.51.0/cargo-semver-checks-x86_64-unknown-linux-gnu.tar.gz",
+                "cacadafaa5cd27ae6d05a74a103266917ebab4c5e43c898360e177d4fbf06a65",
+                "cargo-semver-checks", env,
+            )
             stage_recovery_release_assets(root, destination, RECOVERY_RELEASE_ASSETS,
                                           RECOVERY_TRUSTED_ROOT_SHA256)
     if with_image_tuf:
