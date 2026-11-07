@@ -182,12 +182,12 @@ def start(bus, lifecycle, root, deadline, operation, program, claim):
         manager._watch_start_allowed = False
         manager.validate_watch(deadline)
         return Watch(bus, lifecycle, manager, authority, data)
-    except BaseException:
+    except BaseException as error:
         os.close(writer)
         if lease is not None:
             os.close(lease)
         try:
-            if attempted:
+            if attempted and not (isinstance(error, bus.StartRejected) and error.unit == unit):
                 job = manager.stop(unit, deadline)
                 lifecycle.wait_job(manager, unit, job, deadline)
                 current = lifecycle.state(manager, manager.owner, unit, deadline)

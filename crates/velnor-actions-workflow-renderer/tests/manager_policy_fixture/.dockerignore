@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!rootfs
+!rootfs/**
+!verify-files.py
+!proof.json
+!global-policy.json

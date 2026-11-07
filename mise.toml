@@ -107,6 +107,6 @@ run = "python3 -I crates/velnor-actions-workflow-renderer/tests/release_budget_s
 description = "Verify hosted GitHub CLI configuration isolation"
 run = "python3 -I crates/velnor-actions-workflow-renderer/tests/hosted_gh_config_custody.py"
 
-[tasks.observe-hosted-systemd-policy]
-description = "Observe hosted systemd build and inherited policy without starting a unit"
-run = "python3 -I -S -B scripts/observe-hosted-systemd-policy.py --diagnostic-report"
+[tasks.qualify-manager-policy]
+description = "Qualify native systemd policy and isolated inherited-policy denial"
+run = "python3 -I -S -B scripts/qualify-manager-policy.py"

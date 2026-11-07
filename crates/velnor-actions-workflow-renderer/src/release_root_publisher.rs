@@ -8,14 +8,7 @@ use std::{collections::BTreeMap, io::Write as _};
 use velnor_actions_contract::Step;
 
 pub fn render_entry(timeout_seconds: u32) -> Result<String, RenderError> {
-    let bundle = serde_json::json!({
-        "coordinator": STANDARD.encode(include_bytes!("release_coordinator_exec.py")),
-        "retained": STANDARD.encode(include_bytes!("release_retained_parent.py")),
-        "source": STANDARD.encode(include_bytes!("release_source_executor.py")),
-        "channel": STANDARD.encode(include_bytes!("release_source_channel.py")),
-        "upload": STANDARD.encode(include_bytes!("release_upload_operation.py")),
-        "broker": STANDARD.encode(include_bytes!("release_forge_broker.py")),
-    });
+    let bundle = crate::release_privileged_modules::supervisor_bundle();
     let encoded =
         STANDARD
             .encode(serde_json::to_vec(&bundle).map_err(|_| {
@@ -35,44 +28,26 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
             "publisher_timeout_invalid".to_owned(),
         ));
     }
-    let entry = include_str!("release_publish_entry.py")
-        .replace(
-            "__VELNOR_BOOTSTRAP_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_generator_bootstrap.sh")),
-        )
-        .replace(
-            "__VELNOR_MANAGER_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_manager_bus.py")),
-        )
-        .replace(
-            "__VELNOR_WATCH_ADMISSION_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_watch_admission.py")),
-        )
-        .replace(
-            "__VELNOR_LIFECYCLE_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_manager_lifecycle.py")),
-        )
-        .replace(
-            "__VELNOR_HELPER_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_supervisor_exec.py")),
-        )
-        .replace(
-            "__VELNOR_WATCH_BOOTSTRAP_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_bootstrap_watch.py")),
-        )
-        .replace(
-            "__VELNOR_WATCH_PROGRAM_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_launcher_watch.py")),
-        )
-        .replace(
-            "__VELNOR_WATCH_CLAIM_PAYLOAD__",
-            &STANDARD.encode(include_bytes!("release_supervisor_claim.py")),
-        )
+    let contract = STANDARD.encode(
+        serde_json::to_vec(&crate::release_privileged_modules::export_contract())
+            .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?,
+    );
+    let mut entry = include_str!("release_publish_entry.py")
+        .replace("__VELNOR_EXPORT_CONTRACT_PAYLOAD__", &contract)
         .replace("__VELNOR_SUPERVISOR_PAYLOAD__", encoded)
         .replace(
             "__VELNOR_JOB_TIMEOUT_SECONDS__",
             &timeout_seconds.to_string(),
         );
+    for source in crate::release_privileged_modules::bootstrap_sources() {
+        let marker = format!("__VELNOR_{}_PAYLOAD__", source.marker);
+        if entry.matches(&marker).count() != 1 {
+            return Err(RenderError::InvalidWorkflow(
+                "publisher_module_marker_invalid".to_owned(),
+            ));
+        }
+        entry = entry.replace(&marker, &STANDARD.encode(source.source.as_bytes()));
+    }
     if entry.contains("__VELNOR_") {
         return Err(RenderError::InvalidWorkflow(
             "publisher_bundle_invalid".to_owned(),
@@ -148,25 +123,36 @@ pub(crate) fn bootstrap_payload_script(encoded: &str) -> Result<String, RenderEr
         digest.push(char::from(HEX[usize::from(byte >> 4)]));
         digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
-    let script = format!(
-        "import base64,hashlib,json,os,zlib\ntry:\n payload=os.environ.pop('VELNOR_RELEASE_BOOTSTRAP_PAYLOAD')\n if not 0<len(payload)<=32768 or hashlib.sha256(payload.encode('ascii')).hexdigest()!='{digest}': raise ValueError('payload')\n decoder=zlib.decompressobj()\n raw=decoder.decompress(base64.b64decode(payload,validate=True),524289)\n if len(raw)>524288 or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail: raise ValueError('payload')\n bundle=json.loads(raw)\nexcept Exception:\n raise SystemExit('release bootstrap payload rejected') from None\nexec(compile(bundle['stage'],'<release-bootstrap>','exec'),{{'bundle':bundle,'__name__':'__main__'}})"
-    );
+    let script =
+        include_str!("release_bootstrap_payload.py").replace("__VELNOR_PAYLOAD_SHA256__", &digest);
     Ok(format!("exec({script:?})"))
 }
 
 fn publisher_bundle() -> Result<String, RenderError> {
-    let bundle = serde_json::json!({
-        "stage": include_str!("release_publish_first_stage.py"),
-        "entry": include_str!("release_publish_entry.py"),
-        "bootstrap": include_str!("release_generator_bootstrap.sh"),
-        "manager": include_str!("release_manager_bus.py"),
-        "watch_admission": include_str!("release_watch_admission.py"),
-        "lifecycle": include_str!("release_manager_lifecycle.py"),
-        "helper": include_str!("release_supervisor_exec.py"),
-        "bootstrap_watch": include_str!("release_bootstrap_watch.py"),
-        "watch_program": include_str!("release_launcher_watch.py"),
-        "claim": include_str!("release_supervisor_claim.py"),
-    });
+    let mut bundle = serde_json::Map::from_iter([
+        (
+            "stage".to_owned(),
+            serde_json::json!(include_str!("release_publish_first_stage.py")),
+        ),
+        (
+            "entry".to_owned(),
+            serde_json::json!(include_str!("release_publish_entry.py")),
+        ),
+        (
+            "export_contract".to_owned(),
+            crate::release_privileged_modules::export_contract(),
+        ),
+    ]);
+    for source in crate::release_privileged_modules::bootstrap_sources() {
+        if bundle
+            .insert(source.key.to_owned(), serde_json::json!(source.source))
+            .is_some()
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "publisher_module_key_duplicate".to_owned(),
+            ));
+        }
+    }
     let raw = serde_json::to_vec(&bundle)
         .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?;
     if raw.len() > 512 * 1024 {
@@ -174,7 +160,11 @@ fn publisher_bundle() -> Result<String, RenderError> {
             "publisher_bundle_invalid".to_owned(),
         ));
     }
-    let mut compressor = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    let mut options = lzma_rust2::XzOptions::with_preset(6);
+    options.lzma_options.nice_len = 273;
+    options.lzma_options.pb = 0;
+    let mut compressor = lzma_rust2::XzWriter::new(Vec::new(), options)
+        .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?;
     compressor
         .write_all(&raw)
         .map_err(|_| RenderError::InvalidWorkflow("publisher_bundle_invalid".to_owned()))?;

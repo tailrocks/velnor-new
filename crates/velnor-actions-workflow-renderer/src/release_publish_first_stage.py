@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
-import ast
-import hashlib
 import tempfile
 import fcntl
 import json
@@ -51,23 +49,8 @@ def _export_verified(entry, root, binary, digest, deadline, watch, operation, co
                 or time.clock_gettime_ns(time.CLOCK_BOOTTIME) >= deadline):
             raise ValueError('publisher export invalid')
         exported = os.pread(output, size, 0)
-        names = ('WATCH_CONTRACT', 'WATCH_OPERATION', 'WATCH_BOOTSTRAP')
-        assignments = {name: [] for name in names}
-        for node in ast.walk(ast.parse(exported)):
-            if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                for target in targets:
-                    if isinstance(target, ast.Name) and target.id in assignments:
-                        assignments[target.id].append(node)
-        if any(len(nodes) != 1 or not isinstance(nodes[0], ast.Assign) or len(nodes[0].targets) != 1
-               or not isinstance(nodes[0].value, ast.Constant) or type(nodes[0].value.value) is not str
-               for nodes in assignments.values()):
-            raise ValueError('exported watch contract unavailable')
-        values = {name: nodes[0].value.value for name, nodes in assignments.items()}
-        if (values['WATCH_CONTRACT'] != 'velnor.root-watch.v1' or values['WATCH_OPERATION'] != operation
-                or hashlib.sha256(base64.b64decode(values['WATCH_BOOTSTRAP'], validate=True)).hexdigest()
-                   != hashlib.sha256(entry['decoded'](entry['WATCH_BOOTSTRAP'])).hexdigest()):
-            raise ValueError('exported watch contract mismatch')
+        verifier = entry['module']('velnor_export_contract', entry['EXPORT_VERIFIER'])
+        verifier.verify(exported, entry, operation, deadline)
         os.ftruncate(output, size)
         fcntl.fcntl(output, fcntl.F_ADD_SEALS,
                     fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
@@ -80,19 +63,27 @@ def _export_verified(entry, root, binary, digest, deadline, watch, operation, co
         raise
 
 
+def bootstrap_entry(bundle):
+    source = bundle['entry']
+    for item in bundle['export_contract']['bootstrap']:
+        marker = '__VELNOR_' + item['marker'] + '_PAYLOAD__'
+        if source.count(marker) != 1:
+            raise ValueError('bootstrap module marker invalid')
+        source = source.replace(marker, base64.b64encode(bundle[item['key']].encode()).decode())
+    contract = json.dumps(bundle['export_contract'], sort_keys=True, separators=(',', ':')).encode()
+    source = source.replace('__VELNOR_EXPORT_CONTRACT_PAYLOAD__', base64.b64encode(contract).decode())
+    source = source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
+    entry = {'__name__': 'velnor_first_stage'}
+    exec(compile(source, '<verified-publisher-bootstrap>', 'exec'), entry)
+    entry['EXPORT_TEMPLATE'] = bundle['entry']
+    return entry
+
+
 def main():
     if len(sys.argv) != 5:
         raise ValueError('invalid publisher arguments')
     mode, version, source_sha, manifest_sha = sys.argv[1:]
-    entry_source = bundle['entry']
-    for key, name in (('bootstrap', 'BOOTSTRAP'), ('manager', 'MANAGER'),
-                      ('lifecycle', 'LIFECYCLE'), ('watch_admission', 'WATCH_ADMISSION'), ('helper', 'HELPER'), ('bootstrap_watch', 'WATCH_BOOTSTRAP'),
-                      ('watch_program', 'WATCH_PROGRAM'), ('claim', 'WATCH_CLAIM')):
-        entry_source = entry_source.replace('__VELNOR_' + name + '_PAYLOAD__',
-            base64.b64encode(bundle[key].encode()).decode())
-    entry_source = entry_source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
-    entry = {'__name__': 'velnor_first_stage'}
-    exec(compile(entry_source, '<verified-publisher-bootstrap>', 'exec'), entry)
+    entry = bootstrap_entry(bundle)
     if (os.geteuid() != 0 or sys.platform != 'linux' or os.uname().machine != 'x86_64'
             or mode not in ('trusted-publishing', 'bootstrap')):
         raise ValueError('invalid publisher host')

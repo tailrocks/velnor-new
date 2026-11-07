@@ -25,6 +25,9 @@ source_root = Path(__file__).resolve().parents[1] / 'src'
 source = (source_root / 'release_publish_entry.py').read_text()
 for marker, name in (('__VELNOR_MANAGER_PAYLOAD__', 'release_manager_bus.py'),
                      ('__VELNOR_WATCH_ADMISSION_PAYLOAD__', 'release_watch_admission.py'),
+                     ('__VELNOR_MANAGER_POLICY_HOST_PAYLOAD__', 'release_manager_policy_host.py'),
+                     ('__VELNOR_MANAGER_POLICY_FILES_PAYLOAD__', 'release_manager_policy_files.py'),
+                     ('__VELNOR_MANAGER_POLICY_PAYLOAD__', 'release_manager_policy.py'),
                      ('__VELNOR_LIFECYCLE_PAYLOAD__', 'release_manager_lifecycle.py'),
                      ('__VELNOR_HELPER_PAYLOAD__', 'release_supervisor_exec.py'),
                      ('__VELNOR_BOOTSTRAP_PAYLOAD__', 'release_generator_bootstrap.sh'),

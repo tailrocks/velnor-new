@@ -199,33 +199,11 @@ fn publisher_step_fits_github_limit_and_binds_generator_pins()
             .ok_or("missing literal bundle")?;
         assert!(encoded.len() <= 32 * 1024);
         let compressed = base64::engine::general_purpose::STANDARD.decode(encoded)?;
-        let mut decoder = flate2::read::ZlibDecoder::new(compressed.as_slice());
+        let mut decoder = lzma_rust2::XzReader::new(compressed.as_slice(), false);
         let mut payload = Vec::new();
         decoder.read_to_end(&mut payload)?;
         let bundle: serde_json::Value = serde_json::from_slice(&payload)?;
-        for (key, expected) in [
-            (
-                "stage",
-                include_str!("../src/release_publish_first_stage.py"),
-            ),
-            ("entry", include_str!("../src/release_publish_entry.py")),
-            (
-                "bootstrap",
-                include_str!("../src/release_generator_bootstrap.sh"),
-            ),
-            ("manager", include_str!("../src/release_manager_bus.py")),
-            (
-                "watch_admission",
-                include_str!("../src/release_watch_admission.py"),
-            ),
-            (
-                "lifecycle",
-                include_str!("../src/release_manager_lifecycle.py"),
-            ),
-            ("helper", include_str!("../src/release_supervisor_exec.py")),
-        ] {
-            assert_eq!(bundle[key].as_str(), Some(expected));
-        }
+        export_contract::assert_bootstrap_sources(&bundle);
         assert_eq!(run.last().map(String::as_str), Some(manifest.as_str()));
         assert_eq!(
             run.get(run.len() - 2).map(String::as_str),
@@ -246,13 +224,35 @@ fn assert_bootstrap_transport(
     run: &[String],
     encoded: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rejected = std::process::Command::new(&run[3])
-        .args(&run[4..])
-        .env_clear()
-        .env("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD", encoded)
-        .output()?;
-    assert!(!rejected.status.success());
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("publisher first stage rejected"));
+    #[cfg(target_os = "linux")]
+    {
+        let clock = std::process::Command::new(&run[3])
+            .args([
+                "-I",
+                "-c",
+                "import time; print(time.clock_gettime_ns(time.CLOCK_BOOTTIME)+5_000_000_000)",
+            ])
+            .env_clear()
+            .output()?;
+        assert!(clock.status.success());
+        let deadline = String::from_utf8(clock.stdout)?;
+        let rejected = std::process::Command::new(&run[3])
+            .args(&run[4..])
+            .env_clear()
+            .env("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD", encoded)
+            .env("GITHUB_RUN_ID", "1")
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("GITHUB_JOB", "fixture")
+            .env(
+                "VELNOR_RELEASE_BUDGET",
+                format!("v1:1:1:fixture:{}", deadline.trim()),
+            )
+            .output()?;
+        assert!(!rejected.status.success());
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr).contains("publisher first stage rejected")
+        );
+    }
     for invalid in [
         None,
         Some("A".repeat(33 * 1024)),
@@ -342,3 +342,6 @@ fn renderer_and_release_contract_accept_the_same_environment_boundaries()
     }
     Ok(())
 }
+
+#[path = "release_export_contract_public.rs"]
+mod export_contract;

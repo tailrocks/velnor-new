@@ -3,6 +3,7 @@
 
 import ctypes
 import errno
+import hashlib
 import os
 import re
 import signal
@@ -13,6 +14,18 @@ import time
 
 
 from release_watch_admission import ManagerError, read_watch, watch_staging, verify_programs, open_dropin
+from release_manager_policy import Host, GeneratedDeadline, Admission, require_profile
+
+
+_START_REJECTION_KEY = object()
+
+
+class StartRejected(ManagerError):
+    def __init__(self, key, unit):
+        if key is not _START_REJECTION_KEY:
+            raise ManagerError('start rejection issuer invalid')
+        self.unit = unit
+        super().__init__('unit rejected before dispatch')
 
 
 class Manager:
@@ -48,6 +61,8 @@ class Manager:
         self.owner = None
         self.dropin_parent = None
         self.dropin_name = None
+        self.generated_deadline = None
+        self.policy_host = None
         self.slot = ctypes.c_void_p()
         self._bind()
         try:
@@ -289,6 +304,7 @@ class Manager:
                      "org.freedesktop.systemd1.Manager", "Subscribe", [], deadline)
         if self._owner(deadline) != self.owner:
             raise ManagerError("manager owner changed")
+        self.policy_host = Host(self, deadline)
         return self.owner
 
     def _property(self, message, name, kind, value):
@@ -322,16 +338,18 @@ class Manager:
             directory = None
             child = os.open(name, flags, dir_fd=self.dropin_parent)
             try:
-                fd = os.open("deadline.conf", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                fd = os.open("deadline.conf", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                              0o600, dir_fd=child)
                 try:
                     data = ("[Unit]\nJobTimeoutSec=" + str(runtime_seconds) + "s\n").encode("ascii")
+                    payload = data
                     while data:
                         written = os.write(fd, data)
                         if not written:
                             raise ManagerError("unit deadline staging failed")
                         data = data[written:]
                     os.fsync(fd)
+                    self.generated_deadline = GeneratedDeadline(unit, child, fd, payload)
                 finally:
                     os.close(fd)
             finally:
@@ -345,128 +363,177 @@ class Manager:
             raise ManagerError("invalid unit release")
         self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "UnrefUnit",
                      [("s", unit)], deadline)
+        self._discard_staging(unit)
+
+    def _discard_staging(self, unit):
+        if self.dropin_parent is None:
+            if self.dropin_name is not None or self.generated_deadline is not None:
+                raise ManagerError('unit staging cleanup uncertain')
+            return
+        generated = self.generated_deadline
+        if self.dropin_name != unit + '.d' or generated is None:
+            raise ManagerError('unit staging cleanup uncertain')
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
         directory = os.open(self.dropin_name, flags, dir_fd=self.dropin_parent)
         try:
-            os.unlink("deadline.conf", dir_fd=directory)
+            info = os.fstat(directory)
+            shape = lambda value: (value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_mode)
+            if (shape(info) != generated.directory_identity
+                    or shape(os.fstat(generated.directory)) != generated.directory_identity
+                    or sorted(os.listdir(directory)) != ['deadline.conf']):
+                raise ManagerError('unit staging directory changed')
+            file = os.stat('deadline.conf', dir_fd=directory, follow_symlinks=False)
+            held = os.fstat(generated.descriptor)
+            if (shape(file) != generated.file_identity or shape(held) != generated.file_identity
+                    or file.st_nlink != 1 or held.st_nlink != 1 or file.st_size != held.st_size
+                    or hashlib.sha256(os.pread(generated.descriptor, 1025, 0)).hexdigest() != generated.sha256):
+                raise ManagerError('unit staging file changed')
+            os.unlink('deadline.conf', dir_fd=directory)
         finally:
             os.close(directory)
         os.rmdir(self.dropin_name, dir_fd=self.dropin_parent)
         os.close(self.dropin_parent)
         self.dropin_parent = None
         self.dropin_name = None
+        generated.close()
+        self.generated_deadline = None
 
     def start(self, unit, reader, deadline, output_fd=None):
-        if self._watch_unit is None:
-            self.validate_watch(deadline)
-        elif not self._watch_start_allowed or unit != self._watch_unit:
-            raise ManagerError('watch unit cannot be replaced')
-        remaining = (deadline - time.clock_gettime_ns(time.CLOCK_BOOTTIME)) // 1_000_000_000
-        runtime_seconds = min(self.runtime_seconds, remaining)
-        if runtime_seconds < 1:
-            raise ManagerError('unit deadline unavailable')
-        self._prepare_unit(unit, runtime_seconds)
-        message = self._message(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
-                                "StartTransientUnit")
-        reply = None
+        dispatched = False
         try:
-            self._append(message, "s", unit)
-            self._append(message, "s", "fail")
-            self._open(message, "a", "(sv)")
-            for name, kind, value in (
-                ("AddRef", "b", 1), ("DynamicUser", "b", int(not self.root_bootstrap)), ("NoNewPrivileges", "b", 1), ("Delegate", "b", 0),
-                ("CapabilityBoundingSet", "t", 0), ("AmbientCapabilities", "t", 0), ("LimitCORE", "t", 0),
-                ("TimeoutStartUSec", "t", 5_000_000), ("TimeoutStopUSec", "t", 20_000_000),
-                ("RuntimeMaxUSec", "t", runtime_seconds * 1_000_000),
-                ("KillMode", "s", "control-group"),
-                ("StandardError", "s", "null"), ("StandardInputFileDescriptor", "h", reader),
-            ):
-                self._property(message, name, kind, value)
             if self._watch_unit is None:
-                self._property(message, "KillSignal", "i", signal.SIGKILL)
-                self._property(message, "CollectMode", "s", "inactive-or-failed")
-            if not self.root_bootstrap:
-                self._property(message, "PrivateTmp", "b", 1)
-            if self.deny_network:
-                self._property(message, "PrivateNetwork", "b", 1)
-            if self.deny_unix:
-                self._open(message, "r", "sv")
-                self._append(message, "s", "RestrictAddressFamilies")
-                self._open(message, "v", "(bas)")
-                self._open(message, "r", "bas")
-                self._append(message, "b", 0)
-                self._open(message, "a", "s")
-                self._append(message, "s", "AF_UNIX")
-                self._close(message)
-                self._close(message)
-                self._close(message)
-                self._close(message)
-            if output_fd is None:
-                self._property(message, "StandardOutput", "s", "null")
-            elif type(output_fd) is int and output_fd >= 0:
-                self._property(message, "StandardOutputFileDescriptor", "h", output_fd)
-            else:
-                raise ManagerError("invalid output descriptor")
-            if self.bind_to is not None:
-                for property_name in ("BindsTo", "After"):
+                self.validate_watch(deadline)
+            elif not self._watch_start_allowed or unit != self._watch_unit:
+                raise ManagerError('watch unit cannot be replaced')
+            remaining = (deadline - time.clock_gettime_ns(time.CLOCK_BOOTTIME)) // 1_000_000_000
+            runtime_seconds = min(self.runtime_seconds, remaining)
+            if runtime_seconds < 1:
+                raise ManagerError('unit deadline unavailable')
+            require_profile(self.policy_host)
+            self._prepare_unit(unit, runtime_seconds)
+            admission = Admission(self.policy_host, self, unit, self.generated_deadline, deadline)
+            message = None
+            reply = None
+            try:
+                message = self._message(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
+                                        "StartTransientUnit")
+                self._append(message, "s", unit)
+                self._append(message, "s", "fail")
+                self._open(message, "a", "(sv)")
+                for name, kind, value in (
+                    ("AddRef", "b", 1), ("DynamicUser", "b", int(not self.root_bootstrap)), ("NoNewPrivileges", "b", 1), ("Delegate", "b", 0),
+                    ("CapabilityBoundingSet", "t", 0), ("AmbientCapabilities", "t", 0), ("LimitCORE", "t", 0),
+                    ("TimeoutStartUSec", "t", 5_000_000), ("TimeoutStopUSec", "t", 20_000_000),
+                    ("RuntimeMaxUSec", "t", runtime_seconds * 1_000_000),
+                    ("KillMode", "s", "control-group"),
+                    ("StandardError", "s", "null"), ("StandardInputFileDescriptor", "h", reader),
+                ):
+                    self._property(message, name, kind, value)
+                if self._watch_unit is None:
+                    self._property(message, "KillSignal", "i", signal.SIGKILL)
+                    self._property(message, "CollectMode", "s", "inactive-or-failed")
+                for name, values in (('Environment', ()), ('PassEnvironment', ()),
+                                     ('UnsetEnvironment', admission.environment_names)):
+                    self._open(message, 'r', 'sv')
+                    self._append(message, 's', name)
+                    self._open(message, 'v', 'as')
+                    self._open(message, 'a', 's')
+                    for value in values:
+                        self._append(message, 's', value)
+                    for _ in range(3):
+                        self._close(message)
+                if not self.root_bootstrap:
+                    self._property(message, "PrivateTmp", "b", 1)
+                if self.deny_network:
+                    self._property(message, "PrivateNetwork", "b", 1)
+                if self.deny_unix:
                     self._open(message, "r", "sv")
-                    self._append(message, "s", property_name)
-                    self._open(message, "v", "as")
+                    self._append(message, "s", "RestrictAddressFamilies")
+                    self._open(message, "v", "(bas)")
+                    self._open(message, "r", "bas")
+                    self._append(message, "b", 0)
                     self._open(message, "a", "s")
-                    self._append(message, "s", self.bind_to)
+                    self._append(message, "s", "AF_UNIX")
                     self._close(message)
                     self._close(message)
                     self._close(message)
-            if self.claim_helper is not None:
+                    self._close(message)
+                if output_fd is None:
+                    self._property(message, "StandardOutput", "s", "null")
+                elif type(output_fd) is int and output_fd >= 0:
+                    self._property(message, "StandardOutputFileDescriptor", "h", output_fd)
+                else:
+                    raise ManagerError("invalid output descriptor")
+                if self.bind_to is not None:
+                    for property_name in ("BindsTo", "After"):
+                        self._open(message, "r", "sv")
+                        self._append(message, "s", property_name)
+                        self._open(message, "v", "as")
+                        self._open(message, "a", "s")
+                        self._append(message, "s", self.bind_to)
+                        self._close(message)
+                        self._close(message)
+                        self._close(message)
+                if self.claim_helper is not None:
+                    self._open(message, "r", "sv")
+                    self._append(message, "s", "ExecStartPre")
+                    self._open(message, "v", "a(sasb)")
+                    self._open(message, "a", "(sasb)")
+                    self._open(message, "r", "sasb")
+                    self._append(message, "s", "/usr/bin/python3")
+                    self._open(message, "a", "s")
+                    for arg in ("/usr/bin/python3", "-I", "-S", self.claim_helper):
+                        self._append(message, "s", arg)
+                    self._close(message)
+                    self._append(message, "b", 0)
+                    for _ in range(4):
+                        self._close(message)
                 self._open(message, "r", "sv")
-                self._append(message, "s", "ExecStartPre")
+                self._append(message, "s", "ExecStart")
                 self._open(message, "v", "a(sasb)")
                 self._open(message, "a", "(sasb)")
                 self._open(message, "r", "sasb")
                 self._append(message, "s", "/usr/bin/python3")
                 self._open(message, "a", "s")
-                for arg in ("/usr/bin/python3", "-I", "-S", self.claim_helper):
+                for arg in ("/usr/bin/python3", "-I", "-S", self.helper):
                     self._append(message, "s", arg)
                 self._close(message)
                 self._append(message, "b", 0)
                 for _ in range(4):
                     self._close(message)
-            self._open(message, "r", "sv")
-            self._append(message, "s", "ExecStart")
-            self._open(message, "v", "a(sasb)")
-            self._open(message, "a", "(sasb)")
-            self._open(message, "r", "sasb")
-            self._append(message, "s", "/usr/bin/python3")
-            self._open(message, "a", "s")
-            for arg in ("/usr/bin/python3", "-I", "-S", self.helper):
-                self._append(message, "s", arg)
-            self._close(message)
-            self._append(message, "b", 0)
-            for _ in range(4):
                 self._close(message)
-            self._close(message)
-            self._open(message, "a", "(sa(sv))")
-            self._close(message)
-            reply = self._call(message, deadline)
-            job = self._read(reply, "o")
-        finally:
-            if reply:
-                self.library.sd_bus_message_unref(reply)
-            self.library.sd_bus_message_unref(message)
-        unit_path = self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
-                                      "GetUnit", [("s", unit)], deadline, "o")
-        if self._get(unit_path, "org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != runtime_seconds * 1_000_000:
-            raise ManagerError("unit deadline unverified")
-        if self._watch_unit is None and (
-                self._get(unit_path, "org.freedesktop.systemd1.Service", "KillSignal", "i", deadline) != signal.SIGKILL
-                or self._get(unit_path, "org.freedesktop.systemd1.Service", "KillMode", "s", deadline) != "control-group"
-                or self._get(unit_path, "org.freedesktop.systemd1.Unit", "CollectMode", "s", deadline) != "inactive-or-failed"):
-            raise ManagerError("unit cleanup policy unverified")
-        if self._watch_unit is None:
-            self.validate_watch(deadline)
-        else:
-            self._watch_runtime_seconds = runtime_seconds
-        return job
+                self._open(message, "a", "(sa(sv))")
+                self._close(message)
+                admission.revalidate()
+                dispatched = True
+                reply = self._call(message, deadline)
+                job = self._read(reply, "o")
+            finally:
+                admission.close()
+                if reply:
+                    self.library.sd_bus_message_unref(reply)
+                if message:
+                    self.library.sd_bus_message_unref(message)
+            unit_path = self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
+                                          "GetUnit", [("s", unit)], deadline, "o")
+            if self._get(unit_path, "org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != runtime_seconds * 1_000_000:
+                raise ManagerError("unit deadline unverified")
+            if self._watch_unit is None and (
+                    self._get(unit_path, "org.freedesktop.systemd1.Service", "KillSignal", "i", deadline) != signal.SIGKILL
+                    or self._get(unit_path, "org.freedesktop.systemd1.Service", "KillMode", "s", deadline) != "control-group"
+                    or self._get(unit_path, "org.freedesktop.systemd1.Unit", "CollectMode", "s", deadline) != "inactive-or-failed"):
+                raise ManagerError("unit cleanup policy unverified")
+            if self._watch_unit is None:
+                self.validate_watch(deadline)
+            else:
+                self._watch_runtime_seconds = runtime_seconds
+            return job
+
+        except BaseException as error:
+            if not dispatched:
+                self._discard_staging(unit)
+                raise StartRejected(_START_REJECTION_KEY, unit) from error
+            raise
 
     def event(self, deadline):
         while not self.events:
@@ -575,6 +642,9 @@ class Manager:
         return values
 
     def close(self):
+        if self.generated_deadline is not None:
+            self.generated_deadline.close()
+            self.generated_deadline = None
         if self.dropin_parent is not None:
             os.close(self.dropin_parent)
             self.dropin_parent = None

@@ -6,12 +6,13 @@ import ast, base64, fcntl, hashlib, importlib.util, json, os, pathlib, shutil, s
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from release_watch_fixture import RootWatch
 root = pathlib.Path(sys.argv[1]).resolve(strict=True)
-source = (root / 'release_publish_entry.py').read_text().replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')
-for key, path in [('MANAGER','release_manager_bus.py'),('WATCH_ADMISSION','release_watch_admission.py'),('LIFECYCLE','release_manager_lifecycle.py'),('HELPER','release_supervisor_exec.py'),('WATCH_BOOTSTRAP','release_bootstrap_watch.py'),('WATCH_PROGRAM','release_launcher_watch.py'),('WATCH_CLAIM','release_supervisor_claim.py')]:
-    source = source.replace('__VELNOR_' + key + '_PAYLOAD__', base64.b64encode((root / path).read_bytes()).decode())
-entry={'__name__':'test_entry'}; exec(compile(source, '<entry>', 'exec'), entry)
 spec=importlib.util.spec_from_file_location('first_stage', root / 'release_publish_first_stage.py')
 stage=importlib.util.module_from_spec(spec); spec.loader.exec_module(stage)
+with open(sys.argv[3], 'rb') as stream:
+    raw=stream.read(512*1024+1)
+assert 0<len(raw)<=512*1024
+bundle=json.loads(raw)
+entry=stage.bootstrap_entry(bundle)
 manager=entry['module']('fixture_manager',entry['MANAGER'])
 lifecycle=entry['module']('fixture_lifecycle',entry['LIFECYCLE'])
 with RootWatch(manager,lifecycle,root) as watch, tempfile.TemporaryDirectory(prefix='velnor-publisher-', dir='/run') as private:
@@ -26,8 +27,8 @@ with RootWatch(manager,lifecycle,root) as watch, tempfile.TemporaryDirectory(pre
                        for node in ast.parse(actual).body
                        if isinstance(node, ast.Assign) and len(node.targets) == 1
                        and isinstance(node.targets[0], ast.Name)
-                       and node.targets[0].id in {'MANAGER', 'WATCH_ADMISSION', 'LIFECYCLE', 'HELPER', 'SUPERVISOR', 'WATCH_BOOTSTRAP', 'WATCH_PROGRAM', 'CLAIM'}}
-        for key, filename in [('MANAGER', 'release_manager_bus.py'), ('WATCH_ADMISSION', 'release_watch_admission.py'), ('LIFECYCLE', 'release_manager_lifecycle.py'), ('HELPER', 'release_supervisor_exec.py'), ('WATCH_BOOTSTRAP', 'release_bootstrap_watch.py'), ('WATCH_PROGRAM', 'release_launcher_watch.py'), ('CLAIM', 'release_supervisor_claim.py')]:
+                       and node.targets[0].id in {'MANAGER', 'WATCH_ADMISSION', 'MANAGER_POLICY_HOST', 'MANAGER_POLICY_FILES', 'MANAGER_POLICY', 'LIFECYCLE', 'HELPER', 'SUPERVISOR', 'WATCH_BOOTSTRAP', 'WATCH_PROGRAM', 'CLAIM'}}
+        for key, filename in [('MANAGER', 'release_manager_bus.py'), ('WATCH_ADMISSION', 'release_watch_admission.py'), ('MANAGER_POLICY_HOST', 'release_manager_policy_host.py'), ('MANAGER_POLICY_FILES', 'release_manager_policy_files.py'), ('MANAGER_POLICY', 'release_manager_policy.py'), ('LIFECYCLE', 'release_manager_lifecycle.py'), ('HELPER', 'release_supervisor_exec.py'), ('WATCH_BOOTSTRAP', 'release_bootstrap_watch.py'), ('WATCH_PROGRAM', 'release_launcher_watch.py'), ('CLAIM', 'release_supervisor_claim.py')]:
             assert base64.b64decode(assignments[key], validate=True) == (root / filename).read_bytes()
         embedded = json.loads(base64.b64decode(assignments['SUPERVISOR'], validate=True))
         for key, filename in [('coordinator','release_coordinator_exec.py'), ('retained','release_retained_parent.py'), ('source','release_source_executor.py'), ('channel','release_source_channel.py'), ('upload','release_upload_operation.py'), ('broker','release_forge_broker.py')]:

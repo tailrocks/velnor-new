@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{fs, io::Write as _, path::Path, process::Command};
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use {base64::Engine as _, std::io::Read as _};
 
 fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
     let output = Command::new("git").current_dir(root).args(args).output()?;
@@ -270,10 +272,12 @@ fn hosted_managed_publisher_export_is_bounded_and_quiescent()
         .arg(env!("CARGO_BIN_EXE_velnor-actions"))
         .status()?;
     assert!(status.success(), "candidate strip failed");
+    let bundle = bootstrap_bundle(temp.path())?;
     let renderer = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("workspace crates")?
         .join("velnor-actions-workflow-renderer");
+    assert_hosted_manager_profile(&renderer)?;
     let status = Command::new("/usr/bin/sudo")
         .args([
             "-n",
@@ -290,7 +294,59 @@ fn hosted_managed_publisher_export_is_bounded_and_quiescent()
         .arg(renderer.join("tests/release_first_stage_systemd_test.py"))
         .arg(renderer.join("src"))
         .arg(binary)
+        .arg(bundle)
         .status()?;
     assert!(status.success(), "managed publisher export failed");
     Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn assert_hosted_manager_profile(renderer: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let status = Command::new("/usr/bin/sudo")
+        .args([
+            "-n",
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/nonexistent",
+            "LANG=C",
+            "/usr/bin/python3",
+            "-I",
+            "-S",
+            "-B",
+        ])
+        .arg(renderer.join("tests/release_manager_policy_systemd_test.py"))
+        .status()?;
+    assert!(
+        status.success(),
+        "native manager profile qualification failed"
+    );
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn bootstrap_bundle(root: &Path) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let step = velnor_actions_workflow_renderer::release_root_publisher::publisher_step(
+        false,
+        env!("CARGO_PKG_VERSION"),
+        &"b".repeat(40),
+        &"c".repeat(64),
+    )?;
+    let velnor_actions_contract::StepKind::Shell { env, .. } = step.kind else {
+        return Err("publisher bootstrap shell unavailable".into());
+    };
+    let encoded = env
+        .get("VELNOR_RELEASE_BOOTSTRAP_PAYLOAD")
+        .ok_or("bootstrap payload missing")?;
+    let compressed = base64::engine::general_purpose::STANDARD.decode(encoded)?;
+    let mut payload = Vec::new();
+    lzma_rust2::XzReader::new(compressed.as_slice(), false)
+        .take(512 * 1024 + 1)
+        .read_to_end(&mut payload)?;
+    if payload.is_empty() || payload.len() > 512 * 1024 {
+        return Err("bootstrap payload size invalid".into());
+    }
+    let path = root.join("bootstrap.json");
+    fs::write(&path, payload)?;
+    Ok(path)
 }
