@@ -159,6 +159,14 @@ phase below remains a direct install with `--ignore-scripts`.
 When `[private_sources] npm_scopes` is non-empty, step 3 becomes two phases
 and the job holds `packages: read`:
 
+Every generated Bun job that reads a private registry starts with a fork
+fence before checkout or dependency work. On a `pull_request`, it requires
+the serialized fork flag to be Boolean `false`; a fork or an indeterminate
+flag fails the job. Other events continue normally. The job-level affected
+gate still skips unselected work. This fence does not depend on the version
+of the pinned planner. It assumes the reviewed workflow trust boundary in the
+[fork-PR trust model](../implemented/fork-pr-trust-model.md).
+
 1. `Install dependencies (registry phase)` is the internal operation
    `bun-registry-install-v1` (step role `BunRegistryInstall`, after the staged
    helper under consumer policy). It is the only step that binds
