@@ -99,12 +99,9 @@ fn scoped_lifecycle_only(polled: &Poll) -> bool {
 fn lifecycle_jobs_only(message_id: i64, jobs: &[InnerJob]) -> bool {
     message_id >= 0
         && !jobs.is_empty()
-        && jobs.iter().all(|job| {
-            matches!(
-                job.kind,
-                InnerKind::Assigned | InnerKind::Started | InnerKind::Completed
-            )
-        })
+        && jobs
+            .iter()
+            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
 }
 
 async fn record_scoped_events(

@@ -11,6 +11,8 @@ use velnor_runner_github::{
 };
 
 mod common;
+#[path = "poll_statistics/zero_request_id.rs"]
+mod zero_request_id;
 
 use common::{QUEUE, Script, exchange, header};
 

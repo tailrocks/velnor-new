@@ -107,6 +107,51 @@ impl ConnectionJournal {
         .await
     }
 
+    pub(crate) async fn request_already_assigned(
+        &self,
+        identity: &AssignmentIdentity,
+    ) -> Result<bool, HostError> {
+        let request_id = request_id(identity, self)?;
+        let connection_id = self.connection_id().as_str().to_owned();
+        let binding_digest = self.binding_digest().to_owned();
+        read_transaction(self.journal_ref(), async |connection| {
+            validate_scope_identity(self, connection, identity).await?;
+            let (repository_id, _) =
+                bound_source_identity(connection, &connection_id, &binding_digest).await?;
+            let mut rows = connection
+                .query(
+                    "SELECT source_json, source_digest, binding_digest FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
+                    (connection_id.as_str(), identity.scale_set_id(), request_id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+                return Err(HostError::Journal);
+            };
+            let source_json: String = row.get(0).map_err(|_| HostError::Journal)?;
+            let source_digest: String = row.get(1).map_err(|_| HostError::Journal)?;
+            let stored_binding: String = row.get(2).map_err(|_| HostError::Journal)?;
+            if stored_binding != binding_digest || digest(source_json.as_bytes()) != source_digest {
+                return Err(HostError::Journal);
+            }
+            crate::journal::source_authorization::stored_source_already_assigned(
+                &source_json,
+                repository_id,
+            )
+        })
+        .await
+    }
+
+    pub(crate) async fn claim_authorized_request_acquire(
+        &self,
+        identity: &AssignmentIdentity,
+    ) -> Result<bool, HostError> {
+        in_transaction(self.journal_ref(), async |connection| {
+            claim_request_acquire_in_transaction(connection, self, identity).await
+        })
+        .await
+    }
+
     pub(crate) async fn acquired_authorized_requests(
         &self,
         limit: u32,

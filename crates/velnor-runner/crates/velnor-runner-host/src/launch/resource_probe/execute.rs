@@ -131,7 +131,7 @@ async fn execute(
     let mut record =
         execute_started(docker, journal, projection, &id, memory_total, deadline).await?;
     let row = deadline
-        .within(journal.active_probe())
+        .within(journal.leased_probe())
         .await??
         .ok_or(HostError::Journal)?;
     let cleanup = recover::cleanup(docker, journal, &row, projection, deadline).await?;
@@ -304,7 +304,7 @@ async fn recover_current(
     projection: &ProbeProjection,
     deadline: &Deadline,
 ) {
-    let Ok(Ok(Some(row))) = deadline.within(journal.active_probe()).await else {
+    let Ok(Ok(Some(row))) = deadline.within(journal.leased_probe()).await else {
         return;
     };
     if row.phase == ProbePhase::Prepared {

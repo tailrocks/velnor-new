@@ -41,9 +41,16 @@ pub(super) async fn active(
     if row.engine_id != engine_id || row.docker_root_digest != root.digest() {
         return Err(HostError::Identity);
     }
-    deadline
-        .within(journal.begin_probe_recovery(&row.operation_id))
-        .await??;
+    if row.phase == ProbePhase::Prepared {
+        return deadline
+            .within(journal.abort_prepared_probe(&row.operation_id))
+            .await?;
+    }
+    if !row.is_recovering_lease() {
+        deadline
+            .within(journal.begin_probe_recovery(&row.operation_id))
+            .await??;
+    }
     let projection = persisted_projection(&row, root)?;
     if let Err(error) = cleanup(docker, journal, &row, &projection, deadline).await {
         if matches!(
@@ -81,7 +88,7 @@ pub(super) async fn verify_current_projection(
     deadline: &Deadline,
 ) -> Result<(), HostError> {
     let row = deadline
-        .within(journal.active_probe())
+        .within(journal.leased_probe())
         .await??
         .ok_or(HostError::Journal)?;
     if row.operation_id != projection.operation_id
@@ -250,7 +257,7 @@ async fn retire_exact_absence(
             .await??;
     }
     let current = deadline
-        .within(journal.active_probe())
+        .within(journal.leased_probe())
         .await??
         .filter(|active| active.operation_id == row.operation_id)
         .ok_or(HostError::Journal)?;

@@ -23,6 +23,7 @@ pub(crate) struct AuthorizedSourceReceipt {
     message_id: i64,
     source: VerifiedWorkflowSource,
     policy_mode: SourcePolicyMode,
+    already_assigned: bool,
 }
 
 impl AuthorizedSourceReceipt {
@@ -59,6 +60,17 @@ impl AuthorizedSourceReceipt {
     #[must_use]
     pub(crate) const fn policy_mode(&self) -> SourcePolicyMode {
         self.policy_mode
+    }
+
+    #[must_use]
+    pub(crate) const fn already_assigned(&self) -> bool {
+        self.already_assigned
+    }
+
+    #[must_use]
+    pub(crate) const fn with_already_assigned(mut self, already_assigned: bool) -> Self {
+        self.already_assigned = already_assigned;
+        self
     }
 }
 
@@ -140,6 +152,7 @@ pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
         message_id,
         source: verified,
         policy_mode: connection.source_policy.mode,
+        already_assigned: false,
     })
 }
 

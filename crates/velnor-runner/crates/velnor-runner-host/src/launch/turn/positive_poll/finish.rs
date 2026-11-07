@@ -4,7 +4,7 @@
 use std::future::Future;
 use std::ops::AsyncFnMut;
 
-use velnor_runner_github::{InnerKind, Poll, QueueSession};
+use velnor_runner_github::{Poll, QueueSession};
 
 use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::Link;
@@ -160,7 +160,7 @@ pub(super) async fn settle_known_response(
 }
 
 pub(super) fn contains_available(polled: &Poll) -> bool {
-    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| job.kind == InnerKind::Available))
+    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| crate::assign::is_active_offer_job(batch, job)))
 }
 
 pub(crate) async fn admit_when_ready<F, Fut>(

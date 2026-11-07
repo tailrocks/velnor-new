@@ -115,4 +115,8 @@ impl ProbeRow {
     pub(crate) fn work(&self) -> &ProbeWork {
         &self.work
     }
+
+    pub(crate) const fn is_recovering_lease(&self) -> bool {
+        matches!(self.lease_state, ProbeLeaseState::Recovering)
+    }
 }
