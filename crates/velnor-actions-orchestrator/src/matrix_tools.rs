@@ -57,8 +57,8 @@ enum SuiteTool {
     GenerateValidators,
     OpenTofuExecution,
     BunExecution,
-    GhExecution,
     CraneExecution,
+    GhAttestation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,24 +80,28 @@ impl CrateSuite {
         self.owns(SuiteTool::CraneExecution)
     }
 
+    fn owns_gh_attestation(self) -> bool {
+        self.owns(SuiteTool::GhAttestation)
+    }
+
     const fn package_name(self) -> &'static str {
         self.name.package_name()
     }
 }
 
 const NO_SUITE_TOOLS: &[SuiteTool] = &[];
-const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
-const GH_TOOLS: &[SuiteTool] = &[SuiteTool::GhExecution];
 const CLI_TOOLS: &[SuiteTool] = &[
     SuiteTool::GenerateValidators,
-    SuiteTool::GhExecution,
+    SuiteTool::GhAttestation,
     SuiteTool::CraneExecution,
 ];
 const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[
     SuiteTool::GenerateValidators,
     SuiteTool::BunExecution,
-    SuiteTool::GhExecution,
+    SuiteTool::GhAttestation,
 ];
+const MISE_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
+const RENDERER_TOOLS: &[SuiteTool] = &[SuiteTool::GhAttestation];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
@@ -114,7 +118,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::Mise,
-        tools: OPENTOFU_TOOLS,
+        tools: MISE_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Rust,
@@ -142,7 +146,7 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     },
     CrateSuite {
         name: SuiteName::WorkflowRenderer,
-        tools: GH_TOOLS,
+        tools: RENDERER_TOOLS,
     },
     CrateSuite {
         name: SuiteName::Actionlint,
@@ -235,11 +239,6 @@ impl LaneTools {
         if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_bun) {
             tools.insert(PinnedTool::Bun);
         }
-        if policy == WorkflowPolicy::VelnorRepositoryV1
-            && suite.is_some_and(|suite| suite.owns(SuiteTool::GhExecution))
-        {
-            tools.insert(PinnedTool::Gh);
-        }
         if policy == WorkflowPolicy::VelnorRepositoryV1 && suite.is_some_and(CrateSuite::owns_crane)
         {
             tools.insert(PinnedTool::Crane);
@@ -272,6 +271,22 @@ pub(crate) fn verify_validators_step(catalog: &ToolCatalog, tools: &LaneTools) -
         .0
         .contains(&PinnedTool::Jactionlint)
         .then(|| crate::workflow::verify_jactionlint_step(catalog))
+}
+
+pub(crate) fn prepare_runtime_gh_step(
+    policy: WorkflowPolicy,
+    suite: Option<CrateSuite>,
+    catalog: &ToolCatalog,
+) -> Result<Option<Step>, OrchestratorError> {
+    if policy != WorkflowPolicy::VelnorRepositoryV1
+        || !suite.is_some_and(CrateSuite::owns_gh_attestation)
+    {
+        return Ok(None);
+    }
+    let mut step = prepare_crate_tools_step(catalog, &LaneTools(BTreeSet::from([PinnedTool::Gh])))?;
+    "Prepare pinned attestation verifier".clone_into(&mut step.name);
+    step.role = Some(StepRole::PrepareRuntimeTools);
+    Ok(Some(step))
 }
 
 pub(crate) fn prepare_crate_tools_step(

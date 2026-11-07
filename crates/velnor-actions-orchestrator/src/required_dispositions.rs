@@ -85,3 +85,10 @@ fn fold_unplanned(conclusion: JobConclusion, signals: &mut Signals) {
         JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
     }
 }
+
+pub(crate) fn expected_lane_routes(
+    plan: &Plan,
+    expected: Option<&velnor_actions_contract::LaneInventory>,
+) -> bool {
+    plan.lane_inventory.as_ref() == expected
+}

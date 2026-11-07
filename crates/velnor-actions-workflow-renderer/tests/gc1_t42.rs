@@ -292,3 +292,6 @@ fn macos_artifacts_attested_on_linux_with_same_run_custody() -> Result<(), Box<d
     }
     Ok(())
 }
+
+#[path = "source_preview_graph.rs"]
+mod source_preview_graph;

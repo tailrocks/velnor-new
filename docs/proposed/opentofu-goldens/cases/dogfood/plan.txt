@@ -8,6 +8,7 @@ Detected stacks
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-systemd-policy-observation: observe-hosted-systemd-policy (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -57,6 +58,7 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-hosted-budget-containment (7 steps)
     - check-hosted-gh-config-custody (7 steps)
+    - check-hosted-systemd-policy-observation (7 steps)
     - check-maintenance-helpers (7 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)
@@ -66,15 +68,15 @@ Workflow to generate
     - rust-velnor-actions-actionlint (30 steps)
     - rust-velnor-actions-ansible (30 steps)
     - rust-velnor-actions-bun (30 steps)
-    - rust-velnor-actions-cli (34 steps)
+    - rust-velnor-actions-cli (35 steps)
     - rust-velnor-actions-contract (31 steps)
     - rust-velnor-actions-dbt (30 steps)
     - rust-velnor-actions-gradle (30 steps)
     - rust-velnor-actions-mise (31 steps)
-    - rust-velnor-actions-orchestrator (33 steps)
+    - rust-velnor-actions-orchestrator (34 steps)
     - rust-velnor-actions-rust (31 steps)
     - rust-velnor-actions-tofu (30 steps)
-    - rust-velnor-actions-workflow-renderer (31 steps)
+    - rust-velnor-actions-workflow-renderer (32 steps)
     - rust-velnor-resource-probe (31 steps)
     - rust-velnor-runner-attestation (30 steps)
     - rust-velnor-runner-cli (30 steps)
@@ -87,7 +89,7 @@ Workflow to generate
     - state-seal-crates-velnor-runner (8 steps)
     - state-seal-root (8 steps)
     - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-4b808b72 (11 steps)
+    - tools-producer-924ced60 (11 steps)
     - tools-producer-c957c0bd (8 steps)
     - tools-producer-caf63d48 (9 steps)
     - 18 Rust crate jobs

@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{LaneTools, prepare_crate_tools_step};
+use super::{LaneTools, prepare_crate_tools_step, prepare_runtime_gh_step, suite_for_package};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use velnor_actions_contract::{
-    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand, StepKind,
+    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand, StepKind, StepRole,
     WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
@@ -74,7 +74,31 @@ fn gh_test_tool_is_provisioned_only_for_velnor() {
         "velnor-actions-cli",
     ] {
         task.display_name = package.to_owned();
-        assert!(has_gh(WorkflowPolicy::VelnorRepositoryV1, &task));
+        assert!(!has_gh(WorkflowPolicy::VelnorRepositoryV1, &task));
         assert!(!has_gh(WorkflowPolicy::ConsumerV1, &task));
+        let suite = suite_for_package(package);
+        let runtime = prepare_runtime_gh_step(WorkflowPolicy::VelnorRepositoryV1, suite, &catalog)
+            .expect("render runtime tool installation")
+            .expect("suite requires pinned runtime GitHub verifier");
+        assert_eq!(runtime.role, Some(StepRole::PrepareRuntimeTools));
+        let StepKind::Shell { run, .. } = runtime.kind else {
+            panic!("expected runtime shell step")
+        };
+        assert_eq!(
+            run.iter().filter(|arg| arg.contains("gh@2.103.3")).count(),
+            1
+        );
+        assert!(
+            prepare_runtime_gh_step(WorkflowPolicy::ConsumerV1, suite, &catalog)
+                .expect("render consumer runtime tools")
+                .is_none()
+        );
+    }
+    for suite in [suite_for_package("velnor-actions-rust"), None] {
+        assert!(
+            prepare_runtime_gh_step(WorkflowPolicy::VelnorRepositoryV1, suite, &catalog)
+                .expect("render unrelated runtime tools")
+                .is_none()
+        );
     }
 }

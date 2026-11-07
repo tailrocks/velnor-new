@@ -6,7 +6,7 @@ use super::*;
 fn check_duplicate_ledger_rejected() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = valid_ledger(&task)?;
+    let ledger = valid_ledger(&task, &report)?;
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),
@@ -25,14 +25,10 @@ fn check_duplicate_ledger_rejected() -> Result<(), Box<dyn Error>> {
 
 fn check_unknown_unit_ledger_rejected() -> Result<(), Box<dyn Error>> {
     let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = group_ledger_value(
-        "ghost-unit",
-        JOB_ID,
-        HEAD_SHA,
-        "pull_request",
-        UnitOutcome::Executed,
-        Some(0),
-    )?;
+    let mut ledger = valid_ledger(&task_id()?, &report)?;
+    ledger["selected_unit_ids"][0] = json!("ghost-unit");
+    ledger["ordered_results"][0]["unit_id"] = json!("ghost-unit");
+    ledger["ordered_results"][0]["task_identity"] = json!("ghost-unit");
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),
@@ -59,6 +55,7 @@ fn check_success_contradiction_rejected() -> Result<(), Box<dyn Error>> {
         "pull_request",
         UnitOutcome::Failed,
         Some(1),
+        &report,
     )?;
     let final_report = merge(
         &plan,
@@ -79,7 +76,7 @@ fn check_success_contradiction_rejected() -> Result<(), Box<dyn Error>> {
 fn check_failure_contradiction_rejected() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = valid_ledger(&task)?;
+    let ledger = valid_ledger(&task, &report)?;
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),
@@ -99,7 +96,7 @@ fn check_failure_contradiction_rejected() -> Result<(), Box<dyn Error>> {
 fn check_skipped_job_ledger_rejected() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, _) = check_run_fixture()?;
-    let ledger = valid_ledger(&task)?;
+    let ledger = valid_ledger(&task, &report)?;
     let final_report = merge(
         &plan,
         std::slice::from_ref(&matrix),

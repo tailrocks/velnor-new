@@ -173,7 +173,7 @@ pub(crate) fn validate_bun_assets_job(
     jobs: &BTreeMap<String, Job>,
     policy: &BunAssetsPolicy,
     checkout_uses: &str,
-    plan: Option<&velnor_actions_contract::BunLanePlan>,
+    plan: Option<&velnor_actions_contract::LanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     let expected = crate::verification_jobs::bun_lane_validation::project_job(
         &policy.id,

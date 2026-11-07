@@ -33,6 +33,8 @@ pub(crate) struct PlanRequest {
     pub(crate) repository: Option<String>,
     #[serde(default)]
     pub(crate) named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    #[serde(default)]
+    pub(crate) lane_inventory: Option<velnor_actions_contract::LaneInventory>,
 }
 
 pub(crate) fn checked_plan_request(

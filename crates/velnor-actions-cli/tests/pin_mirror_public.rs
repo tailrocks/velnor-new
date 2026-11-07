@@ -294,15 +294,30 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
 
     let fixture = Fixture::new()?;
     fixture.commit_all()?;
-    fixture.rewrite(POLICY, |text| text.replacen(", \"ubuntu-22.04\"", "", 1))?;
+    fixture.rewrite(POLICY, |text| {
+        let changed = text.replacen(
+            "supported = [\"ubuntu-26.04\"]",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-28.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
+    })?;
     fixture.edit_inventory(|inventory| {
+        assert!(inventory["runner"]["supported"].is_array());
         if let Some(labels) = inventory["runner"]["supported"].as_array_mut() {
-            labels.retain(|label| label != "ubuntu-22.04");
+            assert!(!labels.iter().any(|label| label == "ubuntu-28.04"));
+            labels.push(Value::String("ubuntu-28.04".to_owned()));
         }
     })?;
     fixture.rewrite(RUNNER_SOURCE, |text| {
-        text.replacen("[&str; 6]", "[&str; 5]", 1)
-            .replacen("    \"ubuntu-22.04\",\n", "", 1)
+        let changed = text.replacen(
+            "[&str; 2] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\"]",
+            "[&str; 3] = [\"ubuntu-26.04\", \"ubuntu-26.04-arm\", \"ubuntu-28.04\"]",
+            1,
+        );
+        assert_ne!(changed, text);
+        changed
     })?;
     let labels = fixture.run(Some("HEAD"))?;
     assert!(labels.success, "consistent label change rejected");
@@ -312,7 +327,7 @@ fn pin_diff_reports_cosign_digest_and_runner_label_changes() -> TestResult {
             .ok_or_else(|| io::Error::other(format!("{subject} unreported: {:?}", labels.rows)))?;
         assert_eq!(
             row["detail"],
-            "base=ubuntu-26.04,ubuntu-24.04,ubuntu-22.04 head=ubuntu-26.04,ubuntu-24.04"
+            "base=ubuntu-26.04 head=ubuntu-26.04,ubuntu-28.04"
         );
     }
     Ok(())

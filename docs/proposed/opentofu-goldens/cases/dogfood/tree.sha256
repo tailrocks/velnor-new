@@ -1,7 +1,7 @@
 - 34b5115c3e801cdf89fe3f54b0b7327d77f5d3457c3fd6469a76570e8e11da5c  ./.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 - 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-- 28c0dd634f64a12fd9d3f714fc7e7688d44516a923e6aa2090a95f5764244d14  ./.github/actions/declared-task-0/action.yml
+- 560c70230f21330d2391f9c96452b372616b0df1f7ef737b1d09d6ee5c6bd087  ./.github/actions/declared-task-0/action.yml
 - f6938f160df7e21c19c19fde18f5725fa89eb428e7febc065a1609a0667e063d  ./.github/actions/generator-release-build-linux/action.yml
 - 8014b53901078039d42b2fcbe3705ab33f877466270951881747d8ee2c6e596d  ./.github/actions/generator-release-build-macos-intel/action.yml
 - a508a32db7cc6be003e4e673bb9cb7253bd4081e6f274a9eb2acbe2d73c7c0fb  ./.github/actions/generator-release-build-macos/action.yml
@@ -22,14 +22,15 @@
 - eeed16c78a52ba0d90d8c9354bab464bd40f6f0a12fad7ea048825751e3b1629  ./.github/scripts/velnor-tools-cache-identity.sh
 - 58467ec1e435cb355169d822edba9d926cb4d77bb2ea6d1c2582abc8d41ffd70  ./.github/velnor/task-execution-manifest-v1.json
 - 91a51d46326f1a3497bad150315440d0bf89a4fc5b5cf202edba69a04c0d1b82  ./.github/workflows/cache-prune.yml
-- 6fc5922316b4bc425561a77e9bcf7696ad81e43d2ce77937c0bfd0b7f141ccc8  ./.github/workflows/ci.yml
+- d4b0115b66bd6b7c988b058307cb6f31a77dc1a5f461d75ac1d4ef5f50b964cd  ./.github/workflows/ci.yml
 - 97fe3daddf5a4e353958cba33690840c71cbc6a07f472cb907576752a0c5f676  ./.github/workflows/freshness.yml
 - 1eb3d047a9348606e9ce0590e94f831aa6706833ce7cf97ab379609e500b4139  ./.github/workflows/homebrew-adoption.yml
 - 21cfcddc34acef8b0030014aa67e0e27d147e5f13ba105783a0f94d71df89907  ./.github/workflows/job-image-candidate.yml
 - d4204b98945abca72254174bdfdd06b9048393e54b96e8ea6c83b156ae3a8b55  ./.github/workflows/product-release-binary.yml
-- a7f8231a03acc0d693fb8ba73bf1de92f2c9784c0cd2584d47076f107a7c6b11  ./.github/workflows/product-release-generator.yml
+- 143ccc111491302996fda538909a581ab7d2ddd9e9fd9cb738707fec671de590  ./.github/workflows/product-release-generator.yml
 - 6c2ec0a89af0720e5d9ac1f1101aefee71f744525d84c0a370166d293ba7c512  ./.github/workflows/product-release-images.yml
 - b1e62114c1002e37a68b326028a1ba1bfd1f056cf189443544e46316ca2bf836  ./.github/workflows/product-release.yml
 - af67fb90468928229a4b2991f001636e9486261dfb28d1824dcad5b4ed4e94d1  ./.github/workflows/qualification.yml
+- caca11263383c8af762b4f7b9428a0eaad85a46a32fb64e2fe1b2ead288af574  ./.github/workflows/source-preview-publication.yml
 - 9afb528a534517c5f7748fb90d994f59c792655eb4a22dc96e0c6748d3defdce  ./.github/workflows/source-qualification.yml
-- 8ea05598543be98b1571763134549d56f14dede1dd6470b7e4904e8445fea57a  ./.github/workflows/state-seal.yml
+- 9a38eceeec6ba0c58f436595baa3a3b1220a78521c76283e3540d1ad3d00abb8  ./.github/workflows/state-seal.yml

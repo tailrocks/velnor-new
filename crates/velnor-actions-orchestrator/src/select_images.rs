@@ -68,6 +68,7 @@ pub(crate) fn dispositions(
         };
         for platform in &image.platforms {
             jobs.push(PlanJob {
+                lane: None,
                 job_id: image.build_job_id(*platform),
                 disposition,
             });

@@ -111,6 +111,25 @@ pub fn render_staged_tree_with(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
+    let scoped = prep.config.checks.iter().any(|check| {
+        check.selection == velnor_actions_contract::config::CheckSelection::DeclaredInputs
+    });
+    let controller = &prep.workflow.context.controller;
+    if scoped {
+        controller
+            .validate()
+            .map_err(|error| OrchestratorError::Contract {
+                problem: error.to_string(),
+            })?;
+    }
+    if scoped && (prep.config.workflow.policy != velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1
+        || !matches!(controller, velnor_actions_workflow_renderer::render::ControllerLocator::ProtectedBaseDispatch { .. })) {
+        return Err(OrchestratorError::config(
+            ".velnor/config.toml",
+            "checks.selection",
+            "declared_inputs_requires_approved_preview_controller",
+        ));
+    }
     let tree = render_all(prep, dispatch)?;
     check_tree_paths(&tree)?;
     Ok(tree)

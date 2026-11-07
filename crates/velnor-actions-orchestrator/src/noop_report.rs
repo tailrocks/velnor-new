@@ -5,7 +5,9 @@ use std::path::Path;
 
 use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
 
-use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
+use crate::task_report::{
+    entry_and_digest_for_context, single_task_aggregate, write_entry_reports,
+};
 
 use crate::OrchestratorError;
 use crate::decisions::{NotSelectedInputs, not_selected_report};
@@ -56,13 +58,14 @@ pub(crate) fn write_noop_report_to(
     exit_code: i32,
     request: &NoOpRequest,
     runner_temp: &Path,
+    job_id: Option<&str>,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
     if exit_code != 0 {
         return Err(internal("reason_with_failure"));
     }
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
-    let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
     if digest != request.task_digest {
         return Err(internal("noop_digest_mismatch"));
     }
@@ -88,13 +91,14 @@ pub(crate) fn write_skip_reports(
     task_id: &str,
     downstream: &[String],
     runner_temp: &Path,
+    job_id: Option<&str>,
 ) -> Result<usize, OrchestratorError> {
     let mut reported = 0usize;
     for downstream_id in downstream {
         if downstream_id == task_id {
             return Err(internal("downstream_self"));
         }
-        let (entry, digest) = entry_and_digest(plan, downstream_id)?;
+        let (entry, digest) = entry_and_digest_for_context(plan, downstream_id, job_id)?;
         let task = not_selected_report(&NotSelectedInputs {
             run_key: &plan.run_key,
             event: plan.event,

@@ -104,6 +104,8 @@ pub(super) fn rust_tasks(
             Ok(RustTaskFact {
                 unit: task.identity.unit_id.clone(),
                 no_targets: task.no_targets,
+                shard: velnor_actions_contract::split_shard_suffix(&task.task_id)
+                    .map(|(_, index, count)| (index, count)),
                 manifest: task.identity.unit_path.clone(),
                 kind: velnor_actions_rust::TaskKind::parse(&task.task_kind)?,
                 configuration: task.configuration.clone(),

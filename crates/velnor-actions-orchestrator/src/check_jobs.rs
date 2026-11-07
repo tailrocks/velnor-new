@@ -42,7 +42,14 @@ pub(crate) fn build_check_jobs(
         let id = format!("check-{}", check.id);
         jobs.push((
             id.clone(),
-            check_job(discovered, &id, acquire, catalog, helper_version)?,
+            check_job(
+                discovered,
+                &id,
+                acquire,
+                catalog,
+                helper_version,
+                published_lock.is_some_and(|lock| lock.source_preview.is_some()),
+            )?,
         ));
     }
     for check in &discovery.native_checks {
@@ -148,12 +155,18 @@ fn check_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     helper_version: &str,
+    preview: bool,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
     steps.extend(acquire);
     steps.push(crate::planner::matrix_step::download_plan_step()?);
-    steps.push(execute_check_step(discovered, catalog, helper_version)?);
+    steps.push(execute_check_step(
+        discovered,
+        catalog,
+        helper_version,
+        preview,
+    )?);
     let mut upload = crate::planner::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
@@ -207,6 +220,7 @@ fn execute_check_step(
     discovered: &DiscoveredCheck,
     catalog: &ToolCatalog,
     helper_version: &str,
+    preview: bool,
 ) -> Result<Step, OrchestratorError> {
     let identity = BTreeMap::from([
         ("VELNOR_CHECK_ID".to_owned(), discovered.check.id.clone()),
@@ -221,7 +235,21 @@ fn execute_check_step(
         ),
         (INTERNAL_OP_ENV.to_owned(), "execute-check-v1".to_owned()),
     ]);
-    let env = crate::planner::matrix_step::task_step_env(catalog, &identity, false)?;
+    let mut env = crate::planner::matrix_step::task_step_env(catalog, &identity, false)?;
+    if preview {
+        env.remove(INTERNAL_OP_ENV);
+        return Ok(Step {
+            parallel: false,
+            name: "Execute named check".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: velnor_actions_contract::StepKind::Internal {
+                operation: "execute-check-v1".to_owned(),
+                env,
+            },
+        });
+    }
     velnor_actions_workflow_renderer::shell_step(
         "Execute named check",
         vec![crate::planner::matrix_step::helper_path_for_version(

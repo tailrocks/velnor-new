@@ -60,6 +60,20 @@ pub use velnor_actions_contract::workflow::artifacts::ARTIFACT_RETENTION_DAYS;
 pub const DOWNLOAD_ARTIFACT_USES: &str = DOWNLOAD_ARTIFACT_ACTION_USES;
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 
+pub fn protected_preview_acquire_step() -> Result<Step, RenderError> {
+    Ok(Step {
+        parallel: false,
+        name: "Prepare protected preview controller".to_owned(),
+        id: None,
+        role: Some(StepRole::AcquireProtectedPreview),
+        condition: None,
+        kind: StepKind::Internal {
+            operation: velnor_actions_contract::workflow::step_identity::ACQUIRE_PROTECTED_PREVIEW_OPERATION.to_owned(),
+            env: BTreeMap::new(),
+        },
+    })
+}
+
 pub const ACQUIRE_TIMEOUT_MINUTES: i64 =
     velnor_actions_contract::config::RELEASE_ACQUIRE_STEP_TIMEOUT_MINUTES as i64;
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";

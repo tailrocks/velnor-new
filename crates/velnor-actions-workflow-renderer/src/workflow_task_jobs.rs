@@ -91,7 +91,7 @@ impl WorkflowTaskPolicy {
     pub fn owns_projected_job_id(
         &self,
         job_id: &str,
-        plan: Option<&velnor_actions_contract::BunLanePlan>,
+        plan: Option<&velnor_actions_contract::LanePlan>,
     ) -> bool {
         self.owns_job_id(job_id)
             || plan
@@ -103,7 +103,7 @@ impl WorkflowTaskPolicy {
     pub fn runner_label_for_projected_job(
         &self,
         job_id: &str,
-        plan: Option<&velnor_actions_contract::BunLanePlan>,
+        plan: Option<&velnor_actions_contract::LanePlan>,
     ) -> Option<&str> {
         self.runner_label_for_job(job_id).or_else(|| {
             plan.and_then(|plan| plan.logical_id_for_output(job_id))
@@ -116,7 +116,7 @@ pub(crate) fn validate_workflow_task_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
     checkout_uses: &str,
-    plan: Option<&velnor_actions_contract::BunLanePlan>,
+    plan: Option<&velnor_actions_contract::LanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     crate::verification_jobs::bun_lane_validation::validate_output_set(jobs, policies, plan)?;
     let mut previous = None;
@@ -191,7 +191,7 @@ fn bun_task_job_ids(
     jobs: &BTreeMap<String, Job>,
     policy: &WorkflowTaskPolicy,
     checkout_uses: &str,
-    plan: Option<&velnor_actions_contract::BunLanePlan>,
+    plan: Option<&velnor_actions_contract::LanePlan>,
 ) -> Result<Vec<String>, RenderError> {
     use crate::verification_jobs::{bun_assets_jobs, bun_member_jobs, bun_suite_jobs};
     match policy {

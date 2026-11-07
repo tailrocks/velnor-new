@@ -32,6 +32,7 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
         role,
         Some(
             StepRole::PreparePinnedTools
+                | StepRole::PrepareRuntimeTools
                 | StepRole::PrepareRustComponents
                 | StepRole::CargoSourcesFetch
                 | StepRole::CargoDeny

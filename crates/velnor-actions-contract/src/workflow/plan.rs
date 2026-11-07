@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::lanes::NamedCheckLaneVariant;
+use super::lanes::LaneVariant;
 pub use super::matrix_entry::MatrixEntry;
-pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};
+pub use super::plan_jobs::{
+    JobDisposition, PairedJob, PlanJob, plan_skips_work, selects_affected_work,
+};
 use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;
@@ -54,6 +56,9 @@ pub struct Plan {
 
     pub jobs: Vec<PlanJob>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane_inventory: Option<super::lanes::LaneInventory>,
+
     #[serde(default)]
     pub warnings: Vec<String>,
 
@@ -93,6 +98,23 @@ pub struct PlanGenerator {
     pub target: String,
 
     pub sha256: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<PlanPreviewIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlanPreviewIdentity {
+    pub channel: PlanPreviewChannel,
+    pub source_sha: String,
+    pub receipt_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlanPreviewChannel {
+    SourcePreview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,6 +192,23 @@ impl Plan {
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
         }
+        if let Some(preview) = &self.generator.preview {
+            let valid_hex = |value: &str, length: usize| {
+                value.len() == length
+                    && value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            };
+            if !valid_hex(&preview.source_sha, 40)
+                || !valid_hex(&preview.receipt_sha256, 64)
+                || preview.source_sha == self.head
+            {
+                return Err(ContractError::identity(
+                    "generator.preview",
+                    "invalid_preview_identity",
+                ));
+            }
+        }
         super::qualification_dispatch::validate_plan_qualification(self)?;
         self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
@@ -201,6 +240,12 @@ impl Plan {
         }
         validate_plan_edges(&self.edges, &self.task_ids)?;
         super::plan_jobs::validate_plan_jobs(self)?;
+        if !super::plan_jobs::validate_lane_inventory(self) {
+            return Err(ContractError::identity(
+                "lane_inventory",
+                "route_inventory_mismatch",
+            ));
+        }
         Ok(())
     }
 }
@@ -228,8 +273,8 @@ fn validate_named_check_lane_pairs(entries: &[MatrixEntry]) -> Result<(), Contra
                     ));
                 }
                 let bit = match variant {
-                    NamedCheckLaneVariant::Hosted => 1,
-                    NamedCheckLaneVariant::ScaleSet => 2,
+                    LaneVariant::Hosted => 1,
+                    LaneVariant::ScaleSet => 2,
                 };
                 let seen = pairs.entry(task_id).or_default();
                 if *seen & bit != 0 {

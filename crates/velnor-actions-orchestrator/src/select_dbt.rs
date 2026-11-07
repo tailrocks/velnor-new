@@ -31,6 +31,7 @@ pub(crate) fn dispositions(
         .projects
         .iter()
         .map(|project| PlanJob {
+            lane: None,
             job_id: job_id(project),
             disposition: if selected
                 .as_ref()

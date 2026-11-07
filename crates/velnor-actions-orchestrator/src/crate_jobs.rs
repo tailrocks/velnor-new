@@ -73,6 +73,7 @@ pub(crate) fn build_for_workflow(
     acquire: Option<&Step>,
     helper_version: &str,
     generator_version: &str,
+    preview: Option<&velnor_actions_contract::source_preview::SourcePreviewLock>,
     private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let no_crates = BTreeMap::new();
@@ -94,6 +95,7 @@ pub(crate) fn build_for_workflow(
             timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
             helper_version,
             generator_version,
+            preview,
             crates,
             compiled_state: config.stacks.compiled_state(),
             seed_parallel_targets: config
@@ -149,6 +151,7 @@ fn build_crate_jobs_with_seed_timeout(
         &recipe_jobs,
         input.helper_version,
         input.generator_version,
+        input.preview,
     )?;
     let producers = match input.compiled_state {
         CompiledStateMode::Union => recipe_jobs,
@@ -342,8 +345,15 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
-    steps.push(matrix_step::prepare_crate_tools_step(catalog, tools)?);
-    steps.extend(matrix_step::verify_validators_step(catalog, tools));
+    steps.push(crate::planner::matrix_step::prepare_crate_tools_step(
+        catalog, tools,
+    )?);
+    steps.extend(crate::planner::matrix_step::verify_validators_step(
+        catalog, tools,
+    ));
+    steps.extend(crate::planner::matrix_step::prepare_runtime_gh_step(
+        policy, suite, catalog,
+    )?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));

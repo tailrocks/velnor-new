@@ -2997,12 +2997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "snap"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "199905e6153d6405f9728fe44daace35f8f837bbf830bb6e85fbd5828709a886"
-
-[[package]]
 name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3862,9 +3856,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "sigstore-trust-root",
  "sigstore-verify",
- "snap",
  "tempfile",
  "tokio",
  "tough",

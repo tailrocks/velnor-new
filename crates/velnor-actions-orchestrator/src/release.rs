@@ -91,3 +91,6 @@ pub(crate) mod release_steps;
 pub(crate) mod release_task_identity;
 #[path = "stable_release_emit.rs"]
 pub(crate) mod stable_release_emit;
+
+#[path = "selected_preview_identity.rs"]
+pub(crate) mod selected_preview_identity;

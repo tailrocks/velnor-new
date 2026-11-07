@@ -3,6 +3,8 @@
 
 mod workflow_configuration_fixture;
 
+#[path = "workflow_configuration_public/both_rust_sharding.rs"]
+mod both_rust_sharding;
 #[path = "workflow_configuration_public/branches.rs"]
 mod branches;
 #[path = "workflow_configuration_public/bun_assets_routing.rs"]
@@ -65,6 +67,8 @@ mod final_fanin;
 mod fixture_checkout_filter;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
+#[path = "workflow_configuration_public/lane_inventory_dispatch.rs"]
+mod lane_inventory_dispatch;
 #[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
 mod ledger_cli_build_env;
 #[path = "workflow_configuration_public/ledger_cli_job.rs"]
@@ -121,6 +125,8 @@ mod non_inputs_selection;
 mod one_job_per_crate;
 #[path = "workflow_configuration_public/parallel_owners.rs"]
 mod parallel_owners;
+#[path = "workflow_configuration_public/preview_gh_lane.rs"]
+mod preview_gh_lane;
 #[path = "workflow_configuration_public/release_bun_prerequisite.rs"]
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
@@ -129,6 +135,8 @@ mod report_upload;
 mod rust_tree_pin_jobs;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
 mod rust_tree_pin_rendered;
+#[path = "workflow_configuration_public/scoped_check_selection.rs"]
+mod scoped_check_selection;
 #[path = "workflow_configuration_public/scoped_workspace.rs"]
 mod scoped_workspace;
 #[path = "workflow_configuration_public/seed_ids.rs"]
@@ -251,3 +259,6 @@ mod release_tracked_manifests;
 
 #[path = "workflow_configuration_public/verdict_toolchain.rs"]
 mod verdict_toolchain;
+
+#[path = "workflow_configuration_public/both_shared_producers.rs"]
+mod both_shared_producers;

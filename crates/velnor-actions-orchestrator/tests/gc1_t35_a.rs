@@ -6,7 +6,7 @@ use super::*;
 fn check_grouped_success_preserved() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, entry) = check_run_fixture()?;
-    let group_ledger = valid_ledger(&task)?;
+    let group_ledger = valid_ledger(&task, &report)?;
     let merged = merge(
         &plan,
         std::slice::from_ref(&matrix),
@@ -109,6 +109,7 @@ pub(crate) fn check_cross_source_ledger_rejected() -> Result<(), Box<dyn Error>>
         "pull_request",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,
@@ -136,6 +137,7 @@ pub(crate) fn check_cross_event_ledger_rejected() -> Result<(), Box<dyn Error>> 
         "push",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,
@@ -163,6 +165,7 @@ pub(crate) fn check_unplanned_job_ledger_rejected() -> Result<(), Box<dyn Error>
         "pull_request",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,

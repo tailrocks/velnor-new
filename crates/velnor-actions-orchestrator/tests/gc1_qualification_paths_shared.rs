@@ -165,7 +165,7 @@ pub(crate) fn paths_admission(
 /// scale-set variants stay distinct.
 pub(crate) fn check_named_lane_identity() -> Result<(), Box<dyn Error>> {
     let lane = NamedCheckLane {
-        variant: Some(NamedCheckLaneVariant::Hosted),
+        variant: Some(LaneVariant::Hosted),
         job_id: "check".to_owned(),
     };
     if lane.job_id.is_empty() {
@@ -177,7 +177,7 @@ pub(crate) fn check_named_lane_identity() -> Result<(), Box<dyn Error>> {
     if parsed != lane {
         return Err(invalid("named lane lost its round trip"));
     }
-    if parsed.variant != Some(NamedCheckLaneVariant::Hosted) {
+    if parsed.variant != Some(LaneVariant::Hosted) {
         return Err(invalid("named lane changed its variant"));
     }
     let unpinned = NamedCheckLane {
@@ -188,7 +188,7 @@ pub(crate) fn check_named_lane_identity() -> Result<(), Box<dyn Error>> {
         return Err(invalid("unpinned lane merged with the hosted lane"));
     }
     let scaled = NamedCheckLane {
-        variant: Some(NamedCheckLaneVariant::ScaleSet),
+        variant: Some(LaneVariant::ScaleSet),
         job_id: "check".to_owned(),
     };
     if scaled == lane {
