@@ -111,6 +111,13 @@ impl VelnorConfig {
                 ));
             }
         }
+        if ids.contains(crate::JOB_IMAGE_CANDIDATE_UNIT_ID) {
+            return Err(ContractError::config(
+                file,
+                "checks.id",
+                "reserved_job_image_candidate_identity",
+            ));
+        }
         Ok(())
     }
 

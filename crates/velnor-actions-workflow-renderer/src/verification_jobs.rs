@@ -10,6 +10,10 @@ use velnor_actions_contract::{
 
 use crate::{MiseSetup, RenderError};
 
+#[path = "job_image_candidate_execution.rs"]
+mod job_image_candidate_execution;
+pub use job_image_candidate_execution::JobImageCandidateExecution;
+
 #[path = "build_task_jobs.rs"]
 pub(crate) mod build_task_jobs;
 #[path = "build_task_mise.rs"]

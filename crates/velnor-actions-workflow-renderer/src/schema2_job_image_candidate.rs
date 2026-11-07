@@ -20,7 +20,7 @@ const ATTESTATION_RUNTIME_CANDIDATE: &str = "$RUNNER_TEMP/privatecandidate";
 #[path = "job_image_authority.rs"]
 mod authority;
 #[path = "schema2_job_image_native.rs"]
-mod native;
+pub(crate) mod native;
 
 pub(super) fn render_candidate_workflow(
     request: &Schema2WorkflowRequest,
