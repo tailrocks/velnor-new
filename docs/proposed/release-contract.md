@@ -53,8 +53,8 @@ release implementation. The workflow MUST acquire the exact catalogued archive
 and verify both archive and executable digests; it MUST NOT resolve `latest` or
 recompile release-plz for each run. The archive and executable pins establish
 what bytes were acquired, not independent upstream source provenance. The
-recorded release tag is unsigned and the measured asset evidence and limits
-are in [release-plz qualification](../implemented/release-plz-0.4.3-qualification-2026-11-04.md).
+recorded release tag is unsigned. Supported byte identities, the qualification
+procedure and limits are in [release-plz qualification](../implemented/release-plz-0.4.3-qualification.md).
 Protected use additionally requires the approved generator, Rust toolchain,
 source, runner and artifact custody to satisfy the publication boundary.
 

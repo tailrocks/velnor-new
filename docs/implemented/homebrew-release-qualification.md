@@ -30,8 +30,9 @@ only after these checks. This type cannot be deserialized or substituted for
 `VerifiedPublicPackageRelease`.
 
 The raw bundle cannot exceed 2 GiB. The process checks the ZIP directory count
-and size before constructing the ZIP parser. The bundle permits at most 16
-regular, stored entries and rejects duplicate paths, traversal paths, symlinks,
+and size before constructing the ZIP parser. The bundle permits at most 131
+regular, stored entries, derived from `2 * (64 + 1)` handoff files plus
+`admission.json`. It rejects duplicate paths, traversal paths, symlinks,
 compressed entries, ZIP64, and comments. Each JSON file cannot exceed 1 MiB,
 and each payload archive cannot exceed 256 MiB. ZIP contents remain in memory.
 No downloaded artifact is extracted to the filesystem.
