@@ -212,6 +212,12 @@ fn git_tag_toml_body(config: &ReleasePlzConfig) -> Result<String, RenderError> {
             &mut out,
             format_args!("name = \"{}\"\n", toml_escape(&package.name)),
         )?;
+        if let Some(group) = &package.version_group {
+            toml_line(
+                &mut out,
+                format_args!("version_group = \"{}\"\n", toml_escape(group)),
+            )?;
+        }
         out.push_str("release = true\n");
     }
     Ok(out)

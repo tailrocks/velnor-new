@@ -262,3 +262,6 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+
+#[path = "workflow_configuration_public/git_tag_version_groups.rs"]
+mod git_tag_version_groups;

@@ -22,7 +22,8 @@ use crate::release::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
 mod config;
-use config::{plz_config, release_render_context};
+pub(super) use config::plz_config;
+use config::release_render_context;
 
 #[path = "release_emit_plan.rs"]
 mod plan;

@@ -10,9 +10,7 @@ use velnor_actions_contract::{ImageConfig, WorkflowPolicy};
 use velnor_actions_rust::git_pins::unpinned_git_sources;
 use velnor_actions_workflow_renderer::publish_render::render_publish_workflow;
 use velnor_actions_workflow_renderer::publish_spec::{PublishTriggers, PublishWorkflowSpec};
-use velnor_actions_workflow_renderer::release_config::{
-    ReleasePlzConfig, ReleasePlzPackage, render_git_tag_release_plz_config,
-};
+use velnor_actions_workflow_renderer::release_config::render_git_tag_release_plz_config;
 use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, ReleaseRenderContext};
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
@@ -168,19 +166,8 @@ fn git_tag_config(
             problem: "release_nothing_selected".to_owned(),
         });
     }
-    let config = ReleasePlzConfig {
-        tag_pattern: release.tag_name.clone(),
-        semver_check: false,
-        packages: selection
-            .packages
-            .iter()
-            .map(|package| ReleasePlzPackage {
-                version_group: None,
-                name: package.name.clone(),
-                publish_features: Vec::new(),
-            })
-            .collect(),
-    };
+    let mut config = crate::release::release_emit::plz_config(release, &selection)?;
+    config.semver_check = false;
     let bytes = render_git_tag_release_plz_config(&config, env!("CARGO_PKG_VERSION"))?;
     Ok(RenderedFile {
         path: RELEASE_CONFIG_PATH.to_owned(),

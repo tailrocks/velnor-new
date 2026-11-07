@@ -7,7 +7,7 @@ use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};
 use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, ReleaseRenderContext};
 
-pub(super) fn plz_config(
+pub(crate) fn plz_config(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
 ) -> Result<ReleasePlzConfig, OrchestratorError> {
