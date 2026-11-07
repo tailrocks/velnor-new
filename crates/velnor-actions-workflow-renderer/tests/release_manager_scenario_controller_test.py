@@ -10,10 +10,13 @@ import json
 import os
 from pathlib import Path
 import secrets
+import select
 import shutil
 import socket
+import struct
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 
@@ -208,21 +211,56 @@ class ScenarioControllerTest(unittest.TestCase):
             root = Path(directory)
             unit = "velnor-release-" + os.urandom(16).hex() + ".service"
             marker = root / "started"
-            script = ("import os,signal,subprocess,time;r,w=os.pipe();p=os.fork();\n"
+            channel = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            channel.bind(str(root / "child"))
+            channel.listen(1)
+            channel.settimeout(10)
+            captured = []
+            def capture_child():
+                try:
+                    connection, _ = channel.accept()
+                    with connection:
+                        pid, _, _ = struct.unpack("3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+                        captured.append(os.pidfd_open(pid))
+                        connection.sendall(b"x")
+                except Exception as error:
+                    captured.append(error)
+            receiver = threading.Thread(target=capture_child)
+            receiver.start()
+            script = ("import os,signal,socket,subprocess,time;r,w=os.pipe();p=os.fork();\n"
                       "if p:\n os.close(w);os.read(r,1);os._exit(0)\n"
                       "os.close(r);os.setsid();signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+                      "s=socket.socket(socket.AF_UNIX);s.connect(" + repr(str(root / "child")) + ");"
+                      "s.recv(1);s.close();"
                       "os.write(w,b'x');time.sleep(2);"
                       "subprocess.run(['/usr/bin/systemd-run','--unit=" + unit + "',"
                       "'--property=RuntimeMaxSec=45s','/usr/bin/sleep','40'],check=True);"
                       "open(" + repr(str(marker)) + ",'w').write('started');time.sleep(300)\n")
             try:
-                with self.assertRaises(Exception):
+                try:
                     self.run_fixture(root, script)
-                self.assertEqual(marker.read_text(), "started")
-                active = subprocess.run(["/usr/bin/systemctl", "is-active", unit], capture_output=True,
-                                        timeout=5, check=False)
-                self.assertEqual(active.stdout.strip(), b"active")
+                except Exception as error:
+                    self.assertEqual(type(error).__name__, "SupervisorError")
+                    self.assertEqual(str(error), "unit failed after verified cleanup")
+                receiver.join(timeout=11)
+                self.assertFalse(receiver.is_alive(), "detached child identity was not captured")
+                self.assertEqual(len(captured), 1)
+                self.assertIsInstance(captured[0], int, str(captured[0]))
+                poller = select.poll()
+                poller.register(captured[0], select.POLLIN)
+                events = poller.poll(3000)
+                self.assertTrue(events and events[0][1] & select.POLLIN,
+                                "detached child survived supervisor return")
+                time.sleep(3)
+                self.assertFalse(marker.exists(), "detached child started a unit after supervisor return")
+                controller.UnitInventory().check(unit.removeprefix("velnor-release-").removesuffix(".service"),
+                                                 unused=True)
             finally:
+                channel.close()
+                receiver.join(timeout=11)
+                for value in captured:
+                    if isinstance(value, int):
+                        os.close(value)
                 subprocess.run(["/usr/bin/systemctl", "stop", unit], stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, timeout=10, check=False)
 
