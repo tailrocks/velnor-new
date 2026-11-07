@@ -31,6 +31,45 @@ fn rendered_ci(approvals: &str, lock: &str) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| io::Error::other("rendered ci workflow missing").into())
 }
 
+#[test]
+fn shipped_controller_078_accepts_its_lock_and_renders_qualified_identities()
+-> Result<(), Box<dyn Error>> {
+    let approvals = include_str!("../../../../.velnor/controller-approvals.json");
+    let lock = include_str!("../../../../.velnor/generator.lock");
+    let value: Value = serde_json::from_str(approvals)?;
+    assert_eq!(value["active"]["version"], "0.1.78");
+    assert_eq!(
+        value["active"]["commit"],
+        "ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905"
+    );
+    assert!(value["staged"].is_null());
+    let ci = rendered_ci(approvals, lock)?;
+    assert_runtime_identities(
+        &ci,
+        "2026.11.1",
+        [
+            "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
+            "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627",
+            "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0",
+        ],
+    )?;
+    for hash in [
+        "3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7",
+        "c0435f5b4978ae3ecdb030b4870d2a172ea91fecd7ed23e583ecdd1bcd047ef8",
+        "bd4099027b21685442d537d6af926336840d917536e4855bfa0d94cbaa735f02",
+    ] {
+        assert!(lock.contains(hash), "qualified SDK target missing: {hash}");
+    }
+    assert!(
+        ci.contains("2.103.3"),
+        "qualified GitHub CLI identity missing"
+    );
+    assert!(ci.contains("3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7"));
+    let stale = fixture(Some(approvals), BASE_LOCK)?;
+    assert!(prepare_error(stale.path())?.contains("lock_mismatch"));
+    Ok(())
+}
+
 fn assert_runtime_identities(
     ci: &str,
     version: &str,

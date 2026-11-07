@@ -165,11 +165,11 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
     let lock_path = temp.path().join(".velnor/generator.lock");
-    let lock_text = include_str!("../../../.velnor/generator.lock");
+    let lock_text = include_str!("../../test_support/generator_074.lock");
     fs::write(&lock_path, lock_text)?;
     fs::write(
         temp.path().join(".velnor/controller-approvals.json"),
-        include_str!("../../../.velnor/controller-approvals.json"),
+        include_str!("../../test_support/controller_approval_074.json"),
     )?;
     let published_lock: GeneratorLock =
         velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
