@@ -279,45 +279,6 @@ fn public_runner_publication_rejects_invalid_attestation_entries_in_both_orders(
 }
 
 #[test]
-fn public_runner_publication_rejects_each_non_run_certificate_field_in_both_orders()
--> Result<(), Box<dyn Error>> {
-    for field in [
-        "issuer",
-        "subjectAlternativeName",
-        "sourceRepositoryURI",
-        "sourceRepositoryOwnerURI",
-        "sourceRepositoryIdentifier",
-        "sourceRepositoryDigest",
-        "sourceRepositoryRef",
-        "buildSignerURI",
-        "buildSignerDigest",
-        "buildConfigURI",
-        "buildConfigDigest",
-        "buildTrigger",
-        "runnerEnvironment",
-    ] {
-        for invalid_first in [true, false] {
-            assert_attestation_rejected(
-                |fixture| {
-                    let current = current_attestation(fixture)?;
-                    let mut invalid_entry = current.clone();
-                    invalid_entry["verificationResult"]["signature"]["certificate"][field] =
-                        json!(format!("invalid-{field}"));
-                    let entries = if invalid_first {
-                        vec![invalid_entry, current]
-                    } else {
-                        vec![current, invalid_entry]
-                    };
-                    Ok(json!(entries))
-                },
-                "package_attestation_identity_mismatch",
-            )?;
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn public_runner_publication_rejects_noncanonical_attestation_run_uris_in_both_orders()
 -> Result<(), Box<dyn Error>> {
     for uri_case in [

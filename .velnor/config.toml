@@ -321,6 +321,7 @@ inputs = [
   "crates/velnor-actions-cli/tests/gc1_t53/support.rs",
   "crates/velnor-actions-cli/tests/image_publication_public.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/attempt_identity.rs",
+  "crates/velnor-actions-cli/tests/image_publication_public/signed_attestation.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/readback_retention.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/promotion.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/registry_cases.rs",

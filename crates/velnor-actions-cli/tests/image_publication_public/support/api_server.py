@@ -85,13 +85,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
         nonces = [value for key, value in query if key == "_velnor_read_nonce"]
+        attestation = re.fullmatch(r"/repos/tailrocks/velnor-new/attestations/sha256:[0-9a-f]{64}", parsed.path)
         if (not parsed.path.startswith("/repos/tailrocks/velnor-new/")
                 and parsed.path != "/repos/tailrocks/velnor-new"):
             print("fixture route rejected", file=sys.stderr)
             self.send_error(404)
             return
-        if (self.headers.get("Authorization") != "token fixture-source-token"
-                or self.headers.get("Cache-Control") != "no-cache, no-store"
+        if self.headers.get("Authorization") != "token fixture-source-token":
+            self.send_error(400)
+            return
+        if attestation:
+            parameters = dict(query)
+            if (len(parameters) != len(query)
+                    or set(parameters) - {"per_page", "predicate_type", "page"}
+                    or parameters.get("per_page") != "100"
+                    or parameters.get("predicate_type") != "https://slsa.dev/provenance/v1"
+                    or not re.fullmatch(r"[1-9][0-9]{0,3}", parameters.get("page", "1"))):
+                self.send_error(400)
+                return
+        elif (self.headers.get("Cache-Control") != "no-cache, no-store"
                 or self.headers.get("Pragma") != "no-cache"
                 or len(nonces) != 1
                 or not re.fullmatch(r"[0-9a-f]+-[0-9a-f]+-[0-9a-f]+", nonces[0])):
@@ -101,10 +113,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         route = parsed.path.lstrip("/")
         if query:
             route += "?" + urllib.parse.urlencode(query)
+        backend_args = ["github-api", "api"]
+        if attestation:
+            backend_args += ["--paginate", "--slurp"]
+        backend_args.append(route)
         try:
             with tempfile.TemporaryFile() as output:
                 result = subprocess.run(
-                    ["/bin/sh", "-c", 'ulimit -f 16384; exec "$@"', "fixture", str(backend), "--", "github-api", "api", route],
+                    ["/bin/sh", "-c", 'ulimit -f 16384; exec "$@"', "fixture", str(backend), "--"] + backend_args,
                     env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
                     stdin=subprocess.DEVNULL,
                     stdout=output,
@@ -122,10 +138,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
             print("fixture backend rejected request", file=sys.stderr)
             self.send_error(500)
             return
+        next_page = None
+        if attestation:
+            pages = json.loads(body)
+            page = int(parameters.get("page", "1"))
+            if not isinstance(pages, list) or not 1 <= page <= len(pages):
+                self.send_error(404)
+                return
+            body = json.dumps(pages[page - 1]).encode()
+            if page < len(pages):
+                parameters["page"] = str(page + 1)
+                next_page = "https://api.github.com" + parsed.path + "?" + urllib.parse.urlencode(parameters)
         self.send_response(200)
         content_type = "application/octet-stream" if "/tarball/" in parsed.path else "application/json"
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        if next_page:
+            self.send_header("Link", f'<{next_page}>; rel="next"')
         self.end_headers()
         self.wfile.write(body)
 

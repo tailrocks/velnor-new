@@ -67,10 +67,7 @@ pub(super) fn verify_all(
     let mut seen = BTreeSet::new();
     let mut bundle_bytes = 0_usize;
     let mut written_bytes = 0_usize;
-    let mut file = tempfile::Builder::new()
-        .suffix(".jsonl")
-        .tempfile()
-        .map_err(|_| internal("package_attestation_bundle_temporary"))?;
+    let mut bundles = Vec::new();
     for page in pages {
         for attestation in page.attestations {
             let raw = bundle_bytes_for(attestation, deadline)?;
@@ -89,21 +86,58 @@ pub(super) fn verify_all(
             if !seen.insert(super::sha256(&bundle)) {
                 return Err(internal("package_attestation_ambiguous"));
             }
-            file.write_all(&bundle)
-                .and_then(|()| file.write_all(b"\n"))
-                .map_err(|_| internal("package_attestation_bundle_temporary"))?;
+            bundles.push(bundle);
         }
     }
     if seen.is_empty() {
         return Err(internal("package_attestation_ambiguous"));
     }
-    verify_one_with_bundle(
-        path,
-        file.path(),
-        identity,
-        deadline,
-        super::VerificationPolicy::Repository,
-    )
+    verify_bundles(path, identity, deadline, bundles)
+}
+
+fn verify_bundles(
+    path: &Path,
+    identity: &AttestationCommandIdentity<'_>,
+    deadline: CheckDeadline,
+    bundles: Vec<Vec<u8>>,
+) -> Result<Vec<u8>, OrchestratorError> {
+    let mut verified = Vec::<Value>::new();
+    let mut verified_bytes = 0_usize;
+    for bundle in bundles {
+        let mut file = tempfile::Builder::new()
+            .suffix(".jsonl")
+            .tempfile()
+            .map_err(|_| internal("package_attestation_bundle_temporary"))?;
+        file.write_all(&bundle)
+            .map_err(|_| internal("package_attestation_bundle_temporary"))?;
+        let output = verify_one_with_bundle(
+            path,
+            file.path(),
+            identity,
+            deadline,
+            super::VerificationPolicy::Repository,
+        )?;
+        verified_bytes = verified_bytes
+            .checked_add(output.len())
+            .filter(|size| *size <= VERIFY_OUTPUT_LIMIT)
+            .ok_or_else(|| internal("package_attestation_bundle_limit"))?;
+        let entries: Vec<Value> = serde_json::from_slice(&output)
+            .map_err(|_| internal("package_attestation_output_invalid"))?;
+        if entries.is_empty() {
+            return Err(internal("package_attestation_ambiguous"));
+        }
+        verified.extend(entries);
+    }
+    bounded_verified_output(&verified)
+}
+
+fn bounded_verified_output(verified: &[Value]) -> Result<Vec<u8>, OrchestratorError> {
+    let output =
+        serde_json::to_vec(verified).map_err(|_| internal("package_attestation_output_invalid"))?;
+    if output.len() > VERIFY_OUTPUT_LIMIT {
+        return Err(internal("package_attestation_bundle_limit"));
+    }
+    Ok(output)
 }
 
 fn bundle_bytes_for(
@@ -142,4 +176,29 @@ fn file_digest(path: &Path, deadline: CheckDeadline) -> Result<String, Orchestra
         digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     Ok(digest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VERIFY_OUTPUT_LIMIT, bounded_verified_output};
+    use serde_json::Value;
+
+    #[test]
+    fn combined_verified_output_includes_array_and_string_delimiters_in_limit() {
+        let exact = Value::String("x".repeat(VERIFY_OUTPUT_LIMIT - 4));
+        assert_eq!(
+            bounded_verified_output(&[exact])
+                .expect("exact bound")
+                .len(),
+            VERIFY_OUTPUT_LIMIT
+        );
+        let oversized = Value::String("x".repeat(VERIFY_OUTPUT_LIMIT - 3));
+        let error =
+            bounded_verified_output(&[oversized]).expect_err("array delimiters exceed bound");
+        assert!(
+            error
+                .to_string()
+                .contains("package_attestation_bundle_limit")
+        );
+    }
 }

@@ -25,6 +25,8 @@ mod required_ci;
 mod reviewed_input_helper;
 #[path = "image_publication_public/runner_source.rs"]
 mod runner_source;
+#[path = "image_publication_public/signed_attestation.rs"]
+mod signed_attestation;
 #[path = "image_publication_public/source_closure.rs"]
 mod source_closure;
 #[path = "image_publication_public/source_snapshot.rs"]
