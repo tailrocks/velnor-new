@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "../tests/support/consumer_manifest.rs"]
+mod consumer_manifest_fixture;
+
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -41,6 +44,7 @@ pub(crate) fn make_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     }
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), RUST_CONFIG)?;
+    consumer_manifest_fixture::write(root, &std::env::current_exe()?)?;
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",

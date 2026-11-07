@@ -87,6 +87,39 @@ cp "$nested_source" "$tmp_root/nested-unformatted.rs"
 git -C "$fixture" add .
 staged_tree=$(git -C "$fixture" write-tree)
 
+fmt_bin="$tmp_root/format external tools"
+mkdir -p "$fmt_bin"
+cat >"$fmt_bin/rust-build-guard" <<'SH'
+#!/bin/sh
+set -eu
+[ "${1:-}" = -- ] || exit 125
+shift
+if [ "$#" -lt 6 ] || [ "$1" != mise ] || [ "$2" != exec ] ||
+  [ "$3" != -- ] || [ "$4" != cargo ] || [ "$5" != fmt ] ||
+  [ "$6" != --all ]; then
+  printf '%s\n' 'fixture guard rejected command' >&2
+  exit 125
+fi
+case "$#" in
+  6) ;;
+  7) [ "$7" = --check ] || exit 125 ;;
+  9) [ "$7" = --check ] && [ "$8" = -- ] && [ "$9" = --files-with-diff ] || exit 125 ;;
+  *) exit 125 ;;
+esac
+case "$PWD" in
+  "$FMT_ROOT"|"$FMT_ROOT/crates/root member"|"$FMT_NESTED"|"$FMT_NESTED/runner member") ;;
+  *) printf '%s\n' "fixture guard rejected workspace: $PWD" >&2; exit 125 ;;
+esac
+if [ "${FMT_GUARD_MODE:-allow}" = deny ]; then
+  printf '%s\n' 'fixture guard denied cargo fmt' >&2
+  exit 125
+fi
+exec "$@"
+SH
+chmod +x "$fmt_bin/rust-build-guard"
+export FMT_ROOT="$fixture" FMT_NESTED="$fixture/crates/velnor-runner" FMT_GUARD_MODE=allow
+export PATH="$fmt_bin:$PATH"
+
 "$hk_bin" --cd "$fixture" fix --all --step cargo_fmt --no-stage --no-progress
 if cmp -s "$root_source" "$tmp_root/root-unformatted.rs" ||
   cmp -s "$nested_source" "$tmp_root/nested-unformatted.rs"; then
@@ -100,6 +133,25 @@ cp "$nested_source" "$tmp_root/nested-formatted.rs"
 cmp -s "$root_source" "$tmp_root/root-formatted.rs"
 cmp -s "$nested_source" "$tmp_root/nested-formatted.rs"
 [[ "$(git -C "$fixture" write-tree)" == "$staged_tree" ]]
+
+cp "$tmp_root/root-unformatted.rs" "$root_source"
+cp "$tmp_root/nested-unformatted.rs" "$nested_source"
+test_phase='guard-denied cargo_fmt fix'
+if FMT_GUARD_MODE=deny "$hk_bin" --cd "$fixture" fix --all --step cargo_fmt --no-stage --no-progress >"$tmp_root/fmt-guard-deny.log" 2>&1; then
+  printf '%s\n' 'hk cargo_fmt bypassed the installed guard denial.' >&2
+  exit 1
+fi
+if ! grep -Fq 'fixture guard denied cargo fmt' "$tmp_root/fmt-guard-deny.log"; then
+  cat "$tmp_root/fmt-guard-deny.log" >&2
+  printf '%s\n' 'hk cargo_fmt did not expose the guard denial.' >&2
+  exit 1
+fi
+cmp -s "$root_source" "$tmp_root/root-unformatted.rs"
+cmp -s "$nested_source" "$tmp_root/nested-unformatted.rs"
+[[ "$(git -C "$fixture" write-tree)" == "$staged_tree" ]]
+cp "$tmp_root/root-formatted.rs" "$root_source"
+cp "$tmp_root/nested-formatted.rs" "$nested_source"
+test_phase='invalid nested Rust check'
 
 printf 'pub fn nested_value( -> u8 { 1 }\n' >"$nested_source"
 cp "$nested_source" "$tmp_root/nested-invalid.rs"

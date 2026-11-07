@@ -26,6 +26,12 @@ build_tmp_root="$build_root/tmp"
 run_tmp=''
 temporary=''
 cargo_home="$build_root/cargo-home"
+source_cache=''
+if [[ "$#" -ne 0 ]]; then
+  [[ "$#" -eq 2 && "$1" == --source-cache ]] || { printf 'archive guard build: invalid arguments\n' >&2; exit 1; }
+  source_cache="$2"
+fi
+
 mise_data="$build_root/mise-data"
 mise_cache="$build_root/mise-cache"
 mise_state="$build_root/mise-state"
@@ -277,6 +283,30 @@ chmod 700 "$run_tmp"
 check_directory "$run_tmp"
 trap cleanup EXIT
 
+offline=()
+if [[ "${CARGO_NET_OFFLINE:-}" == true ]]; then
+  offline=(--offline)
+fi
+if [[ -n "$source_cache" ]]; then
+  [[ -n "${RUNNER_TEMP:-}" && "$RUNNER_TEMP" == /* && "$source_cache" == "$RUNNER_TEMP/velnor/cargo" ]] \
+    || fail 'source cache must be the qualification-owned Cargo home'
+  [[ "$(cd -- "$source_cache" && pwd -P)" == "$source_cache" ]] \
+    || fail 'source cache is not canonical'
+  check_directory "$source_cache"
+  for lock in "$repository/Cargo.lock" "$repository/crates/velnor-runner/Cargo.lock"; do
+    if grep -q '^source = "git+' "$lock"; then
+      fail 'Git dependencies are not supported by source-cache handoff'
+    fi
+  done
+  cargo_home="$run_tmp/cargo-home"
+  mkdir -m 700 -- "$cargo_home"
+  check_directory "$cargo_home"
+  /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="$run_tmp" \
+    /bin/bash "$repository/scripts/generator-release/cargo-source-handoff.sh" copy "$source_cache" "$cargo_home" \
+    || fail 'source cache handoff was unsafe or incomplete'
+  offline=(--offline)
+fi
+
 run_mise() {
   env -i \
     HOME="$HOME" \
@@ -294,7 +324,7 @@ run_mise() {
 
 validate_local_cargo_closure() {
   local package package_path tree_output tree_status
-  tree_output="$(run_mise exec rust@1.99.1 -- cargo tree --locked \
+  tree_output="$(run_mise exec rust@1.99.1 -- cargo tree --locked ${offline[@]+"${offline[@]}"} \
     --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
     --edges normal,build --prefix none --format '{p}')"
   tree_status=$?
@@ -365,7 +395,7 @@ mkdir -m 700 -- "$bootstrap_target"
 check_directory "$bootstrap_target"
 guard_target="$bootstrap_target"
 validate_local_cargo_closure
-run_mise exec rust@1.99.1 -- cargo build --release --locked \
+run_mise exec rust@1.99.1 -- cargo build --release --locked ${offline[@]+"${offline[@]}"} \
   --manifest-path "$repository/Cargo.toml" \
   -p velnor-archive-guard --bin velnor-archive-guard
 bootstrap_guard="$bootstrap_target/release/velnor-archive-guard"
@@ -386,7 +416,7 @@ for profile in "$guard_target/debug" "$guard_target/release"; do
     check_directory "$profile"
   fi
 done
-run_mise exec rust@1.99.1 -- cargo build --release --locked \
+run_mise exec rust@1.99.1 -- cargo build --release --locked ${offline[@]+"${offline[@]}"} \
   --manifest-path "$repository/Cargo.toml" \
   -p velnor-archive-guard --bin velnor-archive-guard
 guard_cargo_output="$guard_target/release/velnor-archive-guard"
