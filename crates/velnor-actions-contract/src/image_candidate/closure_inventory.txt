@@ -667,6 +667,7 @@ crates/velnor-actions-orchestrator/src/crate_release_github_authorization.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_checks.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_native.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_pr.rs
+crates/velnor-actions-orchestrator/src/crate_release_github_qualification.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_reviews.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_tags.rs
 crates/velnor-actions-orchestrator/src/crate_release_github_workflow_checks.rs
@@ -1416,6 +1417,9 @@ crates/velnor-actions-workflow-renderer/src/commands_scan.rs
 crates/velnor-actions-workflow-renderer/src/composite.rs
 crates/velnor-actions-workflow-renderer/src/controller_locator.rs
 crates/velnor-actions-workflow-renderer/src/crate_obligations.rs
+crates/velnor-actions-workflow-renderer/src/crate_oidc_probe.py
+crates/velnor-actions-workflow-renderer/src/crate_oidc_probe_launcher.sh
+crates/velnor-actions-workflow-renderer/src/crate_oidc_qualification.rs
 crates/velnor-actions-workflow-renderer/src/dco.rs
 crates/velnor-actions-workflow-renderer/src/dispatch_cache_boundary.rs
 crates/velnor-actions-workflow-renderer/src/document.rs
@@ -1568,6 +1572,7 @@ crates/velnor-actions-workflow-renderer/src/release_rehearsal_prepare_metadata.s
 crates/velnor-actions-workflow-renderer/src/release_rehearsal_witness.sh
 crates/velnor-actions-workflow-renderer/src/release_spec.rs
 crates/velnor-actions-workflow-renderer/src/release_tree.rs
+crates/velnor-actions-workflow-renderer/src/release_tree_paths.rs
 crates/velnor-actions-workflow-renderer/src/release_validators.rs
 crates/velnor-actions-workflow-renderer/src/render.rs
 crates/velnor-actions-workflow-renderer/src/render_action_pins.rs
