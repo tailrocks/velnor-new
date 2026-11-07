@@ -8,12 +8,12 @@ Detected stacks
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check hosted-budget-containment: test-hosted-budget-containment (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check hosted-gh-config-custody: test-hosted-gh-config-custody (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Mise check hosted-systemd-policy-observation: observe-hosted-systemd-policy (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
+  Mise check hosted-manager-policy: qualify-manager-policy (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator, velnor-actions-workflow-renderer]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
@@ -58,7 +58,7 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-hosted-budget-containment (7 steps)
     - check-hosted-gh-config-custody (7 steps)
-    - check-hosted-systemd-policy-observation (7 steps)
+    - check-hosted-manager-policy (7 steps)
     - check-maintenance-helpers (7 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)
