@@ -48,16 +48,10 @@ fn run_with_deadline(
             source_commit,
             source_closure_path,
         } => check_source_request(root, source_commit, source_closure_path, deadline),
-        ImageMaintenanceCommand::CheckQualificationSource {
-            root,
-            source_commit,
-            source_closure_path,
-        } => check_qualification_source(&CheckJobSourceRequest {
-            root: root.clone(),
-            source_commit: source_commit.clone(),
-            source_closure_path: source_closure_path.clone(),
-            deadline,
-        }),
+        command @ (ImageMaintenanceCommand::CheckQualificationSource { .. }
+        | ImageMaintenanceCommand::RunNativeQualification { .. }
+        | ImageMaintenanceCommand::VerifyNativeQualification { .. }
+        | ImageMaintenanceCommand::QualifyNativeImage { .. }) => qualification_request(command, deadline),
         ImageMaintenanceCommand::BuildJobCandidate {
             root,
             source_commit,
@@ -74,32 +68,6 @@ fn run_with_deadline(
             source_closure_path,
             deadline,
         ),
-        ImageMaintenanceCommand::RunNativeQualification { root, runner_temp } => {
-            run_native_qualification(&RunNativeQualificationRequest {
-                root: root.clone(),
-                runner_temp: runner_temp.clone(),
-                deadline,
-            })
-        }
-        ImageMaintenanceCommand::VerifyNativeQualification { root, runner_temp } => {
-            velnor_actions_orchestrator::verify_native_qualification_toolchain(
-                root,
-                runner_temp,
-                deadline,
-            )
-        }
-        ImageMaintenanceCommand::QualifyNativeImage {
-            root,
-            source_commit,
-            runner_temp,
-            source_closure_path,
-        } => qualify_native_image(&QualifyNativeImageRequest {
-            root: root.clone(),
-            source_commit: source_commit.clone(),
-            runner_temp: runner_temp.clone(),
-            source_closure_path: source_closure_path.clone(),
-            deadline,
-        }),
         ImageMaintenanceCommand::ValidateJobCandidate {
             root,
             archive_path,
@@ -137,6 +105,37 @@ fn run_with_deadline(
             deadline,
         }),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
+    }
+}
+
+fn qualification_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    match command {
+        ImageMaintenanceCommand::CheckQualificationSource { root, source_commit, source_closure_path } => {
+            check_qualification_source(&CheckJobSourceRequest {
+                root: root.clone(), source_commit: source_commit.clone(),
+                source_closure_path: source_closure_path.clone(), deadline,
+            })
+        }
+        ImageMaintenanceCommand::RunNativeQualification { root, runner_temp } => {
+            run_native_qualification(&RunNativeQualificationRequest {
+                root: root.clone(), runner_temp: runner_temp.clone(), deadline,
+            })
+        }
+        ImageMaintenanceCommand::VerifyNativeQualification { root, runner_temp } => {
+            velnor_actions_orchestrator::verify_native_qualification_toolchain(root, runner_temp, deadline)
+        }
+        ImageMaintenanceCommand::QualifyNativeImage { root, source_commit, runner_temp, source_closure_path } => {
+            qualify_native_image(&QualifyNativeImageRequest {
+                root: root.clone(), source_commit: source_commit.clone(), runner_temp: runner_temp.clone(),
+                source_closure_path: source_closure_path.clone(), deadline,
+            })
+        }
+        _ => Err(OrchestratorError::Internal {
+            problem: "not a native qualification request".to_owned(),
+        }),
     }
 }
 

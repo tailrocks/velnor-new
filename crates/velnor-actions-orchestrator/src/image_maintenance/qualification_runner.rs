@@ -5,10 +5,7 @@ use std::{collections::BTreeMap, ffi::OsString, fs, os::unix::fs::DirBuilderExt,
 
 use velnor_actions_contract::{NativeExecutionPurpose, native_execution_environment_script};
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand, PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::{
-    join_argv_for_run,
-    verifier_builders::{ToolchainPhase, verify_rust_owned_argv},
-};
+use velnor_actions_workflow_renderer::verifier_builders::{ToolchainPhase, verify_rust_owned_argv};
 
 use super::{RunNativeQualificationRequest, source, validate};
 use crate::{OrchestratorError, internal::internal};
@@ -253,10 +250,9 @@ fn execute(
             )
         })
         .collect::<Vec<_>>();
-    let argv = join_argv_for_run(&argv)?;
-    let task_env = join_argv_for_run(&task_env)?;
     let script = format!(
-        "fail_frame() {{ exit 1; }}\ntask_env=({task_env})\nargv=({argv})\n{}",
+        "fail_frame() {{ exit 1; }}\ntask_env=()\nfor ((i=0; i<{}; i++)); do task_env+=(\"$1\"); shift; done\nargv=(\"$@\")\n{}",
+        task_env.len(),
         native_execution_environment_script(NativeExecutionPurpose::Qualification)
     );
     let mut env = BTreeMap::new();
@@ -287,11 +283,7 @@ fn execute(
     {
         return Err(internal("native_qualification_runner_identity"));
     }
-    run_env(
-        root,
-        &env,
-        "/bin/bash",
-        &[
+    let mut arguments = vec![
             "--noprofile".into(),
             "--norc".into(),
             "-p".into(),
@@ -300,9 +292,11 @@ fn execute(
             "pipefail".into(),
             "-c".into(),
             script,
-        ],
-        deadline,
-    )
+            "velnor-native-qualification".into(),
+    ];
+    arguments.extend(task_env);
+    arguments.extend(argv);
+    run_env(root, &env, "/bin/bash", &arguments, deadline)
 }
 
 fn run_env(
