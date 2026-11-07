@@ -22,9 +22,11 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const START_TIMEOUT: Duration = Duration::from_secs(150);
 pub(super) const START_RESERVE: Duration = Duration::from_secs(130 + 150 + 15);
 const STOP_TIMEOUT: Duration = Duration::from_secs(20);
-// Two inspected removals each allow one lookup, two inspections, and one removal.
-pub(super) const CLEANUP_RESERVE: Duration =
-    Duration::from_secs(20 + 2 * (15 + 2 * 15 + 15) + 10 + 5 + 15);
+const DOCKER_COMMAND_BUDGET_SECS: u64 = 15;
+const INSPECTED_REMOVAL_BUDGET_SECS: u64 = 4 * DOCKER_COMMAND_BUDGET_SECS;
+pub(super) const CLEANUP_RESERVE: Duration = Duration::from_secs(
+    20 + 2 * INSPECTED_REMOVAL_BUDGET_SECS + 10 + 5 + DOCKER_COMMAND_BUDGET_SECS,
+);
 
 pub(super) struct Lease {
     child: Child,

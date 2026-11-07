@@ -37,8 +37,17 @@ pub(super) fn prepare(temp: &Path, deadline: CheckDeadline) -> Result<PathBuf, O
         .and_then(|command| command.with_private_docker_socket(host))
         .map_err(|_| internal("native_base_save_command"))?;
     ImageCandidateCommand::run(&save, deadline).map_err(|_| internal("native_base_save"))?;
+    prepare_saved(&saved, &root, QUALIFICATION_BASE_DIGEST, deadline)
+}
+
+fn prepare_saved(
+    source: &Path,
+    root: &Path,
+    expected_digest: &str,
+    deadline: CheckDeadline,
+) -> Result<PathBuf, OrchestratorError> {
     let normalized = root.join("normalized.tar");
-    normalize(&saved, &normalized, deadline)?;
+    normalize(source, &normalized, expected_digest, deadline)?;
     let evidence = deadline
         .scope(|| {
             velnor_archive_guard::owned_archive_guard::oci_candidate::inspect_oci_candidate(
@@ -47,7 +56,7 @@ pub(super) fn prepare(temp: &Path, deadline: CheckDeadline) -> Result<PathBuf, O
         })
         .map_err(|_| internal("native_base_deadline"))?
         .map_err(|_| internal("native_base_oci"))?;
-    if evidence.platform_manifest_digest != QUALIFICATION_BASE_DIGEST {
+    if evidence.platform_manifest_digest != expected_digest {
         return Err(internal("native_base_digest"));
     }
     let layout = root.join("layout");
@@ -67,6 +76,7 @@ pub(super) fn prepare(temp: &Path, deadline: CheckDeadline) -> Result<PathBuf, O
 fn normalize(
     source: &Path,
     destination: &Path,
+    expected_digest: &str,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let bytes = deadline
@@ -119,7 +129,7 @@ fn normalize(
             .filter(|size| *size <= MAX_BASE_BYTES)
             .ok_or_else(|| internal("native_base_size"))?;
         if name == "index.json" {
-            index = Some(read_index(&mut entry, size)?);
+            index = Some(read_index(&mut entry, size, expected_digest)?);
         } else if name == "manifest.json" {
             if size > MAX_METADATA_BYTES {
                 return Err(internal("native_base_metadata"));
@@ -155,7 +165,11 @@ fn valid_blob_name(name: &str) -> bool {
     })
 }
 
-fn read_index(entry: &mut impl Read, size: u64) -> Result<Vec<u8>, OrchestratorError> {
+fn read_index(
+    entry: &mut impl Read,
+    size: u64,
+    expected_digest: &str,
+) -> Result<Vec<u8>, OrchestratorError> {
     if size > MAX_METADATA_BYTES {
         return Err(internal("native_base_index"));
     }
@@ -171,7 +185,7 @@ fn read_index(entry: &mut impl Read, size: u64) -> Result<Vec<u8>, OrchestratorE
         .filter(|entries| entries.len() == 1)
         .ok_or_else(|| internal("native_base_index"))?;
     let descriptor = &entries[0];
-    if descriptor["digest"].as_str() != Some(QUALIFICATION_BASE_DIGEST)
+    if descriptor["digest"].as_str() != Some(expected_digest)
         || descriptor["mediaType"].as_str() != Some("application/vnd.oci.image.manifest.v1+json")
     {
         return Err(internal("native_base_index"));
@@ -180,7 +194,7 @@ fn read_index(entry: &mut impl Read, size: u64) -> Result<Vec<u8>, OrchestratorE
         .as_u64()
         .filter(|size| *size > 0 && *size <= MAX_METADATA_BYTES)
         .ok_or_else(|| internal("native_base_index"))?;
-    serde_json::to_vec(&serde_json::json!({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": QUALIFICATION_BASE_DIGEST, "size": size, "platform": {"os": "linux", "architecture": "amd64"}}]}))
+    serde_json::to_vec(&serde_json::json!({"schemaVersion": 2, "mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": expected_digest, "size": size, "platform": {"os": "linux", "architecture": "amd64"}}]}))
         .map_err(|_| internal("native_base_index"))
 }
 
@@ -198,3 +212,7 @@ fn append(
         .append_data(&mut header, name, source)
         .map_err(|_| internal("native_base_archive_write"))
 }
+
+#[cfg(test)]
+#[path = "qualification_base_tests.rs"]
+mod tests;

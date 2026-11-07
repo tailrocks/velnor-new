@@ -6,6 +6,10 @@
 mod service;
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[path = "native_image_qualification_public/negative.rs"]
+mod negative;
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
     use std::{env, fs, path::PathBuf, process::Command};
@@ -51,8 +55,9 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("insufficient qualification startup and cleanup time".into());
     }
+    negative::missing(binary, &root, &temp, deadline)?;
     let daemon = service::Lease::start(&root, &temp, deadline)?;
-    reject_tampered_service(binary, &root, &temp, deadline)?;
+    negative::verify(binary, &root, &temp, deadline)?;
     let output = bounded(
         invoke().env("RUSTFLAGS", "--velnor-native-environment-canary"),
         deadline,
@@ -113,69 +118,6 @@ fn check_record(
     for (path, expected) in &record.source_inputs {
         assert_eq!(&hash_file(&root.join(path), deadline)?, expected);
     }
-    Ok(())
-}
-
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-fn reject_tampered_service(
-    binary: &str,
-    root: &std::path::Path,
-    temp: &std::path::Path,
-    deadline: std::time::Instant,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use std::{
-        fs,
-        io::{Read, Seek, SeekFrom, Write},
-        process::Command,
-    };
-    let descriptor_path = temp.join("velnor-qualification-service.json");
-    let original = fs::read(&descriptor_path)?;
-    let mut descriptor: serde_json::Value = serde_json::from_slice(&original)?;
-    descriptor["daemon_id"] = serde_json::json!("invalid-daemon-id");
-    fs::write(&descriptor_path, serde_json::to_vec(&descriptor)?)?;
-    let rejected = bounded(
-        Command::new(binary)
-            .args(["image-maintenance", "run-native-qualification", "--root"])
-            .arg(root)
-            .arg("--runner-temp")
-            .arg(temp),
-        deadline,
-    );
-    fs::write(&descriptor_path, &original)?;
-    let rejected = rejected?;
-    assert_ne!(
-        rejected.status,
-        velnor_actions_mise::BoundedCommandStatus::Exited(0)
-    );
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("native_service_daemon_identity"));
-
-    let archive = temp.join("velnor-qualification-service/docker.tgz");
-    let mut file = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(archive)?;
-    let mut first = [0];
-    file.read_exact(&mut first)?;
-    file.seek(SeekFrom::Start(0))?;
-    file.write_all(&[first[0] ^ 1])?;
-    file.flush()?;
-    let rejected = bounded(
-        Command::new(binary)
-            .args(["image-maintenance", "run-native-qualification", "--root"])
-            .arg(root)
-            .arg("--runner-temp")
-            .arg(temp),
-        deadline,
-    );
-    file.seek(SeekFrom::Start(0))?;
-    file.write_all(&first)?;
-    file.flush()?;
-    let rejected = rejected?;
-    assert_ne!(
-        rejected.status,
-        velnor_actions_mise::BoundedCommandStatus::Exited(0)
-    );
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("native_service_archive_identity"));
     Ok(())
 }
 
