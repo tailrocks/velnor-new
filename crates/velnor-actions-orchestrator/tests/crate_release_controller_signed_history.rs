@@ -16,15 +16,7 @@ pub(crate) fn exercise() -> Result<(), Box<dyn Error>> {
 
 fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Error>> {
     let fixture = super::historical_authority::signed_historical_fixture(event, bad_recovery)?;
-    git(fixture.workflow.path(), &["config", "user.name", "Fixture"])?;
-    git(
-        fixture.workflow.path(),
-        &["config", "user.email", "fixture@example.invalid"],
-    )?;
-    git(
-        fixture.workflow.path(),
-        &["config", "commit.gpgsign", "false"],
-    )?;
+    configure_fixture_git(fixture.workflow.path())?;
     let previous = fixture.previous_intent.clone();
     let prior = fixture.prior_sha.clone();
     let mut intent = fixture.intent.clone();
@@ -95,6 +87,13 @@ fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Er
         .into());
     }
     crate::libtest_case::assert_one_passed(&output);
+    Ok(())
+}
+
+fn configure_fixture_git(path: &Path) -> Result<(), Box<dyn Error>> {
+    git(path, &["config", "user.name", "Fixture"])?;
+    git(path, &["config", "user.email", "fixture@example.invalid"])?;
+    git(path, &["config", "commit.gpgsign", "false"])?;
     Ok(())
 }
 
