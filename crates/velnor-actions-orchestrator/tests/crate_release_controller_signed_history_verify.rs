@@ -6,20 +6,24 @@ use super::*;
 pub(super) fn verify_frozen_predecessor_drift(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,
-        super::JournalRegistryFake,
-        super::HistoricalAuthority<'_>,
-        super::Registry,
+        super::super::JournalRegistryFake,
+        super::super::HistoricalAuthority<'_>,
+        super::super::Registry,
     >,
     prior: &crate::crate_release_journal::JournalReceipt,
 ) -> Result<(), Box<dyn Error>> {
     use crate::crate_release_controller::{CrateReleaseObservation, FrozenCompletion};
     use crate::crate_release_journal::{JournalStage, inspect_journal};
-    let (identity, _) =
-        super::fixture_journal_plan(input.source, input.intent, input.request, input.admission)?;
+    let (identity, _) = super::super::fixture_journal_plan(
+        input.source,
+        input.intent,
+        input.request,
+        input.admission,
+    )?;
     let receipt = inspect_journal(input.journal, &identity, JournalStage::Started)?
         .ok_or("signed current start missing")?
         .receipt;
-    *input.registry.archive.borrow_mut() = super::fixture_archive(input.source)?;
+    *input.registry.archive.borrow_mut() = super::super::fixture_archive(input.source)?;
     input.github.base.tag_exists.set(true);
     input.github.base.release_variant.set(0);
     let observation = CrateReleaseObservation {
@@ -106,15 +110,19 @@ pub(super) fn verify_frozen_predecessor_drift(
 pub(super) fn verify_real_tool_measurement(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,
-        super::JournalRegistryFake,
-        super::HistoricalAuthority<'_>,
-        super::Registry,
+        super::super::JournalRegistryFake,
+        super::super::HistoricalAuthority<'_>,
+        super::super::Registry,
     >,
     generator_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
     use crate::crate_release_journal::{JournalStage, inspect_journal};
-    let (identity, _) =
-        super::fixture_journal_plan(input.source, input.intent, input.request, input.admission)?;
+    let (identity, _) = super::super::fixture_journal_plan(
+        input.source,
+        input.intent,
+        input.request,
+        input.admission,
+    )?;
     let receipt = inspect_journal(input.journal, &identity, JournalStage::Started)?
         .ok_or("signed current start missing")?
         .receipt;
@@ -149,9 +157,9 @@ pub(super) fn verify_real_tool_measurement(
 pub(super) fn verify_prior_observation(
     input: &crate::release::package_release_signer::AdmittedStart<
         '_,
-        super::JournalRegistryFake,
-        super::HistoricalAuthority<'_>,
-        super::Registry,
+        super::super::JournalRegistryFake,
+        super::super::HistoricalAuthority<'_>,
+        super::super::Registry,
     >,
     prior: &crate::crate_release_journal::JournalReceipt,
 ) -> Result<(), Box<dyn Error>> {
@@ -159,8 +167,12 @@ pub(super) fn verify_prior_observation(
         CrateReleaseObservation, RecoveryState, observe_prior_recovery,
     };
     use crate::crate_release_journal::{JournalStage, inspect_journal};
-    let (identity, _) =
-        super::fixture_journal_plan(input.source, input.intent, input.request, input.admission)?;
+    let (identity, _) = super::super::fixture_journal_plan(
+        input.source,
+        input.intent,
+        input.request,
+        input.admission,
+    )?;
     let current = inspect_journal(input.journal, &identity, JournalStage::Started)?
         .ok_or("signed current start missing")?
         .receipt;
@@ -187,12 +199,12 @@ pub(super) fn verify_prior_observation(
         "intention-only"
     );
     assert_eq!(input.journal.write_calls.get(), before);
-    *input.registry.archive.borrow_mut() = super::fixture_archive(input.source)?;
+    *input.registry.archive.borrow_mut() = super::super::fixture_archive(input.source)?;
     input.registry.absent.set(false);
     let present = observe_prior_recovery(&observation, &prior.identity)?;
     assert_eq!(present[0].state, RecoveryState::Present);
     assert_eq!(input.journal.write_calls.get(), before);
-    super::prior_observation::append_fixture_prior_upload_observation(input.journal, prior)?;
+    super::super::prior_observation::append_fixture_prior_upload_observation(input.journal, prior)?;
     let after_seed = input.journal.write_calls.get();
     let recorded = observe_prior_recovery(&observation, &prior.identity)?;
     assert_eq!(recorded[0].state, RecoveryState::Present);
