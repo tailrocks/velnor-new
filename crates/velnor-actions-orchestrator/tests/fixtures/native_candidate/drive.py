@@ -71,7 +71,8 @@ mode = sys.argv[1] if len(sys.argv) > 1 else "success"
 multi = mode == "coordinate-multi"
 env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
-real_cargo = mode == "coordinate-real-cargo-crash"
+new_run = mode == "coordinate-real-cargo-new-run"
+real_cargo = mode == "coordinate-real-cargo-crash" or new_run
 if real_cargo:
     env["VELNOR_FIXTURE_REAL_CARGO"] = "1"
     if (len(pathlib.Path("/proc/net/route").read_text().splitlines()) != 1
@@ -118,15 +119,17 @@ if journal:
         env["VELNOR_TEST_FAST_POLL"] = "1"
         env["VELNOR_NATIVE_COORDINATE_ERROR"] = (
             ""
-            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-multi")
+            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run", "coordinate-multi")
             else "crate_release_upload_credential_missing"
             if mode in ("coordinate-missing-oidc", "coordinate-missing-bootstrap")
             else "crate_registry_version_not_visible"
         )
-        if mode in ("coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash"):
+        if mode in ("coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run"):
             env["VELNOR_NATIVE_COORDINATE_CRASH"] = "1"
             env["VELNOR_NATIVE_PID_FILE"] = str(runner / "coordinator.pid")
             env["VELNOR_FIXTURE_CRASH_PID_PATH"] = env["VELNOR_NATIVE_PID_FILE"]
+        if new_run:
+            env["VELNOR_NATIVE_NEW_RUN_PHASE1"] = "1"
         if mode == "coordinate-crash-no-credentials":
             env["VELNOR_NATIVE_NO_TOKEN_ON_RETRY"] = "1"
         env["ACTIONS_ID_TOKEN_REQUEST_URL"] = (
@@ -289,12 +292,31 @@ try:
         env=env,
         check=True,
     )
+    if new_run:
+        with urllib.request.urlopen(urllib.request.Request(
+                info["origin"] + "/__fixture/advance-recovery", data=b"{}", method="POST")) as response:
+            continuation = json.load(response)
+        (runner / "velnor-crate-release-receipt.json").unlink()
+        with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+            after_upload = json.load(response)
+        assert after_upload["uploads"] == after_upload["upload_attempts"] == 1
+        env["VELNOR_NATIVE_NEW_RUN_PHASE2"] = "1"
+        env["VELNOR_NATIVE_EXPECT_TARGET_CHECKSUM"] = after_upload["published_sha256"]
+        env.pop("VELNOR_NATIVE_NEW_RUN_PHASE1")
+        env.pop("VELNOR_NATIVE_COORDINATE_CRASH")
+        env["GITHUB_SHA"] = continuation["workflow_sha"]
+        env["GITHUB_WORKFLOW_SHA"] = continuation["workflow_sha"]
+        env["GITHUB_RUN_ID"] = "13"
+        subprocess.run(
+            ["cargo", "nextest", "run", "--offline", "--locked", "-p", "velnor-actions-orchestrator", "--lib", "-E", "test(generated_candidate_receipt_rejects_unprotected_environment)", "--no-capture"],
+            cwd="/src", env=env, check=True,
+        )
     with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
         state = json.load(response)
     if multi:
         assert state["uploads"] == 0
         assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
-    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash"):
+    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run"):
         assert state["uploads"] == 1
         if real_cargo:
             assert state["upload_attempts"] == 1
@@ -316,7 +338,9 @@ try:
         assert state["published_sha256"] == hashlib.sha256(packed).hexdigest()
         assert state["release"]["tag_name"] == f"{info['package']}-v{info['version']}"
         assert state["refs"][f"refs/tags/{info['package']}-v{info['version']}"] == info["source_sha"]
-        assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
+        assert f"refs/tags/velnor-receipt/{13 if new_run else 12}/1/reconciled" in state["refs"]
+        if new_run:
+            assert "refs/tags/velnor-receipt/12/1/reconciled" not in state["refs"]
         with urllib.request.urlopen(
             "https://fixture.actions.githubusercontent.com/__fixture/state"
         ) as response:

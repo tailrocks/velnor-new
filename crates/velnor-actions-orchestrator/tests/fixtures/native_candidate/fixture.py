@@ -211,6 +211,7 @@ run(
     cwd=root,
 )
 policy = run("git", "rev-parse", "HEAD", cwd=root)
+prior_policy = policy
 if multi_entries:
     shutil.copytree(root / ".github", source / ".github", dirs_exist_ok=True)
     if assets:
@@ -268,7 +269,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path
-        sha = policy if policy in p else source_sha
+        sha = policy if policy in p else prior_policy if prior_policy in p else source_sha
         status = 200
         obj = None
         if p == "/__fixture/state":
@@ -325,23 +326,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "ref": "refs/heads/main",
                 "object": {"type": "commit", "sha": policy},
             }
-        elif p.startswith(f"/repos/{repository}/actions/runs/12/approvals"):
+        elif p.startswith(f"/repos/{repository}/actions/runs/12/approvals") or p.startswith(f"/repos/{repository}/actions/runs/13/approvals"):
+            approval_run = 13 if "/runs/13/" in p else 12
+            approval_policy = policy if approval_run == 13 else prior_policy
             obj = [
                 {
                     "state": "approved",
                     "user": {"type": "User", "id": reviewer_id},
                     "environments": [{"id": 9, "name": "release"}],
-                    "comment": f"I reviewed the complete release policy at {policy} and source {source_sha}, and authorize this source for run 12.",
+                    "comment": f"I reviewed the complete release policy at {approval_policy} and source {source_sha}, and authorize this source for run {approval_run}.",
                 }
             ]
             if os.environ.get("VELNOR_FIXTURE_FAILURE") == "approval":
                 obj[0]["comment"] = "Unrelated approval"
         elif p in (f"/repos/{repository}/actions/runs/12",
-                   f"/repos/{repository}/actions/runs/12/attempts/1"):
+                   f"/repos/{repository}/actions/runs/12/attempts/1",
+                   f"/repos/{repository}/actions/runs/13",
+                   f"/repos/{repository}/actions/runs/13/attempts/1"):
+            requested_run = 13 if "/runs/13" in p else 12
             obj = {
-                "id": 12,
+                "id": requested_run,
+                "status": "completed",
                 "run_attempt": 1,
-                "head_sha": policy,
+                "head_sha": policy if requested_run == 13 else prior_policy,
                 "head_branch": "main",
                 "event": "push" if multi_names else "workflow_dispatch",
                 "path": ".github/workflows/release.yml",
@@ -580,7 +587,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 os.close(directory)
         published = data
         uploads += 1
-        if os.environ.get("VELNOR_FIXTURE_FAILURE") in ("coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash"):
+        if os.environ.get("VELNOR_FIXTURE_FAILURE") in ("coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run"):
             pid_path = pathlib.Path(os.environ["VELNOR_FIXTURE_CRASH_PID_PATH"])
             os.kill(int(pid_path.read_text()), signal.SIGKILL)
         self.send_response(status)
@@ -591,9 +598,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return
 
     def do_POST(self):
-        global mutations, published, published_features, uploads, release
-        mutations += 1
+        global mutations, published, published_features, uploads, release, policy
         data = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/__fixture/advance-recovery":
+            assert os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-real-cargo-new-run"
+            assert published is not None and uploads == 1 and policy == prior_policy
+            intent_path = root / ".github/velnor-release-intent.toml"
+            with intent_path.open("a", encoding="utf-8") as intent_file:
+                intent_file.write(f'\n[journal_predecessor]\nrun_id = 12\nrun_attempt = 1\nworkflow_sha = "{prior_policy}"\n')
+            run("git", "add", ".github/velnor-release-intent.toml", cwd=root)
+            run("git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "reviewed recovery", cwd=root)
+            policy = run("git", "rev-parse", "HEAD", cwd=root)
+            run("git", "fetch", "--quiet", "--no-recurse-submodules", "--no-tags",
+                str(root), "refs/heads/*:refs/remotes/origin/*", cwd=source)
+            run("git", "merge-base", "--is-ancestor", prior_policy, policy, cwd=source)
+            assert run("git", "rev-parse", "HEAD", cwd=source) == source_sha
+            payload = json.dumps({"workflow_sha": policy}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        mutations += 1
         if self.path == "/__fixture/upload":
             return self.record_upload(data, 201)
         value = json.loads(data)

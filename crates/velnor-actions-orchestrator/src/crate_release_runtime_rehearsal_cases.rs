@@ -30,6 +30,9 @@ pub(super) fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Err
             String::from_utf8_lossy(&interrupted.stdout),
             String::from_utf8_lossy(&interrupted.stderr)
         );
+        if std::env::var_os("VELNOR_NATIVE_NEW_RUN_PHASE1").is_some() {
+            return Ok(());
+        }
     }
     let output = supplied_step(root, "release-publish", "journal-coordinate")?;
     let actual = String::from_utf8_lossy(&output.stdout).to_string()

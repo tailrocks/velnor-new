@@ -175,13 +175,27 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
             receipt.packages[0].source.version,
             std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
         );
-        assert!(
-            matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+        if std::env::var_os("VELNOR_NATIVE_NEW_RUN_PHASE2").is_some() {
+            let intent = velnor_actions_contract::canonical_json_bytes(&receipt.intent)?;
+            let expected_intent_sha = crate::planner::generator::sha256_hex(&intent);
+            assert!(
+                matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
+                Some(crate::release::crate_release_semver::SemverEvidence::MetadataOnly { package, version, source_sha, intent_sha256, target_checksum })
+                if package == &std::env::var("VELNOR_NATIVE_EXPECT_PACKAGE")?
+                && version == &std::env::var("VELNOR_NATIVE_EXPECT_VERSION")?
+                && source_sha == &std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
+                && intent_sha256 == &expected_intent_sha
+                && target_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_TARGET_CHECKSUM")?)
+            );
+        } else {
+            assert!(
+                matches!(receipt.semver_evidence.get(&receipt.packages[0].source.name),
         Some(crate::release::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, checker_sha256 })
         if baseline == &std::env::var("VELNOR_NATIVE_EXPECT_BASELINE")?
         && baseline_checksum == &std::env::var("VELNOR_NATIVE_EXPECT_CHECKSUM")?
         && checker_sha256 == velnor_actions_mise::catalog::qualified_cargo_semver_checks("ubuntu-26.04").ok_or("checker")?.executable_sha256)
-        );
+            );
+        }
     }
     if verify_supplied_admission(&root)? && std::env::var_os("VELNOR_NATIVE_JOURNAL").is_some() {
         rehearse_journal_start(&root)?;
@@ -213,6 +227,8 @@ fn verify_supplied_admission(root: &Path) -> Result<bool, Box<dyn Error>> {
             std::fs::read_to_string(output_path)?,
             if std::env::var_os("VELNOR_NATIVE_MULTI").is_some() {
                 "release_mode=none\n"
+            } else if std::env::var_os("VELNOR_NATIVE_NEW_RUN_PHASE2").is_some() {
+                "release_mode=repair\n"
             } else {
                 "release_mode=publish\n"
             }

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import hashlib
 import http.server
 import json
 import os
@@ -112,6 +113,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        path = urllib.parse.urlsplit(self.path).path
+        history_base = "/repos/tailrocks/velnor-new"
+        manifest_path = pathlib.Path("/assets/release-manifest.json")
+        manifest = manifest_path.read_bytes()
+        bundle = pathlib.Path("/assets/release-manifest.json.intoto.jsonl").read_bytes()
+        record = json.loads(manifest)
+        tag = "v" + record["version"]
+        if path == history_base:
+            return self.reply(200, {"id": 1390620900, "full_name": "tailrocks/velnor-new", "default_branch": "main"})
+        if path == history_base + "/releases/7":
+            return self.reply(200, {"id": 7, "tag_name": tag, "draft": False, "prerelease": False, "immutable": True, "assets": []})
+        if path == history_base + "/git/matching-refs/tags/" + tag:
+            return self.reply(200, [{"ref": "refs/tags/" + tag, "object": {"type": "commit", "sha": record["commit"]}}])
+        if path == history_base + "/releases/7/assets":
+            return self.reply(200, [{"id": identity, "name": name, "size": len(data), "state": "uploaded", "digest": "sha256:" + hashlib.sha256(data).hexdigest()} for identity, name, data in [(11, "release-manifest.json", manifest), (12, "release-manifest.json.intoto.jsonl", bundle)]])
+        if path in (history_base + "/releases/assets/11", history_base + "/releases/assets/12"):
+            data = manifest if path.endswith("/11") else bundle
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if self.headers.get("host") == "index.crates.io" and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
             origin = os.environ["VELNOR_FIXTURE_CARGO_API_ORIGIN"]
             parsed = urllib.parse.urlsplit(origin)
@@ -157,6 +181,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+        if urllib.parse.urlsplit(self.path).path == "/graphql":
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            return self.reply(200, {"data": {"repository": {"release": {"databaseId": 7, "isDraft": False}}}})
         if (
             self.headers.get("host") == "crates.io"
             and self.path == "/api/v1/trusted_publishing/tokens"
