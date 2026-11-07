@@ -102,6 +102,12 @@ SUPPORTED_PROFILES = ({'environment_names': ('LANG', 'PATH', 'SGX_AESM_ADDR'),
   'symlinks': {},
   'version': '259.9-0ubuntu0.1'})
 
+SUPPORTED_PROFILES += ({
+    **SUPPORTED_PROFILES[0],
+    'mappings': {path: digest for path, digest in SUPPORTED_PROFILES[0]['mappings'].items()
+                 if path != '/usr/lib/x86_64-linux-gnu/libapparmor.so.1.30.7'},
+},)
+
 
 def unit_scopes(unit):
     if not re.fullmatch(r'velnor-(release|data)-[0-9a-f]{32}\.service', unit):
