@@ -23,6 +23,9 @@ use velnor_actions_contract::config::CrateReleaseIntent;
 use velnor_actions_mise::GitRequest;
 
 pub fn parse_crate_release_intent(bytes: &[u8]) -> Result<CrateReleaseIntent, OrchestratorError> {
+    if bytes.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_INTENT_BYTES {
+        return Err(internal("crate_release_intent_parse"));
+    }
     let intent: CrateReleaseIntent = toml::from_str(
         std::str::from_utf8(bytes).map_err(|_| internal("crate_release_intent_parse"))?,
     )

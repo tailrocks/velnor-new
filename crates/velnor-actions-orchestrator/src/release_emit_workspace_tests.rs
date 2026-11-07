@@ -84,3 +84,50 @@ fn commit_fixture(root: &std::path::Path, message: &str) -> Result<(), Box<dyn s
     }
     Ok(())
 }
+
+#[test]
+fn large_workspace_intent_includes_all_member_paths() -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs;
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().join("checkout");
+    fs::create_dir(&root)?;
+    preview_fixture(&root)?;
+    for index in 0..127 {
+        let dir = root.join(format!("members/p{index:03}"));
+        fs::create_dir_all(dir.join("src"))?;
+        fs::write(
+            dir.join("Cargo.toml"),
+            format!(
+                "[package]\nname = 'member-{index:03}'\nversion = '0.1.0'\nedition = '2021'\npublish = false\n"
+            ),
+        )?;
+        fs::write(dir.join("src/lib.rs"), "")?;
+    }
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = ['members/*']\n\n[package]\nname = 'demo'\nversion = '0.1.0'\nedition = '2021'\n",
+    )?;
+    fs::remove_file(root.join("Cargo.lock"))?;
+    let status = std::process::Command::new("cargo")
+        .args(["generate-lockfile", "--offline"])
+        .current_dir(&root)
+        .status()?;
+    assert!(status.success());
+    commit_fixture(&root, "large workspace")?;
+    let text = preview_consumer_intent(&root)?;
+    let intent = crate::parse_crate_release_intent(text.as_bytes())?;
+    assert_eq!(intent.pr_write_paths.len(), 257);
+    assert!(
+        intent
+            .pr_write_paths
+            .contains(&"members/p126/CHANGELOG.md".to_owned())
+    );
+    let mut oversized = intent.clone();
+    oversized.pr_write_paths = (0..3000)
+        .map(|i| format!("{i:04}{}/Cargo.toml", "'\"".repeat(200)))
+        .collect();
+    oversized.pr_write_paths.push("Cargo.toml".into());
+    assert!(oversized.validate().is_err());
+    assert!(crate::parse_crate_release_intent(&vec![b' '; 1024 * 1024 + 1]).is_err());
+    Ok(())
+}

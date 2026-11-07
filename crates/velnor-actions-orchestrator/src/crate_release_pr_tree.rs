@@ -120,7 +120,9 @@ pub(crate) fn overlay_tree<R: TreeRead>(
     changes: &std::collections::BTreeMap<String, Change>,
 ) -> Result<String, OrchestratorError> {
     let invalid = || internal("release_pr_overlay_invalid");
-    if changes.is_empty() || changes.len() > 256 {
+    if changes.is_empty()
+        || changes.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_PR_PATHS
+    {
         return Err(invalid());
     }
     for (path, change) in changes {

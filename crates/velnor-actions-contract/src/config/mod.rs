@@ -268,5 +268,8 @@ pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
 pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
 
-pub use release_intent::{CrateReleaseIntent, CrateReleaseRecovery, is_cargo_version};
+pub use release_intent::{
+    CrateReleaseIntent, CrateReleaseRecovery, MAX_CRATE_RELEASE_INTENT_BYTES,
+    MAX_CRATE_RELEASE_PR_PATHS, is_cargo_version,
+};
 pub use release_validation::is_release_feature_name;

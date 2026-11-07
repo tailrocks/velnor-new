@@ -189,3 +189,45 @@ fn updater_children_are_drained_and_timeout_is_not_captured()
     );
     Ok(())
 }
+
+#[test]
+fn rejects_artifacts_over_byte_budgets() -> Result<(), Box<dyn std::error::Error>> {
+    use super::{PreparationArtifact, PreparedFile, verify_preparation_artifact};
+    let (_, checkout) = make_checkout()?;
+    let binding = checkout.binding.clone();
+    let paths = BTreeSet::from([
+        "Cargo.toml".to_owned(),
+        "a/Cargo.toml".to_owned(),
+        "b/Cargo.toml".to_owned(),
+        "c/Cargo.toml".to_owned(),
+    ]);
+    let file = |path: &str, size: usize| {
+        let bytes = vec![0; size];
+        PreparedFile {
+            path: path.to_owned(),
+            sha256: super::sha256(&bytes),
+            bytes,
+        }
+    };
+    for files in [
+        vec![file("Cargo.toml", 8 * 1024 * 1024 + 1)],
+        vec![
+            file("a/Cargo.toml", 8 * 1024 * 1024),
+            file("b/Cargo.toml", 8 * 1024 * 1024),
+            file("c/Cargo.toml", 1),
+        ],
+    ] {
+        let artifact = PreparationArtifact {
+            schema: 1,
+            binding: binding.clone(),
+            files,
+        };
+        let bytes = serde_json::to_vec(&artifact)?;
+        assert!(
+            verify_preparation_artifact(&bytes, &super::sha256(&bytes), &binding, &paths).is_err()
+        );
+    }
+    let bytes = vec![b' '; 64 * 1024 * 1024 + 1];
+    assert!(verify_preparation_artifact(&bytes, &super::sha256(&bytes), &binding, &paths).is_err());
+    Ok(())
+}

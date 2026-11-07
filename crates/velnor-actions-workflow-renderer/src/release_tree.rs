@@ -322,6 +322,11 @@ pub fn render_release_files(
     let intent_text = toml::to_string_pretty(intent)
         .map_err(|err| RenderError::InvalidWorkflow(format!("intent_toml:{err}")))?;
     let intent_text = marker::with_marker(&ctx.generator_version, &intent_text)?;
+    if intent_text.len() > velnor_actions_contract::config::MAX_CRATE_RELEASE_INTENT_BYTES {
+        return Err(RenderError::InvalidWorkflow(
+            "release_intent_too_large".to_owned(),
+        ));
+    }
     let files = ReleaseFiles {
         workflow: RenderedFile {
             path: CRATE_RELEASE_WORKFLOW_PATH.to_owned(),

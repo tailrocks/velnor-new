@@ -255,3 +255,80 @@ fn overlays_real_git_tree_without_changing_unrelated_entries()
     assert!(overlay_tree(&GitTrees(root.path()), &base, &unchanged).is_err());
     Ok(())
 }
+
+#[test]
+fn overlays_257_verified_checkout_changes() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::crate_release_pr_artifact::{
+        PreparationBinding, PreparationCheckout, verify_preparation_artifact,
+    };
+    use std::collections::BTreeSet;
+    let root = tempfile::tempdir()?;
+    git(root.path(), &["init", "-q"])?;
+    let mut paths: BTreeSet<String> = (0..256).map(|i| format!("p{i:03}/Cargo.toml")).collect();
+    paths.insert("p000/CHANGELOG.md".into());
+    for path in paths.iter().filter(|path| !path.ends_with("CHANGELOG.md")) {
+        let file = root.path().join(path);
+        fs::create_dir_all(file.parent().ok_or("parent")?)?;
+        fs::write(file, b"old")?;
+    }
+    git(root.path(), &["add", "."])?;
+    git(
+        root.path(),
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "initial",
+        ],
+    )?;
+    let sha = String::from_utf8(git(root.path(), &["rev-parse", "HEAD"])?)?
+        .trim()
+        .to_owned();
+    let tree = String::from_utf8(git(root.path(), &["rev-parse", "HEAD^{tree}"])?)?
+        .trim()
+        .to_owned();
+    let binding = PreparationBinding {
+        repository: "owner/project".into(),
+        workflow_sha: sha.clone(),
+        source_sha: sha,
+        run_id: 1,
+        run_attempt: 1,
+    };
+    let checkout = PreparationCheckout::open(
+        root.path(),
+        binding.clone(),
+        paths.clone(),
+        crate::crate_release_git::ReleaseGit::host_fixture(),
+    )?;
+    for path in &paths {
+        fs::write(root.path().join(path), b"new")?;
+    }
+    let artifact = checkout.collect()?;
+    let bytes = serde_json::to_vec(&artifact)?;
+    let digest = crate::planner::generator::sha256_hex(&bytes);
+    let artifact = verify_preparation_artifact(&bytes, &digest, &binding, &paths)?;
+    assert_eq!(artifact.files.len(), 257);
+    let changes = artifact
+        .files
+        .iter()
+        .map(|file| {
+            Ok((
+                file.path.clone(),
+                Change {
+                    mode: "100644".into(),
+                    sha: crate::release_policy_admission::git_blob_sha1(&file.bytes)?,
+                },
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, OrchestratorError>>()?;
+    let actual = overlay_tree(&GitTrees(root.path()), &tree, &changes)?;
+    git(root.path(), &["add", "."])?;
+    let expected = String::from_utf8(git(root.path(), &["write-tree"])?)?;
+    assert_eq!(actual, expected.trim());
+    Ok(())
+}

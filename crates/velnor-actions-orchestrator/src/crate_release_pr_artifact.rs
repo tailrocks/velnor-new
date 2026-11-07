@@ -11,7 +11,6 @@ use velnor_actions_mise::GitRequest;
 const MAX_ARTIFACT_BYTES: usize = 64 * 1024 * 1024;
 const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 16 * 1024 * 1024;
-const MAX_FILES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -158,7 +157,7 @@ fn insert_change(
     *total = total
         .checked_add(bytes.len())
         .ok_or("release_pr_artifact_invalid")?;
-    if bytes.len() > MAX_FILE_BYTES || *total > MAX_TOTAL_BYTES || changed.len() >= MAX_FILES {
+    if bytes.len() > MAX_FILE_BYTES || *total > MAX_TOTAL_BYTES {
         return Err("release_pr_artifact_invalid");
     }
     if changed
@@ -194,7 +193,10 @@ pub fn verify_preparation_artifact(
         return Err(invalid());
     }
     let artifact: PreparationArtifact = serde_json::from_slice(bytes).map_err(|_| invalid())?;
-    if artifact.schema != 1 || artifact.binding != *binding || artifact.files.len() > MAX_FILES {
+    if artifact.schema != 1
+        || artifact.binding != *binding
+        || artifact.files.len() > allowed_paths.len()
+    {
         return Err(invalid());
     }
     let mut previous: Option<&str> = None;

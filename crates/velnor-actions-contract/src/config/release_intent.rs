@@ -137,13 +137,26 @@ impl CrateReleaseIntent {
         {
             return Err(invalid("recovery", "invalid_recovery"));
         }
+        let text = toml::to_string_pretty(self)
+            .map_err(|_| invalid("intent", "invalid_intent_serialization"))?;
+        if text.len() > MAX_CRATE_RELEASE_INTENT_BYTES {
+            return Err(invalid("intent", "intent_too_large"));
+        }
         Ok(())
     }
 }
 
+pub const MAX_CRATE_RELEASE_INTENT_BYTES: usize = 1024 * 1024;
+pub const MAX_CRATE_RELEASE_PR_PATHS: usize = MAX_CRATE_RELEASE_INTENT_BYTES / "Cargo.toml".len();
+
 fn validate_pr_write_paths(intent: &CrateReleaseIntent) -> Result<(), ContractError> {
     if intent.pr_write_paths.is_empty()
-        || intent.pr_write_paths.len() > 256
+        || intent.pr_write_paths.len() > MAX_CRATE_RELEASE_PR_PATHS
+        || intent
+            .pr_write_paths
+            .iter()
+            .try_fold(0usize, |total, path| total.checked_add(path.len()))
+            .is_none_or(|total| total > MAX_CRATE_RELEASE_INTENT_BYTES)
         || !intent
             .pr_write_paths
             .iter()
