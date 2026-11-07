@@ -22,6 +22,24 @@ pub(super) struct Harness {
 }
 
 impl Harness {
+    pub(super) fn new_with_clock() -> Result<Self, Box<dyn Error>> {
+        let path = PathBuf::from(
+            env::var_os("VELNOR_QUALIFICATION_CLOCK_DRIVER")
+                .ok_or("qualification clock driver is missing")?,
+        );
+        let metadata = fs::symlink_metadata(&path)?;
+        if !path.is_absolute()
+            || !metadata.file_type().is_file()
+            || metadata.permissions().mode() & 0o111 == 0
+            || fs::canonicalize(&path)? != path
+        {
+            return Err("qualification clock driver is not an absolute executable file".into());
+        }
+        let mut harness = Self::new()?;
+        harness.collector = path;
+        Ok(harness)
+    }
+
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let temp_parent = fs::canonicalize("/tmp")?;
         let temp = Builder::new()

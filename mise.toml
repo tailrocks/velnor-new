@@ -79,6 +79,23 @@ if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
   exit 1
 fi
 export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+cargo --config build.jobs=2 build --locked -p velnor-archive-guard \
+  --example golden_collector_clock --message-format=json >"$ARTIFACT_MESSAGES"
+CLOCK_DRIVER="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=artifact-executable \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
+  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
+  VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
+  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
+    --bin velnor-actions)"
+case "$CLOCK_DRIVER" in
+  /*) ;;
+  *) echo "qualification clock driver is missing" >&2; exit 1 ;;
+esac
+test -x "$CLOCK_DRIVER"
+export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
 printf "maintenance-phase: test-members\n"
 TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=test-members \

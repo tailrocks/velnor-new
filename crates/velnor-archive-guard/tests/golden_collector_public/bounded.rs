@@ -175,7 +175,7 @@ fn caps_stdout_after_successful_entry_and_retains_the_prefix() -> Result<(), Box
 
 #[test]
 fn times_out_after_guard_mutation_and_cleans_only_its_owned_group() -> Result<(), Box<dyn Error>> {
-    let harness = Harness::new()?;
+    let harness = Harness::new_with_clock()?;
     let candidate = diagnostics_candidate()?;
     let mutation_root = harness.directory.join("guard-mutation");
     private_directory(&mutation_root)?;

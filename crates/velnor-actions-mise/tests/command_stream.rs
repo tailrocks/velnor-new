@@ -9,6 +9,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
+#[path = "command_stream/bounded_output.rs"]
+mod bounded_output;
+
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(unix)]
