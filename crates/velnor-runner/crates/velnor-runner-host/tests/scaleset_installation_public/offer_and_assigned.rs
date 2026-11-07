@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "btrfs_and_cleanup.rs"]
+mod btrfs_and_cleanup;
+
 use serde_json::json;
 use velnor_runner_github::{
     Exchange, Method, Poll, SessionRequest, Transport, TransportFail, parse_poll,

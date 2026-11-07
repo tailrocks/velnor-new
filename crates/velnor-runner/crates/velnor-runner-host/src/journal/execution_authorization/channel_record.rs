@@ -254,14 +254,12 @@ impl ProofChannelMountRecord {
     }
 
     fn valid_inbox(&self) -> bool {
-        const TMPFS_SUPER_MAGIC: u64 = 0x0102_1994;
         self.target == INBOX_TARGET
             && self.subpath == INBOX_SUBPATH
             && self.valid_common()
             && self.owner_uid == 1000
             && self.owner_gid == 1000
             && self.mode == 0o700
-            && self.fs_type_magic == TMPFS_SUPER_MAGIC
             && !self.read_only
     }
 

@@ -10,8 +10,8 @@ use std::{
 use super::{
     super::CleanupObserverRequest,
     helpers::{
-        add_issue, expired, linux_device, namespace_identity, namespace_link, numeric_name,
-        observe_descriptor, process_start_ticks, tmpfs_magic,
+        add_issue, expired, io_vanished, linux_device, namespace_identity, namespace_link,
+        numeric_name, observe_descriptor, process_start_ticks, tmpfs_magic, vanished,
     },
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
@@ -99,9 +99,13 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
 
 fn scan_process(pid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
     let task_dir = format!("{PROC}/{pid}/task");
-    let Ok(tasks) = fs::read_dir(task_dir) else {
-        add_issue(&mut inventory.issues, "task_list_unreadable");
-        return;
+    let tasks = match fs::read_dir(task_dir) {
+        Ok(tasks) => tasks,
+        Err(error) if io_vanished(&error) => return,
+        Err(_) => {
+            add_issue(&mut inventory.issues, "task_list_unreadable");
+            return;
+        }
     };
     for task in tasks {
         if expired(context.started) {
@@ -127,14 +131,22 @@ fn scan_process(pid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) 
 
 fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
     let stat_path = format!("{PROC}/{pid}/task/{tid}/stat");
-    let Ok(start_before) = process_start_ticks(&stat_path, tid) else {
-        add_issue(&mut inventory.issues, "task_start_unreadable");
-        return;
+    let start_before = match process_start_ticks(&stat_path, tid) {
+        Ok(ticks) => ticks,
+        Err(error) if vanished(&error) => return,
+        Err(_) => {
+            add_issue(&mut inventory.issues, "task_start_unreadable");
+            return;
+        }
     };
     let namespace_path = format!("{PROC}/{pid}/task/{tid}/ns/mnt");
-    let Ok(namespace) = namespace_identity(&namespace_path) else {
-        add_issue(&mut inventory.issues, "task_namespace_unreadable");
-        return;
+    let namespace = match namespace_identity(&namespace_path) {
+        Ok(namespace) => namespace,
+        Err(error) if vanished(&error) => return,
+        Err(_) => {
+            add_issue(&mut inventory.issues, "task_namespace_unreadable");
+            return;
+        }
     };
     if context.namespace_ids.contains(&namespace) {
         inventory.owned_reference_count = inventory.owned_reference_count.saturating_add(1);
@@ -148,8 +160,10 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
         }
     }
     scan_descriptors(pid, tid, context, inventory);
-    if !matches!(process_start_ticks(&stat_path, tid), Ok(value) if value == start_before) {
-        add_issue(&mut inventory.issues, "task_identity_changed");
+    match process_start_ticks(&stat_path, tid) {
+        Ok(value) if value == start_before => {}
+        Err(error) if vanished(&error) => {}
+        _ => add_issue(&mut inventory.issues, "task_identity_changed"),
     }
 }
 
@@ -173,16 +187,22 @@ fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &m
         &mut inventory.owned_reference_count,
         &mut inventory.issues,
     );
-    if read_task_mountinfo(pid, tid, &mut inventory.issues).as_deref() != Some(&bytes) {
+    if let Some(after) = read_task_mountinfo(pid, tid, &mut inventory.issues)
+        && after != bytes
+    {
         add_issue(&mut inventory.issues, "task_mountinfo_changed");
     }
 }
 
 fn scan_descriptors(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
     let fd_path = format!("{PROC}/{pid}/task/{tid}/fd");
-    let Ok(fds) = fs::read_dir(fd_path) else {
-        add_issue(&mut inventory.issues, "task_fd_list_unreadable");
-        return;
+    let fds = match fs::read_dir(fd_path) {
+        Ok(fds) => fds,
+        Err(error) if io_vanished(&error) => return,
+        Err(_) => {
+            add_issue(&mut inventory.issues, "task_fd_list_unreadable");
+            return;
+        }
     };
     let mut per_task_fds = 0;
     for fd in fds {
@@ -211,9 +231,13 @@ fn observe_task_descriptor(
     context: &ScanContext<'_>,
     inventory: &mut Inventory,
 ) {
-    let Ok(observation) = observe_descriptor(path) else {
-        add_issue(&mut inventory.issues, "task_fd_observation_incomplete");
-        return;
+    let observation = match observe_descriptor(path) {
+        Ok(observation) => observation,
+        Err(error) if vanished(&error) => return,
+        Err(_) => {
+            add_issue(&mut inventory.issues, "task_fd_observation_incomplete");
+            return;
+        }
     };
     let namespace_reference = namespace_link(&observation.target).is_some_and(|inode| {
         observation.filesystem_magic == 0x6e73_6673

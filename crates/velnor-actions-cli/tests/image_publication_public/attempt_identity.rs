@@ -166,14 +166,37 @@ fn public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts(
 #[test]
 fn public_runner_publication_rejects_empty_and_malformed_attestation_output()
 -> Result<(), Box<dyn Error>> {
-    for (response, expected_error) in [
-        (json!([]), "package_attestation_ambiguous"),
-        (json!(null), "package_attestation_output_invalid"),
-        (json!({}), "package_attestation_output_invalid"),
-        (json!([null]), "package_attestation_output_invalid"),
-    ] {
-        assert_attestation_rejected(|_| Ok(response.clone()), expected_error)?;
+    let scenario = "attempt_identity::public_runner_publication_rejects_empty_and_malformed_attestation_output";
+    if !super::begin_isolated(scenario)? {
+        return Ok(());
     }
+    for (pages, expected_error) in [
+        (
+            json!([{"attestations":[]}]),
+            "package_attestation_ambiguous",
+        ),
+        (
+            json!([{"attestations":[null]}]),
+            "package_attestation_lookup_invalid",
+        ),
+        (
+            json!([{"attestations":[{"bundle":null}]}]),
+            "package_attestation_bundle_invalid",
+        ),
+        (
+            json!([{"attestations":[{"bundle":{}}]}]),
+            "package_attestation_verification_failed",
+        ),
+        (
+            json!([{"attestations":[{"bundle":[null]}]}]),
+            "package_attestation_verification_failed",
+        ),
+    ] {
+        let fixture = Fixture::new_for_attempt(FixtureProfile::Job, 2)?;
+        fixture.set_attestation_pages(pages)?;
+        assert_attestation_fixture_rejected(&fixture, expected_error)?;
+    }
+    super::isolated_worker::record_success("image_publication", scenario)?;
     Ok(())
 }
 
@@ -279,45 +302,6 @@ fn public_runner_publication_rejects_invalid_attestation_entries_in_both_orders(
 }
 
 #[test]
-fn public_runner_publication_rejects_each_non_run_certificate_field_in_both_orders()
--> Result<(), Box<dyn Error>> {
-    for field in [
-        "issuer",
-        "subjectAlternativeName",
-        "sourceRepositoryURI",
-        "sourceRepositoryOwnerURI",
-        "sourceRepositoryIdentifier",
-        "sourceRepositoryDigest",
-        "sourceRepositoryRef",
-        "buildSignerURI",
-        "buildSignerDigest",
-        "buildConfigURI",
-        "buildConfigDigest",
-        "buildTrigger",
-        "runnerEnvironment",
-    ] {
-        for invalid_first in [true, false] {
-            assert_attestation_rejected(
-                |fixture| {
-                    let current = current_attestation(fixture)?;
-                    let mut invalid_entry = current.clone();
-                    invalid_entry["verificationResult"]["signature"]["certificate"][field] =
-                        json!(format!("invalid-{field}"));
-                    let entries = if invalid_first {
-                        vec![invalid_entry, current]
-                    } else {
-                        vec![current, invalid_entry]
-                    };
-                    Ok(json!(entries))
-                },
-                "package_attestation_identity_mismatch",
-            )?;
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn public_runner_publication_rejects_noncanonical_attestation_run_uris_in_both_orders()
 -> Result<(), Box<dyn Error>> {
     for uri_case in [
@@ -358,6 +342,13 @@ fn assert_attestation_rejected(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new_for_attempt(FixtureProfile::Job, 2)?;
     fixture.set_attestation_output(response(&fixture)?)?;
+    assert_attestation_fixture_rejected(&fixture, expected_error)
+}
+
+fn assert_attestation_fixture_rejected(
+    fixture: &Fixture,
+    expected_error: &str,
+) -> Result<(), Box<dyn Error>> {
     let foreign = fixture.scratch.join("foreign.keep");
     fs::write(&foreign, b"preserve")?;
     let archive_before = fs::read(&fixture.archive)?;

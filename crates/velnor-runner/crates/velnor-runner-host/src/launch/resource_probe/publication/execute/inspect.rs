@@ -92,7 +92,7 @@ fn matches_identity_with_volume(
             mounts.len() == 1
                 && mounts[0].target.as_deref() == Some("/opt/velnor")
                 && mounts[0].source.as_deref() == Some(projection.metadata_volume.as_str())
-                && mounts[0].read_only == Some(false)
+                && !mounts[0].read_only.unwrap_or(false)
                 && mounts[0]
                     .volume_options
                     .as_ref()
