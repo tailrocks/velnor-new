@@ -607,6 +607,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,11 +822,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f4dc2714fc5632417a6e979602d7044bad8f2880c63fc7217087180acec31b6"
 dependencies = [
  "annotate-snippets",
+ "base64",
  "encoding_rs_io",
  "granit-parser",
+ "nohash-hasher",
  "num-traits",
  "serde_core",
  "smallvec",
+ "zmij",
 ]
 
 [[package]]
@@ -1152,6 +1161,7 @@ dependencies = [
  "lzma-rust2",
  "proc-macro2",
  "rustix",
+ "serde-saphyr",
  "serde_json",
  "sha1-checked",
  "sha2",

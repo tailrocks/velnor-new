@@ -134,6 +134,7 @@ workspace = true
 lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
 velnor-actions-workflow-renderer = { version = "=0.1.78", path = "../velnor-actions-workflow-renderer" }
 base64 = { workspace = true }
+serde-saphyr = "=2.1.0"
 velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
