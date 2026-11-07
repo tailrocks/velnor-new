@@ -192,6 +192,12 @@ fn affected_from_changed(
             discovery
                 .mise_checks
                 .iter()
+                .filter(|check| {
+                    toolfiles
+                        || check.check.selection
+                            == velnor_actions_contract::config::CheckSelection::RustChanges
+                        || check.config_inputs.iter().any(|path| changed.contains(path))
+                })
                 .map(|check| check.check.id.clone()),
         );
     }

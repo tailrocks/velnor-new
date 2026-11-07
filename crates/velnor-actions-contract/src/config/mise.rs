@@ -27,6 +27,9 @@ pub struct MiseCheck {
 
     pub inputs: Vec<String>,
 
+    #[serde(default, skip_serializing_if = "CheckSelection::is_default")]
+    pub selection: CheckSelection,
+
     pub tools: Vec<String>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -40,6 +43,20 @@ pub struct MiseCheck {
 
     #[serde(default, skip_serializing_if = "CheckoutHistory::is_full")]
     pub history: CheckoutHistory,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckSelection {
+    #[default]
+    RustChanges,
+    DeclaredInputs,
+}
+
+impl CheckSelection {
+    const fn is_default(&self) -> bool {
+        matches!(self, Self::RustChanges)
+    }
 }
 
 fn default_directory() -> String {

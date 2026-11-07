@@ -12,8 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
-    CacheLayer, CacheResult, FinalReport, FinalStatus, NEEDS_EXPECTED_ENV, TaskReport,
-    canonical_json_bytes,
+    CacheLayer, CacheResult, FinalReport, NEEDS_EXPECTED_ENV, TaskReport, canonical_json_bytes,
 };
 #[cfg(unix)]
 use velnor_actions_mise::GH_VERSION;
@@ -265,51 +264,6 @@ pub(super) fn retrieve(
     ];
     process::run_child(test_name, "retrieve", label, scenario.root(), &variables)?;
     Ok(fs::read_to_string(result_path)?.parse()?)
-}
-
-#[cfg(unix)]
-pub(super) fn check_dual_lane_shared_artifact_retrieval(
-    scenario: &Scenario,
-    test_name: &str,
-    artifact_id: &str,
-    mise_data_dir: &Path,
-    fake_mise_bin: &Path,
-    payload: &Path,
-) -> TestResult<()> {
-    fs::remove_dir_all(scenario.run_dir.join("reports"))?;
-    let workflows_dir = scenario.root().join(".github/workflows");
-    fs::create_dir_all(&workflows_dir)?;
-    fs::write(
-        workflows_dir.join("ci.yml"),
-        "name: ci\njobs:\n  crate_clippy__hosted:\n    steps:\n      - with:\n          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-crate_clippy__hosted\n  crate_clippy__local:\n    steps:\n      - with:\n          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-crate_clippy__local\n",
-    )?;
-    let dual_request_log = scenario.root().join("gh-requests-dual.tsv");
-    assert_eq!(
-        retrieve(
-            scenario,
-            test_name,
-            "retrieve-shared-dual",
-            mise_data_dir,
-            fake_mise_bin,
-            payload,
-            &dual_request_log,
-        )?,
-        2
-    );
-    let expected_dual_request = format!(
-        "{RUN_ID}\t{artifact_id}__hosted\ttailrocks/velnor-new\n{RUN_ID}\t{artifact_id}__local\ttailrocks/velnor-new\n",
-    );
-    assert_eq!(fs::read_to_string(dual_request_log)?, expected_dual_request);
-    let dual_jobs = [
-        ("crate_clippy__hosted", "success"),
-        ("crate_clippy__local", "success"),
-    ];
-    let dual_request = assemble(scenario, test_name, "shared-dual", &dual_jobs)?;
-    let dual_final = merge(&dual_request)?;
-    assert_eq!(dual_final.status, FinalStatus::Passed);
-    assert_eq!(dual_final.counts.executed, 2);
-    assert_eq!(dual_final.downloaded_artifact_ids, [artifact_id.to_owned()]);
-    Ok(())
 }
 
 pub(super) fn stage_provider_hit(scenario: &Scenario, task_id: &str, key: &str) -> TestResult<()> {

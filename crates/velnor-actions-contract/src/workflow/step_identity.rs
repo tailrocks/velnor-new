@@ -6,7 +6,6 @@ pub use super::step_payloads::{TOOLS_RESTORE_LOOKUP_ONLY_INPUT, ToolsRestoreForm
 use super::step_payloads::{valid_checkout_payload, valid_mise_setup, valid_tool_seed_payload};
 pub(super) use super::step_payloads::{valid_tools_cache_identity, valid_tools_cache_scrub};
 use crate::errors::ContractError;
-use serde::{Deserialize, Serialize};
 
 #[path = "step_identity_payload.rs"]
 mod payload;
@@ -54,8 +53,9 @@ pub const RUST_VERIFIER_USES: [&str; 2] = [
 ];
 
 pub const JACTIONLINT_VERIFIER_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+pub const ACQUIRE_PROTECTED_PREVIEW_OPERATION: &str = "acquire-protected-preview-v1";
 
-pub(super) fn verifier_action_role(uses: &str) -> Option<StepRole> {
+pub(super) fn recognized_action_role(uses: &str) -> Option<StepRole> {
     if RUST_VERIFIER_USES.contains(&uses) {
         Some(StepRole::VerifyRustManifest)
     } else if uses == JACTIONLINT_VERIFIER_USES {
@@ -81,182 +81,6 @@ pub use super::step_private::{
 
 pub use super::step_id::StepId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StepRole {
-    Checkout,
-
-    ToolSeed,
-
-    PreparePinnedTools,
-
-    PrepareRustComponents,
-
-    VerifyRustManifest,
-
-    VerifyJactionlint,
-
-    MiseSetup,
-
-    CargoDeny,
-
-    CargoMachete,
-
-    Jactionlint,
-
-    Markdownlint,
-
-    StrictJson,
-
-    FrontmatterId,
-
-    LinkCheck,
-
-    NativeValidators,
-
-    PlanProducer,
-
-    BuildTaskRun,
-
-    AcquireVelnor,
-
-    PreseedStage,
-
-    DownloadPlan,
-
-    CheckGenerated,
-
-    PublishPlan,
-
-    MatrixReportUpload,
-
-    AttestationDownload,
-
-    FetchReports,
-
-    PublishFinal,
-
-    PlanFormat,
-
-    MsrvQualification,
-
-    ToolsCacheSave,
-
-    ToolsCacheIdentity,
-
-    ToolsCacheRestore,
-
-    ToolsCacheScrub,
-
-    CargoSourcesRestore,
-
-    CargoSourcesSave,
-
-    CargoSourcesFetch,
-
-    CacheKeys,
-
-    TofuProvidersSave,
-
-    TofuProvidersRestore,
-
-    TofuProvidersPrepare,
-
-    TofuProviderUse,
-
-    PreseedBuild,
-
-    PreseedManifest,
-
-    PreseedVerifyBuild,
-
-    PreseedUpload,
-
-    PreseedDownload,
-
-    PreseedVerifyManifest,
-
-    MbxCache,
-
-    MbxVersionCheck,
-
-    MbxPreflight,
-
-    MbxWorkspaceCleanup,
-
-    MbxBundleKey,
-
-    MbxBundleRestore,
-
-    MbxBundleImport,
-
-    MbxProducerMark,
-
-    MbxBundleExport,
-
-    FamilyKeys,
-
-    FamilyRestore,
-
-    FamilySizeCheck,
-
-    FamilySave,
-
-    PrivateTokenMint,
-
-    PrivateFetch,
-
-    PrivateRevoke,
-
-    BunRegistryInstall,
-
-    BunAssetsHandoff,
-
-    PlaywrightInstall,
-
-    GitHubEvidenceFetch,
-
-    GitHubEvidenceImport,
-
-    LedgerCliBuild,
-
-    LedgerCliPublish,
-
-    LedgerCliUpload,
-
-    LedgerCliDownload,
-
-    LedgerCliVerify,
-
-    StateSelect,
-
-    StateSealUpload,
-
-    StateSealDownload,
-
-    StateSealSubject,
-
-    StateSealBind,
-
-    StateSealTip,
-
-    StateSealAttest,
-
-    StateSealSave,
-
-    StateSealAdmit,
-
-    StateSealRetire,
-
-    StateProduced,
-
-    StateSkeleton,
-
-    StateSkeletonRestore,
-    NonInputGuard,
-    MbxStats,
-}
-
 impl StepRole {
     pub(crate) fn validate(self, kind: &StepKind, job: &str) -> Result<(), ContractError> {
         if self.matches_payload(kind) {
@@ -274,6 +98,10 @@ impl StepRole {
             Self::Checkout => valid_checkout_payload(kind),
             Self::ToolSeed => valid_tool_seed_payload(kind),
             Self::MiseSetup => valid_mise_setup(kind),
+            Self::PrepareRuntimeTools => Self::valid_runtime_tools(kind),
+            Self::AcquireProtectedPreview => matches!(kind,
+                StepKind::Internal { operation, env }
+                    if operation == ACQUIRE_PROTECTED_PREVIEW_OPERATION && env.is_empty()),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
@@ -389,3 +217,7 @@ impl StepRole {
         }
     }
 }
+
+#[path = "step_identity_role.rs"]
+mod role;
+pub use role::StepRole;

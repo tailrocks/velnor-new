@@ -3,7 +3,7 @@
 
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
-use super::lanes::NamedCheckLaneVariant;
+use super::lanes::LaneVariant;
 use super::platform::PlannedPlatform;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::VelnorConfig;
@@ -26,7 +26,7 @@ pub struct MatrixEntry {
     pub task_id: String,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lane_variant: Option<NamedCheckLaneVariant>,
+    pub lane_variant: Option<LaneVariant>,
 
     pub run: String,
 
@@ -102,18 +102,16 @@ impl MatrixEntry {
         input_digest: &str,
         run_key: &str,
         job_id: &str,
-        lane_variant: Option<NamedCheckLaneVariant>,
+        lane_variant: Option<LaneVariant>,
         planned_platform: PlannedPlatform,
     ) -> Result<Self, ContractError> {
-        let identity_group = lane_task_group_id(task_group_id, lane_variant)?;
-        let id = matrix_id_for_task_group(stack_id, &identity_group)?;
-        let matrix_key = matrix_key_for_id(&id)?;
+        let (id, matrix_key) = matrix_identity_for_lane(stack_id, task_group_id, lane_variant)?;
         validate_run_key(run_key)?;
         validate_digest(input_digest)?;
         super::plan::validate_matrix_run(run)?;
         validate_digest(task_digest)?;
         execute_task_ids.validate()?;
-        validate_lane_binding(stack_id, job_id, lane_variant)?;
+        crate::workflow::validate_job_id(job_id)?;
         planned_platform.validate()?;
         Ok(Self {
             report_id: report_id_for_matrix(run_key, &matrix_key)?,
@@ -172,9 +170,9 @@ impl MatrixEntry {
             }
         }
         self.planned_platform.validate()?;
-        validate_lane_binding(&self.stack_id, &self.job_id, self.lane_variant)?;
-        let identity_group = lane_task_group_id(&self.task_id, self.lane_variant)?;
-        let expect_id = matrix_id_for_task_group(&self.stack_id, &identity_group)?;
+        crate::workflow::validate_job_id(&self.job_id)?;
+        let (expect_id, _) =
+            matrix_identity_for_lane(&self.stack_id, &self.task_id, self.lane_variant)?;
         if expect_id != self.id {
             return Err(ContractError::identity("id", "id_mismatch"));
         }
@@ -182,45 +180,63 @@ impl MatrixEntry {
     }
 }
 
+pub(super) fn matrix_identity_for_lane(
+    stack_id: &str,
+    task_id: &str,
+    variant: Option<LaneVariant>,
+) -> Result<(String, String), ContractError> {
+    let group = lane_task_group_id(task_id, variant)?;
+    let id = matrix_id_for_task_group(stack_id, &group)?;
+    let key = matrix_key_for_id(&id)?;
+    Ok((id, key))
+}
+
+#[must_use]
+pub fn task_matrix_identity_matches(
+    task_id: &str,
+    matrix_id: &str,
+    matrix_key: &str,
+    variant: Option<LaneVariant>,
+) -> bool {
+    VelnorConfig::REGISTERED_STACKS.iter().any(|stack| {
+        matrix_identity_for_lane(stack, task_id, variant)
+            .is_ok_and(|(id, key)| id == matrix_id && key == matrix_key)
+    })
+}
+
+pub(super) fn project_task_matrix_identity(
+    task_id: &str,
+    matrix_id: &str,
+    matrix_key: &str,
+    variant: LaneVariant,
+) -> Result<(String, String), ContractError> {
+    let mut matches = VelnorConfig::REGISTERED_STACKS.iter().filter(|stack| {
+        matrix_identity_for_lane(stack, task_id, None)
+            .is_ok_and(|(id, key)| id == matrix_id && key == matrix_key)
+    });
+    let stack = matches
+        .next()
+        .ok_or_else(|| ContractError::identity("matrix_id", "task_identity_mismatch"))?;
+    if matches.next().is_some() {
+        return Err(ContractError::identity(
+            "matrix_id",
+            "ambiguous_task_identity",
+        ));
+    }
+    matrix_identity_for_lane(stack, task_id, Some(variant))
+}
+
 fn lane_task_group_id(
     task_group_id: &str,
-    variant: Option<NamedCheckLaneVariant>,
+    variant: Option<LaneVariant>,
 ) -> Result<String, ContractError> {
     crate::ids::validate_task_id(task_group_id)?;
     let Some(variant) = variant else {
         return Ok(task_group_id.to_owned());
     };
     let suffix = match variant {
-        NamedCheckLaneVariant::Hosted => "hosted",
-        NamedCheckLaneVariant::ScaleSet => "scale-set",
+        LaneVariant::Hosted => "hosted",
+        LaneVariant::ScaleSet => "scale-set",
     };
     Ok(format!("{task_group_id}/lane-{suffix}"))
-}
-
-fn validate_lane_binding(
-    stack_id: &str,
-    job_id: &str,
-    variant: Option<NamedCheckLaneVariant>,
-) -> Result<(), ContractError> {
-    crate::workflow::validate_job_id(job_id)?;
-    let Some(variant) = variant else {
-        return Ok(());
-    };
-    if stack_id != "mise" {
-        return Err(ContractError::identity(
-            "matrix.lane_variant",
-            "lane_variant_requires_named_check",
-        ));
-    }
-    let suffix = match variant {
-        NamedCheckLaneVariant::Hosted => super::lanes::HOSTED_SUFFIX,
-        NamedCheckLaneVariant::ScaleSet => super::lanes::SCALE_SUFFIX,
-    };
-    if !job_id.starts_with("check-") || !job_id.ends_with(suffix) {
-        return Err(ContractError::identity(
-            "matrix.job_id",
-            "lane_job_id_mismatch",
-        ));
-    }
-    Ok(())
 }

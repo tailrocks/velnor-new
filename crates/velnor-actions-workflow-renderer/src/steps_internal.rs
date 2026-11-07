@@ -27,7 +27,8 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
     {
         return Ok((operation, operation));
     }
-    if operation == PLAN_OPERATION
+    if operation == "execute-check-v1"
+        || operation == PLAN_OPERATION
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION
         || operation == SEED_PARALLEL_TARGETS_OPERATION

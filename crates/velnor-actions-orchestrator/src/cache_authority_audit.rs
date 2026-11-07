@@ -4,18 +4,18 @@
 use velnor_actions_contract::workflow::crate_job::{
     TOFU_PROVIDERS_PRODUCER_JOB_ID_PREFIX, TOOLS_PRODUCER_JOB_ID_PREFIX,
 };
+use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID_PREFIX;
 use velnor_actions_contract::workflow::{
     CacheWriter, QUALIFICATION_CACHE_WRITER_IDS, QUALIFICATION_WRITER_GATE,
     SOURCES_PRODUCER_JOB_ID, WORKFLOW_CACHE_MODE, WRITER_CACHE_MODE, WRITER_MISE_ENV,
 };
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_JOB_ID_PREFIX;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::QUALIFICATION_WORKFLOW;
 
 use std::collections::BTreeMap;
 
-use crate::OrchestratorError;
 use super::rust_install_audit::parse::step_lists;
+use crate::OrchestratorError;
 
 const WORKFLOW_DIR: &str = ".github/workflows/";
 const CACHE_MODE_KEY: &str = "cache-mode:";
@@ -53,7 +53,11 @@ pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
         }
         let scan = scan(&file.bytes);
         if scan.workflow_modes != [WORKFLOW_CACHE_MODE] {
-            return Err(violation(&file.path, "workflow", "workflow_cache_mode_not_read"));
+            return Err(violation(
+                &file.path,
+                "workflow",
+                "workflow_cache_mode_not_read",
+            ));
         }
         for job in &scan.jobs {
             let Some(mode) = job.cache_mode.as_deref() else {

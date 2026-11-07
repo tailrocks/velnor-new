@@ -43,6 +43,7 @@ pub(crate) fn finalize_dispositions(
     obligations: &mut [PlanObligation],
     entries: &mut Vec<MatrixEntry>,
     needs: &BTreeMap<String, BTreeSet<String>>,
+    routes: &[velnor_actions_contract::LaneRoute],
 ) -> Vec<PlanJob> {
     let mut skippable: BTreeMap<&str, bool> = BTreeMap::new();
     for obligation in obligations.iter() {
@@ -50,7 +51,7 @@ pub(crate) fn finalize_dispositions(
             && (obligation.job_id.starts_with(CRATE_JOB_ID_PREFIX)
                 || obligation.job_id.starts_with("check-"));
         skippable
-            .entry(obligation.job_id.as_str())
+            .entry(&obligation.job_id)
             .and_modify(|all| *all &= unaffected)
             .or_insert(unaffected);
     }
@@ -89,19 +90,58 @@ pub(crate) fn finalize_dispositions(
             reason.clone_into(&mut obligation.reason);
         }
     }
-    entries.retain(|entry| !not_affected.contains(&entry.job_id));
-    let mut ids: BTreeSet<&str> = obligations.iter().map(|ob| ob.job_id.as_str()).collect();
-    ids.extend(entries.iter().map(|entry| entry.job_id.as_str()));
-    ids.into_iter()
-        .map(|job_id| PlanJob {
-            job_id: job_id.to_owned(),
-            disposition: if not_affected.contains(job_id) {
-                JobDisposition::NotAffected
-            } else {
-                JobDisposition::Run
-            },
-        })
-        .collect()
+    let by_output: BTreeMap<&str, &velnor_actions_contract::LaneRoute> = routes
+        .iter()
+        .map(|route| (route.job_id.as_str(), route))
+        .collect();
+    entries.retain(|entry| {
+        let logical = by_output
+            .get(entry.job_id.as_str())
+            .map_or(entry.job_id.as_str(), |route| route.logical_job_id.as_str());
+        !not_affected.contains(logical)
+    });
+    project_jobs(obligations, routes, &not_affected)
+}
+
+fn project_jobs(
+    obligations: &[PlanObligation],
+    routes: &[velnor_actions_contract::LaneRoute],
+    not_affected: &BTreeSet<String>,
+) -> Vec<PlanJob> {
+    let mut jobs = BTreeMap::<String, PlanJob>::new();
+    for obligation in obligations {
+        let matching: Vec<_> = routes
+            .iter()
+            .filter(|route| route.logical_job_id == obligation.job_id)
+            .collect();
+        let disposition = if not_affected.contains(&obligation.job_id) {
+            JobDisposition::NotAffected
+        } else {
+            JobDisposition::Run
+        };
+        if matching.is_empty() {
+            jobs.entry(obligation.job_id.clone())
+                .or_insert_with(|| PlanJob {
+                    job_id: obligation.job_id.clone(),
+                    disposition,
+                    lane: None,
+                });
+        } else {
+            for route in matching {
+                jobs.entry(route.job_id.clone()).or_insert_with(|| PlanJob {
+                    job_id: route.job_id.clone(),
+                    disposition,
+                    lane: route
+                        .variant
+                        .map(|lane_variant| velnor_actions_contract::PairedJob {
+                            logical_job_id: route.logical_job_id.clone(),
+                            lane_variant,
+                        }),
+                });
+            }
+        }
+    }
+    jobs.into_values().collect()
 }
 
 pub(crate) fn encode_not_affected_jobs(jobs: &[PlanJob]) -> String {

@@ -162,39 +162,8 @@ fn unsuffixed_job_key_emits_a_reader_ledger_for_that_group() -> Result<(), Helpe
 }
 
 #[test]
-fn lane_suffixed_job_key_emits_a_reader_ledger_for_base_group() -> Result<(), HelperError> {
-    for suffix in ["__hosted", "__local"] {
-        let mut fixture = gc1_t54_support::build(JobStatus::Success)?;
-        let lane_job_key = format!("{}{suffix}", gc1_t54_support::GROUP);
-        fixture.emit_env.job_key = lane_job_key.clone();
-        let out = emit_group_ledger_to(
-            &fixture.anchor,
-            &fixture.manifest_path,
-            &fixture.run_dir,
-            RUN_KEY,
-            &fixture.emit_env,
-        )?;
-        let text = std::fs::read_to_string(&out).map_err(|err| fail(&err.to_string()))?;
-        let ledger = UnitLedgerV1::parse_json(&text).map_err(|_| fail("ledger_parse"))?;
-        ledger.validate().map_err(|_| fail("ledger_invalid"))?;
-        assert_eq!(ledger.job.job_key, lane_job_key);
-        assert_eq!(ledger.execution_branch, ExecutionBranch::Reader);
-        let plan_bytes = std::fs::read(fixture.run_dir.join("plan.json"))
-            .map_err(|err| fail(&err.to_string()))?;
-        let plan_digest = UnitLedgerV1::plan_digest_from_canonical_bytes(&plan_bytes);
-        assert_eq!(
-            ledger.group_digest.as_str(),
-            UnitLedgerV1::group_digest_for_group(gc1_t54_support::GROUP, &plan_digest)
-                .map_err(|_| fail("group"))?
-                .as_str(),
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn branch_suffixed_job_key_is_not_a_selected_group() -> Result<(), HelperError> {
-    for suffix in ["-write", "-read", "__other"] {
+    for suffix in ["-write", "-read"] {
         let mut fixture = gc1_t54_support::build(JobStatus::Success)?;
         fixture.emit_env.job_key = format!("{}{suffix}", gc1_t54_support::GROUP);
         match emit_group_ledger_to(

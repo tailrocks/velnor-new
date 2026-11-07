@@ -182,6 +182,7 @@ fn discovered(platform: CheckPlatform, tools: Vec<QualifiedTool>) -> DiscoveredC
             container: None,
         },
         inputs: Vec::new(),
+        selection: velnor_actions_contract::config::CheckSelection::default(),
         tools: Vec::new(),
         system_tools: Vec::new(),
         evidence: None,

@@ -36,7 +36,7 @@ cosign = "3.1.4"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
-supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
+supported = ["ubuntu-26.04"]
 
 [[actions]]
 name = "jdx/mise-action"

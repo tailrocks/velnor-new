@@ -36,6 +36,11 @@ name = "ledger_helper_public"
 path = "tests/ledger_helper_public.rs"
 
 [[test]]
+name = "lane_execution_both"
+path = "tests/lane_execution_both.rs"
+required-features = ["generator"]
+
+[[test]]
 name = "velnor_cli"
 path = "tests/velnor_cli.rs"
 required-features = ["generator"]
@@ -68,6 +73,11 @@ required-features = ["generator"]
 [[test]]
 name = "check_runtime_identity_public"
 path = "tests/check_runtime_identity_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "preview_cross_job_identity_public"
+path = "tests/preview_cross_job_identity_public.rs"
 required-features = ["generator"]
 
 [[test]]

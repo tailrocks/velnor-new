@@ -8,6 +8,33 @@ pub const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 pub const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
 pub const START_MS_ENV: &str = "VELNOR_START_MS";
 
+pub fn workspace_format_report_step(
+    controller: &crate::render::ControllerLocator,
+    outcome_path: &str,
+    start_path: &str,
+    task_id: String,
+) -> Result<velnor_actions_contract::Step, crate::RenderError> {
+    controller.validate()?;
+    let mut env = std::collections::BTreeMap::from([(TASK_ID_ENV.to_owned(), task_id)]);
+    let argv = if let crate::render::ControllerLocator::ProtectedBaseDispatch { preview, .. } =
+        controller
+    {
+        let automatic_scrubs = crate::toolchain_env::credential_scrub();
+        for key in crate::preview_setup::LOADER_SCRUB_KEYS {
+            if !automatic_scrubs.contains_key(*key) {
+                env.insert((*key).to_owned(), String::new());
+            }
+        }
+        let loader = crate::commands::join_validated_argv_for_run(
+            &crate::preview_setup::loader_command(preview),
+        )?;
+        deferred_preview_report_argv(outcome_path, &loader, start_path)
+    } else {
+        deferred_report_argv(outcome_path, controller.path(), start_path)
+    };
+    crate::shell_step("Report Format", argv, env)
+}
+
 #[must_use]
 pub fn helper_path_for_version(version: &str) -> String {
     format!("{STAGED_BINARY_PREFIX}{version}")
@@ -42,6 +69,20 @@ pub fn deferred_report_argv(outcome_path: &str, helper: &str, start_path: &str) 
         "-c".to_owned(),
         format!(
             "read -r code rest < \"{outcome_path}\"; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
+        ),
+    ]
+}
+
+pub(crate) fn deferred_preview_report_argv(
+    outcome_path: &str,
+    loader: &str,
+    start_path: &str,
+) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!(
+            "helper() {{ {loader}; }}; read -r code rest < \"{outcome_path}\"; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} helper"
         ),
     ]
 }

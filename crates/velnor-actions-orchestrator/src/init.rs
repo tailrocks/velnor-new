@@ -85,7 +85,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # name = "CI"                         # Workflow display name.
 # policy = "consumer-v1"              # Only consumer policy; Velnor's reserved policy works only in tailrocks/velnor-new.
 # default_branch = "main"             # Push branch override; omit to use origin/HEAD, then the CI event payload. Required if neither is available.
-# runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
+# runner_label = "ubuntu-26.04"        # Pinned Ubuntu 26.04 runner; also the default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 # plan_timeout_minutes = 5              # timeout-minutes for the workflow planning job; bounded 1..=360.

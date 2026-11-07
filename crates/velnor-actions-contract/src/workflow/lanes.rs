@@ -7,7 +7,7 @@ use super::jobs::{PLAN_JOB_ID, REQUIRED_GATE_JOB_ID, REQUIRED_JOB_ID};
 use super::named_check_lanes::add_named_check_lanes;
 pub use super::named_check_lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, named_check_lanes,
+    named_check_lanes,
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, ExecutionConfig, ExecutionMode, ExecutionRole, VelnorConfig,
@@ -16,14 +16,14 @@ use crate::config::{
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
 
-#[path = "lanes_bun_plan.rs"]
-mod bun_plan;
-pub use bun_plan::BunLanePlan;
+#[path = "lanes_plan.rs"]
+mod lane_plan;
+pub use lane_plan::{LANE_INVENTORY_ENV, LaneInventory, LanePlan, LaneRoute, LaneVariant};
 
 #[derive(Debug, Clone)]
 pub struct WorkflowExpansion {
     pub ir: WorkflowIr,
-    pub bun_lane_plan: Option<BunLanePlan>,
+    pub lane_plan: Option<LanePlan>,
 }
 
 #[path = "lanes_retarget.rs"]
@@ -73,15 +73,24 @@ pub fn lane_class(job_id: &str) -> LaneClass {
     }
 }
 
-pub fn expand_workflow_with_bun_plan(
+pub fn expand_workflow_with_lane_plan(
     ir: &WorkflowIr,
     config: &VelnorConfig,
     dispatch: Option<ExecutionMode>,
 ) -> Result<WorkflowExpansion, ContractError> {
+    expand_workflow_with_task_bindings(ir, config, dispatch, &BTreeMap::new())
+}
+
+pub fn expand_workflow_with_task_bindings(
+    ir: &WorkflowIr,
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+    task_bindings: &BTreeMap<String, Vec<String>>,
+) -> Result<WorkflowExpansion, ContractError> {
     if config.schema != 2 {
         return Ok(WorkflowExpansion {
             ir: ir.clone(),
-            bun_lane_plan: None,
+            lane_plan: None,
         });
     }
     let execution = config
@@ -101,17 +110,38 @@ pub fn expand_workflow_with_bun_plan(
         None
     };
     let _ = bun_asset_producers(&ir.jobs)?;
-    let bun_lane_plan = BunLanePlan::from_placements(&placements, &map, scale_token.clone())?;
+    let scale_target = if scale_token.is_some() {
+        let profile = execution
+            .profiles
+            .get(&execution.scale_set_profile)
+            .ok_or_else(missing_scale_selector)?;
+        if profile.platform != crate::config::LINUX_AMD64 {
+            return Err(ContractError::config(
+                "config.toml",
+                "execution.scale_set_profile",
+                "unsupported_scale_platform",
+            ));
+        }
+        Some(
+            crate::targets::ReleaseTarget::LinuxX86_64
+                .triple()
+                .to_owned(),
+        )
+    } else {
+        None
+    };
+    let lane_plan = LanePlan::from_placements(
+        ir,
+        &placements,
+        &map,
+        scale_token.clone(),
+        scale_target.as_deref(),
+        task_bindings,
+        dispatch.or(execution.mode),
+    )?;
     let mut jobs = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
-        let (class, placement) = placements.get(id).ok_or_else(|| {
-            ContractError::identity("workflow.jobs", format!("lane_plan_missing:{id}"))
-        })?;
-        let emitted = if id.starts_with(crate::config::BUN_JOB_PREFIX) {
-            bun_lane_plan.project(id, job)?
-        } else {
-            emit_job_variants(id, job, scale_token.as_deref(), *class, *placement, &map)?
-        };
+        let emitted = lane_plan.project(id, job)?;
         for (output_id, output_job) in emitted {
             insert_job(&mut jobs, output_id, output_job)?;
         }
@@ -119,9 +149,11 @@ pub fn expand_workflow_with_bun_plan(
     let mut expanded = ir.clone();
     expanded.jobs = jobs;
     add_named_check_lanes(&mut expanded, &check_lanes)?;
+    let include_empty = dispatch.is_some() && dispatch != execution.mode;
+    lane_plan::add_lane_routes(&mut expanded, &lane_plan, include_empty)?;
     Ok(WorkflowExpansion {
         ir: expanded,
-        bun_lane_plan: Some(bun_lane_plan),
+        lane_plan: Some(lane_plan),
     })
 }
 
@@ -142,7 +174,7 @@ fn bun_asset_producers(
                     != job_id.as_str()
             {
                 return Err(ContractError::identity(
-                    "bun_lane_plan",
+                    "lane_plan",
                     format!("asset_producer_ambiguous:{asset_id}"),
                 ));
             }
@@ -172,7 +204,18 @@ fn placement_map(
 ) -> Result<BTreeMap<String, (LaneClass, Placement)>, ContractError> {
     let mut map = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
-        let class = lane_class(id);
+        let state_producer = id.starts_with(super::state_seal::STATE_PRODUCER_JOB_ID_PREFIX)
+            && job.producer_kind() == Some(super::ProducerKind::StateProducer);
+        let ledger_builder = id == super::ledger_cli::LEDGER_CLI_JOB_ID
+            && job
+                .steps
+                .iter()
+                .any(|step| step.role == Some(super::StepRole::LedgerCliBuild));
+        let class = if state_producer || ledger_builder {
+            LaneClass::Control
+        } else {
+            lane_class(id)
+        };
         let placement = placement_for(config, execution, dispatch, class, id, job)?;
         map.insert(id.clone(), (class, placement));
     }
@@ -193,93 +236,6 @@ fn id_map(placements: &BTreeMap<String, (LaneClass, Placement)>) -> BTreeMap<Str
             (id.clone(), ids)
         })
         .collect()
-}
-
-pub(super) fn placement_for(
-    config: &VelnorConfig,
-    execution: &ExecutionConfig,
-    dispatch: Option<ExecutionMode>,
-    class: LaneClass,
-    job_id: &str,
-    job: &Job,
-) -> Result<Placement, ContractError> {
-    if let Some(over) = execution.overrides.get(job_id)
-        && !role_matches(over.role, class)
-    {
-        return Err(ContractError::config(
-            "config.toml",
-            format!("execution.overrides.{job_id}.role"),
-            "role_not_eligible",
-        ));
-    }
-    if class != LaneClass::Verification {
-        return Ok(Placement::HostedOnly);
-    }
-    if bun_asset_producer(job_id) {
-        if execution
-            .overrides
-            .get(job_id)
-            .is_some_and(|over| over.profile != execution.hosted_profile)
-        {
-            return Err(ContractError::config(
-                "config.toml",
-                format!("execution.overrides.{job_id}.profile"),
-                "bun_private_assets_hosted_only",
-            ));
-        }
-        return Ok(Placement::HostedOnly);
-    }
-    if !workflow_task_supports_scale_set(job_id, job, config)? {
-        if execution
-            .overrides
-            .get(job_id)
-            .is_some_and(|over| over.profile == execution.scale_set_profile)
-        {
-            let hosted_only = config.image_for_build_job(job_id).is_some()
-                || config.workflow.tasks.iter().any(|task| {
-                    matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
-                        && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id
-                });
-            let issue = if hosted_only {
-                "workflow_task_hosted_only_scale_set_override"
-            } else {
-                "verification_runner_incompatible_with_scale_set"
-            };
-            return Err(ContractError::config(
-                "config.toml",
-                format!("execution.overrides.{job_id}.profile"),
-                issue,
-            ));
-        }
-        return Ok(Placement::HostedOnly);
-    }
-    if let Some(mode) = dispatch.or(execution.mode) {
-        return Ok(match mode {
-            ExecutionMode::Hosted => Placement::HostedOnly,
-            ExecutionMode::ScaleSet => Placement::ScaleSetOnly,
-            ExecutionMode::Both if job_id.starts_with(crate::config::BUN_JOB_PREFIX) => {
-                Placement::HostedOnly
-            }
-            ExecutionMode::Both => Placement::Both,
-        });
-    }
-    let key = execution
-        .overrides
-        .get(job_id)
-        .map_or(execution.default_profile.as_str(), |over| {
-            over.profile.as_str()
-        });
-    if key == execution.hosted_profile {
-        Ok(Placement::HostedOnly)
-    } else if key == execution.scale_set_profile {
-        Ok(Placement::ScaleSetOnly)
-    } else {
-        Err(ContractError::config(
-            "config.toml",
-            format!("execution.overrides.{job_id}.profile"),
-            format!("unknown_profile:{key}"),
-        ))
-    }
 }
 
 fn bun_asset_producer(job_id: &str) -> bool {
@@ -348,23 +304,30 @@ fn emit_job_variants(
     match placement {
         Placement::HostedOnly => Ok(vec![(
             id.to_owned(),
-            retarget(job, None, id, id, class, EmitLane::Single, map),
+            retarget(job, None, id, id, class, EmitLane::Single, map)?,
         )]),
         Placement::ScaleSetOnly => {
             let token = scale_token.ok_or_else(missing_scale_selector)?;
-            let mut next = retarget(job, Some(token), id, id, class, EmitLane::Single, map);
+            let mut next = retarget(job, Some(token), id, id, class, EmitLane::Single, map)?;
             next.display_name = scale_name(&job.display_name);
             Ok(vec![(id.to_owned(), next)])
         }
         Placement::Both => {
             let token = scale_token.ok_or_else(missing_scale_selector)?;
-            let hosted_id = format!("{id}{HOSTED_SUFFIX}");
-            let scale_id = format!("{id}{SCALE_SUFFIX}");
-            let mut hosted = retarget(job, None, id, &hosted_id, class, EmitLane::Hosted, map);
+            let output_ids = map.get(id).ok_or_else(|| {
+                ContractError::identity("workflow.jobs", format!("lane_plan_missing:{id}"))
+            })?;
+            let [hosted_id, scale_id] = output_ids.as_slice() else {
+                return Err(ContractError::identity(
+                    "workflow.jobs",
+                    "invalid_lane_outputs",
+                ));
+            };
+            let mut hosted = retarget(job, None, id, hosted_id, class, EmitLane::Hosted, map)?;
             hosted.display_name = hosted_name(&job.display_name);
-            let mut scale = retarget(job, Some(token), id, &scale_id, class, EmitLane::Scale, map);
+            let mut scale = retarget(job, Some(token), id, scale_id, class, EmitLane::Scale, map)?;
             scale.display_name = scale_name(&job.display_name);
-            Ok(vec![(hosted_id, hosted), (scale_id, scale)])
+            Ok(vec![(hosted_id.clone(), hosted), (scale_id.clone(), scale)])
         }
     }
 }
@@ -392,3 +355,7 @@ fn hosted_name(name: &str) -> String {
 fn scale_name(name: &str) -> String {
     format!("{name} / Velnor Scale Set / Linux x64")
 }
+
+#[path = "lanes_placement.rs"]
+mod placement;
+pub(super) use placement::placement_for;

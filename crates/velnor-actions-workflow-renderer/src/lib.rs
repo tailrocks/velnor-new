@@ -69,6 +69,7 @@ pub mod plan_report;
 pub mod plan_sources;
 pub mod preseed;
 mod preseed_closure;
+mod preview_setup;
 pub mod private_source_steps;
 mod project_tool_resolver;
 pub use project_tool_resolver::quote_project_tool_run_refs;

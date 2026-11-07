@@ -175,7 +175,7 @@ policy = "consumer-v1"
 # default_branch = "main" # Optional: origin/HEAD, then the CI event payload, are used when omitted.
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
-# runner_label = "ubuntu-24.04" # optional older pinned override; omit for latest
+# runner_label = "ubuntu-26.04" # pinned Ubuntu 26.04; also the default
 
 [resources]
 compiler_process_budget = 2

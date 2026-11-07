@@ -30,14 +30,6 @@ pub(crate) fn check_group_ledgers(
     check_group_ledger_coverage(plan, request, &ledgers, signals, miss_reasons);
 }
 
-fn ledger_group_key(job_key: &str) -> &str {
-    job_key
-        .strip_suffix(velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX)
-        .or_else(|| job_key.strip_suffix(velnor_actions_contract::workflow::lanes::SCALE_SUFFIX))
-        .filter(|group| !group.is_empty())
-        .unwrap_or(job_key)
-}
-
 fn parse_group_ledger(raw: &serde_json::Value) -> Option<UnitLedgerV1> {
     let text = serde_json::to_string(raw).ok()?;
     UnitLedgerV1::parse_json(&text).ok()
@@ -50,11 +42,7 @@ fn check_group_ledger_bindings(
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    let planned: BTreeSet<&str> = plan
-        .jobs
-        .iter()
-        .map(|job| job.job_id.as_str())
-        .collect();
+    let planned: BTreeSet<&str> = plan.jobs.iter().map(|job| job.job_id.as_str()).collect();
     let mut seen_jobs = BTreeSet::new();
     let mut run_identity = None;
     for ledger in ledgers {
@@ -83,7 +71,7 @@ fn check_group_ledger_bindings(
             signals.planning_failed = true;
             miss_reasons.insert("trust_scope_mismatch".to_owned());
         }
-        let group = ledger_group_key(&ledger.job.job_key);
+        let group = ledger.job.job_key.as_str();
         if !planned.contains(group) || !is_crate_job_id(group) {
             signals.planning_failed = true;
             miss_reasons.insert("cache_corrupt".to_owned());
@@ -168,12 +156,8 @@ struct GroupLedgerStats {
 fn group_ledger_stats(ledgers: &[UnitLedgerV1]) -> BTreeMap<&str, GroupLedgerStats> {
     let mut per_group: BTreeMap<&str, GroupLedgerStats> = BTreeMap::new();
     for ledger in ledgers {
-        let group = ledger_group_key(&ledger.job.job_key);
-        let stats = per_group.entry(group).or_insert(GroupLedgerStats {
-            covers: true,
-            defers_preparation: false,
-        });
-        stats.covers &= ledger_covers_group(ledger);
+        let stats = per_group.entry(ledger.job.job_key.as_str()).or_default();
+        stats.covers |= ledger_covers_group(ledger);
         stats.defers_preparation |= ledger_defers_preparation(ledger);
     }
     per_group
@@ -192,29 +176,30 @@ fn check_group_ledger_coverage(
         .map(|job| job.job_id.as_str())
         .filter(|id| is_crate_job_id(id))
         .collect();
-    let claimed = check_unit_claims(plan, ledgers, signals, miss_reasons);
-    for obligation in &plan.obligations {
-        if obligation.decision == ObligationDecision::Execute
-            && groups.contains(obligation.job_id.as_str())
-            && !claimed.contains(obligation.task_id.as_str())
-        {
-            signals.planning_failed = true;
-            miss_reasons.insert("no_entry".to_owned());
+    let claimed = check_unit_claims(plan, request, ledgers, signals, miss_reasons);
+    for entry in &plan.matrix.include {
+        if groups.contains(entry.job_id.as_str()) {
+            for reference in entry.execute_task_ids.tasks.values() {
+                let units: &[String] = match reference {
+                    velnor_actions_contract::ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
+                    velnor_actions_contract::ExecuteTaskRef::Shards(ids) => ids,
+                };
+                if units
+                    .iter()
+                    .any(|id| !claimed.contains(&(id.as_str(), entry.job_id.as_str())))
+                {
+                    signals.planning_failed = true;
+                    miss_reasons.insert("no_entry".to_owned());
+                }
+            }
         }
     }
-    let per_job_claims: BTreeMap<&str, BTreeSet<&str>> = ledgers
-        .iter()
-        .map(|ledger| {
-            let units = ledger
-                .ordered_results
-                .iter()
-                .map(|result| result.unit_id.as_str())
-                .collect();
-            (ledger.job.job_key.as_str(), units)
-        })
-        .collect();
     let per_group = group_ledger_stats(ledgers);
-    for job in plan.jobs.iter().filter(|job| groups.contains(job.job_id.as_str())) {
+    for job in plan
+        .jobs
+        .iter()
+        .filter(|job| groups.contains(job.job_id.as_str()))
+    {
         let stats = per_group.get(job.job_id.as_str());
         match (job.disposition, stats) {
             (JobDisposition::Run, None) => {
@@ -222,26 +207,6 @@ fn check_group_ledger_coverage(
                 miss_reasons.insert("no_entry".to_owned());
             }
             (JobDisposition::Run, Some(stats)) => {
-                let expected_lane_jobs = request
-                    .required_job_ids
-                    .iter()
-                    .filter(|req_id| ledger_group_key(req_id) == job.job_id);
-                for lane_job_id in expected_lane_jobs {
-                    let Some(lane_claims) = per_job_claims.get(lane_job_id.as_str()) else {
-                        signals.planning_failed = true;
-                        miss_reasons.insert("no_entry".to_owned());
-                        continue;
-                    };
-                    for obligation in &plan.obligations {
-                        if obligation.decision == ObligationDecision::Execute
-                            && obligation.job_id == job.job_id
-                            && !lane_claims.contains(obligation.task_id.as_str())
-                        {
-                            signals.planning_failed = true;
-                            miss_reasons.insert("no_entry".to_owned());
-                        }
-                    }
-                }
                 if !stats.covers && stats.defers_preparation {
                     signals.needs_prepare = true;
                     miss_reasons.insert("needs_prepare".to_owned());
@@ -258,24 +223,57 @@ fn check_group_ledger_coverage(
 
 fn check_unit_claims<'a>(
     plan: &Plan,
+    request: &MergeRequest,
     ledgers: &'a [UnitLedgerV1],
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
-) -> BTreeSet<&'a str> {
+) -> BTreeSet<(&'a str, &'a str)> {
     let mut claimed = BTreeSet::new();
     for ledger in ledgers {
-        let group = ledger_group_key(&ledger.job.job_key);
         for result in &ledger.ordered_results {
-            claimed.insert(result.unit_id.as_str());
+            if !claimed.insert((result.unit_id.as_str(), ledger.job.job_key.as_str())) {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
             let obligation = plan
                 .obligations
                 .iter()
                 .find(|obligation| obligation.task_id == result.unit_id);
-            if obligation.is_none_or(|obligation| obligation.job_id != group) {
+            let job = plan
+                .jobs
+                .iter()
+                .find(|job| job.job_id == ledger.job.job_key);
+            let logical = job.map(|job| {
+                job.lane
+                    .as_ref()
+                    .map_or(job.job_id.as_str(), |lane| lane.logical_job_id.as_str())
+            });
+            let mut entries = plan.matrix.include.iter().filter(|entry| {
+                entry.job_id == ledger.job.job_key
+                    && entry
+                        .execute_task_ids
+                        .tasks
+                        .values()
+                        .any(|reference| match reference {
+                            velnor_actions_contract::ExecuteTaskRef::Single(id) => {
+                                id == &result.unit_id
+                            }
+                            velnor_actions_contract::ExecuteTaskRef::Shards(ids) => {
+                                ids.contains(&result.unit_id)
+                            }
+                        })
+            });
+            let entry = entries.next();
+            let entry_unique = entry.is_some() && entries.next().is_none();
+            if obligation.is_none_or(|obligation| Some(obligation.job_id.as_str()) != logical)
+                || !entry_unique
+                || entry.is_none_or(|entry| !report_matches(result, entry, request))
+            {
                 signals.planning_failed = true;
                 miss_reasons.insert("cache_corrupt".to_owned());
             }
-            if obligation.is_some_and(|obligation| obligation.decision != ObligationDecision::Execute)
+            if obligation
+                .is_some_and(|obligation| obligation.decision != ObligationDecision::Execute)
             {
                 signals.planning_failed = true;
                 miss_reasons.insert("gate_mismatch".to_owned());
@@ -283,6 +281,28 @@ fn check_unit_claims<'a>(
         }
     }
     claimed
+}
+
+fn report_matches(
+    result: &UnitResultV1,
+    entry: &velnor_actions_contract::MatrixEntry,
+    request: &MergeRequest,
+) -> bool {
+    let mut reports = request.task_reports.iter().filter(|report| {
+        report.task_id == result.unit_id
+            && report.matrix_id == entry.id
+            && report.matrix_key == entry.matrix_key
+    });
+    let Some(report) = reports.next() else {
+        return result.outcome == UnitOutcome::NeedsPrepare
+            && result.report_digest == UnitResultV1::missing_report_digest();
+    };
+    if reports.next().is_some() || report.validate_for_plan_entry(entry).is_err() {
+        return false;
+    }
+    velnor_actions_contract::canonical_json_bytes(report).is_ok_and(|bytes| {
+        result.report_digest == UnitResultV1::report_digest_from_canonical_bytes(&bytes)
+    })
 }
 
 fn group_event_name(event: WorkflowEvent) -> &'static str {

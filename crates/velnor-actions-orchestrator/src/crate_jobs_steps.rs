@@ -16,11 +16,7 @@ pub(super) fn image_publication_fixture_step(
     {
         return Ok(Vec::new());
     }
-    let env = crate::matrix_step::task_step_env(
-        input.catalog,
-        &BTreeMap::new(),
-        true,
-    )?;
+    let env = crate::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
     let build = mbx_image_fixture_argv(
         input.catalog,
         &[
@@ -50,11 +46,7 @@ pub(super) fn image_publication_fixture_step(
     );
     let step = velnor_actions_workflow_renderer::shell_step(
         "Prepare image publication fixture",
-        vec![
-            "bash".to_owned(),
-            "-c".to_owned(),
-            script,
-        ],
+        vec!["bash".to_owned(), "-c".to_owned(), script],
         env,
     )?;
     Ok(vec![step])
@@ -64,12 +56,8 @@ fn mbx_image_fixture_argv(
     catalog: &ToolCatalog,
     cargo_args: &[&str],
 ) -> Result<String, OrchestratorError> {
-    let argv = crate::product_release_pins::exec_argv(
-        &[PinnedTool::Rust],
-        "mbx",
-        cargo_args,
-        catalog,
-    )?;
+    let argv =
+        crate::product_release_pins::exec_argv(&[PinnedTool::Rust], "mbx", cargo_args, catalog)?;
     velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(OrchestratorError::from)
 }
 

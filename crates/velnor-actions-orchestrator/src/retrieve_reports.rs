@@ -1,24 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "retrieve_reports/staged.rs"]
-mod staged;
+use velnor_actions_contract::staged_reads::{path_is_symlink, read_staged_text};
 
-use velnor_actions_contract::staged_reads::read_staged_text;
-
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{parse_strict_json, validate_artifact_id};
+use velnor_actions_contract::{
+    parse_strict_json, task_report_id_for_task, validate_artifact_id, validate_matrix_key,
+};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::retrieve_retry::download_with_retry;
 
-pub(crate) use staged::read_staged_reports;
 pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
 
 pub fn retrieve_reports() -> Result<usize, OrchestratorError> {
@@ -48,17 +46,16 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         return 0;
     };
     let catalog = ToolCatalog::pinned();
-    let workspace = workspace_root();
     let mut retrieved = 0usize;
-    for artifact_id in expected_artifact_ids_for_workspace(&plan, workspace.as_deref()) {
-        if validate_artifact_id(&artifact_id).is_err() {
+    for artifact_id in expected_artifact_ids(&plan) {
+        if validate_artifact_id(artifact_id).is_err() {
             continue;
         }
-        let dir = run_dir.join("reports").join(&artifact_id);
+        let dir = run_dir.join("reports").join(artifact_id);
         if fs::create_dir_all(&dir).is_err() {
             continue;
         }
-        let Ok(args) = retrieve_args(run_id, &artifact_id, &dir, &repo) else {
+        let Ok(args) = retrieve_args(run_id, artifact_id, &dir, &repo) else {
             continue;
         };
         let (downloaded, _) = download_with_retry(|| {
@@ -66,8 +63,6 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         });
         if downloaded {
             retrieved += 1;
-        } else {
-            drop(fs::remove_dir(&dir));
         }
     }
     retrieved
@@ -105,79 +100,256 @@ fn read_plan(run_dir: &Path) -> Option<serde_json::Value> {
     parse_strict_json(&text).ok()
 }
 
-fn workspace_root() -> Option<PathBuf> {
-    std::env::var_os("GITHUB_WORKSPACE")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())
-}
+pub(crate) const MAX_STAGED_REPORT_BYTES: u64 = 1 << 20;
 
-fn expected_artifact_ids_for_workspace(
+pub(crate) fn read_staged_reports(
+    run_key: &str,
     plan: &serde_json::Value,
-    workspace: Option<&Path>,
-) -> Vec<String> {
-    let ci_yml = workspace.and_then(|root| {
-        read_staged_text(&root.join(".github/workflows/ci.yml"), MAX_RETRIEVE_PLAN_BYTES).ok()
-    });
-    let mut ids = Vec::new();
-    for artifact_id in expected_artifact_ids(plan) {
-        let hosted = format!(
-            "{artifact_id}{}",
-            velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX
-        );
-        let local = format!(
-            "{artifact_id}{}",
-            velnor_actions_contract::workflow::lanes::SCALE_SUFFIX
-        );
-        if ci_yml
-            .as_deref()
-            .is_some_and(|text| has_dual_lane_uploads(text, artifact_id, &hosted, &local))
-        {
-            ids.push(hosted);
-            ids.push(local);
-        } else {
-            ids.push(artifact_id.to_owned());
+    dir: &Path,
+    errors: &mut Vec<String>,
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+    let digests = obligation_digests(plan);
+    let entries = plan
+        .get("matrix")
+        .and_then(|matrix| matrix.get("include"))
+        .and_then(serde_json::Value::as_array);
+    let mut reports = Vec::new();
+    let mut tasks = Vec::new();
+    for entry in entries.into_iter().flatten() {
+        let Some(artifact_id) = entry.get("artifact_id").and_then(serde_json::Value::as_str) else {
+            errors.push("bad_artifact_id".to_owned());
+            continue;
+        };
+        if validate_artifact_id(artifact_id).is_err() {
+            errors.push(format!("bad_artifact_id:{artifact_id}"));
+            continue;
+        }
+        let Some(matrix_key) = entry.get("matrix_key").and_then(serde_json::Value::as_str) else {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        };
+        if validate_matrix_key(matrix_key).is_err() {
+            errors.push(format!("bad_matrix_key:{artifact_id}"));
+            continue;
+        }
+        let Some(home) = read_matrix_file(dir, artifact_id, matrix_key, &mut reports, errors)
+        else {
+            continue;
+        };
+        check_staged_observations(run_key, plan, entry, matrix_key, &home, &digests, errors);
+        let tasks_dir = home.join("tasks");
+        let linked = path_is_symlink(&tasks_dir);
+        for report_id in expected_file_ids(entry, run_key, &digests) {
+            if linked {
+                errors.push(format!("symlink_task:{report_id}"));
+                continue;
+            }
+            match read_bounded(&tasks_dir.join(format!("{report_id}.json"))) {
+                Ok(text) => match parse_strict_json(&text) {
+                    Ok(task) => tasks.push(task),
+                    Err(_) => errors.push(format!("unparsable_task:{report_id}")),
+                },
+                Err("missing") => errors.push(format!("missing_task:{report_id}")),
+                Err(kind) => errors.push(format!("{kind}_task:{report_id}")),
+            }
         }
     }
+    reports.sort_by(|left, right| staged_id(left, "report_id").cmp(staged_id(right, "report_id")));
+    tasks.sort_by(|left, right| {
+        staged_id(left, "task_report_id").cmp(staged_id(right, "task_report_id"))
+    });
+    (reports, tasks)
+}
+
+fn check_staged_observations(
+    run_key: &str,
+    plan: &serde_json::Value,
+    entry: &serde_json::Value,
+    matrix_key: &str,
+    home: &Path,
+    digests: &BTreeMap<&str, &str>,
+    errors: &mut Vec<String>,
+) {
+    let source = plan
+        .get("head")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let artifact = entry
+        .get("artifact_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let job = entry
+        .get("job_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let attempt = crate::task_report::run_attempt(run_key);
+    let tasks_dir = home.join("tasks");
+    let linked = path_is_symlink(&tasks_dir);
+    for report_id in expected_file_ids(entry, run_key, digests) {
+        if linked {
+            errors.push(format!("symlink_observation:{report_id}"));
+            continue;
+        }
+        let Ok(member) = crate::task_report::unit_observation_member_name(matrix_key, &report_id)
+        else {
+            errors.push(format!("corrupt_observation:{report_id}"));
+            continue;
+        };
+        let expectation = crate::task_report::UnitObservationExpectation {
+            task_report_id: report_id.clone(),
+            artifact_id: artifact.to_owned(),
+            member_name: member,
+            producer_job: job.to_owned(),
+            producer_attempt: attempt,
+            source_sha: source.to_owned(),
+        };
+        check_staged_observation(&expectation, &tasks_dir, errors);
+    }
+}
+
+fn check_staged_observation(
+    expectation: &crate::task_report::UnitObservationExpectation,
+    tasks_dir: &Path,
+    errors: &mut Vec<String>,
+) {
+    let report_id = expectation.task_report_id.as_str();
+    let path = tasks_dir.join(format!(
+        "{report_id}{}",
+        velnor_actions_contract::workflow::UNIT_OBSERVATION_SUFFIX
+    ));
+    let text = match read_bounded(&path) {
+        Ok(text) => text,
+        Err("missing") => return,
+        Err("symlink") => {
+            errors.push(format!("symlink_observation:{report_id}"));
+            return;
+        }
+        Err("oversize") => {
+            errors.push(format!("oversize_observation:{report_id}"));
+            return;
+        }
+        Err(_) => {
+            errors.push(format!("unreadable_observation:{report_id}"));
+            return;
+        }
+    };
+    let Ok(binding) = crate::task_report::parse_unit_observation_binding(&text) else {
+        errors.push(format!("unparsable_observation:{report_id}"));
+        return;
+    };
+    if crate::task_report::verify_unit_observation_binding(&binding, expectation).is_err() {
+        errors.push(format!("corrupt_observation:{report_id}"));
+    }
+}
+
+fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
+    let mut digests = BTreeMap::new();
+    let obligations = plan
+        .get("obligations")
+        .and_then(serde_json::Value::as_array);
+    for obligation in obligations.into_iter().flatten() {
+        let id = obligation
+            .get("task_id")
+            .and_then(serde_json::Value::as_str);
+        let digest = obligation
+            .get("task_digest")
+            .and_then(serde_json::Value::as_str);
+        if let (Some(id), Some(digest)) = (id, digest) {
+            digests.insert(id, digest);
+        }
+    }
+    digests
+}
+
+fn read_matrix_file(
+    dir: &Path,
+    artifact_id: &str,
+    matrix_key: &str,
+    reports: &mut Vec<serde_json::Value>,
+    errors: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let home = dir.join(artifact_id);
+    if path_is_symlink(&home) {
+        errors.push(format!("symlink_report:{artifact_id}"));
+        return None;
+    }
+    let entry_dir = home.join(matrix_key);
+    if path_is_symlink(&entry_dir) {
+        errors.push(format!("symlink_report:{artifact_id}"));
+        return None;
+    }
+    let direct = entry_dir.join("matrix-report.json");
+    let nested_entry = home.join(artifact_id).join(matrix_key);
+    let nested = nested_entry.join("matrix-report.json");
+    let (path, text) = match read_bounded(&direct) {
+        Ok(text) => (direct, text),
+        Err("missing") => {
+            if path_is_symlink(&home.join(artifact_id)) || path_is_symlink(&nested_entry) {
+                errors.push(format!("symlink_report:{artifact_id}"));
+                return None;
+            }
+            match read_bounded(&nested) {
+                Ok(text) => (nested, text),
+                Err(kind) => {
+                    errors.push(format!("{kind}_report:{artifact_id}"));
+                    return None;
+                }
+            }
+        }
+        Err(kind) => {
+            errors.push(format!("{kind}_report:{artifact_id}"));
+            return None;
+        }
+    };
+    let Ok(report) = parse_strict_json(&text) else {
+        errors.push(format!("unparsable_report:{artifact_id}"));
+        return None;
+    };
+    reports.push(report);
+    path.parent().map(Path::to_path_buf)
+}
+
+fn expected_file_ids(
+    entry: &serde_json::Value,
+    run_key: &str,
+    digests: &BTreeMap<&str, &str>,
+) -> Vec<String> {
+    let Some(matrix_key) = entry.get("matrix_key").and_then(serde_json::Value::as_str) else {
+        return Vec::new();
+    };
+    let refs = entry
+        .get("execute_task_ids")
+        .and_then(|ids| ids.get("tasks").or(Some(ids)))
+        .and_then(serde_json::Value::as_object);
+    let mut ids = Vec::new();
+    for task_ref in refs.into_iter().flat_map(|tasks| tasks.values()) {
+        let mut push = |id: &str| {
+            let derived = digests
+                .get(id)
+                .and_then(|digest| task_report_id_for_task(run_key, matrix_key, digest).ok());
+            ids.extend(derived);
+        };
+        if let Some(id) = task_ref.as_str() {
+            push(id);
+        } else if let Some(shards) = task_ref.as_array() {
+            for shard in shards.iter().filter_map(serde_json::Value::as_str) {
+                push(shard);
+            }
+        }
+    }
+    ids.sort();
     ids
 }
 
-fn has_dual_lane_uploads(ci_yml: &str, artifact_id: &str, hosted: &str, local: &str) -> bool {
-    let Some(rest) = artifact_id.strip_prefix("velnor-crate-") else {
-        return false;
-    };
-    if ci_yml.contains(hosted) && ci_yml.contains(local) {
-        return true;
-    }
-    let Some(job_id) = crate_job_id_from_artifact_suffix(rest) else {
-        return false;
-    };
-    let template_base = format!(
-        "velnor-crate-{}-{job_id}",
-        velnor_actions_workflow_renderer::steps::RUN_KEY_EXPR
-    );
-    let template_hosted = format!(
-        "{template_base}{}",
-        velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX
-    );
-    let template_local = format!(
-        "{template_base}{}",
-        velnor_actions_contract::workflow::lanes::SCALE_SUFFIX
-    );
-    ci_yml.contains(&template_hosted) && ci_yml.contains(&template_local)
+fn read_bounded(path: &Path) -> Result<String, &'static str> {
+    read_staged_text(path, MAX_STAGED_REPORT_BYTES)
 }
 
-fn crate_job_id_from_artifact_suffix(rest: &str) -> Option<&str> {
-    for (idx, _) in rest.match_indices('-') {
-        let (run_key, tail) = rest.split_at(idx);
-        let job_id = tail.strip_prefix('-')?;
-        if velnor_actions_contract::validate_run_key(run_key).is_ok()
-            && velnor_actions_contract::validate_job_id(job_id).is_ok()
-        {
-            return Some(job_id);
-        }
-    }
-    None
+fn staged_id<'a>(report: &'a serde_json::Value, field: &str) -> &'a str {
+    report
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
 }
 
 fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {

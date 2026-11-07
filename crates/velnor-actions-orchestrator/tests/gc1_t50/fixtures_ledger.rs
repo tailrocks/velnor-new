@@ -84,6 +84,7 @@ pub(super) fn branch_plan(
     disposition: JobDisposition,
 ) -> Result<Plan, Box<dyn Error>> {
     Ok(Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY)?,
@@ -92,7 +93,7 @@ pub(super) fn branch_plan(
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
-            label: "ubuntu-22.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
         },
         trust: trust_for_event(WorkflowEvent::PullRequest),
@@ -100,6 +101,7 @@ pub(super) fn branch_plan(
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "6dd871a3ac5473b6745b77359310384c1932ce0a7f921e06207a99d6710dcd47".to_owned(),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![obligation],
@@ -108,6 +110,7 @@ pub(super) fn branch_plan(
         },
         task_ids: vec![task.to_owned()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: GROUP_ID.to_owned(),
             disposition,
         }],

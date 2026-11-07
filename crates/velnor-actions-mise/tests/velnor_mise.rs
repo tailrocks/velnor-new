@@ -10,6 +10,7 @@ mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
 mod rust_spec_kind;
+mod source_preview_lock;
 
 #[test]
 fn job_build_command_binds_validated_source_revision() -> Result<(), Box<dyn std::error::Error>> {

@@ -71,7 +71,7 @@ pub(crate) fn check_rejects_token_confusion() -> Result<(), Box<dyn Error>> {
         return Err(fail("actions write kept an application checkout"));
     }
     if render_cache_cleanup_yml("has space", "0.1.55").is_ok()
-        || render_cache_cleanup_yml("ubuntu-24.04", "").is_ok()
+        || render_cache_cleanup_yml("ubuntu-26.04", "").is_ok()
     {
         return Err(fail("cleanup render accepted an invalid runner or version"));
     }

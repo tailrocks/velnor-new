@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::{ExecutionMode, expand_workflow_with_bun_plan};
+use velnor_actions_contract::{ExecutionMode, expand_workflow_with_lane_plan};
 use velnor_actions_orchestrator::{migrate_config, prepare};
 use velnor_actions_workflow_renderer::{
     MiseSetup, render::render_workflow_ir_strict, setup::MISE_BINARY_SHA256_LINUX_X64,
@@ -33,8 +33,11 @@ fn public_expansion_preserves_bun_context_for_strict_rendering() -> Result<(), B
             ExecutionMode::ScaleSet,
             ExecutionMode::Both,
         ] {
-            let expansion =
-                expand_workflow_with_bun_plan(&prepared.workflow.ir, &prepared.config, Some(mode))?;
+            let expansion = expand_workflow_with_lane_plan(
+                &prepared.workflow.ir,
+                &prepared.config,
+                Some(mode),
+            )?;
             let actual: Vec<_> = expansion
                 .ir
                 .jobs
@@ -44,7 +47,7 @@ fn public_expansion_preserves_bun_context_for_strict_rendering() -> Result<(), B
                 .collect();
             assert_eq!(actual, BUN_JOBS, "schema {schema} {mode:?}");
             let mut context = prepared.workflow.context.clone();
-            context.bun_lane_plan = expansion.bun_lane_plan;
+            context.lane_plan = expansion.lane_plan;
             context.scale_set_selector = if schema == 2 && mode != ExecutionMode::Hosted {
                 Some(
                     prepared
@@ -78,7 +81,7 @@ fn public_expansion_preserves_bun_context_for_strict_rendering() -> Result<(), B
 fn expanded_bun_jobs_gate_on_their_unsuffixed_plan_identity() -> Result<(), Box<dyn Error>> {
     let repo = make_bun_planning_repo(ChangedMember::Web)?;
     let prepared = prepare(repo.repo.path())?;
-    let expansion = expand_workflow_with_bun_plan(&prepared.workflow.ir, &prepared.config, None)?;
+    let expansion = expand_workflow_with_lane_plan(&prepared.workflow.ir, &prepared.config, None)?;
     for id in BUN_JOBS {
         let condition = expansion
             .ir

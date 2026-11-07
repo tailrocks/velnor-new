@@ -33,6 +33,9 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_task_id"))?;
+    let job_id = env::var("GITHUB_JOB")
+        .ok()
+        .filter(|value| !value.is_empty());
     let exit_raw = env::var(EXIT_CODE_ENV)
         .ok()
         .filter(|value| !value.is_empty())
@@ -49,6 +52,7 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
             exit_code,
             &request,
             Path::new(&runner_temp),
+            job_id.as_deref(),
         );
     }
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
@@ -63,6 +67,7 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         start_ms,
         &downstream,
         Path::new(&runner_temp),
+        job_id.as_deref(),
     )
 }
 
@@ -73,13 +78,14 @@ pub(crate) fn write_task_report_to(
     start_ms: Option<u64>,
     downstream: &[String],
     runner_temp: &Path,
+    job_id: Option<&str>,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
     if !(0..=255).contains(&exit_code) {
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));
     }
@@ -107,8 +113,13 @@ pub(crate) fn write_task_report_to(
         } else {
             downstream.to_vec()
         };
-        reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
+        reported += crate::noop_report::write_skip_reports(
+            &plan,
+            task_id,
+            &downstream_tasks,
+            runner_temp,
+            job_id,
+        )?;
     }
     Ok(reported)
 }
@@ -141,6 +152,7 @@ pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, Orche
     let value = parse_strict_json(&text).map_err(|_| internal("unparsable_plan"))?;
     let plan: Plan = serde_json::from_value(value).map_err(|_| internal("unparsable_plan"))?;
     plan.validate().map_err(internal_contract)?;
+    crate::selected_preview_identity::check_ambient(&plan.generator)?;
     if plan.run_key != run_key {
         return Err(internal("report_run_mismatch"));
     }
@@ -206,6 +218,21 @@ pub(crate) fn entry_and_digest_for_job<'a>(
         .map(|obligation| obligation.task_digest.as_str())
         .ok_or_else(|| internal("task_without_obligation"))?;
     Ok((entry, digest))
+}
+
+pub(crate) fn entry_and_digest_for_context<'a>(
+    plan: &'a Plan,
+    task_id: &str,
+    job_id: Option<&str>,
+) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
+    if let Some(job_id) = job_id {
+        return entry_and_digest_for_job(plan, task_id, job_id);
+    }
+    let result = entry_and_digest(plan, task_id)?;
+    if result.0.lane_variant.is_some() {
+        return Err(internal("missing_github_job"));
+    }
+    Ok(result)
 }
 
 fn flattened(entry: &MatrixEntry) -> Vec<&str> {

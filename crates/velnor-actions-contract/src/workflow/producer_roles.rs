@@ -8,6 +8,7 @@ pub(super) fn sources_role(role: StepRole) -> bool {
         role,
         StepRole::Checkout
             | StepRole::AcquireVelnor
+            | StepRole::AcquireProtectedPreview
             | StepRole::MiseSetup
             | StepRole::ToolsCacheIdentity
             | StepRole::ToolsCacheRestore
@@ -63,6 +64,7 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
             | StepRole::VerifyRustManifest
             | StepRole::VerifyJactionlint
             | StepRole::AcquireVelnor
+            | StepRole::AcquireProtectedPreview
             | StepRole::DownloadPlan
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesFetch

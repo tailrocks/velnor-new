@@ -373,3 +373,5 @@ fn gc1_t42_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
     check_rejects_bad_release_version()?;
     Ok(())
 }
+#[path = "source_preview_graph.rs"]
+mod source_preview_graph;

@@ -6,7 +6,7 @@ use super::*;
 fn check_grouped_success_preserved() -> Result<(), Box<dyn Error>> {
     let task = task_id()?;
     let (plan, matrix, report, entry) = check_run_fixture()?;
-    let group_ledger = valid_ledger(&task)?;
+    let group_ledger = valid_ledger(&task, &report)?;
     let merged = merge(
         &plan,
         std::slice::from_ref(&matrix),
@@ -78,77 +78,10 @@ fn check_absent_ledgers_rejected() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn check_dual_lane_grouped_ledgers() -> Result<(), Box<dyn Error>> {
-    let task = task_id()?;
-    let (plan, matrix, report, _) = check_run_fixture()?;
-    let (hosted_job, local_job) = (format!("{JOB_ID}__hosted"), format!("{JOB_ID}__local"));
-    let ledger_for = |job: &str, outcome: UnitOutcome, code: i32| {
-        group_ledger_value(&task, job, HEAD_SHA, "pull_request", outcome, Some(code))
-    };
-    let hosted_ledger = ledger_for(&hosted_job, UnitOutcome::Executed, 0)?;
-    let local_ledger = ledger_for(&local_job, UnitOutcome::Executed, 0)?;
-    let lane_ids = [hosted_job.as_str(), local_job.as_str()];
-    let both_success = required_jobs(&[
-        (&hosted_job, JobConclusion::Success),
-        (&local_job, JobConclusion::Success),
-    ]);
-    let merged = merge(
-        &plan,
-        std::slice::from_ref(&matrix),
-        std::slice::from_ref(&report),
-        &lane_ids,
-        &both_success,
-        RUN_KEY,
-        Some(&[hosted_ledger.clone(), local_ledger]),
-    )?;
-    if merged.status != FinalStatus::Passed
-        || conclusion_of(&merged, &hosted_job)? != JobConclusion::Success
-        || conclusion_of(&merged, &local_job)? != JobConclusion::Success
-    {
-        return Err(fail(
-            "dual-lane grouped ledgers did not preserve Required pass",
-        ));
-    }
-    let missing_local_ledger = merge(
-        &plan,
-        std::slice::from_ref(&matrix),
-        std::slice::from_ref(&report),
-        &lane_ids,
-        &both_success,
-        RUN_KEY,
-        Some(std::slice::from_ref(&hosted_ledger)),
-    )?;
-    planning_failed(
-        &missing_local_ledger,
-        "no_entry",
-        "missing local lane group ledger did not fail Required",
-    )?;
-    let local_failed_ledger = ledger_for(&local_job, UnitOutcome::Failed, 1)?;
-    let local_failed = merge(
-        &plan,
-        std::slice::from_ref(&matrix),
-        std::slice::from_ref(&report),
-        &lane_ids,
-        &required_jobs(&[
-            (&hosted_job, JobConclusion::Success),
-            (&local_job, JobConclusion::Failure),
-        ]),
-        RUN_KEY,
-        Some(&[hosted_ledger, local_failed_ledger]),
-    )?;
-    if local_failed.status != FinalStatus::Failed
-        || conclusion_of(&local_failed, &local_job)? != JobConclusion::Failure
-    {
-        return Err(fail("failed local lane did not fail Required"));
-    }
-    Ok(())
-}
-
 #[test]
 fn gc1_t35_preserves_contract() -> Result<(), Box<dyn Error>> {
     check_grouped_success_preserved()?;
     check_absent_ledgers_rejected()?;
-    check_dual_lane_grouped_ledgers()?;
     Ok(())
 }
 
@@ -176,6 +109,7 @@ pub(crate) fn check_cross_source_ledger_rejected() -> Result<(), Box<dyn Error>>
         "pull_request",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,
@@ -203,6 +137,7 @@ pub(crate) fn check_cross_event_ledger_rejected() -> Result<(), Box<dyn Error>> 
         "push",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,
@@ -230,6 +165,7 @@ pub(crate) fn check_unplanned_job_ledger_rejected() -> Result<(), Box<dyn Error>
         "pull_request",
         UnitOutcome::Executed,
         Some(0),
+        &report,
     )?;
     let final_report = merge(
         &plan,

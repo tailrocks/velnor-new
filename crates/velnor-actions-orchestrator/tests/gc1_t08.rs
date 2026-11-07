@@ -73,7 +73,7 @@ fn fixture_plan(job: &CrateJob, bound: JobTimeout) -> Result<CrateGroupPlan, Box
     Ok(CrateGroupPlan::new(
         job.job_id.clone(),
         String::new(),
-        "ubuntu-24.04".to_owned(),
+        "ubuntu-26.04".to_owned(),
         unit_ids,
         group_timeout_for(None, bound),
     )?)
@@ -168,7 +168,7 @@ fn check_rejects_bad_plans() -> Result<(), Box<dyn Error>> {
         .map(|obligation| obligation.task_id.clone())
         .collect();
     unit_ids.sort();
-    reject_case(unit_ids.clone(), "empty id", "", "ubuntu-24.04", "", bound)?;
+    reject_case(unit_ids.clone(), "empty id", "", "ubuntu-26.04", "", bound)?;
     Ok(())
 }
 
@@ -185,7 +185,7 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
         unit_ids.clone(),
         "absolute root",
         "/absolute/root",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &job.job_id,
         bound,
     )?;
@@ -193,7 +193,7 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
         unit_ids.clone(),
         "parent root",
         "../escape",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &job.job_id,
         bound,
     )?;
@@ -209,7 +209,7 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
         Vec::new(),
         "empty units",
         "",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &job.job_id,
         bound,
     )?;
@@ -220,7 +220,7 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
         duplicated,
         "duplicate units",
         "",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &job.job_id,
         bound,
     )?;
@@ -232,7 +232,7 @@ fn check_rejects_bad_roots() -> Result<(), Box<dyn Error>> {
         oversized,
         "oversized group",
         "",
-        "ubuntu-24.04",
+        "ubuntu-26.04",
         &job.job_id,
         bound,
     )?;

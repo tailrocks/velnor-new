@@ -18,12 +18,28 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
-pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+pub(crate) fn same_or_admitted_check_condition(
+    hosted: &Job,
+    local: &Job,
+    hosted_id: &str,
+    local_id: &str,
+) -> bool {
     if hosted.condition == local.condition {
         return true;
     }
-    hosted.condition.is_none()
-        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+    let canonical_gated = hosted.condition.as_deref()
+        == Some(velnor_actions_contract::workflow::not_affected_gate(hosted_id).as_str())
+        && local.condition.as_deref()
+            == Some(
+                format!(
+                    "({}) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION})",
+                    velnor_actions_contract::workflow::not_affected_gate(local_id)
+                )
+                .as_str(),
+            );
+    let canonical_ungated = hosted.condition.is_none()
+        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION);
+    (canonical_gated || canonical_ungated)
         && matches!(
             (&hosted.check_runner, &local.check_runner),
             (Some(hosted_runner), Some(local_runner))
@@ -51,13 +67,11 @@ fn is_lane_specific(step: &Step) -> bool {
         return true;
     }
     match &step.kind {
-        StepKind::Shell { env, .. }
-        | StepKind::TaskExecution { env, .. }
-        | StepKind::Internal { env, .. } => {
+        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
             env.contains_key(NAMED_CHECK_JOB_ID_ENV)
                 || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
         }
-        StepKind::NativeCheckExecution { .. } => true,
+        StepKind::NativeCheckExecution { .. } | StepKind::TaskExecution { .. } => true,
         StepKind::Action { .. } => false,
     }
 }
@@ -214,7 +228,7 @@ pub(crate) fn composite_file(
         job_env: &empty_job_env,
         runs_on: None,
         actions_read: false,
-        report_helper_version: &ctx.report_helper_version,
+        report_helper_version: ctx.controller.report_helper_version(),
     };
     for step in steps {
         rendered.push(step_to_yaml(logical, step, ctx, &[], true, &step_context)?);

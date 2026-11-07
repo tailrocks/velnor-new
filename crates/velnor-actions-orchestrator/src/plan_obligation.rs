@@ -44,6 +44,7 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) snapshot: &'a ExecutionSnapshot,
     pub(crate) root: &'a Path,
     pub(crate) named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
+    pub(crate) lane_routes: &'a [velnor_actions_contract::LaneRoute],
 }
 
 pub(crate) fn lane_table(universe: &[&ProposedTask]) -> BTreeMap<String, u32> {
@@ -93,6 +94,14 @@ pub(crate) fn plan_group(
     }
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         return plan_named_mise_group(inputs);
+    }
+    if Stack::from_id(&task.stack_id) == Some(Stack::Rust)
+        && inputs
+            .lane_routes
+            .iter()
+            .any(|route| route.task_ids.contains(&task.task_id))
+    {
+        return identity::plan_routed_rust_group(inputs, reads);
     }
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
@@ -161,9 +170,14 @@ fn plan_named_mise_group(
         item,
         inputs.run_key,
         inputs.wire.generator,
-        inputs.catalog,
-        &runtime,
-        check_lanes,
+        crate::internal_plan::named_checks::plan::RuntimeToolchain {
+            catalog: inputs.catalog,
+            runtime: &runtime,
+        },
+        crate::internal_plan::named_checks::plan::CheckLanes {
+            lanes: check_lanes,
+            routes: inputs.lane_routes,
+        },
     )?;
     if !inputs.changed
         && matches!(

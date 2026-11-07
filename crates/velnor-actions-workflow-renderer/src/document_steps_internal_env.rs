@@ -29,6 +29,9 @@ pub(super) fn internal_env(
     {
         ctx.validate_runtime_authority()?;
     }
+    if let Some(env) = preview_named_check_env(job_id, op, ctx, step_env)? {
+        return Ok(env);
+    }
     if let Some(env) = fetch_internal_env(op, step_env)? {
         return Ok(env);
     }
@@ -96,6 +99,47 @@ pub(super) fn internal_env(
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     Ok(Yaml::Map(env))
+}
+
+fn preview_named_check_env(
+    job_id: &str,
+    op: &str,
+    ctx: &RenderContext,
+    step_env: &BTreeMap<String, String>,
+) -> Result<Option<Yaml>, RenderError> {
+    if op != "execute-check-v1" {
+        return Ok(None);
+    }
+    crate::toolchain_env::reject_denied_step_keys(step_env)?;
+    let id = step_env
+        .get("VELNOR_CHECK_ID")
+        .ok_or_else(|| RenderError::InvalidWorkflow("named_check_env_invalid".to_owned()))?;
+    let variant = step_env
+        .get("VELNOR_CHECK_LANE_VARIANT")
+        .map(String::as_str);
+    let expected_job = match variant {
+        Some("single") => format!("check-{id}"),
+        Some("hosted") => format!("check-{id}__hosted"),
+        Some("scale_set") => format!("check-{id}__local"),
+        _ => String::new(),
+    };
+    if !matches!(
+        ctx.controller,
+        crate::render::ControllerLocator::ProtectedBaseDispatch { .. }
+    ) || id.is_empty()
+        || expected_job != job_id
+        || step_env.get("VELNOR_CHECK_JOB_ID").map(String::as_str) != Some(job_id)
+        || step_env.get("VELNOR_TASK_ID") != Some(&format!("stack/mise/{id}/check/default"))
+        || step_env.contains_key(INTERNAL_OP_ENV)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "named_check_env_invalid".to_owned(),
+        ));
+    }
+    let mut values = crate::toolchain_env::credential_scrub();
+    values.extend(step_env.clone());
+    values.insert(INTERNAL_OP_ENV.to_owned(), op.to_owned());
+    Ok(Some(crate::document_steps::string_map_yaml(&values)))
 }
 
 fn fetch_internal_env(

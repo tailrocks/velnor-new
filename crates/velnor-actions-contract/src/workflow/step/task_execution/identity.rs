@@ -24,11 +24,19 @@ pub(super) fn validate_task_and_matrix(
     }
     crate::ids::validate_id(input.matrix_id)?;
     crate::ids::validate_matrix_key(input.matrix_key)?;
-    if !input
-        .matrix_id
-        .ends_with(&format!("|task:{}", input.task_id))
-        || crate::ids::matrix_key_for_id(input.matrix_id)? != input.matrix_key
-    {
+    let variants = [
+        None,
+        Some(crate::workflow::LaneVariant::Hosted),
+        Some(crate::workflow::LaneVariant::ScaleSet),
+    ];
+    if !variants.into_iter().any(|variant| {
+        crate::workflow::matrix_entry::task_matrix_identity_matches(
+            input.task_id,
+            input.matrix_id,
+            input.matrix_key,
+            variant,
+        )
+    }) {
         return Err(ContractError::identity(
             "step.task.identity",
             format!("matrix_identity_mismatch:{}", input.job),

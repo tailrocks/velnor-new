@@ -23,12 +23,12 @@ fn cosign_for_runner(
     label: &str,
 ) -> Result<(CosignPin<'static>, CosignPlatform), OrchestratorError> {
     let (sha256, size, platform) = match label {
-        "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => (
+        "ubuntu-26.04" => (
             COSIGN_LINUX_AMD64_SHA256,
             COSIGN_LINUX_AMD64_BYTES,
             CosignPlatform::LinuxAmd64,
         ),
-        "ubuntu-22.04-arm" | "ubuntu-24.04-arm" | "ubuntu-26.04-arm" => (
+        "ubuntu-26.04-arm" => (
             COSIGN_LINUX_ARM64_SHA256,
             COSIGN_LINUX_ARM64_BYTES,
             CosignPlatform::LinuxArm64,

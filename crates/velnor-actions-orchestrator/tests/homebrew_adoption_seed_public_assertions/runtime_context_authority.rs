@@ -28,9 +28,11 @@ pub(super) fn assert_runtime_context_authority(
     }
 
     let mut changed_runtime = preparation.clone();
-    "9.9.9".clone_into(&mut changed_runtime.workflow.context.report_helper_version);
-    "$RUNNER_TEMP/velnor/bin/velnor-actions-9.9.9"
-        .clone_into(&mut changed_runtime.workflow.context.staged_binary);
+    changed_runtime.workflow.context.controller =
+        velnor_actions_workflow_renderer::render::ControllerLocator::PinnedRelease {
+            version: "9.9.9".to_owned(),
+            path: "$RUNNER_TEMP/velnor/bin/velnor-actions-9.9.9".to_owned(),
+        };
     assert_runtime_rejected(&changed_runtime, policy)?;
 
     let mut changed_request = preparation.clone();

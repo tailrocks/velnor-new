@@ -99,7 +99,7 @@ fn fixture_parts(group: &str) -> Result<Parts, HelperError> {
     let task_digest = digest_b3(b"gc1-t54-task-payload");
     let input_digest = digest_b3(b"gc1-t54-input");
     let closure_digest = digest_b3(b"gc1-t54-closure");
-    let planned = PlannedPlatform::new("ubuntu-22.04", "x86_64-unknown-linux-gnu")
+    let planned = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
         .map_err(|_| fail("planned_platform"))?;
     let execute = ExecuteTaskIds {
         tasks: BTreeMap::from([("group".to_owned(), ExecuteTaskRef::Single(task_id.clone()))]),
@@ -131,6 +131,7 @@ fn fixture_parts(group: &str) -> Result<Parts, HelperError> {
 
 fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
     let plan = Plan {
+        lane_inventory: None,
         schema: Plan::SCHEMA,
         run_key: RUN_KEY.to_owned(),
         plan_id: plan_id_for_run(RUN_KEY).map_err(|_| fail("plan_id"))?,
@@ -139,7 +140,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
         event: WorkflowEvent::PullRequest,
         qualification: None,
         runner: PlanRunner {
-            label: "ubuntu-22.04".to_owned(),
+            label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
         },
         trust: trust_for_event(WorkflowEvent::PullRequest),
@@ -147,6 +148,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
             version: "0.1.55".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "6dd871a3ac5736745b77359310384c1932ce0a7f921e06207a99d6710dcd47".to_owned(),
+            preview: None,
         },
         packages: Vec::new(),
         obligations: vec![PlanObligation {
@@ -163,6 +165,7 @@ fn fixture_plan(parts: &Parts) -> Result<Plan, HelperError> {
         },
         task_ids: vec![parts.task_id.clone()],
         jobs: vec![PlanJob {
+            lane: None,
             job_id: parts.group.clone(),
             disposition: JobDisposition::Run,
         }],

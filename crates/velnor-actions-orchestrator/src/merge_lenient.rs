@@ -30,6 +30,8 @@ struct LenientRequest {
     required_job_ids: Vec<String>,
     required_jobs: Vec<RequiredJobResult>,
     #[serde(default)]
+    lane_inventory: Option<velnor_actions_contract::LaneInventory>,
+    #[serde(default)]
     assembly_errors: Vec<String>,
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
@@ -72,6 +74,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         check_proofs: raw.check_proofs,
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
+        lane_inventory: raw.lane_inventory,
         group_ledgers: Vec::new(),
         assembly_errors,
         shard_proofs: raw.shard_proofs,
