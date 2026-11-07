@@ -84,7 +84,12 @@ fn gate_job(config: &ReleaseRehearsalConfig) -> Yaml {
             "with",
             map(vec![
                 ("name", Yaml::str("rehearsal-source")),
-                ("path", Yaml::str("${{ runner.temp }}/rehearsal-source.tar")),
+                (
+                    "path",
+                    Yaml::str(
+                        "${{ runner.temp }}/rehearsal-source.tar\n${{ runner.temp }}/rehearsal-source.bundle",
+                    ),
+                ),
                 ("if-no-files-found", Yaml::str("error")),
                 ("retention-days", Yaml::Int(1)),
             ]),
@@ -117,6 +122,10 @@ fn gate_outputs(config: &ReleaseRehearsalConfig) -> Yaml {
         "source_sha256",
         Yaml::str("${{ steps.source.outputs.source_sha256 }}"),
     )];
+    outputs.push((
+        "bundle_sha256",
+        Yaml::str("${{ steps.source.outputs.bundle_sha256 }}"),
+    ));
     if config.metadata.is_some() {
         outputs.push((
             "approved_sha256",
@@ -204,6 +213,10 @@ fn execute_job(config: &ReleaseRehearsalConfig) -> Yaml {
         "VELNOR_SOURCE_SHA256".to_owned(),
         Yaml::str("${{ needs.gate.outputs.source_sha256 }}"),
     ));
+    execute_env.push((
+        "VELNOR_BUNDLE_SHA256".to_owned(),
+        Yaml::str("${{ needs.gate.outputs.bundle_sha256 }}"),
+    ));
     let mut steps = vec![
         download,
         step(
@@ -216,6 +229,13 @@ fn execute_job(config: &ReleaseRehearsalConfig) -> Yaml {
                     } else {
                         ""
                     },
+                )
+                .replace(
+                    "__VELNOR_ARCHIVE_PYTHON__",
+                    &include_str!("release_rehearsal_archive.py").replace(
+                        "__VELNOR_PATHS_PYTHON__",
+                        include_str!("release_rehearsal_paths.py"),
+                    ),
                 )
                 .replace(
                     "__VELNOR_EXTRACT_PYTHON__",

@@ -115,6 +115,17 @@ class RehearsalBehavior(unittest.TestCase):
         )
         env = dict(os.environ, RUNNER_TEMP=str(self.root), GITHUB_OUTPUT=str(output), GITHUB_SHA=sha,
                    CANDIDATE_PR="1", CANDIDATE_SHA="a" * 40, VELNOR_REHEARSAL_SCRIPT="rehearse.sh")
+        for filename, setup in [("untracked", None), ("ignored", "ignored\n")]:
+            exclude = checkout / ".git" / "info" / "exclude"
+            original = exclude.read_text()
+            if setup:
+                exclude.write_text(original + setup)
+            (checkout / filename).write_text("untrusted")
+            failed = subprocess.run(["bash", "-c", text], cwd=self.root, env=env, capture_output=True)
+            self.assertNotEqual(failed.returncode, 0, filename)
+            self.assertFalse((self.root / "rehearsal-source.tar").exists())
+            (checkout / filename).unlink()
+            exclude.write_text(original)
         subprocess.run(["bash", "-c", text], cwd=self.root, env=env, check=True)
         archive = self.root / "rehearsal-source.tar"
         self.assertIn(hashlib.sha256(archive.read_bytes()).hexdigest(), output.read_text())
@@ -129,21 +140,42 @@ class RehearsalBehavior(unittest.TestCase):
             'printf ok > "$RUNNER_TEMP/result"\n'
         )
         self.stage()
+        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"], check=True)
+        sha = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
         upload = self.root / "rehearsal"
         upload.mkdir()
         archive = upload / "rehearsal-source.tar"
         module("archive")["build_archive"](self.repo, archive)
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        bundle = upload / "rehearsal-source.bundle"
+        subprocess.run(["git", "-C", str(self.repo), "bundle", "create", str(bundle), "HEAD"], check=True)
+        bundle_digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
         rendered = os.environ.get("VELNOR_RENDERED_EXECUTE")
         text = Path(rendered).read_text() if rendered else (SRC / "release_rehearsal_execute.sh").read_text().replace(
             "__VELNOR_EXTRACT_PYTHON__",
             (SRC / "release_rehearsal_extract.py").read_text().replace("__VELNOR_PATHS_PYTHON__", HELPERS),
-        )
+        ).replace(
+            "__VELNOR_ARCHIVE_PYTHON__",
+            (SRC / "release_rehearsal_archive.py").read_text().replace("__VELNOR_PATHS_PYTHON__", HELPERS),
+        ).replace("__VELNOR_OUTPUT_ENV__", "")
         env = dict(os.environ, RUNNER_TEMP=str(self.root), VELNOR_SOURCE_SHA256=digest,
-                   CANDIDATE_PR="1", CANDIDATE_SHA="a" * 40, GITHUB_SHA="b" * 40,
-                   VELNOR_REHEARSAL_SCRIPT="rehearse.sh", GH_TOKEN="fixture", CANARY="fixture")
+                   CANDIDATE_PR="1", CANDIDATE_SHA="a" * 40, GITHUB_SHA=sha, VELNOR_BUNDLE_SHA256=bundle_digest,
+                   VELNOR_REHEARSAL_SCRIPT="rehearse.sh", GH_TOKEN="fixture", CANARY="fixture",
+                   GIT_DIR="/invalid/injected", GIT_CONFIG_COUNT="1",
+                   GIT_CONFIG_KEY_0="core.hooksPath", GIT_CONFIG_VALUE_0="/invalid/injected")
         subprocess.run(["bash", "-c", text], env=env, check=True)
         self.assertEqual((self.root / "result").read_text(), "ok")
+        for kind in ("bundle", "sha"):
+            with tempfile.TemporaryDirectory() as another:
+                another_root = Path(another)
+                another_upload = another_root / "rehearsal"
+                another_upload.mkdir()
+                (another_upload / "rehearsal-source.tar").write_bytes(archive.read_bytes())
+                (another_upload / "rehearsal-source.bundle").write_bytes(bundle.read_bytes() + (b"x" if kind == "bundle" else b""))
+                changed = dict(env, RUNNER_TEMP=another, GITHUB_SHA=("b" * 40 if kind == "sha" else sha))
+                failed = subprocess.run(["bash", "-c", text], env=changed, capture_output=True)
+                self.assertNotEqual(failed.returncode, 0, kind)
+                self.assertFalse((another_root / "result").exists())
         with tempfile.TemporaryDirectory() as second:
             second_root = Path(second)
             second_upload = second_root / "rehearsal"
