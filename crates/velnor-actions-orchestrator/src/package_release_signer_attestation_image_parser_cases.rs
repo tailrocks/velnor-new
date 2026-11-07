@@ -209,7 +209,11 @@ fn check_paginated_selection(
         .map(|offset| with_invocation(current, expected, expected.run_id - offset, 1))
         .collect::<Vec<_>>();
     let mut selected = stale.clone();
-    selected[0]["verificationResult"]["statement"]["predicate"]["buildDefinition"]["internalParameters"].as_object_mut().ok_or("internal parameters")?.remove("github");
+    selected[0]["verificationResult"]["statement"]["predicate"]["buildDefinition"]
+        ["internalParameters"]
+        .as_object_mut()
+        .ok_or("internal parameters")?
+        .remove("github");
     selected.push(current.clone());
     check(selected, subjects, expected, None)?;
     let mut absent = stale;
@@ -226,7 +230,11 @@ fn check_paginated_selection(
         Some("package_attestation_run_identity_mismatch"),
     )?;
     let mut malformed = current.clone();
-    malformed["verificationResult"]["statement"]["predicate"]["buildDefinition"]["internalParameters"].as_object_mut().ok_or("internal parameters")?.remove("github");
+    malformed["verificationResult"]["statement"]["predicate"]["buildDefinition"]
+        ["internalParameters"]
+        .as_object_mut()
+        .ok_or("internal parameters")?
+        .remove("github");
     check(
         vec![malformed],
         subjects,
