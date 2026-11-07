@@ -47,6 +47,9 @@ class CleanProfileTest(unittest.TestCase):
                 'org.freedesktop.systemd1.Manager', 'GetUnit', [('s', unit)], fixture.deadline, 'o')
             pid = manager._get(path, 'org.freedesktop.systemd1.Service', 'MainPID', 'u', fixture.deadline)
             self.assertGreater(pid, 0)
+            self.assertEqual(manager._get(path, 'org.freedesktop.systemd1.Service', 'Type', 's', fixture.deadline), 'exec')
+            actual, expected = os.stat('/proc/' + str(pid) + '/exe'), os.stat('/usr/bin/python3')
+            self.assertEqual((actual.st_dev, actual.st_ino), (expected.st_dev, expected.st_ino))
             self.assertFalse(set(manager.policy_host.environment_names) & environment_keys(pid))
         self.assertFalse(Path('/sys/fs/cgroup/system.slice', unit).exists())
 

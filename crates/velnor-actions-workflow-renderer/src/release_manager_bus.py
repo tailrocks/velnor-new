@@ -421,7 +421,7 @@ class Manager:
                 self._append(message, "s", "fail")
                 self._open(message, "a", "(sv)")
                 for name, kind, value in (
-                    ("AddRef", "b", 1), ("DynamicUser", "b", int(not self.root_bootstrap)), ("NoNewPrivileges", "b", 1), ("Delegate", "b", 0),
+                    ("Type", "s", "exec"), ("AddRef", "b", 1), ("DynamicUser", "b", int(not self.root_bootstrap)), ("NoNewPrivileges", "b", 1), ("Delegate", "b", 0),
                     ("CapabilityBoundingSet", "t", 0), ("AmbientCapabilities", "t", 0), ("LimitCORE", "t", 0),
                     ("TimeoutStartUSec", "t", 5_000_000), ("TimeoutStopUSec", "t", 20_000_000),
                     ("RuntimeMaxUSec", "t", runtime_seconds * 1_000_000),
@@ -516,13 +516,15 @@ class Manager:
                     self.library.sd_bus_message_unref(message)
             unit_path = self._method(self.owner, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
                                           "GetUnit", [("s", unit)], deadline, "o")
+            if self._get(unit_path, "org.freedesktop.systemd1.Service", "Type", "s", deadline) != "exec":
+                raise ManagerError("unit policy unverified")
             if self._get(unit_path, "org.freedesktop.systemd1.Unit", "JobTimeoutUSec", "t", deadline) != runtime_seconds * 1_000_000:
                 raise ManagerError("unit deadline unverified")
             if self._watch_unit is None and (
                     self._get(unit_path, "org.freedesktop.systemd1.Service", "KillSignal", "i", deadline) != signal.SIGKILL
                     or self._get(unit_path, "org.freedesktop.systemd1.Service", "KillMode", "s", deadline) != "control-group"
                     or self._get(unit_path, "org.freedesktop.systemd1.Unit", "CollectMode", "s", deadline) != "inactive-or-failed"):
-                raise ManagerError("unit cleanup policy unverified")
+                raise ManagerError("unit policy unverified")
             if self._watch_unit is None:
                 self.validate_watch(deadline)
             else:
