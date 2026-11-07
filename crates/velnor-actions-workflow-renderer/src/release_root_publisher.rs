@@ -43,7 +43,7 @@ fn render_source(timeout_seconds: u32, encoded: &str) -> Result<String, RenderEr
             &timeout_seconds.to_string(),
         );
     for source in privileged_modules::bootstrap_sources() {
-        let marker = format!("__VELNOR_{}_PAYLOAD__", source.marker);
+        let marker = format!("__VELNOR_{}_PAYLOAD__", source.constant);
         if entry.matches(&marker).count() != 1 {
             return Err(RenderError::InvalidWorkflow(
                 "publisher_module_marker_invalid".to_owned(),
@@ -152,7 +152,10 @@ fn publisher_bundle() -> Result<String, RenderError> {
     ]);
     for source in privileged_modules::bootstrap_sources() {
         if bundle
-            .insert(source.key.to_owned(), serde_json::json!(source.source))
+            .insert(
+                source.constant.to_ascii_lowercase(),
+                serde_json::json!(source.source),
+            )
             .is_some()
         {
             return Err(RenderError::InvalidWorkflow(

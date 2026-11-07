@@ -49,18 +49,17 @@ def verify(exported, entry, operation, deadline):
     check()
     contract = json.loads(decoded(entry['EXPORT_CONTRACT']), object_pairs_hook=unique)
     if (type(contract) is not dict or set(contract) != {'schema', 'bootstrap', 'supervisor'}
-            or contract['schema'] != 1 or type(contract['bootstrap']) is not list
+            or contract['schema'] != 2 or type(contract['bootstrap']) is not list
             or type(contract['supervisor']) is not dict):
         raise ValueError('trusted export closure shape')
     names = {'SUPERVISOR', 'EXPORT_CONTRACT', 'WATCH_OPERATION'}
-    markers = set()
     for item in contract['bootstrap']:
-        if (type(item) is not dict or set(item) != {'key', 'constant', 'marker', 'sha256'}
+        if (type(item) is not dict or set(item) != {'constant', 'sha256'}
                 or any(type(value) is not str for value in item.values())
-                or item['constant'] in names or item['marker'] in markers):
+                or not item['constant'].isascii() or not item['constant'].isidentifier()
+                or item['constant'].upper() != item['constant'] or item['constant'] in names):
             raise ValueError('trusted export closure descriptor')
         names.add(item['constant'])
-        markers.add(item['marker'])
     values = constants(exported, names)
     if values['WATCH_OPERATION'] != operation or values['EXPORT_CONTRACT'] != entry['EXPORT_CONTRACT']:
         raise ValueError('exported closure identity mismatch')
@@ -70,7 +69,7 @@ def verify(exported, entry, operation, deadline):
         value = values[item['constant']]
         if hashlib.sha256(decoded(value)).hexdigest() != item['sha256']:
             raise ValueError('exported module bytes mismatch')
-        marker = '__VELNOR_' + item['marker'] + '_PAYLOAD__'
+        marker = '__VELNOR_' + item['constant'] + '_PAYLOAD__'
         if expected.count(marker) != 1:
             raise ValueError('trusted export closure marker')
         expected = expected.replace(marker, value)

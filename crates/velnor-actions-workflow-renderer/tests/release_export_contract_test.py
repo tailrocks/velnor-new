@@ -99,6 +99,14 @@ class ExportContractTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, '^' + message + '$'):
                     VERIFIER.verify(source, ENTRY, 'publish', deadline())
 
+    def test_invalid_descriptors_are_rejected(self):
+        for name in ('lowercase', 'INVALID-NAME', '1INVALID', 'É'):
+            contract = json.loads(json.dumps(CONTRACT))
+            contract['bootstrap'][0]['constant'] = name
+            entry = dict(ENTRY, EXPORT_CONTRACT=base64.b64encode(json.dumps(contract).encode()).decode())
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, '^trusted export closure descriptor$'):
+                VERIFIER.verify(EXPORTED, entry, 'publish', deadline())
+
     def test_expired_original_budget_is_rejected(self):
         with self.assertRaisesRegex(ValueError, '^exported closure deadline$'):
             VERIFIER.verify(EXPORTED, ENTRY, 'publish', time.clock_gettime_ns(time.CLOCK_BOOTTIME) - 1)
@@ -106,6 +114,6 @@ class ExportContractTest(unittest.TestCase):
 
 if __name__ == '__main__':
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(ExportContractTest)
-    if suite.countTestCases() != 6:
+    if suite.countTestCases() != 7:
         raise SystemExit('export contract cases missing')
     raise SystemExit(not unittest.TextTestRunner().run(suite).wasSuccessful())

@@ -66,10 +66,10 @@ def _export_verified(entry, root, binary, digest, deadline, watch, operation, co
 def bootstrap_entry(bundle):
     source = bundle['entry']
     for item in bundle['export_contract']['bootstrap']:
-        marker = '__VELNOR_' + item['marker'] + '_PAYLOAD__'
+        marker = '__VELNOR_' + item['constant'] + '_PAYLOAD__'
         if source.count(marker) != 1:
             raise ValueError('bootstrap module marker invalid')
-        source = source.replace(marker, base64.b64encode(bundle[item['key']].encode()).decode())
+        source = source.replace(marker, base64.b64encode(bundle[item['constant'].lower()].encode()).decode())
     contract = json.dumps(bundle['export_contract'], sort_keys=True, separators=(',', ':')).encode()
     source = source.replace('__VELNOR_EXPORT_CONTRACT_PAYLOAD__', base64.b64encode(contract).decode())
     source = source.replace('__VELNOR_JOB_TIMEOUT_SECONDS__', '1800')

@@ -6,86 +6,32 @@ use sha2::{Digest as _, Sha256};
 use std::collections::BTreeMap;
 
 pub(crate) struct BootstrapSource {
-    pub key: &'static str,
     pub constant: &'static str,
-    pub marker: &'static str,
     pub source: &'static str,
 }
 
 macro_rules! source {
-    ($key:literal, $constant:literal, $marker:literal, $file:literal) => {
+    ($constant:literal, $file:literal) => {
         BootstrapSource {
-            key: $key,
             constant: $constant,
-            marker: $marker,
             source: include_str!($file),
         }
     };
 }
 
 const BOOTSTRAP_SOURCES: &[BootstrapSource] = &[
-    source!(
-        "export_verifier",
-        "EXPORT_VERIFIER",
-        "EXPORT_VERIFIER",
-        "release_export_contract.py"
-    ),
-    source!(
-        "bootstrap",
-        "BOOTSTRAP",
-        "BOOTSTRAP",
-        "release_generator_bootstrap.sh"
-    ),
-    source!("manager", "MANAGER", "MANAGER", "release_manager_bus.py"),
-    source!(
-        "watch_admission",
-        "WATCH_ADMISSION",
-        "WATCH_ADMISSION",
-        "release_watch_admission.py"
-    ),
-    source!(
-        "manager_policy_host",
-        "MANAGER_POLICY_HOST",
-        "MANAGER_POLICY_HOST",
-        "release_manager_policy_host.py"
-    ),
-    source!(
-        "manager_policy_files",
-        "MANAGER_POLICY_FILES",
-        "MANAGER_POLICY_FILES",
-        "release_manager_policy_files.py"
-    ),
-    source!(
-        "manager_policy",
-        "MANAGER_POLICY",
-        "MANAGER_POLICY",
-        "release_manager_policy.py"
-    ),
-    source!(
-        "lifecycle",
-        "LIFECYCLE",
-        "LIFECYCLE",
-        "release_manager_lifecycle.py"
-    ),
-    source!("helper", "HELPER", "HELPER", "release_supervisor_exec.py"),
-    source!(
-        "bootstrap_watch",
-        "WATCH_BOOTSTRAP",
-        "WATCH_BOOTSTRAP",
-        "release_bootstrap_watch.py"
-    ),
-    source!(
-        "watch_program",
-        "WATCH_PROGRAM",
-        "WATCH_PROGRAM",
-        "release_launcher_watch.py"
-    ),
-    source!(
-        "claim",
-        "CLAIM",
-        "WATCH_CLAIM",
-        "release_supervisor_claim.py"
-    ),
+    source!("EXPORT_VERIFIER", "release_export_contract.py"),
+    source!("BOOTSTRAP", "release_generator_bootstrap.sh"),
+    source!("MANAGER", "release_manager_bus.py"),
+    source!("WATCH_ADMISSION", "release_watch_admission.py"),
+    source!("MANAGER_POLICY_HOST", "release_manager_policy_host.py"),
+    source!("MANAGER_POLICY_FILES", "release_manager_policy_files.py"),
+    source!("MANAGER_POLICY", "release_manager_policy.py"),
+    source!("LIFECYCLE", "release_manager_lifecycle.py"),
+    source!("HELPER", "release_supervisor_exec.py"),
+    source!("WATCH_BOOTSTRAP", "release_bootstrap_watch.py"),
+    source!("WATCH_PROGRAM", "release_launcher_watch.py"),
+    source!("CLAIM", "release_supervisor_claim.py"),
 ];
 
 pub(crate) fn bootstrap_sources() -> &'static [BootstrapSource] {
@@ -114,9 +60,9 @@ pub(crate) fn supervisor_bundle() -> serde_json::Value {
 
 pub(crate) fn export_contract() -> serde_json::Value {
     serde_json::json!({
-        "schema": 1,
+        "schema": 2,
         "bootstrap": bootstrap_sources().iter().map(|source| serde_json::json!({
-            "key": source.key, "constant": source.constant, "marker": source.marker,
+            "constant": source.constant,
             "sha256": digest(source.source.as_bytes()),
         })).collect::<Vec<_>>(),
         "supervisor": supervisor_sources().into_iter()
