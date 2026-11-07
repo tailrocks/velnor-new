@@ -22,13 +22,13 @@ pub(super) fn validate(
 }
 
 fn check(
-    entries: Vec<Value>,
+    entries: &[Value],
     subjects: &BTreeMap<String, String>,
     expected: &AttestationExpectation<'_>,
     error: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     let result = validate_output_with_additional_names(
-        &serde_json::to_vec(&entries)?,
+        &serde_json::to_vec(entries)?,
         subjects,
         &[],
         expected,
@@ -83,16 +83,16 @@ fn check_history(
         vec![old.clone(), older.clone(), current.clone()],
         vec![current.clone(), old.clone(), older],
     ] {
-        check(entries, subjects, expected, None)?;
+        check(&entries, subjects, expected, None)?;
     }
     check(
-        vec![old],
+        &[old],
         subjects,
         expected,
         Some("package_attestation_run_identity_mismatch"),
     )?;
     check(
-        vec![current.clone(), current.clone()],
+        &[current.clone(), current.clone()],
         subjects,
         expected,
         Some("package_attestation_ambiguous"),
@@ -120,7 +120,7 @@ fn check_invalid_entries(
             vec![invalid.clone(), current.clone()],
             vec![current.clone(), invalid],
         ] {
-            check(entries, subjects, expected, Some(code))?;
+            check(&entries, subjects, expected, Some(code))?;
         }
     }
     Ok(())
@@ -131,15 +131,15 @@ fn invalid_entry(current: &Value, case: &str) -> Result<Value, Box<dyn Error>> {
     match case {
         "predicate" => {
             invalid["verificationResult"]["statement"]["predicateType"] =
-                json!("https://invalid.example/predicate")
+                json!("https://invalid.example/predicate");
         }
         "event" => {
             invalid["verificationResult"]["statement"]["predicate"]["buildDefinition"]["internalParameters"]
-                ["github"]["event_name"] = json!("workflow_dispatch")
+                ["github"]["event_name"] = json!("workflow_dispatch");
         }
         "source" => {
             invalid["verificationResult"]["signature"]["certificate"]["sourceRepositoryDigest"] =
-                json!("c".repeat(40))
+                json!("c".repeat(40));
         }
         "inventory" => invalid["verificationResult"]["statement"]["subject"]
             .as_array_mut()
@@ -190,7 +190,7 @@ fn check_uris(
             vec![current.clone(), invalid],
         ] {
             check(
-                entries,
+                &entries,
                 subjects,
                 expected,
                 Some("package_attestation_run_identity_mismatch"),
@@ -215,7 +215,7 @@ fn check_paginated_selection(
         .ok_or("internal parameters")?
         .remove("github");
     selected.push(current.clone());
-    check(selected, subjects, expected, None)?;
+    check(&selected, subjects, expected, None)?;
     let mut absent = stale;
     absent.push(with_invocation(
         current,
@@ -224,7 +224,7 @@ fn check_paginated_selection(
         expected.run_attempt + 1,
     ));
     check(
-        absent,
+        &absent,
         subjects,
         expected,
         Some("package_attestation_run_identity_mismatch"),
@@ -236,7 +236,7 @@ fn check_paginated_selection(
         .ok_or("internal parameters")?
         .remove("github");
     check(
-        vec![malformed],
+        &[malformed],
         subjects,
         expected,
         Some("package_attestation_output_invalid"),
