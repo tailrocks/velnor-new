@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "required_ci_helpers.rs"]
+mod helpers;
+use helpers::{assert_materialized_layout, assert_rejected};
+
 use std::{error::Error, fs};
 
 use serde_json::{Value, json};
@@ -92,120 +96,135 @@ fn public_publication_requires_one_successful_required_job_with_complete_identit
     Ok(())
 }
 #[test]
-fn public_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates()
+fn boundary_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates()
 -> Result<(), Box<dyn Error>> {
-    for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
-        let fixture = Fixture::new_for(profile)?;
-        fixture.set_ci_job_pages(json!(valid_second_page(&fixture)))?;
-        let output = fixture.invoke()?;
-        assert!(
-            output.status.success(),
-            "later Required page failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
-        assert_eq!(receipt["ci_run_id"], profile.ci_run_id());
-        assert_eq!(receipt["ci_run_attempt"], 1);
-        assert_eq!(
-            fixture.registry_digest()?,
-            Some(fixture.expected_digest.clone())
-        );
-        assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
-        assert!(fixture.last_fixture_error()?.is_none());
-    }
+    super::run_isolated(
+        "required_ci::boundary_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates",
+        || {
+            for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
+                let fixture = Fixture::new_for(profile)?;
+                fixture.set_ci_job_pages(json!(valid_second_page(&fixture)))?;
+                let output = fixture.invoke_publication_boundary()?;
+                assert!(
+                    output.status.success(),
+                    "later Required page failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                let receipt: Value = super::support::read_receipt(&fixture.receipt)?;
+                assert_eq!(receipt["ci_run_id"], profile.ci_run_id());
+                assert_eq!(receipt["ci_run_attempt"], 1);
+                assert_eq!(
+                    fixture.registry_digest()?,
+                    Some(fixture.expected_digest.clone())
+                );
+                assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
+                assert!(fixture.last_fixture_error()?.is_none());
+            }
 
-    let fixture = Fixture::new()?;
-    let mut pages = valid_second_page(&fixture);
-    let duplicate = pages[0]["jobs"][0].clone();
-    pages[1]["jobs"][0]["id"] = duplicate["id"].clone();
-    fixture.set_ci_job_pages(json!(pages))?;
-    let archive = fs::read(&fixture.archive)?;
-    let record = fs::read(&fixture.record)?;
-    let foreign = fixture.scratch.join("foreign.keep");
-    fs::write(&foreign, b"preserve")?;
-    let registry = fixture.preseed_registry_state()?;
-    let output = fixture.invoke()?;
-    assert_rejected(&fixture, &output, "image_publication_ci_job_identity")?;
-    assert_eq!(fixture.registry_state()?, registry);
-    assert_eq!(fs::read(&fixture.archive)?, archive);
-    assert_eq!(fs::read(&fixture.record)?, record);
-    assert_eq!(fs::read(&foreign)?, b"preserve");
-    assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-    Ok(())
-}
-#[test]
-fn public_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<(), Box<dyn Error>>
-{
-    for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
-        for (change, expected) in [
-            (FreshnessChange::Main, "image_publication_main_changed"),
-            (
-                FreshnessChange::Unprotected,
-                "image_publication_default_branch",
-            ),
-            (FreshnessChange::LatestRun, "image_publication_ci_changed"),
-            (
-                FreshnessChange::AdvanceAttempt,
-                "image_publication_ci_changed",
-            ),
-            (
-                FreshnessChange::FailedRun,
-                "image_publication_ci_latest_not_success",
-            ),
-            (
-                FreshnessChange::FailedRequired,
-                "image_publication_ci_required_job",
-            ),
-        ] {
-            let fixture = Fixture::new_for(profile)?;
+            let fixture = Fixture::new()?;
+            let mut pages = valid_second_page(&fixture);
+            let duplicate = pages[0]["jobs"][0].clone();
+            pages[1]["jobs"][0]["id"] = duplicate["id"].clone();
+            fixture.set_ci_job_pages(json!(pages))?;
             let archive = fs::read(&fixture.archive)?;
             let record = fs::read(&fixture.record)?;
             let foreign = fixture.scratch.join("foreign.keep");
             fs::write(&foreign, b"preserve")?;
             let registry = fixture.preseed_registry_state()?;
-            let mut process: PublicationProcess = fixture.start_at_manifest_lookup()?;
-            process.wait_until_blocked()?;
-            assert_materialized_layout(&fixture)?;
-            fixture.update_github_state(|state| apply_freshness_change(state, change))?;
-            let output = process.release_and_wait()?;
-            assert_rejected(&fixture, &output, expected)?;
+            let output = fixture.invoke_publication_boundary()?;
+            assert_rejected(&fixture, &output, "image_publication_ci_job_identity")?;
             assert_eq!(fixture.registry_state()?, registry);
             assert_eq!(fs::read(&fixture.archive)?, archive);
             assert_eq!(fs::read(&fixture.record)?, record);
             assert_eq!(fs::read(&foreign)?, b"preserve");
             assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-        }
-    }
-    Ok(())
+            Ok(())
+        },
+    )
 }
 #[test]
-fn public_idempotent_publication_revalidates_before_accepting_existing_tag()
--> Result<(), Box<dyn Error>> {
-    for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
-        let fixture = Fixture::new_for(profile)?;
-        let archive = fs::read(&fixture.archive)?;
-        let record = fs::read(&fixture.record)?;
-        let foreign = fixture.scratch.join("foreign.keep");
-        fs::write(&foreign, b"preserve")?;
-        fixture.preseed_registry_state()?;
-        fixture.seed_existing_tag(ExistingTag::SameDigest)?;
-        let registry = fixture.registry_state()?;
-        let mut process: PublicationProcess = fixture.start_at_manifest_lookup()?;
-        process.wait_until_blocked()?;
-        assert_materialized_layout(&fixture)?;
-        fixture.update_github_state(|state| {
-            state["ci_jobs"][1]["conclusion"] = json!("failure");
+fn boundary_publication_revalidates_ci_and_main_after_manifest_lookup() -> Result<(), Box<dyn Error>>
+{
+    super::run_isolated(
+        "required_ci::boundary_publication_revalidates_ci_and_main_after_manifest_lookup",
+        || {
+            for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
+                for (change, expected) in [
+                    (FreshnessChange::Main, "image_publication_main_changed"),
+                    (
+                        FreshnessChange::Unprotected,
+                        "image_publication_default_branch",
+                    ),
+                    (FreshnessChange::LatestRun, "image_publication_ci_changed"),
+                    (
+                        FreshnessChange::AdvanceAttempt,
+                        "image_publication_ci_changed",
+                    ),
+                    (
+                        FreshnessChange::FailedRun,
+                        "image_publication_ci_latest_not_success",
+                    ),
+                    (
+                        FreshnessChange::FailedRequired,
+                        "image_publication_ci_required_job",
+                    ),
+                ] {
+                    let fixture = Fixture::new_for(profile)?;
+                    let archive = fs::read(&fixture.archive)?;
+                    let record = fs::read(&fixture.record)?;
+                    let foreign = fixture.scratch.join("foreign.keep");
+                    fs::write(&foreign, b"preserve")?;
+                    let registry = fixture.preseed_registry_state()?;
+                    let mut process: PublicationProcess = fixture.start_at_manifest_lookup()?;
+                    process.wait_until_blocked()?;
+                    assert_materialized_layout(&fixture)?;
+                    fixture.update_github_state(|state| apply_freshness_change(state, change))?;
+                    let output = process.release_and_wait()?;
+                    assert_rejected(&fixture, &output, expected)?;
+                    assert_eq!(fixture.registry_state()?, registry);
+                    assert_eq!(fs::read(&fixture.archive)?, archive);
+                    assert_eq!(fs::read(&fixture.record)?, record);
+                    assert_eq!(fs::read(&foreign)?, b"preserve");
+                    assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
+                }
+            }
             Ok(())
-        })?;
-        let output = process.release_and_wait()?;
-        assert_rejected(&fixture, &output, "image_publication_ci_required_job")?;
-        assert_eq!(fixture.registry_state()?, registry);
-        assert_eq!(fs::read(&fixture.archive)?, archive);
-        assert_eq!(fs::read(&fixture.record)?, record);
-        assert_eq!(fs::read(&foreign)?, b"preserve");
-        assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-    }
-    Ok(())
+        },
+    )
+}
+#[test]
+fn boundary_idempotent_publication_revalidates_before_accepting_existing_tag()
+-> Result<(), Box<dyn Error>> {
+    super::run_isolated(
+        "required_ci::boundary_idempotent_publication_revalidates_before_accepting_existing_tag",
+        || {
+            for profile in [FixtureProfile::Job, FixtureProfile::Runner] {
+                let fixture = Fixture::new_for(profile)?;
+                let archive = fs::read(&fixture.archive)?;
+                let record = fs::read(&fixture.record)?;
+                let foreign = fixture.scratch.join("foreign.keep");
+                fs::write(&foreign, b"preserve")?;
+                fixture.preseed_registry_state()?;
+                fixture.seed_existing_tag(ExistingTag::SameDigest)?;
+                let registry = fixture.registry_state()?;
+                let mut process: PublicationProcess = fixture.start_at_manifest_lookup()?;
+                process.wait_until_blocked()?;
+                assert_materialized_layout(&fixture)?;
+                fixture.update_github_state(|state| {
+                    state["ci_jobs"][1]["conclusion"] = json!("failure");
+                    Ok(())
+                })?;
+                let output = process.release_and_wait()?;
+                assert_rejected(&fixture, &output, "image_publication_ci_required_job")?;
+                assert_eq!(fixture.registry_state()?, registry);
+                assert_eq!(fs::read(&fixture.archive)?, archive);
+                assert_eq!(fs::read(&fixture.record)?, record);
+                assert_eq!(fs::read(&foreign)?, b"preserve");
+                assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
+            }
+            Ok(())
+        },
+    )
 }
 
 fn apply_required_failure(
@@ -315,46 +334,6 @@ fn valid_second_page(fixture: &Fixture) -> Vec<Value> {
         json!({"total_count":101,"jobs":first_page}),
         json!({"total_count":101,"jobs":[required]}),
     ]
-}
-
-fn assert_rejected(
-    fixture: &Fixture,
-    output: &std::process::Output,
-    expected: &str,
-) -> Result<(), Box<dyn Error>> {
-    assert!(!output.status.success(), "accepted invalid CI evidence");
-    let diagnostic = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        diagnostic.contains(expected),
-        "expected {expected}; got {diagnostic}"
-    );
-    assert!(fixture.last_fixture_error()?.is_none());
-    if fixture.receipt.exists() {
-        assert_eq!(
-            super::support::read_pending(&fixture.receipt)?["expected_digest"],
-            fixture.expected_digest
-        );
-    }
-    Ok(())
-}
-
-fn assert_materialized_layout(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
-    let mut directories = fs::read_dir(&fixture.scratch)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .filter(|path| path.is_dir());
-    let publication = directories
-        .next()
-        .ok_or("publication directory missing at manifest lookup")?;
-    if directories.next().is_some() || !publication.join("oci/oci-layout").is_file() {
-        return Err("manifest lookup did not follow OCI materialization".into());
-    }
-    Ok(())
 }
 
 #[test]

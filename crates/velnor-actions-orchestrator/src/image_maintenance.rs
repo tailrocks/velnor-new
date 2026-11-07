@@ -141,3 +141,105 @@ pub(crate) fn read_source_file(
 ) -> Result<Vec<u8>, OrchestratorError> {
     source::read_source_file(root, source_commit, relative, limit, deadline)
 }
+
+#[cfg(test)]
+mod publication_boundary_worker {
+    use super::{ImagePublicationProfile, PublishImageRequest, publish_image};
+    use std::{error::Error, fs, io::Write, path::PathBuf, time::Duration};
+    use velnor_actions_mise::CheckDeadline;
+
+    #[test]
+    #[ignore = "invoked only by the isolated image publication fixture"]
+    fn publication() -> Result<(), Box<dyn Error>> {
+        let path = PathBuf::from(
+            std::env::var_os("VELNOR_IMAGE_TEST_INPUT").ok_or("missing fixture input")?,
+        );
+        if !path.is_absolute() || fs::metadata(&path)?.len() > 16 * 1024 * 1024 {
+            return Err("invalid fixture input".into());
+        }
+        let data: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
+        let string = |key: &str| -> Result<String, Box<dyn Error>> {
+            Ok(data[key]
+                .as_str()
+                .ok_or("missing fixture field")?
+                .to_owned())
+        };
+        let number = |key: &str| -> Result<u64, Box<dyn Error>> {
+            data[key]
+                .as_u64()
+                .ok_or_else(|| "missing fixture number".into())
+        };
+        let profile = match string("profile")?.as_str() {
+            "job" => ImagePublicationProfile::Job,
+            "runner" => ImagePublicationProfile::Runner,
+            "dind" => ImagePublicationProfile::Dind,
+            "resource_probe" => ImagePublicationProfile::ResourceProbe,
+            _ => return Err("invalid publication profile".into()),
+        };
+        let report = if profile == ImagePublicationProfile::Job {
+            serde_json::to_vec(&data["attestation"])?
+        } else {
+            serde_json::to_vec(&data["qualification_attestation"])?
+        };
+        crate::release::package_release_signer::inject_verified_output_for_test(report.clone());
+        if profile == ImagePublicationProfile::Job {
+            crate::release::package_release_signer::inject_verified_output_for_test(report);
+        }
+        publish_image(&PublishImageRequest {
+            profile,
+            source_commit: string("source")?,
+            producer_run_id: number("producer_run_id")?,
+            producer_run_attempt: u32::try_from(number("producer_run_attempt")?)?,
+            artifact_id: number("artifact_id")?,
+            archive_path: string("archive")?.into(),
+            record_path: string("record")?.into(),
+            qualification_proof: data["qualification_proof"].as_str().map(Into::into),
+            job_attestation_run_id: if profile == ImagePublicationProfile::Job {
+                Some(number("job_attestation_run_id")?)
+            } else {
+                None
+            },
+            job_attestation_run_attempt: if profile == ImagePublicationProfile::Job {
+                Some(u32::try_from(number("producer_run_attempt")?)?)
+            } else {
+                None
+            },
+            private_scratch: string("scratch")?.into(),
+            receipt_output: string("receipt")?.into(),
+            deadline: CheckDeadline::after(Duration::from_secs(90))?,
+        })?;
+        crate::release::package_release_signer::assert_test_verified_outputs_consumed();
+        let mut receipt = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(string("boundary_receipt")?)?;
+        receipt.write_all(string("nonce")?.as_bytes())?;
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "invoked only by the isolated image promotion fixture"]
+    fn promotion() -> Result<(), Box<dyn Error>> {
+        let path = PathBuf::from(
+            std::env::var_os("VELNOR_IMAGE_TEST_INPUT").ok_or("missing fixture input")?,
+        );
+        if !path.is_absolute() || fs::metadata(&path)?.len() > 16 * 1024 * 1024 {
+            return Err("invalid fixture input".into());
+        }
+        let data: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
+        let field = |key: &str| data[key].as_str().ok_or("missing fixture field");
+        super::promotion::enable_test_promotion_verifier();
+        super::promote_image(&super::PromoteImageRequest {
+            image_id: field("image_id")?.to_owned(),
+            source_commit: field("source")?.to_owned(),
+            deadline: CheckDeadline::after(Duration::from_secs(90))?,
+        })?;
+        super::promotion::assert_test_promotion_verifier_used();
+        let mut receipt = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(field("boundary_receipt")?)?;
+        receipt.write_all(field("nonce")?.as_bytes())?;
+        Ok(())
+    }
+}

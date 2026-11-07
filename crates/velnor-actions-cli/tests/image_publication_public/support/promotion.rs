@@ -97,6 +97,7 @@ impl Fixture {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
+        let _server = super::api_server::start_for_isolated_worker(self)?;
         let home = self
             .state
             .parent()
@@ -135,7 +136,57 @@ impl Fixture {
                 "--source-commit",
                 &self.source,
             ]);
+        if std::env::var("VELNOR_GH_FIXTURE_TARGET").as_deref() == Ok("image_publication") {
+            command.env("MISE_DATA_DIR", "/tools/mise");
+        }
         command.output()
+    }
+
+    pub(crate) fn invoke_promotion_boundary(&self) -> Result<Output, Box<dyn Error>> {
+        let binary =
+            std::env::var_os("VELNOR_IMAGE_TEST_WORKER").ok_or("missing boundary worker")?;
+        let input = self
+            .state
+            .parent()
+            .ok_or("missing fixture directory")?
+            .join("promotion-boundary-input.json");
+        let receipt = input.with_file_name("promotion-boundary-child-receipt");
+        let nonce = std::env::var("VELNOR_GH_FIXTURE_NONCE")?;
+        fs::write(
+            &input,
+            serde_json::to_vec(&json!({
+                "source": self.source, "image_id": "runner", "boundary_receipt": receipt, "nonce": nonce,
+            }))?,
+        )?;
+        let _server = super::api_server::start_for_isolated_worker(self)?;
+        let original = super::runtime::publication_command(self)?;
+        let mut command = Command::new(binary);
+        command.env_clear();
+        for (key, value) in original.get_envs() {
+            if let Some(value) = value {
+                command.env(key, value);
+            }
+        }
+        let tag = format!("runner-v{VERSION}");
+        command
+            .env("GITHUB_REF_NAME", &tag)
+            .env("GITHUB_REF", format!("refs/tags/{tag}"))
+            .env(
+                "GITHUB_WORKFLOW_REF",
+                format!("tailrocks/velnor-new/.github/workflows/publish.yml@refs/tags/{tag}"),
+            )
+            .env("VELNOR_IMAGE_TEST_INPUT", input)
+            .args([
+                "--exact",
+                "image_maintenance::publication_boundary_worker::promotion",
+                "--ignored",
+                "--nocapture",
+            ]);
+        let output = command.output()?;
+        if output.status.success() && fs::read_to_string(receipt)? != nonce {
+            return Err("promotion boundary worker receipt mismatch".into());
+        }
+        Ok(output)
     }
 }
 

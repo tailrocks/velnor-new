@@ -263,6 +263,38 @@ def main():
     if kind == "image_attestation" and test not in image_attestation_tests:
         raise RuntimeError("fixture scenario does not belong to target")
     if kind == "image_publication" and test not in (
+        "job_boundary_accepts_captured_missing_manifest_and_verifies_registry_state",
+        "public_authority_rejections_preserve_registry_inputs_and_foreign_resources",
+        "boundary_job_publication_failure_cleans_owned_scratch_and_preserves_inputs",
+        "boundary_job_publication_rejects_corrupt_remote_config_and_layer",
+        "required_ci::boundary_publication_reads_all_required_ci_job_pages_and_rejects_cross_page_duplicates",
+        "required_ci::boundary_publication_revalidates_ci_and_main_after_manifest_lookup",
+        "required_ci::boundary_idempotent_publication_revalidates_before_accepting_existing_tag",
+        "publication_collections::boundary_publication_selects_the_attempt_artifact_from_later_pages",
+        "publication_collections::boundary_publication_reads_later_attestor_job_pages_and_rejects_duplicate_ids",
+        "publication_collections::boundary_publication_selects_latest_matching_ci_run_from_later_page",
+        "job_identity::boundary_job_publication_rejects_wrong_image_identity_before_registry_writes",
+        "job_identity::boundary_job_publication_rejects_unlabeled_or_malformed_configuration",
+        "attempt_identity::runner_boundary_selects_only_the_current_attempt_artifact",
+        "runner_source::runner_family_boundary_authenticates_selected_source_and_verifies_registry_state",
+        "runner_source::runner_boundary_rejects_dind_kind_archive_before_registry_mutation",
+        "promotion::promotion_boundary_tags_the_attested_source_digest_without_uploading_blobs",
+        "promotion::promotion_boundary_rejects_unapproved_authority_and_conflicting_tags_without_registry_writes",
+        "promotion::promotion_boundary_rejects_attested_digest_for_the_wrong_native_role",
+        "promotion::promotion_boundary_reserved_job_repository_requires_the_job_role",
+        "promotion::promotion_boundary_generic_image_without_native_role_label_can_be_promoted",
+        "readback_retention::boundary_job_publication_releases_verified_readback_before_next_blob_finishes",
+        "pagination::public_runner_publication_rejects_unusable_paginated_attestations_before_registry_write",
+        "registry_cases::boundary_job_publication_accepts_legacy_raw_tar_layer",
+        "registry_cases::boundary_job_publication_is_idempotent_for_the_same_registry_manifest",
+        "registry_cases::boundary_job_publication_rejects_conflicting_leaf_and_outer_index_tags",
+        "registry_cases::boundary_job_publication_creates_a_previously_unknown_repository",
+        "registry_cases::boundary_job_publication_requires_the_captured_missing_manifest_response",
+        "registry_cases::boundary_job_publication_rejects_a_tag_that_moves_after_readback",
+        "registry_cases::boundary_job_publication_rejects_a_same_size_corrupt_remote_manifest",
+        "registry_cases::boundary_existing_receipt_blocks_registry_publication",
+        "source_closure::boundary_runner_family_accepts_the_independent_complete_input_inventory",
+        "source_closure::boundary_job_publication_rejects_wrong_attested_source_closure_digest",
         "signed_attestation::public_publication_rejects_an_unverified_certificate_before_registry_mutation",
         "attempt_identity::public_runner_publication_rejects_empty_and_malformed_attestation_output",
         "attempt_identity::public_runner_publication_rejects_artifacts_from_other_or_ambiguous_attempts",
@@ -397,13 +429,23 @@ def main():
         target = cache / key; checked_directory(target)
         docker = docker_base(client, snapshot, target, tools, registry, image_platform)
         binary_meta = target / "fixture-binaries.json"; cargo_meta = target / "fixture-cargo.json"
-        if not binary_meta.is_file() or not cargo_meta.is_file():
+        worker_path = target / "fixture-worker-path"
+        if not binary_meta.is_file() or not cargo_meta.is_file() or (kind == "image_publication" and not worker_path.is_file()):
             release = "--release" if profile == "release" else ""
             selection = "--lib" if test_target is None else f"--test {test_target}"
-            fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release};" if kind == "image_publication" else ""
+            fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release}; cargo test --locked --offline -p velnor-actions-orchestrator --lib --no-run --message-format=json {release} > /target/fixture-worker-messages;" if kind == "image_publication" else ""
             build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if signed_controller else ""
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true {build_settings}; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
+            if kind == "image_publication":
+                messages = (target / "fixture-worker-messages").read_text().splitlines()
+                executables = [item["executable"] for item in map(json.loads, messages)
+                               if item.get("reason") == "compiler-artifact"
+                               and item.get("target", {}).get("name") == "velnor_actions_orchestrator"
+                               and item.get("profile", {}).get("test") is True and item.get("executable")]
+                if len(executables) != 1 or not executables[0].startswith(f"/target/{profile}/deps/"):
+                    raise RuntimeError("invalid orchestrator fixture executable")
+                worker_path.write_text(executables[0])
             verify_sources(root, snapshot, entries, patterns)
             if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
@@ -416,8 +458,9 @@ def main():
         nonce = secrets.token_hex(32)
         receipt = target / f"receipt-{nonce}"
         fixture_path = "/tools/bin:" if signed_controller else ""
+        worker = read_regular(worker_path, 4096).decode() if kind == "image_publication" else ""
         script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
-        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}"]
+        env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}", "-e", f"VELNOR_IMAGE_TEST_WORKER={worker}"]
         try:
             command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)
             if read_regular(receipt, 256).decode() != f"{nonce}\n{kind}\n{test}\n":

@@ -57,99 +57,129 @@ fn begin_isolated(scenario: &str) -> Result<bool, Box<dyn Error>> {
     Ok(false)
 }
 
-#[test]
-fn public_job_publication_accepts_captured_missing_manifest_and_verifies_registry_state()
--> Result<(), Box<dyn Error>> {
-    let fixture = support::Fixture::new()?;
-    assert_eq!(fixture.source, fixture.authority_sha);
-    assert_eq!(fixture.source, fixture.current_main_sha);
-    fixture.set_initial_manifest_outcome(
-        support::CapturedOutcome::Missing,
-        support::ReplayMutation::Exact,
-    )?;
-    let archive_before = fs::read(&fixture.archive)?;
-    let record_before = fs::read(&fixture.record)?;
-    let output = fixture.invoke()?;
-    let fixture_error = fixture.last_fixture_error()?;
-    assert!(
-        output.status.success(),
-        "publication failed: {}; fixture: {fixture_error:?}",
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert!(fixture_error.is_none());
-    let receipt: serde_json::Value = support::read_receipt(&fixture.receipt)?;
-    assert_eq!(receipt["schema"], "velnor.image-publication.v1");
-    assert_eq!(receipt["profile"], "job");
-    assert_eq!(receipt["source_commit"], fixture.source);
-    assert_eq!(receipt["workflow_path"], ".github/workflows/ci.yml");
-    assert_eq!(receipt["workflow_authority_sha"], fixture.authority_sha);
-    assert_eq!(receipt["repository"], fixture.profile.repository());
-    assert_eq!(receipt["tag"], format!("sha-{}", fixture.source));
-    assert_eq!(receipt["registry_digest"], fixture.expected_digest);
-    assert_eq!(receipt["platform_manifest_digest"], fixture.platform_digest);
-    assert_eq!(receipt["image_configuration_digest"], fixture.config_digest);
-    assert_eq!(receipt["lock_sha256"], fixture.lock_sha256);
-    assert_eq!(receipt["archive_sha256"], fixture.archive_sha256);
-    assert_eq!(receipt["producer_run_id"], fixture.producer_run_id);
-    assert_eq!(receipt["artifact_id"], fixture.artifact_id);
-    assert!(fixture.platform_digest.starts_with("sha256:"));
-    assert!(fixture.config_digest.starts_with("sha256:"));
-    assert_eq!(receipt["idempotent"], false);
-    assert_eq!(fs::read(&fixture.archive)?, archive_before);
-    assert_eq!(fs::read(&fixture.record)?, record_before);
-    assert_eq!(
-        fixture.registry_digest()?,
-        Some(fixture.expected_digest.clone())
-    );
-    assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
-    assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 0);
+fn run_isolated(
+    scenario: &str,
+    body: impl FnOnce() -> Result<(), Box<dyn Error>>,
+) -> Result<(), Box<dyn Error>> {
+    if begin_isolated(scenario)? {
+        body()?;
+        isolated_worker::record_success("image_publication", scenario)?;
+    }
     Ok(())
+}
+
+#[test]
+fn job_boundary_accepts_captured_missing_manifest_and_verifies_registry_state()
+-> Result<(), Box<dyn Error>> {
+    run_isolated(
+        "job_boundary_accepts_captured_missing_manifest_and_verifies_registry_state",
+        || {
+            let fixture = support::Fixture::new()?;
+            assert_eq!(fixture.source, fixture.authority_sha);
+            assert_eq!(fixture.source, fixture.current_main_sha);
+            fixture.set_initial_manifest_outcome(
+                support::CapturedOutcome::Missing,
+                support::ReplayMutation::Exact,
+            )?;
+            let archive_before = fs::read(&fixture.archive)?;
+            let record_before = fs::read(&fixture.record)?;
+            let output = fixture.invoke_publication_boundary()?;
+            let fixture_error = fixture.last_fixture_error()?;
+            assert!(
+                output.status.success(),
+                "publication failed: {}; fixture: {fixture_error:?}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            assert!(fixture_error.is_none());
+            let receipt: serde_json::Value = support::read_receipt(&fixture.receipt)?;
+            assert_eq!(receipt["schema"], "velnor.image-publication.v1");
+            assert_eq!(receipt["profile"], "job");
+            assert_eq!(receipt["source_commit"], fixture.source);
+            assert_eq!(receipt["workflow_path"], ".github/workflows/ci.yml");
+            assert_eq!(receipt["workflow_authority_sha"], fixture.authority_sha);
+            assert_eq!(receipt["repository"], fixture.profile.repository());
+            assert_eq!(receipt["tag"], format!("sha-{}", fixture.source));
+            assert_eq!(receipt["registry_digest"], fixture.expected_digest);
+            assert_eq!(receipt["platform_manifest_digest"], fixture.platform_digest);
+            assert_eq!(receipt["image_configuration_digest"], fixture.config_digest);
+            assert_eq!(receipt["lock_sha256"], fixture.lock_sha256);
+            assert_eq!(receipt["archive_sha256"], fixture.archive_sha256);
+            assert_eq!(receipt["producer_run_id"], fixture.producer_run_id);
+            assert_eq!(receipt["artifact_id"], fixture.artifact_id);
+            assert!(fixture.platform_digest.starts_with("sha256:"));
+            assert!(fixture.config_digest.starts_with("sha256:"));
+            assert_eq!(receipt["idempotent"], false);
+            assert_eq!(fs::read(&fixture.archive)?, archive_before);
+            assert_eq!(fs::read(&fixture.record)?, record_before);
+            assert_eq!(
+                fixture.registry_digest()?,
+                Some(fixture.expected_digest.clone())
+            );
+            assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
+            assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 0);
+            Ok(())
+        },
+    )
 }
 
 #[test]
 fn public_authority_rejections_preserve_registry_inputs_and_foreign_resources()
 -> Result<(), Box<dyn Error>> {
-    authority_rejections::assert_all()
+    run_isolated(
+        "public_authority_rejections_preserve_registry_inputs_and_foreign_resources",
+        authority_rejections::assert_all,
+    )
 }
 
 #[test]
-fn public_job_publication_failure_cleans_owned_scratch_and_preserves_inputs()
+fn boundary_job_publication_failure_cleans_owned_scratch_and_preserves_inputs()
 -> Result<(), Box<dyn Error>> {
-    let fixture = support::Fixture::new()?;
-    let archive_before = fs::read(&fixture.archive)?;
-    let record_before = fs::read(&fixture.record)?;
-    let foreign = fixture.scratch.join("foreign.keep");
-    fs::write(&foreign, b"preserve")?;
-    fixture.fail_remote_readback()?;
-    let output = fixture.invoke()?;
-    assert!(!output.status.success());
-    assert!(fixture.last_fixture_error()?.is_none());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("image_publication_blob_process"),
-        "unexpected publication failure: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let pending = support::read_pending(&fixture.receipt)?;
-    assert_eq!(pending["expected_digest"], fixture.expected_digest);
-    assert_eq!(
-        fixture.registry_digest()?,
-        Some(fixture.expected_digest.clone())
-    );
-    assert_eq!(fs::read(&foreign)?, b"preserve");
-    assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-    assert_eq!(fs::read(&fixture.archive)?, archive_before);
-    assert_eq!(fs::read(&fixture.record)?, record_before);
-    Ok(())
+    run_isolated(
+        "boundary_job_publication_failure_cleans_owned_scratch_and_preserves_inputs",
+        || {
+            let fixture = support::Fixture::new()?;
+            let archive_before = fs::read(&fixture.archive)?;
+            let record_before = fs::read(&fixture.record)?;
+            let foreign = fixture.scratch.join("foreign.keep");
+            fs::write(&foreign, b"preserve")?;
+            fixture.fail_remote_readback()?;
+            let output = fixture.invoke_publication_boundary()?;
+            assert!(!output.status.success());
+            assert!(fixture.last_fixture_error()?.is_none());
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("image_publication_blob_process"),
+                "unexpected publication failure: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let pending = support::read_pending(&fixture.receipt)?;
+            assert_eq!(pending["expected_digest"], fixture.expected_digest);
+            assert_eq!(
+                fixture.registry_digest()?,
+                Some(fixture.expected_digest.clone())
+            );
+            assert_eq!(fs::read(&foreign)?, b"preserve");
+            assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
+            assert_eq!(fs::read(&fixture.archive)?, archive_before);
+            assert_eq!(fs::read(&fixture.record)?, record_before);
+            Ok(())
+        },
+    )
 }
 
 #[test]
-fn public_job_publication_rejects_corrupt_remote_config_and_layer() -> Result<(), Box<dyn Error>> {
-    for kind in ["config", "layer"] {
-        for fault in blob_faults(kind)? {
-            assert_blob_fault_rejected(kind, fault)?;
-        }
-    }
-    Ok(())
+fn boundary_job_publication_rejects_corrupt_remote_config_and_layer() -> Result<(), Box<dyn Error>>
+{
+    run_isolated(
+        "boundary_job_publication_rejects_corrupt_remote_config_and_layer",
+        || {
+            for kind in ["config", "layer"] {
+                for fault in blob_faults(kind)? {
+                    assert_blob_fault_rejected(kind, fault)?;
+                }
+            }
+            Ok(())
+        },
+    )
 }
 
 fn blob_faults(kind: &str) -> Result<Vec<support::BlobFault>, Box<dyn Error>> {
@@ -211,7 +241,7 @@ fn assert_blob_fault_rejected(kind: &str, fault: support::BlobFault) -> Result<(
         .ok_or("readback fixture blob is missing")?;
     let foreign = fixture.scratch.join("foreign.keep");
     fs::write(&foreign, b"preserve")?;
-    let output = fixture.invoke()?;
+    let output = fixture.invoke_publication_boundary()?;
     assert!(
         !output.status.success(),
         "accepted {kind} blob fault {fault:?}"

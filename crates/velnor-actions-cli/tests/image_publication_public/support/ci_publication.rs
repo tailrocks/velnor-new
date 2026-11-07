@@ -13,10 +13,13 @@ use std::{
 
 use serde_json::{Value, json};
 
-use super::{Fixture, runtime};
+use super::{Fixture, api_server, boundary::verify_boundary_receipt};
 
 pub(crate) struct PublicationProcess {
     child: Option<Child>,
+    _server: Option<api_server::Server>,
+    boundary_receipt: PathBuf,
+    boundary_nonce: String,
     ready_path: PathBuf,
     release_path: PathBuf,
     reference: String,
@@ -56,9 +59,16 @@ impl Fixture {
         let release_path = home.join(".image-publication-manifest-release");
         remove_if_present(&ready_path)?;
         remove_if_present(&release_path)?;
-        let child = runtime::publication_command(self)?.spawn()?;
+        let server = api_server::start_for_isolated_worker(self)?;
+        let (mut command, boundary_receipt, boundary_nonce) = self
+            .publication_boundary_command()
+            .map_err(|error| error.to_string())?;
+        let child = command.spawn()?;
         Ok(PublicationProcess {
             child: Some(child),
+            _server: server,
+            boundary_receipt,
+            boundary_nonce,
             ready_path,
             release_path,
             reference,
@@ -111,7 +121,10 @@ impl PublicationProcess {
             .child
             .take()
             .ok_or("publication process was already joined")?;
-        Ok(child.wait_with_output()?)
+        let output = child.wait_with_output()?;
+        verify_boundary_receipt(&output, &self.boundary_receipt, &self.boundary_nonce)
+            .map_err(|error| error.to_string())?;
+        Ok(output)
     }
 
     fn release(&self) -> Result<(), Box<dyn Error>> {

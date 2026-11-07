@@ -91,8 +91,20 @@ fn verify_one(
     identity: &AttestationCommandIdentity<'_>,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    #[cfg(test)]
+    if let Some(output) = test_output::take() {
+        return Ok(output);
+    }
     fetch::verify_all(path, identity, deadline)
 }
+
+#[cfg(test)]
+#[path = "package_release_signer_attestation_test_output.rs"]
+mod test_output;
+#[cfg(test)]
+pub(crate) use test_output::{
+    assert_test_verified_outputs_consumed, inject_verified_output_for_test,
+};
 
 #[derive(Clone, Copy)]
 enum VerificationPolicy {

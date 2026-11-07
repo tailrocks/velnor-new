@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod api_server;
+mod boundary;
 mod ci_publication;
 mod encoding;
 mod journal;

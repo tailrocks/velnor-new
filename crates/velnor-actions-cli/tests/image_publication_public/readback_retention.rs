@@ -11,57 +11,63 @@ use std::{
 use super::support::{self, Fixture};
 
 #[test]
-fn public_job_publication_releases_verified_readback_before_next_blob_finishes()
+fn boundary_job_publication_releases_verified_readback_before_next_blob_finishes()
 -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new_with_large_raw_tar()?;
-    let layer_digest = fixture
-        .layer_digests
-        .first()
-        .ok_or("large image fixture has no layer")?;
-    let (ready, release) = support::readback_barrier::configure(&fixture, layer_digest)?;
-    let archive_before = fs::read(&fixture.archive)?;
-    let record_before = fs::read(&fixture.record)?;
-    let foreign = fixture.scratch.join("foreign.keep");
-    fs::write(&foreign, b"preserve")?;
-    std::thread::scope(|scope| {
-        let publication = scope.spawn(|| fixture.invoke());
-        let live = wait_for_file(&ready).and_then(|()| live_scratch_state(&fixture, layer_digest));
-        let release_result = fs::write(&release, b"continue");
-        let output = publication
-            .join()
-            .map_err(|_| std::io::Error::other("publication thread panicked"))??;
-        let (config_absent, layer_readback_present, layout_present) = live?;
-        release_result?;
-        assert!(
-            output.status.success(),
-            "publication failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(fixture.last_fixture_error()?.is_none());
-        assert!(fixture.receipt.is_file());
-        let receipt: serde_json::Value = super::support::read_receipt(&fixture.receipt)?;
-        assert_eq!(receipt["schema"], "velnor.image-publication.v1");
-        assert_eq!(receipt["registry_digest"], fixture.expected_digest);
-        assert!(
-            config_absent,
-            "verified config readback remained in scratch"
-        );
-        assert!(
-            layer_readback_present,
-            "blocked layer readback was not present"
-        );
-        assert!(layout_present, "original OCI layout was not present");
-        assert_eq!(
-            fixture.registry_digest()?,
-            Some(fixture.expected_digest.clone())
-        );
-        assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
-        assert_eq!(fs::read(&fixture.archive)?, archive_before);
-        assert_eq!(fs::read(&fixture.record)?, record_before);
-        assert_eq!(fs::read(&foreign)?, b"preserve");
-        assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
-        Ok(())
-    })
+    super::run_isolated(
+        "readback_retention::boundary_job_publication_releases_verified_readback_before_next_blob_finishes",
+        || {
+            let fixture = Fixture::new_with_large_raw_tar()?;
+            let layer_digest = fixture
+                .layer_digests
+                .first()
+                .ok_or("large image fixture has no layer")?;
+            let (ready, release) = support::readback_barrier::configure(&fixture, layer_digest)?;
+            let archive_before = fs::read(&fixture.archive)?;
+            let record_before = fs::read(&fixture.record)?;
+            let foreign = fixture.scratch.join("foreign.keep");
+            fs::write(&foreign, b"preserve")?;
+            std::thread::scope(|scope| {
+                let publication = scope.spawn(|| fixture.invoke_publication_boundary());
+                let live =
+                    wait_for_file(&ready).and_then(|()| live_scratch_state(&fixture, layer_digest));
+                let release_result = fs::write(&release, b"continue");
+                let output = publication
+                    .join()
+                    .map_err(|_| std::io::Error::other("publication thread panicked"))??;
+                let (config_absent, layer_readback_present, layout_present) = live?;
+                release_result?;
+                assert!(
+                    output.status.success(),
+                    "publication failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert!(fixture.last_fixture_error()?.is_none());
+                assert!(fixture.receipt.is_file());
+                let receipt: serde_json::Value = super::support::read_receipt(&fixture.receipt)?;
+                assert_eq!(receipt["schema"], "velnor.image-publication.v1");
+                assert_eq!(receipt["registry_digest"], fixture.expected_digest);
+                assert!(
+                    config_absent,
+                    "verified config readback remained in scratch"
+                );
+                assert!(
+                    layer_readback_present,
+                    "blocked layer readback was not present"
+                );
+                assert!(layout_present, "original OCI layout was not present");
+                assert_eq!(
+                    fixture.registry_digest()?,
+                    Some(fixture.expected_digest.clone())
+                );
+                assert_eq!(fixture.stored_inventory()?, fixture.expected_inventory);
+                assert_eq!(fs::read(&fixture.archive)?, archive_before);
+                assert_eq!(fs::read(&fixture.record)?, record_before);
+                assert_eq!(fs::read(&foreign)?, b"preserve");
+                assert_eq!(fs::read_dir(&fixture.scratch)?.count(), 1);
+                Ok(())
+            })
+        },
+    )
 }
 
 fn live_scratch_state(
