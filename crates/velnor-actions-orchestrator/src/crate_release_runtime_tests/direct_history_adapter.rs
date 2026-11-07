@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crate_release_github::GitHubAdmissionRequest;
-use crate::crate_release_journal::JournalReceipt;
+use crate::crate_release_journal::{JournalIo as _, JournalReceipt, JournalTag};
 use std::path::Path;
 
 pub(super) fn exercise(
@@ -266,7 +266,6 @@ fn exercise_interrupted_journal(
         1,
         "pending upload must remain visible to recovery"
     );
-    use crate::crate_release_journal::{JournalIo as _, JournalTag};
     let completion_ref = format!(
         "refs/tags/velnor-receipt/{}/{}/reconciled",
         current.identity.run_id, current.identity.run_attempt
