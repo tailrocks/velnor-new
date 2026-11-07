@@ -110,11 +110,12 @@ GitHub job ID,
 MBX version, and the `MBX_SHARE_OUT_DIR=1` / `MBX_BUILD_SCRIPT_EXECUTION=0` / `MBX_GC_AUTO=0` policy of production jobs (decision X48: `MBX_BUILD_SCRIPT_EXECUTION=1` plus a cross-job compiled-state restore replays a workspace member's stale build-script output, so `1` returns only with a writer that compiles under `0`); the qualification job keeps `MBX_SHARE_OUT_DIR=0` and its own cache generation slot. The action's
 stable logical object path is `$RUNNER_TEMP/velnor/mbx`; runner job namespaces
 provide physical isolation. The workflow does not install MBX through Mise.
-The fixed native job-image producer and its nonpublication source-builder
-qualification instead materialize a private MBX executable from its
-catalog-pinned archive, verify both archive and executable SHA-256, and invoke
-it under the selected Rust Mise environment. This exception does not change
-MBX installation or cache transport for other jobs.
+The nonpublication source-builder qualification instead materializes a private
+MBX executable from its catalog-pinned archive, verifies both archive and
+executable SHA-256, and invokes it under the selected Rust Mise environment.
+The fixed native job-image producer is intended to use the same boundary, but
+that integration is pending. This exception does not change MBX installation
+or cache transport for other jobs.
 A following guard checks both `mbx --version` and `mbx cache dir` through the
 selected Rust Mise environment, requiring the exact version and the expected
 action-owned store before the build. Automatic GC stays off while task results

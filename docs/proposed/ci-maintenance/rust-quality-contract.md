@@ -195,10 +195,11 @@ one binary from the immutable artifact and SHA-256 in `.velnor/generator.lock`
 before invoking it; local developers MUST use the same pinned release. The
 bootstrap verifies version and digest. Mise itself is the bootstrap exception;
 all subsequent tools MUST be installed and selected by Mise.
-The fixed native job-image producer and its nonpublication source-builder
-qualification have one additional exception: they materialize MBX from the
-catalog-pinned archive after verifying the archive and executable SHA-256, and
-run that exact private executable under the selected Rust Mise environment.
+The nonpublication source-builder qualification has one additional exception:
+it materializes MBX from the catalog-pinned archive after verifying the archive
+and executable SHA-256, and runs that exact private executable under the
+selected Rust Mise environment. The fixed native job-image producer may use
+the same exception once its boundary is wired and qualified.
 The resolved project MBX version must match the admitted archive. Other jobs
 retain their existing Mise and action-owned tool contracts.
 

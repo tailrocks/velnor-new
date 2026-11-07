@@ -40,11 +40,12 @@ record, and source closure. The attestor must consume that artifact without
 rebuilding it. The current GitHub Release workflow remains active until the new
 Runner-family producer and consumer are wired together; it is not a fallback
 after GHCR cutover.
-The job-image producer and its nonpublication source-builder fixture use the
-same closed native execution boundary. Each obtains its own private MBX binary
-from the catalog-pinned archive, verifies the archive and executable SHA-256,
-and executes it under the selected Rust Mise toolchain. The fixture artifact
-has a distinct schema and cannot authorize publication.
+The nonpublication source-builder fixture uses a closed native execution
+boundary. It obtains a private MBX binary from the catalog-pinned archive,
+verifies the archive and executable SHA-256, and executes it under the selected
+Rust Mise toolchain. The fixture artifact has a distinct schema and cannot
+authorize publication. Wiring the job-image producer to the same boundary is
+pending.
 
 The producer writes one `velnor.runner-image-publication.v1` record per image:
 `runner-image-publication.json`, `dind-image-publication.json`, or
