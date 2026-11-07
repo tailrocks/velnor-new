@@ -33,6 +33,8 @@ copy_checkout() {
     "$repository/scripts/archive-guard-build-namespace.sh" \
     "$repository/scripts/build-owned-archive-guard.sh" \
     "$repository/scripts/check-owned-archive-guard-sources.sh" "$destination/scripts/"
+  mkdir -p -- "$destination/scripts/generator-release"
+  cp -- "$repository/scripts/generator-release/cargo-source-handoff.sh" "$destination/scripts/generator-release/"
   cp -- "$repository/crates/velnor-archive-guard/Cargo.toml" \
     "$repository/crates/velnor-archive-guard/build.rs" \
     "$destination/crates/velnor-archive-guard/"

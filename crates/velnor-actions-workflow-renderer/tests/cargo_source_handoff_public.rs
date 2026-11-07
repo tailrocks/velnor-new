@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+#![cfg(unix)]
+
+use std::{error::Error, path::Path, process::Command};
+
+#[test]
+fn locked_cargo_sources_survive_private_handoff_and_corruption_recovery()
+-> Result<(), Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("python3")
+        .arg("-I")
+        .arg(root.join(
+            "crates/velnor-actions-workflow-renderer/tests/cargo_source_handoff_scenarios.py",
+        ))
+        .arg(&root)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
