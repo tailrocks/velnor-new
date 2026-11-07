@@ -5,18 +5,16 @@
 
 use serde_json::{Value, json};
 use std::{error::Error, fs, path::PathBuf};
-use velnor_actions_contract::workflow::group_ledger::{EmitEnv, JobStatus, emit_group_ledger_to};
 use velnor_actions_contract::{
-    ExecutionMode, Plan, TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1,
-    expand_workflow_with_lane_plan, plan_json_bytes,
+    Plan, TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1, plan_json_bytes,
 };
-use velnor_actions_orchestrator::{plan_internal, prepare, render_staged_tree_with};
+
+#[path = "lane_execution_both/cli.rs"]
+mod cli;
 
 #[path = "lane_execution_both/support.rs"]
 mod support;
-use support::{
-    action_script, assert_pass, assert_reject, fixture, link_dir, read_json, sha, wrapper_command,
-};
+use support::{assert_pass, assert_reject, fixture, link_dir, read_json, sha, wrapper_command};
 
 const RUN_KEY: &str = "r190003-a1";
 const BIN: &str = env!("CARGO_BIN_EXE_velnor-actions");
@@ -47,6 +45,8 @@ fn qualified_tools() -> Result<(Option<tempfile::TempDir>, PathBuf), Box<dyn Err
         "bin/mise",
         "bin/mbx",
         "bin/cargo-nextest",
+        "bin/jactionlint",
+        "bin/shellcheck",
         "cargo",
         "rustup",
         "mise-data",
@@ -77,7 +77,6 @@ fn execute_job(
         head,
         plan,
         manifest,
-        manifest_path,
         ..
     } = ctx;
     let runner = temp.join(job_id);
@@ -109,20 +108,9 @@ fn execute_job(
     ));
     fs::copy(BIN, &helper)?;
     execute_entries(ctx, job_id, &runner, &run_dir, entries, results)?;
-    let env = EmitEnv {
-        job_key: job_id.to_owned(),
-        run_id: 190_003,
-        run_attempt: 1,
-        event: "push".into(),
-        source_sha: (*head).to_owned(),
-        ref_name: "refs/heads/main".into(),
-        repository: "tailrocks/velnor-new".into(),
-        workflow_sha: (*head).to_owned(),
-        matrix_key: None,
-        job_status: JobStatus::Success,
-    };
-    let ledger = emit_group_ledger_to(&runner, manifest_path, &run_dir, RUN_KEY, &env)?;
-    results.ledgers.push(read_json(&ledger)?);
+    results
+        .ledgers
+        .push(cli::emit_ledger(tools, ctx.root, &runner, head, job_id)?);
     Ok(())
 }
 
@@ -273,24 +261,16 @@ fn check_invalid_frames(
 fn executed_rust_both_binds_wrapper_reports_and_ledgers() -> Result<(), Box<dyn Error>> {
     let (_tool_staging, tools) = qualified_tools()?;
     let (temp, root, head) = fixture()?;
-    let prepared = prepare(&root)?;
-    let expansion = expand_workflow_with_lane_plan(
-        &prepared.workflow.ir,
-        &prepared.config,
-        Some(ExecutionMode::Both),
-    )?;
-    let inventory = expansion
-        .lane_plan
-        .as_ref()
-        .ok_or("missing lane plan")?
-        .inventory();
+    let generated = cli::generate(&root, &tools)?;
+    let inventory = &generated.inventory;
+    for id in ["rust-fixture__hosted", "rust-fixture__local"] {
+        assert!(generated.required.iter().any(|required| required == id));
+    }
     let request = json!({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "event": "push", "head": head, "root": root, "lane_inventory": inventory});
-    let response: Value = serde_json::from_str(&plan_internal(&request.to_string())?)?;
+    let response = cli::invoke(&tools, "plan-v1", &request, true)?;
     let plan: Plan = serde_json::from_value(response["plan"].clone())?;
-    let tree = render_staged_tree_with(&prepared, Some(ExecutionMode::Both))?;
-    let manifest_text = tree
-        .get(TASK_EXECUTION_MANIFEST_PATH)
-        .ok_or("manifest missing")?;
+    assert_eq!(plan.generator.sha256, sha(&fs::read(BIN)?));
+    let manifest_text = &generated.manifest;
     let manifest_body = manifest_text
         .split_once('\n')
         .ok_or("manifest marker missing")?
@@ -299,15 +279,7 @@ fn executed_rust_both_binds_wrapper_reports_and_ledgers() -> Result<(), Box<dyn 
     let manifest_path = root.join(TASK_EXECUTION_MANIFEST_PATH);
     fs::create_dir_all(manifest_path.parent().ok_or("manifest parent missing")?)?;
     fs::write(&manifest_path, manifest_text)?;
-    let wrapper = tree
-        .files
-        .iter()
-        .find(|file| {
-            file.path.starts_with(".github/actions/declared-task-")
-                && file.path.ends_with("/action.yml")
-        })
-        .ok_or("declared task action missing")?;
-    let script = action_script(&wrapper.bytes)?;
+    let script = &generated.script;
     let pair: Vec<_> = plan
         .jobs
         .iter()
@@ -326,7 +298,7 @@ fn executed_rust_both_binds_wrapper_reports_and_ledgers() -> Result<(), Box<dyn 
         manifest: &manifest,
         manifest_path: &manifest_path,
         manifest_text,
-        script: &script,
+        script,
     };
     let mut results = RunResults::default();
     for job in &pair {
@@ -337,12 +309,13 @@ fn executed_rust_both_binds_wrapper_reports_and_ledgers() -> Result<(), Box<dyn 
         [&pair[0].job_id, &pair[1].job_id],
         results.first_digest.as_deref(),
     )?;
-    let required_ids = &expansion.ir.jobs["required"].needs;
-    check_merge(required_ids, &response, &json!(inventory), results)?;
+    let required_ids = &generated.required;
+    check_merge(&tools, required_ids, &response, &json!(inventory), results)?;
     Ok(())
 }
 
 fn check_merge(
+    tools: &std::path::Path,
     required_ids: &[String],
     response: &Value,
     inventory: &Value,
@@ -359,16 +332,16 @@ fn check_merge(
         .map(|id| json!({"job_id": id, "conclusion": "success"}))
         .collect();
     let mut merge = json!({"schema": 1, "run_key": RUN_KEY, "actual_event": "push", "plan": response["plan"], "matrix": response["matrix"], "matrix_reports": matrices, "task_reports": reports, "required_job_ids": required_ids, "required_jobs": required_jobs, "group_ledgers": ledgers, "lane_inventory": inventory});
-    assert_pass(&merge)?;
+    assert_pass(&merge, tools)?;
     let all_ledgers = merge["group_ledgers"]
         .as_array()
         .ok_or("ledgers missing")?
         .clone();
     merge["group_ledgers"] = json!([all_ledgers[0]]);
-    assert_reject(&merge)?;
+    assert_reject(&merge, tools)?;
     let mut replay = all_ledgers[0].clone();
     replay["job"]["job_key"] = all_ledgers[1]["job"]["job_key"].clone();
     merge["group_ledgers"] = json!([all_ledgers[0], replay]);
-    assert_reject(&merge)?;
+    assert_reject(&merge, tools)?;
     Ok(())
 }
