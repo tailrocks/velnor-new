@@ -51,15 +51,7 @@ fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Er
         &["checkout", "--quiet", "--detach", &request.source_sha],
     )?;
     let runner = tempfile::tempdir()?;
-    let bundle = runner.path().join("velnor/git-bundle");
-    fs::create_dir_all(&bundle)?;
-    fs::copy("/tools/pinned-git", bundle.join("git"))?;
-    fs::copy(
-        "/tools/pinned-git-remote-http",
-        bundle.join("git-remote-http"),
-    )?;
-    symlink("git-remote-http", bundle.join("git-remote-https"))?;
-    velnor_actions_mise::release_git_pin::verify_bundle(&bundle)?;
+    prepare_test_git_bundle(runner.path())?;
     let output = Command::new(std::env::current_exe()?)
         .args([
             "--exact",
@@ -103,6 +95,19 @@ fn exercise_case(event: &'static str, bad_recovery: u8) -> Result<(), Box<dyn Er
         .into());
     }
     crate::libtest_case::assert_one_passed(&output);
+    Ok(())
+}
+
+fn prepare_test_git_bundle(runner: &Path) -> Result<(), Box<dyn Error>> {
+    let bundle = runner.join("velnor/git-bundle");
+    fs::create_dir_all(&bundle)?;
+    fs::copy("/tools/pinned-git", bundle.join("git"))?;
+    fs::copy(
+        "/tools/pinned-git-remote-http",
+        bundle.join("git-remote-http"),
+    )?;
+    symlink("git-remote-http", bundle.join("git-remote-https"))?;
+    velnor_actions_mise::release_git_pin::verify_bundle(&bundle)?;
     Ok(())
 }
 
