@@ -1,12 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Github, JournalRegistryFake, Registry, fixture_journal_plan, test_git};
+use super::{Github, JournalRegistryFake, Registry};
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+use super::{fixture_journal_plan, test_git};
 use crate::crate_release_controller::{CrateReleaseObservation, FrozenCompletion};
-use crate::crate_release_journal::{
-    JournalStage, fixture_storage::seed_started_record, inspect_journal,
-};
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+use crate::crate_release_journal::fixture_storage::seed_started_record;
+use crate::crate_release_journal::{JournalStage, inspect_journal};
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn completion_rejects_predecessor_drift_after_source_freeze()
+-> Result<(), Box<dyn std::error::Error>> {
+    crate::release::package_release_signer::image_transport_tests::dispatch(
+        "release::package_release_signer::attestation::image_transport_tests::signed_controller_dispatch_rechecks_historical_authority",
+    )
+}
+
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 #[test]
 fn completion_rejects_predecessor_drift_after_source_freeze()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -36,9 +48,14 @@ fn completion_rejects_predecessor_drift_after_source_freeze()
         git: test_git(),
         sequence: 1,
     };
-    reject_prior_history_drift(&input)
+    let error =
+        reject_prior_history_drift(&input).expect_err("unavailable custody must fail closed");
+    assert!(matches!(error.downcast_ref::<crate::OrchestratorError>(),
+        Some(crate::OrchestratorError::Internal { problem }) if problem == "crate_release_history_custody_required"));
+    Ok(())
 }
 
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 pub(super) fn reject_prior_history_drift(
     input: &CrateReleaseObservation<'_, JournalRegistryFake, Github, Registry>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -115,6 +132,7 @@ pub(super) fn reject_prior_history_drift(
     Ok(())
 }
 
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn alter_prior_history(journal: &JournalRegistryFake, prefix: &str, scenario: u8) {
     match scenario {
         0 => {

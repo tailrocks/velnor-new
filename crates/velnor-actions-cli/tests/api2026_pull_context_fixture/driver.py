@@ -189,8 +189,8 @@ def extract_git_member(ar_command, tar_command, timeout=60):
                 process.wait()
 
 
-def stage_release_git(source_tools, tools, root):
-    pin_source = read_regular(root / "crates/velnor-actions-mise/src/release_git_pin.rs", 65536).decode()
+def stage_release_git(source_tools, tools, validation):
+    pin_source = read_regular(validation / "crates/velnor-actions-mise/src/release_git_pin.rs", 65536).decode()
     def pin(name):
         matches = re.findall(r"pub const " + name + r': &str\s*=\s*"([^"\n]+)";', pin_source)
         if len(matches) != 1:
@@ -319,6 +319,21 @@ def main():
     source_tools = pathlib.Path(configured_tools or "")
     if not source_tools.is_absolute():
         raise RuntimeError("set VELNOR_GH_FIXTURE_TOOLS to an absolute directory with qualified Linux gh and nextest")
+    signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
+    required = [f"gh_{gh_platform}", f"cargo-nextest_{gh_platform}"]
+    if signed_controller:
+        required.extend(["mise_linux_amd64", "release-plz-0.4.3", "channel-rust-1.99.1.toml"])
+    if any(not (source_tools / name).is_file() for name in required):
+        runner_temp = os.environ.get("RUNNER_TEMP")
+        if not runner_temp or source_tools != pathlib.Path(runner_temp) / "velnor-gh-fixture-tools":
+            raise RuntimeError("fixture tool directory is incomplete")
+        staging_env = {key: os.environ[key] for key in (
+            "PATH", "HOME", "RUNNER_TEMP", "MISE_DATA_DIR", "MISE_CACHE_DIR", "MISE_STATE_DIR"
+        ) if key in os.environ}
+        args = ["/usr/bin/python3", "-I", str(validation / "scripts/prepare-gh-fixture-tools.py")]
+        if signed_controller:
+            args.append("--with-signed-controller")
+        subprocess.run(args, env=staging_env, check=True, timeout=780)
     cargo_home = pathlib.Path(os.environ.get("CARGO_HOME") or (pathlib.Path.home() / ".cargo"))
     registry = (cargo_home / "registry").resolve(strict=True)
     if not registry.is_dir(): raise RuntimeError("offline Cargo registry is unavailable")
@@ -339,12 +354,11 @@ def main():
         install_tool(source_tools / f"gh_{gh_platform}", tools / f"mise/installs/gh/{gh_version}/gh_{gh_version}_{gh_platform}/bin/gh", gh_digest)
         install_tool(source_tools / f"cargo-nextest_{gh_platform}", tools / "cargo-nextest", nextest_digest)
         if test.endswith(signed_history_tests):
-            stage_release_git(source_tools, tools, root)
-        signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
+            stage_release_git(source_tools, tools, validation)
         if signed_controller:
             install_tool(source_tools / "release-plz-0.4.3", tools / "signed-controller/release-plz", "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466", 128 * 1024 * 1024)
             install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024)
-            catalog = read_regular(root / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
+            catalog = read_regular(validation / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
             versions = re.findall(r'pub const MISE_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
             digests = re.findall(r'pub const MISE_BINARY_SHA256_LINUX_X64: &str\s*=\s*"([0-9a-f]{64})";', catalog)
             rust_versions = re.findall(r'pub const RUST_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)

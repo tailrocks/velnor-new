@@ -31,6 +31,12 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
     if std::env::var_os("VELNOR_TEST_TRANSPORT_CHILD").is_some() {
         return run_test_transport_child();
     }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    if std::env::var_os("VELNOR_TEST_SAME_BASE_SIGNED").is_none() {
+        return crate::release::package_release_signer::image_transport_tests::dispatch(
+            "release::package_release_signer::attestation::image_transport_tests::same_base_history_rejects_forged_tool",
+        );
+    }
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
     let origin = format!("http://{}", listener.local_addr()?);
