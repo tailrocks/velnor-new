@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use velnor_actions_mise::{CheckDeadline, capture_tap_main, read_tap_tree};
+use velnor_actions_mise::{CheckDeadline, MiseError, capture_tap_main, read_tap_tree};
 #[path = "support.rs"]
 mod support;
 use support::{
@@ -39,36 +39,34 @@ fn special_mode_scenario(checkout: &Path, deadline: CheckDeadline) -> Result<(),
     Ok(())
 }
 
+fn require_rejection<T>(result: Result<T, MiseError>, problem: &str) {
+    assert!(
+        matches!(result, Err(MiseError::InvalidStepInput { field, value })
+            if field == "tap_git_capture" && value == problem),
+        "capture_rejection_must_identify_boundary:{problem}"
+    );
+}
+
 fn hardlink_scenario(checkout: &Path, deadline: CheckDeadline) -> Result<(), Box<dyn Error>> {
-    capture_tap_main("fixture/tap", checkout, deadline)?;
-    let tracked = checkout.join("plain.txt");
     let external = checkout
         .parent()
         .ok_or("checkout has no parent")?
         .join("outside-hardlink.txt");
-    fs::hard_link(&tracked, &external)?;
-    fs::set_permissions(&tracked, fs::Permissions::from_mode(0o600))?;
-    let original_bytes = fs::read(&external)?;
-    assert_eq!(physical_mode(&external)?, 0o600);
+    let original_bytes = b"#!/bin/sh\nexit 0\n";
+    fs::write(&external, original_bytes)?;
+    fs::set_permissions(&external, fs::Permissions::from_mode(0o600))?;
     let result = capture_tap_main("fixture/tap", checkout, deadline);
+    let external_metadata = fs::metadata(&external)?;
+    let tracked_metadata = fs::metadata(checkout.join("run me.sh"))?;
+    assert_eq!(
+        (tracked_metadata.dev(), tracked_metadata.ino()),
+        (external_metadata.dev(), external_metadata.ino())
+    );
+    assert_eq!(tracked_metadata.nlink(), 2);
+    assert_eq!(external_metadata.nlink(), 2);
     assert_eq!(fs::read(&external)?, original_bytes);
     assert_eq!(physical_mode(&external)?, 0o600);
-    if result.is_ok() {
-        let external_metadata = fs::metadata(&external)?;
-        let tracked_metadata = fs::metadata(&tracked)?;
-        assert_ne!(
-            (tracked_metadata.dev(), tracked_metadata.ino()),
-            (external_metadata.dev(), external_metadata.ino())
-        );
-        assert_eq!(fs::read(&tracked)?, original_bytes);
-        assert_eq!(physical_mode(&tracked)?, 0o644);
-        let status = invoke_git(
-            &git_program()?,
-            Some(checkout),
-            &words(&["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
-        )?;
-        assert_eq!(status, Vec::<u8>::new());
-    }
+    require_rejection(result, "tap_checkout_hardlinked_file");
     Ok(())
 }
 
@@ -147,7 +145,7 @@ fn child_scenario(scenario: &str) -> Result<(), Box<dyn Error>> {
     match scenario {
         "link" => {
             let result = capture_tap_main("fixture/tap", &checkout, deadline);
-            assert!(result.is_err());
+            require_rejection(result, "tap_tree_nonregular_entry");
             let tree = read_tap_tree(
                 &env::var_os("TAP_CAPTURE_WORKING_REPOSITORY")
                     .map(PathBuf::from)
@@ -155,7 +153,7 @@ fn child_scenario(scenario: &str) -> Result<(), Box<dyn Error>> {
                 &commit,
                 deadline,
             );
-            assert!(tree.is_err());
+            require_rejection(tree, "tap_tree_nonregular_entry");
             let target = PathBuf::from(
                 env::var_os("TAP_CAPTURE_EXTERNAL_TARGET").ok_or("missing external target")?,
             );

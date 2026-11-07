@@ -172,7 +172,32 @@ pub(super) fn install_git_adapter(root: &Path) -> Result<PathBuf, Box<dyn Error>
     let adapter = adapter_dir.join("git");
     fs::write(
         &adapter,
-        b"#!/bin/bash\nargs=()\nwhile (($#)); do\n  if [[ \"$1\" == \"-c\" && \"${2-}\" == \"protocol.file.allow=never\" ]]; then\n    shift 2\n    continue\n  fi\n  if [[ \"$1\" == \"https://github.com/fixture/tap.git\" ]]; then\n    args+=(\"$TAP_CAPTURE_FIXTURE_REPOSITORY\")\n  else\n    args+=(\"$1\")\n  fi\n  shift\ndone\nunset GIT_ALLOW_PROTOCOL\nexec \"$TAP_CAPTURE_REAL_GIT\" -c protocol.file.allow=always \"${args[@]}\"\n",
+        br#"#!/bin/bash
+args=()
+is_tree=0
+while (($#)); do
+  if [[ "$1" == "-c" && "${2-}" == "protocol.file.allow=never" ]]; then
+    shift 2
+    continue
+  fi
+  if [[ "$1" == "ls-tree" ]]; then
+    is_tree=1
+  fi
+  if [[ "$1" == "https://github.com/fixture/tap.git" ]]; then
+    args+=("$TAP_CAPTURE_FIXTURE_REPOSITORY")
+  else
+    args+=("$1")
+  fi
+  shift
+done
+unset GIT_ALLOW_PROTOCOL
+"$TAP_CAPTURE_REAL_GIT" -c protocol.file.allow=always "${args[@]}" || exit $?
+if [[ "$is_tree" == 1 && -n "${TAP_CAPTURE_HARDLINK_SOURCE-}" ]]; then
+  test "$PWD" = "$TAP_CAPTURE_CHECKOUT" || exit 91
+  rm -- "$TAP_CAPTURE_CHECKOUT/run me.sh" || exit 92
+  ln -- "$TAP_CAPTURE_HARDLINK_SOURCE" "$TAP_CAPTURE_CHECKOUT/run me.sh" || exit 93
+fi
+"#,
     )?;
     fs::set_permissions(&adapter, fs::Permissions::from_mode(0o755))?;
     Ok(adapter_dir)
@@ -207,6 +232,7 @@ pub(super) fn run_child(
         .env("PATH", path)
         .env_remove("GIT_CONFIG_COUNT")
         .env_remove("GIT_CONFIG_PARAMETERS")
+        .env_remove("TAP_CAPTURE_HARDLINK_SOURCE")
         .env("TAP_CAPTURE_CHILD_SCENARIO", scenario)
         .env("TAP_CAPTURE_CHILD_UMASK", umask)
         .env("TAP_CAPTURE_FIXTURE_REPOSITORY", &fixture.bare)
@@ -214,6 +240,13 @@ pub(super) fn run_child(
         .env("TAP_CAPTURE_EXPECTED_COMMIT", &fixture.commit)
         .env("TAP_CAPTURE_CHECKOUT", checkout)
         .env("TAP_CAPTURE_REAL_GIT", real_git);
+    if scenario == "hardlink" {
+        let parent = checkout.parent().ok_or("checkout has no parent")?;
+        command.env(
+            "TAP_CAPTURE_HARDLINK_SOURCE",
+            parent.join("outside-hardlink.txt"),
+        );
+    }
     if let Some(target) = &fixture.external_target {
         command.env("TAP_CAPTURE_EXTERNAL_TARGET", target);
     }
