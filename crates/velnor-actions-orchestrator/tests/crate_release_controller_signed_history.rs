@@ -148,19 +148,7 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         .release_plz_version
         .clone_from(&previous.release_plz_version);
     prior.rust_version.clone_from(&previous.rust_version);
-    prior.expected_tools.generator_sha256 =
-        "040c647a575684b84f28588862bad78876faf0224d8e5538c7a680d7d528f6b3".into();
-    prior.expected_tools.release_plz_sha256 = velnor_actions_mise::catalog::qualified_release_plz(
-        &previous.release_plz_version,
-        &previous.runner,
-    )
-    .ok_or("release-plz pin")?
-    .executable_sha256
-    .into();
-    prior.expected_tools.rust_manifest_sha256 =
-        velnor_actions_mise::catalog::rust_channel_manifest_sha256(&previous.rust_version)
-            .ok_or("rust pin")?
-            .into();
+    pin_previous_tools(&mut prior, &previous)?;
     let journal = super::JournalRegistryFake::default();
     seed_started_record(&journal, &prior.identity, &prior)?;
     record_journal_intent(
@@ -197,6 +185,26 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         verify_prior_observation(&input, &prior)?;
         verify_frozen_predecessor_drift(&input, &prior)?;
     }
+    Ok(())
+}
+
+fn pin_previous_tools(
+    prior: &mut crate::crate_release_journal::JournalReceipt,
+    previous: &CrateReleaseIntent,
+) -> Result<(), Box<dyn Error>> {
+    prior.expected_tools.generator_sha256 =
+        "040c647a575684b84f28588862bad78876faf0224d8e5538c7a680d7d528f6b3".into();
+    prior.expected_tools.release_plz_sha256 = velnor_actions_mise::catalog::qualified_release_plz(
+        &previous.release_plz_version,
+        &previous.runner,
+    )
+    .ok_or("release-plz pin")?
+    .executable_sha256
+    .into();
+    prior.expected_tools.rust_manifest_sha256 =
+        velnor_actions_mise::catalog::rust_channel_manifest_sha256(&previous.rust_version)
+            .ok_or("rust pin")?
+            .into();
     Ok(())
 }
 
