@@ -235,6 +235,39 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
+  check-hosted-systemd-policy-observation:
+    name: Check / hosted-systemd-policy-observation
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env: *m6
+    permissions:
+      contents: read
+    needs:
+      - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',check-hosted-systemd-policy-observation,')"
+    steps:
+      - *s6
+      - *s3
+      - *s7
+      - *s8
+      - *s9
+      - name: Execute named check
+        env:
+          VELNOR_CHECK_ID: hosted-systemd-policy-observation
+          VELNOR_CHECK_JOB_ID: check-hosted-systemd-policy-observation
+          VELNOR_CHECK_LANE_VARIANT: single
+          VELNOR_INTERNAL_OP: execute-check-v1
+          VELNOR_TASK_ID: stack/mise/hosted-systemd-policy-observation/check/default
+        run: *r3
+      - name: Upload crate reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-check-hosted-systemd-policy-observation
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          retention-days: "30"
   check-maintenance-helpers:
     name: Check / maintenance-helpers
     runs-on: ubuntu-26.04
@@ -493,7 +526,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-hosted-budget-containment\":[{\"job_id\":\"check-hosted-budget-containment\"}],\"check-hosted-gh-config-custody\":[{\"job_id\":\"check-hosted-gh-config-custody\"}],\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
+          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-hosted-budget-containment\":[{\"job_id\":\"check-hosted-budget-containment\"}],\"check-hosted-gh-config-custody\":[{\"job_id\":\"check-hosted-gh-config-custody\"}],\"check-hosted-systemd-policy-observation\":[{\"job_id\":\"check-hosted-systemd-policy-observation\"}],\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
         run: &r8 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.74'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
@@ -533,6 +566,7 @@ jobs:
       - plan
       - check-hosted-budget-containment
       - check-hosted-gh-config-custody
+      - check-hosted-systemd-policy-observation
       - check-maintenance-helpers
       - rust-velnor-actions-actionlint
       - rust-velnor-actions-ansible
@@ -585,7 +619,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-hosted-budget-containment\",\"check-hosted-gh-config-custody\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-hosted-budget-containment\",\"check-hosted-gh-config-custody\",\"check-hosted-systemd-policy-observation\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: *r8
       - name: Merge reports
@@ -593,7 +627,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-hosted-budget-containment\",\"check-hosted-gh-config-custody\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-hosted-budget-containment\",\"check-hosted-gh-config-custody\",\"check-hosted-systemd-policy-observation\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: *r8
       - name: Publish final report

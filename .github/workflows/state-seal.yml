@@ -169,7 +169,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-hosted-budget-containment\":[{\"job_id\":\"check-hosted-budget-containment\"}],\"check-hosted-gh-config-custody\":[{\"job_id\":\"check-hosted-gh-config-custody\"}],\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
+          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-hosted-budget-containment\":[{\"job_id\":\"check-hosted-budget-containment\"}],\"check-hosted-gh-config-custody\":[{\"job_id\":\"check-hosted-gh-config-custody\"}],\"check-hosted-systemd-policy-observation\":[{\"job_id\":\"check-hosted-systemd-policy-observation\"}],\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
         run: &r8 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.74'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
