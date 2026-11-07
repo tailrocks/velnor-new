@@ -1630,6 +1630,8 @@ scripts/archive-guard-build-namespace.sh
 scripts/archive-guard-inputs.txt
 scripts/build-owned-archive-guard.sh
 scripts/check-owned-archive-guard-sources.sh
+scripts/generator-release/cargo-git-handoff.py
+scripts/generator-release/cargo-source-handoff.sh
 scripts/generator-release/create-release-manifest.sh
 scripts/generator-release/preflight-release-tag.sh
 scripts/native-image-candidate-inventory.py
