@@ -59,13 +59,11 @@ pub fn check_lock_anchor(group: &str, repository: &str) -> Result<(), RenderErro
 pub fn stable_lock_group(
     registry: &str,
     repository: &str,
-    workspace: &str,
 ) -> Result<ReleaseConcurrency, RenderError> {
     validate_lock_segment(registry, "registry")?;
     validate_repository(repository)?;
-    validate_lock_segment(workspace, "workspace")?;
     Ok(ReleaseConcurrency {
-        group: format!("release-{registry}-{repository}-{workspace}"),
+        group: format!("release-{registry}-{repository}"),
         cancel_in_progress: false,
     })
 }

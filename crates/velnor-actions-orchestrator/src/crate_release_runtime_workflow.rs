@@ -66,8 +66,9 @@ pub(crate) fn validate_workflow_concurrency(
         .get("concurrency")
         .and_then(serde_json::Value::as_object)
         .ok_or_else(invalid)?;
-    if concurrency.len() != 2
+    if concurrency.len() != 3
         || concurrency.get("group").and_then(serde_json::Value::as_str) != Some(group)
+        || concurrency.get("queue").and_then(serde_json::Value::as_str) != Some("max")
         || concurrency
             .get("cancel-in-progress")
             .and_then(serde_json::Value::as_bool)
@@ -84,6 +85,7 @@ pub(crate) fn validate_workflow_concurrency(
     if positions.len() != 1
         || lines.get(positions[0] + 1).copied() != Some(format!("  group: {group}").as_str())
         || lines.get(positions[0] + 2).copied() != Some("  cancel-in-progress: false")
+        || lines.get(positions[0] + 3).copied() != Some("  queue: max")
     {
         return Err(invalid());
     }

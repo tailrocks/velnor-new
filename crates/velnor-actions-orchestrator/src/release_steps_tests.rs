@@ -103,11 +103,7 @@ fn fixture_for_release_pr(
                 push_branches: Vec::new(),
                 dispatch_inputs: fixture_dispatch_inputs(&plan),
             },
-            concurrency: stable_lock_group(
-                "crates-io",
-                repository,
-                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            )?,
+            concurrency: stable_lock_group("crates-io", repository)?,
             jobs,
             plan,
             publish_environment: "release".to_owned(),

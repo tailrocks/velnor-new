@@ -26,6 +26,7 @@ pub(super) fn assert_reviewed_rendered_workflow(
     for (path, value) in [
         ("/concurrency/group", serde_json::json!("forged")),
         ("/concurrency/cancel-in-progress", serde_json::json!(true)),
+        ("/concurrency/queue", serde_json::json!("single")),
         (
             "/jobs/release-preflight/permissions/contents",
             serde_json::json!("write"),
@@ -55,6 +56,18 @@ pub(super) fn assert_reviewed_rendered_workflow(
             "accepted {path}"
         );
     }
+    let mut missing_queue = yaml.clone();
+    missing_queue["concurrency"]
+        .as_object_mut()
+        .ok_or("concurrency")?
+        .remove("queue");
+    assert!(
+        crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
+            serde_json::to_string(&missing_queue)?.as_bytes(),
+            intent
+        )
+        .is_err()
+    );
     assert_reviewed_nested_lock(&yaml, intent)?;
     assert_reviewed_preparation_outputs(&yaml)?;
     let publisher = &yaml["jobs"]["release-publish"];
@@ -83,9 +96,7 @@ fn assert_reviewed_nested_lock(
     let mut nested_intent = intent.clone();
     nested_intent.pr_write_paths = vec!["nested/workspace/Cargo.lock".into()];
     let mut nested_workflow = yaml.clone();
-    nested_workflow["concurrency"]["group"] = serde_json::json!(
-        "release-crates-io-owner/project-bed46b222d05fcf033c7a100925229762295940199bb5c2e0aba841333bfa949"
-    );
+    nested_workflow["concurrency"]["group"] = serde_json::json!("release-crates-io-owner/project");
     assert!(
         crate::release::crate_release_pr_acquisition::verify_reviewed_workflow(
             serde_json::to_string(&nested_workflow)?.as_bytes(),

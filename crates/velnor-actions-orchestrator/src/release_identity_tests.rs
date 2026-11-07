@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::workspace_lock;
+use super::release_lock;
 use std::{fs, path::Path, process::Command};
 
 fn write(root: &Path, path: &str, contents: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -31,7 +31,77 @@ fn metadata(root: &Path, manifest: &str) -> Result<String, Box<dyn std::error::E
 }
 
 #[test]
-fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn std::error::Error>> {
+fn release_workflows_serialize_across_workspace_moves() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().canonicalize()?;
+    write_workspace_fixture(&root)?;
+    let known = std::collections::BTreeSet::from(["other/Cargo.toml".to_owned()]);
+    let lock = |manifest: &str| {
+        release_lock(
+            &metadata(&root, manifest)?,
+            &root,
+            manifest,
+            &known,
+            "crates-io",
+            "owner/project",
+        )
+        .map_err(Into::<Box<dyn std::error::Error>>::into)
+    };
+    let first = lock("Cargo.toml")?;
+    let moved = lock("other/Cargo.toml")?;
+    assert_eq!(first.group, moved.group);
+    assert!(!first.cancel_in_progress && !moved.cancel_in_progress);
+    let (mut recovery, rust) = crate::release::release_steps::tests::fixture()?;
+    recovery.concurrency = first;
+    let ctx = velnor_actions_workflow_renderer::release_tree::ReleaseRenderContext {
+        generator_version: env!("CARGO_PKG_VERSION").into(),
+        runs_on: "ubuntu-26.04".into(),
+    };
+    let recovery_yaml = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
+        &recovery, &ctx, &rust,
+    )?;
+    let mut normal = recovery.clone();
+    normal.concurrency = moved;
+    normal.plan.dispatch = false;
+    normal.plan.version = None;
+    normal.triggers = velnor_actions_workflow_renderer::release_spec::ReleaseTriggers {
+        push_branches: vec!["main".into()],
+        dispatch_inputs: Vec::new(),
+    };
+    normal
+        .jobs
+        .get_mut("release-publish")
+        .ok_or("publish job")?
+        .condition = Some(
+        velnor_actions_workflow_renderer::release_spec::publish_gate_condition(
+            &normal.repository,
+            &normal.default_branch,
+            &normal.plan,
+        ),
+    );
+    let normal_yaml = velnor_actions_workflow_renderer::release_tree::render_release_workflow(
+        &normal, &ctx, &rust,
+    )?;
+    let recovery_value: serde_json::Value = serde_saphyr::from_str(&recovery_yaml)?;
+    let normal_value: serde_json::Value = serde_saphyr::from_str(&normal_yaml)?;
+    assert_eq!(recovery_value["concurrency"], normal_value["concurrency"]);
+    assert_eq!(recovery_value["concurrency"]["queue"], "max");
+    crate::release::crate_release_runtime::validate_workflow_concurrency(
+        recovery_yaml.as_bytes(),
+        &recovery.concurrency.group,
+    )?;
+    crate::release::crate_release_runtime::validate_workflow_concurrency(
+        normal_yaml.as_bytes(),
+        &normal.concurrency.group,
+    )?;
+    assert!(recovery_value["on"]["workflow_dispatch"].is_object());
+    assert!(normal_value["on"]["push"].is_object());
+    Ok(())
+}
+
+#[test]
+fn release_lock_validates_workspace_and_uses_repository_scope()
+-> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::release_tree::{
         ReleaseRenderContext, render_release_workflow,
     };
@@ -40,7 +110,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
     write_workspace_fixture(&root)?;
     let known = std::collections::BTreeSet::from(["other/Cargo.toml".to_owned()]);
     let lock = |manifest: &str| -> Result<_, Box<dyn std::error::Error>> {
-        Ok(workspace_lock(
+        Ok(release_lock(
             &metadata(&root, manifest)?,
             &root,
             manifest,
@@ -52,7 +122,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
     let root_lock = lock("Cargo.toml")?;
     assert_eq!(root_lock, lock("a/Cargo.toml")?);
     assert_eq!(root_lock, lock("b/Cargo.toml")?);
-    assert_ne!(root_lock.group, lock("other/Cargo.toml")?.group);
+    assert_eq!(root_lock.group, lock("other/Cargo.toml")?.group);
     assert!(!root_lock.cancel_in_progress);
     let (mut spec, rust) = crate::release::release_steps::tests::fixture()?;
     spec.concurrency = root_lock.clone();
@@ -69,7 +139,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
         std::os::unix::fs::symlink(root.join("a"), root.join("alias"))?;
         assert_eq!(
             root_lock,
-            workspace_lock(
+            release_lock(
                 &original,
                 &root,
                 "alias/Cargo.toml",
@@ -83,7 +153,7 @@ fn actual_cargo_workspace_root_controls_rendered_lock() -> Result<(), Box<dyn st
         let mut escaped: serde_json::Value = serde_json::from_str(&original)?;
         escaped["workspace_root"] = root.join("escaped").to_string_lossy().to_string().into();
         assert!(
-            workspace_lock(
+            release_lock(
                 &serde_json::to_string(&escaped)?,
                 &root,
                 "a/Cargo.toml",
@@ -128,7 +198,7 @@ fn assert_invalid_workspace_metadata(
     known: &std::collections::BTreeSet<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert!(
-        workspace_lock(
+        release_lock(
             "not json",
             root,
             "a/Cargo.toml",
@@ -140,7 +210,7 @@ fn assert_invalid_workspace_metadata(
     );
     let original = metadata(root, "a/Cargo.toml")?;
     assert!(
-        workspace_lock(
+        release_lock(
             &original,
             root,
             "a/Cargo.toml",
@@ -158,7 +228,7 @@ fn assert_invalid_workspace_metadata(
         .to_string()
         .into();
     assert!(
-        workspace_lock(
+        release_lock(
             &serde_json::to_string(&forged)?,
             root,
             "a/Cargo.toml",
@@ -169,7 +239,7 @@ fn assert_invalid_workspace_metadata(
         .is_err()
     );
     assert!(
-        workspace_lock(
+        release_lock(
             &original,
             root,
             "other/Cargo.toml",
@@ -191,7 +261,7 @@ fn assert_invalid_workspace_membership(
     let mut forged_member: serde_json::Value = serde_json::from_str(original)?;
     forged_member["workspace_root"] = root.join("a").to_string_lossy().to_string().into();
     assert!(
-        workspace_lock(
+        release_lock(
             &serde_json::to_string(&forged_member)?,
             root,
             "a/Cargo.toml",
@@ -207,7 +277,7 @@ fn assert_invalid_workspace_membership(
         .ok_or("metadata object")?
         .remove("workspace_root");
     assert!(
-        workspace_lock(
+        release_lock(
             &serde_json::to_string(&missing)?,
             root,
             "a/Cargo.toml",

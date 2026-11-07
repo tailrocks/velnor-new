@@ -190,7 +190,6 @@ fn bootstrap_handover_renders_normal_trusted_publisher() -> Result<(), Box<dyn s
         velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
             "crates-io",
             "OWNER/PROJECT",
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         )?;
     for job in mixed_spec.jobs.values_mut() {
         if let Some(condition) = &mut job.condition {

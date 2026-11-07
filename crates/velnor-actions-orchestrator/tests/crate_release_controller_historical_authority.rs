@@ -250,7 +250,7 @@ pub(super) fn workflow_lock_uses_event_scoped_recovery_and_committed_policy()
     fs::write(
         &workflow,
         format!(
-            "name: release\nconcurrency:\n  group: {}\n  cancel-in-progress: false\njobs: {{}}\n",
+            "name: release\nconcurrency:\n  group: {}\n  cancel-in-progress: false\n  queue: max\njobs: {{}}\n",
             plan.concurrency_group
         ),
     )?;

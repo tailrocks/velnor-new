@@ -132,6 +132,7 @@ fn release_document(spec: &ReleaseWorkflowSpec) -> Result<Yaml, RenderError> {
                     "cancel-in-progress".to_owned(),
                     Yaml::Bool(spec.concurrency.cancel_in_progress),
                 ),
+                ("queue".to_owned(), Yaml::str("max")),
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),

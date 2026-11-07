@@ -103,7 +103,7 @@ pub(crate) fn common_registry(selection: &ReleaseSelection) -> Result<String, Or
         })
 }
 
-pub(crate) fn workspace_lock(
+pub(crate) fn release_lock(
     metadata: &str,
     root: &Path,
     manifest_hint: &str,
@@ -114,7 +114,6 @@ pub(crate) fn workspace_lock(
     velnor_actions_workflow_renderer::release_spec::lock::ReleaseConcurrency,
     OrchestratorError,
 > {
-    use sha2::{Digest, Sha256};
     let record = velnor_actions_rust::metadata::parse_metadata_json(
         metadata,
         root,
@@ -168,24 +167,15 @@ pub(crate) fn workspace_lock(
             problem: "release_workspace_manifest_mismatch".to_owned(),
         });
     }
-    let components = relative
+    relative
         .components()
         .map(|part| part.as_os_str().to_str())
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| OrchestratorError::Contract {
             problem: "release_workspace_invalid_path".to_owned(),
         })?;
-    let mut digest = String::with_capacity(64);
-    for byte in Sha256::digest(components.join("/").as_bytes()) {
-        use std::fmt::Write as _;
-        write!(&mut digest, "{byte:02x}").map_err(|_| OrchestratorError::Contract {
-            problem: "release_workspace_digest_encoding".to_owned(),
-        })?;
-    }
-    velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
-        registry, repository, &digest,
-    )
-    .map_err(Into::into)
+    velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(registry, repository)
+        .map_err(Into::into)
 }
 
 #[cfg(test)]

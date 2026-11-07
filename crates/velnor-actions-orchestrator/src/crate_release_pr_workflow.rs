@@ -7,7 +7,6 @@ use serde_json::Value;
 fn expected_concurrency(
     intent: &velnor_actions_contract::config::CrateReleaseIntent,
 ) -> Result<String, OrchestratorError> {
-    use sha2::{Digest as _, Sha256};
     let invalid = || internal("release_pr_workflow_unverified");
     let mut roots = intent.pr_write_paths.iter().filter_map(|path| {
         if path == "Cargo.lock" {
@@ -16,20 +15,13 @@ fn expected_concurrency(
             path.strip_suffix("/Cargo.lock")
         }
     });
-    let root = roots.next().ok_or_else(invalid)?;
+    roots.next().ok_or_else(invalid)?;
     if roots.next().is_some() {
         return Err(invalid());
-    }
-    let digest = Sha256::digest(root.as_bytes());
-    let mut hex = String::with_capacity(64);
-    for byte in digest {
-        use std::fmt::Write as _;
-        write!(&mut hex, "{byte:02x}").map_err(|_| invalid())?;
     }
     let lock = velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
         &intent.registry,
         &intent.repository,
-        &hex,
     )
     .map_err(|_| invalid())?;
     Ok(lock.group)
@@ -64,7 +56,7 @@ pub(crate) fn verify_reviewed_workflow(
     }
     let expected = expected_concurrency(intent)?;
     if workflow["concurrency"]
-        != serde_json::json!({"group": expected, "cancel-in-progress": false})
+        != serde_json::json!({"group": expected, "cancel-in-progress": false, "queue": "max"})
     {
         return Err(invalid());
     }

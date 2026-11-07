@@ -393,7 +393,7 @@ fn check_historical_workspace_lock(
         .source_snapshot
         .as_ref()
         .ok_or("source snapshot missing")?;
-    let source_lock = crate::release::release_identity::workspace_lock(
+    let source_lock = crate::release::release_identity::release_lock(
         &derived.metadata,
         snapshot.root(),
         &release_config.manifest_path,
@@ -403,7 +403,7 @@ fn check_historical_workspace_lock(
     )?;
     let live_metadata = release::release_metadata_json(prep, &release_config.manifest_path)?;
     let live_known = release::selection::tracked_manifests(root)?;
-    let live_lock = crate::release::release_identity::workspace_lock(
+    let live_lock = crate::release::release_identity::release_lock(
         &live_metadata,
         root,
         &release_config.manifest_path,
@@ -411,7 +411,7 @@ fn check_historical_workspace_lock(
         &derived.registry,
         &derived.repository,
     )?;
-    assert_ne!(source_lock, live_lock);
+    assert_eq!(source_lock, live_lock);
     Ok(source_lock)
 }
 

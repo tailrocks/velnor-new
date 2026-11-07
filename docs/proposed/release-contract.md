@@ -156,7 +156,7 @@ reviewer’s statement; it cannot independently prove the review’s substance.
 Neither condition is inferred from release-plz's return code.
 
 For an exact-source recovery or new-crate intent, workflow generation reads
-package metadata, workspace membership, write paths and the concurrency scope
+package metadata, workspace membership and write paths
 from the approved commit's Git objects. Qualification derives the same values
 from that source. The reviewed workflow policy and workflow-authority SHA
 remain those of the current workflow. Generation uses the host's system Git as
@@ -164,6 +164,14 @@ an object transport, with Git transports and lazy fetching disabled for object r
 commit, tree and blob hashes independently. This trusts the host operating
 system and executable; it does not pin the system Git binary. Missing objects,
 unsupported tree entries and unsafe links cause generation to fail.
+
+Crate release workflows for the same repository and registry share one
+concurrency group, including when the workspace moves. Running releases are not
+canceled, and GitHub queues up to 100 waiting runs. Additional runs can be
+canceled when that queue is full; queued order is based on when runs enter the
+group, not commit order. When adopting this group, operators must first verify
+that earlier runs using a different group have finished; the new group cannot
+serialize with them.
 
 For each approved upload the coordinator renders a temporary config outside
 the source checkout. It selects exactly that package and its reviewed

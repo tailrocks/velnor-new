@@ -16,7 +16,7 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::planner::prepare::GenerationPreparation;
 use crate::release::release_identity::{
-    common_registry, origin_repository, plan_id_for_source, workspace_lock,
+    common_registry, origin_repository, plan_id_for_source, release_lock,
 };
 use crate::release::release_steps::{JobInputs, assemble_jobs};
 
@@ -101,7 +101,7 @@ fn release_files_for_config(
         &plan,
         ((&pin.0, &pin.1), &catalog),
     )?;
-    let concurrency = workspace_lock(
+    let concurrency = release_lock(
         &metadata,
         source_root,
         &release.manifest_path,

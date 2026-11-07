@@ -170,7 +170,7 @@ if supplied_intent is not None:
 write(root / ".github/velnor-release-intent.toml", intent)
 write(
     root / ".github/workflows/release.yml",
-    f"name: release\nconcurrency:\n  group: release-crates-io-{repository}-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n  cancel-in-progress: false\njobs: {{}}\n",
+    f"name: release\nconcurrency:\n  group: release-crates-io-{repository}\n  cancel-in-progress: false\n  queue: max\njobs: {{}}\n",
 )
 run("git", "init", "-q", cwd=root)
 run("git", "add", ".github", cwd=root)

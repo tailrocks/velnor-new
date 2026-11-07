@@ -239,7 +239,7 @@ fn workspace_plan_from_metadata<R: crate::crate_release_registry::CrateRegistryR
     manifests: &BTreeSet<String>,
     metadata: &str,
 ) -> Result<CrateReleaseWorkspacePlan, OrchestratorError> {
-    let concurrency_group = crate::release::release_identity::workspace_lock(
+    let concurrency_group = crate::release::release_identity::release_lock(
         metadata,
         canonical,
         &intent.manifest_path,

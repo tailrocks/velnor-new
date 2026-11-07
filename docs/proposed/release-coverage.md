@@ -51,7 +51,7 @@ semantics, spaced-path argv safety, coordinator payload equality past `--`.
 | Scalar validators (env, repo, SHA, plan, package, version) | `impl_renderer_release_spec` (5 tests) |
 | Dispatch binds approved plan + source SHA | `impl_renderer_release_spec::dispatch_inputs_bind_the_approved_plan_and_source` |
 | Exact branches; no PR/fork event shapes | `impl_renderer_release_spec::triggers_pin_exact_branches_without_pr_or_fork_events` |
-| Stable lock queues; never cancels | `impl_renderer_release_spec::concurrency_queues_on_a_stable_lock_and_never_cancels` |
+| Stable lock queues up to 100 pending runs without canceling a running release | `impl_renderer_release_spec::concurrency_queues_on_a_stable_lock_and_never_cancels` |
 | Lock anchors on repository identity | `impl_renderer_release_spec::lock_anchor_requires_the_repository_identity` |
 | Publish gate binds repo/plan/source | `impl_renderer_release_spec::publish_gate_binds_repo_plan_and_source_exactly` |
 | Effective config validation + golden TOML | `impl_renderer_release_config` (6 tests incl. golden snapshot) |

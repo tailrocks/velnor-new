@@ -77,12 +77,14 @@ fn test_only_dispatch_and_loopback_transport() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn workflow_lock_requires_exact_literal_group_and_no_cancellation() {
-    let group = "release-crates-io-owner/repo-workspace";
+    let group = "release-crates-io-owner/repo";
     let valid = format!(
-        "name: release\nconcurrency:\n  group: {group}\n  cancel-in-progress: false\njobs: {{}}\n"
+        "name: release\nconcurrency:\n  group: {group}\n  cancel-in-progress: false\n  queue: max\njobs: {{}}\n"
     );
     assert!(super::validate_workflow_concurrency(valid.as_bytes(), group).is_ok());
     for bad in [
+        valid.replace("  queue: max\n", ""),
+        valid.replace("queue: max", "queue: single"),
         valid.replace(group, "release-crates-io-owner/repo-other"),
         valid.replace("cancel-in-progress: false", "cancel-in-progress: true"),
         valid.replace("concurrency:", "other:"),
