@@ -224,7 +224,7 @@ pub(super) fn dogfood_plan_difference(
 ) -> Result<String, Box<dyn Error>> {
     let workspace = retained_workspace(output).ok_or("failed workspace was not retained")?;
     let expected =
-        fs::read_to_string(root.join("docs/proposed/opentofu-goldens/cases/dogfood/plan.txt"))?;
+        fs::read_to_string(root.join("fixtures/opentofu-goldens/cases/dogfood/plan.txt"))?;
     let actual = fs::read_to_string(workspace.join("stage/dogfood/plan.txt"))?;
     let mut expected_lines = expected.lines();
     let mut actual_lines = actual.lines();

@@ -27,7 +27,7 @@ const ALWAYS_PHASES: &[&str] = &[
 ];
 const LAST_PRELUDE_PHASE: &str = "capture-all-five-external-goldens";
 
-fn rendered_workflow() -> Result<String, Box<dyn Error>> {
+pub(super) fn rendered_workflow() -> Result<String, Box<dyn Error>> {
     let repo = generator_repo(true)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     Ok(tree
@@ -61,7 +61,7 @@ fn script_phases() -> Result<Vec<String>, Box<dyn Error>> {
     Ok(phases)
 }
 
-fn job_ids(workflow: &str) -> Vec<String> {
+pub(super) fn job_ids(workflow: &str) -> Vec<String> {
     let jobs = workflow.split("\njobs:\n").nth(1).unwrap_or_default();
     jobs.lines()
         .filter_map(|line| {
@@ -154,6 +154,9 @@ fn source_qualification_phases_are_all_scheduled_across_jobs() -> Result<(), Box
     let mut rendered = BTreeSet::new();
     let mut counts = BTreeMap::<String, usize>::new();
     for id in job_ids(&workflow) {
+        if id == "plan" || id == "selection" {
+            continue;
+        }
         let phases = job_phases(rendered_job_block(&workflow, &id)?);
         if id == gather {
             assert_eq!(phases, [BUNDLE_PHASE], "gather job {id} runs other phases");
@@ -205,22 +208,18 @@ fn assert_producer_gate(gather_block: &str, producers: &[String]) -> Result<(), 
         .skip(1)
         .map_while(|line| line.strip_prefix("      - "))
         .collect();
-    assert_eq!(
-        needs,
-        producers.iter().map(String::as_str).collect::<Vec<_>>()
-    );
+    let expected: Vec<&str> = ["plan", "selection"]
+        .into_iter()
+        .chain(producers.iter().map(String::as_str))
+        .collect();
+    assert_eq!(needs, expected);
     assert!(gather_block.contains("\n    if: always()\n"));
     let gather_steps = steps(gather_block);
     let guard = *gather_steps.last().ok_or("gather job has no steps")?;
-    let expected_condition = producers
-        .iter()
-        .map(|id| format!("needs.{id}.result != 'success'"))
-        .collect::<Vec<_>>()
-        .join(" || ");
-    assert_eq!(step_field(guard, "if"), Some(expected_condition.as_str()));
-    assert!(
-        guard.contains("exit 1"),
-        "last gather step does not fail: {guard}"
+    assert_eq!(step_field(guard, "if"), Some("always()"));
+    assert_eq!(
+        step_field(guard, "run"),
+        Some("python3 scripts/generator-release/source-qualification-routing.py gather")
     );
     let position =
         |predicate: &dyn Fn(&str) -> bool| gather_steps.iter().position(|s| predicate(s));
@@ -240,8 +239,8 @@ fn assert_producer_gate(gather_block: &str, producers: &[String]) -> Result<(), 
         "checkout must precede download and bundle: {gather_steps:?}"
     );
     assert!(
-        step_field(gather_steps[checkout], "if").is_none(),
-        "checkout is conditional: {}",
+        step_field(gather_steps[checkout], "if") == Some("always()"),
+        "checkout must run to validate the verdict: {}",
         gather_steps[checkout]
     );
     assert!(
@@ -290,7 +289,7 @@ fn source_qualification_gather_job_keeps_the_check_name_and_needs_every_producer
     assert_eq!(workflow.matches(GATHER_NAME_LINE).count(), 1);
     let producers: Vec<String> = job_ids(&workflow)
         .into_iter()
-        .filter(|id| *id != gather)
+        .filter(|id| *id != gather && id != "plan" && id != "selection")
         .collect();
     assert!(
         producers.len() >= 2,
@@ -304,8 +303,8 @@ fn source_qualification_gather_job_keeps_the_check_name_and_needs_every_producer
     for id in &producers {
         let block = rendered_job_block(&workflow, id)?;
         assert!(
-            !block.contains("\n    needs:"),
-            "producer {id} must not wait"
+            block.contains("\n    needs:\n      - selection\n"),
+            "producer {id} must wait for selection"
         );
         let uploads = artifact_names(block, "actions/upload-artifact@");
         let [name] = uploads.as_slice() else {
@@ -342,7 +341,10 @@ fn source_qualification_harness_and_check_phases_keep_running_after_a_failure()
 -> Result<(), Box<dyn Error>> {
     let workflow = rendered_workflow()?;
     let gather = gather_id(&workflow)?;
-    for id in job_ids(&workflow).into_iter().filter(|id| *id != gather) {
+    for id in job_ids(&workflow)
+        .into_iter()
+        .filter(|id| *id != gather && id != "plan" && id != "selection")
+    {
         let block = rendered_job_block(&workflow, &id)?;
         let mut always_phases = BTreeSet::new();
         for step in steps(block) {
@@ -367,32 +369,6 @@ fn source_qualification_harness_and_check_phases_keep_running_after_a_failure()
         assert!(
             always_phases.contains("capture-all-five-external-goldens"),
             "job {id} lost its capture phase"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn source_qualification_keeps_triggers_permissions_and_concurrency() -> Result<(), Box<dyn Error>> {
-    let workflow = rendered_workflow()?;
-    assert!(workflow.contains(
-        "\"on\":\n  pull_request: {}\n  workflow_dispatch: {}\npermissions:\n  contents: read\ncache-mode: read\nconcurrency:\n  group: source-qualification-${{ github.ref }}\n  cancel-in-progress: false\njobs:\n"
-    ));
-    let ids = job_ids(&workflow);
-    assert_eq!(workflow.matches("concurrency:").count(), 1);
-    for id in &ids {
-        let block = rendered_job_block(&workflow, id)?;
-        assert!(
-            block.contains("\n    timeout-minutes: "),
-            "job {id} has no timeout"
-        );
-        assert!(
-            block.contains("\n    permissions:\n      contents: read\n"),
-            "job {id} permissions are not read-only"
-        );
-        assert!(
-            !block.contains("write"),
-            "job {id} grants a write permission"
         );
     }
     Ok(())

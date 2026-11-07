@@ -10,7 +10,9 @@ use std::{
 };
 
 use velnor_actions_contract::RoutingWorkflow;
-use velnor_actions_workflow_renderer::schema2::{Schema2WorkflowRequest, render_schema2_workflows};
+use velnor_actions_workflow_renderer::schema2::{
+    Schema2WorkflowRequest, render_schema2_product_release_workflows,
+};
 
 mod assets;
 
@@ -121,7 +123,7 @@ fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
         mise_pin_qualification: None,
         product_release: Some(pins),
     };
-    let files = render_schema2_workflows(&request)?;
+    let files = render_schema2_product_release_workflows(&request)?;
     let workflow = files
         .iter()
         .find(|file| file.path == ".github/workflows/product-release.yml")

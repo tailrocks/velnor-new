@@ -126,6 +126,12 @@ fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entri
 
 pub(super) fn generator_repo(enabled: bool) -> Result<TempDir, Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(&generator_config(enabled))?;
+    if enabled {
+        fs::write(
+            repo.path().join("Cargo.toml"),
+            "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )?;
+    }
     Ok(repo)
 }
 
@@ -181,4 +187,18 @@ fn preview_generation(
         },
     )?;
     Ok(destination)
+}
+
+#[test]
+fn source_qualification_cannot_emit_without_a_cli_route() -> Result<(), Box<dyn Error>> {
+    let repo = workflow_configuration_fixture::make_repo(&generator_config(true))?;
+    let prepared = prepare(repo.path())?;
+    let error = render_staged_tree(&prepared)
+        .err()
+        .ok_or("qualification emitted without its CLI route")?;
+    assert!(
+        error.to_string().contains("source_qualification_cli_route"),
+        "{error}"
+    );
+    Ok(())
 }

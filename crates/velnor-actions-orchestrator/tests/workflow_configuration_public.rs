@@ -260,3 +260,16 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+#[path = "workflow_configuration_public/source_qualification_both.rs"]
+mod source_qualification_both;
+
+#[path = "workflow_configuration_public/oracle_input_selection.rs"]
+mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_selection.rs"]
+mod source_qualification_selection;
+
+#[path = "workflow_configuration_public/source_qualification_routing_shape.rs"]
+mod source_qualification_routing_shape;
+
+#[path = "workflow_configuration_public/source_qualification_gather_routing.rs"]
+mod source_qualification_gather_routing;

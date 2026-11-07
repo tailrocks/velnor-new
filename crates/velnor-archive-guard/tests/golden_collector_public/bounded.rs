@@ -95,7 +95,7 @@ fn rejects_incomplete_or_changed_case_inventory_without_touching_the_oracle()
 -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let oracle = harness.root.join("docs/proposed/opentofu-goldens");
+    let oracle = harness.root.join("fixtures/opentofu-goldens");
     let oracle_manifest = fs::read(oracle.join("MANIFEST.sha256"))?;
     let oracle_case = fs::read(oracle.join("cases/nested/plan.txt"))?;
     for fault in [

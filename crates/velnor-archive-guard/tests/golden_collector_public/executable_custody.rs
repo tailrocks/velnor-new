@@ -289,7 +289,7 @@ fn external_candidate(
 }
 
 fn copy_oracle(harness: &Harness) -> Result<PathBuf, Box<dyn Error>> {
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let destination = harness.directory.join("oracle");
     copy_tree(&source, &destination)?;
     Ok(destination)

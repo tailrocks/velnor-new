@@ -14,7 +14,8 @@ use tempfile::TempDir;
 use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::schema2::{
-    PRODUCT_RELEASE_WORKFLOW, ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
+    PRODUCT_RELEASE_WORKFLOW, ProductReleasePins, Schema2WorkflowRequest,
+    render_schema2_product_release_workflows,
 };
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 
@@ -67,7 +68,7 @@ impl Fixture {
         permissions.set_mode(0o755);
         fs::set_permissions(&fake_gh, permissions)?;
 
-        let files = render_schema2_workflows(&request(&fake_gh)?)?;
+        let files = render_schema2_product_release_workflows(&request(&fake_gh)?)?;
         let workflow = rendered_file(&files, PRODUCT_RELEASE_WORKFLOW)?;
         let (script, asset_names) = extract_prepare_script(workflow)?;
 

@@ -107,6 +107,13 @@ impl Schema2WorkflowRequest {
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    render_schema2_workflows_bound(request, None)
+}
+
+pub(crate) fn render_schema2_workflows_bound(
+    request: &Schema2WorkflowRequest,
+    source_plan: Option<&crate::source_qualification_plan::SourceQualificationPlan>,
+) -> Result<Vec<RenderedFile>, RenderError> {
     RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
@@ -116,6 +123,35 @@ pub fn render_schema2_workflows(
             &qualification(request)?,
         )?);
     }
+    files.extend(render_schema2_product_release_workflows(request)?);
+    if request
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        files.push(file(
+            source_qualification::WORKFLOW_PATH,
+            &request.version,
+            &source_qualification::render(request, source_plan)?,
+        )?);
+    }
+    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+        files.push(job_image_candidate::render_candidate_workflow(request)?);
+    }
+    if request.workflows.contains(&RoutingWorkflow::Monitoring) {
+        files.push(file(
+            MONITORING_WORKFLOW,
+            &request.version,
+            &monitoring(request)?,
+        )?);
+    }
+    Ok(files)
+}
+
+pub fn render_schema2_product_release_workflows(
+    request: &Schema2WorkflowRequest,
+) -> Result<Vec<RenderedFile>, RenderError> {
+    RunnerSpec::hosted(&request.hosted_label)?;
+    let mut files = Vec::new();
     if let Some(generated) = product_release::render(request)? {
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
@@ -128,26 +164,6 @@ pub fn render_schema2_workflows(
         for (path, action) in generated.actions {
             files.push(file(&path, &request.version, &action)?);
         }
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
-    {
-        files.push(file(
-            source_qualification::WORKFLOW_PATH,
-            &request.version,
-            &source_qualification::render(request)?,
-        )?);
-    }
-    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
-        files.push(job_image_candidate::render_candidate_workflow(request)?);
-    }
-    if request.workflows.contains(&RoutingWorkflow::Monitoring) {
-        files.push(file(
-            MONITORING_WORKFLOW,
-            &request.version,
-            &monitoring(request)?,
-        )?);
     }
     Ok(files)
 }

@@ -6,7 +6,7 @@ use std::path::Path;
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
 use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest,
 };
 
 use crate::OrchestratorError;
@@ -32,39 +32,25 @@ pub fn parse_dispatch_mode(text: &str) -> Result<ExecutionMode, OrchestratorErro
     ExecutionMode::parse(text).map_err(config_error)
 }
 
-pub(crate) fn extra_files(
+pub(crate) fn workflow_request_for(
     config: &VelnorConfig,
     catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
-) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    if config.schema != VelnorConfig::SCHEMA_V2 {
+) -> Result<Option<Schema2WorkflowRequest>, OrchestratorError> {
+    if config.schema != VelnorConfig::SCHEMA_V2 { return Ok(None); }
+    let Some(execution) = &config.execution else { return Ok(None); };
+    if execution.workflows.is_empty() { return Ok(None); }
+    workflow_request(config, execution, catalog, version).map(Some)
+}
+
+pub(crate) fn extra_files(config: &VelnorConfig, version: &str) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    let Some(execution) = &config.execution else { return Ok(Vec::new()); };
+    if config.schema != VelnorConfig::SCHEMA_V2 || !execution.workflows.contains(&RoutingWorkflow::GeneratorRelease) {
         return Ok(Vec::new());
     }
-    let Some(execution) = &config.execution else {
-        return Ok(Vec::new());
-    };
-    if execution.workflows.is_empty() {
-        return Ok(Vec::new());
-    }
-    let request = workflow_request(config, execution, catalog, version)?;
-    let mut files =
-        render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
-            problem: err.to_string(),
-        })?;
-    if execution
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
-    {
-        let pins = crate::product_release_pins::homebrew_adoption_pins()?;
-        files.push(
-            velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
-                .map_err(|err| OrchestratorError::Render {
-                    problem: err.to_string(),
-                })?
-                .file,
-        );
-    }
-    Ok(files)
+    let pins = crate::product_release_pins::homebrew_adoption_pins()?;
+    Ok(vec![velnor_actions_workflow_renderer::render_homebrew_adoption_callee(version, &pins)
+        .map_err(|err| OrchestratorError::Render { problem: err.to_string() })?.file])
 }
 
 fn proposed_text(root: &Path) -> Result<String, OrchestratorError> {
