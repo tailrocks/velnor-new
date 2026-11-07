@@ -237,10 +237,16 @@ pub(crate) fn check_rejects_ci_and_attestation(fixture: &Fixture) -> Result<(), 
         "CI-REJECTED",
         Some("The latest canonical main CI run has no `success` conclusion."),
     )?;
+    check_rejects_attestation(fixture)
+}
+
+fn check_rejects_attestation(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
     expect_rejection(
         fixture,
         "attestation",
-        &format!("{{\"output\":[],\"source\":\"{SOURCE_SHA}\"}}"),
+        &format!(
+            "{{\"output\":[],\"source\":\"{SOURCE_SHA}\",\"run_id\":7,\"run_attempt\":1,\"subjects\":{{}}}}"
+        ),
         "attestation-empty",
         "ATTESTATION-REJECTED",
         Some("Attestation verification output has no records."),
@@ -268,6 +274,42 @@ pub(crate) fn check_rejects_ci_and_attestation(fixture: &Fixture) -> Result<(), 
         "attestation-trigger",
         "ATTESTATION-REJECTED",
         Some("Attestation certificate source or workflow identity is incorrect."),
+    )?;
+    expect_rejection(
+        fixture,
+        "attestation",
+        &replace_once(
+            &attestation_envelope(),
+            "/actions/runs/7/attempts/1",
+            "/actions/runs/8/attempts/1",
+        )?,
+        "attestation-run",
+        "ATTESTATION-REJECTED",
+        Some("Attestation certificate run identity is incorrect."),
+    )?;
+    expect_rejection(
+        fixture,
+        "attestation",
+        &replace_once(
+            &attestation_envelope(),
+            "/actions/runs/7/attempts/1",
+            "/actions/runs/7/attempts/2",
+        )?,
+        "attestation-attempt",
+        "ATTESTATION-REJECTED",
+        Some("Attestation certificate run identity is incorrect."),
+    )?;
+    expect_rejection(
+        fixture,
+        "attestation",
+        &replace_once(
+            &attestation_envelope(),
+            "\"sha256\":\"archive\"",
+            "\"sha256\":\"different\"",
+        )?,
+        "attestation-subject",
+        "ATTESTATION-REJECTED",
+        Some("Attestation subjects are incorrect."),
     )?;
     Ok(())
 }
