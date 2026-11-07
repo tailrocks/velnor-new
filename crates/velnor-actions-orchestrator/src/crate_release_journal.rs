@@ -272,18 +272,23 @@ mod tests;
 #[cfg(test)]
 #[test]
 fn qualification_policy_change_changes_base_intent() -> Result<(), Box<dyn std::error::Error>> {
-    let current: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(serde_json::json!({
-        "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
-        "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
-        "generator_version":"0.1.72","generator_source_sha":"c".repeat(40),"generator_manifest_sha256":"d".repeat(64),
-        "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
-        "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
-        "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
-        "tag_template":"{{ package }}-v{{ version }}"
-    }))?;
+    let current: velnor_actions_contract::config::CrateReleaseIntent = serde_json::from_value(
+        serde_json::json!({
+            "schema":1,"repository":"owner/project","default_branch":"main","environment":"release",
+            "required_workflow_path":".github/workflows/ci.yml","trusted_reviewer_id":139_017,
+            "generator_version":"0.1.72","generator_source_sha":"c".repeat(40),"generator_manifest_sha256":"d".repeat(64),
+            "release_plz_version":"0.4.3","runner":"ubuntu-26.04","authentication":"trusted-publishing",
+            "rust_version":"1.97.1","manifest_path":"Cargo.toml","pr_write_paths":["Cargo.toml"],
+            "registry":"crates-io","packages":["demo"],"publish_features":{"demo":[]},
+            "tag_template":"{{ package }}-v{{ version }}"
+        }),
+    )?;
     let mut changed = current.clone();
     changed.oidc_qualification = true;
-    assert_ne!(release_base_intent_sha256(&current)?, release_base_intent_sha256(&changed)?);
+    assert_ne!(
+        release_base_intent_sha256(&current)?,
+        release_base_intent_sha256(&changed)?
+    );
     Ok(())
 }
 

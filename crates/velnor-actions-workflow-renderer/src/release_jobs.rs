@@ -207,7 +207,9 @@ impl ReleaseWorkflowSpec {
             ));
         }
         if self.qualification.is_some() {
-            return Err(RenderError::InvalidWorkflow("oidc_qualification_unavailable".to_owned()));
+            return Err(RenderError::InvalidWorkflow(
+                "oidc_qualification_unavailable".to_owned(),
+            ));
         }
         if self.plan.repository != self.repository {
             return Err(RenderError::InvalidWorkflow(
