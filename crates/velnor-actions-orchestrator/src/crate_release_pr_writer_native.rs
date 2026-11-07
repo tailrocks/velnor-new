@@ -27,6 +27,7 @@ impl NativeWriter<'_> {
 fn text(value: &serde_json::Value, key: &str) -> Result<String, OrchestratorError> {
     value[key]
         .as_str()
+        .filter(|value| !value.is_empty())
         .map(str::to_owned)
         .ok_or_else(|| internal("release_pr_response_invalid"))
 }
@@ -46,8 +47,15 @@ impl WriterIo for NativeWriter<'_> {
             for pr in prs {
                 let head = text(&pr["head"], "ref")?;
                 let head_repo = text(&pr["head"]["repo"], "full_name")?;
+                if !crate::release::release_identity::same_repository(&head_repo, &head_repo) {
+                    return Err(internal("release_pr_response_invalid"));
+                }
                 if head.starts_with("release-plz-")
-                    && (head_repo != plan.repository || head != plan.branch)
+                    && crate::release::release_identity::same_repository(
+                        &head_repo,
+                        &plan.repository,
+                    )
+                    && head != plan.branch
                 {
                     return Err(internal("release_pr_existing"));
                 }
@@ -62,7 +70,7 @@ impl WriterIo for NativeWriter<'_> {
     fn require_not_release_pr(&self, plan: &Plan) -> Result<(), OrchestratorError> {
         if crate::crate_release_github::has_release_pr(
             self.github,
-            &format!("repos/{}", plan.repository),
+            &plan.repository,
             &plan.source_sha,
         )? {
             return Err(internal("release_pr_source_is_release"));

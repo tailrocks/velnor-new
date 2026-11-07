@@ -85,7 +85,7 @@ pub fn admit_github_evidence(
         )?;
         let prefix = format!("repos/{}", request.repository);
         verify_run_authority(request, api, &prefix)?;
-        if !has_release_pr(api, &prefix, &request.source_sha)? {
+        if !has_release_pr(api, &request.repository, &request.source_sha)? {
             return Ok(GitHubAdmissionOutcome::Skipped);
         }
     }
@@ -95,22 +95,29 @@ pub fn admit_github_evidence(
 
 pub(crate) fn has_release_pr(
     api: &dyn GitHubAdmissionRead,
-    prefix: &str,
+    repository: &str,
     source: &str,
 ) -> Result<bool, OrchestratorError> {
     for page in 1..=100 {
         let response = api.get(&format!(
-            "{prefix}/commits/{source}/pulls?per_page=100&page={page}"
+            "repos/{repository}/commits/{source}/pulls?per_page=100&page={page}"
         ))?;
         let prs = response
             .as_array()
+            .filter(|rows| rows.len() <= 100)
             .ok_or_else(|| internal("crate_release_pulls_invalid"))?;
         for pr in prs {
             let branch = pr["head"]["ref"]
                 .as_str()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| internal("crate_release_pull_branch"))?;
-            if branch.starts_with("release-plz-") {
+            let head_repository = pr["head"]["repo"]["full_name"]
+                .as_str()
+                .filter(|name| crate::release::release_identity::same_repository(name, name))
+                .ok_or_else(|| internal("crate_release_pull_repository"))?;
+            if branch.starts_with("release-plz-")
+                && crate::release::release_identity::same_repository(head_repository, repository)
+            {
                 return Ok(true);
             }
         }

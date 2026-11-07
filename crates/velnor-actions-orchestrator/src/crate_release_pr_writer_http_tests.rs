@@ -253,7 +253,7 @@ fn rejects_existing_release_pr_on_later_page_and_api_failures() -> Result<(), Or
         ("200 OK", serde_json::json!(first)),
         (
             "200 OK",
-            serde_json::json!([{"head":{"ref":"release-plz-another","repo":{"full_name":"other/fork"}}}]),
+            serde_json::json!([{"head":{"ref":"release-plz-another","repo":{"full_name":"owner/project"}}}]),
         ),
         ("403 Forbidden", serde_json::json!({"message":"denied"})),
     ];

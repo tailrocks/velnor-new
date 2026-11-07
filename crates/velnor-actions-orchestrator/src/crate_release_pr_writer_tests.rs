@@ -155,6 +155,9 @@ fn creates_and_reconciles_exact_branch_and_pull_request_after_lost_replies()
 #[path = "crate_release_pr_writer_http_tests.rs"]
 mod http_tests;
 
+#[path = "crate_release_pr_writer_repository_tests.rs"]
+mod repository_tests;
+
 #[test]
 fn conflicting_branch_and_untrusted_blob_never_create_pull_requests() {
     let plan = plan();
