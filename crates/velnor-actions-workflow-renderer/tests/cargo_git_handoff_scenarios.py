@@ -163,15 +163,27 @@ with tempfile.TemporaryDirectory() as temporary:
     assert (quarantines[0] / "original/db" / database.name / "foreign-canary").read_text() == "preserved"
     assert not marker.exists() and canary.read_text() == "untouched"
     for fifo_home, relative_fifo in fifo_cases:
+        fifo_before = (fifo_home / "git" / relative_fifo).stat()
         shutil.rmtree(shared / "git")
         (fifo_home / "git").rename(shared / "git")
         bounded_run(["bash", str(prefetch), "prefetch-locked-sources-for-qualification-workspaces"], workspace, prefetch_env, True)
         log = (evidence / "cargo-prefetch.log").read_text()
         assert "manifest=Cargo.toml mode=network status=0" in log
         assert "manifest=crates/velnor-runner/Cargo.toml mode=network status=0" in log
-        assert any((item / "original" / relative_fifo).is_fifo() for item in runner_temp.glob("velnor-git-quarantine.*"))
+        preserved = [item / "git" / relative_fifo for item in runner_temp.glob("velnor-cargo-quarantine.*") if (item / "git" / relative_fifo).is_fifo()]
+        assert any((entry.stat().st_dev, entry.stat().st_ino) == (fifo_before.st_dev, fifo_before.st_ino) for entry in preserved)
         assert not marker.exists() and canary.read_text() == "untouched"
     shutil.rmtree(shared / "git/checkouts", ignore_errors=True)
+    for item in (shared / "git/db").rglob("*"):
+        if item.is_file() and item.stat().st_nlink > 1:
+            original_bytes = item.read_bytes()
+            replacement = item.with_name(item.name + ".owned-copy")
+            shutil.copyfile(item, replacement)
+            os.replace(replacement, item)
+            assert item.read_bytes() == original_bytes
+    (shared / "registry/index").mkdir(parents=True, exist_ok=True)
+    (shared / "registry/cache").mkdir(exist_ok=True)
+    run(["bash", str(helper), "check", str(shared)], root, env)
     current_pack = next((shared / "git/db").rglob("*.pack"))
     current_pack.chmod(0o600)
     current_pack.write_bytes(b"corrupt")

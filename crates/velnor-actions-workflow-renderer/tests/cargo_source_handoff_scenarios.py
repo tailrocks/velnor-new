@@ -82,7 +82,8 @@ with tempfile.TemporaryDirectory() as temporary:
     for project, name, dependency in ((checkout, "handoff-root", "handoff-dep"), (nested, "handoff-nested", "runner-dep")):
         (project / "src").mkdir()
         (project / "src/lib.rs").write_text(f"pub fn answer() -> u8 {{ {dependency.replace('-', '_')}::answer() }}\n")
-        (project / "Cargo.toml").write_text(f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\n[dependencies]\n{dependency}="=1.0.0"\n')
+        extra = 'handoff-dep="=1.0.0"\n' if project == nested else ""
+        (project / "Cargo.toml").write_text(f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2021"\n[dependencies]\n{dependency}="=1.0.0"\n{extra}')
     owned_script = checkout / "scripts/generator-release/cargo-source-handoff.sh"
     owned_script.parent.mkdir(parents=True)
     shutil.copyfile(helper, owned_script)
@@ -114,6 +115,41 @@ with tempfile.TemporaryDirectory() as temporary:
     assert "fetch_mode=crates/velnor-runner/Cargo.toml:network" in identity
     assert events
     archive_path = next((shared / "registry/cache").rglob("handoff-dep-1.0.0.crate"))
+    archive_relative = archive_path.relative_to(shared)
+    for project in (checkout, nested):
+        subprocess.run([cargo, "build", "--locked", "--offline", "--manifest-path", str(project / "Cargo.toml")], env=env, cwd=checkout, check=True, capture_output=True)
+    shutil.rmtree(shared / "registry/src", ignore_errors=True)
+    archive_path.chmod(0o600)
+    archive_path.write_bytes(b"corrupt")
+    unsafe_db = shared / "git/db/fixture-0123456789abcdef"
+    subprocess.run(["git", "init", "--bare", "-q", str(unsafe_db)], env=env, cwd=checkout, check=True, capture_output=True)
+    fifo = unsafe_db / "objects/ff" / ("f" * 38)
+    fifo.parent.mkdir()
+    os.mkfifo(fifo, 0o600)
+    hook_marker = base / "mixed-hook-executed"
+    hook = unsafe_db / "hooks/post-checkout"
+    hook.write_text(f'#!/bin/sh\ntouch "{hook_marker}"\n')
+    hook.chmod(0o755)
+    with (unsafe_db / "config").open("a") as config:
+        config.write(f'\n[core]\n hooksPath = {unsafe_db / "hooks"}\n')
+    canary = base / "mixed-foreign-canary"
+    canary.write_text("untouched")
+    requests_before = len(events)
+    prefetch_env |= {"SOURCES_CACHE_HIT": "true", "SOURCES_CACHE_MATCHED_KEY": "fixture"}
+    result = subprocess.run(["bash", str(prefetch), "prefetch-locked-sources-for-qualification-workspaces"], env=prefetch_env, cwd=checkout, text=True, capture_output=True, timeout=60)
+    log = (evidence / "cargo-prefetch.log").read_text()
+    assert result.returncode == 0, f"mixed unsafe Git and corrupt registry did not recover: {result.stdout}\n{result.stderr}\n{log}"
+    assert "manifest=Cargo.toml mode=network status=0" in log
+    assert "manifest=crates/velnor-runner/Cargo.toml mode=network status=0" in log
+    assert any((item / "git/db/fixture-0123456789abcdef/objects/ff" / ("f" * 38)).is_fifo() for item in (base / "temp").glob("velnor-cargo-quarantine.*"))
+    assert any((item / archive_relative).is_file() and (item / archive_relative).read_bytes() == b"corrupt" for item in (base / "temp").glob("velnor-cargo-quarantine.*"))
+    assert not hook_marker.exists() and canary.read_text() == "untouched"
+    assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in locks] == before
+    archive_path = next((shared / "registry/cache").rglob("handoff-dep-1.0.0.crate"))
+    assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == checksum
+    assert "/api/v1/crates/handoff-dep/1.0.0/download" in events[requests_before:]
+    for project in (checkout, nested):
+        subprocess.run([cargo, "fetch", "--locked", "--offline", "--manifest-path", str(project / "Cargo.toml")], env=env, cwd=checkout, check=True, capture_output=True)
     archive_path.write_bytes(b"corrupt")
     shutil.rmtree(shared / "registry/src", ignore_errors=True)
     prefetch_env |= {"SOURCES_CACHE_HIT": "true", "SOURCES_CACHE_MATCHED_KEY": "fixture"}

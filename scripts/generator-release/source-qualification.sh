@@ -513,17 +513,15 @@ if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ]; then
     export GIT_TEMPLATE_DIR="$quarantine/empty-template"
     if ! /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
       "$root/scripts/generator-release/cargo-git-handoff.py" "$CARGO_HOME" "$quarantine/staging" 0 0; then
-      mkdir -m 700 -- "$quarantine/cold" || exit 1
-      quarantine_staging="$quarantine/cold"
+      quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
       SOURCES_CACHE_MATCHED_KEY=''
       SOURCES_CACHE_HIT=''
       printf '::warning::unsafe restored Git source cache quarantined\n'
     else
-      quarantine_staging="$quarantine/staging"
+      /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+        "$root/scripts/generator-release/cargo-git-handoff.py" install "$CARGO_HOME" "$quarantine/staging" "$quarantine" \
+        || { printf 'FATAL: Git source quarantine failed\n' >&2; exit 1; }
     fi
-    /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
-      "$root/scripts/generator-release/cargo-git-handoff.py" install "$CARGO_HOME" "$quarantine_staging" "$quarantine" \
-      || { printf 'FATAL: Git source quarantine failed\n' >&2; exit 1; }
   else
     GIT_TEMPLATE_DIR="$(mktemp -d "$RUNNER_TEMP/velnor-git-template.XXXXXXXX")" || exit 1
     export GIT_TEMPLATE_DIR
