@@ -450,6 +450,7 @@ crates/velnor-actions-mise/src/check_capabilities_probe.rs
 crates/velnor-actions-mise/src/check_command.rs
 crates/velnor-actions-mise/src/check_container_observation.rs
 crates/velnor-actions-mise/src/check_deadline.rs
+crates/velnor-actions-mise/src/check_deadline_tests.rs
 crates/velnor-actions-mise/src/check_discovery.rs
 crates/velnor-actions-mise/src/check_execution.rs
 crates/velnor-actions-mise/src/check_file_read.rs
