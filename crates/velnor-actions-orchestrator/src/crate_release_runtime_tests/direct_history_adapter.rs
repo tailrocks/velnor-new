@@ -120,45 +120,7 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
     {
         crate::crate_release_controller::tests::signed_history::exercise()?;
     }
-    let mut forged_prior = prior.clone();
-    forged_prior.intent_sha256 = "0".repeat(64);
-    assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &forged_prior,
-            &receipt,
-            &request,
-            &github
-        )
-        .is_err()
-    );
-    let mut wrong_origin = prior.clone();
-    wrong_origin.identity.run_id = 13;
-    wrong_origin.workflow_run_url = "https://github.com/owner/project/actions/runs/13".into();
-    assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &wrong_origin,
-            &receipt,
-            &request,
-            &github
-        )
-        .is_err(),
-        "a different run origin must fail"
-    );
-    let mut wrong_runner = prior.clone();
-    wrong_runner
-        .identity
-        .workflow_sha
-        .clone_from(&request.workflow_sha);
-    assert!(
-        crate::release::crate_release_direct_history::verify_transition(
-            &wrong_runner,
-            &receipt,
-            &request,
-            &github
-        )
-        .is_err(),
-        "the historical runner transition must match"
-    );
+    verify_forged_transitions(&prior, &receipt, &request, &github);
     let mut invalid = receipt.clone();
     invalid.intent_sha256 = "0".repeat(64);
     assert!(
@@ -174,6 +136,53 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
         "changed source must invalidate history"
     );
     Ok(())
+}
+
+fn verify_forged_transitions(
+    prior: &JournalReceipt,
+    receipt: &JournalReceipt,
+    request: &GitHubAdmissionRequest,
+    github: &crate::crate_release_github::NativeGitHubAdmissionRead,
+) {
+    let mut forged_prior = prior.clone();
+    forged_prior.intent_sha256 = "0".repeat(64);
+    assert!(
+        crate::release::crate_release_direct_history::verify_transition(
+            &forged_prior,
+            receipt,
+            request,
+            github
+        )
+        .is_err()
+    );
+    let mut wrong_origin = prior.clone();
+    wrong_origin.identity.run_id = 13;
+    wrong_origin.workflow_run_url = "https://github.com/owner/project/actions/runs/13".into();
+    assert!(
+        crate::release::crate_release_direct_history::verify_transition(
+            &wrong_origin,
+            receipt,
+            request,
+            github
+        )
+        .is_err(),
+        "a different run origin must fail"
+    );
+    let mut wrong_runner = prior.clone();
+    wrong_runner
+        .identity
+        .workflow_sha
+        .clone_from(&request.workflow_sha);
+    assert!(
+        crate::release::crate_release_direct_history::verify_transition(
+            &wrong_runner,
+            receipt,
+            request,
+            github
+        )
+        .is_err(),
+        "the historical runner transition must match"
+    );
 }
 
 fn verify_signed_generator_fixture() -> Result<(), Box<dyn std::error::Error>> {
