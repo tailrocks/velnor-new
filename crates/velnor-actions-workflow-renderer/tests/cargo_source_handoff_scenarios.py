@@ -86,8 +86,9 @@ with tempfile.TemporaryDirectory() as temporary:
     owned_script = checkout / "scripts/generator-release/cargo-source-handoff.sh"
     owned_script.parent.mkdir(parents=True)
     shutil.copyfile(helper, owned_script)
-    shared = base / "shared"
-    shared.mkdir(mode=0o700)
+    shutil.copyfile(root / "scripts/generator-release/cargo-git-handoff.py", owned_script.parent / "cargo-git-handoff.py")
+    shared = base / "temp/velnor/cargo"
+    shared.mkdir(mode=0o700, parents=True)
     env = {key: os.environ[key] for key in ("HOME", "USER", "RUSTUP_HOME", "MISE_DATA_DIR") if key in os.environ}
     env["PATH"] = str(pathlib.Path(cargo).parent) + os.pathsep + str(pathlib.Path(mise).parent) + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin")
     env["MISE_AUTO_INSTALL"] = "0"

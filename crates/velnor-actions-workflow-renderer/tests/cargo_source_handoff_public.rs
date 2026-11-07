@@ -24,3 +24,24 @@ fn locked_cargo_sources_survive_private_handoff_and_corruption_recovery()
     );
     Ok(())
 }
+
+#[test]
+fn locked_git_sources_survive_private_handoff_without_executing_cache_configuration()
+-> Result<(), Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output =
+        Command::new("python3")
+            .arg("-I")
+            .arg(root.join(
+                "crates/velnor-actions-workflow-renderer/tests/cargo_git_handoff_scenarios.py",
+            ))
+            .arg(&root)
+            .output()?;
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}

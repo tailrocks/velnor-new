@@ -474,14 +474,63 @@ restored_sources_discarded=""
 clean_retry_attempted=0
 : >"$log"
 : >"$identity"
+quarantine_sources() {
+  local quarantine_directory
+  quarantine_directory="$(mktemp -d "$RUNNER_TEMP/velnor-cargo-quarantine.XXXXXXXX")" || return 1
+  /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+    "$root/scripts/generator-release/cargo-git-handoff.py" quarantine "$CARGO_HOME" "$quarantine_directory"
+}
 if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ]; then
-  if [ ! -d "$CARGO_HOME" ] || [ -L "$CARGO_HOME" ] || [ "$(cd "$CARGO_HOME" && pwd -P)" != "$CARGO_HOME" ]; then
+  if [ -z "${RUNNER_TEMP:-}" ] || [[ "$RUNNER_TEMP" != /* ]] \
+    || [ "$(cd "$RUNNER_TEMP" && pwd -P)" != "$RUNNER_TEMP" ] \
+    || [ "$CARGO_HOME" != "$RUNNER_TEMP/velnor/cargo" ] \
+    || [ ! -d "$CARGO_HOME" ] || [ -L "$CARGO_HOME" ] || [ "$(cd "$CARGO_HOME" && pwd -P)" != "$CARGO_HOME" ]; then
     printf 'FATAL: qualification Cargo home is unsafe\n' >&2
     exit 1
   fi
+  for owned_directory in "$RUNNER_TEMP" "$RUNNER_TEMP/velnor" "$CARGO_HOME"; do
+    if [ -L "$owned_directory" ] || [ ! -d "$owned_directory" ] || [ ! -O "$owned_directory" ]; then
+      printf 'FATAL: qualification Cargo parent is unsafe\n' >&2
+      exit 1
+    fi
+    if [ "$(uname -s)" = Darwin ]; then
+      owned_mode="$(stat -f '%Lp' "$owned_directory")" || exit 1
+    else
+      owned_mode="$(stat -c '%a' "$owned_directory")" || exit 1
+    fi
+    if [[ ! "$owned_mode" =~ ^[0-7]+$ ]] || (( (8#$owned_mode & 022) != 0 )); then
+      printf 'FATAL: qualification Cargo parent is writable by others\n' >&2
+      exit 1
+    fi
+  done
+  while IFS= read -r variable; do
+    case "$variable" in GIT_*) unset "$variable" ;; esac
+  done < <(compgen -e)
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 GIT_NO_REPLACE_OBJECTS=1
+  if [ -e "$CARGO_HOME/git" ] || [ -L "$CARGO_HOME/git" ]; then
+    quarantine="$(mktemp -d "$RUNNER_TEMP/velnor-git-quarantine.XXXXXXXX")" || exit 1
+    mkdir -m 700 -- "$quarantine/staging" "$quarantine/empty-template" || exit 1
+    export GIT_TEMPLATE_DIR="$quarantine/empty-template"
+    if ! /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+      "$root/scripts/generator-release/cargo-git-handoff.py" "$CARGO_HOME" "$quarantine/staging" 0 0; then
+      mkdir -m 700 -- "$quarantine/cold" || exit 1
+      quarantine_staging="$quarantine/cold"
+      SOURCES_CACHE_MATCHED_KEY=''
+      SOURCES_CACHE_HIT=''
+      printf '::warning::unsafe restored Git source cache quarantined\n'
+    else
+      quarantine_staging="$quarantine/staging"
+    fi
+    /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+      "$root/scripts/generator-release/cargo-git-handoff.py" install "$CARGO_HOME" "$quarantine_staging" "$quarantine" \
+      || { printf 'FATAL: Git source quarantine failed\n' >&2; exit 1; }
+  else
+    GIT_TEMPLATE_DIR="$(mktemp -d "$RUNNER_TEMP/velnor-git-template.XXXXXXXX")" || exit 1
+    export GIT_TEMPLATE_DIR
+  fi
   for forbidden in config config.toml credentials credentials.toml registry/src git/checkouts; do
     if [ -e "$CARGO_HOME/$forbidden" ] || [ -L "$CARGO_HOME/$forbidden" ]; then
-      rm -rf -- "$CARGO_HOME/registry" "$CARGO_HOME/git" "$CARGO_HOME/config" "$CARGO_HOME/config.toml" "$CARGO_HOME/credentials" "$CARGO_HOME/credentials.toml"
+      quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
       SOURCES_CACHE_MATCHED_KEY=''
       SOURCES_CACHE_HIT=''
       printf '::warning::unsafe restored Cargo source cache discarded\n'
@@ -492,7 +541,7 @@ fi
 if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ] && [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ]; then
   if ! /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="$RUNNER_TEMP" \
     /bin/bash "$root/scripts/generator-release/cargo-source-handoff.sh" check "$CARGO_HOME"; then
-    rm -rf -- "$CARGO_HOME/registry" "$CARGO_HOME/git"
+    quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
     SOURCES_CACHE_MATCHED_KEY=''
     SOURCES_CACHE_HIT=''
     printf '::warning::unsafe restored Cargo source cache discarded\n'
@@ -530,22 +579,13 @@ run_fetch() {
   return "$command_status"
 }
 discard_restored_sources() {
-  local manifest="$1" reason="$2" path entry updated=() refetch_status=0
+  local manifest="$1" reason="$2" entry updated=() refetch_status=0
   clean_retry_attempted=1
   if [ ! -d "$CARGO_HOME" ] || [ -L "$CARGO_HOME" ] || [ "$(cd "$CARGO_HOME" && pwd -P)" != "$CARGO_HOME" ]; then
     printf 'FATAL: qualification Cargo home is unsafe\n' >&2
     return 1
   fi
-  for path in registry git; do
-    if [ -L "$CARGO_HOME/$path" ]; then
-      rm -f -- "$CARGO_HOME/$path" || return 1
-    else
-      case "$path" in
-        registry) rm -rf -- "$CARGO_HOME/registry/index" "$CARGO_HOME/registry/cache" "$CARGO_HOME/registry/src" || return 1 ;;
-        git) rm -rf -- "$CARGO_HOME/git/db" "$CARGO_HOME/git/checkouts" || return 1 ;;
-      esac
-    fi
-  done
+  quarantine_sources || return 1
   restored_sources_discarded="${restored_sources_discarded:+$restored_sources_discarded,}$manifest"
   printf '::warning::restored Cargo sources discarded because the %s fetch of %s failed\n' "$reason" "$manifest"
   printf 'restored sources discarded after the %s fetch of %s failed\n' "$reason" "$manifest" >>"$log"

@@ -293,11 +293,6 @@ if [[ -n "$source_cache" ]]; then
   [[ "$(cd -- "$source_cache" && pwd -P)" == "$source_cache" ]] \
     || fail 'source cache is not canonical'
   check_directory "$source_cache"
-  for lock in "$repository/Cargo.lock" "$repository/crates/velnor-runner/Cargo.lock"; do
-    if grep -q '^source = "git+' "$lock"; then
-      fail 'Git dependencies are not supported by source-cache handoff'
-    fi
-  done
   cargo_home="$run_tmp/cargo-home"
   mkdir -m 700 -- "$cargo_home"
   check_directory "$cargo_home"

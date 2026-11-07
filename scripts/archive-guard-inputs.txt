@@ -13,6 +13,7 @@ file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.r
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
 file scripts/build-owned-archive-guard.sh
 file scripts/generator-release/cargo-source-handoff.sh
+file scripts/generator-release/cargo-git-handoff.py
 file scripts/archive-guard-build-namespace.sh
 file scripts/check-owned-archive-guard-sources.sh
 tree crates/velnor-archive-guard/src

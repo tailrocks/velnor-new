@@ -163,7 +163,15 @@ pub(super) fn run_prefetch(
     fs::write(&log, "")?;
     let seen = base.join("network-seen.log");
     fs::write(&seen, "")?;
-    let cargo_home = base.join("cargo-home");
+    let cargo_home = runner_temp.join("velnor/cargo");
+    fs::create_dir_all(&cargo_home)?;
+    let helpers = workspace.join("scripts/generator-release");
+    fs::create_dir_all(&helpers)?;
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../scripts/generator-release/cargo-git-handoff.py"),
+        helpers.join("cargo-git-handoff.py"),
+    )?;
     if !scenario.matched_key.is_empty() {
         for restored in ["registry/index", "registry/cache", "git/db"] {
             fs::create_dir_all(cargo_home.join(restored))?;

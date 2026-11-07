@@ -40,6 +40,10 @@ for family in index cache; do
   [[ -d "$path" && ! -L "$path" ]] || exit 1
   scan "$path"
 done
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+if [[ "$mode" == check ]]; then
+  /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 "$script_dir/cargo-git-handoff.py" inspect "$source_home" "$scratch" "$entries" "$bytes"
+fi
 if [[ "$mode" == copy ]]; then
   [[ "$destination" == /* && -d "$destination" && ! -L "$destination" ]] || exit 1
   [[ ! -e "$destination/registry" && ! -L "$destination/registry" ]] || exit 1
@@ -52,4 +56,5 @@ if [[ "$mode" == copy ]]; then
   bytes=0
   scan "$destination/registry/index"
   scan "$destination/registry/cache"
+  /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 "$script_dir/cargo-git-handoff.py" "$source_home" "$destination" "$entries" "$bytes"
 fi
