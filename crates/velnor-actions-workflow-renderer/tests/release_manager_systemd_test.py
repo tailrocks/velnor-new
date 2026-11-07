@@ -227,6 +227,69 @@ class RealManagerTest(unittest.TestCase):
             subprocess.run(['/usr/bin/systemctl', 'reset-failed', unit],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=5)
 
+    def test_accepted_remote_write_survives_interrupted_response(self):
+        unit = 'velnor-release-' + secrets.token_hex(16) + '.service'
+        manager = bus.Manager(str(self.helper), 10, self.watch.authority, root_bootstrap=True)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(1)
+        listener.settimeout(10)
+        reader, writer = os.pipe()
+        peer = None
+        end = deadline(35)
+        payload = b'accepted-upload'
+        command = ("import socket,sys; s=socket.create_connection(('127.0.0.1',int(sys.argv[1]))); "
+                   "s.sendall(b'POST /upload HTTP/1.1\\r\\nContent-Length: 15\\r\\n\\r\\naccepted-upload'); "
+                   "s.recv(1)")
+        body = json.dumps({'program': '/usr/bin/python3', 'args': ['-I', '-S', '-c', command,
+                           str(listener.getsockname()[1])], 'cwd': '/', 'env': {}, 'stdin': ''}).encode()
+        frame = struct.pack('>QQI', end, os.stat('/proc/self/ns/time').st_ino, len(body)) + body
+        try:
+            owner = manager.subscribe(end)
+            job = manager.start(unit, reader, end)
+            os.close(reader)
+            reader = None
+            lifecycle.wait_job(manager, unit, job, end)
+            invocation = lifecycle.state(manager, owner, unit, end)['invocation']
+            lifecycle.write_frame(writer, frame, end)
+            os.close(writer)
+            writer = None
+            peer, _ = listener.accept()
+            peer.settimeout(10)
+            request = b''
+            while not request.endswith(payload):
+                chunk = peer.recv(4096)
+                if not chunk or len(request) + len(chunk) > 4096:
+                    self.fail('remote upload did not arrive intact')
+                request += chunk
+            self.assertEqual(request, b'POST /upload HTTP/1.1\r\nContent-Length: 15\r\n\r\n' + payload)
+            accepted = self.directory / 'accepted-upload'
+            with accepted.open('wb') as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            manager.stop(unit, end)
+            lifecycle.wait_quiescent(manager, owner, unit, invocation, end)
+            state = lifecycle.state(manager, owner, unit, end)
+            self.assertEqual(state['result'], 'signal')
+            self.assertEqual(state['exec_status'], signal.SIGKILL)
+            self.assertEqual(peer.recv(1), b'')
+            self.assertEqual(accepted.read_bytes(), payload)
+            manager.release(unit, end)
+        finally:
+            if reader is not None:
+                os.close(reader)
+            if writer is not None:
+                os.close(writer)
+            if peer is not None:
+                peer.close()
+            listener.close()
+            if manager.dropin_name:
+                subprocess.run(['/usr/bin/systemctl', 'stop', unit], check=False,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                manager.release(unit, deadline(10))
+            manager.close()
+
     def test_root_owned_staging_rejects_preexisting_symlink(self):
         unit = "velnor-release-" + secrets.token_hex(16) + ".service"
         directory = Path("/run/systemd/system") / (unit + ".d")
