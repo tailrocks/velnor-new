@@ -210,6 +210,7 @@ pub(crate) enum ConfigCommand {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CrateReleaseCommand {
+    OidcQualificationAdmit,
     CheckoutPolicy,
     CheckoutSource,
     PreparePr,

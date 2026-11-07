@@ -331,6 +331,13 @@ mod pr;
 mod workflow_checks;
 use pr::approved_pr;
 
+#[path = "crate_release_github_qualification.rs"]
+mod qualification;
+pub use qualification::{
+    oidc_qualification_admit_from_environment, verify_oidc_qualification,
+    verify_oidc_qualification_for_run,
+};
+
 #[path = "crate_release_github_reviews.rs"]
 mod reviews;
 use reviews::{encode, require, valid_sha, valid_utc, validate_request, verify_reviews};

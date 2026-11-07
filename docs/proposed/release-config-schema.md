@@ -24,7 +24,13 @@ Reference for the typed config in `velnor-actions-contract`
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | For crates.io, must be `{{ package }}-v{{ version }}` (whitespace-insensitive). Git-tag releases support safe templates containing both variables. |
 | `recovery` | table or absent | absent | Binds an exact package, version, and source for an approved recovery dispatch; push events are rejected. Cannot coexist with `new_crates`. Bootstrap-token authentication requires either `recovery` or `new_crates`. |
 | `journal_predecessor` | table or absent | absent | Binds a reviewed previous run ID, attempt, and workflow SHA for durable release recovery. Requires an exact source through `recovery`, `new_crates`, or `continuation_source_sha`; only attempt `1` is accepted. |
+| `oidc_qualification` | boolean | false | Opts into the protected, no-publish OIDC qualification dispatch for trusted publishing. Qualification remains unavailable until its workflow guard is lifted after verification. |
 | `continuation_source_sha` | string or absent | absent | Selects the exact 40-character lowercase source SHA for a predecessor continuation without changing the selected packages. Requires `journal_predecessor`; any other exact-source selection must agree. |
+
+Changing `oidc_qualification` changes the release intent. A predecessor created
+under the previous value cannot be continued under the new value. A transition
+requires a separately reviewed and approved migration; the continuation code
+does not silently normalize this security policy change.
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Native release-plz computes a group maximum, but inherited workspace versions take precedence; consult the pinned release-plz behavior for the resulting updates. |
 
 For example, to verify `demo-crate` with its `pty` feature during publication:

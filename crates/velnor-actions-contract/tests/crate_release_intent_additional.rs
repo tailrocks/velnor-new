@@ -208,3 +208,38 @@ fn assert_git_tag_ref_templates() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+#[test]
+fn rust_release_oidc_qualification_preserves_boolean_wire_format()
+-> Result<(), Box<dyn std::error::Error>> {
+    use velnor_actions_contract::config::RustReleaseConfig;
+
+    let absent: RustReleaseConfig = serde_json::from_str("{}")?;
+    let disabled: RustReleaseConfig = serde_json::from_str(r#"{"oidc_qualification":false}"#)?;
+    let enabled: RustReleaseConfig = serde_json::from_str(r#"{"oidc_qualification":true}"#)?;
+    assert_eq!(absent, disabled);
+    assert_eq!(
+        serde_json::to_value(&absent)?,
+        serde_json::to_value(&disabled)?
+    );
+    assert!(
+        serde_json::to_value(&disabled)?
+            .get("oidc_qualification")
+            .is_none()
+    );
+    assert_eq!(serde_json::to_value(&enabled)?["oidc_qualification"], true);
+    assert!(
+        serde_json::from_str::<RustReleaseConfig>(r#"{"oidc_qualification":"enabled"}"#).is_err()
+    );
+
+    let absent_toml: RustReleaseConfig = toml::from_str("")?;
+    let disabled_toml: RustReleaseConfig = toml::from_str("oidc_qualification = false")?;
+    let enabled_toml: RustReleaseConfig = toml::from_str("oidc_qualification = true")?;
+    assert_eq!(absent_toml, absent);
+    assert_eq!(disabled_toml, disabled);
+    assert_eq!(enabled_toml, enabled);
+    assert_eq!(toml::to_string(&absent)?, toml::to_string(&disabled)?);
+    assert!(!toml::to_string(&disabled)?.contains("oidc_qualification"));
+    assert!(toml::to_string(&enabled)?.contains("oidc_qualification = true"));
+    assert!(toml::from_str::<RustReleaseConfig>("oidc_qualification = 'enabled'").is_err());
+    Ok(())
+}

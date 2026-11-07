@@ -125,7 +125,15 @@ pub(super) fn check_role_conditions(
                     )));
                 }
             }
-            ReleaseRole::Preflight => {}
+            ReleaseRole::Preflight => {
+                let expected =
+                    crate::release_spec::preflight_gate_condition(repository, branch, plan);
+                if job.condition != expected {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "preflight_gate_mismatch:{id}"
+                    )));
+                }
+            }
         }
     }
     Ok(())

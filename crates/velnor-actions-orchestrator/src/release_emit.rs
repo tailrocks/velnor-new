@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{
     CrateReleaseIntent, CrateReleaseRecovery, ReleaseRegistry, RustReleaseConfig,
 };
@@ -13,7 +12,6 @@ use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, rend
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
 use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
 use crate::planner::prepare::GenerationPreparation;
 use crate::release::release_identity::{
     common_registry, origin_repository, plan_id_for_source, release_lock,
@@ -22,7 +20,8 @@ use crate::release::release_steps::{JobInputs, assemble_jobs};
 
 #[path = "release_emit_config.rs"]
 pub(super) mod config;
-use config::{plz_config, release_render_context};
+pub(crate) use config::{enabled_release, git_tag_release};
+use config::{plz_config, release_qualification, release_render_context};
 
 #[path = "release_emit_plan.rs"]
 mod plan;
@@ -83,7 +82,7 @@ fn release_files_for_config(
         .recovery
         .as_ref()
         .map(|record| record.version.as_str());
-    let plan = release_plan(
+    let mut plan = release_plan(
         &selection,
         &repository,
         &source_sha,
@@ -92,6 +91,10 @@ fn release_files_for_config(
         version,
         release.exact_source_sha().is_some(),
     );
+    if intent.oidc_qualification {
+        plan.qualification_dispatch =
+            velnor_actions_workflow_renderer::release_spec::QualificationDispatch::Enabled;
+    }
     let jobs = build_release_jobs(
         prep,
         mise,
@@ -121,6 +124,7 @@ fn release_files_for_config(
         bootstrap_environment: release.environment.clone(),
         journal_predecessor: release.journal_predecessor.clone(),
         new_crates: release.new_crates.clone(),
+        qualification: release_qualification(&intent),
         release_plz_version: catalog
             .version(velnor_actions_mise::PinnedTool::ReleasePlz)
             .to_owned(),
@@ -159,7 +163,7 @@ fn build_release_jobs(
         generator.0,
         generator.1,
     )?;
-    assemble_jobs(&JobInputs {
+    let mut jobs = assemble_jobs(&JobInputs {
         release,
         gate,
         preparation_gate,
@@ -171,7 +175,16 @@ fn build_release_jobs(
         generator_version,
         generator_source_sha: generator.0,
         generator_manifest_sha256: generator.1,
-    })
+    })?;
+    if let Some(preflight) = jobs.get_mut("release-preflight") {
+        preflight.condition =
+            velnor_actions_workflow_renderer::release_spec::preflight_gate_condition(
+                repository,
+                &prep.default_branch,
+                plan,
+            );
+    }
+    Ok(jobs)
 }
 
 struct IntentSettings<'a> {
@@ -190,6 +203,7 @@ fn crate_release_intent(
 ) -> CrateReleaseIntent {
     CrateReleaseIntent {
         schema: 1,
+        oidc_qualification: release.oidc_qualification.is_enabled(),
         repository: repository.to_owned(),
         default_branch: settings.default_branch.to_owned(),
         environment: release.environment.clone(),
@@ -359,41 +373,6 @@ fn reviewed_pr_write_paths(
 #[path = "release_emit_write_paths.rs"]
 mod write_paths;
 use write_paths::release_pr_write_paths;
-
-pub(crate) fn enabled_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
-    let Some(release) = release else {
-        return Ok(None);
-    };
-    if !release.enabled {
-        return Ok(None);
-    }
-    if prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.release.enabled",
-            "release_requires_consumer_policy",
-        ));
-    }
-    Ok(Some(release))
-}
-
-pub(crate) fn git_tag_release(
-    prep: &GenerationPreparation,
-) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
-    if prep
-        .config
-        .stacks
-        .rust
-        .as_ref()
-        .is_some_and(|rust| rust.binary_release.stable.enabled)
-    {
-        return Ok(None);
-    }
-    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
-}
 
 #[cfg(test)]
 #[path = "release_emit_tests.rs"]

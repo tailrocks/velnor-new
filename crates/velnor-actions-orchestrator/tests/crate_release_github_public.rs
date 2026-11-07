@@ -368,3 +368,6 @@ mod reviews;
 
 #[path = "crate_release_github_public/environment_names.rs"]
 mod environment_names;
+
+#[path = "crate_release_github_public/qualification.rs"]
+mod qualification;

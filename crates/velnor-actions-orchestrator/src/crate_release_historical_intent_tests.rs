@@ -21,6 +21,13 @@ fn continuation_accepts_reviewed_tool_changes_but_not_release_content()
     prior.generator_source_sha = "e".repeat(40);
     prior.generator_manifest_sha256 = "f".repeat(64);
     assert_eq!(normalized_historical_base(&prior, &current)?, expected);
+    let mut changed_policy = current.clone();
+    changed_policy.oidc_qualification = true;
+    assert_ne!(
+        normalized_historical_base(&current, &changed_policy)?,
+        crate::crate_release_journal::release_base_intent_sha256(&changed_policy)?,
+        "enabling qualification cannot silently migrate a previous recovery intent"
+    );
     prior
         .publish_features
         .insert("demo".into(), vec!["changed".into()]);

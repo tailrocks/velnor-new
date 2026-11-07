@@ -13,6 +13,8 @@ use crate::errors::ContractError;
 #[serde(deny_unknown_fields)]
 pub struct CrateReleaseIntent {
     pub schema: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub oidc_qualification: bool,
     pub repository: String,
     pub default_branch: String,
     pub environment: String,
@@ -70,6 +72,12 @@ impl CrateReleaseIntent {
         if self.schema != 1 {
             return Err(invalid("schema", "unsupported_schema"));
         }
+        if self.oidc_qualification
+            && (self.authentication != super::ReleaseAuthentication::TrustedPublishing
+                || self.new_crates.is_some())
+        {
+            return Err(invalid("oidc_qualification", "trusted_publishing_required"));
+        }
         let mut parts = self.repository.split('/');
         let owner = parts.next().unwrap_or_default();
         let name = parts.next().unwrap_or_default();
@@ -83,18 +91,7 @@ impl CrateReleaseIntent {
             return Err(invalid("registry", "unsupported_registry"));
         }
         validate_environment(file, &self.environment)?;
-        if !is_full_sha(&self.generator_source_sha)
-            || self.generator_manifest_sha256.len() != 64
-            || !self
-                .generator_manifest_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-            || !super::is_exact_semver(&self.generator_version)
-            || !super::is_exact_semver(&self.release_plz_version)
-            || self.runner != "ubuntu-26.04"
-        {
-            return Err(invalid("tool_expectations", "invalid_tool_expectations"));
-        }
+        self.validate_tool_expectations()?;
         if !super::is_exact_semver(&self.rust_version) {
             return Err(invalid("rust_version", "invalid_rust_version"));
         }
@@ -141,6 +138,22 @@ impl CrateReleaseIntent {
             .map_err(|_| invalid("intent", "invalid_intent_serialization"))?;
         if text.len() > MAX_CRATE_RELEASE_INTENT_BYTES {
             return Err(invalid("intent", "intent_too_large"));
+        }
+        Ok(())
+    }
+    fn validate_tool_expectations(&self) -> Result<(), ContractError> {
+        let invalid = |key, problem| ContractError::config("release_intent", key, problem);
+        if !is_full_sha(&self.generator_source_sha)
+            || self.generator_manifest_sha256.len() != 64
+            || !self
+                .generator_manifest_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || !super::is_exact_semver(&self.generator_version)
+            || !super::is_exact_semver(&self.release_plz_version)
+            || self.runner != "ubuntu-26.04"
+        {
+            return Err(invalid("tool_expectations", "invalid_tool_expectations"));
         }
         Ok(())
     }

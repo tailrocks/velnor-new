@@ -122,6 +122,12 @@ fn run_plan(guard: Option<&OperatorToolchainGuard>) -> ExitCode {
 }
 
 fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> ExitCode {
+    if matches!(command, crate::args::CrateReleaseCommand::OidcQualificationAdmit) {
+        return match velnor_actions_orchestrator::crate_release_github::oidc_qualification_admit_from_environment() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_public(&error),
+        };
+    }
     let checkout_mode = match command {
         crate::args::CrateReleaseCommand::CheckoutPolicy => Some("policy"),
         crate::args::CrateReleaseCommand::CheckoutSource => Some("source"),
@@ -142,7 +148,8 @@ fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> Exit
                 };
     }
     let operation = match command {
-        crate::args::CrateReleaseCommand::PreparePr
+        crate::args::CrateReleaseCommand::OidcQualificationAdmit
+        | crate::args::CrateReleaseCommand::PreparePr
         | crate::args::CrateReleaseCommand::CheckoutPolicy
         | crate::args::CrateReleaseCommand::CheckoutSource => unreachable!(),
         crate::args::CrateReleaseCommand::ReleasePrCreate => "release-pr-create",

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::OrchestratorError;
-use velnor_actions_contract::config::RustReleaseConfig;
+use velnor_actions_contract::config::{ReleaseRegistry, RustReleaseConfig};
 use velnor_actions_rust::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_config::{ReleasePlzConfig, ReleasePlzPackage};
 use velnor_actions_workflow_renderer::release_tree::{RELEASE_HOSTED_RUNNER, ReleaseRenderContext};
@@ -59,4 +59,58 @@ pub(super) fn release_render_context() -> ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: RELEASE_HOSTED_RUNNER.to_owned(),
     }
+}
+
+use crate::{config::CONFIG_REL, planner::prepare::GenerationPreparation};
+use velnor_actions_contract::WorkflowPolicy;
+
+pub(crate) fn enabled_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
+    let Some(release) = release else {
+        return Ok(None);
+    };
+    if !release.enabled {
+        return Ok(None);
+    }
+    if prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "stacks.rust.release.enabled",
+            "release_requires_consumer_policy",
+        ));
+    }
+    Ok(Some(release))
+}
+
+pub(crate) fn git_tag_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    if prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.binary_release.stable.enabled)
+    {
+        return Ok(None);
+    }
+    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
+}
+pub(super) fn release_qualification(
+    intent: &velnor_actions_contract::config::CrateReleaseIntent,
+) -> Option<velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec> {
+    intent.oidc_qualification.then(|| {
+        velnor_actions_workflow_renderer::crate_oidc_qualification::OidcQualificationSpec {
+            repository: intent.repository.clone(),
+            default_branch: intent.default_branch.clone(),
+            environment: intent.environment.clone(),
+            required_workflow_path: intent.required_workflow_path.clone(),
+            trusted_reviewer_id: intent.trusted_reviewer_id,
+            generator_version: intent.generator_version.clone(),
+            generator_source_sha: intent.generator_source_sha.clone(),
+            generator_manifest_sha256: intent.generator_manifest_sha256.clone(),
+        }
+    })
 }
