@@ -158,7 +158,20 @@ fn check_job(
     preview: bool,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
+    let mut checkout = crate::workflow::wire_w1::checkout_step_for(check.history)?;
+    if check.checkout_blob_closure {
+        let velnor_actions_contract::StepKind::Action { with, .. } = &mut checkout.kind else {
+            return Err(OrchestratorError::Contract {
+                problem: "check checkout is not an action".to_owned(),
+            });
+        };
+        with.insert(
+            "filter".to_owned(),
+            velnor_actions_contract::workflow::step_identity::FIXTURE_CHECKOUT_BLOB_FILTER
+                .to_owned(),
+        );
+    }
+    let mut steps = vec![checkout];
     steps.extend(acquire);
     steps.push(crate::planner::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(

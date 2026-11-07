@@ -84,6 +84,7 @@ pub fn discover_preview_producer(
         evidence: None,
         timeout_minutes: u32::from(producer.timeout_minutes),
         history: velnor_actions_contract::CheckoutHistory::Full,
+        checkout_blob_closure: false,
     };
     discover(
         root,

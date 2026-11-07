@@ -889,6 +889,7 @@ executor = "hosted"
 
 [[checks]]
 id = "hosted-direct-release"
+checkout_blob_closure = true
 task = "test-hosted-direct-release"
 inputs = [".config/nextest.toml", ".velnor/config.toml", "Cargo.lock", "Cargo.toml", "crates/velnor-actions-orchestrator/src/crate_release_direct_history.rs", "crates/velnor-actions-orchestrator/src/crate_release_runtime_tests.rs", "crates/velnor-actions-orchestrator/src/release_steps_jobs.rs", "crates/velnor-actions-workflow-renderer/src/release_gates.rs", "mise.toml", "rust-toolchain.toml", "scripts/check-hosted-direct-release.py"]
 tools = ["cargo-nextest", "rust"]

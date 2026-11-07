@@ -249,6 +249,7 @@ mod tests {
             evidence: None,
             timeout_minutes: 10,
             history: velnor_actions_contract::CheckoutHistory::Full,
+            checkout_blob_closure: false,
         }
     }
 
