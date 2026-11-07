@@ -39,7 +39,7 @@ mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
 #[path = "schema2_job_image_candidate.rs"]
-mod job_image_candidate;
+pub(crate) mod job_image_candidate;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]

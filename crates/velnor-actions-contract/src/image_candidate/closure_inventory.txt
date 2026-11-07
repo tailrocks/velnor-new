@@ -222,10 +222,13 @@ crates/velnor-actions-contract/src/image_candidate/closure.rs
 crates/velnor-actions-contract/src/image_candidate/closure_inventory.rs
 crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt
 crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt
+crates/velnor-actions-contract/src/image_candidate/native_task.rs
+crates/velnor-actions-contract/src/image_candidate/operation.rs
 crates/velnor-actions-contract/src/image_candidate/record.rs
 crates/velnor-actions-contract/src/image_candidate/runner_publication.rs
 crates/velnor-actions-contract/src/image_candidate/runner_publication_context.rs
 crates/velnor-actions-contract/src/image_candidate/runner_qualification.rs
+crates/velnor-actions-contract/src/image_candidate/task.rs
 crates/velnor-actions-contract/src/lib.rs
 crates/velnor-actions-contract/src/manifest.rs
 crates/velnor-actions-contract/src/manifest_checks.rs
@@ -349,6 +352,7 @@ crates/velnor-actions-contract/src/workflow/step/task_execution.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/argv.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/environment.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/identity.rs
+crates/velnor-actions-contract/src/workflow/step/task_execution/native_job_image.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/toolchain.rs
 crates/velnor-actions-contract/src/workflow/step_id.rs
 crates/velnor-actions-contract/src/workflow/step_identity.rs
@@ -1313,6 +1317,7 @@ crates/velnor-actions-workflow-renderer/src/job_image_authority_record.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_registry.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_tar.py
 crates/velnor-actions-workflow-renderer/src/job_image_authority_verify.rs
+crates/velnor-actions-workflow-renderer/src/job_image_candidate_execution.rs
 crates/velnor-actions-workflow-renderer/src/lane_share.rs
 crates/velnor-actions-workflow-renderer/src/lane_share_runtime.rs
 crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs

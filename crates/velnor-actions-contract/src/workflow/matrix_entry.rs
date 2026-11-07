@@ -135,6 +135,9 @@ impl MatrixEntry {
     }
 
     pub fn validate(&self, run_key: &str) -> Result<(), ContractError> {
+        if self.stack_id == crate::Stack::Native.id() {
+            crate::NativeTaskKind::from_entry(self)?;
+        }
         validate_id(&self.id)?;
         validate_run_key(run_key)?;
         let expect_key = matrix_key_for_id(&self.id)?;
