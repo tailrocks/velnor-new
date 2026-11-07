@@ -253,7 +253,6 @@ inputs = [
   "crates/velnor-actions-cli/tests/image_publication_public/support/subjects.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/records/qualification.rs",
   "crates/velnor-actions-cli/tests/image_publication_public/support/rejections/apply.rs",
-  "crates/velnor-actions-cli/tests/image_publication_public/support/rejections/attestation.rs",
   "crates/velnor-actions-cli/examples/image_publication_fixture/registry.rs",
   "crates/velnor-actions-cli/examples/qualification_diagnostics.rs",
   "crates/velnor-actions-cli/examples/qualification_diagnostics/collector.rs",
