@@ -12,20 +12,18 @@ use velnor_runner_host::{
 use super::{SOURCE_SHA, TestResult, sample_connection};
 
 #[test]
-fn public_offer_admits_assigned_batch_and_waits_on_lifecycle_only_batch() {
+fn public_offer_admits_assigned_batch_and_waits_on_lifecycle_only_batch() -> TestResult<()> {
     let assigned_body = serde_json::to_string(&json!([{
         "messageType": "JobAssigned",
         "runnerRequestId": 0,
         "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67"
-    }]))
-    .expect("serialize assigned body");
+    }]))?;
     let assigned_envelope = serde_json::to_string(&json!({
         "messageId": 3,
         "messageType": "RunnerScaleSetJobMessages",
         "body": assigned_body
-    }))
-    .expect("serialize assigned envelope");
-    let assigned_poll = parse_poll(200, &assigned_envelope).expect("parse assigned poll");
+    }))?;
+    let assigned_poll = parse_poll(200, &assigned_envelope)?;
     let Poll::Batch(ref batch) = assigned_poll else {
         panic!("expected batch for JobAssigned");
     };
@@ -55,15 +53,13 @@ fn public_offer_admits_assigned_batch_and_waits_on_lifecycle_only_batch() {
             "runnerName": "",
             "result": "succeeded"
         }
-    ]))
-    .expect("serialize lifecycle body");
+    ]))?;
     let lifecycle_envelope = serde_json::to_string(&json!({
         "messageId": 4,
         "messageType": "RunnerScaleSetJobMessages",
         "body": lifecycle_body
-    }))
-    .expect("serialize lifecycle envelope");
-    let lifecycle_poll = parse_poll(200, &lifecycle_envelope).expect("parse lifecycle poll");
+    }))?;
+    let lifecycle_poll = parse_poll(200, &lifecycle_envelope)?;
     assert_eq!(offer(&lifecycle_poll), Offer::Wait);
 
     let same_batch_completed_body = serde_json::to_string(&json!([
@@ -80,17 +76,74 @@ fn public_offer_admits_assigned_batch_and_waits_on_lifecycle_only_batch() {
             "runnerName": "velnor-1",
             "result": "succeeded"
         }
-    ]))
-    .expect("serialize same-batch completed body");
+    ]))?;
     let same_batch_completed_envelope = serde_json::to_string(&json!({
         "messageId": 5,
         "messageType": "RunnerScaleSetJobMessages",
         "body": same_batch_completed_body
-    }))
-    .expect("serialize same-batch completed envelope");
-    let same_batch_completed_poll =
-        parse_poll(200, &same_batch_completed_envelope).expect("parse same-batch completed poll");
+    }))?;
+    let same_batch_completed_poll = parse_poll(200, &same_batch_completed_envelope)?;
     assert_eq!(offer(&same_batch_completed_poll), Offer::Wait);
+    check_accumulated_available_and_assigned_offers(derived_id)
+}
+
+fn check_accumulated_available_and_assigned_offers(derived_id: i64) -> TestResult<()> {
+    let accumulated_body = serde_json::to_string(&json!([
+        {
+            "messageType": "JobAvailable",
+            "runnerRequestId": 0,
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "repositoryName": "repo"
+        },
+        {
+            "messageType": "JobAssigned",
+            "runnerRequestId": 0,
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "repositoryName": "repo"
+        }
+    ]))?;
+    let accumulated_envelope = serde_json::to_string(&json!({
+        "messageId": 6,
+        "messageType": "RunnerScaleSetJobMessages",
+        "body": accumulated_body
+    }))?;
+    let accumulated_poll = parse_poll(200, &accumulated_envelope)?;
+    assert_eq!(
+        offer(&accumulated_poll),
+        Offer::Acquire {
+            message_id: 6,
+            ids: vec![derived_id],
+        }
+    );
+
+    let mismatched_body = serde_json::to_string(&json!([
+        {
+            "messageType": "JobAvailable",
+            "runnerRequestId": 0,
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "repositoryName": "repo-a"
+        },
+        {
+            "messageType": "JobAssigned",
+            "runnerRequestId": 0,
+            "jobId": "67c5c946-116b-52aa-9566-1d8de67a2a67",
+            "repositoryName": "repo-b"
+        }
+    ]))?;
+    let mismatched_envelope = serde_json::to_string(&json!({
+        "messageId": 7,
+        "messageType": "RunnerScaleSetJobMessages",
+        "body": mismatched_body
+    }))?;
+    let mismatched_poll = parse_poll(200, &mismatched_envelope)?;
+    assert_eq!(
+        offer(&mismatched_poll),
+        Offer::Acquire {
+            message_id: 7,
+            ids: vec![derived_id, derived_id],
+        }
+    );
+    Ok(())
 }
 
 struct RecordingOfferTransport {
@@ -146,19 +199,25 @@ impl Transport for RecordingOfferTransport {
 
 fn job_poll_with_source(
     message_id: i64,
-    message_type: &str,
+    message_types: &[&str],
     job_id: &str,
 ) -> TestResult<velnor_runner_github::ParsedBatch> {
-    let body = serde_json::to_string(&json!([{
-        "messageType": message_type,
-        "runnerRequestId": 0,
-        "jobId": job_id,
-        "repositoryName": "repo",
-        "ownerName": "owner",
-        "jobWorkflowRef": "owner/repo/.github/workflows/ci.yml@refs/heads/main",
-        "workflowRunId": 100,
-        "eventName": "push"
-    }]))?;
+    let entries: Vec<serde_json::Value> = message_types
+        .iter()
+        .map(|message_type| {
+            json!({
+                "messageType": message_type,
+                "runnerRequestId": 0,
+                "jobId": job_id,
+                "repositoryName": "repo",
+                "ownerName": "owner",
+                "jobWorkflowRef": "owner/repo/.github/workflows/ci.yml@refs/heads/main",
+                "workflowRunId": 100,
+                "eventName": "push"
+            })
+        })
+        .collect();
+    let body = serde_json::to_string(&entries)?;
     let envelope = serde_json::to_string(&json!({
         "messageId": message_id,
         "messageType": "RunnerScaleSetJobMessages",
@@ -180,8 +239,11 @@ fn public_deferred_assigned_offer_skips_acquirejobs_on_resumption() -> TestResul
     let connection = sample_connection(vec![WorkflowEvent::Push], Vec::new())?;
     let mut transport = RecordingOfferTransport { acquire_calls: 0 };
 
-    let assigned_batch =
-        job_poll_with_source(10, "JobAssigned", "67c5c946-116b-52aa-9566-1d8de67a2a67")?;
+    let assigned_batch = job_poll_with_source(
+        10,
+        &["JobAvailable", "JobAssigned"],
+        "67c5c946-116b-52aa-9566-1d8de67a2a67",
+    )?;
     let assigned_id = assigned_batch.jobs[0]
         .request_id
         .expect("assigned request_id");
@@ -201,8 +263,11 @@ fn public_deferred_assigned_offer_skips_acquirejobs_on_resumption() -> TestResul
     assert!(skipped?);
     assert_eq!(transport.acquire_calls, 0);
 
-    let available_batch =
-        job_poll_with_source(11, "JobAvailable", "11111111-2222-3333-4444-555555555555")?;
+    let available_batch = job_poll_with_source(
+        11,
+        &["JobAvailable"],
+        "11111111-2222-3333-4444-555555555555",
+    )?;
     let available_id = available_batch.jobs[0]
         .request_id
         .expect("available request_id");
