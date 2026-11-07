@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn selected_runtime_uses_approved_identity_not_compiled_pin() {
         let path = format!(
-            "{}/../../.velnor/controller-approvals.json",
+            "{}/../test_support/controller_approval_074.json",
             env!("CARGO_MANIFEST_DIR")
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");

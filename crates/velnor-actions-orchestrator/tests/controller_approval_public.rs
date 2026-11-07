@@ -65,8 +65,8 @@ platform = "macos_x64"
 executor = "hosted"
 "#;
 
-const BASE_APPROVALS: &str = include_str!("../../../.velnor/controller-approvals.json");
-const BASE_LOCK: &str = include_str!("../../../.velnor/generator.lock");
+const BASE_APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
+const BASE_LOCK: &str = include_str!("../../test_support/generator_074.lock");
 
 fn fixture(approvals: Option<&str>, lock: &str) -> Result<TempDir, Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
