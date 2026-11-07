@@ -16,6 +16,7 @@ struct Fixture {
     check: Value,
     extra_checks: Vec<Value>,
     extra_runs: Vec<Value>,
+    extra_jobs: Vec<Value>,
     reviews: Vec<Value>,
     env_rules: Vec<Value>,
     run_sha: &'static str,
@@ -35,6 +36,7 @@ impl Fixture {
             check: json!({"id":1,"name":"Required","head_sha":SOURCE,"check_suite":{"id":123},"app":{"id":15368,"slug":"github-actions"},"status":"completed","conclusion":"success","started_at":"2026-11-03T15:00:00Z"}),
             extra_checks: Vec::new(),
             extra_runs: Vec::new(),
+            extra_jobs: Vec::new(),
             reviews: vec![
                 json!({"id":1,"user":{"login":"reviewer","id":55,"type":"User"},"author_association":"MEMBER","state":"APPROVED","commit_id":WORKFLOW,"submitted_at":"2026-11-03T15:00:00Z"}),
             ],
@@ -74,10 +76,16 @@ impl GitHubAdmissionRead for Fixture {
                 SOURCE
             };
             let mut runs = vec![
-                json!({"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}},"head_repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}}}),
+                json!({"id":501,"run_number":1,"run_attempt":1,"check_suite_id":123,"head_sha":source,"path":".github/workflows/ci.yml","status":"completed","conclusion":"success","event":"push","head_branch":"main","repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}},"head_repository":{"id":101,"full_name":"example/crate","owner":{"id":202,"login":"example"}}}),
             ];
             runs.extend(self.extra_runs.clone());
             json!({"total_count":runs.len(),"workflow_runs":runs})
+        } else if route.contains("/actions/runs/501/attempts/1/jobs?") {
+            let mut jobs = vec![
+                json!({"id":1,"name":"Required","run_id":501,"run_attempt":1,"check_run_url":"https://api.github.com/repos/example/crate/check-runs/1","status":"completed","conclusion":"success"}),
+            ];
+            jobs.extend(self.extra_jobs.clone());
+            json!({"total_count":jobs.len(),"jobs":jobs})
         } else if route.contains("check-runs?") {
             let source = if route.contains(WORKFLOW) {
                 WORKFLOW
@@ -212,8 +220,13 @@ fn release_requires_approved_source_checks_and_protected_environment() {
     tied["id"] = json!(2);
     bad.extra_checks.push(tied);
     assert!(
+        verify_github_evidence(&request(), &bad).is_ok(),
+        "a different check at the same time must not override the exact Required job"
+    );
+    bad.extra_jobs.push(json!({"id":2,"name":"Required","run_id":501,"run_attempt":1,"check_run_url":"https://api.github.com/repos/example/crate/check-runs/2","status":"completed","conclusion":"success"}));
+    assert!(
         verify_github_evidence(&request(), &bad).is_err(),
-        "equal-second Required order is ambiguous"
+        "two Required jobs in the same attempt must fail closed"
     );
     let mut bad = Fixture::valid();
     bad.extra_checks.push(bad.check.clone());

@@ -66,6 +66,14 @@ struct Rerun {
 
 impl GitHubAdmissionRead for Rerun {
     fn get(&self, route: &str) -> Result<Value, OrchestratorError> {
+        if route.contains("/attempts/") && route.contains("/jobs?") {
+            let (run_id, attempt) = if self.same_suite { (501, 2) } else { (502, 1) };
+            if route.contains(&format!("/runs/{run_id}/attempts/{attempt}/jobs?")) {
+                return Ok(
+                    json!({"total_count":1,"jobs":[{"id":2,"name":"Required","run_id":run_id,"run_attempt":attempt,"check_run_url":"https://api.github.com/repos/example/crate/check-runs/2","status":self.status,"conclusion":self.conclusion}]}),
+                );
+            }
+        }
         let mut response = Fixture::valid().get(route)?;
         if route.contains("check-runs?") {
             let mut old = response["check_runs"][0].clone();
@@ -87,6 +95,8 @@ impl GitHubAdmissionRead for Rerun {
             let mut old = response["workflow_runs"][0].clone();
             let mut new = old.clone();
             new["check_suite_id"] = json!(124);
+            new["id"] = json!(502);
+            new["run_number"] = json!(2);
             old["event"] = json!(self.recorded_event);
             let runs = if self.same_suite {
                 old["run_attempt"] = json!(2);
