@@ -20,6 +20,7 @@ use std::path::Path;
 use velnor_actions_contract::config::CrateReleaseIntent;
 
 pub(crate) struct UploadPermit {
+    pub(super) archive_sha256: String,
     pub(super) intent_sha256: String,
     pub(super) repository: String,
     pub(super) workflow_sha: String,

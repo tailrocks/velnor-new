@@ -135,6 +135,7 @@ pub(super) fn verify_real_journal_continuation(
         &prior.identity,
         &prior,
         &crate::crate_release_journal::JournalIntendedMutation {
+            archive_sha256: None,
             sequence: 1,
             package: "demo".into(),
             version: "0.1.1".into(),

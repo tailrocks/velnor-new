@@ -79,6 +79,7 @@ impl CapacityReservation {
             files: envelope.files.clone(),
         };
         self.check_mutation(JournalMutation {
+            archive_sha256: None,
             sequence: 1000,
             package: package.name.clone(),
             version: package.version.clone(),
@@ -87,6 +88,7 @@ impl CapacityReservation {
             phase: JournalMutationPhase::Observed { result },
         })?;
         self.check_mutation(JournalMutation {
+            archive_sha256: Some("f".repeat(64)),
             sequence: 1000,
             package: package.name.clone(),
             version: package.version.clone(),
@@ -99,6 +101,7 @@ impl CapacityReservation {
     fn check_release(&self, package: &JournalPackage) -> Result<(), OrchestratorError> {
         let identity = &self.receipt.identity;
         self.check_mutation(JournalMutation {
+            archive_sha256: None,
             sequence: 1000,
             package: package.name.clone(),
             version: package.version.clone(),

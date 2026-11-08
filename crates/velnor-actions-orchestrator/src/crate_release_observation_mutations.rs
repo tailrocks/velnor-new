@@ -156,6 +156,7 @@ fn record_admitted_upload_intent_with_capacity<
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     if let Some(capacity) = capacity {
         capacity.verify_mutation(&JournalMutation {
+            archive_sha256: Some(verified.archive_sha256.clone()),
             sequence: input.sequence,
             package: verified.package.clone(),
             version: verified.version.clone(),
@@ -169,6 +170,7 @@ fn record_admitted_upload_intent_with_capacity<
         input.identity,
         input.journal_receipt,
         &JournalIntendedMutation {
+            archive_sha256: Some(verified.archive_sha256.clone()),
             sequence: input.sequence,
             package: verified.package.clone(),
             version: verified.version.clone(),
@@ -177,6 +179,7 @@ fn record_admitted_upload_intent_with_capacity<
         },
     )?;
     Ok(UploadPermit {
+        archive_sha256: verified.archive_sha256,
         intent_sha256: verified.intent_sha256,
         repository: verified.repository,
         workflow_sha: verified.workflow_sha,
@@ -253,6 +256,7 @@ pub(super) fn repair_verified_metadata_with_capacity<
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     capacity.verify_mutation(&JournalMutation {
+        archive_sha256: None,
         sequence: input.sequence,
         package: selected.source.name.clone(),
         version: selected.source.version.clone(),
@@ -265,6 +269,7 @@ pub(super) fn repair_verified_metadata_with_capacity<
         input.identity,
         input.journal_receipt,
         &JournalIntendedMutation {
+            archive_sha256: None,
             sequence: input.sequence,
             package: selected.source.name.clone(),
             version: selected.source.version.clone(),
@@ -374,6 +379,7 @@ pub(super) fn record_verified_mutation_with_capacity<
     }
     authorize_github_candidate(input.request, &input.admission.github, input.github)?;
     let mutation = JournalMutation {
+        archive_sha256: None,
         sequence: input.sequence,
         package: prior.package,
         version: prior.version,

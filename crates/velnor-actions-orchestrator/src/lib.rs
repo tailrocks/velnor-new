@@ -22,6 +22,7 @@ mod controller_approval;
 mod controller_manifest_digest;
 pub mod crate_release_checkout;
 pub mod crate_release_controller;
+pub mod crate_release_credential_provider;
 pub mod crate_release_github;
 pub mod crate_release_http;
 pub mod crate_release_pr_artifact;

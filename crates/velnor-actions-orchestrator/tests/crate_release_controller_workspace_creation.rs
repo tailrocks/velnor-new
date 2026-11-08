@@ -118,6 +118,7 @@ pub(super) fn fixture_creation_intention(
     version: &str,
 ) -> crate::crate_release_journal::JournalIntendedMutation {
     crate::crate_release_journal::JournalIntendedMutation {
+        archive_sha256: None,
         sequence,
         package: name.into(),
         version: version.into(),
@@ -173,6 +174,7 @@ pub(super) fn record_first_created_workspace_crate(
         identity,
         plan,
         &JournalMutation {
+            archive_sha256: None,
             sequence: 2,
             package: first.name.clone(),
             version: first.version.clone(),

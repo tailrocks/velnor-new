@@ -220,6 +220,7 @@ fn seed_pending_upload(
         &prior.identity,
         prior,
         &JournalIntendedMutation {
+            archive_sha256: None,
             sequence: 1,
             package: "demo".into(),
             version: "0.1.1".into(),

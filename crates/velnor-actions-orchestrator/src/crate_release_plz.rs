@@ -45,7 +45,6 @@ pub(crate) fn invoke_upload<
         velnor_actions_mise::release_git_pin::verify_bundle(&git_root).map_err(|_| invalid())?;
     let rustup_home = runner_temp.join("velnor/rustup");
     let [cargo, rustc, rustdoc] = upload_rust_tools(&rustup_home, &input.intent.rust_version)?;
-    let bin = cargo.parent().ok_or_else(invalid)?;
     let source = input.source.canonicalize().map_err(|_| invalid())?;
     if runner_temp.starts_with(&source) {
         return Err(invalid());
@@ -61,29 +60,20 @@ pub(crate) fn invoke_upload<
         .prefix("velnor-upload-")
         .tempdir_in(&runner_temp)
         .map_err(|_| invalid())?;
-    let cargo_home = private.path().join("cargo");
-    std::fs::create_dir(&cargo_home).map_err(|_| invalid())?;
+    let cargo_home = create_cargo_home(private.path())?;
     let cargo_target = create_private_target(private.path())?;
-    #[cfg(all(test, unix))]
-    if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
-        crate::release::crate_release_semver::test_registry::copy_snapshot(
-            Path::new(&snapshot),
-            &cargo_home,
-        )
-        .map_err(|_| invalid())?;
-    }
-    let config_path = private.path().join("release-plz.toml");
-    let config = single_package_config(input.intent, &permit.package)?;
-    std::fs::write(&config_path, config).map_err(|_| invalid())?;
-    let args = vec![
-        "release".into(),
-        "--config".into(),
-        config_path.into_os_string(),
-        "--manifest-path".into(),
-        manifest.into_os_string(),
-    ];
+    let args = upload_args(private.path(), input.intent, &permit.package, &manifest)?;
+    let provider_path = prepare_provider(private.path())?;
+    let provider = provider_path.to_str().ok_or_else(invalid)?;
+    let socket = private.path().join("authorization.sock");
     let env: Vec<(OsString, OsString)> = [
-        ("PATH", format!("{}:/usr/bin:/bin", bin.display())),
+        (
+            "PATH",
+            format!(
+                "{}:/usr/bin:/bin",
+                cargo.parent().ok_or_else(invalid)?.display()
+            ),
+        ),
         ("CARGO", cargo.display().to_string()),
         ("RUSTC", rustc.display().to_string()),
         ("RUSTDOC", rustdoc.display().to_string()),
@@ -93,6 +83,13 @@ pub(crate) fn invoke_upload<
         ("RUSTUP_HOME", rustup_home.display().to_string()),
         ("RUSTUP_AUTO_INSTALL", "0".to_owned()),
         ("RUNNER_TEMP", runner_temp.display().to_string()),
+        (
+            "CARGO_REGISTRIES_CRATES_IO_CREDENTIAL_PROVIDER",
+            provider.to_owned(),
+        ),
+        ("CARGO_REGISTRY_CREDENTIAL_PROVIDER", provider.to_owned()),
+        ("CARGO_REGISTRY_DEFAULT", "crates-io".to_owned()),
+        ("VELNOR_CARGO_AUTH_SOCKET", socket.display().to_string()),
     ]
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))
@@ -107,7 +104,7 @@ pub(crate) fn invoke_upload<
         &git,
     )
     .map_err(|_| invalid())?;
-    let attempt = if execute_upload(&command, &git_root)? {
+    let attempt = if execute_upload(&command, &git_root, &socket, input, &permit)? {
         UploadAttempt::ExitedSuccess
     } else {
         UploadAttempt::Uncertain
@@ -116,6 +113,63 @@ pub(crate) fn invoke_upload<
         return Ok(UploadAttempt::Uncertain);
     }
     Ok(attempt)
+}
+
+fn create_cargo_home(private: &Path) -> Result<std::path::PathBuf, OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
+    let home = private.join("cargo");
+    std::fs::create_dir(&home).map_err(|_| invalid())?;
+    #[cfg(all(test, unix))]
+    if let Some(snapshot) = std::env::var_os("VELNOR_NATIVE_REGISTRY_SNAPSHOT") {
+        crate::release::crate_release_semver::test_registry::copy_snapshot(
+            Path::new(&snapshot),
+            &home,
+        )
+        .map_err(|_| invalid())?;
+    }
+    Ok(home)
+}
+
+fn upload_args(
+    private: &Path,
+    intent: &CrateReleaseIntent,
+    package: &str,
+    manifest: &Path,
+) -> Result<Vec<OsString>, OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
+    let config_path = private.join("release-plz.toml");
+    std::fs::write(&config_path, single_package_config(intent, package)?).map_err(|_| invalid())?;
+    Ok(vec![
+        "release".into(),
+        "--config".into(),
+        config_path.into_os_string(),
+        "--manifest-path".into(),
+        manifest.as_os_str().to_owned(),
+    ])
+}
+
+#[cfg(unix)]
+fn prepare_provider(private: &Path) -> Result<std::path::PathBuf, OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
+    #[cfg(test)]
+    let executable = std::env::var_os("VELNOR_NATIVE_PROVIDER_EXECUTABLE")
+        .map(std::path::PathBuf::from)
+        .map_or_else(std::env::current_exe, Ok)
+        .map_err(|_| invalid())?;
+    #[cfg(not(test))]
+    let executable = std::env::current_exe().map_err(|_| invalid())?;
+    let provider = private.join("credential-provider");
+    std::os::unix::fs::symlink(executable, &provider).map_err(|_| invalid())?;
+    provider
+        .to_str()
+        .filter(|value| !value.chars().any(char::is_whitespace))
+        .ok_or_else(invalid)?;
+    Ok(provider)
+}
+
+#[cfg(not(unix))]
+fn prepare_provider(_: &Path) -> Result<std::path::PathBuf, OrchestratorError> {
+    Err(internal("crate_release_upload_unverified"))
 }
 
 fn create_private_target(home: &Path) -> Result<std::path::PathBuf, OrchestratorError> {
@@ -133,15 +187,196 @@ fn upload_rust_tools(
     Ok([tool("cargo")?, tool("rustc")?, tool("rustdoc")?])
 }
 
-fn execute_upload(command: &IsolatedCommand, git_root: &Path) -> Result<bool, OrchestratorError> {
+#[cfg(unix)]
+fn execute_upload<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    command: &IsolatedCommand,
+    git_root: &Path,
+    socket: &Path,
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    permit: &UploadPermit,
+) -> Result<bool, OrchestratorError> {
+    use std::os::unix::net::UnixListener;
     let invalid = || internal("crate_release_upload_unverified");
-    let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(600))
-        .map_err(|_| invalid())?;
+    #[cfg(test)]
+    let timeout = std::env::var("VELNOR_NATIVE_PROVIDER_DEADLINE_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map_or(Duration::from_secs(600), Duration::from_millis);
+    #[cfg(not(test))]
+    let timeout = Duration::from_secs(600);
+    let deadline = velnor_actions_mise::CheckDeadline::after(timeout)
+        .map_err(|_| invalid())?
+        .effective();
+    let listener = UnixListener::bind(socket).map_err(|_| invalid())?;
+    listener.set_nonblocking(true).map_err(|_| invalid())?;
+    #[cfg(test)]
+    let resume = if let Some(path) = std::env::var_os("VELNOR_NATIVE_PROVIDER_CONTEXT") {
+        let resume = Path::new(&path).with_extension("resume");
+        let provider = socket
+            .parent()
+            .ok_or_else(invalid)?
+            .join("credential-provider");
+        let context = serde_json::json!({"socket": socket, "provider": provider});
+        std::fs::write(path, context.to_string()).map_err(|_| invalid())?;
+        Some(resume)
+    } else {
+        None
+    };
     velnor_actions_mise::release_git_pin::verify_bundle(git_root).map_err(|_| invalid())?;
-    let result = command.run_quiescent_until(1024 * 1024, deadline);
+    let result = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        scope.spawn(move || {
+            #[cfg(test)]
+            if let Some(resume) = resume {
+                while !resume.exists() && deadline.remaining().is_ok() {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            }
+            drop(tx.send(command.run_quiescent_until(1024 * 1024, deadline)));
+        });
+        loop {
+            if let Ok(result) = rx.try_recv() {
+                break result.map_err(|_| internal("crate_release_upload_incomplete"));
+            }
+            let Ok(remaining) = deadline.remaining() else {
+                break Err(internal("crate_release_upload_incomplete"));
+            };
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    handle_provider_stream(stream, remaining, deadline, input, permit);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10).min(remaining));
+                }
+                Err(_) => break Err(invalid()),
+            }
+        }
+    })?;
     velnor_actions_mise::release_git_pin::verify_bundle(git_root).map_err(|_| invalid())?;
-    let (output, _drained) = result.map_err(|_| internal("crate_release_upload_incomplete"))?;
-    Ok(output.success)
+    Ok(result.0.success)
+}
+
+#[cfg(unix)]
+fn handle_provider_stream<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    mut stream: std::os::unix::net::UnixStream,
+    remaining: Duration,
+    deadline: velnor_actions_mise::CheckDeadline,
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    permit: &UploadPermit,
+) {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let timeout = Some(remaining.min(Duration::from_secs(30)));
+    let mut line = String::new();
+    let received = stream.set_read_timeout(timeout).is_ok()
+        && stream.set_write_timeout(timeout).is_ok()
+        && BufReader::new(&stream)
+            .take(8193)
+            .read_line(&mut line)
+            .is_ok()
+        && line.len() <= 8192;
+    let request = received
+        .then(|| serde_json::from_str::<serde_json::Value>(&line))
+        .and_then(Result::ok);
+    #[cfg(test)]
+    if let (Some(request), Some(path)) = (
+        &request,
+        std::env::var_os("VELNOR_NATIVE_PROVIDER_ATTEMPTS"),
+    ) && let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let fields = serde_json::json!({"name": request["name"], "version": request["vers"], "checksum": request["cksum"], "registry": request["registry"]["index-url"]});
+        drop(writeln!(file, "{fields}"));
+    }
+    let allowed = request.is_some_and(|request| {
+        request["v"] == 1
+            && request["kind"] == "get"
+            && request["operation"] == "publish"
+            && matches!(
+                request["registry"]["index-url"].as_str(),
+                Some(
+                    "sparse+https://index.crates.io/"
+                        | "https://github.com/rust-lang/crates.io-index"
+                )
+            )
+            && request["name"] == permit.package
+            && request["vers"] == permit.version
+            && request["cksum"] == permit.archive_sha256
+            && deadline
+                .scope(|| validate_upload_permit(input, permit))
+                .is_ok_and(|result| result.is_ok())
+            && deadline.remaining().is_ok()
+    });
+    #[cfg(test)]
+    if allowed
+        && let Some(path) = std::env::var_os("VELNOR_NATIVE_PROVIDER_EVENT")
+        && let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+    {
+        let event = serde_json::json!({"name": permit.package, "version": permit.version, "checksum": permit.archive_sha256});
+        drop(writeln!(file, "{event}"));
+    }
+    drop(stream.write_all(if allowed { b"allow\n" } else { b"deny\n" }));
+}
+
+#[cfg(not(unix))]
+fn execute_upload<
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+>(
+    _: &IsolatedCommand,
+    _: &Path,
+    _: &Path,
+    _: &CrateReleaseObservation<'_, J, G, R>,
+    _: &UploadPermit,
+) -> Result<bool, OrchestratorError> {
+    Err(internal("crate_release_upload_unverified"))
+}
+
+pub(crate) fn verify_current_upload_intent<J: JournalIo>(
+    journal: &J,
+    identity: &crate::crate_release_journal::JournalIdentity,
+    receipt: &crate::crate_release_journal::JournalReceipt,
+    sequence: u32,
+    package: &str,
+    version: &str,
+    checksum: &str,
+) -> Result<(), OrchestratorError> {
+    let invalid = || internal("crate_release_upload_unverified");
+    let started = inspect_journal(journal, identity, JournalStage::Started)?.ok_or_else(invalid)?;
+    if started.receipt != *receipt
+        || inspect_journal(journal, identity, JournalStage::Completed)?.is_some()
+    {
+        return Err(invalid());
+    }
+    let item = inspect_journal_mutation(journal, identity, sequence)?.ok_or_else(invalid)?;
+    if item.kind != JournalMutationKind::Upload
+        || item.phase != JournalMutationPhase::Intended
+        || item.package != package
+        || item.version != version
+        || item.archive_sha256.as_deref() != Some(checksum)
+        || inspect_journal_mutation(
+            journal,
+            identity,
+            sequence.checked_add(1).ok_or_else(invalid)?,
+        )?
+        .is_some()
+    {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 fn verified_release_plz(
@@ -209,21 +444,15 @@ pub(super) fn validate_upload_permit<
     {
         return Err(invalid());
     }
-    let started = inspect_journal(input.journal, input.identity, JournalStage::Started)?
-        .ok_or_else(invalid)?;
-    if started.receipt != *input.journal_receipt {
-        return Err(invalid());
-    }
-    let mutation = inspect_journal_mutation(input.journal, input.identity, permit.sequence)?
-        .ok_or_else(invalid)?;
-    if mutation.sequence != permit.sequence
-        || mutation.package != permit.package
-        || mutation.version != permit.version
-        || mutation.kind != JournalMutationKind::Upload
-        || mutation.phase != JournalMutationPhase::Intended
-    {
-        return Err(invalid());
-    }
+    verify_current_upload_intent(
+        input.journal,
+        input.identity,
+        input.journal_receipt,
+        permit.sequence,
+        &permit.package,
+        &permit.version,
+        &permit.archive_sha256,
+    )?;
     let current = observe_admitted_crate_release(
         input.intent,
         input.request,
@@ -254,7 +483,7 @@ pub(super) fn validate_upload_permit<
         &input.intent.runner,
     )
     .ok_or_else(invalid)?;
-    if started.receipt.expected_tools.release_plz_sha256 != qualified.executable_sha256 {
+    if input.journal_receipt.expected_tools.release_plz_sha256 != qualified.executable_sha256 {
         return Err(invalid());
     }
     Ok(qualified)

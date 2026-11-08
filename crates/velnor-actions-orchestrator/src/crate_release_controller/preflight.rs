@@ -82,6 +82,7 @@ pub(crate) fn verify_release_package_with_capacity<G: GitHubAdmissionRead, R: Cr
     let intent_bytes = velnor_actions_contract::canonical_json_bytes(intent)
         .map_err(|_| internal("crate_release_intent_invalid"))?;
     Ok(VerifiedReleasePackage {
+        archive_sha256: crate::planner::generator::sha256_hex(&archive),
         intent_sha256: crate::planner::generator::sha256_hex(&intent_bytes),
         repository: request.repository.clone(),
         workflow_sha: request.workflow_sha.clone(),

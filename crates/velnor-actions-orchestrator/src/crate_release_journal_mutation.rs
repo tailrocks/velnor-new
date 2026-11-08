@@ -42,6 +42,7 @@ pub fn inspect_journal_mutation<I: JournalIo>(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JournalIntendedMutation {
+    pub archive_sha256: Option<String>,
     pub sequence: u32,
     pub package: String,
     pub version: String,
@@ -56,6 +57,7 @@ pub(crate) fn record_journal_intent<I: JournalIo>(
     intended: &JournalIntendedMutation,
 ) -> Result<String, OrchestratorError> {
     let mutation = JournalMutation {
+        archive_sha256: intended.archive_sha256.clone(),
         sequence: intended.sequence,
         package: intended.package.clone(),
         version: intended.version.clone(),
@@ -207,6 +209,13 @@ pub(super) fn valid_mutation(
     receipt: &JournalReceipt,
     previous: Option<&JournalMutation>,
 ) -> bool {
+    if let Some(checksum) = &item.archive_sha256
+        && (item.kind != JournalMutationKind::Upload
+            || !matches!(item.phase, JournalMutationPhase::Intended)
+            || !schema::valid_sha256(checksum))
+    {
+        return false;
+    }
     if item.kind == JournalMutationKind::Upload
         && matches!(
             receipt.semver_evidence.get(&item.package),

@@ -9,6 +9,14 @@ use super::{
     verify_crate_release_admission, verify_metadata_observations, verify_upload_result,
 };
 
+use velnor_actions_orchestrator::crate_release_controller::{
+    CrateReleaseObservation, record_verified_mutation,
+};
+use velnor_actions_orchestrator::crate_release_journal::{
+    JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
+    inspect_journal_mutation, record_journal_intent,
+};
+
 struct CaseAware<'a> {
     github: &'a Github,
     wrong_id: Option<&'static str>,
@@ -284,13 +292,6 @@ pub(super) fn err() -> OrchestratorError {
 #[test]
 pub(super) fn observed_upload_is_derived_from_current_registry()
 -> Result<(), Box<dyn std::error::Error>> {
-    use velnor_actions_orchestrator::crate_release_controller::{
-        CrateReleaseObservation, record_verified_mutation,
-    };
-    use velnor_actions_orchestrator::crate_release_journal::{
-        JournalIntendedMutation, JournalMutationKind, fixture_storage::seed_started_record,
-        inspect_journal_mutation, record_journal_intent,
-    };
     let temp = tempfile::tempdir()?;
     let root = temp.path();
     let (intent, request, github, registry) = make_fixture(root)?;
@@ -304,6 +305,7 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
         &identity,
         &plan,
         &JournalIntendedMutation {
+            archive_sha256: None,
             semver_evidence: Some(fixture_no_baseline()),
             sequence: 1,
             package: "demo".into(),
@@ -329,11 +331,13 @@ pub(super) fn observed_upload_is_derived_from_current_registry()
     };
     let mut wrong_identity = identity.clone();
     wrong_identity.workflow_sha = "c".repeat(40);
-    let wrong = CrateReleaseObservation {
-        identity: &wrong_identity,
-        ..obs
-    };
-    assert!(record_verified_mutation(&wrong).is_err());
+    assert!(
+        record_verified_mutation(&CrateReleaseObservation {
+            identity: &wrong_identity,
+            ..obs
+        })
+        .is_err()
+    );
     reject_wrong_authentication(&obs);
     let mut wrong_intent = intent.clone();
     wrong_intent.rust_version = "1.0.0".into();

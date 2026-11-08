@@ -154,6 +154,7 @@ pub(super) fn new_crate_upload_intention() -> crate::crate_release_journal::Jour
 {
     use crate::crate_release_journal::{JournalIntendedMutation, JournalMutationKind};
     JournalIntendedMutation {
+        archive_sha256: None,
         sequence: 1,
         package: "demo".into(),
         version: "0.1.1".into(),

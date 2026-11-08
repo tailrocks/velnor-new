@@ -229,6 +229,7 @@ pub(super) fn check_upload_semver_rejections(
         ),
     ] {
         let intended = JournalIntendedMutation {
+            archive_sha256: None,
             sequence: 1,
             package: "demo".into(),
             version: "0.1.1".into(),

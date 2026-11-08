@@ -45,6 +45,7 @@ pub(super) fn verify_new_crate_prior_intention(
         &prior.identity,
         &prior,
         &JournalIntendedMutation {
+            archive_sha256: None,
             sequence: 1,
             package: "demo-crate".into(),
             version: "0.1.1".into(),
@@ -64,6 +65,7 @@ pub(super) fn verify_new_crate_prior_intention(
         &prior.identity,
         &prior,
         &crate::crate_release_journal::JournalMutation {
+            archive_sha256: None,
             sequence: 2,
             package: "demo-crate".into(),
             version: "0.1.1".into(),
@@ -106,6 +108,7 @@ fn reject_pending_upload(
         journal.blobs.borrow().len(),
     );
     let forged = JournalIntendedMutation {
+        archive_sha256: None,
         sequence: 1,
         package: "demo-crate".into(),
         version: "0.1.1".into(),
@@ -204,6 +207,7 @@ pub(super) fn reject_forged_new_crate_prior(
         &existing_prior.identity,
         &existing_prior,
         &JournalIntendedMutation {
+            archive_sha256: None,
             sequence: 1,
             package: "demo-crate".into(),
             version: "0.1.1".into(),

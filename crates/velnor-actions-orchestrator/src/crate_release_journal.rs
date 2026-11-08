@@ -148,6 +148,8 @@ pub enum JournalMutationResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JournalMutation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_sha256: Option<String>,
     pub sequence: u32,
     pub package: String,
     pub version: String,

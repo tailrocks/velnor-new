@@ -63,6 +63,7 @@ pub(super) fn prior_upload_recovery_requires_qualified_history_custody()
         &previous.identity,
         &previous,
         &JournalIntendedMutation {
+            archive_sha256: None,
             semver_evidence: Some(fixture_no_baseline()),
             sequence: 1,
             package: "demo".into(),
@@ -111,6 +112,7 @@ pub(super) fn append_fixture_prior_upload_observation(
         JournalMutationResult,
     };
     let mutation = JournalMutation {
+        archive_sha256: None,
         semver_evidence: None,
         sequence: 2,
         package: "demo".into(),
@@ -216,6 +218,7 @@ pub(super) fn verify_reconciled_candidate(
         input.identity,
         input.journal_receipt,
         &JournalIntendedMutation {
+            archive_sha256: None,
             semver_evidence: Some(fixture_no_baseline()),
             sequence: 7,
             package: "demo".into(),

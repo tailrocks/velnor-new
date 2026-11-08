@@ -173,7 +173,8 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         | InternalOp::PlaywrightInstall
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
-        | InternalOp::PreseedManifest | InternalOp::RepoPolicy
+        | InternalOp::PreseedManifest
+        | InternalOp::RepoPolicy
         | InternalOp::NativeValidatorToolQualification
         | InternalOp::ExecuteCheck
         | InternalOp::ExecuteNativeHomebrewCheck

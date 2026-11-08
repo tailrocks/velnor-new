@@ -6,8 +6,6 @@
 mod args;
 #[path = "../src/dispatch/compiler.rs"]
 mod compiler;
-#[path = "../src/ledger_helper.rs"]
-mod ledger_helper;
 #[cfg(feature = "generator")]
 #[path = "../src/dispatch.rs"]
 mod dispatch;
@@ -41,10 +39,20 @@ mod dispatch_repo_policy;
 #[cfg(feature = "generator")]
 #[path = "../src/dispatch_unmanaged.rs"]
 mod dispatch_unmanaged;
+#[path = "../src/ledger_helper.rs"]
+mod ledger_helper;
 
 use std::process::ExitCode;
 
 fn run_entry() -> ExitCode {
+    #[cfg(feature = "generator")]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--cargo-plugin")) {
+        return if velnor_actions_orchestrator::crate_release_credential_provider::run().is_ok() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        };
+    }
     if let Some(outcome) = compiler::try_observer_entry() {
         return outcome;
     }

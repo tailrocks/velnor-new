@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import tomllib
+import time
 import urllib.request
 
 from evidence import read_bounded, write_evidence
@@ -63,6 +64,7 @@ def assert_pending_upload(info, state, runner):
     assert mutation["package"] == info["package"] and mutation["version"] == info["version"]
     assert mutation["phase"] == {"phase": "intended"}
     assert mutation["semver_evidence"] is not None
+    assert mutation["archive_sha256"] == state["published_sha256"]
     admission = json.loads((runner / "velnor-crate-release-receipt.json").read_text())
     intent = json.dumps(admission["intent"], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     assert hashlib.sha256(intent).hexdigest() == pending["receipt"]["intent_sha256"]
@@ -70,15 +72,21 @@ def assert_pending_upload(info, state, runner):
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "success"
 multi = mode == "coordinate-multi"
+bootstrap_mode = mode == "coordinate-bootstrap"
 env = os.environ.copy()
 coordinate = mode.startswith("coordinate")
 new_run = mode == "coordinate-real-cargo-new-run"
 real_cargo = mode == "coordinate-real-cargo-crash" or new_run
 evidence_drift = mode in ("coordinate-evidence-drift", "coordinate-evidence-checksum-drift")
 evidence_matching = mode == "coordinate-evidence-matching"
-evidence_deferred = mode == "coordinate-evidence-deferred"
+delay_authorization = mode == "coordinate-delay-authorization"
+cancel_authorization = mode == "coordinate-cancel-authorization"
+stall_authorization = mode == "coordinate-stall-authorization"
+owned_delay = delay_authorization or cancel_authorization
+evidence_deferred = mode in ("coordinate-evidence-deferred", "coordinate-checksum-denial") or stall_authorization or owned_delay
+checksum_denial = mode == "coordinate-checksum-denial"
 tamper_cargo = mode == "coordinate-cargo-tamper"
-real_cargo = real_cargo or evidence_drift or evidence_matching or evidence_deferred or tamper_cargo
+real_cargo = real_cargo or evidence_drift or evidence_matching or evidence_deferred or tamper_cargo or bootstrap_mode
 if real_cargo:
     env["VELNOR_FIXTURE_REAL_CARGO"] = "1"
     if (len(pathlib.Path("/proc/net/route").read_text().splitlines()) != 1
@@ -124,8 +132,10 @@ if journal:
         env["VELNOR_NATIVE_COORDINATE"] = "1"
         env["VELNOR_TEST_FAST_POLL"] = "1"
         env["VELNOR_NATIVE_COORDINATE_ERROR"] = (
-            ""
-            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run", "coordinate-multi") or evidence_matching or evidence_deferred
+            "crate_release_upload_incomplete"
+            if stall_authorization or cancel_authorization
+            else ""
+            if mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run", "coordinate-multi") or evidence_matching or evidence_deferred or bootstrap_mode
             else "crate_release_toolchain_invalid"
             if tamper_cargo
             else "crate_release_semver_evidence_changed"
@@ -148,6 +158,8 @@ if journal:
             env["VELNOR_NATIVE_NEW_RUN_PHASE1"] = "1"
         if mode == "coordinate-crash-no-credentials":
             env["VELNOR_NATIVE_NO_TOKEN_ON_RETRY"] = "1"
+        if bootstrap_mode:
+            env["CARGO_REGISTRY_TOKEN"] = "fixture-scoped"
         env["ACTIONS_ID_TOKEN_REQUEST_URL"] = (
             "https://fixture.actions.githubusercontent.com/oidc"
         )
@@ -167,7 +179,12 @@ if journal:
             with git.open("ab") as handle:
                 handle.write(b"corrupted fixture")
 if mode != "success" and not multi:
-    env["VELNOR_FIXTURE_FAILURE"] = "oidc" if mode == "coordinate-oidc-denied" else mode
+    env["VELNOR_FIXTURE_FAILURE"] = "oidc" if mode == "coordinate-oidc-denied" else "coordinate-evidence-deferred" if checksum_denial or stall_authorization or owned_delay else mode
+if stall_authorization or owned_delay:
+    env["VELNOR_FIXTURE_STALL_PATH"] = str(runner / "stall-journal")
+    if delay_authorization:
+        env["VELNOR_FIXTURE_STALL_COUNT"] = "2"
+        env["VELNOR_FIXTURE_STALL_SECONDS"] = "18"
 env["RUNNER_TEMP"] = str(runner)
 runner.mkdir(parents=True, exist_ok=True)
 fixture_env = env.copy()
@@ -202,6 +219,10 @@ try:
     if coordinate:
         if real_cargo:
             env["VELNOR_FIXTURE_CARGO_API_ORIGIN"] = info["origin"]
+        if checksum_denial:
+            env["VELNOR_FIXTURE_OTHER_REGISTRY"] = "1"
+        if stall_authorization:
+            env["VELNOR_FIXTURE_STALL_PATH"] = str(runner / "stall-journal")
         tls_server = subprocess.Popen(
             [
                 "python3",
@@ -311,7 +332,18 @@ try:
         env["GITHUB_EVENT_PATH"] = str(event_path)
     if mode == "verify-source":
         env["VELNOR_NATIVE_MUTATE_AFTER_RECEIPT"] = "1"
-    subprocess.run(
+    if coordinate:
+        subprocess.run(["cargo", "build", "--offline", "--locked", "-p", "velnor-actions-cli"], cwd="/src", env=env, check=True)
+        env["VELNOR_NATIVE_PROVIDER_EXECUTABLE"] = str(pathlib.Path(env["CARGO_TARGET_DIR"]) / "debug/velnor-actions")
+        env["VELNOR_NATIVE_PROVIDER_EVENT"] = str(runner / "provider-events.jsonl")
+        if checksum_denial or stall_authorization or owned_delay:
+            env["VELNOR_NATIVE_PROVIDER_CONTEXT"] = str(runner / "provider-context.json")
+            env["VELNOR_NATIVE_PROVIDER_ATTEMPTS"] = str(runner / "provider-attempts.jsonl")
+        if stall_authorization:
+            env["VELNOR_NATIVE_PROVIDER_DEADLINE_MS"] = "10000"
+        if cancel_authorization:
+            env["VELNOR_NATIVE_PROVIDER_DEADLINE_MS"] = "10000"
+    process = subprocess.Popen(
         [
             "cargo",
             "nextest",
@@ -327,8 +359,169 @@ try:
         ],
         cwd="/src",
         env=env,
-        check=True,
     )
+    if owned_delay:
+        context_path = runner / "provider-context.json"
+        limit = time.monotonic() + 600
+        while not context_path.exists() and process.poll() is None and time.monotonic() < limit:
+            time.sleep(0.05)
+        if not context_path.exists():
+            raise RuntimeError("real parent provider context missing")
+        context = json.loads(context_path.read_text())
+        marker = runner / "stall-journal"
+        marker.write_text("stall\n")
+        started = time.monotonic()
+        context_path.with_suffix(".resume").write_text("resume\n")
+        while not marker.with_name(marker.name + ".hit1").exists() and process.poll() is None and time.monotonic() - started < 50:
+            time.sleep(0.05)
+        assert marker.with_name(marker.name + ".hit1").exists()
+        processes = {}
+        for proc in pathlib.Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            try:
+                argv0 = (proc / "cmdline").read_bytes().split(b"\0", 1)[0].decode()
+                name = pathlib.Path(argv0).name
+                if name in ("release-plz", "cargo", "credential-provider"):
+                    processes.setdefault(name, []).append((int(proc.name), os.getpgid(int(proc.name))))
+            except (OSError, UnicodeError, ProcessLookupError):
+                pass
+        providers = processes.get("credential-provider", [])
+        assert providers
+        provider_pid, group = providers[0]
+        anchor = pathlib.Path(f"/proc/{group}/cmdline").read_bytes().split(b"\0", 1)[0]
+        assert anchor == b"/bin/cat" and os.getpgid(group) == group
+        provider_start = pathlib.Path(f"/proc/{provider_pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+        assert any(pgid == group for _, pgid in processes.get("cargo", []))
+        assert any(pgid == group for _, pgid in processes.get("release-plz", []))
+        if delay_authorization:
+            while not (runner / "provider-events.jsonl").exists() and process.poll() is None and time.monotonic() - started < 100:
+                time.sleep(0.05)
+            assert (runner / "provider-events.jsonl").exists() and marker.with_name(marker.name + ".hit2").exists()
+            assert time.monotonic() - started >= 30
+        else:
+            assert process.wait(timeout=60) == 0
+            assert time.monotonic() - started < 15
+            proc_stat = pathlib.Path(f"/proc/{provider_pid}/stat")
+            state = "absent"
+            if proc_stat.exists():
+                fields = proc_stat.read_text().rsplit(")", 1)[1].split()
+                state = fields[0] if fields[19] == provider_start else "reused"
+            (runner / "provider-exit-state.txt").write_text(state + "\n")
+            assert state in ("absent", "reused", "Z")
+            assert not (runner / "provider-events.jsonl").exists()
+    if stall_authorization:
+        context_path = runner / "provider-context.json"
+        limit = time.monotonic() + 600
+        while not context_path.exists() and process.poll() is None and time.monotonic() < limit:
+            time.sleep(0.05)
+        if not context_path.exists():
+            raise RuntimeError("real parent provider context missing")
+        context = json.loads(context_path.read_text())
+        with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+            before_stall = json.load(response)
+        pending = [item for item in before_stall["records"] if (item.get("mutation") or {}).get("kind") == "upload" and item["mutation"]["phase"]["phase"] == "intended"]
+        assert len(pending) == 1
+        signed = read_journal_record(info, before_stall, f"refs/tags/velnor-receipt/12/1/operation-{pending[0]['mutation']['sequence']}")
+        request = {"v": 1, "kind": "get", "operation": "publish", "name": info["deferred_b"], "vers": "0.1.1", "cksum": signed["mutation"]["archive_sha256"], "registry": {"index-url": "https://github.com/rust-lang/crates.io-index"}}
+        marker = runner / "stall-journal"
+        marker.write_text("stall\n")
+        provider_env = {"PATH": "/usr/bin:/bin", "CARGO_REGISTRY_TOKEN": "fixture-only", "VELNOR_CARGO_AUTH_SOCKET": context["socket"]}
+        started = time.monotonic()
+        response = subprocess.run([context["provider"], "--cargo-plugin"], input=json.dumps(request) + "\n", env=provider_env, text=True, capture_output=True, timeout=20, check=True)
+        elapsed = time.monotonic() - started
+        lines = response.stdout.splitlines()
+        assert marker.with_name(marker.name + ".hit1").exists() and elapsed < 15
+        assert len(lines) == 2 and json.loads(lines[1]) == {"Err": {"kind": "not-found"}}
+        assert not (runner / "provider-events.jsonl").exists()
+    if checksum_denial:
+        context_path = runner / "provider-context.json"
+        limit = time.monotonic() + 600
+        while not context_path.exists() and process.poll() is None and time.monotonic() < limit:
+            time.sleep(0.05)
+        if not context_path.exists():
+            raise RuntimeError("real parent provider context missing")
+        context = json.loads(context_path.read_text())
+        wrong_home = runner / "wrong-cargo-home"
+        wrong_home.mkdir()
+        cargo = runner / "velnor/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo"
+        wrong_env = {"PATH": str(cargo.parent) + ":/usr/bin:/bin", "HOME": str(runner), "CARGO_HOME": str(wrong_home),
+                     "CARGO_TARGET_DIR": str(runner / "wrong-target"), "CARGO_REGISTRY_TOKEN": "fixture-only",
+                     "CARGO_REGISTRY_CREDENTIAL_PROVIDER": context["provider"], "CARGO_REGISTRIES_CRATES_IO_CREDENTIAL_PROVIDER": context["provider"],
+                     "VELNOR_CARGO_AUTH_SOCKET": context["socket"]}
+        trace = runner / "provider-trace.txt"
+        wrong_env["VELNOR_FIXTURE_REAL_PROVIDER"] = context["provider"]
+        wrong_env["VELNOR_FIXTURE_PROVIDER_TRACE"] = str(trace)
+        wrong_env["CARGO_REGISTRY_CREDENTIAL_PROVIDER"] = "/fixture/provider_trampoline.py"
+        wrong_env["CARGO_REGISTRIES_CRATES_IO_CREDENTIAL_PROVIDER"] = "/fixture/provider_trampoline.py"
+        cases = [("wrong-archive", info["deferred_b"], "0.1.1"),
+                 ("wrong-name", info["deferred_b"] + "-wrong", "0.1.1"),
+                 ("wrong-version", info["deferred_b"], "0.1.2")]
+        for index, (label, name, version) in enumerate(cases):
+            wrong = pathlib.Path("/workspace") / label
+            (wrong / "src").mkdir(parents=True)
+            (wrong / "Cargo.toml").write_text('[package]\nname = "' + name + '"\nversion = "' + version + '"\nedition = "2024"\n')
+            (wrong / "src/lib.rs").write_text('pub fn different_fixture_payload() -> u8 { 42 }\n')
+            result = subprocess.run([str(cargo), "publish", "--no-verify", "--allow-dirty", "--registry", "crates-io"], cwd=wrong, env=wrong_env, capture_output=True, timeout=120)
+            if result.returncode == 0:
+                raise RuntimeError(label + " was accepted")
+            attempts = [json.loads(line) for line in (runner / "provider-attempts.jsonl").read_text().splitlines()]
+            assert len(attempts) == 2 * index + 1 and attempts[-1]["name"] == name and attempts[-1]["version"] == version
+            request = {"v": 1, "kind": "get", "operation": "publish", "name": name, "vers": version, "cksum": attempts[-1]["checksum"], "registry": {"index-url": attempts[-1]["registry"]}}
+            response = subprocess.run([context["provider"], "--cargo-plugin"], input=json.dumps(request) + "\n", env=wrong_env, text=True, capture_output=True, timeout=60, check=True)
+            lines = response.stdout.splitlines()
+            assert len(lines) == 2 and json.loads(lines[0]) == {"v": [1]} and json.loads(lines[1]) == {"Err": {"kind": "not-found"}}
+        assert "read" in trace.read_text().splitlines() and "placeholder" in trace.read_text().splitlines()
+        trampoline = runner / "provider-trampoline"
+        trampoline.write_text('#!/bin/sh\n: > "$VELNOR_FIXTURE_PROVIDER_MARKER"\nexec "$VELNOR_FIXTURE_REAL_PROVIDER" "$@"\n')
+        trampoline.chmod(0o700)
+        marker = runner / "other-registry-provider-invoked"
+        other_env = dict(wrong_env, CARGO_REGISTRIES_OTHER_INDEX="sparse+https://crates.io/",
+                         CARGO_REGISTRIES_OTHER_CREDENTIAL_PROVIDER=str(trampoline), CARGO_REGISTRIES_OTHER_TOKEN="fixture-only",
+                         VELNOR_FIXTURE_PROVIDER_MARKER=str(marker), VELNOR_FIXTURE_REAL_PROVIDER=context["provider"])
+        other = subprocess.run([str(cargo), "publish", "--no-verify", "--allow-dirty", "--registry", "other"], cwd=pathlib.Path("/workspace/wrong-archive"), env=other_env, capture_output=True, timeout=120)
+        assert other.returncode != 0 and marker.exists()
+        other_request = {"v": 1, "kind": "get", "operation": "publish", "name": info["deferred_b"], "vers": "0.1.1", "cksum": attempts[0]["checksum"], "registry": {"index-url": "sparse+https://crates.io/"}}
+        other_response = subprocess.run([context["provider"], "--cargo-plugin"], input=json.dumps(other_request) + "\n", env=wrong_env, text=True, capture_output=True, timeout=60, check=True)
+        other_lines = other_response.stdout.splitlines()
+        assert len(other_lines) == 2 and json.loads(other_lines[1]) == {"Err": {"kind": "not-found"}}
+        with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+            before_resume = json.load(response)
+        assert before_resume["uploads"] == before_resume["upload_attempts"] == 0
+        assert not (runner / "provider-events.jsonl").exists()
+        pending = [item for item in before_resume["records"] if (item.get("mutation") or {}).get("kind") == "upload" and item["mutation"]["phase"]["phase"] == "intended"]
+        assert len(pending) == 1
+        sequence = pending[0]["mutation"]["sequence"]
+        signed = read_journal_record(info, before_resume, f"refs/tags/velnor-receipt/12/1/operation-{sequence}")
+        witness = signed["mutation"]["archive_sha256"]
+        valid_request = {"v": 1, "kind": "get", "operation": "publish", "name": info["deferred_b"], "vers": "0.1.1", "cksum": witness, "registry": {"index-url": attempts[0]["registry"]}}
+        for field, value in (("name", info["deferred_b"] + "-wrong"), ("vers", "0.1.2"), ("registry", {"index-url": "sparse+https://crates.io/"})):
+            altered = dict(valid_request, **{field: value})
+            denied = subprocess.run([context["provider"], "--cargo-plugin"], input=json.dumps(altered) + "\n", env=wrong_env, text=True, capture_output=True, timeout=60, check=True)
+            denied_lines = [json.loads(line) for line in denied.stdout.splitlines()]
+            assert denied_lines == [{"v": [1]}, {"Err": {"kind": "not-found"}}]
+        assert not (runner / "provider-events.jsonl").exists()
+        provider = subprocess.Popen([context["provider"], "--cargo-plugin"], env=wrong_env, text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert json.loads(provider.stdout.readline()) == {"v": [1]}
+        deltas = []
+        for _ in range(2):
+            with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+                before = json.load(response)
+            provider.stdin.write(json.dumps(valid_request) + "\n")
+            provider.stdin.flush()
+            reply = json.loads(provider.stdout.readline())
+            assert reply == {"Ok": {"kind": "get", "token": "fixture-only", "cache": "never", "operation_independent": False}}
+            with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+                after = json.load(response)
+            assert before["refs"] == after["refs"] and before["mutations"] == after["mutations"]
+            deltas.append(after["journal_reads"] - before["journal_reads"])
+        provider.stdin.close()
+        assert provider.wait(timeout=60) == 0
+        assert len(deltas) == 2 and deltas[0] > 0 and deltas[0] == deltas[1]
+        print("fixture journal requests per authorized provider request:", deltas, flush=True)
+        context_path.with_suffix(".resume").write_text("resume\n")
+    if process.wait() != 0:
+        raise RuntimeError("native controller test failed")
     if new_run:
         with urllib.request.urlopen(urllib.request.Request(
                 info["origin"] + "/__fixture/advance-recovery", data=b"{}", method="POST")) as response:
@@ -353,6 +546,9 @@ try:
     if multi:
         assert state["uploads"] == 0
         assert "refs/tags/velnor-receipt/12/1/reconciled" in state["refs"]
+    elif stall_authorization or cancel_authorization:
+        assert state["uploads"] == state["upload_attempts"] == 0
+        assert not (runner / "provider-events.jsonl").exists()
     elif evidence_deferred:
         assert state["uploads"] == state["upload_attempts"] == 1
         assert f"refs/tags/{info['deferred_a']}-v0.1.1" in state["refs"]
@@ -365,6 +561,12 @@ try:
         second_intents = [record for record in operations if record["mutation"]["package"] == info["deferred_b"] and record["mutation"]["kind"] == "upload" and record["mutation"]["phase"]["phase"] == "intended"]
         assert {record["mutation"]["kind"] for record in first_metadata} == {"create-tag", "create-release"}
         assert len(second_intents) == 1
+        accepted = (pathlib.Path("/workspace") / ("final-" + mode) / "fixture-upload.crate").read_bytes()
+        assert second_intents[0]["mutation"]["archive_sha256"] == state["published_sha256"] == hashlib.sha256(accepted).hexdigest()
+        events = [json.loads(line) for line in (runner / "provider-events.jsonl").read_text().splitlines()]
+        assert events and all(event == {"name": info["deferred_b"], "version": "0.1.1", "checksum": state["published_sha256"]} for event in events)
+        if checksum_denial:
+            assert attempts[0]["checksum"] != state["published_sha256"]
         assert second_intents[0]["mutation"]["semver_evidence"]["status"] == "checked"
         assert second_intents[0]["mutation"]["semver_evidence"]["baseline"] == info["baseline_version"]
         assert second_intents[0]["mutation"]["semver_evidence"]["baseline_checksum"] == info["baseline_checksum"]
@@ -372,7 +574,7 @@ try:
         with urllib.request.urlopen("https://fixture.actions.githubusercontent.com/__fixture/state") as response:
             counts = json.load(response)
         assert counts["oidc"] == counts["exchange"] == 1
-    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run") or evidence_matching:
+    elif mode in ("coordinate", "coordinate-crash", "coordinate-crash-no-credentials", "coordinate-real-cargo-crash", "coordinate-real-cargo-new-run") or evidence_matching or bootstrap_mode:
         assert state["uploads"] == 1
         if real_cargo:
             assert state["upload_attempts"] == 1
@@ -428,7 +630,11 @@ try:
             "https://fixture.actions.githubusercontent.com/__fixture/state"
         ) as response:
             counts = json.load(response)
-        assert counts["oidc"] == counts["exchange"] == 1
+        assert counts["oidc"] == counts["exchange"] == (0 if bootstrap_mode else 1)
+        if bootstrap_mode:
+            assert_pending_upload(info, state, runner)
+            events = [json.loads(line) for line in (runner / "provider-events.jsonl").read_text().splitlines()]
+            assert events and all(event == {"name": info["package"], "version": info["version"], "checksum": state["published_sha256"]} for event in events)
         if mode == "coordinate":
             assert counts["revoke"] == 1
             destination = os.environ.get("VELNOR_NATIVE_FIXTURE_EVIDENCE")
