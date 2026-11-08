@@ -24,7 +24,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn Error>> {
     fs::write(root.join(".velnor/config.toml"), config)?;
     fs::write(
         root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
+        fixture_manifest_json()?,
     )?;
     fs::write(
         root.join("Cargo.toml"),
@@ -84,15 +84,26 @@ pub(crate) fn write_nextest_task(root: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn fixture_manifest_json() -> String {
+fn fixture_manifest_json() -> Result<String, Box<dyn Error>> {
     let version = env!("CARGO_PKG_VERSION");
+    let executable_digest = synthetic_sha256(&fs::read(std::env::current_exe()?)?);
+    let host_target = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        _ => return Err("unsupported test host".into()),
+    };
     let targets = SUPPORTED_TARGETS
         .iter()
         .map(|target| {
             let payload = format!(
                 "Velnor synthetic test payload; version={version}; target={target}\n"
             );
-            let digest = synthetic_sha256(payload.as_bytes());
+            let digest = if *target == host_target {
+                executable_digest.clone()
+            } else {
+                synthetic_sha256(payload.as_bytes())
+            };
             format!(
                 "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{digest}\"}}"
             )
@@ -101,9 +112,9 @@ fn fixture_manifest_json() -> String {
         .join(",");
     let source_marker = synthetic_sha256(b"Velnor synthetic test source marker");
     let commit = source_marker.chars().take(40).collect::<String>();
-    format!(
+    Ok(format!(
         "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
-    )
+    ))
 }
 
 fn synthetic_sha256(bytes: &[u8]) -> String {

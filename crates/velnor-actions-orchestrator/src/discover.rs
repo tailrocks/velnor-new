@@ -51,7 +51,6 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     pub recommendations: Vec<String>,
     pub consumer_manifest_json: Option<String>,
-    pub consumer_manifest_stand_in: bool,
     pub skipped_non_utf8: bool,
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
@@ -133,7 +132,7 @@ pub(crate) fn discover_with_options(
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let (consumer_manifest_json, consumer_manifest_stand_in) =
+    let consumer_manifest_json =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
     let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
@@ -149,7 +148,6 @@ pub(crate) fn discover_with_options(
         clippy_memory,
         recommendations,
         consumer_manifest_json,
-        consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,

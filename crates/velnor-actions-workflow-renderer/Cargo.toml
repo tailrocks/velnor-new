@@ -88,3 +88,7 @@ path = "tests/source_preview_exec_public.rs"
 [[test]]
 name = "source_preview_loader_public"
 path = "tests/source_preview_loader_public.rs"
+
+[[test]]
+name = "cargo_source_handoff_public"
+path = "tests/cargo_source_handoff_public.rs"

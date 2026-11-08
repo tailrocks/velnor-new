@@ -68,18 +68,14 @@ fn run_command_bounded_unix(
         Err(output) => return output,
     };
     result.status = BoundedCommandStatus::Unavailable;
-    collect_bounded_output(&mut child, output_cap_bytes, deadline, &mut result);
-    result.termination = if result.execution_error.is_some() {
-        termination_for_error(result.execution_error.as_deref())
-    } else {
-        BoundedCommandTermination::Completed
-    };
-    result.cleanup_error = cleanup_anchor(
+    collect_bounded_output(
+        &mut child,
         &mut anchor,
-        Some(&mut child),
-        cleanup_deadline_for(cleanup_budget),
-    )
-    .err();
+        output_cap_bytes,
+        deadline,
+        cleanup_budget,
+        &mut result,
+    );
     if result.cleanup_error.is_some() && result.termination == BoundedCommandTermination::Completed
     {
         result.termination = BoundedCommandTermination::CleanupFailed;
@@ -129,26 +125,31 @@ fn spawn_failure(error: String, cleanup_error: Option<String>) -> BoundedCommand
 #[cfg(unix)]
 fn collect_bounded_output(
     child: &mut std::process::Child,
+    anchor: &mut Option<ProcessGroupAnchor>,
     output_cap_bytes: usize,
     deadline: CheckDeadline,
+    cleanup_budget: Duration,
     result: &mut BoundedCommandOutput,
 ) {
-    let Some(stdout) = child.stdout.take() else {
-        result.execution_error = Some("child_stdout_pipe_missing".to_owned());
-        return;
-    };
-    let Some(stderr) = child.stderr.take() else {
-        result.execution_error = Some("child_stderr_pipe_missing".to_owned());
-        return;
-    };
+    let mut stdout = child.stdout.take();
+    let mut stderr = child.stderr.take();
     let mut streams = Streams::memory(output_cap_bytes);
-    if let Err(error) = set_nonblocking(&stdout).and_then(|()| set_nonblocking(&stderr)) {
+    let setup = match (&stdout, &stderr) {
+        (Some(stdout), Some(stderr)) => {
+            set_nonblocking(stdout).and_then(|()| set_nonblocking(stderr))
+        }
+        (None, _) => Err("child_stdout_pipe_missing".to_owned()),
+        (_, None) => Err("child_stderr_pipe_missing".to_owned()),
+    };
+    if let Err(error) = setup {
         result.execution_error = Some(error);
+        stdout = None;
+        stderr = None;
     } else {
         let polled = poll_child(
             child,
-            stdout,
-            stderr,
+            &mut stdout,
+            &mut stderr,
             &mut streams,
             deadline,
             &CancelHandle::new(),
@@ -165,7 +166,37 @@ fn collect_bounded_output(
     {
         result.status = status_from_observed(status);
     }
+    result.termination = if result.execution_error.is_some() {
+        termination_for_error(result.execution_error.as_deref())
+    } else {
+        BoundedCommandTermination::Completed
+    };
+    let cleanup_deadline = cleanup_deadline_for(cleanup_budget);
+    result.cleanup_error = cleanup_anchor(anchor, Some(child), cleanup_deadline).err();
+    drain_available(&mut streams, &mut stdout, &mut stderr, cleanup_deadline);
     (result.stdout, result.stderr) = streams.into_prefixes();
+}
+
+#[cfg(unix)]
+fn drain_available(
+    streams: &mut Streams<'_>,
+    stdout: &mut Option<std::process::ChildStdout>,
+    stderr: &mut Option<std::process::ChildStderr>,
+    deadline: Instant,
+) {
+    while Instant::now() < deadline {
+        let out = streams.poll_stdout(stdout);
+        let err = streams.poll_stderr(stderr);
+        if out.is_err() {
+            *stdout = None;
+        }
+        if err.is_err() {
+            *stderr = None;
+        }
+        if !out.unwrap_or(false) && !err.unwrap_or(false) {
+            break;
+        }
+    }
 }
 
 #[cfg(unix)]

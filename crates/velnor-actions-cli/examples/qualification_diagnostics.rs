@@ -274,7 +274,7 @@ fn run_after_plan(mode: DiagnosticsMode) -> Result<(), ExitCode> {
 
     match mode {
         DiagnosticsMode::ReplaceCopiedGuardThenSleep => {
-            std::thread::sleep(Duration::from_secs(30));
+            std::thread::sleep(Duration::from_secs(3600));
             Ok(())
         }
         DiagnosticsMode::ChangeCopiedSourceThenStderrOverflow => {

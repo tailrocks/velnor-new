@@ -52,6 +52,16 @@ RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
 echo "verify-local: log directory: $LOG_DIR"
 
+if [ "$(uname -s)" = Darwin ] && [ -z "${VELNOR_GROUP_PROBE_RECEIPT:-}" ]; then
+  PROBE_DIR="$LOG_DIR/group-signal-probe"
+  trap 'rm -rf -- "$PROBE_DIR"' EXIT
+  if ! bash scripts/provision-group-signal-interposer.sh "$PROBE_DIR"; then
+    echo "verify-local: FAIL: could not provision process-group fixture"
+    exit 1
+  fi
+  export VELNOR_GROUP_PROBE_RECEIPT="$PROBE_DIR/group_signal_zero_interpose.json"
+fi
+
 FAILURES=""
 
 fail() {
@@ -270,6 +280,28 @@ else
       DIAGNOSTICS_FIXTURE=""
     fi
     export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+    CLOCK_ARTIFACTS="$LOG_DIR/clock-driver-artifacts.jsonl"
+    CLOCK_DRIVER=""
+    if "${MISE_EXEC[@]}" cargo build --locked --message-format=json \
+      -p velnor-archive-guard --example golden_collector_clock \
+      >"$CLOCK_ARTIFACTS" 2>>"$GENERATED_BUILD_LOG"; then
+      CLOCK_DRIVER="$(env \
+        VELNOR_INTERNAL_OP=repo-policy-v1 \
+        VELNOR_REPO_POLICY_ACTION=artifact-executable \
+        VELNOR_REPO_POLICY_ROOT="$ROOT" \
+        VELNOR_REPO_POLICY_MESSAGES="$CLOCK_ARTIFACTS" \
+        VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
+        VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
+        VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+        "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+          --bin velnor-actions 2>>"$GENERATED_BUILD_LOG")" || CLOCK_DRIVER=""
+    fi
+    case "$CLOCK_DRIVER" in
+      /*) ;;
+      *) CLOCK_DRIVER="" ;;
+    esac
+    if [ ! -x "$CLOCK_DRIVER" ]; then CLOCK_DRIVER=""; fi
+    export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
     IMAGE_PUBLICATION_FIXTURE="$(env \
       VELNOR_INTERNAL_OP=repo-policy-v1 \
       VELNOR_REPO_POLICY_ACTION=artifact-executable \
@@ -290,7 +322,7 @@ else
     export VELNOR_IMAGE_PUBLICATION_FIXTURE="$IMAGE_PUBLICATION_FIXTURE"
     : >"$GENERATED_RUN_LOG"
     : >"$GENERATED_DIFF_LOG"
-    if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && \
+    if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && [ -n "$CLOCK_DRIVER" ] && \
       [ -n "$IMAGE_PUBLICATION_FIXTURE" ] && \
       "$BIN" generate --output-dir "$GEN_DIR/tree" \
       >"$GENERATED_RUN_LOG" 2>&1 &&

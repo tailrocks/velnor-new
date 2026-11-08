@@ -206,8 +206,18 @@ fn build_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
 }
 
 fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
-    let action_steps = vec![
+    let mut action_steps = vec![
         steps::checkout_step(),
+        steps::bash_step(
+            "Prepare private source cache",
+            "set -eu\ncase \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac\nmkdir -p \"$RUNNER_TEMP/velnor\"\nrm -rf -- \"$RUNNER_TEMP/velnor/cargo\"\nmkdir -m 700 \"$RUNNER_TEMP/velnor/cargo\"",
+        ),
+    ];
+    action_steps.extend(super::super::source_qualification::sources_restore_steps(
+        "source-preview-qualify",
+        "ubuntu-26.04",
+    )?);
+    action_steps.extend(vec![
         steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
         steps::command_step(
             "Install pinned preview qualification tools",
@@ -219,11 +229,21 @@ fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError>
             "${{ needs.source-preview-build.outputs.artifact_id }}",
             "source-preview",
         ),
-        steps::bash_step(
+        steps::bash_step_with_env(
             "Qualify exact source preview bytes",
-            &qualification_script(),
+            &qualification_script(pins),
+            vec![
+                (
+                    "SOURCES_CACHE_HIT",
+                    "${{ steps.sources-restore.outputs.cache-hit }}",
+                ),
+                (
+                    "SOURCES_CACHE_MATCHED_KEY",
+                    "${{ steps.sources-restore.outputs.cache-matched-key }}",
+                ),
+            ],
         ),
-    ];
+    ]);
     Ok(finish(
         "source-preview-qualify",
         fields(
@@ -237,9 +257,11 @@ fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError>
     ))
 }
 
-fn qualification_script() -> String {
+fn qualification_script(pins: &ProductReleasePins) -> String {
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest -f source-preview/{PAYLOAD}\ntest ! -L source-preview/{PAYLOAD}\nchmod 0500 source-preview/{PAYLOAD}\ntest \"$(source-preview/{PAYLOAD} --version)\" = 'velnor-actions {}'\nbash scripts/build-owned-archive-guard.sh\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(sha256sum \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/{PAYLOAD}\"",
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nCARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\"\nexport CARGO_HOME\ntest -d \"$CARGO_HOME\"\ntest ! -L \"$CARGO_HOME\"\ntest \"$(cd \"$CARGO_HOME\" && pwd -P)\" = \"$CARGO_HOME\"\nmkdir -p \"$RUNNER_TEMP/source-qualification-artifacts/logs\"\nexport VELNOR_RUST_VERSION='{}' VELNOR_PREFETCH_RUST_ONLY=1\nbash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces\nfor manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do\n  mise --no-config --no-env --no-hooks exec 'rust@{}' -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path \"$GITHUB_WORKSPACE/$manifest\" > /dev/null\ndone\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\ntest -f source-preview/{PAYLOAD}\ntest ! -L source-preview/{PAYLOAD}\nchmod 0500 source-preview/{PAYLOAD}\ntest \"$(source-preview/{PAYLOAD} --version)\" = 'velnor-actions {}'\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(sha256sum \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/{PAYLOAD}\"",
+        pins.rust_version,
+        pins.rust_version,
         assets::VERSION,
     )
 }
