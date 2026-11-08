@@ -16,9 +16,11 @@ pub(crate) struct FrozenCompletion {
     predecessors: PriorHistorySnapshot,
     completed: Option<JournalEvidence>,
     tools: crate::release::package_release_signer::MeasuredReleaseTools,
+    capacity: crate::crate_release_journal::CapacityReservation,
 }
 
 impl FrozenCompletion {
+    #[cfg(test)]
     pub(crate) fn prepare_unprivileged<
         J: JournalIo + JournalOperationRefs,
         G: GitHubAdmissionRead,
@@ -28,12 +30,34 @@ impl FrozenCompletion {
         tools: crate::release::package_release_signer::MeasuredReleaseTools,
         execution: &crate::UnprivilegedSourceExecution,
     ) -> Result<Self, OrchestratorError> {
+        let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+            input.journal_receipt,
+            input.admission,
+            input.intent,
+            input.request,
+            input.source,
+            input.git,
+        )?;
+        Self::prepare_unprivileged_with_capacity(input, tools, execution, capacity)
+    }
+
+    pub(crate) fn prepare_unprivileged_with_capacity<
+        J: JournalIo + JournalOperationRefs,
+        G: GitHubAdmissionRead,
+        R: CrateRegistryRead,
+    >(
+        input: &CrateReleaseObservation<'_, J, G, R>,
+        tools: crate::release::package_release_signer::MeasuredReleaseTools,
+        execution: &crate::UnprivilegedSourceExecution,
+        capacity: crate::crate_release_journal::CapacityReservation,
+    ) -> Result<Self, OrchestratorError> {
         Self::prepare(
             &CrateReleaseObservation {
                 source_execution: execution,
                 ..*input
             },
             tools,
+            capacity,
         )
     }
 
@@ -44,6 +68,7 @@ impl FrozenCompletion {
     >(
         input: &CrateReleaseObservation<'_, J, G, R>,
         tools: crate::release::package_release_signer::MeasuredReleaseTools,
+        capacity: crate::crate_release_journal::CapacityReservation,
     ) -> Result<Self, OrchestratorError> {
         let candidate = super::derive_reconciled_candidate(input)?;
         let deadline =
@@ -64,6 +89,7 @@ impl FrozenCompletion {
                     false,
                     input.git,
                 ))?;
+            capacity.verify_archive(&package.source.name, &package.source.version, &archive)?;
             if crate::release::crate_release_archive::crate_archive_inventory(
                 &archive,
                 &package.source.name,
@@ -98,6 +124,7 @@ impl FrozenCompletion {
             predecessors,
             completed,
             tools,
+            capacity,
         };
         frozen.revalidate_history(input.journal)?;
         crate::verify_journal_source(input.source, input.journal_receipt, input.git)?;
@@ -223,6 +250,7 @@ impl FrozenCompletion {
             packages: super::reconciled_completion_packages(&self.candidate)?,
             post_publication_file_hashes: self.tools.into_pins(),
         };
+        self.capacity.verify_completion(&completion)?;
         before_write()?;
         crate::crate_release_journal::record_frozen_completion(
             journal,

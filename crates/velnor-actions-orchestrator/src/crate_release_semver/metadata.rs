@@ -175,17 +175,8 @@ pub(crate) fn matches_revalidated_preflight(
 ) -> bool {
     prior.len() == fresh.len()
         && prior.iter().all(|(name, old)| {
-            fresh.get(name).is_some_and(|new| {
-                old == new
-                    || matches!(
-                        (old, new),
-                        (
-                            SemverEvidence::Deferred { .. },
-                            SemverEvidence::Checked { .. }
-                                | SemverEvidence::NoBaseline { .. }
-                                | SemverEvidence::MetadataOnly { .. }
-                        )
-                    )
-            })
+            fresh
+                .get(name)
+                .is_some_and(|new| old.matches_revalidated(new))
         })
 }

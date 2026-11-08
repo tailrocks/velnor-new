@@ -34,6 +34,8 @@ pub fn journal_source_inventory(
     let mut total_bytes = 0_u64;
     let mut files = Vec::with_capacity(entries.len());
     for (path, mode, object) in entries {
+        velnor_actions_mise::CheckDeadline::check_scope()
+            .map_err(|_| internal("crate_release_journal_inventory_timeout"))?;
         let (size, sha256, target) = crate::release::crate_release_inventory_read::read_inventory(
             &anchor, &path, &mode, &object,
         )?;
@@ -153,6 +155,8 @@ fn validate_source_links(root: &Path, git: &ReleaseGit) -> Result<(), Orchestrat
         .split(|byte| *byte == 0)
         .filter(|part| !part.is_empty())
     {
+        velnor_actions_mise::CheckDeadline::check_scope()
+            .map_err(|_| internal("crate_release_source_timeout"))?;
         let record = std::str::from_utf8(entry)
             .map_err(|_| internal("crate_release_source_path_unsupported"))?;
         let (header, path) = record
@@ -201,6 +205,8 @@ fn source_tree_entries(
         .split(|byte| *byte == 0)
         .filter(|part| !part.is_empty())
     {
+        velnor_actions_mise::CheckDeadline::check_scope()
+            .map_err(|_| internal("crate_release_source_timeout"))?;
         let record = std::str::from_utf8(entry)
             .map_err(|_| internal("crate_release_source_path_unsupported"))?;
         let (header, path) = record
@@ -265,6 +271,8 @@ fn validate_link_targets(
     links: Vec<String>,
 ) -> Result<(), OrchestratorError> {
     for link in links {
+        velnor_actions_mise::CheckDeadline::check_scope()
+            .map_err(|_| internal("crate_release_source_timeout"))?;
         let target = root
             .join(link)
             .canonicalize()

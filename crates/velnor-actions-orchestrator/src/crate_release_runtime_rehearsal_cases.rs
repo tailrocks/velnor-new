@@ -25,6 +25,12 @@ pub(super) fn rehearse_journal_start(root: &Path) -> Result<(), Box<dyn Error>> 
 }
 
 pub(super) fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Error>> {
+    if std::env::var_os("VELNOR_NATIVE_TAMPER_CARGO").is_some() {
+        let cargo = root.join("velnor/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/cargo");
+        let mut bytes = std::fs::read(&cargo)?;
+        *bytes.last_mut().ok_or("empty Cargo executable")? ^= 1;
+        std::fs::write(cargo, bytes)?;
+    }
     if std::env::var_os("VELNOR_NATIVE_POISON_CHECKER").is_some() {
         std::fs::remove_file(root.join("velnor-semver/cargo-semver-checks"))?;
     }

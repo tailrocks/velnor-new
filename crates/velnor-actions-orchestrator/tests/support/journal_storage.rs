@@ -34,3 +34,16 @@ pub(crate) fn seed_started_record<I: JournalIo>(
     io.create_ref(&identity.repository, &name, &sha)?;
     Ok(name)
 }
+
+pub(crate) fn seed_mutation_record<I: JournalIo>(
+    io: &I,
+    identity: &JournalIdentity,
+    receipt: &JournalReceipt,
+    mutation: &super::JournalMutation,
+) -> Result<(), crate::OrchestratorError> {
+    let bytes = super::fixture_mutation_record_bytes(receipt, mutation.clone())?;
+    let name = super::mutation_name(identity, mutation.sequence);
+    let sha = super::create_content_addressed_tag(io, identity, &name, &bytes)?;
+    io.create_ref(&identity.repository, &name, &sha)?;
+    Ok(())
+}

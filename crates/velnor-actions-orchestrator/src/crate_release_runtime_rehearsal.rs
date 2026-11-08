@@ -63,6 +63,9 @@ fn generated_source_require_rehearsal() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn generated_candidate_receipt_rejects_unprotected_environment() -> Result<(), Box<dyn Error>> {
+    if let Some(assets) = std::env::var_os("VELNOR_NATIVE_RUST_CACHE_ASSETS") {
+        return rust_cache::verify_real_archive_cache(Path::new(&assets));
+    }
     if let Some(temp) = std::env::var_os("VELNOR_NATIVE_ACQUIRE_GIT") {
         let root = std::path::PathBuf::from(temp);
         let git = crate::release::crate_release_git_bundle::acquire(
@@ -168,7 +171,10 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
         std::env::var("VELNOR_NATIVE_EXPECT_SOURCE")?
     );
     let multi = std::env::var_os("VELNOR_NATIVE_MULTI").is_some();
-    if multi {
+    let deferred = std::env::var_os("VELNOR_NATIVE_DEFERRED").is_some();
+    if deferred {
+        assert_deferred_receipt(&receipt)?;
+    } else if multi {
         assert_eq!(receipt.packages.len(), 58);
     } else {
         assert_eq!(receipt.packages.len(), 1);
@@ -208,6 +214,22 @@ fn rehearse_supplied_candidate() -> Result<(), Box<dyn Error>> {
             rehearse_journal_coordinate(&root)?;
         }
     }
+    Ok(())
+}
+
+fn assert_deferred_receipt(
+    receipt: &crate::crate_release_controller::CrateReleaseAdmissionReceipt,
+) -> Result<(), Box<dyn Error>> {
+    assert_eq!(receipt.packages.len(), 2);
+    let first = std::env::var("VELNOR_NATIVE_DEFERRED_FIRST")?;
+    let second = std::env::var("VELNOR_NATIVE_DEFERRED_SECOND")?;
+    assert_eq!(receipt.packages[0].source.name, first);
+    assert_eq!(receipt.packages[1].source.name, second);
+    assert!(matches!(receipt.semver_evidence.get(&first),
+        Some(crate::release::crate_release_semver::SemverEvidence::Checked { baseline, baseline_checksum, .. })
+        if baseline == "0.1.0" && baseline_checksum == &std::env::var("VELNOR_NATIVE_DEFERRED_FIRST_CHECKSUM")?));
+    assert!(matches!(receipt.semver_evidence.get(&second),
+        Some(crate::release::crate_release_semver::SemverEvidence::Deferred { predecessors }) if predecessors == &[first]));
     Ok(())
 }
 
@@ -256,3 +278,6 @@ mod support;
 use support::{
     committed_intent, generated_script, serve_admission, source_require_script, supplied_step,
 };
+
+#[path = "crate_release_runtime_rehearsal_cache.rs"]
+mod rust_cache;

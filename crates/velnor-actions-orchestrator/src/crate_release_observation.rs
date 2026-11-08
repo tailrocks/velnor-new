@@ -71,7 +71,9 @@ mod reconcile;
 mod recovery;
 #[path = "crate_release_observation_validation.rs"]
 mod validation;
+#[cfg(test)]
 pub(crate) use coordinate::coordinate_release;
+pub(crate) use coordinate::coordinate_release_with_capacity;
 use coordinate::verify_predecessor;
 use mutations::metadata_action_matches;
 pub(crate) use mutations::{
@@ -91,6 +93,51 @@ pub(super) use validation::{
 
 fn invalid() -> OrchestratorError {
     internal("crate_release_verified_observation_invalid")
+}
+
+fn verify_sequence_room<J, G, R>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    history: &[JournalMutation],
+) -> Result<(), OrchestratorError>
+where
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+{
+    let sequence = u32::try_from(history.len())
+        .map_err(|_| invalid())?
+        .checked_add(1)
+        .ok_or_else(invalid)?;
+    let step = CrateReleaseObservation { sequence, ..*input };
+    let pending = history
+        .last()
+        .filter(|item| matches!(item.phase, JournalMutationPhase::Intended));
+    let state = mutations::observe_input_state(&step)?;
+    verify_observed_packages_with_upload_intent(
+        &step,
+        &state,
+        pending.filter(|item| item.kind == JournalMutationKind::Upload),
+    )?;
+    crate::crate_release_journal::verify_sequence_capacity(&state, history.len(), pending.is_some())
+}
+
+fn verify_standalone_sequence_room<J, G, R>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+) -> Result<(), OrchestratorError>
+where
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead,
+    R: CrateRegistryRead,
+{
+    let (history, completed) = crate::crate_release_journal::inspect_recoverable_history(
+        input.journal,
+        input.identity,
+        input.journal_receipt,
+    )?;
+    if completed.is_some() {
+        return Err(invalid());
+    }
+    verify_sequence_room(input, &history)
 }
 
 impl<J, G, R> std::fmt::Debug for CrateReleaseObservation<'_, J, G, R> {

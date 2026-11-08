@@ -14,16 +14,17 @@ pub(crate) fn fixture_upload_config(
 #[path = "crate_release_observation.rs"]
 mod observation;
 pub(crate) use observation::{
-    CrateReleaseObservation, FrozenCompletion, ValidatedCompletion, coordinate_release,
-    derive_reconciled_candidate, observe_prior_recovery, record_verified_mutation,
-    repair_verified_metadata, verify_and_record_upload_intent,
+    CrateReleaseObservation, FrozenCompletion, ValidatedCompletion,
+    coordinate_release_with_capacity, derive_reconciled_candidate, observe_prior_recovery,
+    record_verified_mutation, repair_verified_metadata, verify_and_record_upload_intent,
 };
 #[cfg(test)]
-pub(crate) use observation::{UploadAttempt, reconciled_completion_packages};
+pub(crate) use observation::{UploadAttempt, coordinate_release, reconciled_completion_packages};
 pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 
 mod inventory;
 pub(crate) mod preflight;
+pub(crate) use inventory::{list_package_unprivileged, verify_capacity_rust};
 mod reconcile;
 mod state;
 use crate::crate_release_github::{
@@ -42,7 +43,6 @@ use crate::{
 pub(crate) use inventory::package_unprivileged;
 use inventory::require_reviewer_owner;
 use inventory::{wait_for_release, wait_for_tag, workspace_inventory};
-pub(crate) use reconcile::same_observed_state;
 pub use reconcile::{
     CrateReleaseCompletedPackage, reconcile_crate_release, validate_reconciliation_receipt,
     verify_crate_release_admission, wait_for_reconciliation_visibility,
@@ -211,99 +211,6 @@ pub trait CrateReleaseRepairWrite {
         source_sha: &str,
         version: &str,
     ) -> Result<(), OrchestratorError>;
-}
-
-pub fn repair_crate_release<
-    G: GitHubAdmissionRead + CrateReleaseRepairWrite,
-    R: CrateRegistryRead,
->(
-    receipt: &CrateReleaseAdmissionReceipt,
-    intent: &CrateReleaseIntent,
-    request: &GitHubAdmissionRequest,
-    github: &G,
-    registry: &R,
-    source_context: crate::CrateSource<'_>,
-) -> Result<(), OrchestratorError> {
-    let recovery = intent
-        .recovery
-        .as_ref()
-        .ok_or_else(|| internal("crate_release_repair_requires_recovery"))?;
-    if request.event != "workflow_dispatch"
-        || recovery.source_sha != request.source_sha
-        || receipt.packages.len() != 1
-        || receipt.packages[0].source.name != recovery.package
-        || receipt.packages[0].source.version != recovery.version
-    {
-        return Err(internal("crate_release_repair_scope"));
-    }
-    if receipt.schema != 1 || &receipt.intent != intent {
-        return Err(internal("crate_release_receipt_mismatch"));
-    }
-    authorize_github_candidate(request, &receipt.github, github)?;
-    let observe = || {
-        observe_admitted_crate_release(
-            intent,
-            request,
-            github,
-            registry,
-            source_context,
-            &receipt.github,
-        )
-    };
-    if !same_observed_state(&observe()?, receipt) {
-        return Err(internal("crate_release_repair_state_changed"));
-    }
-    authorize_github_candidate(request, &receipt.github, github)?;
-    let package = &receipt.packages[0];
-    match &package.action {
-        CrateReleaseAction::RepairTag { registry: expected } => {
-            if let Err(error) =
-                github.create_tag(&request.repository, &package.tag, &request.source_sha)
-            {
-                observe()?;
-                return Err(error);
-            }
-            let observed = observe()?;
-            authorize_github_candidate(request, &receipt.github, github)?;
-            if observed.github != receipt.github
-                || observed.packages.len() != 1
-                || observed.packages[0].source != package.source
-                || observed.packages[0].owners != package.owners
-                || observed.packages[0].tag != package.tag
-                || !matches!(&observed.packages[0].action, CrateReleaseAction::RepairRelease { registry } if registry == expected)
-            {
-                return Err(internal("crate_release_repair_state_changed"));
-            }
-        }
-        CrateReleaseAction::RepairRelease { .. } => {}
-        _ => return Err(internal("crate_release_repair_action_invalid")),
-    }
-    if let Err(error) = github.create_release(
-        &request.repository,
-        &package.tag,
-        &request.source_sha,
-        &package.source.version,
-    ) {
-        observe()?;
-        return Err(error);
-    }
-    let observed = observe()?;
-    authorize_github_candidate(request, &receipt.github, github)?;
-    let (CrateReleaseAction::RepairTag { registry: expected }
-    | CrateReleaseAction::RepairRelease { registry: expected }) = &package.action
-    else {
-        return Err(internal("crate_release_repair_action_invalid"));
-    };
-    if observed.github != receipt.github
-        || observed.packages.len() != 1
-        || observed.packages[0].source != package.source
-        || observed.packages[0].owners != package.owners
-        || observed.packages[0].tag != package.tag
-        || !matches!(&observed.packages[0].action, CrateReleaseAction::Reconciled { registry, .. } if registry == expected)
-    {
-        return Err(internal("crate_release_repair_state_changed"));
-    }
-    Ok(())
 }
 
 #[cfg(test)]

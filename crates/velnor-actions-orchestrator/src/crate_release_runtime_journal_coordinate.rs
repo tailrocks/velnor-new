@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crate_release_controller::{CrateReleaseObservation, coordinate_release, invoke_upload};
+use crate::crate_release_controller::{
+    CrateReleaseObservation, coordinate_release_with_capacity, invoke_upload,
+};
 use crate::crate_release_journal::{JournalIdentity, JournalStage, inspect_journal};
 use crate::crate_release_journal_adapter::JournalAdapter;
 
@@ -50,7 +52,15 @@ pub(super) fn prepare_coordinate_journal(
     };
     let runner_temp = runtime.runner_temp;
     let workflow_root = runtime.workflow_root;
-    coordinate_operations(runtime, &input)?;
+    let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        input.journal_receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
+    coordinate_operations(runtime, &input, &capacity)?;
     let reviewed_manifest =
         read_manifest_at_workflow(workflow_root, &runtime.request.workflow_sha, runtime.git)?;
     let mut completion = None;
@@ -67,10 +77,11 @@ pub(super) fn prepare_coordinate_journal(
                 &generator,
             )?;
             completion = Some(
-                crate::crate_release_controller::FrozenCompletion::prepare_unprivileged(
+                crate::crate_release_controller::FrozenCompletion::prepare_unprivileged_with_capacity(
                     &input,
                     tools,
                     runtime.upload,
+                    capacity,
                 )?,
             );
             Ok(())
@@ -89,10 +100,11 @@ fn coordinate_operations<
         NativeGitHubAdmissionRead,
         super::NativeCrateRegistryRead,
     >,
+    capacity: &crate::crate_release_journal::CapacityReservation,
 ) -> Result<(), OrchestratorError> {
     let runner_temp = runtime.runner_temp;
     let credential = upload_credentials(runtime.intent.authentication, required);
-    coordinate_release(
+    coordinate_release_with_capacity(
         input,
         |package| {
             credential
@@ -121,6 +133,7 @@ fn coordinate_operations<
             )
         },
         || thread::sleep(coordinator_wait_duration()),
+        capacity,
     )?;
     Ok(())
 }

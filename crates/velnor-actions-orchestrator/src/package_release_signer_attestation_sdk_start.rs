@@ -62,6 +62,15 @@ pub(crate) fn record_admitted_start<
     crate::crate_release_controller::verify_observed_packages(&observed, input.admission)?;
     crate::release::crate_release_semver::verify_observed_evidence(input.admission, &observed)?;
     let receipt = derive_start_receipt(input, &observed)?;
+    crate::crate_release_journal::verify_sequence_capacity(&observed, 0, false)?;
+    let _capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        &receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(600))
         .map_err(|_| internal("crate_release_history_deadline"))?
         .effective();

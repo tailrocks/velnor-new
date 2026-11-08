@@ -1,16 +1,48 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mutations::{
+    record_verified_mutation_with_capacity, repair_verified_metadata_with_capacity,
+    verify_and_record_upload_intent_with_capacity,
+};
 use super::{
     CrateRegistryRead, CrateReleaseAction, CrateReleaseAdmissionReceipt, CrateReleaseObservation,
     GitHubAdmissionRead, JournalIo, JournalMutationKind, JournalMutationPhase, OrchestratorError,
     ReconciledCandidate, RecoveryState, UploadAttempt, UploadPermit, derive_reconciled_candidate,
     invalid, metadata_action_matches, observe_admitted_crate_release, observe_prior_recovery,
-    record_verified_mutation, repair_verified_metadata, verify_and_record_upload_intent,
     verify_observed_packages_after_recorded_upload,
 };
 
+#[cfg(test)]
 pub(crate) fn coordinate_release<J, G, R>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    verify_semver: impl FnMut(
+        &str,
+    ) -> Result<
+        crate::release::crate_release_semver::VerifiedSemver,
+        OrchestratorError,
+    >,
+    upload: impl FnMut(UploadPermit) -> Result<UploadAttempt, OrchestratorError>,
+    wait: impl FnMut(),
+) -> Result<ReconciledCandidate, OrchestratorError>
+where
+    J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
+    G: GitHubAdmissionRead + super::super::CrateReleaseRepairWrite,
+    R: CrateRegistryRead,
+{
+    super::verify_binding(input)?;
+    let capacity = crate::crate_release_journal::CapacityReservation::prepare(
+        input.journal_receipt,
+        input.admission,
+        input.intent,
+        input.request,
+        input.source,
+        input.git,
+    )?;
+    coordinate_release_with_capacity(input, verify_semver, upload, wait, &capacity)
+}
+
+pub(crate) fn coordinate_release_with_capacity<J, G, R>(
     input: &CrateReleaseObservation<'_, J, G, R>,
     mut verify_semver: impl FnMut(
         &str,
@@ -20,12 +52,14 @@ pub(crate) fn coordinate_release<J, G, R>(
     >,
     mut upload: impl FnMut(UploadPermit) -> Result<UploadAttempt, OrchestratorError>,
     mut wait: impl FnMut(),
+    capacity: &crate::crate_release_journal::CapacityReservation,
 ) -> Result<ReconciledCandidate, OrchestratorError>
 where
     J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
     G: GitHubAdmissionRead + super::super::CrateReleaseRepairWrite,
     R: CrateRegistryRead,
 {
+    super::verify_binding(input)?;
     if input.sequence != 1 {
         return Err(invalid());
     }
@@ -38,6 +72,7 @@ where
     if completed.is_some() {
         return derive_reconciled_candidate(input);
     }
+    super::verify_sequence_room(input, &history)?;
     let mut sequence = u32::try_from(history.len())
         .map_err(|_| invalid())?
         .checked_add(1)
@@ -46,7 +81,10 @@ where
         .last()
         .is_some_and(|item| matches!(item.phase, JournalMutationPhase::Intended))
     {
-        record_verified_mutation(&CrateReleaseObservation { sequence, ..*input })?;
+        record_verified_mutation_with_capacity(
+            &CrateReleaseObservation { sequence, ..*input },
+            capacity,
+        )?;
         sequence = sequence.checked_add(1).ok_or_else(invalid)?;
         history = crate::crate_release_journal::inspect_current_history(
             input.journal,
@@ -65,6 +103,7 @@ where
             &mut verify_semver,
             &mut upload,
             &mut wait,
+            capacity,
         )?;
     }
     verify_predecessor(input)?;
@@ -83,6 +122,7 @@ pub(super) fn coordinate_package<J, G, R>(
     >,
     upload: &mut impl FnMut(UploadPermit) -> Result<UploadAttempt, OrchestratorError>,
     wait: &mut impl FnMut(),
+    capacity: &crate::crate_release_journal::CapacityReservation,
 ) -> Result<(), OrchestratorError>
 where
     J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
@@ -121,7 +161,8 @@ where
             sequence: *sequence,
             ..*input
         };
-        let permit = verify_and_record_upload_intent(&step, package, semver)?;
+        let permit =
+            verify_and_record_upload_intent_with_capacity(&step, package, semver, capacity)?;
         let _attempt = upload(permit)?;
         crate::crate_release_registry::wait_for_crate_version(
             input.registry,
@@ -131,13 +172,16 @@ where
             wait,
         )?;
         *sequence = sequence.checked_add(1).ok_or_else(invalid)?;
-        record_verified_mutation(&CrateReleaseObservation {
-            sequence: *sequence,
-            ..*input
-        })?;
+        record_verified_mutation_with_capacity(
+            &CrateReleaseObservation {
+                sequence: *sequence,
+                ..*input
+            },
+            capacity,
+        )?;
         *sequence = sequence.checked_add(1).ok_or_else(invalid)?;
     }
-    coordinate_metadata(input, planned, package, sequence)?;
+    coordinate_metadata(input, planned, package, sequence, capacity)?;
     ensure_package_reconciled(
         &CrateReleaseObservation {
             sequence: *sequence,
@@ -152,6 +196,7 @@ pub(super) fn coordinate_metadata<J, G, R>(
     planned: &super::super::CrateReleasePlannedPackage,
     package: &str,
     sequence: &mut u32,
+    capacity: &crate::crate_release_journal::CapacityReservation,
 ) -> Result<(), OrchestratorError>
 where
     J: JournalIo + crate::crate_release_journal::JournalOperationRefs,
@@ -184,13 +229,14 @@ where
             .ok_or_else(invalid)?;
         if metadata_action_matches(kind, &selected.action) {
             verify_predecessor(input)?;
-            repair_verified_metadata(
+            repair_verified_metadata_with_capacity(
                 &CrateReleaseObservation {
                     sequence: *sequence,
                     ..*input
                 },
                 package,
                 kind,
+                capacity,
             )?;
             *sequence = sequence.checked_add(2).ok_or_else(invalid)?;
         }

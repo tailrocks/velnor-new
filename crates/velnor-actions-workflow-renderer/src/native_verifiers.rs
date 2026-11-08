@@ -31,7 +31,7 @@ const OWNED_HOME_TREES: TreeCheck<'static> = TreeCheck::Pinned {
     pins: RUST_TREE_DIGESTS,
 };
 
-const HELPER_ENV: [&str; 18] = [
+const HELPER_ENV: [&str; 19] = [
     "PATH",
     "HOME",
     "RUNNER_TEMP",
@@ -39,6 +39,7 @@ const HELPER_ENV: [&str; 18] = [
     "MISE_RUSTUP_HOME",
     "CARGO_HOME",
     "VELNOR_TOOL_RUST",
+    "VELNOR_RUST_ARCHIVE_CACHE",
     "HTTPS_PROXY",
     "https_proxy",
     "HTTP_PROXY",
@@ -148,7 +149,7 @@ pub fn toolchain_script(
         format!("{COMPONENT_TARBALLS_AWK} || fail \"rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship\""),
         "test -s \"$d/tarballs\" || fail \"rust_installed_manifest_empty: $t lists no component\"".to_owned(),
         ": > \"$d/expected\"".to_owned(),
-        "while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then get \"$d/c.tar.xz\" \"$url\"; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; ev rm -rf \"$d/x\"; ev mkdir \"$d/x\"; ev tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; ev rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; ev mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; ev cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"".to_owned(),
+        "while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then if [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ] && [ -f \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" ]; then ev cp \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" \"$d/c.tar.xz\"; else get \"$d/c.tar.xz\" \"$url\"; fi; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; if [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ]; then ev cp \"$d/c.tar.xz\" \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\"; fi; ev rm -rf \"$d/x\"; ev mkdir \"$d/x\"; ev uname -s > \"$d/platform\"; platform=; IFS= read -r platform < \"$d/platform\"; if [ \"$platform\" = Linux ]; then ev xz -dc \"$d/c.tar.xz\" > \"$d/c.tar\"; ev tar -xf \"$d/c.tar\" -C \"$d/x\"; ev rm -f \"$d/c.tar\"; set -- \"$d/x\"/*; [ \"$#\" -eq 1 ] && [ -d \"$1\" ] || fail \"rust_component_archive_invalid: $comp\"; ev mv \"$1\" \"$d/unpacked\"; ev rmdir \"$d/x\"; ev mv \"$d/unpacked\" \"$d/x\"; else ev tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; fi; ev rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; ev mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; ev cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"".to_owned(),
         "(cd \"$t\" && ev find . -type f ! -path ./lib/rustlib/components ! \\( -path \"./lib/rustlib/manifest-*\" ! -path \"./lib/rustlib/manifest-*/*\" \\) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > \"$d/installed\"".to_owned(),
         "ev sort -k2 \"$d/expected\" > \"$d/expected.sorted\"".to_owned(),
         "ev sort -k2 \"$d/installed\" > \"$d/installed.sorted\"".to_owned(),

@@ -138,17 +138,6 @@ pub fn wait_for_reconciliation_visibility(
     Err(internal("crate_release_visibility_timeout"))
 }
 
-pub(crate) fn same_observed_state(
-    left: &CrateReleaseAdmissionReceipt,
-    right: &CrateReleaseAdmissionReceipt,
-) -> bool {
-    let mut left = left.clone();
-    let mut right = right.clone();
-    left.semver_evidence.clear();
-    right.semver_evidence.clear();
-    left == right
-}
-
 pub fn verify_crate_release_admission<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     receipt: &CrateReleaseAdmissionReceipt,
     intent: &CrateReleaseIntent,
