@@ -284,6 +284,7 @@ pub(crate) fn verify_capacity_rust(
     if !output.success {
         #[cfg(test)]
         verifier_diagnostics::report_verifier_failure(
+            &output.stdout,
             &output.stderr,
             output.code,
             output.signal,
