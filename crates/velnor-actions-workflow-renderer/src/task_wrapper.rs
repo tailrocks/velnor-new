@@ -1,6 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::S256;
@@ -13,7 +12,6 @@ use crate::{
     RenderError, action_ref::DECLARED_TASK_ACTION_PREFIX, composite, marker, steps,
     tree::RenderedFile, yaml::Yaml,
 };
-
 const ACTION_NAME_PREFIX: &str = "declared-task-";
 const EXECUTION_DIGEST_INPUT: &str = "digest";
 const RUNTIME_RUNNER_TEMP_ENV: &str = "VELNOR_RUNTIME_RUNNER_TEMP";
@@ -58,6 +56,7 @@ struct CollectedTaskExecutions<'a> {
     eligible: BTreeMap<(String, usize), TaskExecutionRef<'a>>,
     shapes: BTreeSet<Shape>,
     manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
+    producer_tasks: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 pub(crate) fn factor_obligation_steps(
@@ -86,6 +85,7 @@ pub(crate) fn factor_obligation_steps(
     let files = render_task_files(
         &shape_ids,
         collected.manifest_tasks,
+        collected.producer_tasks,
         &ctx.generator_version,
         !preview,
     )?;
@@ -100,7 +100,13 @@ pub fn declared_task_wrapper_digest(
         helper_version: helper_version.to_owned(),
         preview_loader: None,
     }]));
-    let files = render_task_files(&shape_ids, BTreeMap::new(), generator_version, true)?;
+    let files = render_task_files(
+        &shape_ids,
+        BTreeMap::new(),
+        BTreeMap::new(),
+        generator_version,
+        true,
+    )?;
     let bytes: String = files.into_iter().map(|file| file.bytes).collect();
     Ok(S256::of(bytes.as_bytes()))
 }
@@ -133,12 +139,19 @@ fn collect_task_executions<'a>(
     let mut eligible = BTreeMap::<(String, usize), TaskExecutionRef<'_>>::new();
     let mut shapes = BTreeSet::new();
     let mut manifest_tasks = BTreeMap::<String, TaskExecutionManifestEntryV1>::new();
+    let mut producer_tasks = BTreeMap::<String, BTreeMap<String, String>>::new();
     for (job_id, job) in jobs {
         for (step_index, step) in job.steps.iter().enumerate() {
             let Some(prepared) = prepare_task_execution(job_id, job, step_index, step, context)?
             else {
                 continue;
             };
+            crate::task_producer_manifest::record(
+                &mut producer_tasks,
+                job_id,
+                job,
+                &prepared.record,
+            )?;
             let paired = context
                 .lane_plan
                 .and_then(|plan| plan.route_for_output(job_id))
@@ -173,6 +186,7 @@ fn collect_task_executions<'a>(
         eligible,
         shapes,
         manifest_tasks,
+        producer_tasks,
     })
 }
 
@@ -346,6 +360,7 @@ fn replace_task_steps(
 fn render_task_files(
     shape_ids: &BTreeMap<Shape, usize>,
     manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
+    producer_tasks: BTreeMap<String, BTreeMap<String, String>>,
     generator_version: &str,
     emit_actions: bool,
 ) -> Result<Vec<RenderedFile>, RenderError> {
@@ -363,6 +378,14 @@ fn render_task_files(
         };
         let bytes = manifest.marked_json().map_err(RenderError::Contract)?;
         steps::scan_for_private_subcommands(&bytes)?;
+        if let Some(file) = crate::task_producer_manifest::render(
+            &manifest,
+            &bytes,
+            producer_tasks,
+            generator_version,
+        )? {
+            files.push(file);
+        }
         files.push(RenderedFile {
             path: TASK_EXECUTION_MANIFEST_PATH.to_owned(),
             bytes,
@@ -370,7 +393,6 @@ fn render_task_files(
     }
     Ok(files)
 }
-
 struct TaskExecutionRef<'a> {
     execution_digest: String,
     helper_version: &'a String,

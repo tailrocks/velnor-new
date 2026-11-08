@@ -101,6 +101,15 @@ never restored. A commit SHA alone MUST NOT be a cache identity.
 The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
 compatibility fields under the same invariants.
 
+The push plan keeps state producer tasks under their existing crate obligations.
+The generated
+`.github/velnor/producer-executions-v1.json` records those job and task bindings
+and the digest of the marked task execution manifest. The resolver and report
+writer read both files from the plan's commit, require `GITHUB_SHA` to match the
+plan head, and reject a missing or mismatched binding. Producer reports use
+separate temporary directories for each pass and never enter the crate report
+artifacts.
+
 Each path has one owner:
 
 | Data | Owner | Rule |

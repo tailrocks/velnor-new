@@ -20,6 +20,7 @@
 - 55b5ce477a286611dc6c75a01ccc008eb029c62a31861afb777d875ce1a4412f  ./.github/dco.yml
 - 79a54a428498bff12840f7e88ecaa88ba3003fd594319246e97ec8a6d2f2335c  ./.github/jactionlint.yaml
 - 289ca5d4e368c416e2cd308a1df05b949cd3690b2db0cc608e02579498ae68e8  ./.github/scripts/velnor-tools-cache-identity.sh
+- 66aac0404341fc8cbe8342d5a6f346be9616d0ec73f4a3ca826153d0695d357e  ./.github/velnor/producer-executions-v1.json
 - 57a2b4622a42b25504554eea84af9af7be8653419df7c86d271ec0a3800c2337  ./.github/velnor/task-execution-manifest-v1.json
 - 32406a8befb4d8ffa8644c148de4510ab4398d4306bcbb4c7a4198f48423a4ba  ./.github/workflows/cache-prune.yml
 - 818354180689c4c004d55e0ef890a45be06c23bac2a7ed293cd8bca849782049  ./.github/workflows/ci.yml
@@ -32,5 +33,5 @@
 - 4450f3deaba53dbc4cfe11104bd81455a9bf97ded79e1a38ede4faca38fd03b3  ./.github/workflows/product-release.yml
 - 1998f8663ed773a5b292b095066d7d439d9b0123b7aec1ddd6d9ce51d51c60f0  ./.github/workflows/qualification.yml
 - 48609e6deca1c9d3c881d720d85caaa354dd538a83f2428ff85d3c6dd92ba026  ./.github/workflows/source-preview-publication.yml
-- d69337e8f2e318922f9a2af54ffe022614c00d7c484c6dfb483aae3f074c19f8  ./.github/workflows/source-qualification.yml
+- f6a2f5a9d2ecc9253485489b587d218f8e846a85260dfbcda9637dff6c2b8de8  ./.github/workflows/source-qualification.yml
 - 17217fe647ab3f268e2b719d0fe398f1242c0afc56a939011a9bd4c40bf228fa  ./.github/workflows/state-seal.yml
