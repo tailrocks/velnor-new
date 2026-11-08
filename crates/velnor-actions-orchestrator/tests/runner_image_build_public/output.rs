@@ -7,6 +7,22 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+pub(super) fn mutate_readonly_context(path: &Path) -> Result<(), Box<dyn Error>> {
+    let original = fs::read(path)?;
+    let mut changed = original.clone();
+    *changed.first_mut().ok_or("empty context")? ^= 1;
+    let mode = fs::metadata(path)?.permissions().mode() & 0o7777;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode | 0o200))?;
+    let write = fs::write(path, &changed);
+    let restore = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+    write?;
+    restore?;
+    if fs::read(path)? != changed {
+        return Err("context mutation did not persist".into());
+    }
+    Ok(())
+}
+
 struct CountedBuildx {
     inner: ExternalBuildx,
     calls: AtomicUsize,
@@ -185,6 +201,32 @@ fn concurrent_builds_publish_exactly_one_complete_family() -> Result<(), Box<dyn
                     .file_name()
                     .to_string_lossy()
                     .starts_with(".velnor-runner-author-")))
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn changing_held_context_during_build_prevents_family_output() -> Result<(), Box<dyn Error>> {
+    frozen_clock(|| {
+        let fixture = Fixture::new()?;
+        let mut execution = fixture.execution();
+        let mutated = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        execution.mutate_context = Some(std::sync::Arc::clone(&mutated));
+        let result = build_runner_images_with_execution(&fixture.request()?, &execution);
+        assert!(mutated.load(std::sync::atomic::Ordering::Acquire));
+        let error = match result {
+            Ok(()) => return Err("changed held context was accepted".into()),
+            Err(error) => error,
+        };
+        assert!(
+            error.to_string().contains("runner_context_changed"),
+            "{error}"
+        );
+        assert!(!fixture.output.exists());
+        assert_eq!(
+            fs::read(fixture.contexts.join("resource_probe"))?,
+            b"fixture resource_probe"
         );
         Ok(())
     })

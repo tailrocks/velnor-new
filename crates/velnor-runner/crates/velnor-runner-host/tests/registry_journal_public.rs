@@ -149,6 +149,47 @@ async fn migrates_genuine_v41_journal_and_preserves_completed_intent() -> TestRe
     Ok(())
 }
 
+async fn assert_registry_rows(conn: &turso::Connection, case: &str) -> TestResult {
+    let mut rows = conn
+        .query("SELECT count(*) FROM image_import_registry", ())
+        .await?;
+    assert_eq!(rows.next().await?.ok_or("missing count")?.get::<i64>(0)?, 2);
+    drop(rows);
+    let mut rows = conn
+        .query(
+            "SELECT engine_id, runtime_id, receipt FROM image_import_registry ORDER BY id",
+            (),
+        )
+        .await?;
+    let first = rows.next().await?.ok_or("missing prepared row")?;
+    assert_eq!(
+        first.get::<String>(0)?,
+        if case == "engine" {
+            "bad engine"
+        } else {
+            "engine-a"
+        }
+    );
+    let second = rows.next().await?.ok_or("missing completed row")?;
+    let expected_runtime = format!(
+        "sha256:{}",
+        (if case == "runtime" { "f" } else { "e" }).repeat(64)
+    );
+    assert_eq!(second.get::<String>(1)?, expected_runtime);
+    let expected_receipt = if case == "receipt" {
+        "{}".to_owned()
+    } else {
+        format!(
+            "{{\"store\":\"classic\",\"runtime_id\":\"sha256:{}\",\"manifest_size\":1}}",
+            "e".repeat(64)
+        )
+    };
+    assert_eq!(second.get::<String>(2)?, expected_receipt);
+    assert!(rows.next().await?.is_none());
+    drop(rows);
+    Ok(())
+}
+
 #[tokio::test]
 async fn journal_reopens_valid_registry_entries_and_rejects_corrupt_rows() -> TestResult {
     for case in ["valid", "engine", "receipt", "runtime", "conflict"] {
@@ -214,43 +255,7 @@ async fn journal_reopens_valid_registry_entries_and_rejects_corrupt_rows() -> Te
             );
             drop(rows);
         }
-        let mut rows = conn
-            .query("SELECT count(*) FROM image_import_registry", ())
-            .await?;
-        assert_eq!(rows.next().await?.ok_or("missing count")?.get::<i64>(0)?, 2);
-        drop(rows);
-        let mut rows = conn
-            .query(
-                "SELECT engine_id, runtime_id, receipt FROM image_import_registry ORDER BY id",
-                (),
-            )
-            .await?;
-        let first = rows.next().await?.ok_or("missing prepared row")?;
-        assert_eq!(
-            first.get::<String>(0)?,
-            if case == "engine" {
-                "bad engine"
-            } else {
-                "engine-a"
-            }
-        );
-        let second = rows.next().await?.ok_or("missing completed row")?;
-        let expected_runtime = format!(
-            "sha256:{}",
-            (if case == "runtime" { "f" } else { "e" }).repeat(64)
-        );
-        assert_eq!(second.get::<String>(1)?, expected_runtime);
-        let expected_receipt = if case == "receipt" {
-            "{}".to_owned()
-        } else {
-            format!(
-                "{{\"store\":\"classic\",\"runtime_id\":\"sha256:{}\",\"manifest_size\":1}}",
-                "e".repeat(64)
-            )
-        };
-        assert_eq!(second.get::<String>(2)?, expected_receipt);
-        assert!(rows.next().await?.is_none());
-        drop(rows);
+        assert_registry_rows(&conn, case).await?;
         drop(conn);
         let reopened = Journal::open(&path).await;
         assert_eq!(reopened.is_ok(), case == "valid", "{case}");

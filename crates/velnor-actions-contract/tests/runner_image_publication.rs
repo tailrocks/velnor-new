@@ -49,14 +49,15 @@ fn valid_record(image: &str) -> Result<Value, Box<dyn Error>> {
 }
 
 #[test]
-fn source_inventory_rejects_duplicate_and_control_paths() {
+fn source_inventory_rejects_duplicate_and_control_paths() -> Result<(), Box<dyn Error>> {
     assert_eq!(
-        parse_runner_publication_source_inputs("a\nb\n").unwrap(),
+        parse_runner_publication_source_inputs("a\nb\n")?,
         ["a", "b"]
     );
     for invalid in ["a\na\n", "a\0b\n", "a\rb\n", "a/../b\n"] {
         assert!(parse_runner_publication_source_inputs(invalid).is_err());
     }
+    Ok(())
 }
 
 fn assert_rejected(record: &Value, case: &str) -> Result<(), Box<dyn Error>> {

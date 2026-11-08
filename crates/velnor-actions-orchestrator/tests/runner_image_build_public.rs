@@ -26,7 +26,7 @@ mod source;
 
 struct ExternalBuildx {
     plugin: PathBuf,
-    mutate_context: bool,
+    mutate_context: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 impl RunnerImageBuildExecution for ExternalBuildx {
     fn run(&self, command: &IsolatedCommand, _: CheckDeadline) -> Result<ProcessOutput, MiseError> {
@@ -88,12 +88,14 @@ impl ExternalBuildx {
                     .flatten()
             })
             .unwrap_or("");
-        if self.mutate_context {
-            let root = command.cwd().ok_or("missing build root")?;
-            fs::write(
-                root.join("target/velnor-runner-family/resource_probe/resource-probe"),
-                b"changed during build",
+        if let Some(witness) = &self.mutate_context {
+            output::mutate_readonly_context(
+                &command
+                    .cwd()
+                    .ok_or("missing build root")?
+                    .join("target/velnor-runner-family/resource_probe/resource-probe"),
             )?;
+            witness.store(true, std::sync::atomic::Ordering::Release);
         }
         let root = command.cwd().ok_or("missing build root")?;
         let revision = git(root, &["rev-parse", "HEAD"])?;
@@ -207,7 +209,7 @@ impl Fixture {
     fn execution(&self) -> ExternalBuildx {
         ExternalBuildx {
             plugin: self.plugin.clone(),
-            mutate_context: false,
+            mutate_context: None,
         }
     }
 }
@@ -305,7 +307,7 @@ fn publication_build_requires_main_push_and_writes_three_bound_records()
             let sha = std::env::var("GITHUB_SHA")?;
             let runner_temp = root.join("runner");
             let execution = ExternalBuildx {
-                mutate_context: false,
+                mutate_context: None,
                 plugin: runner_temp
                     .join(".velnor-job-image-candidate/docker-config/cli-plugins/docker-buildx"),
             };
@@ -361,25 +363,6 @@ fn publication_build_requires_main_push_and_writes_three_bound_records()
         );
         assert_eq!(fs::read_dir(&fixture.output)?.count(), 13);
         records::assert_publication_records(&fixture)?;
-        Ok(())
-    })
-}
-
-#[test]
-fn changing_held_context_during_build_prevents_family_output() -> Result<(), Box<dyn Error>> {
-    frozen_clock(|| {
-        let fixture = Fixture::new()?;
-        let mut execution = fixture.execution();
-        execution.mutate_context = true;
-        assert!(
-            build_runner_images_with_execution(&fixture.request()?, &execution).is_err(),
-            "changed held context was accepted"
-        );
-        assert!(!fixture.output.exists());
-        assert_eq!(
-            fs::read(fixture.contexts.join("resource_probe"))?,
-            b"fixture resource_probe"
-        );
         Ok(())
     })
 }

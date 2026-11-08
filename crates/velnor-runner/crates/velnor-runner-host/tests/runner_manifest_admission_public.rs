@@ -20,9 +20,15 @@ const LOCK: &str = "runner_version = \"2.338.0\"\ndocker_version = \"29.9.1\"\nb
 type TestResult = Result<(), Box<dyn Error>>;
 
 fn digest(bytes: &[u8]) -> String {
+    let alphabet = b"0123456789abcdef";
     Sha256::digest(bytes)
         .iter()
-        .map(|byte| format!("{byte:02x}"))
+        .flat_map(|byte| {
+            [
+                char::from(alphabet[usize::from(byte >> 4)]),
+                char::from(alphabet[usize::from(byte & 15)]),
+            ]
+        })
         .collect()
 }
 
@@ -57,12 +63,14 @@ fn manifest(lock: &str) -> Value {
 
 fn reject(bytes: &[u8], lock: &str, name: &str) {
     let original = bytes.to_vec();
-    let error = runner_manifest::parse_for_source(bytes, SOURCE, lock.as_bytes())
-        .expect_err("accepted invalid manifest");
-    assert!(
-        matches!(error, error::HostError::Identity),
-        "{name}: {error:?}"
-    );
+    let result = runner_manifest::parse_for_source(bytes, SOURCE, lock.as_bytes());
+    assert!(result.is_err(), "accepted invalid manifest: {name}");
+    if let Err(error) = result {
+        assert!(
+            matches!(error, error::HostError::Identity),
+            "{name}: {error:?}"
+        );
+    }
     assert_eq!(bytes, original, "mutated {name}");
 }
 
@@ -120,6 +128,11 @@ fn rejects_invalid_manifest_bindings_and_grammar() -> TestResult {
         *value.pointer_mut(pointer).ok_or(name)? = replacement;
         reject(&serde_json::to_vec(&value)?, LOCK, name);
     }
+    reject_missing_and_malformed_fields(&original)?;
+    Ok(())
+}
+
+fn reject_missing_and_malformed_fields(original: &Value) -> TestResult {
     let mut missing = original.clone();
     missing["images"]
         .as_object_mut()

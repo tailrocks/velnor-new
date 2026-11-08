@@ -5,7 +5,8 @@ use super::{admit_header, compare_digest, finish, read_blob};
 use std::io::Cursor;
 
 #[test]
-fn git_batch_frames_preserve_binary_and_reject_malformed_content() {
+fn git_batch_frames_preserve_binary_and_reject_malformed_content()
+-> Result<(), Box<dyn std::error::Error>> {
     let oid = "a".repeat(40);
     let frame = |header: String, body: &[u8]| {
         let mut bytes = header.into_bytes();
@@ -13,7 +14,7 @@ fn git_batch_frames_preserve_binary_and_reject_malformed_content() {
         Cursor::new(bytes)
     };
     let mut valid = frame(format!("{oid} blob 4\n"), b"\0\n\xffx\n");
-    assert_eq!(read_blob(&mut valid).unwrap().1, b"\0\n\xffx");
+    assert_eq!(read_blob(&mut valid)?.1, b"\0\n\xffx");
     assert!(finish(&mut valid).is_ok());
     for (header, body) in [
         (format!("{}\n", "x".repeat(128)), b"".as_slice()),
@@ -28,18 +29,21 @@ fn git_batch_frames_preserve_binary_and_reject_malformed_content() {
     oversized.push(b'\n');
     assert!(read_blob(&mut frame(format!("{oid} blob 8388609\n"), &oversized)).is_err());
     let mut trailing = frame(format!("{oid} blob 1\n"), b"x\ny");
-    assert_eq!(read_blob(&mut trailing).unwrap().1, b"x");
+    assert_eq!(read_blob(&mut trailing)?.1, b"x");
     assert!(finish(&mut trailing).is_err());
+    Ok(())
 }
 
 #[test]
-fn compares_committed_binary_bytes_before_recording_digest() {
+fn compares_committed_binary_bytes_before_recording_digest()
+-> Result<(), Box<dyn std::error::Error>> {
     let committed = b"a\0\n\xff";
     assert_eq!(
-        compare_digest(committed, committed).unwrap(),
+        compare_digest(committed, committed)?,
         "3638cc321f1fac9e8c8be937620f2c1e8250ce24e6b3f0f7a4302ea5a8faddc8"
     );
     assert!(compare_digest(committed, b"a\0\n\xfe").is_err());
+    Ok(())
 }
 
 #[test]

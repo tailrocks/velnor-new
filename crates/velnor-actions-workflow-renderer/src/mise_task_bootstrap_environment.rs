@@ -139,3 +139,27 @@ pub(super) fn evidence_statements() -> [String; 3] {
         "export VELNOR_GITHUB_EVIDENCE_ROOT=\"$evidence_root\"".to_owned(),
     ]
 }
+
+pub(super) fn task_invocation(policy: &MiseTaskBootstrapPolicy) -> String {
+    let locked = if policy.mise_lock_sha256.is_some() {
+        "--locked "
+    } else {
+        ""
+    };
+    if policy.runner_family_script {
+        let tools = policy
+            .selected_tools
+            .iter()
+            .map(|tool| format!("{}@{}", tool.key, tool.version))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "task_status=0; mise --no-env {locked}--no-hooks exec {tools} -- bash scripts/check-runner-image-candidate.sh || task_status=$?"
+        )
+    } else {
+        format!(
+            "task_status=0; mise --no-env {locked}--no-hooks run --skip-tools {} || task_status=$?",
+            policy.mise_task
+        )
+    }
+}

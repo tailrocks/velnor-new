@@ -208,7 +208,7 @@ fn read_blob(reader: &mut impl BufRead) -> Result<((String, usize), Vec<u8>), Or
     reader
         .read_exact(&mut separator)
         .map_err(|_| internal("runner_image_source_file"))?;
-    if separator != [b'\n'] {
+    if separator != *b"\n" {
         return Err(internal("runner_image_source_file"));
     }
     Ok((header, committed))

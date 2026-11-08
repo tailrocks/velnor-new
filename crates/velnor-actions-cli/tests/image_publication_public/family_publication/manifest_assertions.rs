@@ -42,7 +42,11 @@ pub(super) fn assert_manifest_matches_fixture(
         ),
     ] {
         assert_image_entry(
-            fixture, &manifest, &state, role, repository, record, envelope, context, &mut lock,
+            fixture,
+            &manifest,
+            &state,
+            (role, repository, record, envelope, context),
+            &mut lock,
         )?;
     }
     assert_manifest_lock(&manifest, &lock.ok_or("family publication lock")?)
@@ -84,13 +88,10 @@ fn assert_image_entry(
     fixture: &FamilyFixture,
     manifest: &Value,
     state: &Value,
-    role: &str,
-    repository: &str,
-    record_name: &str,
-    envelope_name: &str,
-    context_path: &str,
+    entry: (&str, &str, &str, &str, &str),
     family_lock: &mut Option<Value>,
 ) -> Result<(), Box<dyn Error>> {
+    let (role, repository, record_name, envelope_name, context_path) = entry;
     let record: Value = serde_json::from_slice(&fs::read(fixture.assets.join(record_name))?)?;
     let candidate_lock = record.get("lock").ok_or("publication lock")?;
     if let Some(expected) = family_lock {

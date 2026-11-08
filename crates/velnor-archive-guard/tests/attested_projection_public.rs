@@ -42,7 +42,9 @@ fn projection_reports_deadline_after_output_begins() -> Result<(), Box<dyn std::
         move || {
             if std::fs::read(&watched).is_ok_and(|bytes| {
                 bytes
-                    .chunks_exact(512)
+                    .as_chunks::<512>()
+                    .0
+                    .iter()
                     .any(|block| block.starts_with(b"blobs/sha256/"))
             }) {
                 observed.set(true);
