@@ -50,7 +50,7 @@ pub(crate) fn verify_release_package_with_capacity<G: GitHubAdmissionRead, R: Cr
         .ok_or_else(|| internal("crate_release_package_not_selected"))?;
     if observed.packages[..index]
         .iter()
-        .any(|p| !matches!(p.action, CrateReleaseAction::Reconciled { .. }))
+        .any(|p| !p.action.is_reconciled())
         || observed.packages[index].action != CrateReleaseAction::Publish
     {
         return Err(internal("crate_release_package_not_ready"));

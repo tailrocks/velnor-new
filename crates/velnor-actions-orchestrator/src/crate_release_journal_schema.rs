@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::JournalIdentity;
+use super::{JournalIdentity, valid_sha};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -51,6 +51,8 @@ pub struct JournalPackage {
     pub version: String,
     pub manifest: String,
     pub tag: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_target: Option<String>,
     pub owners: JournalOwnership,
 }
 
@@ -223,6 +225,7 @@ fn valid_package(package: &JournalPackage) -> bool {
         && valid_path(&package.manifest)
         && package.tag == format!("{}-v{}", package.name, package.version)
         && valid_tag(&package.tag)
+        && package.tag_target.as_deref().is_none_or(valid_sha)
         && match &package.owners {
             JournalOwnership::NewCrate => true,
             JournalOwnership::Existing { owners } => valid_owners(owners),
@@ -290,7 +293,11 @@ fn valid_result(
             JournalOwnership::Existing { owners } => owners == &package.owners,
         }
         && package.registry_checksum == package.downloaded_checksum
-        && package.tag_target == identity.source_sha
+        && package.tag_target
+            == planned
+                .tag_target
+                .as_deref()
+                .unwrap_or(&identity.source_sha)
         && package.release_id > 0
         && [planned.tag.clone(), percent_encode(&planned.tag)]
             .iter()

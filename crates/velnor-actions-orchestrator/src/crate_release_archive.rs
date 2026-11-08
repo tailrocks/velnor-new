@@ -355,3 +355,7 @@ pub(crate) fn crate_archive_inventory(
         })
         .collect())
 }
+
+#[path = "crate_release_archive_historical.rs"]
+mod historical;
+pub(crate) use historical::verify_historical_archive_content;

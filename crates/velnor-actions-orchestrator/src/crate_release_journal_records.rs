@@ -128,7 +128,7 @@ fn record_journal_guarded<I: JournalIo>(
         ensure_no_pending_mutation(io, identity, receipt)?;
     }
     let record = JournalRecord {
-        schema: 1,
+        schema: super::receipt_schema(receipt).ok_or_else(invalid)?,
         identity: identity.clone(),
         stage,
         receipt: receipt.clone(),
@@ -259,7 +259,7 @@ pub(super) fn read_record<I: JournalIo>(
         velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, MAX_RECORD_BYTES)
             .map_err(|_| invalid())?;
     let record: JournalRecord = serde_json::from_value(value).map_err(|_| invalid())?;
-    if record.schema != 1
+    if Some(record.schema) != super::receipt_schema(&record.receipt)
         || record.identity != *identity
         || record.stage != stage
         || !valid_receipt(&record.receipt, identity)

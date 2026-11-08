@@ -177,6 +177,26 @@ pub(super) fn admitted_start_derives_receipt_and_rechecks_authority()
         workflow_root: root,
         generator: &generator,
     };
+    let mut forged = admission.clone();
+    forged.packages[0].action = crate::crate_release_controller::CrateReleaseAction::Historical {
+        source_sha: "f".repeat(40),
+        registry: crate::crate_release_registry::CrateRegistryReconciliation {
+            checksum: "a".repeat(64),
+            downloaded_checksum: "a".repeat(64),
+            owners: Vec::new(),
+            features: std::collections::BTreeMap::new(),
+        },
+        release: crate::crate_release_github::GitHubReleaseEvidence {
+            id: 1,
+            url: "https://github.com/example/forged".into(),
+        },
+    };
+    let forged_input = AdmittedStart {
+        admission: &forged,
+        ..input
+    };
+    assert!(record_admitted_start(&forged_input).is_err());
+    assert!(journal.refs.borrow().is_empty());
     github.approved.set(false);
     assert!(record_admitted_start(&input).is_err());
     assert!(journal.refs.borrow().is_empty());

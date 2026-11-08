@@ -27,6 +27,8 @@ pub(crate) use observation::{VerifiedMutation, verify_observed_packages};
 mod inventory;
 pub(crate) mod preflight;
 pub(crate) use inventory::{list_package_unprivileged, verify_capacity_rust};
+#[path = "crate_release_controller/package_source.rs"]
+mod package_source;
 mod reconcile;
 mod state;
 use crate::crate_release_github::{
@@ -50,6 +52,7 @@ pub use reconcile::{
     verify_crate_release_admission, wait_for_reconciliation_visibility,
 };
 use serde::{Deserialize, Serialize};
+pub(crate) use state::HistoricalGitHubEvidence;
 pub(crate) use state::reprepare_crate_release;
 use state::{observe_admitted_crate_release, observe_crate_release, observe_package_state};
 use std::path::Path;
@@ -78,6 +81,17 @@ pub enum CrateReleaseAction {
         registry: CrateRegistryReconciliation,
         release: crate::crate_release_github::GitHubReleaseEvidence,
     },
+    Historical {
+        registry: CrateRegistryReconciliation,
+        release: crate::crate_release_github::GitHubReleaseEvidence,
+        source_sha: String,
+    },
+}
+
+impl CrateReleaseAction {
+    pub(crate) fn is_reconciled(&self) -> bool {
+        matches!(self, Self::Reconciled { .. } | Self::Historical { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

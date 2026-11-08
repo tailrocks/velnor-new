@@ -142,7 +142,7 @@ fn record_admitted_upload_intent_with_capacity<
         .ok_or_else(invalid)?;
     if state.packages[..index]
         .iter()
-        .any(|p| !matches!(p.action, CrateReleaseAction::Reconciled { .. }))
+        .any(|p| !p.action.is_reconciled())
     {
         return Err(invalid());
     }
@@ -246,7 +246,7 @@ pub(super) fn repair_verified_metadata_with_capacity<
         .ok_or_else(invalid)?;
     if state.packages[..index]
         .iter()
-        .any(|item| !matches!(item.action, CrateReleaseAction::Reconciled { .. }))
+        .any(|item| !item.action.is_reconciled())
     {
         return Err(invalid());
     }

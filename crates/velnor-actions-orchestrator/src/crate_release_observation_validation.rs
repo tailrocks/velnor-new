@@ -74,6 +74,14 @@ pub(super) fn verify_bound_packages(
             || recorded.version != admitted.source.version
             || recorded.manifest != admitted.source.manifest
             || recorded.tag != admitted.tag
+            || recorded
+                .tag_target
+                .as_deref()
+                .unwrap_or(&receipt.identity.source_sha)
+                != match &admitted.action {
+                    CrateReleaseAction::Historical { source_sha, .. } => source_sha.as_str(),
+                    _ => admission.github.request.source_sha.as_str(),
+                }
         {
             return Err(invalid());
         }
@@ -176,7 +184,10 @@ pub(super) fn verify_observed_packages_with_history<
         return Err(invalid());
     }
     for (now, old) in current.packages.iter().zip(&input.admission.packages) {
-        if now.source != old.source || now.tag != old.tag {
+        if now.source != old.source
+            || now.tag != old.tag
+            || !historical_actions_match(&now.action, &old.action)
+        {
             return Err(invalid());
         }
         if now.owners == old.owners {
@@ -204,7 +215,9 @@ pub(super) fn verify_creation_owner_transition(
         CrateReleaseAction::RepairTag { registry }
         | CrateReleaseAction::RepairRelease { registry }
         | CrateReleaseAction::Reconciled { registry, .. } => registry,
-        CrateReleaseAction::Publish => return Err(invalid()),
+        CrateReleaseAction::Publish | CrateReleaseAction::Historical { .. } => {
+            return Err(invalid());
+        }
     };
     let pending_matches = pending.is_some_and(|item| {
         item.package == now.source.name
@@ -263,12 +276,25 @@ pub(crate) fn verify_observed_packages(
         .iter()
         .zip(&prior.packages)
         .any(|(now, old)| {
-            now.source != old.source || now.tag != old.tag || now.owners != old.owners
+            now.source != old.source
+                || now.tag != old.tag
+                || now.owners != old.owners
+                || !historical_actions_match(&now.action, &old.action)
         })
     {
         return Err(invalid());
     }
     Ok(())
+}
+
+fn historical_actions_match(now: &CrateReleaseAction, old: &CrateReleaseAction) -> bool {
+    if matches!(now, CrateReleaseAction::Historical { .. })
+        || matches!(old, CrateReleaseAction::Historical { .. })
+    {
+        now == old
+    } else {
+        true
+    }
 }
 
 pub(super) fn derive_result<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegistryRead>(

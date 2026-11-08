@@ -14,7 +14,7 @@ impl CapacityReservation {
     pub(super) fn check_sizes(&self) -> Result<(), OrchestratorError> {
         let identity = &self.receipt.identity;
         check(&JournalRecord {
-            schema: 1,
+            schema: super::super::receipt_schema(&self.receipt).ok_or_else(invalid)?,
             identity: identity.clone(),
             stage: JournalStage::Started,
             receipt: self.receipt.clone(),
@@ -38,7 +38,7 @@ impl CapacityReservation {
             completed.push(published);
         }
         check(&JournalRecord {
-            schema: 1,
+            schema: super::super::receipt_schema(&self.receipt).ok_or_else(invalid)?,
             identity: identity.clone(),
             stage: JournalStage::Completed,
             receipt: self.receipt.clone(),
@@ -123,7 +123,7 @@ impl CapacityReservation {
 
     fn check_mutation(&self, mutation: JournalMutation) -> Result<(), OrchestratorError> {
         check(&MutationRecord {
-            schema: 1,
+            schema: super::super::receipt_schema(&self.receipt).ok_or_else(invalid)?,
             identity: self.receipt.identity.clone(),
             receipt: self.receipt.clone(),
             mutation,

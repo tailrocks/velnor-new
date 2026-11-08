@@ -278,7 +278,9 @@ pub(super) fn wait_for_predecessor_indexes<
             .iter()
             .find(|item| item.source.name == name)
             .ok_or_else(invalid)?;
-        let CrateReleaseAction::Reconciled { registry, .. } = &dependency.action else {
+        let (CrateReleaseAction::Reconciled { registry, .. }
+        | CrateReleaseAction::Historical { registry, .. }) = &dependency.action
+        else {
             return Err(invalid());
         };
         if registry.checksum != registry.downloaded_checksum {
@@ -313,10 +315,11 @@ pub(super) fn ensure_package_reconciled<
         &input.admission.github,
     )?;
     verify_observed_packages_after_recorded_upload(input, &current)?;
-    if !current.packages.iter().any(|item| {
-        item.source == planned.source
-            && matches!(item.action, CrateReleaseAction::Reconciled { .. })
-    }) {
+    if !current
+        .packages
+        .iter()
+        .any(|item| item.source == planned.source && item.action.is_reconciled())
+    {
         return Err(invalid());
     }
 

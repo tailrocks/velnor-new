@@ -259,6 +259,7 @@ fn receipt(version: &str) -> JournalReceipt {
             version: version.to_owned(),
             manifest: "Cargo.toml".to_owned(),
             tag: format!("demo-crate-v{version}"),
+            tag_target: None,
             owners: crate::crate_release_journal::JournalOwnership::Existing {
                 owners: vec![JournalOwner {
                     id: 1,
@@ -317,6 +318,8 @@ mod chain_support;
 mod completion;
 #[path = "crate_release_journal_public/evidence.rs"]
 mod evidence;
+#[path = "crate_release_journal_public/historical_schema.rs"]
+mod historical_schema;
 #[path = "crate_release_journal_public/mutation.rs"]
 mod mutation;
 #[path = "crate_release_journal_public/owner_identity.rs"]

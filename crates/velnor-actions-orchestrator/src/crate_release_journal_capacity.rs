@@ -98,7 +98,8 @@ impl CapacityReservation {
                 CrateReleaseAction::Publish => None,
                 CrateReleaseAction::RepairTag { registry }
                 | CrateReleaseAction::RepairRelease { registry }
-                | CrateReleaseAction::Reconciled { registry, .. } => Some(registry),
+                | CrateReleaseAction::Reconciled { registry, .. }
+                | CrateReleaseAction::Historical { registry, .. } => Some(registry),
             };
             if let Some(registry) = registry {
                 reservation.verify_contents(&package.source.name, &[], &registry.features)?;
@@ -157,7 +158,7 @@ impl CapacityReservation {
             self.verify_contents(&mutation.package, files, features)?;
         }
         check(&MutationRecord {
-            schema: 1,
+            schema: super::receipt_schema(&self.receipt).ok_or_else(invalid)?,
             identity: self.receipt.identity.clone(),
             receipt: self.receipt.clone(),
             mutation: mutation.clone(),
@@ -172,7 +173,7 @@ impl CapacityReservation {
             self.verify_contents(&package.name, &package.files, &package.features)?;
         }
         check(&JournalRecord {
-            schema: 1,
+            schema: super::receipt_schema(&self.receipt).ok_or_else(invalid)?,
             identity: self.receipt.identity.clone(),
             stage: JournalStage::Completed,
             receipt: self.receipt.clone(),
@@ -226,7 +227,7 @@ pub(crate) fn verify_sequence_capacity(
                 CrateReleaseAction::Publish => 6,
                 CrateReleaseAction::RepairTag { .. } => 4,
                 CrateReleaseAction::RepairRelease { .. } => 2,
-                CrateReleaseAction::Reconciled { .. } => 0,
+                CrateReleaseAction::Reconciled { .. } | CrateReleaseAction::Historical { .. } => 0,
             };
             total.checked_add(count).ok_or_else(invalid)
         },

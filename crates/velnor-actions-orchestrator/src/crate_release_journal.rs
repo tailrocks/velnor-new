@@ -99,6 +99,16 @@ pub trait JournalIo {
     fn get_blob(&self, repository: &str, sha: &str) -> Result<Vec<u8>, OrchestratorError>;
 }
 
+fn receipt_schema(receipt: &JournalReceipt) -> Option<u8> {
+    if receipt.packages.iter().all(|p| p.tag_target.is_none()) {
+        Some(1)
+    } else if receipt.packages.iter().all(|p| p.tag_target.is_some()) {
+        Some(2)
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct JournalRecord {
@@ -173,7 +183,7 @@ pub(crate) fn fixture_mutation_record_bytes(
     mutation: JournalMutation,
 ) -> Result<Vec<u8>, OrchestratorError> {
     velnor_actions_contract::canonical_json_bytes(&MutationRecord {
-        schema: 1,
+        schema: receipt_schema(receipt).ok_or_else(invalid)?,
         identity: receipt.identity.clone(),
         receipt: receipt.clone(),
         mutation,
@@ -187,7 +197,7 @@ pub(crate) fn fixture_stage_record_bytes(
     completion: Option<JournalCompletion>,
 ) -> Result<Vec<u8>, OrchestratorError> {
     velnor_actions_contract::canonical_json_bytes(&JournalRecord {
-        schema: 1,
+        schema: receipt_schema(receipt).ok_or_else(invalid)?,
         identity: receipt.identity.clone(),
         stage: if completion.is_some() {
             JournalStage::Completed

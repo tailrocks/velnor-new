@@ -82,6 +82,8 @@ mod metadata_preflight;
 #[path = "crate_release_controller_metadata_repair.rs"]
 mod metadata_repair;
 use coordinator_recovery::{MixedGithub, MixedRegistry, reject_bad_completion_evidence};
+#[path = "crate_release_controller_historical_workspace.rs"]
+mod historical_workspace;
 #[path = "crate_release_controller_mixed_workspace.rs"]
 mod mixed_workspace;
 use mixed_workspace::set_workspace_journal_packages;

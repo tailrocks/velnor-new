@@ -286,6 +286,7 @@ pub(crate) fn prior_no_baseline_pending<R: CrateRegistryRead>(
         | CrateReleaseAction::RepairRelease { registry }
         | CrateReleaseAction::Reconciled { registry, .. } => registry,
         CrateReleaseAction::Publish => return Ok(None),
+        CrateReleaseAction::Historical { .. } => return Err(invalid()),
     };
     let inventory =
         inspect_crate_versions(registry, &package.source.name).map_err(|_| invalid())?;

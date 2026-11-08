@@ -126,6 +126,7 @@ pub(super) fn fixture_journal_plan(
             version: "0.1.1".into(),
             manifest: "Cargo.toml".into(),
             tag: "demo-v0.1.1".into(),
+            tag_target: None,
             owners: crate::crate_release_journal::JournalOwnership::Existing {
                 owners: vec![JournalOwner {
                     id: 370_532,

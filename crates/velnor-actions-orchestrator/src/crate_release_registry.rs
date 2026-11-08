@@ -208,6 +208,7 @@ pub fn reconcile_crate_registry<R: CrateRegistryRead>(
         expected_owners,
         Some(expected_archive),
         None,
+        None,
     )
 }
 
@@ -224,6 +225,30 @@ pub(crate) fn revalidate_crate_registry<R: CrateRegistryRead>(
         &expected.owners,
         None,
         Some(expected),
+        None,
+    )
+}
+
+pub(super) fn reconcile_historical_crate_registry<R: CrateRegistryRead>(
+    reader: &R,
+    repository: &str,
+    name: &str,
+    version: &str,
+    expected_owners: &[CrateRegistryOwner],
+    expected_archive: &[u8],
+    evidence: &crate::crate_release_controller::HistoricalGitHubEvidence,
+) -> Result<CrateRegistryReconciliation, OrchestratorError> {
+    if !evidence.matches_package(repository, name, version) {
+        return Err(internal("crate_registry_historical_identity_mismatch"));
+    }
+    reconcile_registry_archive(
+        reader,
+        name,
+        version,
+        expected_owners,
+        Some(expected_archive),
+        None,
+        Some(evidence),
     )
 }
 
@@ -234,6 +259,7 @@ fn reconcile_registry_archive<R: CrateRegistryRead>(
     expected_owners: &[CrateRegistryOwner],
     expected_archive: Option<&[u8]>,
     frozen: Option<&CrateRegistryReconciliation>,
+    historical: Option<&crate::crate_release_controller::HistoricalGitHubEvidence>,
 ) -> Result<CrateRegistryReconciliation, OrchestratorError> {
     validate_name_version(name, version)?;
     if expected_owners.is_empty() || read_owners(reader, name)? != expected_owners {
@@ -287,7 +313,19 @@ fn reconcile_registry_archive<R: CrateRegistryRead>(
         return Err(internal("crate_registry_archive_unavailable"));
     }
     if let Some(expected_archive) = expected_archive {
-        verify_crate_archive(expected_archive, &archive.body, name, version, checksum)?;
+        if let Some(evidence) = historical {
+            crate::release::crate_release_archive::verify_historical_archive_content(
+                expected_archive,
+                &archive.body,
+                name,
+                version,
+                checksum,
+                evidence.current_sha(),
+                evidence.historical_sha(),
+            )?;
+        } else {
+            verify_crate_archive(expected_archive, &archive.body, name, version, checksum)?;
+        }
     } else {
         let frozen = frozen.ok_or_else(|| internal("crate_registry_checksum_missing"))?;
         if checksum != frozen.checksum

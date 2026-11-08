@@ -128,6 +128,13 @@ fn verify_metadata_binding(
     evidence: &SemverEvidence,
     expected_intent: &str,
 ) -> Result<(), OrchestratorError> {
+    if matches!(
+        selected.action,
+        crate::crate_release_controller::CrateReleaseAction::Historical { .. }
+    ) && selected.action != admitted.action
+    {
+        return Err(invalid());
+    }
     let observed = metadata_registry(&selected.action)?;
     let prior = metadata_registry(&admitted.action)?;
     let SemverEvidence::MetadataOnly {
@@ -164,7 +171,8 @@ fn metadata_registry(
     match action {
         CrateReleaseAction::RepairTag { registry }
         | CrateReleaseAction::RepairRelease { registry }
-        | CrateReleaseAction::Reconciled { registry, .. } => Ok(registry),
+        | CrateReleaseAction::Reconciled { registry, .. }
+        | CrateReleaseAction::Historical { registry, .. } => Ok(registry),
         CrateReleaseAction::Publish => Err(invalid()),
     }
 }

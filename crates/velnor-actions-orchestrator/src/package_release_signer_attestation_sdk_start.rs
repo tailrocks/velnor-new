@@ -289,6 +289,13 @@ fn journal_packages(
                 version: package.source.version.clone(),
                 manifest: package.source.manifest.clone(),
                 tag: package.tag.clone(),
+                tag_target: Some(match &package.action {
+                    crate::crate_release_controller::CrateReleaseAction::Historical {
+                        source_sha,
+                        ..
+                    } => source_sha.clone(),
+                    _ => observed.github.request.source_sha.clone(),
+                }),
                 owners,
             })
         })

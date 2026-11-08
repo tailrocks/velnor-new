@@ -12,7 +12,8 @@ pub(crate) fn seed_started_record<I: JournalIo>(
     receipt: &JournalReceipt,
 ) -> Result<String, crate::OrchestratorError> {
     let record = JournalRecord {
-        schema: 1,
+        schema: super::receipt_schema(receipt)
+            .ok_or_else(|| crate::internal::internal("fixture_schema_invalid"))?,
         identity: identity.clone(),
         stage: JournalStage::Started,
         receipt: receipt.clone(),

@@ -252,6 +252,12 @@ impl CrateRegistryRead for MixedRegistry {
         if path.contains(name) && self.second.borrow().is_some() {
             let archive = self.second.borrow();
             let bytes = archive.as_ref().expect("present");
+            if path == format!("/index/ve/ln/{name}") {
+                return Ok(CrateRegistryResponse {
+                    status: 200,
+                    body: format!("{}\n", json!({"name":name,"vers":"0.1.1","cksum":test_hex(&Sha256::digest(bytes)),"yanked":false})).into_bytes(),
+                });
+            }
             if path == format!("/crates/{name}/{name}-0.1.1.crate") {
                 return Ok(CrateRegistryResponse {
                     status: 200,

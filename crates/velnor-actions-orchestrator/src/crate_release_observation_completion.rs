@@ -98,14 +98,18 @@ impl FrozenCompletion {
             {
                 return Err(invalid());
             }
-            if crate::crate_release_registry::reconcile_crate_registry(
-                input.registry,
-                &package.source.name,
-                &package.source.version,
-                &package.registry.owners,
-                &archive,
-            )? != package.registry
-            {
+            let result = if package.tag_commit == input.request.source_sha {
+                crate::crate_release_registry::reconcile_crate_registry(
+                    input.registry,
+                    &package.source.name,
+                    &package.source.version,
+                    &package.registry.owners,
+                    &archive,
+                )?
+            } else {
+                historical_registry(input, package, &archive)?
+            };
+            if result != package.registry {
                 return Err(invalid());
             }
         }
@@ -319,4 +323,41 @@ fn snapshot_predecessors<
         deadline,
         |_| Ok(()),
     )
+}
+
+fn historical_registry<J: JournalIo, G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    input: &CrateReleaseObservation<'_, J, G, R>,
+    package: &crate::crate_release_controller::CrateReleaseCompletedPackage,
+    archive: &[u8],
+) -> Result<crate::crate_release_registry::CrateRegistryReconciliation, OrchestratorError> {
+    let observe = || {
+        crate::crate_release_controller::HistoricalGitHubEvidence::authenticate(
+            input.github,
+            &input.request.repository,
+            &package.source.name,
+            &package.tag,
+            &package.source.version,
+            &input.request.source_sha,
+        )
+    };
+    let evidence = observe()?;
+    if evidence.historical_sha() != package.tag_commit
+        || evidence.release().id != package.release_id
+        || evidence.release().url != package.release_url
+    {
+        return Err(invalid());
+    }
+    let result = crate::crate_release_registry::reconcile_historical_crate_registry(
+        input.registry,
+        &input.request.repository,
+        &package.source.name,
+        &package.source.version,
+        &package.registry.owners,
+        archive,
+        &evidence,
+    )?;
+    if observe()? != evidence {
+        return Err(invalid());
+    }
+    Ok(result)
 }

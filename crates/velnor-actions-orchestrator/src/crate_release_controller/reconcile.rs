@@ -57,9 +57,12 @@ pub fn validate_reconciliation_receipt<G: GitHubAdmissionRead, R: CrateRegistryR
             return Err(invalid());
         }
         let observed_tag = read_github_tag_evidence(&request.repository, &tag, github)?;
-        if observed_tag
-            .as_deref()
-            .is_some_and(|sha| sha != request.source_sha)
+        let historical = authenticate_historical(planned, request, github)?;
+        let expected = historical
+            .as_ref()
+            .map_or(request.source_sha.as_str(), |e| e.historical_sha());
+        if observed_tag.as_deref().is_some_and(|sha| sha != expected)
+            || (historical.is_some() && observed_tag.is_none())
         {
             return Err(invalid());
         }
@@ -186,16 +189,144 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     registry: &R,
     source_context: crate::CrateSource<'_>,
 ) -> Result<Vec<CrateReleaseCompletedPackage>, OrchestratorError> {
-    let source = source_context.root;
     if receipt.schema != 1 || &receipt.intent != intent {
         return Err(internal("crate_release_receipt_mismatch"));
     }
     verify_request_intent(intent, request)?;
     authorize_github_candidate(request, &receipt.github, github)?;
     crate::crate_release_github::verify_immutable_tag_rules(&request.repository, github)?;
+    verify_reconciliation_inventory(receipt, intent, request, registry, source_context)?;
+    let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
+    let mut completed = Vec::with_capacity(receipt.packages.len());
+    for package in &receipt.packages {
+        let owners = reconciliation_owners(intent, request, package, registry)?;
+        if package.tag != format!("{}-v{}", package.source.name, package.source.version) {
+            return Err(internal("crate_release_tag_mismatch"));
+        }
+        let historical = authenticate_historical(package, request, github)?;
+        let tag_sha = wait_for_tag(
+            github,
+            &request.repository,
+            &package.tag,
+            historical
+                .as_ref()
+                .map_or(request.source_sha.as_str(), |e| e.historical_sha()),
+        )?;
+        let archive = super::package_source::package_source(
+            source_context,
+            intent,
+            &package.source,
+            target.path(),
+            &request.source_sha,
+        )?;
+        crate::crate_release_registry::wait_for_crate_version(
+            registry,
+            &package.source.name,
+            &package.source.version,
+            60,
+            || std::thread::sleep(std::time::Duration::from_secs(2)),
+        )?;
+        let source_inventory = crate::release::crate_release_archive::crate_archive_inventory(
+            &archive,
+            &package.source.name,
+            &package.source.version,
+        )?;
+        let registry_result = if let Some(evidence) = &historical {
+            historical_registry_result(
+                registry, github, request, package, &owners, &archive, evidence,
+            )?
+        } else {
+            crate::crate_release_registry::reconcile_crate_registry(
+                registry,
+                &package.source.name,
+                &package.source.version,
+                &owners,
+                &archive,
+            )?
+        };
+        let release = wait_for_release(github, &request.repository, package)?;
+        if let Some(evidence) = &historical
+            && (evidence.release() != &release
+                || authenticate_historical(package, request, github)?.as_ref() != Some(evidence)
+                || read_github_tag_evidence(&request.repository, &package.tag, github)?.as_deref()
+                    != Some(evidence.historical_sha()))
+        {
+            return Err(internal("crate_release_historical_evidence_invalid"));
+        }
+        completed.push(CrateReleaseCompletedPackage {
+            source: package.source.clone(),
+            tag: package.tag.clone(),
+            tag_commit: tag_sha,
+            release_id: release.id,
+            release_url: release.url,
+            source_inventory,
+            registry: registry_result,
+        });
+    }
+    Ok(completed)
+}
+
+fn authenticate_historical<G: GitHubAdmissionRead>(
+    package: &super::CrateReleasePlannedPackage,
+    request: &GitHubAdmissionRequest,
+    github: &G,
+) -> Result<Option<super::state::HistoricalGitHubEvidence>, OrchestratorError> {
+    let super::CrateReleaseAction::Historical {
+        source_sha,
+        release,
+        ..
+    } = &package.action
+    else {
+        return Ok(None);
+    };
+    let evidence = super::state::HistoricalGitHubEvidence::authenticate(
+        github,
+        &request.repository,
+        &package.source.name,
+        &package.tag,
+        &package.source.version,
+        &request.source_sha,
+    )?;
+    if evidence.historical_sha() != source_sha || evidence.release() != release {
+        return Err(internal("crate_release_historical_evidence_invalid"));
+    }
+    Ok(Some(evidence))
+}
+
+fn historical_registry_result<G: GitHubAdmissionRead, R: CrateRegistryRead>(
+    registry: &R,
+    github: &G,
+    request: &GitHubAdmissionRequest,
+    package: &super::CrateReleasePlannedPackage,
+    owners: &[crate::crate_release_registry::CrateRegistryOwner],
+    archive: &[u8],
+    evidence: &super::state::HistoricalGitHubEvidence,
+) -> Result<crate::crate_release_registry::CrateRegistryReconciliation, OrchestratorError> {
+    let result = crate::crate_release_registry::reconcile_historical_crate_registry(
+        registry,
+        &request.repository,
+        &package.source.name,
+        &package.source.version,
+        owners,
+        archive,
+        evidence,
+    )?;
+    if authenticate_historical(package, request, github)?.as_ref() != Some(evidence) {
+        return Err(internal("crate_release_historical_evidence_invalid"));
+    }
+    Ok(result)
+}
+
+fn verify_reconciliation_inventory<R: CrateRegistryRead>(
+    receipt: &CrateReleaseAdmissionReceipt,
+    intent: &CrateReleaseIntent,
+    request: &GitHubAdmissionRequest,
+    registry: &R,
+    source_context: crate::CrateSource<'_>,
+) -> Result<(), OrchestratorError> {
     let effective_intent = effective_release_intent(intent, request);
     let inventory = workspace_inventory(
-        source,
+        source_context.root,
         &request.source_sha,
         &effective_intent,
         registry,
@@ -210,60 +341,5 @@ pub fn reconcile_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
     {
         return Err(internal("crate_release_inventory_mismatch"));
     }
-    let target = tempfile::tempdir().map_err(|_| internal("crate_release_package_temp"))?;
-    let mut completed = Vec::with_capacity(receipt.packages.len());
-    for package in &receipt.packages {
-        let owners = reconciliation_owners(intent, request, package, registry)?;
-        if package.tag != format!("{}-v{}", package.source.name, package.source.version) {
-            return Err(internal("crate_release_tag_mismatch"));
-        }
-        let tag_sha = wait_for_tag(
-            github,
-            &request.repository,
-            &package.tag,
-            &request.source_sha,
-        )?;
-        let archive = crate::CrateSourceExecution::package(
-            source_context.execution,
-            &crate::CratePackageSource::new(
-                source,
-                intent,
-                &package.source,
-                target.path(),
-                &request.source_sha,
-                false,
-                source_context.git,
-            ),
-        )?;
-        crate::crate_release_registry::wait_for_crate_version(
-            registry,
-            &package.source.name,
-            &package.source.version,
-            60,
-            || std::thread::sleep(std::time::Duration::from_secs(2)),
-        )?;
-        let source_inventory = crate::release::crate_release_archive::crate_archive_inventory(
-            &archive,
-            &package.source.name,
-            &package.source.version,
-        )?;
-        let registry_result = crate::crate_release_registry::reconcile_crate_registry(
-            registry,
-            &package.source.name,
-            &package.source.version,
-            &owners,
-            &archive,
-        )?;
-        let release = wait_for_release(github, &request.repository, package)?;
-        completed.push(CrateReleaseCompletedPackage {
-            source: package.source.clone(),
-            tag: package.tag.clone(),
-            tag_commit: tag_sha,
-            release_id: release.id,
-            release_url: release.url,
-            source_inventory,
-            registry: registry_result,
-        });
-    }
-    Ok(completed)
+    Ok(())
 }

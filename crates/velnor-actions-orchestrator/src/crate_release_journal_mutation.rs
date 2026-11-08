@@ -125,7 +125,7 @@ pub(super) fn record_journal_mutation<I: JournalIo>(
         };
     }
     let record = MutationRecord {
-        schema: 1,
+        schema: super::receipt_schema(receipt).ok_or_else(invalid)?,
         identity: identity.clone(),
         receipt: receipt.clone(),
         mutation: mutation.clone(),
@@ -357,7 +357,7 @@ pub(super) fn read_mutation_at<I: JournalIo>(
         velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, MAX_RECORD_BYTES)
             .map_err(|_| invalid())?;
     let record: MutationRecord = serde_json::from_value(value).map_err(|_| invalid())?;
-    if record.schema != 1
+    if Some(record.schema) != super::receipt_schema(&record.receipt)
         || record.identity != *identity
         || record.mutation.sequence != sequence
         || !valid_receipt(&record.receipt, identity)

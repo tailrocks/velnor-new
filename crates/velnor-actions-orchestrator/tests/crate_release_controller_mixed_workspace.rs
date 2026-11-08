@@ -143,6 +143,7 @@ pub(super) fn set_workspace_journal_packages(
             version: p.source.version.clone(),
             manifest: p.source.manifest.clone(),
             tag: p.tag.clone(),
+            tag_target: None,
             owners: crate::crate_release_journal::JournalOwnership::Existing {
                 owners: vec![JournalOwner {
                     id: 370_532,
