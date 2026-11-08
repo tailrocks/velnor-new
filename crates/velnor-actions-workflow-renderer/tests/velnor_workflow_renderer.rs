@@ -78,7 +78,21 @@ mod render {
     pub(crate) use velnor_actions_workflow_renderer::EXPECTED_PR_TYPES;
 }
 mod source_preview_timeout_public;
+#[cfg_attr(
+    target_os = "linux",
+    expect(
+        dead_code,
+        reason = "the validator fixture imports the production module"
+    )
+)]
 #[path = "../src/workflow_size.rs"]
 pub mod workflow_size;
+#[cfg_attr(
+    target_os = "linux",
+    expect(
+        dead_code,
+        reason = "the validator fixture imports the production module"
+    )
+)]
 #[path = "../src/workflow_timeout.rs"]
 mod workflow_timeout;
