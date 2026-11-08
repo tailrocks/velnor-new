@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(
+#[expect(
     dead_code,
     unreachable_pub,
     reason = "The integration test imports the production error type."
 )]
 #[path = "../src/error.rs"]
 mod error;
-#[allow(dead_code, reason = "The integration test imports production hashing.")]
+#[expect(dead_code, reason = "The integration test imports production hashing.")]
 #[path = "../src/artifact_admission/hash.rs"]
 mod hash;
-#[allow(
+#[expect(
     dead_code,
     reason = "The integration test exercises the private cache policy."
 )]
@@ -25,9 +25,9 @@ fn digest(bytes: &[u8]) -> String {
     format!("sha256:{}", hash::lowercase_hex(&hash::sha256(bytes)))
 }
 
-fn fixture(
-    role: ImageKind,
-) -> Result<(ImageEntry, String, Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+type Fixture = (ImageEntry, String, Vec<u8>, Vec<u8>);
+
+fn fixture(role: ImageKind) -> Result<Fixture, Box<dyn std::error::Error>> {
     let source = "a".repeat(40);
     let config = serde_json::to_vec(&serde_json::json!({
         "os": "linux", "architecture": "amd64",
