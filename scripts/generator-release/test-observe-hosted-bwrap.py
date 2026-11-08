@@ -19,6 +19,40 @@ spec.loader.exec_module(observer)
 
 
 def main():
+    cleanup_child = mock.Mock()
+    cleanup_child.poll.return_value = None
+    cleanup_child.wait.side_effect = subprocess.TimeoutExpired('child', 3)
+    cleanup_sentinel = mock.Mock()
+    cleanup_sentinel.poll.return_value = None
+    with mock.patch.object(observer.os, 'close', side_effect=[OSError('close'), None]) as close:
+        try:
+            observer.cleanup_observation(cleanup_child, cleanup_sentinel, [10], 11)
+            raise AssertionError('cleanup error hidden')
+        except subprocess.TimeoutExpired:
+            pass
+        assert close.call_args_list == [mock.call(10), mock.call(11)]
+        cleanup_sentinel.terminate.assert_called_once()
+        cleanup_sentinel.wait.assert_called_once_with(timeout=3)
+    for payload in (b'{}\n', b'{"child-pid":true}\n', b'{"child-pid":1}\n', b'[]\n'):
+        try:
+            observer.bind_namespace_init(payload)
+            raise AssertionError('invalid info record accepted')
+        except ValueError:
+            pass
+    for nspid, signalled, accepted in ((1, False, True), (2, False, False), (1, True, False)):
+        fd = os.open('/dev/null', os.O_RDONLY)
+        with mock.patch.object(observer.os, 'pidfd_open', return_value=fd, create=True), \
+                mock.patch.object(observer, 'namespace_pid', return_value=nspid), \
+                mock.patch.object(observer, 'pidfd_signalled', return_value=signalled):
+            try:
+                result_fd = observer.bind_namespace_init(b'{"child-pid":123}\n')
+                if not accepted:
+                    raise AssertionError('invalid init identity accepted')
+                assert result_fd == fd
+                os.close(result_fd)
+            except ValueError:
+                if accepted:
+                    raise
     with mock.patch.object(observer, 'owned_namespaces', side_effect=PermissionError):
         assert observer.namespace_disappearance('pid:[2]') == (None, 'permission_denied_inconclusive')
     with mock.patch.object(observer, 'owned_namespaces', return_value={'pid:[2]'}):
@@ -97,6 +131,26 @@ def main():
                 pass
     with mock.patch.object(observer.os.path, 'isfile', return_value=False):
         assert observer.observe()['reason'] == 'unavailable'
+    blocked_child = mock.Mock(pid=999)
+    blocked_child.poll.return_value = None
+    blocked_sentinel = mock.Mock(pid=998)
+    blocked_sentinel.poll.return_value = None
+    with tempfile.TemporaryDirectory() as root, \
+            mock.patch.dict(os.environ, {'RUNNER_TEMP': root}), \
+            mock.patch.object(observer.os.path, 'isfile', return_value=True), \
+            mock.patch.object(observer.pathlib.Path, 'is_dir', return_value=True), \
+            mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'bubblewrap 0.11.0\n')), \
+            mock.patch.object(observer.subprocess, 'Popen', side_effect=[blocked_sentinel, blocked_child]), \
+            mock.patch.object(observer, 'read_ready', return_value=b'{"child-pid":123}\n'), \
+            mock.patch.object(observer, 'bind_namespace_init', side_effect=PermissionError), \
+            mock.patch.object(observer.os, 'write') as gate_write:
+        try:
+            observer.observe()
+            raise AssertionError('inaccessible init identity accepted')
+        except PermissionError:
+            assert observer.PHASE == 'bind_namespace_init'
+            gate_write.assert_not_called()
+            blocked_child.kill.assert_called_once()
     child = mock.Mock(pid=999)
     child.stdout = io.BytesIO(json.dumps({
         'readonly_write_rejected': True, 'docker_socket_unreachable': True,
@@ -113,7 +167,10 @@ def main():
             mock.patch.object(observer.pathlib.Path, 'is_dir', return_value=True), \
             mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'bubblewrap 0.11.0\n')), \
             mock.patch.object(observer.subprocess, 'Popen', side_effect=[sentinel, child]) as popen, \
-            mock.patch.object(observer, 'read_ready', return_value=child.stdout.getvalue()), \
+            mock.patch.object(observer, 'read_ready', side_effect=[b'{"child-pid":123}\n', child.stdout.getvalue()]), \
+            mock.patch.object(observer, 'bind_namespace_init', side_effect=lambda _: os.open('/dev/null', os.O_RDONLY)), \
+            mock.patch.object(observer, 'pidfd_signalled', return_value=True), \
+            mock.patch.object(observer.os, 'write', return_value=1), \
             mock.patch.object(observer, 'matching_pids', side_effect=[[999, 111, 222], [], []]), \
             mock.patch.object(observer, 'session_leaders', return_value=[222]), \
             mock.patch.object(observer, 'namespace_pid', return_value=4), \
@@ -128,7 +185,11 @@ def main():
         assert result['identified_process_scope'] == 'handshaken-setsid-process-only'
         assert result['unrelated_sentinel_survived'] and not result['cleanup_guaranteed']
         assert result['observed_namespace_disappeared'] and result['bubblewrap_version'] == 'bubblewrap 0.11.0'
+        assert result['namespace_init_pidfd_bound'] and result['namespace_init_pidfd_signalled']
+        assert result['gate_limitation'] == 'eof-may-release-not-fail-closed'
         assert result['process_scan_scope'] == 'same-uid-only'
+        assert result['init_binding_limitation'] == 'pid-reuse-before-pidfd-open-not-excluded'
+        assert result['pidfd_scope'] == 'namespace-init-only'
         assert result['network_failure_interpretation'] == 'inconclusive-without-external-positive-control'
         assert result['readonly_failure_interpretation'] == 'oserror-not-proof-of-mount'
         assert result['socket_failure_interpretation'] == 'unreachable-not-proof-of-absence'
@@ -156,12 +217,14 @@ def main():
                 mock.patch.object(observer.pathlib.Path, 'is_dir', return_value=True), \
                 mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'bubblewrap 0.11.0\n')), \
                 mock.patch.object(observer.subprocess, 'Popen', side_effect=[sentinel, child]), \
-                mock.patch.object(observer, 'read_ready', return_value=json.dumps({
+                mock.patch.object(observer, 'read_ready', side_effect=[b'{"child-pid":123}\n', json.dumps({
                     'readonly_write_rejected': True, 'docker_socket_unreachable': True,
                     'resolver_config_absent': True, 'loopback_only': True,
                     'network_connection_failed': True, 'dns_resolution_failed': True,
                     'setsid_namespace_pid': 4,
-                }).encode() + b'\n'), \
+                }).encode() + b'\n']), \
+                mock.patch.object(observer, 'bind_namespace_init', side_effect=lambda _: os.open('/dev/null', os.O_RDONLY)), \
+                mock.patch.object(observer.os, 'write', return_value=1), \
                 mock.patch.object(observer, 'matching_pids', return_value=[999, 111, 222]), \
                 mock.patch.object(observer, 'session_leaders', return_value=[222]), \
                 mock.patch.object(observer, 'namespace_pid', return_value=4 if wrong_namespace else 5), \
@@ -181,12 +244,14 @@ def main():
             mock.patch.object(observer.pathlib.Path, 'is_dir', return_value=True), \
             mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'bubblewrap 0.11.0\n')), \
             mock.patch.object(observer.subprocess, 'Popen', side_effect=[sentinel, child]), \
-            mock.patch.object(observer, 'read_ready', return_value=json.dumps({
+            mock.patch.object(observer, 'read_ready', side_effect=[b'{"child-pid":123}\n', json.dumps({
                 'readonly_write_rejected': True, 'docker_socket_unreachable': True,
                 'resolver_config_absent': True, 'loopback_only': True,
                 'network_connection_failed': True, 'dns_resolution_failed': True,
                 'setsid_namespace_pid': 4,
-            }).encode() + b'\n'), \
+            }).encode() + b'\n']), \
+            mock.patch.object(observer, 'bind_namespace_init', side_effect=lambda _: os.open('/dev/null', os.O_RDONLY)), \
+            mock.patch.object(observer.os, 'write', return_value=1), \
             mock.patch.object(observer, 'matching_pids', side_effect=PermissionError):
         try:
             observer.observe()

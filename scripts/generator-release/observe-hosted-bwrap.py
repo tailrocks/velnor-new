@@ -205,9 +205,58 @@ def parse_ready(line):
     return details
 
 
+def bind_namespace_init(line):
+    info = json.loads(line)
+    if not isinstance(info, dict) or type(info.get('child-pid')) is not int or info['child-pid'] <= 1:
+        raise ValueError('invalid info fd record')
+    if not hasattr(os, 'pidfd_open'):
+        raise ValueError('pidfd unavailable')
+    pid = info['child-pid']
+    fd = os.pidfd_open(pid, 0)
+    try:
+        if namespace_pid(pid) != 1:
+            raise ValueError('namespace init identity mismatch')
+        if pidfd_signalled(fd, 0):
+            raise ValueError('namespace init exited before release')
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def pidfd_signalled(fd, timeout_ms):
+    poller = select.poll()
+    poller.register(fd, select.POLLIN)
+    return bool(poller.poll(timeout_ms))
+
+
+def cleanup_observation(child, sentinel, fds, init_pidfd):
+    errors = []
+
+    def attempt(action):
+        try:
+            action()
+        except Exception as error:
+            errors.append(error)
+
+    if child is not None:
+        attempt(lambda: child.kill() if child.poll() is None else None)
+        attempt(lambda: child.wait(timeout=3))
+    for fd in fds:
+        attempt(lambda: os.close(fd))
+    if init_pidfd is not None:
+        attempt(lambda: os.close(init_pidfd))
+    attempt(lambda: sentinel.terminate() if sentinel.poll() is None else None)
+    attempt(lambda: sentinel.wait(timeout=3))
+    if errors:
+        raise errors[0]
+
+
 def observe():
     global PHASE
     result = {'observation_only': True, 'completed': False, 'cleanup_guaranteed': False,
+              'init_binding_limitation': 'pid-reuse-before-pidfd-open-not-excluded',
+              'pidfd_scope': 'namespace-init-only',
               'process_scan_scope': 'same-uid-only',
               'network_failure_interpretation': 'inconclusive-without-external-positive-control',
               'readonly_failure_interpretation': 'oserror-not-proof-of-mount',
@@ -229,15 +278,36 @@ def observe():
     sentinel = subprocess.Popen(['/usr/bin/sleep', '25'], stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     child = None
+    fds = []
+    init_pidfd = None
     try:
         with tempfile.TemporaryDirectory(prefix='velnor-bwrap-observation-', dir=os.environ['RUNNER_TEMP']) as root:
+            info_read, info_write = os.pipe()
+            gate_read, gate_write = os.pipe()
+            fds.extend((info_read, info_write, gate_read, gate_write))
             cmd = [BWRAP, '--unshare-pid', '--unshare-net', '--die-with-parent', '--new-session',
+                   '--info-fd', str(info_write), '--userns-block-fd', str(gate_read),
                    '--ro-bind', '/', '/', '--tmpfs', '/tmp', '--tmpfs', '/run', '--tmpfs', '/etc',
                    '--ro-bind', root, '/tmp/probe', '--proc', '/proc', '--dev', '/dev', '--',
                    '/usr/bin/python3', '-I', '-S', '-c', CHILD, token]
             PHASE = 'launch_sandbox'
             child = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, env={'PATH': '/usr/bin:/bin'})
+                                     stderr=subprocess.DEVNULL, env={'PATH': '/usr/bin:/bin'},
+                                     pass_fds=(info_write, gate_read))
+            os.close(info_write)
+            fds.remove(info_write)
+            os.close(gate_read)
+            fds.remove(gate_read)
+            PHASE = 'bind_namespace_init'
+            with os.fdopen(info_read, 'rb') as info_stream:
+                fds.remove(info_read)
+                init_pidfd = bind_namespace_init(read_ready(info_stream, 8))
+            result['namespace_init_pidfd_bound'] = True
+            result['gate_limitation'] = 'eof-may-release-not-fail-closed'
+            if os.write(gate_write, b'R') != 1:
+                raise OSError('incomplete gate write')
+            os.close(gate_write)
+            fds.remove(gate_write)
             PHASE = 'readiness'
             try:
                 line = read_ready(child.stdout, 8)
@@ -280,6 +350,7 @@ def observe():
             PHASE = 'terminate_supervisor'
             os.kill(child.pid, signal.SIGKILL)
             child.wait(timeout=3)
+            result['namespace_init_pidfd_signalled'] = pidfd_signalled(init_pidfd, 4000)
             PHASE = 'termination_scan'
             deadline = time.monotonic() + 4
             while matching_pids(token) and time.monotonic() < deadline:
@@ -296,12 +367,7 @@ def observe():
             result['completed'] = True
             return result
     finally:
-        if child is not None and child.poll() is None:
-            child.kill()
-            child.wait(timeout=3)
-        if sentinel.poll() is None:
-            sentinel.terminate()
-        sentinel.wait(timeout=3)
+        cleanup_observation(child, sentinel, fds, init_pidfd)
 
 
 if __name__ == '__main__':
