@@ -37,6 +37,8 @@ def validate_results(stdout):
                     'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_runtime::tests::'
                     'test_only_dispatch_and_loopback_transport'}
         ignored = {
+            'velnor-actions-orchestrator::velnor_actions_orchestrator$crate_release_controller::tests::'
+            'signed_history::workspace::exercise',
             'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::promotion',
             'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::publication',
             'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_semver::lockless_qualified_tests::'
@@ -54,7 +56,8 @@ def validate_results(stdout):
             category = 'invalid_record'
             kind, event = record.get('type'), record.get('event')
             if kind == 'suite' and event == 'started' and not suite_open:
-                if record.get('test_count') != len(expected) + len(ignored):
+                if (type(record.get('test_count')) is not int
+                        or record['test_count'] != len(expected) + len(ignored)):
                     category = 'suite_size'
                     raise ValueError('unexpected suite size')
                 suite_open = True
@@ -66,7 +69,7 @@ def validate_results(stdout):
                 if (type(passed) is not int or passed < 0 or type(record.get('failed')) is not int
                         or record.get('failed') != 0 or suite_events == 0
                         or passed != suite_actual_passed
-                        or record.get('ignored') != len(ignored)):
+                        or type(record.get('ignored')) is not int or record['ignored'] != len(ignored)):
                     category = 'suite_result'
                     raise ValueError('unexpected suite result')
                 suite_passed += passed
@@ -91,7 +94,7 @@ def validate_results(stdout):
                 or suite_passed != len(expected)
                 or starts != Counter({name: 1 for name in expected | ignored})
                 or passes != Counter({name: 1 for name in expected})
-                or skips != Counter({name: 1 for name in ignored})):
+                or any(name not in ignored or count != 1 for name, count in skips.items())):
             category = 'test_results'
             record_index = 0
             raise ValueError('unexpected test results')

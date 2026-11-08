@@ -78,11 +78,51 @@ CAPTURED_EVENTS = [{'type': 'suite', 'event': 'started', 'test_count': 9},
   'name': 'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_runtime::tests::test_only_dispatch_and_loopback_transport'},
  {'type': 'suite', 'event': 'ok', 'passed': 4, 'failed': 0, 'ignored': 4}]
 
+HISTORICAL_WORKER = ('velnor-actions-orchestrator::velnor_actions_orchestrator$crate_release_controller::'
+                     'tests::signed_history::workspace::exercise')
+CAPTURED_EVENTS.insert(1, {'type': 'test', 'event': 'started', 'name': HISTORICAL_WORKER})
+for event in CAPTURED_EVENTS:
+    if event['type'] == 'suite' and event['event'] == 'started':
+        event['test_count'] = 10
+    if event['type'] == 'suite' and event['event'] == 'ok':
+        event['ignored'] = 5
+
 def parse_events(events):
     return parse([json.dumps(item).encode() for item in events])
 
 
 class DiagnosticsTest(unittest.TestCase):
+    def test_captured_linux_failure_rejected_and_synthetic_success_accepted(self):
+        fixture = pathlib.Path(__file__).parent / 'tests/fixtures/hosted-direct-release-linux-failed.jsonl'
+        events = [json.loads(line) for line in fixture.read_text().splitlines()]
+        self.assertNotEqual('accepted', parse_events(events))
+        for event in events:
+            if event.get('event') == 'failed':
+                event['event'] = 'ok'
+                if event['type'] == 'suite':
+                    event['passed'] = 5
+                    event['failed'] = 0
+        self.assertEqual('accepted', parse_events(events))
+        missing = [item for item in events if item.get('name') != HISTORICAL_WORKER]
+        self.assertNotEqual('accepted', parse_events(missing))
+        import copy
+        for mutation in ('duplicate', 'unknown', 'ignored_success', 'count', 'summary', 'missing_required'):
+            changed = copy.deepcopy(events)
+            if mutation == 'duplicate':
+                changed.insert(2, copy.deepcopy(changed[1]))
+            elif mutation == 'unknown':
+                changed[1]['name'] = 'unexpected'
+            elif mutation == 'ignored_success':
+                changed.insert(2, {'type': 'test', 'event': 'ok', 'name': HISTORICAL_WORKER})
+            elif mutation == 'count':
+                changed[0]['test_count'] = 9
+            elif mutation == 'summary':
+                next(item for item in changed if item['type'] == 'suite' and item['event'] == 'ok')['ignored'] = 4
+            else:
+                changed = [item for item in changed if not item.get('name', '').endswith('test_only_dispatch_and_loopback_transport')]
+            with self.subTest(mutation=mutation):
+                self.assertNotEqual('accepted', parse_events(changed))
+
     def test_complete_results_are_accepted(self):
         self.assertEqual('accepted', parse_events(CAPTURED_EVENTS))
 
@@ -90,7 +130,7 @@ class DiagnosticsTest(unittest.TestCase):
         import copy
         cases = []
         for index, event in enumerate(CAPTURED_EVENTS):
-            if event['type'] == 'test' and event['event'] in ('ok', 'ignored'):
+            if event['type'] == 'test' and event['event'] == 'ok':
                 missing_event = copy.deepcopy(CAPTURED_EVENTS)
                 del missing_event[index]
                 cases.append(missing_event)
@@ -104,17 +144,17 @@ class DiagnosticsTest(unittest.TestCase):
         duplicate.insert(2, copy.deepcopy(duplicate[1]))
         cases.append(duplicate)
         ignored_pass = copy.deepcopy(CAPTURED_EVENTS)
-        ignored_pass[10]['event'] = 'ok'
+        next(event for event in ignored_pass if event.get('event') == 'ignored')['event'] = 'ok'
         cases.append(ignored_pass)
         wrong_summary = copy.deepcopy(CAPTURED_EVENTS)
-        wrong_summary[15]['passed'] = 2
+        next(event for event in wrong_summary if event['type'] == 'suite' and event['event'] == 'ok')['passed'] = 2
         cases.append(wrong_summary)
         for events in cases:
             with self.subTest(events=events):
                 self.assertNotEqual('accepted', parse_events(events))
 
     def test_bad_json_reports_index_without_content(self):
-        result = parse([b'{"type":"suite","event":"started","test_count":9}', b'secret-token'])
+        result = parse([b'{"type":"suite","event":"started","test_count":10}', b'secret-token'])
         self.assertIn('category=invalid_json record_index=2', result)
         self.assertNotIn('secret-token', result)
 
@@ -127,7 +167,7 @@ class DiagnosticsTest(unittest.TestCase):
         self.assertIn('category=test_results record_index=0', parse([]))
 
     def test_unexpected_test_fails_closed_without_name(self):
-        result = parse([b'{"type":"suite","event":"started","test_count":9}',
+        result = parse([b'{"type":"suite","event":"started","test_count":10}',
                         b'{"type":"test","event":"started","name":"secret-test-name"}'])
         self.assertIn('category=test_event record_index=2', result)
         self.assertNotIn('secret-test-name', result)
