@@ -296,3 +296,6 @@ pub(crate) use gc1_t48_argv::*;
 
 #[path = "gc1_t48_runner_family.rs"]
 mod gc1_t48_runner_family;
+
+#[path = "gc1_t48_release_supersession.rs"]
+mod gc1_t48_release_supersession;

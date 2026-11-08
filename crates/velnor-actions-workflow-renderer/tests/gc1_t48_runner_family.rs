@@ -310,7 +310,7 @@ fn release_discovery_waits_for_each_late_phase_independently() -> Result<(), Box
     )?;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = r#"sleep() { SECONDS=$((SECONDS + 1201)); }
-gh() { case "$*" in *workflows/*/runs*) if (( SECONDS > WAIT_UNTIL )) && [[ "$WAIT_FOREVER" != 1 ]]; then cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-complete"; else cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-pending"; fi;; *runs/31/artifacts*) cat "$FIXTURE/producer-artifact";; *runs/41/artifacts*) cat "$FIXTURE/qualification-artifact";; *runs/41/attempts/3/jobs*) cat "$FIXTURE/jobs";; *) return 1;; esac; }
+gh() { case "$*" in *git/ref/heads/main*) printf '{"ref":"refs/heads/main","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA";; *workflows/*/runs*) if (( SECONDS > WAIT_UNTIL )) && [[ "$WAIT_FOREVER" != 1 ]]; then cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-complete"; else cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-pending"; fi;; *runs/31/artifacts*) cat "$FIXTURE/producer-artifact";; *runs/41/artifacts*) cat "$FIXTURE/qualification-artifact";; *runs/41/attempts/3/jobs*) cat "$FIXTURE/jobs";; *) return 1;; esac; }
 source "$RESOLVER"
 "#;
     for (phase, forever, expected) in [

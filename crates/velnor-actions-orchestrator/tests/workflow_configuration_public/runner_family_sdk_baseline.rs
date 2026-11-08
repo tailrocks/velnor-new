@@ -38,7 +38,10 @@ fn enabled_runner_family_prepares_a_planned_job() -> Result<(), Box<dyn Error>> 
     fs::write(config_path, config)?;
     let prepared = prepare(root)?;
     let jobs = finalized_jobs(&prepared)?;
-    assert!(jobs.contains_key("image-runner-family-linux-amd64"));
+    let family = jobs
+        .get("image-runner-family-linux-amd64")
+        .ok_or("family job missing")?;
+    assert_eq!(family.timeout_minutes.minutes(), 330);
     Ok(())
 }
 
