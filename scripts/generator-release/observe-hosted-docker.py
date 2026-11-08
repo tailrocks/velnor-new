@@ -102,7 +102,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix="velnor-docker-observe-", dir="/tmp") as home:
             env = {"PATH": "/usr/bin:/bin", "HOME": home, "DOCKER_CONFIG": home, "LANG": "C.UTF-8"}
             workspace = os.environ.get("GITHUB_WORKSPACE", "")
-            git_env = {**env, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+            git_env = {**env, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_NO_REPLACE_OBJECTS": "1"}
             git = pathlib.Path("/usr/bin/git")
             script = "scripts/generator-release/observe-hosted-docker.py"
             if not workspace.startswith("/") or probe(git, ["-C", workspace, "rev-parse", "HEAD"], git_env) != source_sha:
