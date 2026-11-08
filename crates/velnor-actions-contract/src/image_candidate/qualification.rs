@@ -154,6 +154,26 @@ pub fn native_image_qualification_identity(
                     .workflow_ref
                     .starts_with("tailrocks/velnor-new/.github/workflows/ci.yml@refs/")
         }
+        "merge_group" => {
+            let Some((number, suffix)) = source_ref
+                .strip_prefix("refs/heads/gh-readonly-queue/main/pr-")
+                .and_then(|value| value.split_once('-'))
+            else {
+                return false;
+            };
+            let prefix = "tailrocks/velnor-new/.github/workflows/ci.yml@";
+            !number.is_empty()
+                && !number.starts_with('0')
+                && number.bytes().all(|byte| byte.is_ascii_digit())
+                && !suffix.is_empty()
+                && lower_hex(suffix, suffix.len())
+                && workflow
+                    .workflow_ref
+                    .strip_prefix(prefix)
+                    .is_some_and(|reference| {
+                        reference == source_ref || reference == "refs/heads/main"
+                    })
+        }
         "push" | "workflow_dispatch" => {
             source_ref == "refs/heads/main"
                 && workflow.authority_commit == source_commit

@@ -5,6 +5,9 @@
 #[path = "native_image_qualification_public/cargo_cache.rs"]
 mod cargo_cache;
 
+#[path = "native_image_qualification_public/identity.rs"]
+mod identity;
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "native_image_qualification_public/service.rs"]
 mod service;
@@ -26,10 +29,7 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
     }
     let event = env::var("GITHUB_EVENT_NAME")?;
     let source_ref = env::var("GITHUB_REF")?;
-    if event != "pull_request"
-        && !(matches!(event.as_str(), "push" | "workflow_dispatch")
-            && source_ref == "refs/heads/main")
-    {
+    if !qualification_runs(&event, &source_ref) {
         return Ok(());
     }
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
@@ -46,6 +46,7 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
         command
     };
     reject_invalid_source(&mut invoke(), deadline)?;
+    negative::merge_group_identity(binary, &root, &temp, deadline)?;
 
     if deadline.saturating_duration_since(std::time::Instant::now())
         < service::CLEANUP_RESERVE + service::START_RESERVE
@@ -89,6 +90,11 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
     daemon.verify()?;
     daemon.close()?;
     Ok(())
+}
+
+fn qualification_runs(event: &str, source_ref: &str) -> bool {
+    matches!(event, "pull_request" | "merge_group")
+        || (matches!(event, "push" | "workflow_dispatch") && source_ref == "refs/heads/main")
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]

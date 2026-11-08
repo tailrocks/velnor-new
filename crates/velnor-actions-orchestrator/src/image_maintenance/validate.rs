@@ -137,8 +137,8 @@ pub(super) fn workflow_identity()
 
 pub(super) fn qualification_identity(source_commit: &str) -> Result<(), OrchestratorError> {
     let (workflow, source_ref) = workflow_identity()?;
-    let protected =
-        workflow.event == "pull_request" || source::env("GITHUB_REF_PROTECTED")? == "true";
+    let protected = matches!(workflow.event.as_str(), "pull_request" | "merge_group")
+        || source::env("GITHUB_REF_PROTECTED")? == "true";
     if workflow.repository != "tailrocks/velnor-new"
         || workflow.repository_id != 1_390_620_900
         || !velnor_actions_contract::native_image_qualification_identity(

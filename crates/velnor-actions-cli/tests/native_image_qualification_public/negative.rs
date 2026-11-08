@@ -14,6 +14,39 @@ use velnor_actions_mise::{BoundedCommandOutput, BoundedCommandStatus};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+pub(super) fn merge_group_identity(
+    binary: &str,
+    root: &Path,
+    temp: &Path,
+    deadline: Instant,
+) -> Result<()> {
+    let sha = std::env::var("GITHUB_SHA")?;
+    for (branch, expected) in [
+        ("main", "native_service_descriptor"),
+        ("other", "native_qualification_workflow_identity"),
+    ] {
+        record_absent(temp)?;
+        let event_ref = format!("refs/heads/gh-readonly-queue/{branch}/pr-1-{sha}");
+        let output = super::bounded(
+            Command::new(binary)
+                .args(["image-maintenance", "run-native-qualification", "--root"])
+                .arg(root)
+                .arg("--runner-temp")
+                .arg(temp)
+                .env("GITHUB_EVENT_NAME", "merge_group")
+                .env("GITHUB_REF", event_ref)
+                .env("GITHUB_REF_PROTECTED", "false")
+                .env(
+                    "GITHUB_WORKFLOW_REF",
+                    "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main",
+                ),
+            deadline,
+        )?;
+        reject(&output, temp, expected)?;
+    }
+    Ok(())
+}
+
 pub(super) fn missing(binary: &str, root: &Path, temp: &Path, deadline: Instant) -> Result<()> {
     reject(
         &invoke(binary, root, temp, deadline)?,
