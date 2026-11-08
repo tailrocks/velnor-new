@@ -80,6 +80,8 @@ pub enum StepRole {
 
     CargoSourcesFetch,
 
+    RunnerFamilySourcesPrefetch,
+
     CacheKeys,
 
     TofuProvidersSave,

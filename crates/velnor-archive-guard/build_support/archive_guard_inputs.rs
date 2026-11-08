@@ -11,7 +11,7 @@ use std::error::Error;
 use std::io;
 use std::path::{Path, PathBuf};
 
-const MANIFEST: &str = "scripts/archive-guard-inputs.txt";
+pub(crate) const MANIFEST: &str = "scripts/archive-guard-inputs.txt";
 const MANIFEST_LIMIT: u64 = 32 * 1024;
 const FILE_LIMIT: u64 = 16 * 1024 * 1024;
 const TOTAL_LIMIT: u64 = 32 * 1024 * 1024;
@@ -26,16 +26,36 @@ enum Kind {
     Tree,
 }
 
-struct Entry {
+pub(crate) struct Entry {
     kind: Kind,
-    path: String,
+    pub(crate) path: String,
+}
+
+pub(crate) struct ManifestInputs {
+    pub(crate) root: std::fs::File,
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) entries: Vec<Entry>,
+}
+
+pub(crate) fn read_entries(root: &Path) -> Result<ManifestInputs, Box<dyn Error>> {
+    let held = open_root(root)?;
+    let manifest = read_file(&held, MANIFEST, MANIFEST_LIMIT)?;
+    let entries = parse_manifest(&manifest)?;
+    filesystem::verify_root_path(root, &held)?;
+    Ok(ManifestInputs {
+        root: held,
+        bytes: manifest,
+        entries,
+    })
 }
 
 pub(crate) fn fingerprint(root: &Path) -> Result<(String, Vec<PathBuf>), Box<dyn Error>> {
     let root_path = root.to_path_buf();
-    let root = open_root(root)?;
-    let manifest = read_file(&root, MANIFEST, MANIFEST_LIMIT)?;
-    let entries = parse_manifest(&manifest)?;
+    let ManifestInputs {
+        root,
+        bytes: manifest,
+        entries,
+    } = read_entries(root)?;
     let mut digest = Sha256::new();
     update(&mut digest, MANIFEST, &manifest);
     let mut watched = vec![root_path.join(MANIFEST)];

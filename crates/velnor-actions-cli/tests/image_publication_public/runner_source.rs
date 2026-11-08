@@ -143,7 +143,7 @@ fn public_runner_publication_rejects_dind_kind_archive_before_registry_mutation(
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("image_publication_image_kind"),
+        stderr.contains("image_publication_family_provenance"),
         "wrong-kind archive rejection: {stderr}"
     );
     assert!(!fixture.receipt.exists());

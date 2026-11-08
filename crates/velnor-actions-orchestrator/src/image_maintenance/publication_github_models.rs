@@ -104,9 +104,3 @@ pub(super) struct WorkflowRun {
     pub(super) status: String,
     pub(super) conclusion: Option<String>,
 }
-
-#[derive(Debug, Deserialize)]
-pub(super) struct ContentFile {
-    pub(super) encoding: String,
-    pub(super) content: String,
-}

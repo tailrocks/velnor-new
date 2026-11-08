@@ -4,10 +4,12 @@
 use crate::args::{ImageMaintenanceCommand, ImagePublicationProfileArg};
 use std::{fmt::Display, path::Path, process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{
-    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckDeadline, CheckJobSourceRequest,
-    ImagePublicationProfile, InstallBuildxRequest, OrchestratorError, PromoteImageRequest,
-    PublishImageRequest, ValidateJobCandidateRequest, admit_runner_images, build_job_candidate,
-    check_job_source, install_buildx, promote_image, publish_image, validate_job_candidate,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, BuildRunnerImagesRequest, CheckDeadline,
+    CheckJobSourceRequest, ImagePublicationProfile, InstallBuildxRequest, OrchestratorError,
+    PromoteImageRequest, PublishImageRequest, PublishRunnerImagesRequest, RunnerImageBuildPurpose,
+    ValidateJobCandidateRequest, admit_runner_images, build_job_candidate, build_runner_images,
+    check_job_source, install_buildx, promote_image, publish_image, publish_runner_images,
+    validate_job_candidate, verify_runner_publication,
 };
 
 struct PublishImageArguments<'a> {
@@ -90,6 +92,9 @@ fn run_with_deadline(
             descriptors_output,
             deadline,
         ),
+        ImageMaintenanceCommand::BuildRunnerImages { .. } => {
+            build_runner_request(command, deadline)
+        }
         ImageMaintenanceCommand::PromoteImage {
             image_id,
             source_commit,
@@ -99,6 +104,65 @@ fn run_with_deadline(
             deadline,
         }),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
+        ImageMaintenanceCommand::PublishRunnerImages(args) => {
+            runner_publication_request(args, deadline, false)
+        }
+        ImageMaintenanceCommand::VerifyRunnerPublication(args) => {
+            runner_publication_request(args, deadline, true)
+        }
+    }
+}
+
+fn build_runner_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::BuildRunnerImages {
+        root,
+        source_commit,
+        runner_temp,
+        contexts_dir,
+        publication_records,
+        output_dir,
+    } = command
+    else {
+        unreachable!()
+    };
+    build_runner_images(&BuildRunnerImagesRequest {
+        root: root.clone(),
+        source_commit: source_commit.to_owned(),
+        runner_temp: runner_temp.clone(),
+        contexts_dir: contexts_dir.clone(),
+        purpose: if *publication_records {
+            RunnerImageBuildPurpose::Publication
+        } else {
+            RunnerImageBuildPurpose::Qualification
+        },
+        output_dir: output_dir.clone(),
+        deadline,
+    })
+}
+
+fn runner_publication_request(
+    args: &crate::args::RunnerFamilyPublicationArgs,
+    deadline: CheckDeadline,
+    verify_only: bool,
+) -> Result<(), OrchestratorError> {
+    let request = PublishRunnerImagesRequest {
+        source_commit: args.source_commit.clone(),
+        producer_run_id: args.producer_run_id,
+        producer_run_attempt: args.producer_run_attempt,
+        artifact_id: args.artifact_id,
+        assets_dir: args.assets_dir.clone(),
+        qualification_proof: args.qualification_proof.clone(),
+        private_scratch: args.private_scratch.clone(),
+        manifest_output: args.manifest_output.clone(),
+        deadline,
+    };
+    if verify_only {
+        verify_runner_publication(&request)
+    } else {
+        publish_runner_images(&request)
     }
 }
 

@@ -97,7 +97,10 @@ pub use distribution::{
     HomebrewTapDestinations, HomebrewTapProtectionObserver, ReviewAppIdentity, TapMergePolicy,
     TapUpdateEnvironment, TapUpdaterBinding,
 };
-pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_digest_pinned};
+pub use dockerfile::{
+    DockerfileFacts, DockerfileProblem, analyze_dockerfile, analyze_runner_dockerfile,
+    is_digest_pinned,
+};
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
@@ -251,6 +254,9 @@ pub struct VelnorConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runner_image_family: Option<RunnerImageFamilyConfig>,
+
     #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
     pub publish: PublishConfig,
 }
@@ -260,3 +266,9 @@ pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
 pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunnerImageFamilyConfig {}
+
+pub const RUNNER_IMAGE_FAMILY_JOB_ID: &str = "image-runner-family-linux-amd64";

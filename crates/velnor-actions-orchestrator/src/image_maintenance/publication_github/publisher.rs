@@ -3,7 +3,7 @@
 
 use std::env;
 
-use super::super::{PublishImageRequest, authority};
+use super::super::{ImagePublicationProfile, PublishImageRequest, authority};
 use super::{Run, get_json};
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_mise::CheckDeadline;
@@ -14,13 +14,18 @@ pub(super) fn authenticate(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let get = |name| env::var(name).map_err(|_| internal("image_publication_invocation_missing"));
+    let workflow = match request.profile {
+        ImagePublicationProfile::Job => ".github/workflows/publish.yml",
+        ImagePublicationProfile::Runner
+        | ImagePublicationProfile::Dind
+        | ImagePublicationProfile::ResourceProbe => ".github/workflows/product-release-images.yml",
+    };
     if get("GITHUB_EVENT_NAME")? != "push"
         || get("GITHUB_REF")? != "refs/heads/main"
         || get("GITHUB_REF_PROTECTED")? != "true"
         || get("GITHUB_SHA")? != request.source_commit
         || get("GITHUB_REPOSITORY")? != authority::IMAGE_REPOSITORY
-        || get("GITHUB_WORKFLOW_REF")?
-            != "tailrocks/velnor-new/.github/workflows/publish.yml@refs/heads/main"
+        || get("GITHUB_WORKFLOW_REF")? != format!("tailrocks/velnor-new/{workflow}@refs/heads/main")
         || get("GITHUB_WORKFLOW_SHA")? != request.source_commit
     {
         return Err(internal("image_publication_invocation_identity"));
@@ -39,7 +44,7 @@ pub(super) fn authenticate(
     if run.id != id
         || run.attempt != attempt
         || run.event != "push"
-        || run.path != ".github/workflows/publish.yml"
+        || run.path != workflow
         || run.head_branch != "main"
         || run.head_sha != request.source_commit
         || run.status != "in_progress"

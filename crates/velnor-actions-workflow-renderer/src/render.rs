@@ -142,15 +142,21 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2(
-            id,
-            job,
-            &setup,
-            always,
-            target,
-            &ctx.checkout_uses,
-            policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
-        )?;
+        if !ctx
+            .workflow_tasks
+            .iter()
+            .any(|task| task.uses_private_tool_home(id))
+        {
+            cache_p08::ensure_tools_cache_v2(
+                id,
+                job,
+                &setup,
+                always,
+                target,
+                &ctx.checkout_uses,
+                policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
+            )?;
+        }
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

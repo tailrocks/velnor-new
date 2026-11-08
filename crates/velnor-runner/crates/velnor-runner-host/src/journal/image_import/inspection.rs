@@ -78,10 +78,6 @@ impl ImageImportObservation {
         }
         Ok(observation)
     }
-
-    pub(super) fn receipt(&self) -> Result<String, HostError> {
-        serde_json::to_string(self).map_err(|_| HostError::Journal)
-    }
 }
 
 fn validate_containerd(

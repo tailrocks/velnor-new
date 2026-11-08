@@ -325,6 +325,7 @@ pub(crate) fn pins() -> ProductReleasePins {
 
 pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        runner_image_family: false,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -356,3 +357,6 @@ pub(crate) use gc1_t51_stream::*;
 mod gc1_t51_argv;
 
 use gc1_t51_argv::*;
+
+#[path = "runner_family_fixed_publication.rs"]
+mod runner_family_fixed_publication;

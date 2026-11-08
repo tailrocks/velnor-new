@@ -30,9 +30,20 @@ pub(super) async fn qualify(
     source: &SourceSnapshot,
     runner_id: &str,
     dind_id: &str,
+    healthchecks: [Option<bollard::models::HealthConfig>; 2],
+    end: std::time::Instant,
 ) -> Result<Qualification, HostError> {
-    let mut resources = OwnedResources::new()?;
-    let result = qualify_with_resources(docker, source, runner_id, dind_id, &mut resources).await;
+    let [runner_health, dind_health] = healthchecks;
+    let mut resources = OwnedResources::new(&[(runner_id, runner_health), (dind_id, dind_health)])?;
+    let result = match super::remaining(end) {
+        Ok(limit) => super::deadline(
+            qualify_with_resources(docker, source, runner_id, dind_id, &mut resources),
+            limit,
+        )
+        .await
+        .and_then(std::convert::identity),
+        Err(error) => Err(error),
+    };
     let cleanup = resources.cleanup(docker).await;
     match (result, cleanup) {
         (Ok(result), Ok(())) => Ok(result),

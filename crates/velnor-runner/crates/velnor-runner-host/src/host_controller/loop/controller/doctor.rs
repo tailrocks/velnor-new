@@ -98,7 +98,11 @@ fn run_doctor_probe_worker(
     let result = match runtime {
         Ok(runtime) => match crate::launch::ReleaseReadSecret::load(config) {
             Ok(secret) => runtime.block_on(crate::launch::run_doctor_probe(
-                docker, journal, &secret, ticket,
+                docker,
+                journal,
+                &secret,
+                ticket,
+                &config.docker().endpoint,
             )),
             Err(error) => {
                 if let Err(failure) =

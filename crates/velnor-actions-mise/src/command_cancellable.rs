@@ -192,8 +192,13 @@ impl IsolatedCommand {
         } else {
             None
         };
-        let mut child = spawn_child(self, &mut anchor, reserved_cleanup_deadline)
-            .map_err(|problem| fail(&problem))?;
+        let mut child = spawn_child(
+            self,
+            &mut anchor,
+            reserved_cleanup_deadline,
+            streams.input.take(),
+        )
+        .map_err(|problem| fail(&problem))?;
         let mut context = ChildRunContext {
             program: &program,
             streams,

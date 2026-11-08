@@ -114,6 +114,7 @@ async fn prepare_storage_profile(
         current.max_jobs(),
         release_read_secret,
         worker_images,
+        &current.docker().endpoint,
     )
     .await;
     if let Some(profile) = profile {

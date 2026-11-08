@@ -128,6 +128,7 @@ workspace = true
 
 [dev-dependencies]
 base64 = { workspace = true }
+velnor-archive-guard = { version = "=0.1.78", path = "../velnor-archive-guard" }
 serde-saphyr = "=2.1.0"
 velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }

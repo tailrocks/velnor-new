@@ -96,20 +96,22 @@ pub(super) async fn wait(mutation: &mut PendingMutation, timeout: Duration) -> M
 impl OwnedResources {
     pub(super) async fn await_mutation(
         &mut self,
-        mut mutation: PendingMutation,
+        mutation: PendingMutation,
         timeout: Duration,
     ) -> Result<MutationValue, HostError> {
-        match wait(&mut mutation, timeout).await {
-            MutationWait::Settled(MutationResult::Created(value)) => Ok(value),
-            MutationWait::Settled(MutationResult::Rejected(error)) => Err(error),
-            MutationWait::Settled(MutationResult::Uncertain(error)) => {
-                self.pending_mutations.push(mutation);
+        self.pending_mutations.push(mutation);
+        let index = self.pending_mutations.len() - 1;
+        match wait(&mut self.pending_mutations[index], timeout).await {
+            MutationWait::Settled(MutationResult::Created(value)) => {
+                self.pending_mutations.remove(index);
+                Ok(value)
+            }
+            MutationWait::Settled(MutationResult::Rejected(error)) => {
+                self.pending_mutations.remove(index);
                 Err(error)
             }
-            MutationWait::Pending => {
-                self.pending_mutations.push(mutation);
-                Err(HostError::DockerTimeout)
-            }
+            MutationWait::Settled(MutationResult::Uncertain(error)) => Err(error),
+            MutationWait::Pending => Err(HostError::DockerTimeout),
         }
     }
 }

@@ -11,6 +11,10 @@ status-level = "all"
 final-status-level = "flaky"
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and binary(=runner_image_build_public)'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.ci.overrides]]
 filter = 'package(=velnor-archive-guard) and binary(=golden_collector_public) and (test(=bounded::caps_stdout_after_successful_entry_and_retains_the_prefix) or test(=bounded::times_out_after_guard_mutation_and_cleans_only_its_owned_group) or test(=bounded::retains_stderr_prefix_and_reports_source_mutation_with_output_overflow) or test(=bounded::checks_the_real_five_case_collector_and_manifest) or test(=executable_custody::replaces_external_original_after_nested_plan_and_keeps_all_goldens_matching) or test(=executable_custody::rejects_candidate_changes_to_fixture_or_dogfood_source) or test(=gate::repository_golden_gate_accepts_matching_and_rejects_changed_oracle) or test(=oracle_snapshot::capture_creates_absent_oracle_and_check_accepts_it) or test(=oracle_snapshot::capture_rejects_candidate_created_destination) or test(=oracle_snapshot::rejects_a_candidate_that_forges_the_oracle_to_match_its_output) or test(=oracle_snapshot::capture_rejects_changes_to_unmanaged_oracle_files) or test(=tree_inventory::rejects_a_golden_file_whose_executable_mode_changed) or test(=tree_inventory::rejects_an_invalid_manifest_before_capture_without_changing_cases))'
 threads-required = "num-test-threads"
 
@@ -40,3 +44,7 @@ success-output = "immediate"
 [[profile.default.overrides]]
 filter = 'package(=velnor-archive-guard) and binary(=golden_collector_public) and (test(=bounded::caps_stdout_after_successful_entry_and_retains_the_prefix) or test(=bounded::times_out_after_guard_mutation_and_cleans_only_its_owned_group) or test(=bounded::retains_stderr_prefix_and_reports_source_mutation_with_output_overflow))'
 threads-required = "num-test-threads"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and binary(=runner_image_build_public)'
+slow-timeout = { period = "60s", terminate-after = 10 }

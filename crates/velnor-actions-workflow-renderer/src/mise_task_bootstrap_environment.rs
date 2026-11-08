@@ -13,8 +13,8 @@ pub(super) fn base_environment(root: &str) -> Vec<String> {
     ]
 }
 
-pub(super) fn private_environment() -> Vec<String> {
-    [
+pub(super) fn private_environment(shared_cargo_sources: bool) -> Vec<String> {
+    let mut values: Vec<String> = [
         "HOME=\"$task_root/home\"",
         "XDG_CONFIG_HOME=\"$task_root/home/config\"",
         "XDG_DATA_HOME=\"$task_root/home/data\"",
@@ -36,7 +36,16 @@ pub(super) fn private_environment() -> Vec<String> {
     ]
     .iter()
     .map(|assignment| format!("export {assignment}"))
-    .collect()
+    .collect();
+    if shared_cargo_sources {
+        values.insert(0, shared_cargo_home());
+        values.push("export CARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\" MISE_CARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\" RUSTUP_HOME=\"$RUNNER_TEMP/velnor/rustup\" MISE_RUSTUP_HOME=\"$RUNNER_TEMP/velnor/rustup\"".to_owned());
+    }
+    values
+}
+
+pub(super) fn shared_cargo_home() -> String {
+    "test -d \"$RUNNER_TEMP\" && test ! -L \"$RUNNER_TEMP\" && test -O \"$RUNNER_TEMP\"; test ! -L \"$RUNNER_TEMP/velnor\"; /bin/mkdir -p -m 700 \"$RUNNER_TEMP/velnor\"; test -d \"$RUNNER_TEMP/velnor\" && test -O \"$RUNNER_TEMP/velnor\"; test ! -L \"$RUNNER_TEMP/velnor/cargo\"; /bin/mkdir -p -m 700 \"$RUNNER_TEMP/velnor/cargo\"; test -d \"$RUNNER_TEMP/velnor/cargo\" && test -O \"$RUNNER_TEMP/velnor/cargo\"; test ! -L \"$RUNNER_TEMP/velnor/rustup\"; /bin/mkdir -p -m 700 \"$RUNNER_TEMP/velnor/rustup\"; test -d \"$RUNNER_TEMP/velnor/rustup\" && test -O \"$RUNNER_TEMP/velnor/rustup\"; /bin/chmod 700 \"$RUNNER_TEMP/velnor\" \"$RUNNER_TEMP/velnor/cargo\" \"$RUNNER_TEMP/velnor/rustup\"".to_owned()
 }
 
 pub(super) fn source_hash_check(
@@ -121,4 +130,12 @@ pub(super) fn platform(
         | velnor_actions_contract::VerificationRunner::Macos26Arm64
         | velnor_actions_contract::VerificationRunner::Xcode27Arm64 => ("macos", "macos-arm64"),
     }
+}
+
+pub(super) fn evidence_statements() -> [String; 3] {
+    [
+        "evidence_root=\"$workspace_root/.velnor/evidence\"".to_owned(),
+        "test -d \"$evidence_root\" && test ! -L \"$evidence_root\"".to_owned(),
+        "export VELNOR_GITHUB_EVIDENCE_ROOT=\"$evidence_root\"".to_owned(),
+    ]
 }

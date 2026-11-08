@@ -22,6 +22,8 @@ const RELEASE_CONCURRENCY: &str = "${{ github.repository }}-product-release";
 mod family_jobs;
 #[path = "schema2_product_release_generator.rs"]
 mod generator;
+#[path = "schema2_runner_image_release.rs"]
+mod runner_image_release;
 #[path = "schema2_product_release_workflows.rs"]
 mod workflows;
 
@@ -47,6 +49,13 @@ pub(super) fn render(
     let mut family_workflows = Vec::new();
     let mut actions = Vec::new();
     for family in families {
+        if request.runner_image_family && family == Family::Images {
+            family_workflows.push((
+                family.workflow_path().to_owned(),
+                runner_image_release::render(request)?,
+            ));
+            continue;
+        }
         jobs.push(family_jobs::prepare_job(family, hosted.clone(), request)?);
         let composed_family_jobs = if family == Family::Generator {
             let generated = super::generator_release::generator_release(request)?;

@@ -1,0 +1,224 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "name": "pkg:docker/velnor-resource-probe@linux-amd64?platform=linux%2Famd64",
+      "digest": {
+        "sha256": "c6640793db3f495ed825a041f271d706f8de6854faca4c018fe2deca58936f5b"
+      }
+    }
+  ],
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+      "externalParameters": {
+        "configSource": {
+          "path": "Dockerfile"
+        },
+        "request": {
+          "frontend": "dockerfile.v0",
+          "args": {
+            "build-arg:SOURCE_SHA": "cf38cba8f4941fcf477726638e1a86c850400c0d",
+            "context:resource_probe": "local:resource_probe",
+            "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+            "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c"
+          },
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
+            },
+            {
+              "name": "resource_probe"
+            }
+          ],
+          "root": {
+            "configSource": {
+              "path": "Dockerfile"
+            },
+            "request": {
+              "args": {
+                "build-arg:SOURCE_SHA": "cf38cba8f4941fcf477726638e1a86c850400c0d",
+                "context:resource_probe": "local:resource_probe",
+                "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+                "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c",
+                "vcs:localdir:context": "images/resource-probe",
+                "vcs:localdir:dockerfile": "images/resource-probe",
+                "vcs:localdir:resource_probe": "prebuilt/probe",
+                "vcs:revision": "cf38cba8f4941fcf477726638e1a86c850400c0d",
+                "vcs:source": "https://github.com/tailrocks/velnor-new"
+              }
+            }
+          },
+          "compatibilityVersion": 30
+        }
+      },
+      "internalParameters": {
+        "buildConfig": {
+          "digestMapping": {
+            "sha256:32e1263f1f644b8944c90776d0a38043cd2c7a8bf81afeb83c921a719f0c3d78": "step0",
+            "sha256:a74f25e3e0ca02e5e66abc64c5c59e1939460e44facba29d3216ce7a4214b8f7": "step2",
+            "sha256:f5cdb57b79504ee93d5f1b0f9cbbf9413c77938d8490c939af851251ed994426": "step1"
+          },
+          "llbDefinition": [
+            {
+              "id": "step0",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"resource_probe\"]",
+                      "local.sharedkeyhint": "context:resource_probe-probe:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://resource_probe"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step1",
+              "inputs": [
+                "step0:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/velnor/resource-probe",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/resource_probe",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": -1,
+                        "output": 0,
+                        "secondaryInput": 0
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step2",
+              "inputs": [
+                "step1:0"
+              ],
+              "op": {
+                "Op": {}
+              }
+            }
+          ]
+        },
+        "builderPlatform": "linux/arm64",
+        "dockerfileVersion": "1.27.0"
+      }
+    },
+    "runDetails": {
+      "builder": {
+        "id": ""
+      },
+      "metadata": {
+        "invocationId": "ujgew6q4yruzwzph6b2rwb874",
+        "startedOn": "2026-11-07T22:08:44.059262851+07:00",
+        "finishedOn": "2026-11-07T22:08:44.409123931+07:00",
+        "buildkit_metadata": {
+          "vcs": {
+            "localdir:context": "images/resource-probe",
+            "localdir:dockerfile": "images/resource-probe",
+            "localdir:resource_probe": "prebuilt/probe",
+            "revision": "cf38cba8f4941fcf477726638e1a86c850400c0d",
+            "source": "https://github.com/tailrocks/velnor-new"
+          },
+          "source": {
+            "locations": {
+              "step0": {},
+              "step1": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 3
+                        },
+                        "end": {
+                          "line": 3
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "infos": [
+              {
+                "filename": "Dockerfile",
+                "language": "Dockerfile",
+                "data": "RlJPTSBzY3JhdGNoCkFSRyBTT1VSQ0VfU0hBCkNPUFkgLS1mcm9tPXJlc291cmNlX3Byb2JlIC9yZXNvdXJjZV9wcm9iZSAvdmVsbm9yL3Jlc291cmNlLXByb2JlClVTRVIgNjU1MzI6NjU1MzIKRU5UUllQT0lOVCBbIi92ZWxub3IvcmVzb3VyY2UtcHJvYmUiXQpMQUJFTCBvcmcub3BlbmNvbnRhaW5lcnMuaW1hZ2UucmV2aXNpb249JHtTT1VSQ0VfU0hBfQo=",
+                "llbDefinition": [
+                  {
+                    "id": "step0",
+                    "op": {
+                      "Op": {
+                        "source": {
+                          "identifier": "local://dockerfile",
+                          "attrs": {
+                            "local.differ": "none",
+                            "local.followpaths": "[\"Dockerfile\",\"Dockerfile.dockerignore\",\"dockerfile\"]",
+                            "local.sharedkeyhint": "dockerfile"
+                          }
+                        }
+                      },
+                      "constraints": {}
+                    }
+                  },
+                  {
+                    "id": "step1",
+                    "op": {
+                      "Op": {}
+                    },
+                    "inputs": [
+                      "step0:0"
+                    ]
+                  }
+                ],
+                "digestMapping": {
+                  "sha256:529d0f738182ac6c8511fd4fe33c6fb1f3f12b83dfe543899861f57145a94424": "step1",
+                  "sha256:c6de86053c072760641bf752d9ce67ad664cb1d30216a69a478f244df33e0157": "step0"
+                }
+              }
+            ]
+          },
+          "layers": {
+            "step1:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:49703085db777395c834e06888fd93166e187bdf38dc694de488a184dfc431a3",
+                  "size": 149
+                }
+              ]
+            ]
+          }
+        },
+        "buildkit_completeness": {
+          "request": true,
+          "resolvedDependencies": false
+        }
+      }
+    }
+  }
+}

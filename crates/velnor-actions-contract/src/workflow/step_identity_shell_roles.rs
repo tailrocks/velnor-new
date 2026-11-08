@@ -41,6 +41,7 @@ impl StepRole {
                 | Self::PlanFormat
                 | Self::MsrvQualification
                 | Self::CargoSourcesFetch
+                | Self::RunnerFamilySourcesPrefetch
                 | Self::CacheKeys
                 | Self::PreseedBuild
                 | Self::PreseedManifest

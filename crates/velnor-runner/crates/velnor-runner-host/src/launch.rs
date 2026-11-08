@@ -22,6 +22,7 @@ mod inspect;
 pub(crate) mod jit_conflict;
 mod name_taken;
 mod resource_probe;
+pub(crate) use resource_probe::{ProjectedCandidate, inspect_projected_candidate};
 pub(crate) mod retirement;
 pub(crate) mod scoped_runtime;
 
@@ -84,8 +85,8 @@ pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub use resource_probe::{
-    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
-    verify_worker_runtime_config,
+    DaemonSelection, ImageObservation, ImageReference, ImageSession, WorkerImage,
+    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use steps::resume_deferred_offer_acquire_with_transport;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
@@ -97,8 +98,9 @@ pub(crate) async fn startup_storage_profile(
     max_jobs: u32,
     secret: &ReleaseReadSecret,
     images: &VerifiedWorkerImages,
+    endpoint: &str,
 ) -> Option<crate::journal::StorageProfile> {
-    let permit = resource_probe::start_permit(docker, journal, budget, secret).await?;
+    let permit = resource_probe::start_permit(docker, journal, budget, secret, endpoint).await?;
     (permit.resource_budget() == budget)
         .then(|| permit.storage_profile(images, budget, max_jobs))
         .flatten()

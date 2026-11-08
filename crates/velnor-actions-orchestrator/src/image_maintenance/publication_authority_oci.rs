@@ -63,7 +63,7 @@ pub(super) fn inspect_archive(
     Ok(actual)
 }
 
-fn same_oci_evidence(
+pub(in crate::image_maintenance) fn same_oci_evidence(
     actual: &OciCandidateEvidence,
     archive: &ImageCandidateArchive,
     expected: &ImageCandidateOci,

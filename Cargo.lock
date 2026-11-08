@@ -1172,6 +1172,7 @@ dependencies = [
  "velnor-actions-freshness",
  "velnor-actions-mise",
  "velnor-actions-orchestrator",
+ "velnor-archive-guard",
 ]
 
 [[package]]
@@ -1186,6 +1187,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
+ "velnor-runner-image-manifest",
 ]
 
 [[package]]
@@ -1326,6 +1328,16 @@ dependencies = [
  "tar",
  "tempfile",
  "velnor-actions-mise",
+ "velnor-runner-image-manifest",
+]
+
+[[package]]
+name = "velnor-runner-image-manifest"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

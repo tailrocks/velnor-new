@@ -160,6 +160,9 @@ fn native_cleanup_runtime(
     worker_images: &crate::launch::VerifiedWorkerImages,
     release_read_secret: &Arc<crate::launch::ReleaseReadSecret>,
 ) -> Result<NativeCleanupRuntime, ListenFault> {
+    if !selected_engine.matches_images(worker_images) {
+        return Err(HostError::Ownership.into());
+    }
     Ok(NativeCleanupRuntime::new(
         docker.clone(),
         journal.clone(),
@@ -169,7 +172,6 @@ fn native_cleanup_runtime(
             platform: selected_engine.platform().to_owned(),
         },
         selected_engine.clone(),
-        worker_images.clone(),
         Arc::clone(release_read_secret),
     )?)
 }

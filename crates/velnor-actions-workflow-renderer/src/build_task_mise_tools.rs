@@ -32,7 +32,7 @@ pub(super) fn selected_mise_files(
     policy: &BuildTaskPolicy,
 ) -> Result<(String, String), RenderError> {
     validate_selected_tools(policy)?;
-    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", false)
+    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", false, false)
 }
 
 pub(super) fn selected_mise_files_for(
@@ -40,6 +40,7 @@ pub(super) fn selected_mise_files_for(
     mise_os: &str,
     lock_platform: &str,
     cargo_wrapper: bool,
+    runner_family: bool,
 ) -> Result<(String, String), RenderError> {
     if !matches!(
         (mise_os, lock_platform),
@@ -60,6 +61,16 @@ pub(super) fn selected_mise_files_for(
         let key = toml_string(&tool.key);
         config.push(format!("[tools.{key}]"));
         config.push(format!("version = {}", toml_string(&tool.version)));
+        if let Some(workflow) = &tool.workflow
+            && runner_family
+        {
+            if tool.key != "mr-boxington" || workflow != "release.yml@refs/heads/main" {
+                return Err(RenderError::InvalidWorkflow(
+                    "build_task_tool_workflow".to_owned(),
+                ));
+            }
+            config.push(format!("workflow = {}", toml_string(workflow)));
+        }
         if !tool.os.is_empty() {
             config.push(format!("os = [\"{mise_os}\"]"));
         }
@@ -88,12 +99,44 @@ pub(super) fn selected_mise_files_for(
         ]);
     }
 
-    let mut lock = Vec::new();
+    let lock = selected_lock(selected_tools, lock_platform, runner_family)?;
+    Ok((config.join("\n"), lock))
+}
+
+fn selected_lock(
+    selected_tools: &[crate::verification_jobs::build_task_jobs::BuildTaskTool],
+    lock_platform: &str,
+    runner_family: bool,
+) -> Result<String, RenderError> {
+    let mut lock = if runner_family {
+        vec!["lockfile_version = 3".to_owned(), String::new()]
+    } else {
+        Vec::new()
+    };
     for tool in selected_tools {
         let key = toml_string(&tool.key);
         lock.push(format!("[[tools.{key}]]"));
         lock.push(format!("version = {}", toml_string(&tool.version)));
         lock.push(format!("backend = {}", toml_string(&tool.backend)));
+        if runner_family {
+            if tool.specifiers.is_empty()
+                || tool
+                    .specifiers
+                    .iter()
+                    .any(|specifier| !safe_version(specifier))
+            {
+                return Err(RenderError::InvalidWorkflow(
+                    "selected_tool_specifiers".to_owned(),
+                ));
+            }
+            let specifiers = tool
+                .specifiers
+                .iter()
+                .map(|specifier| toml_string(specifier))
+                .collect::<Vec<_>>()
+                .join(", ");
+            lock.push(format!("specifiers = [{specifiers}]"));
+        }
         if !tool.lock_options.is_empty() {
             lock.push(String::new());
             lock.push(format!("[tools.{key}.options]"));
@@ -109,10 +152,24 @@ pub(super) fn selected_mise_files_for(
             append_lock_string(&mut lock, "url_api", artifact.url_api.as_deref());
             append_lock_string(&mut lock, "signer", artifact.signer.as_deref());
             append_lock_string(&mut lock, "provenance", artifact.provenance.as_deref());
+            if let Some(repository) = &artifact.repository_id
+                && runner_family
+            {
+                let owner = artifact
+                    .owner_id
+                    .as_ref()
+                    .map_or_else(String::new, |owner| {
+                        format!(", owner = {}", toml_string(owner))
+                    });
+                lock.push(format!(
+                    "repository_ids = {{ repository = {}{owner} }}",
+                    toml_string(repository)
+                ));
+            }
         }
         lock.push(String::new());
     }
-    Ok((config.join("\n"), lock.join("\n")))
+    Ok(lock.join("\n"))
 }
 
 fn toml_string(value: &str) -> String {
@@ -273,7 +330,18 @@ pub(super) fn validate_artifact(
         .checksum
         .strip_prefix("sha256:")
         .unwrap_or_default();
-    if !velnor_actions_contract::ids::is_lower_hex_len(checksum, 64)
+    let valid_id = |value: &str| {
+        value
+            .parse::<u64>()
+            .is_ok_and(|id| id != 0 && id.to_string() == value)
+    };
+    if artifact.owner_id.is_some() && artifact.repository_id.is_none()
+        || artifact
+            .repository_id
+            .as_deref()
+            .is_some_and(|id| !valid_id(id))
+        || artifact.owner_id.as_deref().is_some_and(|id| !valid_id(id))
+        || !velnor_actions_contract::ids::is_lower_hex_len(checksum, 64)
         || !locked_github_url(&artifact.url, "https://github.com/")
         || artifact
             .url_api
@@ -295,63 +363,12 @@ pub(super) fn validate_artifact(
     Ok(())
 }
 
-pub(super) fn locked_github_url(value: &str, prefix: &str) -> bool {
-    value.strip_prefix(prefix).is_some_and(|path| {
-        !path.is_empty()
-            && !path.starts_with('/')
-            && !path.contains("..")
-            && path.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'+')
-            })
-    })
-}
-
-pub(super) fn safe_version(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
-}
-
-pub(super) fn exact_rust_version(value: &str) -> bool {
-    let components = value.split('.').collect::<Vec<_>>();
-    if components.len() != 3 {
-        return false;
-    }
-    let (Ok(major), Ok(minor), Ok(_patch)) = (
-        components[0].parse::<u32>(),
-        components[1].parse::<u32>(),
-        components[2].parse::<u32>(),
-    ) else {
-        return false;
-    };
-    major == 1 && minor >= 98
-}
-
-pub(super) fn safe_backend(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 200
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'/' | b'.' | b'_' | b'-' | b'@')
-        })
-}
-
-pub(super) fn safe_option_value(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 512
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b',' | b'.' | b'_' | b'-'))
-}
-
-pub(super) fn safe_identity(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 512
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'/' | b'.' | b'_' | b'-' | b'@')
-        })
-}
+#[path = "build_task_mise_tools_identity.rs"]
+mod identity;
+pub(super) use identity::{
+    exact_rust_version, locked_github_url, safe_backend, safe_identity, safe_option_value,
+    safe_version,
+};
 
 pub(super) fn validate_policy(policy: &BuildTaskPolicy) -> Result<(), RenderError> {
     policy

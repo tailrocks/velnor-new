@@ -25,6 +25,7 @@ pub(super) struct OwnedResources {
     pub(super) containers: Vec<TrackedContainer>,
     pub(super) volumes: Vec<String>,
     pub(super) pending_mutations: Vec<PendingMutation>,
+    healthchecks: HashMap<String, Option<bollard::models::HealthConfig>>,
     next_container: u8,
 }
 
@@ -35,7 +36,9 @@ pub(super) struct TrackedContainer {
 }
 
 impl OwnedResources {
-    pub(super) fn new() -> Result<Self, HostError> {
+    pub(super) fn new(
+        images: &[(&str, Option<bollard::models::HealthConfig>)],
+    ) -> Result<Self, HostError> {
         let mut bytes = [0_u8; 16];
         getrandom::fill(&mut bytes).map_err(|_| HostError::Identity)?;
         let mut run_id = String::with_capacity(32);
@@ -48,6 +51,10 @@ impl OwnedResources {
             containers: Vec::new(),
             volumes: Vec::new(),
             pending_mutations: Vec::new(),
+            healthchecks: images
+                .iter()
+                .map(|(id, health)| ((*id).to_owned(), health.clone()))
+                .collect(),
             next_container: 0,
         })
     }
@@ -261,11 +268,18 @@ impl OwnedResources {
         {
             return Err(HostError::Ownership);
         }
-        let labels = inspect
-            .config
-            .as_ref()
-            .and_then(|config| config.labels.as_ref())
+        let config = inspect.config.as_ref().ok_or(HostError::Ownership)?;
+        let expected_health = self
+            .healthchecks
+            .get(image_id)
             .ok_or(HostError::Ownership)?;
+        if !super::image_identity::same_healthcheck(
+            config.healthcheck.as_ref(),
+            expected_health.as_ref(),
+        ) {
+            return Err(HostError::Ownership);
+        }
+        let labels = config.labels.as_ref().ok_or(HostError::Ownership)?;
         if labels.get(QUALIFIER_LABEL).map(String::as_str) != Some(self.run_id.as_str())
             || labels
                 .get("io.velnor.runner-image-qualifier.role")

@@ -55,8 +55,8 @@ pub(crate) async fn load(root: &Path, source_sha: &str) -> Result<SourceSnapshot
     if canonical != root {
         return Err(HostError::Path);
     }
-    validate_source(&canonical, source_sha).await?;
-    let lock_bytes = read_commit_lock(&canonical, source_sha).await?;
+    Box::pin(validate_source(&canonical, source_sha)).await?;
+    let lock_bytes = Box::pin(read_commit_lock(&canonical, source_sha)).await?;
     require_worktree_lock(&canonical, &lock_bytes)?;
     let versions = parse_versions(&lock_bytes)?;
     Ok(SourceSnapshot {
@@ -72,8 +72,8 @@ pub(crate) async fn load(root: &Path, source_sha: &str) -> Result<SourceSnapshot
 }
 
 pub(crate) async fn revalidate(snapshot: &SourceSnapshot) -> Result<(), HostError> {
-    validate_source(&snapshot.root, &snapshot.source_sha).await?;
-    let commit_lock = read_commit_lock(&snapshot.root, &snapshot.source_sha).await?;
+    Box::pin(validate_source(&snapshot.root, &snapshot.source_sha)).await?;
+    let commit_lock = Box::pin(read_commit_lock(&snapshot.root, &snapshot.source_sha)).await?;
     if commit_lock != snapshot.lock_bytes {
         return Err(HostError::Identity);
     }

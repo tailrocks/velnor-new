@@ -10,8 +10,8 @@ use crate::worker::ResourceBudget;
 pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
 pub use self::provider::{
-    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
-    verify_worker_runtime_config,
+    DaemonSelection, ImageObservation, ImageReference, ImageSession, WorkerImage,
+    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 
 pub(crate) use self::sample::FreshPressureSample;
@@ -32,14 +32,12 @@ mod ops;
 mod owned_cgroups;
 mod projection;
 mod provider;
+pub(crate) use provider::{ProjectedCandidate, inspect_projected_candidate};
 pub(crate) mod publication;
 mod readiness;
-pub(in crate::launch) use provider::VerifiedWorkspaceCleanup;
 pub(crate) use readiness::collect as collect_readiness_sample;
 
 mod release_secret;
-
-pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
 
 mod record;
 
@@ -85,7 +83,7 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_un
     release_read_secret: &ReleaseReadSecret,
     deadline: std::time::Instant,
 ) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(release_read_secret, journal)?;
+    let provider = release_image_provider(release_read_secret, journal, selected.endpoint())?;
     verify_publication_probe_image_until_with_provider(
         docker, journal, selected, &provider, deadline,
     )
@@ -201,16 +199,25 @@ pub(crate) async fn run_doctor_probe(
     journal: &Journal,
     release_read_secret: &ReleaseReadSecret,
     ticket: &crate::journal::DoctorProbeTicket,
+    endpoint: &str,
 ) -> Result<Option<serde_json::Value>, crate::error::HostError> {
-    Box::pin(doctor::run(docker, journal, release_read_secret, ticket)).await
+    Box::pin(doctor::run(
+        docker,
+        journal,
+        release_read_secret,
+        ticket,
+        endpoint,
+    ))
+    .await
 }
 
 pub(in crate::launch) fn release_image_provider<'a>(
     secret: &'a ReleaseReadSecret,
     journal: &'a Journal,
+    endpoint: &str,
 ) -> Result<impl ImageProvider + 'a, crate::error::HostError> {
     let token = secret.as_provider_token()?;
-    ReleaseImageProvider::from_compiled_source(token, journal)
+    ReleaseImageProvider::from_compiled_source(token, journal, endpoint)
         .map_err(|_| crate::error::HostError::Docker)
 }
 
@@ -230,9 +237,10 @@ pub(crate) async fn start_permit(
     journal: &Journal,
     budget: ResourceBudget,
     release_read_secret: &ReleaseReadSecret,
+    endpoint: &str,
 ) -> Option<StartPermit> {
     let token = release_read_secret.as_provider_token().ok()?;
-    let provider = match ReleaseImageProvider::from_compiled_source(token, journal) {
+    let provider = match ReleaseImageProvider::from_compiled_source(token, journal, endpoint) {
         Ok(provider) => provider,
         Err(error) => {
             eprintln!("resource_probe=unavailable reason={}", error.code());
@@ -254,7 +262,8 @@ pub(crate) async fn recovery_observation(
     release_read_secret: &ReleaseReadSecret,
 ) -> Option<RecoveryObservation> {
     let token = release_read_secret.as_provider_token().ok()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token, journal).ok()?;
+    let provider =
+        ReleaseImageProvider::from_compiled_source(token, journal, engine.endpoint()).ok()?;
     let sample = Box::pin(lifecycle::collect(docker, journal, &provider))
         .await
         .ok()??;

@@ -117,6 +117,7 @@ fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
             .to_owned(),
     ];
     let request = Schema2WorkflowRequest {
+        runner_image_family: false,
         version: env!("CARGO_PKG_VERSION").to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

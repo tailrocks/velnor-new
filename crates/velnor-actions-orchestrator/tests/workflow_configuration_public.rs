@@ -271,3 +271,18 @@ mod producer_execution_fixture;
 
 #[path = "workflow_configuration_public/producer_execution_limits.rs"]
 mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/runner_family_sdk_baseline.rs"]
+mod runner_family_sdk_baseline;
+
+#[path = "workflow_configuration_public/runner_family_selection.rs"]
+mod runner_family_selection;
+
+#[path = "workflow_configuration_public/runner_family_guard.rs"]
+mod runner_family_guard;
+
+#[path = "workflow_configuration_public/runner_family_render.rs"]
+mod runner_family_render;
+
+#[path = "workflow_configuration_public/runner_family_source.rs"]
+mod runner_family_source;

@@ -362,6 +362,7 @@ impl<'a> ControllerLoop<'a> {
             self.current.max_jobs(),
             &self.release_read_secret,
             &self.worker_images,
+            &self.current.docker().endpoint,
         )
         .await;
         let Some(profile) = profile else {

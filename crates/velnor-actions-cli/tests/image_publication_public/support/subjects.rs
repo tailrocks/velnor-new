@@ -56,11 +56,23 @@ pub(super) fn write_subjects(
         run_attempt,
     })?;
     fs::write(&record, &record_bytes)?;
+    if let Some(envelope) = &image.envelope {
+        fs::write(base.join(provenance_name(profile)), envelope)?;
+        for (name, (_, bytes)) in &image.contexts {
+            fs::write(base.join(name), bytes)?;
+        }
+    }
     let (qualification_proof, qualification_attestation) = match profile {
         FixtureProfile::Job => (None, None),
         FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => {
-            let proof =
-                records::qualification_proof(profile, source, &lock_sha256, run_attempt, image)?;
+            let proof = records::qualification_proof(
+                profile,
+                source,
+                &lock_sha256,
+                run_attempt,
+                image,
+                &hex(&Sha256::digest(&record_bytes)),
+            )?;
             let path = base.join("RUNNER_IMAGE_QUALIFICATION.json");
             fs::write(&path, &proof)?;
             let attestation =
@@ -78,4 +90,13 @@ pub(super) fn write_subjects(
         lock_sha256,
         source_files,
     })
+}
+
+fn provenance_name(profile: FixtureProfile) -> &'static str {
+    match profile {
+        FixtureProfile::Runner => "runner-image-provenance.json",
+        FixtureProfile::Dind => "dind-image-provenance.json",
+        FixtureProfile::ResourceProbe => "resource-probe-image-provenance.json",
+        FixtureProfile::Job => "",
+    }
 }

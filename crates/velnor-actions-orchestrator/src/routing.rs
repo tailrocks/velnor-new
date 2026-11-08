@@ -167,5 +167,6 @@ fn workflow_request(
         mbx_qualification,
         mise_pin_qualification,
         product_release,
+        runner_image_family: config.runner_image_family.is_some(),
     })
 }

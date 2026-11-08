@@ -22,3 +22,7 @@ include!(concat!(env!("OUT_DIR"), "/compile_identity.rs"));
 pub(crate) const fn compiled_release_identity() -> Option<CompiledReleaseIdentity> {
     COMPILED_RELEASE_IDENTITY
 }
+
+pub(crate) const fn runner_lock() -> &'static [u8] {
+    include_bytes!(concat!(env!("OUT_DIR"), "/runner.lock"))
+}

@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, env};
 
-use base64::{Engine, engine::general_purpose::STANDARD};
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
@@ -25,7 +24,7 @@ mod snapshot;
 
 #[path = "publication_github_models.rs"]
 mod models;
-use models::{Artifact, Comparison, ContentFile, Job, Run};
+use models::{Artifact, Comparison, Job, Run};
 
 use super::{ImagePublicationProfile, PublishImageRequest, authority};
 
@@ -85,7 +84,7 @@ pub(super) fn authenticate(
         super::qualification::unchanged(proof)?;
     } else {
         let job_run = attestor::job(request, &token, deadline)?;
-        super::attestation::verify(
+        super::attestation::verify_job_image(
             request,
             candidate,
             &super::attestation::AttestationRun {
@@ -271,36 +270,13 @@ fn source_files(
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
-    if request.profile == ImagePublicationProfile::Job {
-        return snapshot::source_files(
-            &request.source_commit,
-            authority::source_paths(request.profile),
-            token,
-            deadline,
-        );
-    }
-    authority::source_paths(request.profile)
-        .iter()
-        .map(|path| {
-            let route = format!(
-                "repos/tailrocks/velnor-new/contents/{path}?ref={}",
-                request.source_commit
-            );
-            let content: ContentFile = get_json(&route, token, deadline)?;
-            if content.encoding != "base64" {
-                return Err(internal("image_publication_source_encoding"));
-            }
-            let compact = content
-                .content
-                .bytes()
-                .filter(|byte| !byte.is_ascii_whitespace())
-                .collect::<Vec<_>>();
-            let bytes = STANDARD
-                .decode(compact)
-                .map_err(|_| internal("image_publication_source_base64"))?;
-            Ok(((*path).to_owned(), bytes))
-        })
-        .collect()
+    snapshot::source_files(
+        &request.source_commit,
+        authority::source_paths(request.profile)?,
+        request.profile,
+        token,
+        deadline,
+    )
 }
 
 fn is_sha1(value: &str) -> bool {

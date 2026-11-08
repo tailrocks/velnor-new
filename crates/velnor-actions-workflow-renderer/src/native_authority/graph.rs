@@ -115,6 +115,12 @@ fn metadata_ir(
         job.check_runner.clone_from(&fact.check_runner);
         job.needs.clone_from(&fact.needs);
         job.outputs.clone_from(&fact.outputs);
+        if matches!(&fact.source, LogicalJobSource::WorkflowTask { owner } if owner == "runner-image-family")
+            && fact.id == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID
+            && input.config.runner_image_family.is_some()
+        {
+            job.env = velnor_actions_contract::JobEnv::RustToolchain;
+        }
         if let LogicalJobSource::NamedCheck { id } = &fact.source {
             job.steps.push(named_check_metadata(input, id)?);
         }

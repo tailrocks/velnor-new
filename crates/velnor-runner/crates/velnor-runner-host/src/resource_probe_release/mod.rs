@@ -8,7 +8,7 @@ use crate::error::HostError;
 mod files;
 mod manifest;
 pub(crate) mod runner_manifest;
-mod runner_qualification;
+pub(crate) mod runner_qualification;
 mod schema5;
 
 fn is_exact_semver(version: &str) -> bool {
@@ -28,14 +28,6 @@ pub fn write_manifest(inspect: &Path, archive: &Path, output: &Path) -> Result<(
     manifest::write(inspect, archive, output)
 }
 
-pub fn write_runner_image_manifest(
-    descriptors: &Path,
-    runner_lock: &Path,
-    output: &Path,
-) -> Result<(), HostError> {
-    runner_manifest::write(descriptors, runner_lock, output)
-}
-
 pub async fn qualify_runner_images(
     root: &Path,
     source_sha: &str,
@@ -43,5 +35,61 @@ pub async fn qualify_runner_images(
     dind_id: &str,
     docker_socket: &str,
 ) -> Result<(), HostError> {
-    runner_qualification::qualify(root, source_sha, runner_id, dind_id, docker_socket).await
+    Box::pin(runner_qualification::qualify(
+        root,
+        source_sha,
+        runner_id,
+        dind_id,
+        docker_socket,
+    ))
+    .await
+}
+
+#[derive(Debug)]
+pub struct RunnerArchiveQualification<'a> {
+    pub root: &'a Path,
+    pub source_sha: &'a str,
+    pub runner_archive: &'a Path,
+    pub dind_archive: &'a Path,
+    pub probe_archive: &'a Path,
+    pub runner_envelope: &'a Path,
+    pub dind_envelope: &'a Path,
+    pub probe_envelope: &'a Path,
+    pub contexts: &'a Path,
+    pub runner_record: &'a Path,
+    pub dind_record: &'a Path,
+    pub probe_record: &'a Path,
+    pub producer_run_id: u64,
+    pub producer_run_attempt: u32,
+    pub qualifier_run_id: u64,
+    pub qualifier_run_attempt: u32,
+    pub qualifier_job_id: u64,
+    pub docker_socket: &'a str,
+    pub output: &'a Path,
+}
+
+pub async fn qualify_runner_image_archives(
+    request: &RunnerArchiveQualification<'_>,
+) -> Result<(), HostError> {
+    Box::pin(runner_qualification::qualify_archives(request)).await
+}
+
+#[derive(Debug)]
+pub struct RunnerCandidateCheck<'a> {
+    pub root: &'a Path,
+    pub source_sha: &'a str,
+    pub runner_archive: &'a Path,
+    pub dind_archive: &'a Path,
+    pub probe_archive: &'a Path,
+    pub runner_envelope: &'a Path,
+    pub dind_envelope: &'a Path,
+    pub probe_envelope: &'a Path,
+    pub contexts: &'a Path,
+    pub docker_socket: &'a str,
+}
+
+pub async fn check_runner_image_candidate(
+    request: &RunnerCandidateCheck<'_>,
+) -> Result<(), HostError> {
+    Box::pin(runner_qualification::check_candidate(request)).await
 }

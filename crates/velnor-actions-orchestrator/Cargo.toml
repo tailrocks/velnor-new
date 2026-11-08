@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "runner_image_build_public"
+path = "tests/runner_image_build_public.rs"
+
+[[test]]
 name = "controller_approval_public"
 path = "tests/controller_approval_public.rs"
 

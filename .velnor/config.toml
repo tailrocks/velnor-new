@@ -54,6 +54,16 @@ packages = ["velnor-actions-cli"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner/crates/velnor-runner-host/**",
+  ".velnor/runner.lock",
+  "crates/velnor-runner/Cargo.toml",
+  "crates/velnor-runner/Cargo.lock",
+]
+packages = ["velnor-runner-host"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = ["crates/velnor-actions-contract/**"]
 packages = ["velnor-actions-contract"]
 complete = true
@@ -125,6 +135,14 @@ globs = [
   "fixtures/bun-workspace-suites/input/.velnor/config.toml",
   "mise.toml",
   "mise.lock",
+  "rust-toolchain.toml",
+  "images/runner/ubuntu-26.04/Dockerfile",
+  "images/dind/Dockerfile",
+  "images/resource-probe/Dockerfile",
+  "scripts/check-runner-image-candidate.sh",
+  "scripts/runner-family-discovery.sh",
+  "scripts/resolve-runner-family-producer.sh",
+  "scripts/resolve-runner-family-publication.sh",
   "scripts/generator-release/create-release-manifest.sh",
   "scripts/generator-release/source-qualification-validator-recipes.json",
   "Cargo.toml",
@@ -493,9 +511,22 @@ inputs = [
   "crates/velnor-actions-contract/src/image_candidate.rs",
   "crates/velnor-actions-contract/src/image_candidate/closure.rs",
   "crates/velnor-actions-contract/src/image_candidate/record.rs",
-  "crates/velnor-actions-contract/src/image_candidate/runner_publication.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/attested_grammar.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/build_source.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/candidate.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/inventory.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/lib.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_inventory.txt",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_absences.txt",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/model.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_configuration.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_grammar.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/provenance.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_publication.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_qualification.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/strict_json.rs",
   "crates/velnor-actions-contract/src/image_candidate/runner_publication_context.rs",
-  "crates/velnor-actions-contract/src/image_candidate/runner_qualification.rs",
   "crates/velnor-actions-contract/src/lib.rs",
   "crates/velnor-actions-contract/src/manifest.rs",
   "crates/velnor-actions-contract/src/manifest_checks.rs",
@@ -806,8 +837,11 @@ inputs = [
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive_tar_framing.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/config.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested/envelope.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested/output.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/registry.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph_support.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/json.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer.rs",
@@ -864,6 +898,11 @@ inputs = [
   "rust-toolchain.toml",
   "scripts/archive-guard-build-namespace.sh",
   "scripts/archive-guard-inputs.txt",
+  "scripts/native-image-candidate-inventory.py",
+  "scripts/runner-family-source-inventory.py",
+  "scripts/runner-family-root-inventory.py",
+  "scripts/runner-family-host-inventory.py",
+  "scripts/test-native-image-candidate-inventory.py",
   "scripts/build-owned-archive-guard.sh",
   "scripts/check-owned-archive-guard-sources.sh",
   "scripts/owned_archive_preflight.py",

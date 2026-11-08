@@ -14,6 +14,7 @@ pub(crate) fn qualification_proof(
     lock_sha256: &str,
     producer_run_attempt: u32,
     selected_image: &oci::Layout,
+    record_sha256: &str,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut images = serde_json::Map::new();
     for profile in [
@@ -24,13 +25,37 @@ pub(crate) fn qualification_proof(
         let layout = if profile == selected {
             None
         } else {
-            Some(oci::create_for(profile, source)?)
+            Some(oci::create_runner_for(profile, source)?)
         };
         let selected_layout = layout.as_ref().unwrap_or(selected_image);
-        images.insert(profile.name().to_owned(), image_value(selected_layout));
+        let digest = if profile == selected {
+            record_sha256.to_owned()
+        } else {
+            let source_files = super::source_files(profile)?;
+            let source_inputs = source_files
+                .iter()
+                .map(|(path, bytes)| (path.clone(), super::hex(&Sha256::digest(bytes))))
+                .collect();
+            let archive_sha = super::hex(&Sha256::digest(&selected_layout.archive));
+            let record = super::make_record(super::RecordInput {
+                profile,
+                source,
+                authority_sha: source,
+                inputs: &source_inputs,
+                archive_sha: &archive_sha,
+                image: selected_layout,
+                source_files: &source_files,
+                run_attempt: producer_run_attempt,
+            })?;
+            super::hex(&Sha256::digest(record))
+        };
+        images.insert(
+            profile.name().to_owned(),
+            image_value(selected_layout, &digest)?,
+        );
     }
     Ok(serde_json::to_vec(&json!({
-        "schema":"velnor.runner-image-qualification.v1",
+        "schema":"velnor.runner-image-qualification.v2",
         "source_commit":source,
         "source_ref":"refs/heads/main",
         "runner_lock_sha256":lock_sha256,
@@ -43,11 +68,13 @@ pub(crate) fn qualification_proof(
     }))?)
 }
 
-fn image_value(layout: &oci::Layout) -> Value {
-    json!({
+fn image_value(layout: &oci::Layout, record_sha256: &str) -> Result<Value, Box<dyn Error>> {
+    Ok(json!({
+        "record_sha256":record_sha256,
+        "provenance":layout.provenance.as_ref().ok_or("runner provenance missing")?,
         "archive":{"sha256":hex(&Sha256::digest(&layout.archive)),"size_bytes":layout.archive.len()},
         "oci":&layout.identity
-    })
+    }))
 }
 
 pub(crate) fn qualification_attestation(

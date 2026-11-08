@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::models::{ImageInspect, SystemInfo};
+use bollard::models::SystemInfo;
 
-use crate::artifact_admission::{NativeArtifactProvider, WorkerReleaseMaterial};
+use crate::artifact_admission::NativeArtifactProvider;
 use crate::error::HostError;
-use crate::journal::{ImageImportState, Journal};
+use crate::journal::Journal;
 
 mod archive;
+pub(crate) use archive::worker::{ProjectedCandidate, inspect_projected_candidate};
 pub use archive::worker::{
     WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
     verify_worker_runtime_config,
@@ -19,32 +19,20 @@ pub use archive::worker::{
 mod evidence;
 mod failure;
 mod identity;
-mod release;
+mod image_acquisition;
+pub use image_acquisition::{DaemonSelection, ImageObservation, ImageReference, ImageSession};
+mod registry_import;
 mod release_provider;
 
-mod worker_import;
 mod worker_prepare;
-mod worker_stream;
 mod worker_verify;
-mod workspace;
 
-pub(in crate::launch) use evidence::ProbeImagePreparationEvidence;
 pub(crate) use evidence::VerifiedCandidate;
+pub(in crate::launch) use evidence::{ProbeImageOrigin, ProbeImagePreparationEvidence};
 pub(super) use failure::ProviderFailure;
-use identity::{
-    SelectedDaemon, candidate, compiled_source_revision, image_import_request, inspect_image,
-    selected_daemon, verified_import_inspection, verify_daemon_image, verify_selected_daemon,
-};
-pub(in crate::launch) use worker_import::VerifiedWorkerImageIdentityProof;
-pub(in crate::launch) use workspace::VerifiedWorkspaceCleanup;
+use identity::{compiled_source_revision, selected_daemon};
 
-const SOURCE_REPOSITORY: &str = "tailrocks/velnor-new";
-const SOURCE_REF: &str = "refs/heads/main";
-const SIGNER_WORKFLOW: &str = ".github/workflows/product-release-images.yml";
-const SIGNER_IDENTITY: &str = "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main";
-const OIDC_ISSUER: &str = "https://token.actions.githubusercontent.com";
 const PLATFORM: &str = "linux/amd64";
-const IMAGE_TAG: &str = "velnor-resource-probe:linux-amd64";
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub(super) fn build_pin_status() -> Result<(), &'static str> {
@@ -93,25 +81,18 @@ pub(crate) trait ImageProvider {
 
 pub(super) struct ReleaseImageProvider<'a> {
     native: Option<NativeArtifactProvider<'a>>,
-    source_revision: String,
-    cache_key: Option<PreparedReleaseCacheKey>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct PreparedReleaseCacheKey {
-    source_revision: String,
-    helper_sha256: [u8; 32],
-    state_directory: PathBuf,
+    endpoint: String,
 }
 
 impl<'a> ReleaseImageProvider<'a> {
     pub(super) fn from_compiled_source(
         pat: &'a str,
         journal: &Journal,
+        endpoint: &str,
     ) -> Result<Self, ProviderFailure> {
-        let compiled_identity = crate::compile_identity::compiled_release_identity()
+        crate::compile_identity::compiled_release_identity()
             .ok_or(ProviderFailure::TrustedSourcePinMissing)?;
-        let source_revision = compiled_source_revision()?;
+        compiled_source_revision()?;
         if pat.trim().is_empty() {
             return Err(ProviderFailure::CredentialMissing);
         }
@@ -121,15 +102,9 @@ impl<'a> ReleaseImageProvider<'a> {
             .ok_or(ProviderFailure::NativeAdmission)?;
         let native = NativeArtifactProvider::from_compiled_release_identity(pat, state_directory)
             .map_err(|_| ProviderFailure::NativeAdmission)?;
-        let cache_key = PreparedReleaseCacheKey {
-            source_revision: source_revision.clone(),
-            helper_sha256: *compiled_identity.helper_sha256(),
-            state_directory: state_directory.to_path_buf(),
-        };
         Ok(Self {
             native: Some(native),
-            source_revision,
-            cache_key: Some(cache_key),
+            endpoint: endpoint.to_owned(),
         })
     }
 }

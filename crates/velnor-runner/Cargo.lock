@@ -3908,7 +3908,10 @@ dependencies = [
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
+ "http-body-util",
  "httpdate",
+ "hyper",
+ "hyper-util",
  "libc",
  "reqwest",
  "rustix 1.1.5",
@@ -3926,7 +3929,17 @@ dependencies = [
  "velnor-resource-probe",
  "velnor-runner-core",
  "velnor-runner-github",
+ "velnor-runner-image-manifest",
  "zeroize",
+]
+
+[[package]]
+name = "velnor-runner-image-manifest"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -84,7 +84,11 @@ pub(crate) async fn recover_pre_jit_reservation(
     reservation_id: i64,
     release_secret: &crate::launch::ReleaseReadSecret,
 ) -> Result<bool, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(release_secret, journal)?;
+    let provider = crate::launch::resource_probe::release_image_provider(
+        release_secret,
+        journal,
+        engine.endpoint(),
+    )?;
     Box::pin(remove_bootstrap_after_terminal_failure(
         docker,
         scope,

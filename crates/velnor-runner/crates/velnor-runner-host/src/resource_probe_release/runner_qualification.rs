@@ -1,10 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod archive_operation;
 mod docker;
+mod family;
+pub(crate) mod image_identity;
 mod mutation_cleanup;
 mod mutation_lifecycle;
+mod probe_image;
 mod probes;
+mod receipt;
 mod resources;
 mod source;
 mod tool_versions;
@@ -22,6 +27,8 @@ use bollard::query_parameters::{
 use futures_util::StreamExt;
 
 use crate::error::HostError;
+
+pub(super) use archive_operation::{check_candidate, qualify_archives};
 
 const QUALIFIER_LABEL: &str = "io.velnor.runner-image-qualifier.run";
 const OUTPUT_LIMIT: usize = 4096;
@@ -206,7 +213,15 @@ pub(super) async fn qualify(
     }
     let source = source::load(root, source_sha).await?;
     let docker = crate::docker_client::connect_unix(docker_socket)?;
-    let result = docker::qualify(&docker, &source, runner_id, dind_id).await?;
+    let result = docker::qualify(
+        &docker,
+        &source,
+        runner_id,
+        dind_id,
+        [None, None],
+        Instant::now() + Duration::from_secs(3600),
+    )
+    .await?;
     source::revalidate(&source).await?;
     println!(
         "runner_listener_version={} runner_docker_version={} dind_docker_version={} dind_daemon_version={} runner_buildx_version={} runner_compose_version={} runner_node_version={}",

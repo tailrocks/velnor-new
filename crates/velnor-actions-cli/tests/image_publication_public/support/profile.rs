@@ -55,6 +55,15 @@ impl FixtureProfile {
         }
     }
 
+    pub(crate) const fn envelope_name(self) -> &'static str {
+        match self {
+            Self::Job => "",
+            Self::Runner => "runner-image-provenance.json",
+            Self::Dind => "dind-image-provenance.json",
+            Self::ResourceProbe => "resource-probe-image-provenance.json",
+        }
+    }
+
     pub(crate) const fn run_id(self) -> u64 {
         match self {
             Self::Job => 40_613_392_798,
@@ -108,6 +117,15 @@ impl FixtureProfile {
         match self {
             Self::Job => ".github/workflows/job-image-candidate.yml",
             Self::Runner | Self::Dind | Self::ResourceProbe => ".github/workflows/ci.yml",
+        }
+    }
+
+    pub(crate) const fn publication_workflow_path(self) -> &'static str {
+        match self {
+            Self::Job => ".github/workflows/publish.yml",
+            Self::Runner | Self::Dind | Self::ResourceProbe => {
+                ".github/workflows/product-release-images.yml"
+            }
         }
     }
 

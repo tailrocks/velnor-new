@@ -82,17 +82,15 @@ impl CompletionWorker {
             .map_err(|_| HostError::Docker)?
             .map_err(|_| HostError::Docker)?;
         let selected = SelectedEngineContext::capture(&engine_context, &info)?;
-        let worker_images = crate::launch::VerifiedWorkerImages::from_journal_for_engine(
-            journal, &bounded, &selected,
-        )
-        .await?;
+        journal
+            .ensure_image_imports_resolved(selected.engine_id())
+            .await?;
         let release_secret = Arc::new(crate::launch::ReleaseReadSecret::parse(release_read_token)?);
         let native_cleanup = NativeCleanupRuntime::new(
             bounded.clone(),
             journal.clone(),
             engine_context,
             selected.clone(),
-            worker_images,
             release_secret,
         )?;
         Self::start_scoped(

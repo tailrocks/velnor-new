@@ -12,8 +12,12 @@ use crate::journal::{
 use crate::launch::VerifiedWorkerImages;
 use crate::worker::ResourceBudget;
 
-use super::super::provider::ProbeImagePreparationEvidence;
+use super::super::provider::{ProbeImageOrigin, ProbeImagePreparationEvidence};
 use super::{Observation, ProbeStartupEvidence, checked_guest_capacity};
+use crate::launch::verified_images::{WorkerImageOrigin, WorkerImagesOrigin};
+
+mod validation;
+use validation::{digest, digest_reference, source_revision};
 
 const POLICY_DOMAIN: &[u8] = b"velnor-storage-policy-one-job-v1\0";
 const PROFILE_DOMAIN: &[u8] = b"velnor-storage-startup-profile-v1\0";
@@ -172,8 +176,7 @@ impl<'a> StartupImagePreparationReceipt<'a> {
             || !source_revision(worker_images.source_sha())
             || !digest_reference(probe_image.runtime_id())
             || !digest(probe_image.binding_fingerprint())
-            || !digest(probe_image.workspace_cleanup_digest())
-            || !digest(worker_images.release_workspace_cleanup_digest())
+            || !matching_origins(probe_image.origin(), worker_images.origin())
             || !complete_worker_image(worker_images.runner())
             || !complete_worker_image(worker_images.dind())
         {
@@ -188,13 +191,27 @@ impl<'a> StartupImagePreparationReceipt<'a> {
 
 fn complete_worker_image(image: &crate::launch::VerifiedImageIdentity) -> bool {
     digest_reference(image.runtime_id())
-        && digest(image.archive_sha256())
-        && digest(image.archive_index_digest())
-        && image.image_index_digest().is_some_and(digest_reference)
-        && image.image_index_size().is_some_and(|size| size > 0)
         && digest_reference(image.manifest_digest())
         && image.manifest_size() > 0
         && digest_reference(image.config_digest())
+        && match image.origin() {
+            WorkerImageOrigin::Registry(registry) => {
+                registry.observation.validate(&registry.identity).is_ok()
+            }
+        }
+}
+
+fn matching_origins(probe: &ProbeImageOrigin, workers: &WorkerImagesOrigin) -> bool {
+    match (probe, workers) {
+        (
+            ProbeImageOrigin::Registry {
+                manifest_sha256: probe,
+            },
+            WorkerImagesOrigin::Registry {
+                manifest_sha256: worker,
+            },
+        ) => digest(probe) && probe == worker,
+    }
 }
 
 fn make_profile(generation_id: &str, disk_pool_id: &str) -> Result<StorageProfile, HostError> {
@@ -304,10 +321,12 @@ fn profile_generation(
     update(&mut digest, worker_images.source_sha().as_bytes());
     update(&mut digest, disk_pool_id.as_bytes());
     update(&mut digest, observation.record.guest_boot_id.as_bytes());
-    update(
-        &mut digest,
-        b"verified-worker-and-probe-workspace-removal-v1",
-    );
+    match worker_images.origin() {
+        WorkerImagesOrigin::Registry { manifest_sha256 } => {
+            update(&mut digest, b"verified-runner-image-registry-v1");
+            update(&mut digest, manifest_sha256.as_bytes());
+        }
+    }
     update_worker_image(&mut digest, worker_images.runner());
     update_worker_image(&mut digest, worker_images.dind());
     update(&mut digest, probe_image.runtime_id().as_bytes());
@@ -334,12 +353,12 @@ fn profile_generation(
 
 fn update_worker_image(digest: &mut Sha256, image: &crate::launch::VerifiedImageIdentity) {
     update(digest, image.runtime_id().as_bytes());
-    update(digest, image.archive_sha256().as_bytes());
-    update(digest, image.archive_index_digest().as_bytes());
-    if let Some(index) = image.image_index_digest() {
-        update(digest, index.as_bytes());
+    match image.origin() {
+        WorkerImageOrigin::Registry(registry) => {
+            update(digest, registry.identity.reference().as_bytes());
+            update(digest, registry.identity.release_manifest_sha256.as_bytes());
+        }
     }
-    digest.update(image.image_index_size().unwrap_or_default().to_be_bytes());
     update(digest, image.manifest_digest().as_bytes());
     digest.update(image.manifest_size().to_be_bytes());
     update(digest, image.config_digest().as_bytes());
@@ -375,22 +394,4 @@ fn hex(bytes: &[u8]) -> String {
         result.push(char::from(b"0123456789abcdef"[usize::from(byte & 0x0f)]));
     }
     result
-}
-
-fn digest(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn digest_reference(value: &str) -> bool {
-    value.strip_prefix("sha256:").is_some_and(digest)
-}
-
-fn source_revision(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }

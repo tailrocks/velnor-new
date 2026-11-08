@@ -372,3 +372,10 @@ fn assert_blob_fault_rejected(kind: &str, fault: support::BlobFault) -> Result<(
     assert_eq!(fs::read(&fixture.record)?, record_before);
     Ok(())
 }
+
+#[path = "image_publication_public/family_publication.rs"]
+mod family_publication;
+#[path = "image_publication_public/qualification_provenance.rs"]
+mod qualification_provenance;
+#[path = "image_publication_public/source_absences.rs"]
+mod source_absences;

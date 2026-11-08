@@ -66,6 +66,28 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         descriptors_output: PathBuf,
     },
+    #[command(about = "Build and project the runner family from held context snapshots.")]
+    BuildRunnerImages {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_temp: PathBuf,
+        #[arg(long)]
+        contexts_dir: PathBuf,
+        #[arg(long)]
+        publication_records: bool,
+        #[arg(
+            long,
+            help = "Fresh output directory under an existing private parent."
+        )]
+        output_dir: PathBuf,
+    },
+    #[command(about = "Publish a qualified runner family and write its manifest.")]
+    PublishRunnerImages(RunnerFamilyPublicationArgs),
+    #[command(about = "Recheck runner publication authority and registry identities.")]
+    VerifyRunnerPublication(RunnerFamilyPublicationArgs),
     /// Promote a verified source digest to its approved version tag.
     PromoteImage {
         #[arg(long)]
@@ -100,6 +122,26 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         receipt_output: PathBuf,
     },
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct RunnerFamilyPublicationArgs {
+    #[arg(long)]
+    pub(crate) source_commit: String,
+    #[arg(long)]
+    pub(crate) producer_run_id: u64,
+    #[arg(long)]
+    pub(crate) producer_run_attempt: u32,
+    #[arg(long)]
+    pub(crate) artifact_id: u64,
+    #[arg(long)]
+    pub(crate) assets_dir: PathBuf,
+    #[arg(long)]
+    pub(crate) qualification_proof: PathBuf,
+    #[arg(long)]
+    pub(crate) private_scratch: PathBuf,
+    #[arg(long)]
+    pub(crate) manifest_output: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
