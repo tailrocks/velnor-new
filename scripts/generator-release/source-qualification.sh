@@ -959,6 +959,21 @@ exit "$final_status"
       DOCKER_HOST=unix:///run/docker.sock \
       python3 -I scripts/generator-release/test-observe-hosted-docker.py
     python3 -I scripts/generator-release/observe-hosted-docker.py
+    for observer in scripts/generator-release/observe-hosted-checkout.py scripts/generator-release/test-observe-hosted-checkout.py; do
+      if [ -L "$observer" ] || [ ! -f "$observer" ]; then printf 'FATAL: invalid checkout observer file\n' >&2; exit 1; fi
+      expected="$(env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_NO_REPLACE_OBJECTS=1 /usr/bin/git -C "$GITHUB_WORKSPACE" rev-parse "$GITHUB_SHA:$observer")"
+      actual="$(env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_NO_REPLACE_OBJECTS=1 /usr/bin/git -C "$GITHUB_WORKSPACE" hash-object --no-filters "$observer")"
+      case "$expected" in *[!0-9a-f]*|'') printf 'FATAL: invalid checkout observer identity\n' >&2; exit 1 ;; esac
+      if [ "${#expected}" -ne 40 ] || [ "$actual" != "$expected" ]; then printf 'FATAL: checkout observer source mismatch\n' >&2; exit 1; fi
+    done
+    env -i PATH=/usr/bin:/bin python3 -I scripts/generator-release/test-observe-hosted-checkout.py
+    env -i PATH=/usr/bin:/bin GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
+      GITHUB_SHA="$GITHUB_SHA" GITHUB_WORKFLOW_SHA="$GITHUB_WORKFLOW_SHA" \
+      GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_WORKFLOW_REF="$GITHUB_WORKFLOW_REF" \
+      GITHUB_RUN_ID="$GITHUB_RUN_ID" GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+      GITHUB_WORKSPACE="$GITHUB_WORKSPACE" RUNNER_TEMP="$RUNNER_TEMP" RUNNER_OS="$RUNNER_OS" RUNNER_ARCH="$RUNNER_ARCH" \
+      ImageOS="$ImageOS" ImageVersion="$ImageVersion" \
+      python3 -I scripts/generator-release/observe-hosted-checkout.py
     ;;
   qualify-linux-x64-native-validator-tools)
 if [ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch ]; then printf 'FATAL: native validator authoring requires a workflow_dispatch event\n' >&2; exit 64; fi
