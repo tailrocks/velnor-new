@@ -201,7 +201,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VELNOR_SOURCE_REPO: ${{ github.repository }}
           VELNOR_SOURCE_SHA: ${{ github.sha }}
-          VELNOR_SOURCE_OUTPUT: $RUNNER_TEMP/velnor-authenticated-source.json
+          VELNOR_SOURCE_OUTPUT: ${{ runner.temp }}/velnor-authenticated-source.json
         run: "/usr/bin/python3 -I -S -c 'import hashlib,sys; sys.exit(hashlib.sha256(open(sys.argv[1], \"rb\").read()).hexdigest() != sys.argv[2])' \"$VELNOR_FIXED_SCRIPT_DIR/script.sh\" '4f8208fa335e93c4e154bcd2382a15b8bfc5a82d1fcb463ab081c404c1321f0c'\nexec \"$BASH\" --noprofile --norc -e -o pipefail \"$VELNOR_FIXED_SCRIPT_DIR/script.sh\""
       - name: Verify candidate attestations with Sigstore
         shell: bash

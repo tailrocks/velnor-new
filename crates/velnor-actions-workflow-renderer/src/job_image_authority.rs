@@ -298,7 +298,7 @@ print("fixed authority body assembled the publication evidence")
 "#;
 
 pub(super) const CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-ci-runs.json";
-pub(super) const AUTHENTICATED_SOURCE_PATH: &str = "$RUNNER_TEMP/velnor-authenticated-source.json";
+pub(super) const AUTHENTICATED_SOURCE_FILE: &str = "velnor-authenticated-source.json";
 pub(super) const ARTIFACT_RESPONSE_PATH: &str = "$RUNNER_TEMP/velnor-candidate-artifact.json";
 pub(super) const ARCHIVE_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-archive-attestation.json";
 pub(super) const RECORD_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-record-attestation.json";
@@ -309,8 +309,9 @@ pub(super) fn assemble_evidence_step(
     result: &str,
     artifact_id: &str,
 ) -> Yaml {
+    let authenticated_source = format!("$RUNNER_TEMP/{AUTHENTICATED_SOURCE_FILE}");
     let mut run = format!(
-        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{AUTHENTICATED_SOURCE_PATH}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" candidate/job-image-native-source-closure.json <<'{EVIDENCE_MARKER}'\n"
+        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{authenticated_source}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" candidate/job-image-native-source-closure.json <<'{EVIDENCE_MARKER}'\n"
     );
     run.push_str(EVIDENCE_PROGRAM);
     run.push_str(EVIDENCE_MARKER);

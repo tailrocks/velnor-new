@@ -63,6 +63,7 @@ mod state_v4_tip;
 mod ubuntu_owned_publication;
 
 mod job_image_candidate_execution_public;
+mod job_image_source_inputs_public;
 
 mod bounded_test_support;
 
