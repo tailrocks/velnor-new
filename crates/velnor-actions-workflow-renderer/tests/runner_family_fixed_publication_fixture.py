@@ -15,6 +15,7 @@ root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 import job_image_authority_transport as transport
 import job_image_authority_registry as registry_module
+import job_image_authority_publish as publisher
 import runner_image_authority_candidate as candidate
 import runner_image_authority_custody as custody
 import runner_image_authority_identity as identity
@@ -83,6 +84,8 @@ class Response:
 class Network:
     store = {}
     puts = 0
+    anonymous_reads = []
+    anonymous_token_requests = []
     def __init__(self, host, timeout=None, context=None):
         self.host = host
         self.headers = {}
@@ -106,7 +109,10 @@ class Network:
         if self.method == "GET" and target == "/v2/":
             return Response(401, {"www-authenticate": 'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:fixture:pull,push"'})
         if self.method == "GET" and target.startswith("/token"):
-            return Response(200, {}, b'{"token":"stub-token-1234567890"}')
+            if "authorization" not in self.headers:
+                Network.anonymous_token_requests.append(target)
+                return Response(200, {}, b'{"token":"anonymous-token-1234567890"}')
+            return Response(200, {}, b'{"token":"publisher-token-1234567890"}')
         if self.method == "POST" and target.endswith("/blobs/uploads/"):
             return Response(202, {"location": target + "stub"})
         key = (self.host, target.split("?", 1)[0])
@@ -124,6 +130,14 @@ class Network:
             self.store[key] = body
             return Response(201, {"docker-content-digest": "sha256:" + hashlib.sha256(body).hexdigest()})
         if self.method == "GET":
+            if self.headers.get("authorization") == "Bearer anonymous-token-1234567890":
+                Network.anonymous_reads.append(target)
+                if scenario.startswith("private_") and f"/velnor-{scenario.removeprefix('private_').replace('_', '-')}/" in target:
+                    return Response(403, {})
+                if scenario == "anonymous_bad_blob" and "/blobs/" in target:
+                    original = self.store[key]
+                    corrupted = bytes([original[0] ^ 1]) + original[1:]
+                    return Response(200, {"content-length": str(len(corrupted))}, corrupted)
             data = self.store.get(key)
             return Response(200, {"docker-content-digest": "sha256:" + hashlib.sha256(data).hexdigest(), "content-length": str(len(data))}, data)
         raise AssertionError((self.method, target))
@@ -218,8 +232,10 @@ try:
     manifest = publication.publish_family(inputs_for_roles, receipt_raw, json.dumps(verification).encode(), source, 101, 1, 202, 2, 303, lock_raw, root / "private", "actor", "password", transports, current_source)
     (root / "manifest.json").write_bytes(manifest)
     result = {"ok": True}
-except (publication.AuthorityError, identity.AuthorityError, candidate.AuthorityError, custody.AuthorityError, registry_module.AuthorityError) as error:
+except (publication.AuthorityError, publisher.AuthorityError, identity.AuthorityError, candidate.AuthorityError, custody.AuthorityError, registry_module.AuthorityError) as error:
     result = {"ok": False, "error": str(error)}
+result["anonymous_token_requests"] = Network.anonymous_token_requests
+result["anonymous_reads"] = Network.anonymous_reads
 result["registry_puts"] = Network.puts
 result["stored_paths"] = sorted(path for host, path in Network.store if host == "ghcr.io")
 if scenario == "tampered_third_archive":

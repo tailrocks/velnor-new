@@ -154,6 +154,81 @@ fn family_coordinator_publishes_three_authenticated_images_and_serializes_releas
     Ok(())
 }
 
+#[test]
+fn family_reads_all_graphs_with_anonymous_pull_tokens() -> Result<(), Box<dyn Error>> {
+    let (_, public, manifest) = family_fixture("publish")?;
+    assert_eq!(public["ok"], true);
+    assert!(!manifest.is_empty());
+    let reads = public["anonymous_reads"]
+        .as_array()
+        .ok_or("missing anonymous reads")?;
+    let requests = public["anonymous_token_requests"]
+        .as_array()
+        .ok_or("missing anonymous tokens")?;
+    for role in ["runner", "dind", "resource-probe"] {
+        let prefix = format!("/v2/tailrocks/velnor-{role}/");
+        let paths: Vec<&str> = reads
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|path| path.starts_with(&prefix))
+            .collect();
+        assert!(paths.iter().any(|path| path.contains("/manifests/sha256:")));
+        assert_eq!(
+            paths
+                .iter()
+                .filter(|path| path.contains("/blobs/sha256:"))
+                .count(),
+            2
+        );
+        assert!(
+            requests
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|request| request.contains(&format!("velnor-{role}%3Apull"))
+                    && !request.contains("push"))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn family_rejects_private_runner_before_promoting_tags() -> Result<(), Box<dyn Error>> {
+    assert_anonymous_failure("private_runner")
+}
+
+#[test]
+fn family_rejects_private_dind_before_promoting_tags() -> Result<(), Box<dyn Error>> {
+    assert_anonymous_failure("private_dind")
+}
+
+#[test]
+fn family_rejects_private_resource_probe_before_promoting_tags() -> Result<(), Box<dyn Error>> {
+    assert_anonymous_failure("private_resource_probe")
+}
+
+#[test]
+fn family_rejects_corrupt_anonymous_blob_before_promoting_tags() -> Result<(), Box<dyn Error>> {
+    assert_anonymous_failure("anonymous_bad_blob")
+}
+
+fn assert_anonymous_failure(scenario: &str) -> Result<(), Box<dyn Error>> {
+    let (_, result, manifest) = family_fixture(scenario)?;
+    assert_eq!(result["ok"], false, "{scenario}");
+    assert!(manifest.is_empty(), "{scenario}");
+    assert!(
+        result["registry_puts"]
+            .as_u64()
+            .is_some_and(|count| count > 0)
+    );
+    assert!(
+        result["source_tags"]
+            .as_object()
+            .is_some_and(|tags| tags.values().all(Value::is_null)),
+        "{scenario}"
+    );
+    Ok(())
+}
+
 fn assert_no_publication(result: &Value, manifest_raw: &[u8], error: &str) {
     assert_eq!(result["ok"], false);
     assert_eq!(result["error"], error);

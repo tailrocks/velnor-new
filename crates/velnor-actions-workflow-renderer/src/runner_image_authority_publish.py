@@ -107,7 +107,27 @@ def publish_family(inputs, receipt_raw, verification_output, source, producer_id
                 blobs = {digest: publisher.extract_blob(paths[role], digest, size, Path(directory))
                          for digest, size in publisher.blob_descriptors(identity.parse_document(manifest, publisher.MAX_MANIFEST_BYTES)).items()}
                 published[role] = publisher.publish_image(policy, transport, token, manifest, blobs)
+        for role, profile in PROFILES.items():
             _current(source, current_source)
+            policy = registry.RegistryPolicy(profile)
+            transport = transports[role]
+            token = publisher.fetch_anonymous_pull_token(policy, transport)
+            graph = admitted[role]["graph"]
+            digest = graph["platform_manifest_digest"]
+            manifest = publisher.read_manifest_bytes(paths[role], digest, graph["platform_manifest_size_bytes"])
+            publisher.verify_remote_manifest(policy, transport, token, manifest, digest, len(manifest))
+            with TemporaryDirectory(prefix="runner-anonymous-blobs-", dir=private_parent) as directory:
+                descriptors = publisher.blob_descriptors(identity.parse_document(manifest, publisher.MAX_MANIFEST_BYTES))
+                for blob_digest, size in descriptors.items():
+                    blob = publisher.extract_blob(paths[role], blob_digest, size, Path(directory))
+                    publisher.verify_remote_blob(policy, transport, token, blob_digest, blob, size)
+        for role, profile in PROFILES.items():
+            _current(source, current_source)
+            policy = registry.RegistryPolicy(profile)
+            transport = transports[role]
+            token = publisher.fetch_registry_token(policy, transport, actor, password)
+            graph = admitted[role]["graph"]
+            manifest = publisher.read_manifest_bytes(paths[role], graph["platform_manifest_digest"], graph["platform_manifest_size_bytes"])
             publisher.publish_source_tag(policy, transport, token, manifest, source)
         _current(source, current_source)
         return (json.dumps(_manifest(source, receipt, admitted, published), indent=2) + "\n").encode()

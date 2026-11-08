@@ -132,6 +132,10 @@ class RegistryPolicy:
         query = urlencode({'service': 'ghcr.io', 'scope': f'repository:{self.PACKAGE}:pull,push'})
         return f'https://{REGISTRY}/token?{query}'
 
+    def anonymous_token_request_url(self):
+        query = urlencode({'service': REGISTRY, 'scope': f'repository:{self.PACKAGE}:pull'})
+        return f'https://{REGISTRY}/token?{query}'
+
     def parse_token_payload(self, data):
         value = self._token_json(data, 'Registry token response')
         token = value.get('token', value.get('access_token')) if isinstance(value, dict) else None

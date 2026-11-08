@@ -214,6 +214,19 @@ def fetch_registry_token(registry, transport, actor, password):
     return registry.parse_token_payload(response.body)
 
 
+
+def fetch_anonymous_pull_token(registry, transport):
+    response = _request(
+        transport,
+        "GET",
+        registry.anonymous_token_request_url(),
+        {"Accept": "application/json"},
+    )
+    if response.status != 200:
+        raise AuthorityError("Anonymous registry token request failed.")
+    return registry.parse_token_payload(response.body)
+
+
 def _authorization(token):
     if not isinstance(token, str) or not token:
         raise AuthorityError("Registry token is missing.")
