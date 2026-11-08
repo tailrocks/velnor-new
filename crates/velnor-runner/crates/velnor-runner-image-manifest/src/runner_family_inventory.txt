@@ -787,6 +787,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/runner_contexts.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_family_admission/mod.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_family_admission/provenance.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_profiles.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/runner_source_batch.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/source.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/validate.rs
 crates/velnor-actions-orchestrator/src/image_prebuilt.rs
@@ -2172,6 +2173,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/provisioning/t
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/provisioning/validation.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/provisioning/validation/queries.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/registry_image_import.rs
+crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/registry_import_invariant.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/request_ledger.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/request_ledger/validation.rs
@@ -2447,6 +2449,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/readiness.rs
 crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/mod.rs
 crates/velnor-runner/crates/velnor-runner-host/src/reconcile.rs
 crates/velnor-runner/crates/velnor-runner-host/src/resource_probe_record/mod.rs
+crates/velnor-runner/crates/velnor-runner-host/src/resource_probe_release/exact_semver.rs
 crates/velnor-runner/crates/velnor-runner-host/src/resource_probe_release/files.rs
 crates/velnor-runner/crates/velnor-runner-host/src/resource_probe_release/manifest.rs
 crates/velnor-runner/crates/velnor-runner-host/src/resource_probe_release/mod.rs
