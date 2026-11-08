@@ -10,7 +10,7 @@ use std::{
 
 const MAX_ARCHIVE: usize = 64 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 256 * 1024 * 1024;
-const MAX_CARGO_GENERATED_ENTRIES: usize = 3;
+const MAX_CARGO_GENERATED_ENTRIES: usize = 4;
 const MAX_ENTRIES: usize =
     crate::release::crate_release_source::MAX_SOURCE_ENTRIES + MAX_CARGO_GENERATED_ENTRIES;
 
@@ -24,6 +24,35 @@ pub fn verify_archive_tracked_content(
     package: &str,
     version: &str,
     git: &crate::crate_release_git::ReleaseGit,
+) -> Result<(), OrchestratorError> {
+    verify_archive_tracked_content_inner(
+        archive, root, source_sha, manifest, package, version, git, false,
+    )
+}
+
+pub(crate) fn verify_reconstructed_archive_tracked_content(
+    archive: &[u8],
+    root: &std::path::Path,
+    source_sha: &str,
+    manifest: &str,
+    package: &str,
+    version: &str,
+    git: &crate::crate_release_git::ReleaseGit,
+) -> Result<(), OrchestratorError> {
+    verify_archive_tracked_content_inner(
+        archive, root, source_sha, manifest, package, version, git, true,
+    )
+}
+
+fn verify_archive_tracked_content_inner(
+    archive: &[u8],
+    root: &std::path::Path,
+    source_sha: &str,
+    manifest: &str,
+    package: &str,
+    version: &str,
+    git: &crate::crate_release_git::ReleaseGit,
+    generated_lock: bool,
 ) -> Result<(), OrchestratorError> {
     let invalid = || internal("crate_archive_source_evidence_invalid");
     let package_dir = source_package_dir(manifest, package, version)?;
@@ -49,6 +78,9 @@ pub fn verify_archive_tracked_content(
         let relative = package_dir.join(path);
         let relative = relative.to_str().ok_or_else(invalid)?;
         if !files.contains(relative) {
+            if generated_lock && path == "Cargo.lock" && *mode == 0 {
+                continue;
+            }
             return Err(invalid());
         }
         let path = root.join(relative);
@@ -282,6 +314,11 @@ pub(crate) fn read_archive(bytes: &[u8], prefix: &str) -> Result<ArchiveFiles, O
         {
             return Err(internal("crate_archive_duplicate_or_size"));
         }
+    }
+    if files.len() > crate::release::crate_release_source::MAX_SOURCE_ENTRIES + 3
+        && !files.contains_key("Cargo.lock")
+    {
+        return Err(internal("crate_archive_entry_type_or_count"));
     }
     let end = usize::try_from(last_end).map_err(|_| internal("crate_archive_size_invalid"))?;
     if files.is_empty()

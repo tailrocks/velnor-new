@@ -170,3 +170,148 @@ fn rebuilt_package_must_match_complete_approved_source_archive()
     assert!(verify_reconstructed_archive(&root, &sha, &wrong, &package, &archive, &git).is_err());
     Ok(())
 }
+
+fn altered_workspace_archive(
+    archive: &[u8],
+    inject: bool,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut input = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(archive)));
+    let writer = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut output = tar::Builder::new(writer);
+    for entry in input.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_path_buf();
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes)?;
+        if !inject && path == Path::new("demo-0.1.1/Cargo.lock") {
+            bytes.push(b'\n');
+        }
+        let mut header = entry.header().clone();
+        header.set_size(bytes.len() as u64);
+        header.set_cksum();
+        output.append_data(&mut header, path, bytes.as_slice())?;
+    }
+    if inject {
+        let mut header = tar::Header::new_gnu();
+        header.set_mode(0o644);
+        header.set_size(4);
+        header.set_cksum();
+        output.append_data(&mut header, "demo-0.1.1/injected.txt", b"evil".as_slice())?;
+    }
+    Ok(output.into_inner()?.finish()?)
+}
+
+#[test]
+fn reconstructed_workspace_package_accepts_generated_lock_but_rejects_tampering()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().join("workspace");
+    std::fs::create_dir_all(root.join("crates/demo/src"))?;
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nresolver = '2'\nmembers = ['crates/demo']\n",
+    )?;
+    std::fs::write(
+        root.join("crates/demo/Cargo.toml"),
+        "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\n",
+    )?;
+    std::fs::write(
+        root.join("crates/demo/src/lib.rs"),
+        "pub fn answer() -> u8 { 42 }\n",
+    )?;
+    git(&root, &["init", "-q"])?;
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let cargo = crate::release::crate_release_source::source_cargo_path(
+        catalog.version(velnor_actions_mise::PinnedTool::Rust),
+        &root,
+    )?;
+    let generated = Command::new(&cargo)
+        .args(["generate-lockfile", "--offline"])
+        .current_dir(&root)
+        .output()?;
+    if !generated.status.success() {
+        return Err(String::from_utf8_lossy(&generated.stderr)
+            .into_owned()
+            .into());
+    }
+    git(&root, &["add", "."])?;
+    git(
+        &root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "workspace fixture",
+        ],
+    )?;
+    let sha = git(&root, &["rev-parse", "HEAD"])?;
+    let mut intent = intent(&sha);
+    intent.pr_write_paths = vec!["Cargo.toml".into(), "crates/demo/Cargo.toml".into()];
+    let package = CrateReleaseSourcePackage {
+        name: "demo".into(),
+        version: "0.1.1".into(),
+        manifest: "crates/demo/Cargo.toml".into(),
+    };
+    let target = tempfile::tempdir()?;
+    let packaged = Command::new(cargo)
+        .args([
+            "package",
+            "--locked",
+            "--offline",
+            "--no-verify",
+            "-p",
+            "demo",
+            "--target-dir",
+        ])
+        .arg(target.path())
+        .current_dir(&root)
+        .output()?;
+    if !packaged.status.success() {
+        return Err(String::from_utf8_lossy(&packaged.stderr)
+            .into_owned()
+            .into());
+    }
+    let archive = std::fs::read(target.path().join("package/demo-0.1.1.crate"))?;
+    let git = ReleaseGit::host_fixture();
+    verify_reconstructed_archive(&root, &sha, &intent, &package, &archive, &git)?;
+    assert!(
+        crate::verify_archive_tracked_content(
+            &archive,
+            &root,
+            &sha,
+            &package.manifest,
+            &package.name,
+            &package.version,
+            &git
+        )
+        .is_err()
+    );
+    assert!(
+        verify_reconstructed_archive(
+            &root,
+            &sha,
+            &intent,
+            &package,
+            &altered_workspace_archive(&archive, false)?,
+            &git
+        )
+        .is_err()
+    );
+    assert!(
+        verify_reconstructed_archive(
+            &root,
+            &sha,
+            &intent,
+            &package,
+            &altered_workspace_archive(&archive, true)?,
+            &git
+        )
+        .is_err()
+    );
+    Ok(())
+}

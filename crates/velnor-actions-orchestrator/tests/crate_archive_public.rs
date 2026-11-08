@@ -248,6 +248,25 @@ fn admitted_source_entry_count_includes_cargo_generated_files()
         let bytes = archive_with_entries(count)?;
         verify_crate_archive(&bytes, &bytes, "demo", "0.1.1", &hex_digest(&bytes))?;
     }
+    let with_lock = archive_with_entries_and_lock(100_004)?;
+    verify_crate_archive(
+        &with_lock,
+        &with_lock,
+        "demo",
+        "0.1.1",
+        &hex_digest(&with_lock),
+    )?;
+    let too_many_with_lock = archive_with_entries_and_lock(100_005)?;
+    assert!(
+        verify_crate_archive(
+            &too_many_with_lock,
+            &too_many_with_lock,
+            "demo",
+            "0.1.1",
+            &hex_digest(&too_many_with_lock)
+        )
+        .is_err()
+    );
     let bytes = archive_with_entries(100_004)?;
     let error = verify_crate_archive(&bytes, &bytes, "demo", "0.1.1", &hex_digest(&bytes))
         .expect_err("archive beyond admitted source plus Cargo metadata was accepted");
@@ -269,5 +288,23 @@ fn archive_with_entries(count: usize) -> Result<Vec<u8>, Box<dyn std::error::Err
         header.set_cksum();
         builder.append_data(&mut header, format!("demo-0.1.1/entries/{index}"), &[][..])?;
     }
+    Ok(builder.into_inner()?.finish()?)
+}
+
+fn archive_with_entries_and_lock(count: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    let mut builder = tar::Builder::new(encoder);
+    for index in 0..count - 1 {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(0);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, format!("demo-0.1.1/entries/{index}"), &[][..])?;
+    }
+    let mut header = tar::Header::new_gnu();
+    header.set_size(0);
+    header.set_mode(0o644);
+    header.set_cksum();
+    builder.append_data(&mut header, "demo-0.1.1/Cargo.lock", &[][..])?;
     Ok(builder.into_inner()?.finish()?)
 }

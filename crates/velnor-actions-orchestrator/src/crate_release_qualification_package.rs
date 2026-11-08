@@ -42,7 +42,7 @@ pub fn verify_reconstructed_archive(
             git,
         ),
     )?;
-    crate::verify_archive_tracked_content(
+    crate::release::crate_release_archive::verify_reconstructed_archive_tracked_content(
         &expected,
         source,
         source_sha,
@@ -60,7 +60,7 @@ pub fn verify_reconstructed_archive(
         &checksum,
     )?;
 
-    crate::verify_archive_tracked_content(
+    crate::release::crate_release_archive::verify_reconstructed_archive_tracked_content(
         observed,
         source,
         source_sha,
