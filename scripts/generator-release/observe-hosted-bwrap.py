@@ -16,6 +16,7 @@ import time
 BWRAP = '/usr/bin/bwrap'
 MAX_PROC_ENTRIES = 131072
 MAX_CMDLINE_BYTES = 16384
+PHASE = 'startup'
 CHILD = r'''
 import json, os, select, socket, sys, time
 read_fd, write_fd = os.pipe()
@@ -184,6 +185,7 @@ def parse_ready(line):
 
 
 def observe():
+    global PHASE
     result = {'observation_only': True, 'completed': False, 'cleanup_guaranteed': False,
               'process_scan_scope': 'same-uid-only',
               'network_failure_interpretation': 'inconclusive-without-external-positive-control',
@@ -192,6 +194,7 @@ def observe():
     if not os.path.isfile(BWRAP) or not pathlib.Path('/proc').is_dir():
         result['reason'] = 'unavailable'
         return result
+    PHASE = 'version'
     version = subprocess.run([BWRAP, '--version'], stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                              timeout=2, check=False, env={'PATH': '/usr/bin:/bin'})
@@ -201,6 +204,7 @@ def observe():
         return result
     result['bubblewrap_version'] = version_text
     token = 'velnor-bwrap-' + secrets.token_hex(16)
+    PHASE = 'launch_sentinel'
     sentinel = subprocess.Popen(['/usr/bin/sleep', '25'], stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     child = None
@@ -210,8 +214,10 @@ def observe():
                    '--ro-bind', '/', '/', '--tmpfs', '/tmp', '--tmpfs', '/run', '--tmpfs', '/etc',
                    '--ro-bind', root, '/tmp/probe', '--proc', '/proc', '--dev', '/dev', '--',
                    '/usr/bin/python3', '-I', '-S', '-c', CHILD, token]
+            PHASE = 'launch_sandbox'
             child = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, env={'PATH': '/usr/bin:/bin'})
+            PHASE = 'readiness'
             try:
                 line = read_ready(child.stdout, 8)
             except TimeoutError:
@@ -225,10 +231,12 @@ def observe():
             except (ValueError, UnicodeDecodeError):
                 result['reason'] = 'invalid_readiness'
                 return result
+            PHASE = 'token_scan'
             observed = [pid for pid in matching_pids(token) if pid != child.pid]
             if len(observed) < 2:
                 result['reason'] = 'descendants_not_observed'
                 return result
+            PHASE = 'namespace_identity'
             own_namespace = os.readlink('/proc/self/ns/pid')
             namespaces = {os.readlink(f'/proc/{pid}/ns/pid') for pid in observed}
             namespaces.discard(own_namespace)
@@ -243,13 +251,16 @@ def observe():
                 result['reason'] = 'setsid_descendant_not_identified'
                 return result
             result['setsid_descendant_identified'] = True
+            PHASE = 'terminate_supervisor'
             os.kill(child.pid, signal.SIGKILL)
             child.wait(timeout=3)
+            PHASE = 'termination_scan'
             deadline = time.monotonic() + 4
             while matching_pids(token) and time.monotonic() < deadline:
                 time.sleep(0.05)
             result.update(details)
             result['descendants_disappeared'] = not matching_pids(token)
+            PHASE = 'namespace_scan'
             result['observed_namespace_disappeared'] = namespace not in owned_namespaces()
             result['unrelated_sentinel_survived'] = sentinel.poll() is None
             result['completed'] = True
@@ -268,5 +279,5 @@ if __name__ == '__main__':
         print(json.dumps(observe(), sort_keys=True, separators=(',', ':')))
     except (KeyError, OSError, ValueError, subprocess.SubprocessError) as error:
         print(json.dumps({'observation_only': True, 'completed': False,
-                          'cleanup_guaranteed': False, 'reason': type(error).__name__},
+                          'cleanup_guaranteed': False, 'reason': type(error).__name__, 'phase': PHASE},
                          sort_keys=True, separators=(',', ':')))

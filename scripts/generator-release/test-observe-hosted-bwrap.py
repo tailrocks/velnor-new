@@ -143,6 +143,29 @@ def main():
             assert not result['completed'] and result['reason'] == 'setsid_descendant_not_identified'
             kill.assert_not_called()
             child.kill.assert_called_once()
+    child = mock.Mock(pid=999)
+    child.poll.return_value = None
+    sentinel = mock.Mock(pid=998)
+    sentinel.poll.return_value = None
+    with tempfile.TemporaryDirectory() as root, \
+            mock.patch.dict(os.environ, {'RUNNER_TEMP': root}), \
+            mock.patch.object(observer.os.path, 'isfile', return_value=True), \
+            mock.patch.object(observer.pathlib.Path, 'is_dir', return_value=True), \
+            mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'bubblewrap 0.11.0\n')), \
+            mock.patch.object(observer.subprocess, 'Popen', side_effect=[sentinel, child]), \
+            mock.patch.object(observer, 'read_ready', return_value=json.dumps({
+                'readonly_write_rejected': True, 'docker_socket_unreachable': True,
+                'resolver_config_absent': True, 'loopback_only': True,
+                'network_connection_failed': True, 'dns_resolution_failed': True,
+                'setsid_namespace_pid': 4,
+            }).encode() + b'\n'), \
+            mock.patch.object(observer, 'matching_pids', side_effect=PermissionError):
+        try:
+            observer.observe()
+            raise AssertionError('inaccessible proc scan accepted')
+        except PermissionError:
+            assert observer.PHASE == 'token_scan'
+            child.kill.assert_called_once()
 
 
 if __name__ == '__main__':
