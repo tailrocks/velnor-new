@@ -154,6 +154,7 @@ pub(super) fn verify_metadata_observations(
         JournalMutationResult as ResultKind, inspect_journal_mutation, record_journal_intent,
     };
     let mut intent = JournalIntendedMutation {
+        archive_sha256: None,
         semver_evidence: None,
         sequence: 3,
         package: "demo".into(),

@@ -265,6 +265,7 @@ mod tests {
     #[test]
     fn prior_record_state_distinguishes_recorded_observation_from_pending_intent() {
         let observed = JournalMutation {
+            archive_sha256: None,
             semver_evidence: None,
             sequence: 2,
             package: "demo".into(),

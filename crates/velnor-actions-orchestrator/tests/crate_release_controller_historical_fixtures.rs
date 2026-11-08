@@ -203,6 +203,7 @@ pub(super) fn admitted_start_rejects_forged_prior_intent_digest()
 
 pub(super) fn fixture_upload_intention() -> crate::crate_release_journal::JournalIntendedMutation {
     crate::crate_release_journal::JournalIntendedMutation {
+        archive_sha256: None,
         semver_evidence: Some(fixture_no_baseline()),
         sequence: 1,
         package: "demo".into(),

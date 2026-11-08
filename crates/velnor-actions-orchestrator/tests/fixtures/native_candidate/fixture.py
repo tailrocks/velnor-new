@@ -13,6 +13,7 @@ import struct
 import subprocess
 import shutil
 import tomllib
+import time
 import re
 import sys
 import tarfile
@@ -188,7 +189,7 @@ if assets:
     generator_manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
     (root / ".velnor").mkdir()
     (root / ".velnor/release-manifest.json").write_bytes(manifest_bytes)
-authentication = "bootstrap-token" if os.environ.get("VELNOR_FIXTURE_FAILURE") == "coordinate-missing-bootstrap" else "trusted-publishing"
+authentication = "bootstrap-token" if os.environ.get("VELNOR_FIXTURE_FAILURE") in ("coordinate-missing-bootstrap", "coordinate-bootstrap") else "trusted-publishing"
 intent = f'''schema = 1
 repository = "owner/project"
 default_branch = "main"
@@ -336,6 +337,10 @@ def git_hash(kind, data):
     return hashlib.sha1(f"{kind} {len(data)}\0".encode() + data).hexdigest()
 
 
+journal_reads = 0
+stall_hits = 0
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Connection", "close")
@@ -346,12 +351,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         sys.stderr.write("fixture: " + fmt % args + "\n")
 
     def do_GET(self):
+        global journal_reads, stall_hits
         p = self.path
+        if "/git/ref/tags/velnor-receipt" in p or "/git/tags/" in p or "/git/blobs/" in p:
+            journal_reads += 1
+        stall = os.environ.get("VELNOR_FIXTURE_STALL_PATH")
+        if stall and pathlib.Path(stall).exists() and p == f"/repos/{repository}/rulesets?targets=tag&includes_parents=true&per_page=100" and stall_hits < int(os.environ.get("VELNOR_FIXTURE_STALL_COUNT", "1")):
+            stall_hits += 1
+            pathlib.Path(stall + ".hit" + str(stall_hits)).write_text("hit\n")
+            time.sleep(int(os.environ.get("VELNOR_FIXTURE_STALL_SECONDS", "30")))
         sha = policy if policy in p else prior_policy if prior_policy in p else source_sha
         status = 200
         obj = None
         if p == "/__fixture/state":
             obj = {
+                "journal_reads": journal_reads,
                 "mutations": mutations,
                 "refs": refs,
                 "blobs": len(blobs),
@@ -644,6 +658,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "cksum": hashlib.sha256(published).hexdigest(),
                 "yanked": False,
             }
+        elif p == index_path(package + "-wrong") and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
+            status, obj = 404, {"errors": []}
         elif p in (index_path(package), index_path(package.replace("-", "_"))) and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
             status, obj = 404, {"errors": []}
         else:

@@ -7,10 +7,7 @@ use velnor_actions_orchestrator::OperatorToolchainGuard;
 use crate::args::HomebrewCommand;
 use crate::dispatch::fail_public;
 
-pub(crate) fn run(
-    command: &HomebrewCommand,
-    guard: Option<&OperatorToolchainGuard>,
-) -> ExitCode {
+pub(crate) fn run(command: &HomebrewCommand, guard: Option<&OperatorToolchainGuard>) -> ExitCode {
     let report = match command {
         HomebrewCommand::SourcePolicy {
             root,

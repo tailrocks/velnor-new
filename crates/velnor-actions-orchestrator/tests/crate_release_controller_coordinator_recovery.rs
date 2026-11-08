@@ -135,6 +135,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_upload_without_uploadi
         &identity,
         &plan,
         &JournalIntendedMutation {
+            archive_sha256: None,
             semver_evidence: Some(fixture_no_baseline()),
             sequence: 1,
             package: "demo".into(),

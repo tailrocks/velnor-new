@@ -122,6 +122,7 @@ fn observed_size(
         return Err("owners".into());
     };
     let mutation = JournalMutation {
+        archive_sha256: None,
         sequence: 2,
         package: package.name.clone(),
         version: package.version.clone(),
@@ -146,6 +147,7 @@ fn intent_size(
     version: &str,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let mutation = JournalMutation {
+        archive_sha256: None,
         sequence: 1,
         package: name.into(),
         version: version.into(),

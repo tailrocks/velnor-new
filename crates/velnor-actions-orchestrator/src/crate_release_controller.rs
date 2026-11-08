@@ -5,6 +5,8 @@
 mod plz;
 pub(crate) use plz::invoke_upload;
 #[cfg(test)]
+pub(crate) use plz::verify_current_upload_intent;
+#[cfg(test)]
 pub(crate) fn fixture_upload_config(
     intent: &CrateReleaseIntent,
     package: &str,
@@ -113,6 +115,7 @@ pub fn prepare_crate_release<G: GitHubAdmissionRead, R: CrateRegistryRead>(
 
 #[derive(Debug)]
 pub(crate) struct VerifiedReleasePackage {
+    archive_sha256: String,
     intent_sha256: String,
     repository: String,
     workflow_sha: String,

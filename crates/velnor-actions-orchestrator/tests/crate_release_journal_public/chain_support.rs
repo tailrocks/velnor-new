@@ -212,6 +212,7 @@ pub(super) fn verify_prior_operation_chain(
         record_journal_mutation,
     };
     let mut mutation = JournalMutation {
+        archive_sha256: None,
         semver_evidence: Some(
             crate::release::crate_release_semver::SemverEvidence::NoBaseline {
                 checker_sha256: velnor_actions_mise::catalog::qualified_cargo_semver_checks(

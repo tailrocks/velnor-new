@@ -136,7 +136,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
-        if self.headers.get("host") == "index.crates.io" and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
+        if (self.headers.get("host") == "index.crates.io" or
+                self.headers.get("host") == "crates.io" and os.environ.get("VELNOR_FIXTURE_OTHER_REGISTRY")) and os.environ.get("VELNOR_FIXTURE_REAL_CARGO"):
             origin = os.environ["VELNOR_FIXTURE_CARGO_API_ORIGIN"]
             parsed = urllib.parse.urlsplit(origin)
             if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"

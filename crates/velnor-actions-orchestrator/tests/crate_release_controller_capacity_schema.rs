@@ -46,6 +46,7 @@ fn near_full_recoverable_history_stops_before_next_package()
             }
         };
         let mutation = JournalMutation {
+            archive_sha256: None,
             sequence,
             package: package.name.clone(),
             version: package.version.clone(),

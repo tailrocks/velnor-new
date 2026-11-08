@@ -176,6 +176,7 @@ pub(super) fn serial_coordinator_recovers_pending_visible_tag_without_recreating
         &identity,
         &plan,
         &JournalIntendedMutation {
+            archive_sha256: None,
             semver_evidence: None,
             sequence: 1,
             package: "demo".into(),

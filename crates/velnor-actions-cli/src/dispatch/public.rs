@@ -122,7 +122,10 @@ fn run_plan(guard: Option<&OperatorToolchainGuard>) -> ExitCode {
 }
 
 fn run_crate_release_command(command: &crate::args::CrateReleaseCommand) -> ExitCode {
-    if matches!(command, crate::args::CrateReleaseCommand::OidcQualificationAdmit) {
+    if matches!(
+        command,
+        crate::args::CrateReleaseCommand::OidcQualificationAdmit
+    ) {
         return match velnor_actions_orchestrator::crate_release_github::oidc_qualification_admit_from_environment() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_public(&error),

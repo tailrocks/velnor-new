@@ -6,11 +6,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_contract::HelperError;
-#[cfg(not(feature = "generator"))]
-use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_REJECTION_MARKER;
 use velnor_actions_contract::workflow::group_ledger::{
     ASSEMBLE_GROUP_LEDGERS_OP, EMIT_GROUP_LEDGER_OP, assemble_group_ledgers, emit_group_ledger,
 };
+#[cfg(not(feature = "generator"))]
+use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_REJECTION_MARKER;
 
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
