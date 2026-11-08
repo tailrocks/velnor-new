@@ -1786,6 +1786,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/hash.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/inspection.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/manifest.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/mod.rs
+crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/projection_cache.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/registry_projection.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/runner_release.rs
 crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/strict_json.rs
