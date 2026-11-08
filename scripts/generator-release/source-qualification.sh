@@ -60,9 +60,9 @@ set -uo pipefail
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 log="$evidence/logs/archive-guard-build.log"
 receipt="$evidence/archive-guard-identity.txt"
-printf '%s\n' 'bash scripts/build-owned-archive-guard.sh' >"$evidence/logs/archive-guard-build.command"
+printf '%s\n' 'CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache "$CARGO_HOME"' >"$evidence/logs/archive-guard-build.command"
 set +e
-bash scripts/build-owned-archive-guard.sh >"$log" 2>&1
+CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache "$CARGO_HOME" >"$log" 2>&1
 command_status=$?
 cat "$log"
 identity_status=0
@@ -149,14 +149,14 @@ set +e
 evidence="$RUNNER_TEMP/source-qualification-artifacts"
 mise --no-config --no-env --no-hooks exec \
   "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-  mbx build --locked --release --package velnor-actions-cli --bin velnor-actions \
+  mbx build --locked --offline --release --package velnor-actions-cli --bin velnor-actions \
   --example qualification-diagnostics \
   >"$evidence/logs/cli-build.log" 2>&1
 command_status=$?
 if [ "$command_status" -eq 0 ]; then
   mise --no-config --no-env --no-hooks exec \
     "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
-    mbx build --locked --release --package velnor-archive-guard --bin velnor-golden-collector \
+    mbx build --locked --offline --release --package velnor-archive-guard --bin velnor-golden-collector \
     >>"$evidence/logs/cli-build.log" 2>&1
   command_status=$?
 fi
@@ -480,8 +480,80 @@ locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
 final_status=0
 fetch_modes=()
 restored_sources_discarded=""
+clean_retry_attempted=0
 : >"$log"
 : >"$identity"
+quarantine_sources() {
+  local quarantine_directory
+  quarantine_directory="$(mktemp -d "$RUNNER_TEMP/velnor-cargo-quarantine.XXXXXXXX")" || return 1
+  /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+    "$root/scripts/generator-release/cargo-git-handoff.py" quarantine "$CARGO_HOME" "$quarantine_directory"
+}
+if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ]; then
+  if [ -z "${RUNNER_TEMP:-}" ] || [[ "$RUNNER_TEMP" != /* ]] \
+    || [ "$(cd "$RUNNER_TEMP" && pwd -P)" != "$RUNNER_TEMP" ] \
+    || [ "$CARGO_HOME" != "$RUNNER_TEMP/velnor/cargo" ] \
+    || [ ! -d "$CARGO_HOME" ] || [ -L "$CARGO_HOME" ] || [ "$(cd "$CARGO_HOME" && pwd -P)" != "$CARGO_HOME" ]; then
+    printf 'FATAL: qualification Cargo home is unsafe\n' >&2
+    exit 1
+  fi
+  for owned_directory in "$RUNNER_TEMP" "$RUNNER_TEMP/velnor" "$CARGO_HOME"; do
+    if [ -L "$owned_directory" ] || [ ! -d "$owned_directory" ] || [ ! -O "$owned_directory" ]; then
+      printf 'FATAL: qualification Cargo parent is unsafe\n' >&2
+      exit 1
+    fi
+    if [ "$(uname -s)" = Darwin ]; then
+      owned_mode="$(stat -f '%Lp' "$owned_directory")" || exit 1
+    else
+      owned_mode="$(stat -c '%a' "$owned_directory")" || exit 1
+    fi
+    if [[ ! "$owned_mode" =~ ^[0-7]+$ ]] || (( (8#$owned_mode & 022) != 0 )); then
+      printf 'FATAL: qualification Cargo parent is writable by others\n' >&2
+      exit 1
+    fi
+  done
+  while IFS= read -r variable; do
+    case "$variable" in GIT_*) unset "$variable" ;; esac
+  done < <(compgen -e)
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 GIT_NO_REPLACE_OBJECTS=1
+  if [ -e "$CARGO_HOME/git" ] || [ -L "$CARGO_HOME/git" ]; then
+    quarantine="$(mktemp -d "$RUNNER_TEMP/velnor-git-quarantine.XXXXXXXX")" || exit 1
+    mkdir -m 700 -- "$quarantine/staging" "$quarantine/empty-template" || exit 1
+    export GIT_TEMPLATE_DIR="$quarantine/empty-template"
+    if ! /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+      "$root/scripts/generator-release/cargo-git-handoff.py" "$CARGO_HOME" "$quarantine/staging" 0 0; then
+      quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
+      SOURCES_CACHE_MATCHED_KEY=''
+      SOURCES_CACHE_HIT=''
+      printf '::warning::unsafe restored Git source cache quarantined\n'
+    else
+      /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
+        "$root/scripts/generator-release/cargo-git-handoff.py" install "$CARGO_HOME" "$quarantine/staging" "$quarantine" \
+        || { printf 'FATAL: Git source quarantine failed\n' >&2; exit 1; }
+    fi
+  else
+    GIT_TEMPLATE_DIR="$(mktemp -d "$RUNNER_TEMP/velnor-git-template.XXXXXXXX")" || exit 1
+    export GIT_TEMPLATE_DIR
+  fi
+  for forbidden in config config.toml credentials credentials.toml registry/src git/checkouts; do
+    if [ -e "$CARGO_HOME/$forbidden" ] || [ -L "$CARGO_HOME/$forbidden" ]; then
+      quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
+      SOURCES_CACHE_MATCHED_KEY=''
+      SOURCES_CACHE_HIT=''
+      printf '::warning::unsafe restored Cargo source cache discarded\n'
+      break
+    fi
+  done
+fi
+if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ] && [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ]; then
+  if ! /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="$RUNNER_TEMP" \
+    /bin/bash "$root/scripts/generator-release/cargo-source-handoff.sh" check "$CARGO_HOME"; then
+    quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
+    SOURCES_CACHE_MATCHED_KEY=''
+    SOURCES_CACHE_HIT=''
+    printf '::warning::unsafe restored Cargo source cache discarded\n'
+  fi
+fi
 record_lock_hashes() {
   local destination="$1" lock digest
   : >"$destination" || return 1
@@ -501,25 +573,31 @@ record_lock_hashes() {
 run_fetch() {
   local manifest="$1" mode="$2" flags=(--locked)
   if [ "$mode" = offline ]; then flags+=(--offline); fi
-  printf 'command=mise --no-config --no-env --no-hooks exec rust@%s mr-boxington@%s -- cargo fetch %s --manifest-path %s/%s\n' \
-    "$VELNOR_RUST_VERSION" "$VELNOR_MBX_VERSION" "${flags[*]}" "$root" "$manifest" >>"$log"
-  mise --no-config --no-env --no-hooks exec \
-    "rust@$VELNOR_RUST_VERSION" "mr-boxington@$VELNOR_MBX_VERSION" -- \
+  local tools=("rust@$VELNOR_RUST_VERSION")
+  if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" != 1 ]; then
+    tools+=("mr-boxington@$VELNOR_MBX_VERSION")
+  fi
+  printf 'command=mise --no-config --no-env --no-hooks exec %s -- cargo fetch %s --manifest-path %s/%s\n' \
+    "${tools[*]}" "${flags[*]}" "$root" "$manifest" >>"$log"
+  mise --no-config --no-env --no-hooks exec "${tools[@]}" -- \
     cargo fetch "${flags[@]}" --manifest-path "$root/$manifest" >>"$log" 2>&1
   local command_status=$?
   printf 'manifest=%s mode=%s status=%s\n' "$manifest" "$mode" "$command_status" >>"$log"
   return "$command_status"
 }
 discard_restored_sources() {
-  local manifest="$1" path entry updated=() refetch_status=0
-  for path in registry/index registry/cache git/db; do
-    rm -rf -- "${CARGO_HOME:?}/$path"
-  done
+  local manifest="$1" reason="$2" entry updated=() refetch_status=0
+  clean_retry_attempted=1
+  if [ ! -d "$CARGO_HOME" ] || [ -L "$CARGO_HOME" ] || [ "$(cd "$CARGO_HOME" && pwd -P)" != "$CARGO_HOME" ]; then
+    printf 'FATAL: qualification Cargo home is unsafe\n' >&2
+    return 1
+  fi
+  quarantine_sources || return 1
   restored_sources_discarded="${restored_sources_discarded:+$restored_sources_discarded,}$manifest"
-  printf '::warning::restored Cargo sources discarded because the offline fetch of %s failed\n' "$manifest"
-  printf 'restored sources discarded after the offline fetch of %s failed\n' "$manifest" >>"$log"
+  printf '::warning::restored Cargo sources discarded because the %s fetch of %s failed\n' "$reason" "$manifest"
+  printf 'restored sources discarded after the %s fetch of %s failed\n' "$reason" "$manifest" >>"$log"
   for entry in ${fetch_modes[@]+"${fetch_modes[@]}"}; do
-    if [ "${entry##*:}" = offline ]; then
+    if [ "${entry##*:}" != failed ]; then
       if run_fetch "${entry%:*}" network; then
         entry="${entry%:*}:network"
       else
@@ -534,12 +612,12 @@ discard_restored_sources() {
 }
 fetch_manifest() {
   local manifest="$1"
-  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ -z "$restored_sources_discarded" ]; then
+  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ "$clean_retry_attempted" -eq 0 ]; then
     if run_fetch "$manifest" offline; then
       fetch_modes+=("$manifest:offline")
       return 0
     fi
-    if [ "${SOURCES_CACHE_HIT:-}" = true ] && ! discard_restored_sources "$manifest"; then
+    if [ "${SOURCES_CACHE_HIT:-}" = true ] && ! discard_restored_sources "$manifest" offline; then
       fetch_modes+=("$manifest:failed")
       return 1
     fi
@@ -547,6 +625,12 @@ fetch_manifest() {
   if run_fetch "$manifest" network; then
     fetch_modes+=("$manifest:network")
     return 0
+  fi
+  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ "$clean_retry_attempted" -eq 0 ]; then
+    if discard_restored_sources "$manifest" network && run_fetch "$manifest" network; then
+      fetch_modes+=("$manifest:network")
+      return 0
+    fi
   fi
   fetch_modes+=("$manifest:failed")
   return 1

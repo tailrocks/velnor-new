@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "../../velnor-actions-orchestrator/tests/support/consumer_manifest.rs"]
+mod consumer_manifest_fixture;
+
 use std::{
     error::Error,
     fs,
@@ -59,6 +62,7 @@ fn consumer_required_uses_canonical_group_ledger_fanin() -> Result<(), Box<dyn E
     );
     assert_ne!(config, consumer, "fixture policy was not Velnor-specific");
     fs::write(config_path, consumer)?;
+    consumer_manifest_fixture::write(&paths.repo, &std::env::current_exe()?)?;
     let jobs = super::finalized_jobs(&super::prepare(&paths.repo)?)?;
     let required = jobs
         .get(super::REQUIRED_JOB_ID)

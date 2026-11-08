@@ -190,6 +190,7 @@ fn build_release_jobs(
 struct IntentSettings<'a> {
     default_branch: &'a str,
     catalog: &'a velnor_actions_mise::ToolCatalog,
+    generator_version: &'a str,
 }
 
 fn crate_release_intent(
@@ -213,7 +214,7 @@ fn crate_release_intent(
             .catalog
             .version(velnor_actions_mise::PinnedTool::Rust)
             .to_owned(),
-        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        generator_version: settings.generator_version.to_owned(),
         generator_source_sha: generator_pin.0.to_owned(),
         generator_manifest_sha256: generator_pin.1.to_owned(),
         release_plz_version: settings
@@ -320,15 +321,15 @@ fn derive_release_inputs(
         paths,
     } = snapshot::derive_source_inputs(source_root, release, &metadata, &known)?;
     let repository = origin_repository(&prep.root)?;
-    let pin = reviewed_generator_manifest(
+    let pin = plan::reviewed_current_generator_manifest(
         prep.discovery.consumer_manifest_json.as_deref(),
-        prep.discovery.consumer_manifest_stand_in,
         env!("CARGO_PKG_VERSION"),
     )?;
     let intent = crate_release_intent(
         &IntentSettings {
             default_branch: &prep.default_branch,
             catalog: &catalog,
+            generator_version: env!("CARGO_PKG_VERSION"),
         },
         release,
         &repository,

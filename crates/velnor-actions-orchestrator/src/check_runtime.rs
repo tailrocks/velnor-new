@@ -292,7 +292,8 @@ fn run_owned(
         .map_err(|e| internal(&e.to_string()))?
         .with_env(&pairs)
         .map_err(|e| internal(&e.to_string()))?;
-    let task_output = command.run_until(8 * 1024 * 1024, deadline);
+    let task_output =
+        command.run_until_with_progress(8 * 1024 * 1024, deadline, &mut std::io::stderr().lock());
     let after_result =
         preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline);
     let output = task_output.map_err(|e| internal(&e.to_string()))?;

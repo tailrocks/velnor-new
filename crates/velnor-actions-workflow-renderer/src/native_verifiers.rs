@@ -9,6 +9,8 @@ use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_mise::{PinnedTool, RUST_TARGET_TRIPLE, ToolCatalog, ToolHomes};
 
 use crate::VERIFY_PATH;
+const CACHE_PUBLISH: &str = r#"cache_publish() { cache_tmp=; if ev mktemp "$VELNOR_RUST_ARCHIVE_CACHE/.velnor-archive.XXXXXXXX" > "$d/cache-temp-path" 2>/dev/null; then IFS= read -r cache_tmp < "$d/cache-temp-path"; fi; if [ -n "$cache_tmp" ]; then if ev cp "$d/c.tar.xz" "$cache_tmp"; then ev ln "$cache_tmp" "$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz" 2>/dev/null || :; fi; ev rm -f "$cache_tmp" || :; fi; }"#;
+
 use crate::native_verifiers_tree_digest::{
     RUST_TREE_DIGESTS, TreeCheck, pin_check_statements, pin_scope_statements,
 };
@@ -133,6 +135,7 @@ pub fn toolchain_script(
         "ev find \"$t\" ! -type f ! -type d > \"$d/special\"".to_owned(),
         "test ! -s \"$d/special\" || fail \"rust_toolchain_file_unexpected: $t holds a symlink or a special file\"".to_owned(),
         GET.to_owned(),
+        CACHE_PUBLISH.to_owned(),
         PUT.to_owned(),
         CHANNEL_SHA_OK.to_owned(),
         VERIFIED_CHANNEL.replace("{DIST}", DIST),
@@ -149,7 +152,7 @@ pub fn toolchain_script(
         format!("{COMPONENT_TARBALLS_AWK} || fail \"rust_component_not_in_manifest: $t lists a component the verified channel-rust-$v.toml does not ship\""),
         "test -s \"$d/tarballs\" || fail \"rust_installed_manifest_empty: $t lists no component\"".to_owned(),
         ": > \"$d/expected\"".to_owned(),
-        "while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then if [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ] && [ -f \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" ]; then ev cp \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" \"$d/c.tar.xz\"; else get \"$d/c.tar.xz\" \"$url\"; fi; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; if [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ]; then ev cp \"$d/c.tar.xz\" \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\"; fi; ev rm -rf \"$d/x\"; ev mkdir \"$d/x\"; ev uname -s > \"$d/platform\"; platform=; IFS= read -r platform < \"$d/platform\"; if [ \"$platform\" = Linux ]; then ev xz -dc \"$d/c.tar.xz\" > \"$d/c.tar\"; ev tar -xf \"$d/c.tar\" -C \"$d/x\"; ev rm -f \"$d/c.tar\"; set -- \"$d/x\"/*; [ \"$#\" -eq 1 ] && [ -d \"$1\" ] || fail \"rust_component_archive_invalid: $comp\"; ev mv \"$1\" \"$d/unpacked\"; ev rmdir \"$d/x\"; ev mv \"$d/unpacked\" \"$d/x\"; else ev tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; fi; ev rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; ev mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; ev cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"".to_owned(),
+        "while read -r comp url hash; do case \"$comp\" in *[!A-Za-z0-9._-]*|\"\") fail \"rust_component_name_invalid: $comp\";; esac; case \"$url\" in https://static.rust-lang.org/dist/*.tar.xz) ;; *) fail \"rust_component_url_untrusted: $url\";; esac; if [ ! -f \"$r/$comp.$hash\" ]; then cache_miss=0; if [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ] && [ -f \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" ]; then ev cp \"$VELNOR_RUST_ARCHIVE_CACHE/$hash.tar.xz\" \"$d/c.tar.xz\"; else cache_miss=1; get \"$d/c.tar.xz\" \"$url\"; fi; printf \"%s  %s\\n\" \"$hash\" \"$d/c.tar.xz\" > \"$d/c.sha256\"; $h -c \"$d/c.sha256\" >/dev/null || fail \"rust_component_tarball_digest_mismatch: $comp\"; if [ \"$cache_miss\" = 1 ] && [ -n \"${VELNOR_RUST_ARCHIVE_CACHE:-}\" ]; then cache_publish; fi; ev rm -rf \"$d/x\"; ev mkdir \"$d/x\"; ev uname -s > \"$d/platform\"; platform=; IFS= read -r platform < \"$d/platform\"; if [ \"$platform\" = Linux ]; then ev xz -dc \"$d/c.tar.xz\" > \"$d/c.tar\"; ev tar -xf \"$d/c.tar\" -C \"$d/x\"; ev rm -f \"$d/c.tar\"; set -- \"$d/x\"/*; [ \"$#\" -eq 1 ] && [ -d \"$1\" ] || fail \"rust_component_archive_invalid: $comp\"; ev mv \"$1\" \"$d/unpacked\"; ev rmdir \"$d/x\"; ev mv \"$d/unpacked\" \"$d/x\"; else ev tar -xJf \"$d/c.tar.xz\" -C \"$d/x\" --strip-components=1; fi; ev rm -f \"$d/c.tar.xz\"; : > \"$d/c.sums\"; while read -r sub; do case \"$sub\" in *[!A-Za-z0-9._-]*|\"\"|.|..) fail \"rust_component_name_invalid: $sub\";; esac; (cd \"$d/x/$sub\" && ev find . -type f ! -path ./manifest.in -exec $hb {} +) >> \"$d/c.sums\"; done < \"$d/x/components\"; ev mv \"$d/c.sums\" \"$r/$comp.$hash\"; fi; ev cat \"$r/$comp.$hash\" >> \"$d/expected\"; done < \"$d/tarballs\"".to_owned(),
         "(cd \"$t\" && ev find . -type f ! -path ./lib/rustlib/components ! \\( -path \"./lib/rustlib/manifest-*\" ! -path \"./lib/rustlib/manifest-*/*\" \\) ! -path ./lib/rustlib/multirust-channel-manifest.toml ! -path ./lib/rustlib/multirust-config.toml ! -path ./lib/rustlib/rust-installer-version -exec $hb {} +) > \"$d/installed\"".to_owned(),
         "ev sort -k2 \"$d/expected\" > \"$d/expected.sorted\"".to_owned(),
         "ev sort -k2 \"$d/installed\" > \"$d/installed.sorted\"".to_owned(),
@@ -275,5 +278,48 @@ fn call_step(name: &str, uses: &'static str, role: Option<StepRole>) -> Step {
             with: BTreeMap::new(),
             env: BTreeMap::new(),
         },
+    }
+}
+
+#[cfg(all(test, unix))]
+mod archive_cache_tests {
+    use super::CACHE_PUBLISH;
+    use std::{error::Error, fs, os::unix::fs::PermissionsExt, process::Command};
+
+    #[test]
+    fn archive_cache_publishes_without_overwriting_or_requiring_write_access()
+    -> Result<(), Box<dyn Error>> {
+        let root = tempfile::tempdir()?;
+        let work = root.path().join("work");
+        let cache = root.path().join("cache");
+        fs::create_dir(&work)?;
+        fs::create_dir(&cache)?;
+        fs::write(work.join("c.tar.xz"), b"verified archive")?;
+        let script =
+            format!("set -eu; ev() {{ /usr/bin/env \"$@\"; }}; {CACHE_PUBLISH}; cache_publish");
+        let run = || -> Result<(), Box<dyn Error>> {
+            let status = Command::new("/bin/sh")
+                .arg("-c")
+                .arg(&script)
+                .env("d", &work)
+                .env("hash", "digest")
+                .env("VELNOR_RUST_ARCHIVE_CACHE", &cache)
+                .status()?;
+            assert!(status.success());
+            Ok(())
+        };
+        run()?;
+        assert_eq!(fs::read(cache.join("digest.tar.xz"))?, b"verified archive");
+        fs::write(work.join("c.tar.xz"), b"replacement")?;
+        run()?;
+        assert_eq!(fs::read(cache.join("digest.tar.xz"))?, b"verified archive");
+        fs::remove_file(cache.join("digest.tar.xz"))?;
+        fs::set_permissions(&cache, fs::Permissions::from_mode(0o500))?;
+        let result = run();
+        fs::set_permissions(&cache, fs::Permissions::from_mode(0o700))?;
+        result?;
+        assert!(!cache.join("digest.tar.xz").exists());
+        assert_eq!(fs::read_dir(&cache)?.count(), 0);
+        Ok(())
     }
 }

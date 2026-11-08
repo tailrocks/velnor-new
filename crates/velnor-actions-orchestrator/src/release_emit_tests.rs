@@ -147,7 +147,8 @@ fn preview_fixture(root: &std::path::Path) -> Result<(), Box<dyn std::error::Err
     )?;
     fs::write(root.join("src/lib.rs"), "pub fn demo() {}\n")?;
     let version = env!("CARGO_PKG_VERSION");
-    let targets: Vec<_> = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"].into_iter().map(|target| serde_json::json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": "a".repeat(64)})).collect();
+    let digest = crate::planner::generator::sha256_hex(&fs::read(std::env::current_exe()?)?);
+    let targets: Vec<_> = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"].into_iter().map(|target| serde_json::json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": digest})).collect();
     fs::write(root.join(".velnor/release-manifest.json"), serde_json::json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": "b".repeat(40), "targets": targets}).to_string())?;
     for args in [
         &["init", "-b", "main"][..],
@@ -221,27 +222,26 @@ fn generator_pin_uses_validated_exact_manifest_bytes() -> Result<(), Box<dyn std
     let targets: Vec<_> = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
         .into_iter().map(|target| serde_json::json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": digest})).collect();
     let manifest = serde_json::json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": source, "targets": targets}).to_string();
-    let pin = reviewed_generator_manifest(Some(&manifest), false, version)?;
+    let pin = reviewed_generator_manifest(Some(&manifest), version)?;
     assert_eq!(pin.0, source);
-    let changed = reviewed_generator_manifest(Some(&(manifest.clone() + "\n")), false, version)?;
+    let changed = reviewed_generator_manifest(Some(&(manifest.clone() + "\n")), version)?;
     assert_eq!(changed.0, pin.0);
     assert_ne!(changed.1, pin.1);
-    assert!(reviewed_generator_manifest(Some(&manifest), true, version).is_err());
-    assert!(reviewed_generator_manifest(None, false, version).is_err());
-    assert!(reviewed_generator_manifest(Some(&manifest), false, "0.1.99").is_err());
+    assert!(reviewed_generator_manifest(None, version).is_err());
+    assert!(reviewed_generator_manifest(Some(&manifest), "0.1.99").is_err());
     let mut invalid: serde_json::Value = serde_json::from_str(&manifest)?;
     invalid["commit"] = serde_json::json!("not-a-commit");
-    assert!(reviewed_generator_manifest(Some(&invalid.to_string()), false, version).is_err());
+    assert!(reviewed_generator_manifest(Some(&invalid.to_string()), version).is_err());
     invalid["commit"] = serde_json::json!(source);
     invalid["targets"][0]["target"] = serde_json::json!("unsupported");
-    assert!(reviewed_generator_manifest(Some(&invalid.to_string()), false, version).is_err());
+    assert!(reviewed_generator_manifest(Some(&invalid.to_string()), version).is_err());
     Ok(())
 }
 
 #[test]
 fn generator_pin_uses_exact_official_release_manifest() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = include_str!("release_emit_tests/official-0.1.12.json");
-    let (source, digest) = reviewed_generator_manifest(Some(manifest), false, "0.1.12")?;
+    let (source, digest) = reviewed_generator_manifest(Some(manifest), "0.1.12")?;
     assert_eq!(source, "f1b044a606b6bc469f9718644f5c0ed88bf965b6");
     assert_eq!(
         digest,

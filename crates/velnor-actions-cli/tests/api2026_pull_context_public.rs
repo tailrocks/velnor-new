@@ -157,7 +157,6 @@ fn isolated_fixture_tools_match_qualified_catalog_and_lock() -> Result<(), Box<d
     Ok(())
 }
 
-#[cfg(not(debug_assertions))]
 #[test]
 fn release_consumer_manifest_sentinel_never_bypasses_executable_binding()
 -> Result<(), Box<dyn Error>> {
@@ -300,4 +299,30 @@ else:
         .status()?;
     assert!(status.success());
     Ok(())
+}
+
+#[test]
+fn debug_consumer_generation_requires_matching_executable_manifest() -> Result<(), Box<dyn Error>> {
+    fixture::generation_admission(false)
+}
+
+#[test]
+fn debug_consumer_generation_requires_release_manifest() -> Result<(), Box<dyn Error>> {
+    fixture::generation_admission(true)
+}
+
+#[test]
+fn debug_consumer_plan_requires_release_manifest() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::MissingManifest,
+        "consumer_requires_release_install",
+    )
+}
+
+#[test]
+fn consumer_plan_rejects_executable_digest_in_wrong_host_row() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::WrongHost,
+        "release_manifest_binary_mismatch",
+    )
 }

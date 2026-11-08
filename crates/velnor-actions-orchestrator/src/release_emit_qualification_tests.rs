@@ -42,6 +42,7 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
             "main",
         )
     };
+    check_official_historical_manifest(&source, &prep.config, &metadata, &metadata_config)?;
     let actual = derive(&prep.config)?;
     let rendered = preview_consumer_intent(temp.path())?;
     let expected =
@@ -70,6 +71,47 @@ fn qualification_intent_matches_rendered_intent_without_enabling_publishing()
     Ok(())
 }
 
+fn check_official_historical_manifest(
+    source: &crate::crate_release_qualification_snapshot::SourceSnapshot,
+    config: &velnor_actions_contract::VelnorConfig,
+    metadata: &str,
+    metadata_config: &velnor_actions_contract::config::ReleaseRehearsalMetadataConfig,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let historical_manifest = include_bytes!("release_emit_tests/official-0.1.12.json");
+    let mut historical_metadata = metadata_config.clone();
+    historical_metadata
+        .qualification
+        .historical_manifest
+        .version = "0.1.12".into();
+    let historical = parent::derive_intent_from_snapshot(
+        source,
+        config,
+        metadata,
+        historical_manifest,
+        &historical_metadata,
+        "example/demo",
+        "main",
+    )?;
+    assert_eq!(historical.generator_version, "0.1.12");
+    assert_eq!(
+        historical.generator_source_sha,
+        "f1b044a606b6bc469f9718644f5c0ed88bf965b6"
+    );
+    assert_eq!(
+        historical.generator_manifest_sha256,
+        "e945a9122ed051cbe918ef3208f7fa6ec2203a5228be4437a680c33a67fc1cbb"
+    );
+    assert!(
+        velnor_actions_workflow_renderer::release_helpers::validate_consumer_manifest_for_version(
+            velnor_actions_contract::ReleaseTarget::LinuxX86_64,
+            "0.1.12",
+            Some(std::str::from_utf8(historical_manifest)?),
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
 pub(super) fn qualification_metadata(
     rust_version: &str,
 ) -> velnor_actions_contract::config::ReleaseRehearsalMetadataConfig {
@@ -87,7 +129,7 @@ pub(super) fn qualification_metadata(
                 reviewer_app_ids: [1].into_iter().collect(),
             },
             historical_manifest: velnor_actions_contract::config::ReleaseHistoricalManifestPolicy {
-                version: "0.1.5".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
                 source_sha: "b".repeat(40),
                 sha256: "c".repeat(64),
             },

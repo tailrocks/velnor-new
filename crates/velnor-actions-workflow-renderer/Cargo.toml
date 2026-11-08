@@ -117,3 +117,7 @@ path = "tests/source_preview_loader_public.rs"
 [[test]]
 name = "crate_oidc_qualification_public"
 path = "tests/crate_oidc_qualification_public.rs"
+
+[[test]]
+name = "cargo_source_handoff_public"
+path = "tests/cargo_source_handoff_public.rs"

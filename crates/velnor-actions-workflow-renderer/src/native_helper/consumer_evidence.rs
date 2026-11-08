@@ -12,6 +12,16 @@ pub(super) fn validated_consumer_manifest(
     version: &str,
     json: Option<&str>,
 ) -> Result<ReleaseManifest, ReleaseHelperError> {
+    let manifest = validated_historical_manifest(target, version, json)?;
+    super::release_binary::verify_current_exe_matches_consumer_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+pub(super) fn validated_historical_manifest(
+    target: ReleaseTarget,
+    version: &str,
+    json: Option<&str>,
+) -> Result<ReleaseManifest, ReleaseHelperError> {
     let Some(json) = json else {
         return Err(ReleaseHelperError::Problem(
             "consumer_requires_release_install:install an official velnor-actions release"
@@ -29,7 +39,6 @@ pub(super) fn validated_consumer_manifest(
             manifest.version
         )));
     }
-    super::release_binary::verify_current_exe_matches_consumer_manifest(&manifest)?;
     let record = manifest.record_for_target(target.triple()).ok_or_else(|| {
         ReleaseHelperError::Problem(format!("manifest_missing_target:{}", target.triple()))
     })?;

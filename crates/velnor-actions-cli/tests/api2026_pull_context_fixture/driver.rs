@@ -26,10 +26,11 @@ pub(super) fn dispatch(scenario: Scenario) -> Result<(), Box<dyn Error>> {
 impl Scenario {
     fn test_name(self) -> &'static str {
         match self {
-            #[cfg(not(debug_assertions))]
             Self::ReleaseSentinel => {
                 "release_consumer_manifest_sentinel_never_bypasses_executable_binding"
             }
+            Self::MissingManifest => "debug_consumer_plan_requires_release_manifest",
+            Self::WrongHost => "consumer_plan_rejects_executable_digest_in_wrong_host_row",
             Self::Valid => "absent_rest_merge_sha_reaches_owned_locator_gate",
             Self::ReversedParents => "reversed_api_merge_parents_are_rejected",
             Self::ChangedRef => "changed_merge_ref_is_rejected",

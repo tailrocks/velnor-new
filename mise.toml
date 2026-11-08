@@ -50,11 +50,13 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+printf "maintenance-phase: pin-mirror\n"
 VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=pin-mirror \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
+printf "maintenance-phase: diagnostics-build\n"
 ARTIFACT_MESSAGES="$(mktemp)"
 trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
 cargo --config build.jobs=2 build --locked -p velnor-actions-cli \
@@ -77,17 +79,37 @@ if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
   exit 1
 fi
 export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+cargo --config build.jobs=2 build --locked -p velnor-archive-guard \
+  --example golden_collector_clock --message-format=json >"$ARTIFACT_MESSAGES"
+CLOCK_DRIVER="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=artifact-executable \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
+  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
+  VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
+  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
+    --bin velnor-actions)"
+case "$CLOCK_DRIVER" in
+  /*) ;;
+  *) echo "qualification clock driver is missing" >&2; exit 1 ;;
+esac
+test -x "$CLOCK_DRIVER"
+export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
+printf "maintenance-phase: test-members\n"
 TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=test-members \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_MANIFEST_PATH='' \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
 (
   cd "$ROOT/crates/velnor-runner"
   cargo fetch --locked
 )
 for package in velnor-actions-freshness velnor-archive-guard; do
+  printf "maintenance-phase: %s\n" "$package"
   case " $TEST_MEMBERS " in
     *" $package "*)
       cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package "$package" --no-tests fail --jobs 2

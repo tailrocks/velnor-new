@@ -87,13 +87,13 @@ pub(crate) fn derive_intent_from_snapshot(
     let derived = derive_source_inputs(source.root(), release, metadata, source.manifests())?;
     let pin = reviewed_generator_manifest(
         Some(std::str::from_utf8(manifest).map_err(|_| invalid())?),
-        false,
-        env!("CARGO_PKG_VERSION"),
+        &metadata_config.qualification.historical_manifest.version,
     )?;
     let intent = crate_release_intent(
         &IntentSettings {
             default_branch,
             catalog: &catalog,
+            generator_version: &metadata_config.qualification.historical_manifest.version,
         },
         release,
         repository,

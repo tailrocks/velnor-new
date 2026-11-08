@@ -71,7 +71,7 @@ fn bind_manifest_values(
     }
     let raw = std::str::from_utf8(bytes).map_err(|_| invalid())?;
     let parsed =
-        velnor_actions_workflow_renderer::release_helpers::validate_consumer_manifest_for_version(
+        velnor_actions_workflow_renderer::release_helpers::validate_historical_manifest_for_version(
             velnor_actions_contract::ReleaseTarget::LinuxX86_64,
             &policy.version,
             Some(raw),

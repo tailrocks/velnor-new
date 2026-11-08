@@ -23,6 +23,14 @@ pub fn validate_consumer_manifest_for_version(
     consumer_evidence::validated_consumer_manifest(target, version, json)
 }
 
+pub fn validate_historical_manifest_for_version(
+    target: velnor_actions_contract::ReleaseTarget,
+    version: &str,
+    json: Option<&str>,
+) -> Result<velnor_actions_contract::ReleaseManifest, ReleaseHelperError> {
+    consumer_evidence::validated_historical_manifest(target, version, json)
+}
+
 pub fn verify_binary_matches_consumer_manifest(
     manifest: &velnor_actions_contract::ReleaseManifest,
     exe_sha256: &str,

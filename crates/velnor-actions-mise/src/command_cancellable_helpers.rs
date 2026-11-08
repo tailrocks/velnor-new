@@ -28,15 +28,13 @@ pub(super) struct ChildPollResult {
 
 pub(super) fn poll_child(
     child: &mut Child,
-    stdout: std::process::ChildStdout,
-    stderr: std::process::ChildStderr,
+    stdout: &mut Option<std::process::ChildStdout>,
+    stderr: &mut Option<std::process::ChildStderr>,
     streams: &mut Streams<'_>,
     deadline: CheckDeadline,
     cancel: &CancelHandle,
     timeout_message: &str,
 ) -> ChildPollResult {
-    let mut stdout = Some(stdout);
-    let mut stderr = Some(stderr);
     let mut status: Option<ObservedStatus> = None;
     loop {
         if cancel.is_cancelled() {
@@ -57,8 +55,8 @@ pub(super) fn poll_child(
                 error: Some(timeout_message.to_owned()),
             };
         }
-        let stdout_poll = streams.poll_stdout(&mut stdout);
-        let stderr_poll = streams.poll_stderr(&mut stderr);
+        let stdout_poll = streams.poll_stdout(stdout);
+        let stderr_poll = streams.poll_stderr(stderr);
         let progressed = stdout_poll.as_ref().is_ok_and(|value| *value)
             || stderr_poll.as_ref().is_ok_and(|value| *value);
         if cancel.is_cancelled() {
@@ -177,8 +175,8 @@ pub(super) fn finish_child_process(
     }
     let polled = poll_child(
         child,
-        stdout,
-        stderr,
+        &mut Some(stdout),
+        &mut Some(stderr),
         context.streams,
         context.deadline,
         context.cancel,

@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "../../velnor-actions-orchestrator/tests/support/consumer_manifest.rs"]
+mod consumer_manifest_fixture;
+
 mod cache_no_explanatory_comments;
 #[path = "velnor_cli/cargo_artifact.rs"]
 mod cargo_artifact;

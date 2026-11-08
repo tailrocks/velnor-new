@@ -167,18 +167,24 @@ pub(super) fn release_triggers(branch: &str, plan: &ReleasePlan) -> ReleaseTrigg
     }
 }
 
+pub(super) fn reviewed_current_generator_manifest(
+    raw: Option<&str>,
+    version: &str,
+) -> Result<(String, String), OrchestratorError> {
+    velnor_actions_workflow_renderer::release_helpers::validate_consumer_manifest_for_version(
+        velnor_actions_contract::ReleaseTarget::LinuxX86_64,
+        version,
+        raw,
+    )
+    .map_err(crate::local_release_manifest::map_release_helper_error)?;
+    reviewed_generator_manifest(raw, version)
+}
+
 pub(super) fn reviewed_generator_manifest(
     raw: Option<&str>,
-    stand_in: bool,
     version: &str,
 ) -> Result<(String, String), OrchestratorError> {
     use sha2::{Digest, Sha256};
-    if stand_in {
-        return Err(OrchestratorError::unsupported(
-            "generator_manifest",
-            "release requires a reviewed consumer release manifest",
-        ));
-    }
     let raw = raw.ok_or_else(|| {
         OrchestratorError::unsupported(
             "generator_manifest",
@@ -186,7 +192,7 @@ pub(super) fn reviewed_generator_manifest(
         )
     })?;
     let manifest =
-        velnor_actions_workflow_renderer::release_helpers::validate_consumer_manifest_for_version(
+        velnor_actions_workflow_renderer::release_helpers::validate_historical_manifest_for_version(
             velnor_actions_contract::ReleaseTarget::LinuxX86_64,
             version,
             Some(raw),

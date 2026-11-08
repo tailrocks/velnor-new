@@ -68,3 +68,6 @@ private_intra_doc_links = "deny"
 
 [profile.test.package."sha2:0.11.1"]
 opt-level = 3
+
+[profile.dev.package."sha2:0.11.1"]
+opt-level = 3
