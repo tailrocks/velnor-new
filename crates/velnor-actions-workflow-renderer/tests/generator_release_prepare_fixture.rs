@@ -21,6 +21,13 @@ use velnor_actions_workflow_renderer::setup::MiseSetup;
 #[path = "generator_release_prepare_fixture/fixture_pins.rs"]
 mod fixture_pins;
 
+#[path = "generator_release_prepare_fixture/interpreter.rs"]
+mod interpreter;
+
+#[path = "generator_release_prepare_fixture/extract.rs"]
+mod extract;
+use extract::extract_prepare_script;
+
 const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const RUST_VERSION: &str = "1.99.1";
@@ -30,6 +37,8 @@ const GH_VERSION: &str = "2.83.1";
 pub(crate) struct Fixture {
     root: TempDir,
     script: String,
+    executor: String,
+    materializers: Vec<String>,
     pub(crate) empty_workspace: PathBuf,
     pub(crate) github_output: PathBuf,
     fake_gh: PathBuf,
@@ -69,7 +78,8 @@ impl Fixture {
 
         let files = render_schema2_workflows(&request(&fake_gh)?)?;
         let workflow = rendered_file(&files, PRODUCT_RELEASE_WORKFLOW)?;
-        let (script, asset_names) = extract_prepare_script(workflow)?;
+        let (script, executor, materializers, asset_names) = extract_prepare_script(workflow)?;
+        extract::check_project_tool_binding(workflow, &script)?;
 
         create_release_assets(&release_assets)?;
         let manifest_assets = release_assets.join("manifest-assets");
@@ -85,6 +95,8 @@ impl Fixture {
         Ok(Self {
             root,
             script,
+            executor,
+            materializers,
             empty_workspace,
             github_output,
             fake_gh,
@@ -96,21 +108,30 @@ impl Fixture {
     }
 
     pub(crate) fn execute(&self) -> Result<Output, Box<dyn Error>> {
+        self.execute_materialized(&self.materialize()?)
+    }
+
+    pub(crate) fn execute_materialized(&self, directory: &Path) -> Result<Output, Box<dyn Error>> {
         let fake_bin = self
             .fake_gh
             .parent()
             .ok_or("fake GitHub CLI has no parent")?;
         let path = format!("{}:{}", fake_bin.display(), std::env::var("PATH")?);
-        let mut command = Command::new("bash");
+        let mut command = Command::new("/bin/bash");
         command
             .args(["--noprofile", "--norc", "-e", "-o", "pipefail", "-c"])
-            .arg(&self.script)
+            .arg(&self.executor)
             .current_dir(&self.empty_workspace)
             .env("PATH", path)
+            .env("VELNOR_FIXED_SCRIPT_DIR", directory)
+            .env("PYTHONPATH", self.root.path().join("poison"))
+            .env("SENTINEL", self.root.path().join("sentinel"))
             .env("GH_TOKEN", "fixture-token")
             .env("GITHUB_REPOSITORY", REPOSITORY)
             .env("GITHUB_SHA", SOURCE_SHA)
             .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
+            .env("VELNOR_TOOL_RUST", RUST_VERSION)
+            .env("VELNOR_TOOL_MR_BOXINGTON", MBX_VERSION)
             .env("VELNOR_SOURCE_SHA", SOURCE_SHA)
             .env("VELNOR_WORKFLOW_AUTHORITY_SHA", SOURCE_SHA)
             .env("GITHUB_OUTPUT", &self.github_output)
@@ -182,7 +203,7 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
             ),
         ],
         gh_argv: vec![fake_gh.display().to_string()],
-        rust_version: RUST_VERSION.to_owned(),
+        rust_version: "${VELNOR_TOOL_RUST}".to_owned(),
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
@@ -191,7 +212,7 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
                 velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
             ),
         ],
-        mr_boxington_version: MBX_VERSION.to_owned(),
+        mr_boxington_version: "${VELNOR_TOOL_MR_BOXINGTON}".to_owned(),
         gh_version: GH_VERSION.to_owned(),
     }
 }
@@ -202,28 +223,6 @@ fn rendered_file<'a>(files: &'a [RenderedFile], path: &str) -> Result<&'a str, B
         .find(|file| file.path == path)
         .ok_or("generator family workflow is missing")?;
     Ok(&file.bytes)
-}
-
-fn extract_prepare_script(workflow: &str) -> Result<(String, Vec<String>), Box<dyn Error>> {
-    let step = workflow
-        .split("name: Reconcile immutable family release")
-        .nth(1)
-        .ok_or("generator reconciliation step is missing")?;
-    let encoded = step
-        .lines()
-        .find_map(|line| line.trim_start().strip_prefix("run: "))
-        .ok_or("generator reconciliation run command is missing")?;
-    let script: String = serde_json::from_str(encoded)?;
-    let expected_line = script
-        .lines()
-        .find(|line| line.starts_with("readonly prepare_expected_assets='"))
-        .ok_or("generator release asset list is missing")?;
-    let encoded = expected_line
-        .strip_prefix("readonly prepare_expected_assets='")
-        .and_then(|value| value.strip_suffix('\''))
-        .ok_or("generator release asset list is malformed")?;
-    let asset_names = serde_json::from_str(encoded)?;
-    Ok((script, asset_names))
 }
 
 fn create_release_assets(root: &Path) -> Result<(), Box<dyn Error>> {

@@ -63,3 +63,13 @@ mod state_v4_tip;
 mod ubuntu_owned_publication;
 
 mod job_image_candidate_execution_public;
+
+mod bounded_test_support;
+
+use velnor_actions_workflow_renderer::RenderError;
+mod yaml {
+    pub(crate) use velnor_actions_workflow_renderer::Yaml;
+}
+mod bounded_script_public;
+#[path = "../src/fixed_python_authority.rs"]
+mod fixed_python_authority;
