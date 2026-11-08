@@ -12,7 +12,6 @@ use velnor_runner_host::{
 
 use super::connect::ConnectError;
 use super::marker::{MarkerToken, StateWriteError, atomic_write};
-use super::token_input::normalize_token_line;
 
 pub(super) fn read_host(state: &Path) -> Result<Option<HostConfig>, ConnectError> {
     const MAX_BYTES: u64 = 1_048_576;
@@ -47,11 +46,10 @@ pub(super) fn store_token<R, F>(
 ) -> Result<(), ConnectError>
 where
     R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+    F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
 {
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    let secret = normalize_token_line(&secret).ok_or(ConnectError::Secret(HostError::Keychain))?;
-    store(credential_ref.service(), credential_ref.account(), secret).map_err(ConnectError::Secret)
+    store(credential_ref.service(), credential_ref.account(), &secret).map_err(ConnectError::Secret)
 }
 
 pub(super) fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {

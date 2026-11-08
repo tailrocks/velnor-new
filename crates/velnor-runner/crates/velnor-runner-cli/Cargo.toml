@@ -33,7 +33,3 @@ test = false
 name = "velnor-host"
 path = "src/main.rs"
 test = false
-
-[[test]]
-name = "token_input_public"
-path = "tests/token_input_public.rs"

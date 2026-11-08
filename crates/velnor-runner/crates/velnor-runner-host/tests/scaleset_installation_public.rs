@@ -3,6 +3,8 @@
 
 #[path = "scaleset_installation_public/attestation_and_logs.rs"]
 mod attestation_and_logs;
+#[path = "scaleset_installation_public/credential.rs"]
+mod credential;
 #[path = "scaleset_installation_public/runtime_and_policy.rs"]
 mod runtime_and_policy;
 

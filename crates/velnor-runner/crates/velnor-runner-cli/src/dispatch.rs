@@ -19,7 +19,6 @@ mod credential;
 mod disconnect;
 mod drain;
 mod marker;
-mod token_input;
 
 use connect::{ConnectRequest, connect};
 use disconnect::disconnect;

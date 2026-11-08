@@ -73,7 +73,9 @@ pub use journal::pr_source_transition::{
     TransitionStage, UncertaintyReason,
 };
 pub use journal::{IntentState, Journal, Outcome};
-pub use keychain::{import_secret, load_secret, read_secret};
+pub use keychain::{
+    NormalizedSecret, SecretStore, import_secret, load_secret, read_secret, store_secret,
+};
 pub use launch::{
     BootstrapContainerRole, CompletionWorker, WorkerImage,
     resume_deferred_offer_acquire_with_transport, runner_pair_environment,
