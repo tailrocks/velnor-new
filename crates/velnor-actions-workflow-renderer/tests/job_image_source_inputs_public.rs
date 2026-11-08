@@ -118,17 +118,18 @@ fn execute_step(
         let bootstrap = velnor_actions_workflow_renderer::verified_gh_shell::bootstrap();
         let gh = velnor_actions_workflow_renderer::verified_gh_shell::command();
         assert_eq!(source.matches(&bootstrap).count(), 1);
-        let hex = |bytes: &[u8]| {
-            bytes
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>()
+        let hex = |bytes: &[u8]| -> std::result::Result<String, std::fmt::Error> {
+            let mut output = String::with_capacity(bytes.len() * 2);
+            for byte in bytes {
+                write!(&mut output, "{byte:02x}")?;
+            }
+            Ok(output)
         };
-        let original = hex(&Sha256::digest(source.as_bytes()));
+        let original = hex(&Sha256::digest(source.as_bytes()))?;
         source = source.replace(&bootstrap, ":");
         assert_eq!(source.matches(&gh).count(), 2);
         source = source.replace(&gh, "command gh");
-        let adapted = hex(&Sha256::digest(source.as_bytes()));
+        let adapted = hex(&Sha256::digest(source.as_bytes()))?;
         assert_eq!(run.matches(&original).count(), 1);
         run = run.replace(&original, &adapted);
     }
