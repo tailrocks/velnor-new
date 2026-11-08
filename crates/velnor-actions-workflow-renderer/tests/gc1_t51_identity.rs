@@ -146,6 +146,31 @@ fn run_verify_program(
     Ok((code, combined))
 }
 
+fn materialized_source(runs: &[String]) -> Result<String, Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let env_file = temp.path().join("env");
+    std::fs::write(&env_file, "")?;
+    let mut directory = String::new();
+    for run in runs {
+        let output = Command::new("/bin/bash")
+            .args(["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", run])
+            .env("RUNNER_TEMP", temp.path())
+            .env("GITHUB_ENV", &env_file)
+            .env("VELNOR_FIXED_SCRIPT_DIR", &directory)
+            .output()?;
+        if !output.status.success() {
+            return Err(fail("source materializer failed"));
+        }
+        if let Some(value) = std::fs::read_to_string(&env_file)?
+            .lines()
+            .find_map(|line| line.strip_prefix("VELNOR_FIXED_SCRIPT_DIR="))
+        {
+            value.clone_into(&mut directory);
+        }
+    }
+    Ok(std::fs::read_to_string(format!("{directory}/script.sh"))?)
+}
+
 fn check_rendered_identity_steps(text: &str) -> Result<(), Box<dyn Error>> {
     for (needle, label) in [
         (
@@ -176,6 +201,20 @@ fn check_rendered_identity_steps(text: &str) -> Result<(), Box<dyn Error>> {
     ] {
         require(text, needle, label)?;
     }
+    let prefix = text
+        .split("name: Fetch authenticated source inputs")
+        .next()
+        .ok_or("source input step missing")?;
+    let group = prefix
+        .rsplit("name: Materialize fixed script")
+        .next()
+        .ok_or("source materializer missing")?;
+    let runs = group
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("run: "))
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<String>, _>>()?;
+    let source_script = materialized_source(&runs)?;
     for path in [
         ".velnor/runner.lock",
         "images/job/ubuntu-26.04/Dockerfile",
@@ -183,7 +222,7 @@ fn check_rendered_identity_steps(text: &str) -> Result<(), Box<dyn Error>> {
         "images/job/ubuntu-26.04/build-test.sh",
         "images/job/ubuntu-26.04/candidate/candidate.py",
     ] {
-        require(text, path, "authenticated input path")?;
+        require(&source_script, path, "authenticated input path")?;
     }
     require_order(
         text,
