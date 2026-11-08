@@ -160,6 +160,12 @@ approved identity. Required checks each report against the identity used by Plan
 A neutral executable path alone does not establish this agreement.
 A preview executable cannot be installed under a different stable version label.
 
+State producer execution requires the generated producer execution descriptor
+at the planned source commit. A preview controller rejects producer execution
+when that descriptor is absent. Commit the descriptor before activating a
+preview controller that requires it, and activate the same controller for Plan,
+task execution, report writing, and Required.
+
 Tests of parser rules, API policy, or historical signed fixtures do not establish
 that a new preview was published successfully. Adoption requires a real signed
 publication and successful verification of that publication before staging.

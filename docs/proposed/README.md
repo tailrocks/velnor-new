@@ -78,7 +78,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 21. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
 22. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
 23. [Resource probe image artifact](resource-probe-artifact.md) defines the probe protocol and fixed execution contract; [Runner image release](runner-image-release.md) defines GHCR distribution and the shared source-bound manifest.
-24. [Resource probe controller](resource-probe-controller.md) defines controller-side guest probe execution and parsing.
+24. [Resource probe controller](resource-probe-controller/README.md) defines controller-side guest probe execution and parsing.
 25. [Runner resource admission](runner-resource-admission.md) defines candidate job admission and resource enforcement.
 26. [GitHub Actions reference](github-actions-reference.md) defines source repository requirements and fidelity contracts.
 27. [Image publication contract](image-publication-contract.md) defines `[[images]]`, Dockerfile pinning rules, and the build, publish and promote jobs.

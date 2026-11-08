@@ -25,6 +25,7 @@ fn render_marked_workflow_with(
     let mut bound = document.clone();
     crate::project_tool_resolver::bind_workflow(&mut bound)?;
     crate::cache_authority::bind_workflow_cache_mode(path, &mut bound)?;
+    crate::fixed_python_authority::bound_workflow(&mut bound)?;
     let document = &bound;
     validate(path, document)?;
     let canonical = marker::with_marker(generator_version, &render_yaml(document))?;

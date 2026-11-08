@@ -9,7 +9,7 @@ document does not claim a qualified probe, live installation, or safe Scale Set
 capacity.
 
 This contract implements the controller boundary referenced by the
-[resource-admission policy](runner-resource-admission.md). The selected Docker
+[resource-admission policy](../runner-resource-admission.md). The selected Docker
 engine is authoritative for guest measurements. Host CPU, memory, and disk
 values are never substitutes.
 
@@ -115,15 +115,17 @@ not assume that Docker's runtime image ID always equals the config digest.
 
 ### Implemented provider (source only, unqualified)
 
-- **Build identity.** `velnor-runner-host`'s build script reads
+- **Build identity.** `velnor-runner-host` compiles
   `VELNOR_RUNNER_BUILD_SOURCE_SHA` (40 lowercase hex) and
-  `VELNOR_RUNNER_BUILD_HELPER_SHA256` (64 lowercase hex) and writes them into
-  `OUT_DIR/compile_identity.rs`, which `compile_identity.rs` includes. Both or
-  neither must be set; one alone, or a malformed value, fails the build. With
-  neither, the identity is `None` and `provider_for_build` in
-  `launch/resource_probe.rs` selects `UnavailableImageProvider`, which is how
-  every local and current release build behaves. With both, a provider
-  construction error is a probe error, never a silent fallback to unavailable.
+  `VELNOR_RUNNER_BUILD_HELPER_SHA256` (64 lowercase hex) into typed constants
+  through `option_env!` and unconditional compile-time validation. Both or
+  neither must be set; one alone, or a malformed value, fails compilation. With
+  neither, the identity is `None` and native provider construction fails with
+  `TrustedSourcePinMissing`. Release builds
+  hash the built attestation helper and supply both identity inputs together.
+  With both, a provider construction error is a probe error, never a silent
+  fallback to unavailable. Cargo and MBX track the environment dependencies;
+  changing either input invalidates the compiled identity.
 - **Release admission.** `artifact_admission::NativeArtifactProvider` reads
   the GitHub release `runner-<source>` of `tailrocks/velnor-new` with the
   host's REST credential, accepts only redirects to
@@ -157,23 +159,24 @@ not assume that Docker's runtime image ID always equals the config digest.
   image ID, platform, source revision, binding fingerprint, and inspected
   config, as `VerifiedCandidate`.
 
-### Remaining before a production permit
+### Production permit prerequisites
 
-The product release must build and ship the helper beside `velnor-host` and
-compile `velnor-host` with the release source commit and the helper digest
-(inside [hard decision 8](../hard-decisions.md#8-publication-only-from-the-default-branch-or-a-release-tag)).
-Until then, and until the provider and image release pass independent
-verification on the selected Docker backend, production image readiness is
-unavailable and no production permit can be minted. Test fakes may exercise
+The product release builds and ships the helper beside `velnor-host` and
+compiles `velnor-host` with the release source commit and the helper digest
+(inside [hard decision 8](../../hard-decisions.md#8-publication-only-from-the-default-branch-or-a-release-tag)).
+The provider and image release must also pass independent verification on the
+selected Docker backend before production image readiness or a production
+permit is available. Test fakes may exercise
 projection and lifecycle behavior but do not qualify image trust or production
 readiness. Do not introduce shell, PATH, mutable-tag, or credential-based
 fallbacks.
 
-Pull-request selection consequence ([hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect)):
-a package with a build script is always `undeclared_reads`, and
-`[[stacks.rust.inputs]]` cannot declare build-script inputs, so the
-`velnor-runner-host` and `velnor-runner-cli` crate jobs now run on every pull
-request.
+Pull-request selection follows [hard decision 3](../../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
+The host has no build script: its paired release identities are validated as
+Rust compile-time inputs. Host and Runner CLI jobs run when their direct inputs
+or transitive dependencies change; unrelated classified changes skip them.
+Packages that retain build scripts remain conservatively selected for
+`undeclared_reads`.
 
 ## Durable operation lifecycle
 

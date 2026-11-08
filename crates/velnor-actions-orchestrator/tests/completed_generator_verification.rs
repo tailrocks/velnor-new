@@ -69,6 +69,7 @@ impl Fixture {
         let root = tempfile::tempdir()?;
         fs::create_dir(root.path().join("checkout"))?;
         fs::create_dir(root.path().join("assets"))?;
+        fs::write(root.path().join("github-env"), "")?;
         assets::create(&root.path().join("assets"))?;
         fs::write(
             root.path().join("gh-transport.sh"),
@@ -84,6 +85,7 @@ impl Fixture {
         let response = assets::release_response(&root.join("assets"))?;
         fs::write(root.join("releases.json"), serde_json::to_vec(&response)?)?;
         Ok(Command::new("bash")
+            .arg("-e")
             .arg(root.join("reconcile.sh"))
             .current_dir(root.join("checkout"))
             .env_clear()
@@ -97,6 +99,8 @@ impl Fixture {
             .env("GITHUB_WORKFLOW_SHA", assets::SOURCE)
             .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
             .env("GITHUB_OUTPUT", root.join("output"))
+            .env("GITHUB_ENV", root.join("github-env"))
+            .env("RUNNER_TEMP", root)
             .env("FIXTURE_RELEASES", root.join("releases.json"))
             .env("FIXTURE_ASSETS", root.join("assets"))
             .output()?)
@@ -143,7 +147,25 @@ fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
         .lines()
         .find_map(|line| line.strip_prefix("        run: "))
         .ok_or("missing generator reconcile script")?;
-    Ok(serde_json::from_str(run)?)
+    let executor: String = serde_json::from_str(run)?;
+    let materializers = job
+        .split("name: Materialize fixed script")
+        .nth(1)
+        .ok_or("missing materializers")?
+        .split("name: Reconcile immutable family release")
+        .next()
+        .ok_or("missing materializers")?;
+    let mut script = String::new();
+    for line in materializers
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("run: "))
+    {
+        let run: String = serde_json::from_str(line)?;
+        script.push_str(&run);
+        script.push_str("\n. \"$GITHUB_ENV\"\n");
+    }
+    script.push_str(&executor);
+    Ok(script)
 }
 
 fn assert_rejected(fixture: &Fixture, output: &Output) -> Result<(), Box<dyn Error>> {

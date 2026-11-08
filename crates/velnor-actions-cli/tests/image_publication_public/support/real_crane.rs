@@ -23,13 +23,20 @@ use velnor_actions_mise::{
 use super::oci;
 use registry::Registry;
 
-pub(super) fn crane_command(args: &[&str]) -> Result<IsolatedCommand, Box<dyn Error>> {
+pub(super) fn crane_command(
+    args: &[&str],
+    docker_config: &Path,
+) -> Result<IsolatedCommand, Box<dyn Error>> {
     let request = PinnedToolExec::new(
         vec![PinnedTool::Crane],
         OsStr::new("crane"),
         args.iter().map(OsString::from).collect(),
     )?;
-    let local_proxy_bypass = [
+    let environment = [
+        (
+            OsString::from("DOCKER_CONFIG"),
+            docker_config.as_os_str().to_owned(),
+        ),
         (
             OsString::from("NO_PROXY"),
             OsString::from("127.0.0.1,localhost"),
@@ -41,11 +48,12 @@ pub(super) fn crane_command(args: &[&str]) -> Result<IsolatedCommand, Box<dyn Er
     ];
     Ok(request
         .command(&ToolCatalog::pinned())?
-        .with_env(&local_proxy_bypass)?)
+        .with_env(&environment)?)
 }
 
 pub(super) fn crane(args: &[&str]) -> Result<velnor_actions_mise::ProcessOutput, Box<dyn Error>> {
-    let command = crane_command(args)?;
+    let docker_config = tempfile::tempdir()?;
+    let command = crane_command(args, docker_config.path())?;
     let (output, _) =
         command.run_quiescent_until(1024 * 1024, CheckDeadline::after(Duration::from_secs(90))?)?;
     Ok(output)

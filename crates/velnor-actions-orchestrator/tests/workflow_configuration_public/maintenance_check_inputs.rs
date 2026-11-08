@@ -19,8 +19,10 @@ const VALIDATION_TEST: &str = "crates/velnor-actions-orchestrator/tests/workflow
 const CARGO_ARTIFACT_KIND: &str = "crates/velnor-actions-freshness/src/cargo_artifact_kind.rs";
 const REPO_VERIFICATION_DOC: &str = "docs/implemented/ci-maintenance/repo-verification.md";
 const RUST_QUALITY_CONTRACT: &str = "docs/proposed/ci-maintenance/rust-quality-contract.md";
+const RESOURCE_PROBE_CONTROLLER: &str = "docs/proposed/resource-probe-controller/README.md";
 const REPO_VERIFICATION_NON_INPUT: &str = "docs/implemented/ci-maintenance/**";
 const RUST_QUALITY_NON_INPUT: &str = "docs/proposed/ci-maintenance/**";
+const RESOURCE_PROBE_NON_INPUT: &str = "docs/proposed/resource-probe-controller/**";
 const FIXTURE_CHECK_SOURCE: &str = "libs/core/src/lib.rs";
 #[test]
 fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> TestResult {
@@ -36,20 +38,26 @@ fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> Tes
     assert!(inputs.contains("mise.toml"));
     assert!(!inputs.contains(REPO_VERIFICATION_DOC));
     assert!(!inputs.contains(RUST_QUALITY_CONTRACT));
+    assert!(!inputs.contains(RESOURCE_PROBE_CONTROLLER));
+    for path in [
+        REPO_VERIFICATION_DOC,
+        RUST_QUALITY_CONTRACT,
+        RESOURCE_PROBE_CONTROLLER,
+    ] {
+        assert_planner_skips_documentation(path, &inputs, &non_inputs)?;
+    }
     assert_eq!(
         non_inputs,
         BTreeSet::from([
             REPO_VERIFICATION_NON_INPUT.to_owned(),
             RUST_QUALITY_NON_INPUT.to_owned(),
+            RESOURCE_PROBE_NON_INPUT.to_owned(),
         ])
     );
     validation::assert_dedicated_document_directories(&root)?;
     validation::assert_source_closure(&root, &inputs)?;
     validation::assert_metadata_input_closures(&root)?;
 
-    for path in [REPO_VERIFICATION_DOC, RUST_QUALITY_CONTRACT] {
-        assert_planner_skips_documentation(path, &inputs, &non_inputs)?;
-    }
     assert_local_documentation_keeps_named_check(&inputs, &non_inputs)?;
     for path in [FIXTURE_CHECK_SOURCE, "libs/util/src/lib.rs"] {
         assert_planner_selects_check_input(path, &inputs, &non_inputs)?;

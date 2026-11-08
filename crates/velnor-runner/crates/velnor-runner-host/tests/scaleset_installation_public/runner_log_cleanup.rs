@@ -295,6 +295,7 @@ async fn run_one_worker_pass(
         .lock()
         .map_err(|_| std::io::Error::other("stub state poisoned"))?
         .exec_inspected = 0;
+    let mut observer = None;
     let worker = CompletionWorker::start_for_connection(
         journal,
         connection,
@@ -315,8 +316,7 @@ async fn run_one_worker_pass(
             (g.exit_code == 1 && g.exec_inspected >= 3)
                 || (!g.archive.is_empty() && g.exit_code != 0 && g.exec_inspected >= 1)
         };
-        if bad_exit_done {
-            tokio::time::sleep(Duration::from_millis(50)).await;
+        if bad_exit_done && seed::retry_committed(state_dir, &mut observer).await? {
             break;
         }
         waited_polls += 1;

@@ -20,6 +20,10 @@ pub(super) fn assert_dedicated_document_directories(root: &Path) -> TestResult {
             "docs/proposed/ci-maintenance",
             "docs/proposed/ci-maintenance/rust-quality-contract.md",
         ),
+        (
+            "docs/proposed/resource-probe-controller",
+            "docs/proposed/resource-probe-controller/README.md",
+        ),
     ] {
         let output = Command::new("git")
             .args(["ls-files", "-z", "--", &format!("{directory}/")])

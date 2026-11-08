@@ -63,3 +63,37 @@ mod state_v4_tip;
 mod ubuntu_owned_publication;
 
 mod job_image_candidate_execution_public;
+mod job_image_source_inputs_public;
+
+mod bounded_test_support;
+
+use velnor_actions_workflow_renderer::RenderError;
+mod yaml {
+    pub(crate) use velnor_actions_workflow_renderer::Yaml;
+}
+mod bounded_script_public;
+#[path = "../src/fixed_python_authority.rs"]
+mod fixed_python_authority;
+
+mod render {
+    pub(crate) use velnor_actions_workflow_renderer::EXPECTED_PR_TYPES;
+}
+mod source_preview_timeout_public;
+#[cfg_attr(
+    target_os = "linux",
+    expect(
+        dead_code,
+        reason = "the validator fixture imports the production module"
+    )
+)]
+#[path = "../src/workflow_size.rs"]
+pub mod workflow_size;
+#[cfg_attr(
+    target_os = "linux",
+    expect(
+        dead_code,
+        reason = "the validator fixture imports the production module"
+    )
+)]
+#[path = "../src/workflow_timeout.rs"]
+mod workflow_timeout;

@@ -168,7 +168,8 @@ fn read_remote_blob(
     destination: &Path,
 ) -> Result<(ProcessFileOutput, bool), Box<dyn Error>> {
     let reference = registry.digest_reference(digest);
-    let command = crane_command(&["blob", "--insecure", &reference])?;
+    let docker_config = tempdir()?;
+    let command = crane_command(&["blob", "--insecure", &reference], docker_config.path())?;
     capture_command(&command, expected, destination)
 }
 
@@ -177,7 +178,8 @@ fn read_remote_manifest(
     expected: &[u8],
     destination: &Path,
 ) -> Result<(ProcessFileOutput, bool), Box<dyn Error>> {
-    let command = crane_command(&["manifest", "--insecure", reference])?;
+    let docker_config = tempdir()?;
+    let command = crane_command(&["manifest", "--insecure", reference], docker_config.path())?;
     capture_command(&command, expected, destination)
 }
 

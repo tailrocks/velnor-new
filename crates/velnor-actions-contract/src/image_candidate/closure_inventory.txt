@@ -319,6 +319,7 @@ crates/velnor-actions-contract/src/workflow/plan.rs
 crates/velnor-actions-contract/src/workflow/plan_jobs.rs
 crates/velnor-actions-contract/src/workflow/platform.rs
 crates/velnor-actions-contract/src/workflow/producer.rs
+crates/velnor-actions-contract/src/workflow/producer_execution_manifest.rs
 crates/velnor-actions-contract/src/workflow/producer_order.rs
 crates/velnor-actions-contract/src/workflow/producer_roles.rs
 crates/velnor-actions-contract/src/workflow/producer_state.rs
@@ -1121,6 +1122,7 @@ crates/velnor-actions-orchestrator/src/tap_writer_prepare.rs
 crates/velnor-actions-orchestrator/src/tap_writer_receipt.rs
 crates/velnor-actions-orchestrator/src/tap_writer_result.rs
 crates/velnor-actions-orchestrator/src/task_execution.rs
+crates/velnor-actions-orchestrator/src/task_producer.rs
 crates/velnor-actions-orchestrator/src/task_report.rs
 crates/velnor-actions-orchestrator/src/task_report/observation.rs
 crates/velnor-actions-orchestrator/src/task_report/write.rs
@@ -1301,6 +1303,7 @@ crates/velnor-actions-workflow-renderer/src/document_steps_internal_env.rs
 crates/velnor-actions-workflow-renderer/src/error.rs
 crates/velnor-actions-workflow-renderer/src/expressions.rs
 crates/velnor-actions-workflow-renderer/src/final_steps.rs
+crates/velnor-actions-workflow-renderer/src/fixed_python_authority.rs
 crates/velnor-actions-workflow-renderer/src/freshness.rs
 crates/velnor-actions-workflow-renderer/src/group_ledger_steps.rs
 crates/velnor-actions-workflow-renderer/src/guard.rs
@@ -1522,6 +1525,7 @@ crates/velnor-actions-workflow-renderer/src/steps_shell.rs
 crates/velnor-actions-workflow-renderer/src/support.rs
 crates/velnor-actions-workflow-renderer/src/support_private_tokens.rs
 crates/velnor-actions-workflow-renderer/src/support_tokens.rs
+crates/velnor-actions-workflow-renderer/src/task_producer_manifest.rs
 crates/velnor-actions-workflow-renderer/src/task_script.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper_declared.rs

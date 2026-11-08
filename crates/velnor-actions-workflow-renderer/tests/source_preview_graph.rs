@@ -49,7 +49,15 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
 }
 
 fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
-    assert!(!workflow.contains("  source-preview-publication:"));
+    let callers: Vec<_> = workflow
+        .match_indices("  source-preview-publication:")
+        .collect();
+    assert_eq!(callers.len(), 1);
+    let caller = job(workflow, "source-preview-publication")?;
+    assert!(caller.contains("if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}"));
+    assert!(caller.contains("uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e"));
+    assert!(caller.contains("    permissions:\n      actions: read\n      artifact-metadata: write\n      attestations: write\n      contents: write\n      id-token: write\n"));
+    assert!(!caller.contains("    needs:"));
     assert!(!workflow.contains("  workflow_dispatch:"));
     assert!(workflow.contains("  push:"));
     assert!(workflow.contains("sdk-preview-*"));
@@ -166,8 +174,8 @@ fn assert_publication_artifacts(authority: &str) -> Result<(), Box<dyn Error>> {
     assert!(!admission.contains("SDK_PREVIEW_VERSION"));
     assert!(admission.contains("source-preview-source-${{ github.run_attempt }}"));
     assert!(admission.contains("source-preview-qualified-payload-${{ github.run_attempt }}"));
-    assert!(!admission.contains("/releases?per_page="));
-    assert!(draft.contains("/releases?per_page=100&page="));
+    assert!(!materialized_script(admission)?.contains("/releases?per_page="));
+    assert!(materialized_script(draft)?.contains("/releases?per_page=100&page="));
     assert!(draft.contains("source-preview-decision-${{ github.run_attempt }}"));
     assert!(draft.contains("steps.draft.outputs.source_artifact_id"));
     assert!(draft.contains("steps.draft.outputs.payload_artifact_id"));
@@ -257,3 +265,74 @@ fn job<'a>(workflow: &'a str, id: &str) -> Result<&'a str, Box<dyn Error>> {
         .unwrap_or(body.len());
     Ok(&body[..end])
 }
+
+fn materialized_script(job: &str) -> Result<String, Box<dyn Error>> {
+    let runs = crate::bounded_test_support::materializer_runs(job)?;
+    crate::bounded_test_support::materialized_source(&runs)
+}
+
+#[test]
+fn preview_publication_preserves_fixed_source_and_executor_authority() -> Result<(), Box<dyn Error>>
+{
+    let files = rendered()?;
+    let authority = find_file(&files, ".github/workflows/source-preview-publication.yml")?;
+    for (id, step, expected_id) in [
+        (
+            "source-preview-source",
+            "Admit annotated SDK preview tag",
+            None,
+        ),
+        (
+            "source-preview-draft",
+            "Create exact preview draft",
+            Some("draft"),
+        ),
+        (
+            "source-preview-attest",
+            "Select or finalize signed candidate",
+            Some("prepare"),
+        ),
+        ("source-preview-publish", "Verify and publish preview", None),
+    ] {
+        let section = job(authority, id)?;
+        let body = materialized_script(section)?;
+        assert!(body.len() > 21_000, "{id}");
+        let expected = if id == "source-preview-source" {
+            include_str!("../src/schema2_generator_source_preview_source.py")
+        } else {
+            include_str!("../src/schema2_generator_source_preview_publication.py")
+        };
+        assert!(body.contains(expected), "{id}");
+        let (materializers, executor) = section
+            .split_once(&format!("- name: {step}"))
+            .ok_or("missing executor")?;
+        let materializers = materializers
+            .rsplit("- name: Materialize fixed script")
+            .next()
+            .ok_or("missing materializer")?;
+        assert!(!materializers.contains("GH_TOKEN"), "{id}");
+        for line in materializers
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("run: "))
+        {
+            let run: String = serde_json::from_str(line)?;
+            assert!(run.chars().count() <= 21_000, "{id}");
+        }
+        let executor = executor
+            .split("\n      - name:")
+            .next()
+            .ok_or("missing executor fields")?;
+        assert!(executor.contains("GH_TOKEN: ${{ github.token }}"), "{id}");
+        assert!(executor.contains("shell: bash"), "{id}");
+        if let Some(step_id) = expected_id {
+            assert!(executor.contains(&format!("id: {step_id}")), "{id}");
+        }
+        let run = step_script(section, step)?;
+        assert!(run.chars().count() <= 21_000, "{id}");
+        assert!(run.contains("-e -o pipefail"), "{id}");
+    }
+    Ok(())
+}
+
+#[path = "source_preview_publication_bounds.rs"]
+mod publication_bounds;

@@ -63,6 +63,8 @@ mod family_save_suppression;
 mod feature_toggles;
 #[path = "workflow_configuration_public/final_fanin.rs"]
 mod final_fanin;
+#[path = "workflow_configuration_public/host_identity_selection.rs"]
+mod host_identity_selection;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
 #[path = "workflow_configuration_public/lane_inventory_dispatch.rs"]
@@ -260,3 +262,14 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+#[path = "workflow_configuration_public/producer_execution.rs"]
+mod producer_execution;
+
+#[path = "workflow_configuration_public/producer_execution_support.rs"]
+mod producer_execution_support;
+
+#[path = "workflow_configuration_public/producer_execution_fixture.rs"]
+mod producer_execution_fixture;
+
+#[path = "workflow_configuration_public/producer_execution_limits.rs"]
+mod producer_execution_limits;

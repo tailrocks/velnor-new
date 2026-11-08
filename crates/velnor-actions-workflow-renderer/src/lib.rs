@@ -41,6 +41,7 @@ mod document_steps;
 mod error;
 mod expressions;
 mod final_steps;
+mod fixed_python_authority;
 pub mod freshness;
 pub mod guard;
 mod homebrew_adoption_seed;
@@ -144,3 +145,5 @@ mod root_api;
 pub use self::root_api::*;
 
 pub mod review_completion;
+
+mod task_producer_manifest;

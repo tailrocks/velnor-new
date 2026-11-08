@@ -40,6 +40,7 @@ test_runner = "cargo_nextest"
 non_inputs = [
   "docs/implemented/ci-maintenance/**",
   "docs/proposed/ci-maintenance/**",
+  "docs/proposed/resource-probe-controller/**",
 ]
 
 [[stacks.rust.inputs]]

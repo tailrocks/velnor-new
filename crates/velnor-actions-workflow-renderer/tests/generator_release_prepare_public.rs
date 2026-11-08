@@ -72,3 +72,26 @@ fn assert_rejected(scenario: Scenario) -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn generator_release_rejects_missing_or_corrupt_materialized_source() -> Result<(), Box<dyn Error>>
+{
+    let fixture = Fixture::new(Scenario::Valid)?;
+    let directory = tempfile::tempdir()?;
+    let missing = fixture.execute_materialized(directory.path())?;
+    assert!(!missing.status.success(), "missing source executed");
+    fs::write(
+        directory.path().join("script.sh"),
+        "printf 'action=complete\\n' >> \"$GITHUB_OUTPUT\"\n",
+    )?;
+    let corrupt = fixture.execute_materialized(directory.path())?;
+    assert!(!corrupt.status.success(), "corrupt source executed");
+    assert_eq!(fs::read_to_string(&fixture.github_output)?, "");
+    Ok(())
+}
+
+#[test]
+fn generator_release_ignores_untrusted_interpreters_and_python_modules()
+-> Result<(), Box<dyn Error>> {
+    Fixture::new(Scenario::Valid)?.test_interpreter_boundary()
+}
