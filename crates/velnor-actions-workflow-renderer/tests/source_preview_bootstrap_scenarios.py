@@ -97,12 +97,23 @@ for changed in (dict(authority, ref=bootstrap.REPOSITORY + "/" + stage.AUTHORITY
         pass
     else:
         raise AssertionError("accepted mutable or missing publication authority")
+assert stage.staging_authority() == {
+    "repository": bootstrap.REPOSITORY,
+    "path": ".github/workflows/source-preview-publication.yml",
+    "ref": bootstrap.REPOSITORY + "/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e",
+    "sha": "3a3c641b531a69b7e4142b61aecf536007bb3f2e",
+}
+enabled_authority_sha = stage.PUBLICATION_AUTHORITY_SHA
 try:
-    stage.staging_authority()
-except bootstrap.AdmissionError:
-    pass
-else:
-    raise AssertionError("bootstrap enabled staging without an independent authority pin")
+    stage.PUBLICATION_AUTHORITY_SHA = None
+    try:
+        stage.staging_authority()
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("staging accepted a missing publication authority pin")
+finally:
+    stage.PUBLICATION_AUTHORITY_SHA = enabled_authority_sha
 
 
 class RoleEvidence:

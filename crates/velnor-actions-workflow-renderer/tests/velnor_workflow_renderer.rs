@@ -73,3 +73,12 @@ mod yaml {
 mod bounded_script_public;
 #[path = "../src/fixed_python_authority.rs"]
 mod fixed_python_authority;
+
+mod render {
+    pub(crate) use velnor_actions_workflow_renderer::EXPECTED_PR_TYPES;
+}
+mod source_preview_timeout_public;
+#[path = "../src/workflow_size.rs"]
+pub mod workflow_size;
+#[path = "../src/workflow_timeout.rs"]
+mod workflow_timeout;

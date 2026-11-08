@@ -146,7 +146,7 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
     }
     for (id, job) in jobs(document, path)? {
         let fields = mapping(job, id)?;
-        if local_callee(fields, id)?.is_some() {
+        if callee(path, fields, id)?.is_some() {
             continue;
         }
         let minutes = fields
@@ -241,7 +241,7 @@ pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderErr
     }
     for (path, document) in documents {
         for (id, job) in jobs(document, path)? {
-            if let Some(callee) = local_callee(mapping(job, id)?, id)?
+            if let Some(Callee::Local(callee)) = callee(path, mapping(job, id)?, id)?
                 && !paths.contains(callee)
             {
                 return Err(invalid(id, "callee_missing_from_generated_inventory"));
@@ -251,10 +251,16 @@ pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderErr
     Ok(())
 }
 
-fn local_callee<'a>(
+enum Callee<'a> {
+    Local(&'a str),
+    SourcePreview,
+}
+
+fn callee<'a>(
+    path: &str,
     fields: &'a [(String, Yaml)],
     id: &str,
-) -> Result<Option<&'a str>, RenderError> {
+) -> Result<Option<Callee<'a>>, RenderError> {
     let Some((_, value)) = fields.iter().find(|(key, _)| key == "uses") else {
         return Ok(None);
     };
@@ -266,6 +272,16 @@ fn local_callee<'a>(
         .any(|(key, _)| matches!(key.as_str(), "runs-on" | "steps" | "timeout-minutes"))
     {
         return Err(invalid(id, "mixed_reusable_job"));
+    }
+    if path == ".github/workflows/product-release-generator.yml"
+        && id == "source-preview-publication"
+        && value
+            == &format!(
+                "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@{SOURCE_PREVIEW_AUTHORITY_SHA}"
+            )
+    {
+        validate_source_preview_authority()?;
+        return Ok(Some(Callee::SourcePreview));
     }
     let filename = value
         .strip_prefix("./.github/workflows/")
@@ -281,7 +297,67 @@ fn local_callee<'a>(
     }) {
         return Err(invalid(id, "noncanonical_callee"));
     }
-    Ok(value.strip_prefix("./"))
+    Ok(value.strip_prefix("./").map(Callee::Local))
+}
+
+pub(crate) const SOURCE_PREVIEW_AUTHORITY_SHA: &str = "3a3c641b531a69b7e4142b61aecf536007bb3f2e";
+
+struct AuthorityJob {
+    id: &'static str,
+    minutes: u32,
+    needs: &'static [&'static str],
+}
+
+fn validate_source_preview_authority() -> Result<(), RenderError> {
+    const BLOB_SHA256: &str = "61f89e771ae4ba322078ebd354d5a66da7a15767361eadeccbe6a7f68e412cde";
+    const JOBS: &[AuthorityJob] = &[
+        AuthorityJob {
+            id: "source-preview-source",
+            minutes: 5,
+            needs: &[],
+        },
+        AuthorityJob {
+            id: "source-preview-draft",
+            minutes: 10,
+            needs: &["source-preview-source"],
+        },
+        AuthorityJob {
+            id: "source-preview-attest",
+            minutes: 10,
+            needs: &["source-preview-source", "source-preview-draft"],
+        },
+        AuthorityJob {
+            id: "source-preview-publish",
+            minutes: 10,
+            needs: &[
+                "source-preview-source",
+                "source-preview-draft",
+                "source-preview-attest",
+            ],
+        },
+    ];
+    if !lower_hex(BLOB_SHA256, 64) || !lower_hex(SOURCE_PREVIEW_AUTHORITY_SHA, 40) {
+        return Err(invalid(
+            "source-preview-publication",
+            "invalid_authority_identity",
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    for job in JOBS {
+        JobTimeout::try_from(job.minutes).map_err(RenderError::Contract)?;
+        if job
+            .needs
+            .iter()
+            .any(|dependency| !seen.contains(dependency))
+            || !seen.insert(job.id)
+        {
+            return Err(invalid(
+                "source-preview-publication",
+                "invalid_authority_graph",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn jobs<'a>(document: &'a Yaml, path: &str) -> Result<&'a [(String, Yaml)], RenderError> {
