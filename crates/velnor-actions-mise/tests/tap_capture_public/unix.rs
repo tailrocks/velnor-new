@@ -166,8 +166,12 @@ fn child_scenario(scenario: &str) -> Result<(), Box<dyn Error>> {
             assert_eq!(captured.checkout, checkout);
             let entries = read_tap_tree(&checkout, &commit, deadline)?;
             assert_eq!(captured.tree, entries);
-            assert_eq!(captured.tree.len(), 3);
+            assert_eq!(captured.tree.len(), 7);
             for (path, mode) in [
+                ("a/deep/inside.txt", 0o100_644),
+                ("a/same.txt", 0o100_644),
+                ("a/sibling.sh", 0o100_755),
+                ("ab/same.txt", 0o100_755),
                 ("nested dir/data.bin", 0o100_644),
                 ("plain.txt", 0o100_644),
                 ("run me.sh", 0o100_755),
@@ -179,6 +183,10 @@ fn child_scenario(scenario: &str) -> Result<(), Box<dyn Error>> {
                 );
             }
             for (path, bytes, mode) in [
+                ("a/deep/inside.txt", &b"deep bytes\n"[..], 0o644),
+                ("a/same.txt", &b"first sibling bytes\n"[..], 0o644),
+                ("a/sibling.sh", &b"executable sibling bytes\n"[..], 0o755),
+                ("ab/same.txt", &b"prefix sibling bytes\n"[..], 0o755),
                 ("nested dir/data.bin", &[0, 1, 2, 255][..], 0o644),
                 ("plain.txt", &b"plain tap bytes\n"[..], 0o644),
                 ("run me.sh", &b"#!/bin/sh\nexit 0\n"[..], 0o755),
