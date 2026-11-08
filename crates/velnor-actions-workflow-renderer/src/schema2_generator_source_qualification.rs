@@ -81,6 +81,13 @@ fn producer_job(
     let mut steps = vec![checkout_step()];
     steps.push(prepare_step());
     steps.extend(phase_steps(&[VERIFY_CHECKOUT_PHASE]));
+    if producer.id == "generation-checks" {
+        steps.extend(phase_steps(&[(
+            "Observe hosted Docker identity",
+            "observe-hosted-docker-identity",
+            false,
+        )]));
+    }
     steps.extend(sources_restore_steps(producer.id, runner_label)?);
     steps.push(mise_step(pins)?);
     steps.extend(phase_steps(PRELUDE_AFTER_MISE_BEFORE_PREFETCH));

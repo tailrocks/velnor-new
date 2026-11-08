@@ -114,11 +114,6 @@ pub(super) const PRODUCER_JOBS: &[ProducerJob] = &[
         name: "Source qualification generation and repository checks",
         phases: &[
             (
-                "Observe hosted Docker identity",
-                "observe-hosted-docker-identity",
-                false,
-            ),
-            (
                 "Author Linux x64 native validator candidates",
                 "qualify-linux-x64-native-validator-tools",
                 false,
