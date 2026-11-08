@@ -14,7 +14,8 @@ pub(super) fn exercise(
     prior: &JournalReceipt,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::symlink;
-    let source_dir = root.join("release-source");
+    let runner = tempfile::tempdir()?;
+    let source_dir = runner.path().join("velnor-crate-release-source");
     assert!(
         std::process::Command::new("git")
             .args(["clone", "--quiet", "--no-hardlinks", "--local"])
@@ -30,7 +31,6 @@ pub(super) fn exercise(
             .status()?
             .success()
     );
-    let runner = tempfile::tempdir()?;
     let bundle = runner.path().join("velnor/git-bundle");
     std::fs::create_dir_all(runner.path().join("velnor"))?;
     match (
@@ -67,7 +67,7 @@ pub(super) fn exercise(
         )
         .env("VELNOR_TEST_DIRECT_PRIOR", serde_json::to_string(prior)?)
         .env("GITHUB_WORKSPACE", root)
-        .env("RUNNER_TEMP", runner.path())
+        .env("RUNNER_TEMP", runner.path().canonicalize()?)
         .env("GITHUB_REPOSITORY", "owner/project")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GITHUB_REF", "refs/heads/main")
@@ -134,8 +134,8 @@ pub(in super::super) fn verify_direct_history_child() -> Result<(), Box<dyn std:
     let mut invalid = receipt.clone();
     invalid.intent_sha256 = "0".repeat(64);
     assert!(context.verify_prior(&invalid, &github).is_err());
-    let manifest = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?)
-        .join("release-source/Cargo.toml");
+    let manifest = std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?)
+        .join("velnor-crate-release-source/Cargo.toml");
     std::fs::write(manifest, "[package]\nname='tampered'\nversion='0.1.1'\n")?;
     assert!(
         crate::release::crate_release_direct_history::HistoryContext::admitted(
@@ -240,7 +240,8 @@ fn history_source_context(
     ),
     Box<dyn std::error::Error>,
 > {
-    let root = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?).join("release-source");
+    let root =
+        std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor-crate-release-source");
     let bundle = std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor/git-bundle");
     let git = crate::crate_release_git::ReleaseGit::new(
         velnor_actions_mise::release_git_pin::verify_bundle(&bundle)?,

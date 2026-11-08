@@ -85,7 +85,8 @@ fn run_qualified_crate_release_with_git(
         return source_admit(&request, &token, operation == "source-require");
     }
     let github = NativeGitHubAdmissionRead::new(token.clone())?;
-    let source = workspace.join("release-source");
+    let source =
+        crate::crate_release_checkout::source_directory(workspace, &required_path("RUNNER_TEMP")?)?;
     if matches!(
         operation,
         "receipt-acquire" | "reconciliation-receipt-acquire"

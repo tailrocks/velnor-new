@@ -34,7 +34,8 @@ pub(super) fn exercise() -> Result<(), Box<dyn Error>> {
     )?;
     let mut request = fixture.request.clone();
     request.workflow_sha.clone_from(&policy);
-    let source = fixture.workflow.path().join("release-source");
+    let runner = tempfile::tempdir()?;
+    let source = runner.path().join("velnor-crate-release-source");
     let status = Command::new("git")
         .args(["clone", "--quiet", "--no-hardlinks", "--local"])
         .arg(fixture.workflow.path())
@@ -48,6 +49,7 @@ pub(super) fn exercise() -> Result<(), Box<dyn Error>> {
         &["checkout", "--quiet", "--detach", &request.source_sha],
     )?;
     run_parent(
+        runner.path(),
         fixture.workflow.path(),
         &intent,
         &previous,
@@ -57,14 +59,14 @@ pub(super) fn exercise() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_parent(
+    runner: &Path,
     workspace: &Path,
     intent: &CrateReleaseIntent,
     previous: &CrateReleaseIntent,
     request: &GitHubAdmissionRequest,
     prior: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let runner = tempfile::tempdir()?;
-    super::prepare_test_git_bundle(runner.path())?;
+    super::prepare_test_git_bundle(runner)?;
     let output = Command::new(std::env::current_exe()?)
         .args([
             "--exact",
@@ -80,7 +82,7 @@ fn run_parent(
         .env("VELNOR_CONTROLLER_REQUEST", serde_json::to_string(request)?)
         .env("VELNOR_CONTROLLER_PRIOR", prior)
         .env("GITHUB_WORKSPACE", workspace)
-        .env("RUNNER_TEMP", runner.path())
+        .env("RUNNER_TEMP", runner.canonicalize()?)
         .env("GITHUB_REPOSITORY", &request.repository)
         .env("GITHUB_EVENT_NAME", &request.event)
         .env("GITHUB_REF", "refs/heads/main")
@@ -116,7 +118,8 @@ pub(super) fn run_child() -> Result<(), Box<dyn Error>> {
     let request: GitHubAdmissionRequest =
         serde_json::from_str(&std::env::var("VELNOR_CONTROLLER_REQUEST")?)?;
     let workspace = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?);
-    let source = workspace.join("release-source");
+    let source =
+        std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor-crate-release-source");
     let scratch = tempfile::tempdir()?;
     let (_, _, mut github, base) = super::super::make_fixture(scratch.path())?;
     github.sha.clone_from(&request.source_sha);

@@ -168,6 +168,8 @@ if journal:
                 handle.write(b"corrupted fixture")
 if mode != "success" and not multi:
     env["VELNOR_FIXTURE_FAILURE"] = "oidc" if mode == "coordinate-oidc-denied" else mode
+env["RUNNER_TEMP"] = str(runner)
+runner.mkdir(parents=True, exist_ok=True)
 fixture_env = env.copy()
 fixture_env.pop("CARGO_TARGET_DIR", None)
 server = subprocess.Popen(
@@ -385,7 +387,7 @@ try:
             }
             subprocess.run(
                 [str(cargo), "package", "--offline", "--no-verify", "--allow-dirty"],
-                cwd=pathlib.Path("/workspace") / ("final-" + mode) / "release-source",
+                cwd=runner / "velnor-crate-release-source",
                 env=package_env, check=True, timeout=120,
             )
         packed = read_bounded(runner / "fixture-package/package" / f"{info['package']}-{info['version']}.crate", 100 * 1024 * 1024)

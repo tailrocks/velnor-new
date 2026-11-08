@@ -34,7 +34,8 @@ fn exercise_case(
     let policy = super::commit_history_intent(fixture.workflow.path(), &intent, "signed current")?;
     let mut request = fixture.request.clone();
     request.workflow_sha.clone_from(&policy);
-    let source = fixture.workflow.path().join("release-source");
+    let runner = tempfile::tempdir()?;
+    let source = runner.path().join("velnor-crate-release-source");
     let status = Command::new("git")
         .args(["clone", "--quiet", "--no-hardlinks", "--local"])
         .arg(fixture.workflow.path())
@@ -47,7 +48,6 @@ fn exercise_case(
         &source,
         &["checkout", "--quiet", "--detach", &request.source_sha],
     )?;
-    let runner = tempfile::tempdir()?;
     prepare_test_git_bundle(runner.path())?;
     let output = Command::new(std::env::current_exe()?)
         .args([
@@ -70,7 +70,7 @@ fn exercise_case(
         .env("VELNOR_CONTROLLER_BAD_RECOVERY", bad_recovery.to_string())
         .env("VELNOR_CONTROLLER_PRIOR_EVENT", event)
         .env("GITHUB_WORKSPACE", fixture.workflow.path())
-        .env("RUNNER_TEMP", runner.path())
+        .env("RUNNER_TEMP", runner.path().canonicalize()?)
         .env("GITHUB_REPOSITORY", &request.repository)
         .env("GITHUB_EVENT_NAME", &request.event)
         .env("GITHUB_REF", "refs/heads/main")
@@ -141,7 +141,8 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
         _ => return Err("invalid historical event".into()),
     };
     let workspace = std::path::PathBuf::from(std::env::var("GITHUB_WORKSPACE")?);
-    let source = workspace.join("release-source");
+    let source =
+        std::path::PathBuf::from(std::env::var("RUNNER_TEMP")?).join("velnor-crate-release-source");
     let scratch = tempfile::tempdir()?;
     let (_, _, mut github, registry) = super::make_fixture(scratch.path())?;
     github.sha.clone_from(&request.source_sha);

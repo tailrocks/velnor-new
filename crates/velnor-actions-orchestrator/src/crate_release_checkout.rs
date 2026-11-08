@@ -62,11 +62,7 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
     }
     let target = match mode {
         "policy" => workspace.clone(),
-        "source" => {
-            let path = workspace.join("release-source");
-            fs::create_dir(&path).map_err(|_| invalid())?;
-            path
-        }
+        "source" => create_source_directory(&workspace, &PathBuf::from(required("RUNNER_TEMP")?))?,
         _ => return Err(invalid()),
     };
     let sha = match mode {
@@ -92,6 +88,34 @@ pub fn checkout_from_environment(mode: &str) -> Result<(), OrchestratorError> {
             deadline,
         },
     )
+}
+
+pub(crate) fn source_directory(
+    workspace: &Path,
+    runner_temp: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let invalid = || internal("release_checkout_invalid");
+    if !runner_temp.is_absolute()
+        || runner_temp.canonicalize().map_err(|_| invalid())? != runner_temp
+        || !runner_temp.is_dir()
+        || runner_temp.starts_with(workspace)
+    {
+        return Err(invalid());
+    }
+    let path = runner_temp.join("velnor-crate-release-source");
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| !metadata.is_dir()) {
+        return Err(invalid());
+    }
+    Ok(path)
+}
+
+fn create_source_directory(
+    workspace: &Path,
+    runner_temp: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let path = source_directory(workspace, runner_temp)?;
+    fs::create_dir(&path).map_err(|_| internal("release_checkout_invalid"))?;
+    Ok(path)
 }
 
 #[derive(Clone, Copy)]

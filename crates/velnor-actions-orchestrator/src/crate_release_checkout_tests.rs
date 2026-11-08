@@ -390,3 +390,6 @@ fn checkout_fetches_exact_private_source_without_credential_files()
 
 #[path = "crate_release_checkout_redirect_tests.rs"]
 mod redirect_tests;
+
+#[path = "crate_release_checkout_source_path_tests.rs"]
+mod source_path_tests;

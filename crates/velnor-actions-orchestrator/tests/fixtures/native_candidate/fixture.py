@@ -22,7 +22,7 @@ from fixture_support import approved_baseline, index_path
 
 root = pathlib.Path(sys.argv[1]).resolve()
 root.mkdir(parents=True, exist_ok=True)
-source = root / "release-source"
+source = pathlib.Path(os.environ["RUNNER_TEMP"]) / "velnor-crate-release-source"
 
 
 def run(*args, cwd):

@@ -18,7 +18,7 @@ def main():
     cargo = pathlib.Path(os.environ['VELNOR_FIXTURE_CARGO'])
     with tempfile.TemporaryDirectory(prefix='velnor-fixture-routes-') as temp:
         env = {'PATH': str(cargo.parent) + os.pathsep + '/usr/bin:/bin', 'HOME': temp,
-               'CARGO_NET_OFFLINE': 'true', 'VELNOR_FIXTURE_REAL_CARGO': '1'}
+               'RUNNER_TEMP': temp, 'CARGO_NET_OFFLINE': 'true', 'VELNOR_FIXTURE_REAL_CARGO': '1'}
         server = subprocess.Popen([sys.executable, str(fixture), temp], env=env,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
@@ -35,7 +35,7 @@ def main():
             assert run['id'] == 12 and jobs['total_count'] == 1
             assert (job['id'], job['run_id'], job['run_attempt'], job['name']) == (1, 123, 1, 'Required')
             assert job['check_run_url'] == f"https://api.github.com/repos/{info['repository']}/check-runs/1"
-            source = pathlib.Path(info['workspace']) / 'release-source'
+            source = pathlib.Path(temp) / 'velnor-crate-release-source'
             subprocess.run([str(cargo), 'package', '--offline', '--no-verify', '--allow-dirty'],
                            cwd=source, env=env, capture_output=True, check=True, timeout=60)
             archive = (source / 'target/package/example-0.1.1.crate').read_bytes()

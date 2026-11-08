@@ -63,6 +63,8 @@ pub(super) fn rehearse_journal_coordinate(root: &Path) -> Result<(), Box<dyn Err
 pub(super) fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path();
+    let runner = tempfile::tempdir()?;
+    let runner_root = runner.path().canonicalize()?;
     let source = "a".repeat(40);
     let sha = committed_intent(root, &source, true)?;
     let github_event = fixture_event(root, &source)?;
@@ -75,7 +77,7 @@ pub(super) fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
     let server = std::thread::spawn(move || {
         serve_admission(&listener, &server_done, &server_sha, &source, true)
     });
-    let bin = root.join("velnor/bin");
+    let bin = runner_root.join("velnor/bin");
     std::fs::create_dir_all(&bin)?;
     let executable = bin.join(format!("velnor-actions-{}", env!("CARGO_PKG_VERSION")));
     std::fs::write(
@@ -91,7 +93,7 @@ pub(super) fn rehearse_candidate_denial() -> Result<(), Box<dyn Error>> {
         .env("VELNOR_CANDIDATE_CHILD", "1")
         .env("VELNOR_TEST_BINARY", std::env::current_exe()?)
         .env("VELNOR_TEST_GITHUB_ORIGIN", origin)
-        .env("RUNNER_TEMP", root)
+        .env("RUNNER_TEMP", &runner_root)
         .env("GITHUB_WORKSPACE", root)
         .env("GITHUB_REPOSITORY", "owner/project")
         .env("GITHUB_SHA", &sha)

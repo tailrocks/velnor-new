@@ -236,9 +236,9 @@ fn assert_deferred_receipt(
 fn verify_supplied_admission(root: &Path) -> Result<bool, Box<dyn Error>> {
     if std::env::var_os("VELNOR_NATIVE_MUTATE_AFTER_RECEIPT").is_some() {
         let workspace =
-            std::path::PathBuf::from(std::env::var_os("GITHUB_WORKSPACE").ok_or("workspace")?);
+            std::path::PathBuf::from(std::env::var_os("RUNNER_TEMP").ok_or("runner temp")?);
         std::fs::write(
-            workspace.join("release-source/src/lib.rs"),
+            workspace.join("velnor-crate-release-source/src/lib.rs"),
             b"pub fn changed() {}\n",
         )?;
     }
