@@ -21,6 +21,7 @@ Repository: <repo>
 .github/dco.yml
 .github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
+.github/velnor/producer-executions-v1.json
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
