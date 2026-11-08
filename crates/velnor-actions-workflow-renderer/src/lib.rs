@@ -95,6 +95,8 @@ pub mod render;
 mod render_cache_files;
 mod render_state_seal;
 mod required_gate;
+pub mod review_completion;
+mod root_api;
 mod runs_on;
 mod rust_job_env;
 pub mod rust_suites;
@@ -112,6 +114,7 @@ mod steps_internal;
 mod steps_plain;
 mod steps_shell;
 mod support;
+mod task_producer_manifest;
 mod task_wrapper;
 pub mod tofu_apply;
 mod tofu_apply_command;
@@ -128,24 +131,17 @@ mod tools_identity;
 mod tools_producer;
 pub mod tree;
 pub mod upgrades;
+pub mod verification_jobs;
+pub mod verified_gh_shell;
+pub mod verifier_builders;
+pub mod verifier_composite;
 mod verifier_shell;
 mod waste_lint;
 mod waste_lint_env;
 mod waste_lint_graph;
 mod waste_lint_tools;
-
-pub mod verification_jobs;
-pub mod verifier_builders;
-pub mod verifier_composite;
 mod workflow_policy;
 mod workflow_size;
 mod workflow_timeout;
 pub mod yaml;
-
-mod root_api;
 pub use self::root_api::*;
-
-pub mod review_completion;
-pub mod verified_gh_shell;
-
-mod task_producer_manifest;
