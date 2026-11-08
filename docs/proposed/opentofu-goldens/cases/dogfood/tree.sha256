@@ -32,5 +32,5 @@
 - 4450f3deaba53dbc4cfe11104bd81455a9bf97ded79e1a38ede4faca38fd03b3  ./.github/workflows/product-release.yml
 - 722a1b591b5dcd4d8c0bbe3ac0dfb52186944a1ae54b8a8b0bd1761efe9b284d  ./.github/workflows/qualification.yml
 - 48609e6deca1c9d3c881d720d85caaa354dd538a83f2428ff85d3c6dd92ba026  ./.github/workflows/source-preview-publication.yml
-- 6923f8b08c460f0cfbcc88f1423342534970b0ca818bcf2e726b2ab556839087  ./.github/workflows/source-qualification.yml
+- d69337e8f2e318922f9a2af54ffe022614c00d7c484c6dfb483aae3f074c19f8  ./.github/workflows/source-qualification.yml
 - 898c918bef1d4c626ad5804ab2b2c88c2d8401fb2991566729656fa5b61d5746  ./.github/workflows/state-seal.yml

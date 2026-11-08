@@ -317,6 +317,10 @@ jobs:
         if: always()
         shell: bash
         run: bash scripts/generator-release/source-qualification.sh capture-all-five-external-goldens
+      - name: Observe hosted Docker identity
+        if: success() && github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash scripts/generator-release/source-qualification.sh observe-hosted-docker-identity
       - name: Author Linux x64 native validator candidates
         if: success() && github.event_name == 'workflow_dispatch'
         shell: bash
