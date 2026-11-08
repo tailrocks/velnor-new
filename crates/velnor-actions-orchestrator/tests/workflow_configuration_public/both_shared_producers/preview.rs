@@ -77,6 +77,14 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     );
     let yaml: Value = serde_saphyr::from_str(workflow)?;
     assert_identity_steps(&tree, &yaml)?;
+    let seal: Value = serde_saphyr::from_str(
+        tree.get(velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH)
+            .ok_or("missing preview state seal")?,
+    )?;
+    assert_job_identity(&tree, &seal, "plan")?;
+    for id in ["state-producer-crates-a-b", "state-producer-crates-a-c"] {
+        assert_job_identity(&tree, &seal, id)?;
+    }
     assert_preview_action_retired(root)?;
     fs::write(path, original)?;
     Ok(())
@@ -202,53 +210,62 @@ fn assert_identity_steps(
         "check-maintenance-helpers__hosted",
         "check-maintenance-helpers__local",
     ] {
-        let steps = yaml["jobs"][id]["steps"]
-            .as_array()
-            .ok_or_else(|| format!("{id}: missing steps"))?;
-        let mut flattened = Vec::new();
-        for step in steps {
-            if step["uses"] == "./.github/actions/check-maintenance-helpers" {
-                let action = tree
-                    .get(".github/actions/check-maintenance-helpers/action.yml")
-                    .ok_or("missing shared check action")?;
-                let composite: Value = serde_saphyr::from_str(action)?;
-                flattened.extend(
-                    composite["runs"]["steps"]
-                        .as_array()
-                        .ok_or("missing composite steps")?
-                        .iter()
-                        .cloned(),
-                );
-            } else {
-                flattened.push(step.clone());
-            }
-        }
-        let steps = &flattened;
-        let setup_index = steps
-            .iter()
-            .position(|step| step["name"] == "Stage protected preview launcher")
-            .ok_or_else(|| format!("{id}: missing protected setup: {steps:?}"))?;
-        assert_setup_script(&steps[setup_index])?;
-        let identity_index = steps
-            .iter()
-            .position(|step| {
-                let text = step.to_string();
-                [
-                    "source-preview",
-                    "0.1.75",
-                    "x86_64-unknown-linux-gnu",
-                    SOURCE,
-                    RECEIPT,
-                    &"c".repeat(64),
-                ]
-                .iter()
-                .all(|value| text.contains(value))
-            })
-            .ok_or_else(|| format!("{id}: missing complete selected identity"))?;
-        assert!(
-            setup_index < identity_index,
-            "{id}: identity used before setup"
-        );
+        assert_job_identity(tree, yaml, id)?;
     }
+    Ok(())
+}
+
+fn assert_job_identity(
+    tree: &velnor_actions_workflow_renderer::render::RenderedTree,
+    yaml: &Value,
+    id: &str,
+) -> Result<(), Box<dyn Error>> {
+    let steps = yaml["jobs"][id]["steps"]
+        .as_array()
+        .ok_or_else(|| format!("{id}: missing steps"))?;
+    let mut flattened = Vec::new();
+    for step in steps {
+        if step["uses"] == "./.github/actions/check-maintenance-helpers" {
+            let action = tree
+                .get(".github/actions/check-maintenance-helpers/action.yml")
+                .ok_or("missing shared check action")?;
+            let composite: Value = serde_saphyr::from_str(action)?;
+            flattened.extend(
+                composite["runs"]["steps"]
+                    .as_array()
+                    .ok_or("missing composite steps")?
+                    .iter()
+                    .cloned(),
+            );
+        } else {
+            flattened.push(step.clone());
+        }
+    }
+    let steps = &flattened;
+    let setup_index = steps
+        .iter()
+        .position(|step| step["name"] == "Stage protected preview launcher")
+        .ok_or_else(|| format!("{id}: missing protected setup: {steps:?}"))?;
+    assert_setup_script(&steps[setup_index])?;
+    let identity_index = steps
+        .iter()
+        .position(|step| {
+            let text = step.to_string();
+            [
+                "source-preview",
+                "0.1.75",
+                "x86_64-unknown-linux-gnu",
+                SOURCE,
+                RECEIPT,
+                &"c".repeat(64),
+            ]
+            .iter()
+            .all(|value| text.contains(value))
+        })
+        .ok_or_else(|| format!("{id}: missing complete selected identity"))?;
+    assert!(
+        setup_index < identity_index,
+        "{id}: identity used before setup"
+    );
     Ok(())
 }

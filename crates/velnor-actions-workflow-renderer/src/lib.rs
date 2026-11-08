@@ -144,3 +144,5 @@ mod root_api;
 pub use self::root_api::*;
 
 pub mod review_completion;
+
+mod task_producer_manifest;

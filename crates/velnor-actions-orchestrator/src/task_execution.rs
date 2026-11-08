@@ -84,8 +84,25 @@ pub(crate) fn resolve_task_execution_to(
     if obligation.decision != ObligationDecision::Execute {
         return Err(internal("task_not_executable_in_plan"));
     }
+    let producer_entry;
     let (entry, plan_task_digest) =
-        crate::task_report::entry_and_digest_for_context(&plan, task_id, job_id)?;
+        match crate::task_report::entry_and_digest_for_context(&plan, task_id, job_id) {
+            Ok(result) => result,
+            Err(error) => {
+                let Some(job) = job_id else {
+                    return Err(error);
+                };
+                let (entry, digest) = crate::task_producer::authorize_producer(
+                    &plan,
+                    root,
+                    job,
+                    task_id,
+                    Some(expected_execution_digest),
+                )?;
+                producer_entry = entry;
+                (&producer_entry, digest)
+            }
+        };
     if record.task_digest != plan_task_digest
         || entry.task_digest != plan_task_digest
         || record.matrix_id != entry.id
@@ -97,7 +114,7 @@ pub(crate) fn resolve_task_execution_to(
     encode_runtime_frame(record, runner_temp)
 }
 
-fn unique_record_by_execution_digest<'a>(
+pub(crate) fn unique_record_by_execution_digest<'a>(
     manifest: &'a TaskExecutionManifestV1,
     expected_execution_digest: &str,
 ) -> Result<&'a TaskExecutionManifestEntryV1, OrchestratorError> {
@@ -236,7 +253,6 @@ pub(crate) fn resolve_project_tool_refs(
     }))
 }
 
-
 fn read_manifest(
     root: &Path,
     expected_generator_version: &str,
@@ -291,7 +307,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn project_tool_refs_resolve_non_rust_pins_and_reject_missing_or_invalid_versions() -> Result<(), Box<dyn std::error::Error>> {
+    fn project_tool_refs_resolve_non_rust_pins_and_reject_missing_or_invalid_versions()
+    -> Result<(), Box<dyn std::error::Error>> {
         let versions = BTreeMap::from([
             ("VELNOR_TOOL_JAVA", "21.0.1"),
             ("VELNOR_TOOL_DBT_FUSION", "2.0.9"),
@@ -306,7 +323,9 @@ mod tests {
         ];
         let resolved = argv
             .iter()
-            .map(|arg| resolve_project_tool_refs(arg, |name| versions.get(name).map(ToString::to_string)))
+            .map(|arg| {
+                resolve_project_tool_refs(arg, |name| versions.get(name).map(ToString::to_string))
+            })
             .collect::<Result<Vec<_>, _>>()?;
         assert_eq!(
             resolved,
@@ -319,10 +338,12 @@ mod tests {
         );
         for name in versions.keys() {
             assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| None).is_err());
-            assert!(resolve_project_tool_refs(&format!("${{{name}}}"), |_| {
-                Some("not-an-exact-version".to_owned())
-            })
-            .is_err());
+            assert!(
+                resolve_project_tool_refs(&format!("${{{name}}}"), |_| {
+                    Some("not-an-exact-version".to_owned())
+                })
+                .is_err()
+            );
         }
         Ok(())
     }

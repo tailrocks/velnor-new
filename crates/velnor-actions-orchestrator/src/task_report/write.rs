@@ -85,7 +85,27 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
+    let producer_entry;
+    let (entry, digest, producer) = match entry_and_digest_for_context(&plan, task_id, job_id) {
+        Ok((entry, digest)) => (entry, digest, false),
+        Err(error) => {
+            let Some(job) = job_id else {
+                return Err(error);
+            };
+            let workspace = env::var_os("GITHUB_WORKSPACE")
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| internal("missing_workspace"))?;
+            let (entry, digest) = crate::task_producer::authorize_producer(
+                &plan,
+                Path::new(&workspace),
+                job,
+                task_id,
+                None,
+            )?;
+            producer_entry = entry;
+            (&producer_entry, digest, true)
+        }
+    };
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));
     }
@@ -93,6 +113,17 @@ pub(crate) fn write_task_report_to(
     let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
         .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
+    if producer {
+        let root = runner_temp.join("velnor-producer-reports");
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(runner_temp, &root)?;
+        let isolated = tempfile::Builder::new()
+            .prefix("execution-")
+            .tempdir_in(root)
+            .map_err(|error| OrchestratorError::io("producer_report", error.to_string()))?
+            .keep();
+        write_entry_reports(&isolated, &plan, entry, &task, &matrix)?;
+        return Ok(1);
+    }
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     if let Some(observation) = env::var(UNIT_OBSERVATION_ENV)
         .ok()

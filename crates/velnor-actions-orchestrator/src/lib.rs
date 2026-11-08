@@ -114,3 +114,5 @@ pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
 
 pub use api::*;
+
+mod task_producer;

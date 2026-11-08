@@ -260,3 +260,14 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+#[path = "workflow_configuration_public/producer_execution.rs"]
+mod producer_execution;
+
+#[path = "workflow_configuration_public/producer_execution_support.rs"]
+mod producer_execution_support;
+
+#[path = "workflow_configuration_public/producer_execution_fixture.rs"]
+mod producer_execution_fixture;
+
+#[path = "workflow_configuration_public/producer_execution_limits.rs"]
+mod producer_execution_limits;
