@@ -271,3 +271,6 @@ mod producer_execution_fixture;
 
 #[path = "workflow_configuration_public/producer_execution_limits.rs"]
 mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/premerge_event_proof.rs"]
+mod premerge_event_proof;
