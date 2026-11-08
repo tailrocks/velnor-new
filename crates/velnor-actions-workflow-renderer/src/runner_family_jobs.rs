@@ -85,7 +85,10 @@ pub fn build_runner_family_job(
         outputs: BTreeMap::new(),
         display_name: "Qualify runner image family".into(),
         runs_on: "ubuntu-26.04".into(),
-        timeout_minutes: JobTimeout::new(120).map_err(RenderError::Contract)?,
+        timeout_minutes: JobTimeout::new(
+            velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_TIMEOUT_MINUTES,
+        )
+        .map_err(RenderError::Contract)?,
         needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
         condition: Some(crate::plan_gate::not_affected_gate(id)),
         permissions: Some(Permissions {

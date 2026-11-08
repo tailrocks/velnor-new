@@ -28,7 +28,12 @@ struct PublishImageArguments<'a> {
 }
 
 pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
-    let deadline = match CheckDeadline::after(Duration::from_mins(10)) {
+    let minutes = if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
+        velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES
+    } else {
+        10
+    };
+    let deadline = match CheckDeadline::after(Duration::from_mins(u64::from(minutes))) {
         Ok(deadline) => deadline,
         Err(error) => return report_error(&error),
     };

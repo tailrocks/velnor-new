@@ -272,3 +272,5 @@ pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
 pub struct RunnerImageFamilyConfig {}
 
 pub const RUNNER_IMAGE_FAMILY_JOB_ID: &str = "image-runner-family-linux-amd64";
+pub const RUNNER_IMAGE_FAMILY_JOB_TIMEOUT_MINUTES: u16 = 120;
+pub const RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES: u16 = 110;

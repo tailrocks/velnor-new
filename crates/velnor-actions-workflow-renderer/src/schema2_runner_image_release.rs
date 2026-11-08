@@ -13,8 +13,7 @@ use super::super::{
 };
 
 const PUBLICATION_ALLOWANCE_MINUTES: i64 = 50;
-const DISCOVERY_MINUTES: i64 = super::super::runner_image_qualification::QUALIFIER_TIMEOUT_MINUTES
-    + super::super::runner_image_qualification::SIGNER_TIMEOUT_MINUTES;
+const DISCOVERY_MINUTES: i64 = 350;
 
 fn map(items: &[(&str, Yaml)]) -> Yaml {
     Yaml::Map(
@@ -69,7 +68,7 @@ fn tools(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(result)
 }
 
-fn discover(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
+fn discover(pins: &ProductReleasePins, phase: &str) -> Result<Yaml, RenderError> {
     let timeout = (DISCOVERY_MINUTES * 60).to_string();
     let mut step = run(
         "Discover exact producer and qualification artifacts",
@@ -85,6 +84,7 @@ fn discover(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
         &[
             ("GH_TOKEN", "${{ github.token }}"),
             ("VELNOR_FAMILY_DISCOVERY_TIMEOUT_SECONDS", &timeout),
+            ("VELNOR_FAMILY_DISCOVERY_PHASE", phase),
         ],
     );
     if let Yaml::Map(fields) = &mut step {
@@ -101,9 +101,12 @@ fn downloads() -> Vec<Yaml> {
             &[
                 (
                     "artifact-ids",
-                    "${{ steps.discovery.outputs.producer_artifact_id }}",
+                    "${{ needs.discover-producer.outputs.producer_artifact_id }}",
                 ),
-                ("run-id", "${{ steps.discovery.outputs.producer_run_id }}"),
+                (
+                    "run-id",
+                    "${{ needs.discover-producer.outputs.producer_run_id }}",
+                ),
                 ("github-token", "${{ github.token }}"),
                 ("path", "${{ runner.temp }}/runner-family-candidate"),
             ],
@@ -114,9 +117,12 @@ fn downloads() -> Vec<Yaml> {
             &[
                 (
                     "artifact-ids",
-                    "${{ steps.discovery.outputs.qualification_artifact_id }}",
+                    "${{ needs.discover-artifacts.outputs.qualification_artifact_id }}",
                 ),
-                ("run-id", "${{ steps.discovery.outputs.qualifier_run_id }}"),
+                (
+                    "run-id",
+                    "${{ needs.discover-artifacts.outputs.qualifier_run_id }}",
+                ),
                 ("github-token", "${{ github.token }}"),
                 ("path", "${{ runner.temp }}/runner-family-qualification"),
             ],
@@ -129,34 +135,33 @@ fn publisher_env() -> [(&'static str, &'static str); 7] {
         ("GH_TOKEN", "${{ github.token }}"),
         (
             "PRODUCER_RUN_ID",
-            "${{ steps.discovery.outputs.producer_run_id }}",
+            "${{ needs.discover-producer.outputs.producer_run_id }}",
         ),
         (
             "PRODUCER_RUN_ATTEMPT",
-            "${{ steps.discovery.outputs.producer_run_attempt }}",
+            "${{ needs.discover-producer.outputs.producer_run_attempt }}",
         ),
         (
             "PRODUCER_ARTIFACT_ID",
-            "${{ steps.discovery.outputs.producer_artifact_id }}",
+            "${{ needs.discover-producer.outputs.producer_artifact_id }}",
         ),
         (
             "QUALIFIER_RUN_ID",
-            "${{ steps.discovery.outputs.qualifier_run_id }}",
+            "${{ needs.discover-artifacts.outputs.qualifier_run_id }}",
         ),
         (
             "QUALIFIER_RUN_ATTEMPT",
-            "${{ steps.discovery.outputs.qualifier_run_attempt }}",
+            "${{ needs.discover-artifacts.outputs.qualifier_run_attempt }}",
         ),
         (
             "QUALIFIER_JOB_ID",
-            "${{ steps.discovery.outputs.qualifier_job_id }}",
+            "${{ needs.discover-artifacts.outputs.qualifier_job_id }}",
         ),
     ]
 }
 
 fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
     let mut list = tools(pins)?;
-    list.push(discover(pins)?);
     list.extend(downloads());
     list.push(authority::verification_step(pins)?);
     list.push(run(
@@ -203,10 +208,7 @@ fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
     list.push(upload);
     Ok(map(&[
         ("runs-on", Yaml::str("ubuntu-26.04")),
-        (
-            "timeout-minutes",
-            Yaml::Int(DISCOVERY_MINUTES + PUBLICATION_ALLOWANCE_MINUTES),
-        ),
+        ("timeout-minutes", Yaml::Int(PUBLICATION_ALLOWANCE_MINUTES)),
         (
             "permissions",
             strings(&[
@@ -216,6 +218,7 @@ fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
                 ("packages", "write"),
             ]),
         ),
+        ("needs", seq(&["discover-producer", "discover-artifacts"])),
         ("outputs", publish_outputs()),
         ("steps", Yaml::Seq(list)),
     ]))
@@ -230,11 +233,11 @@ fn publish_outputs() -> Yaml {
         ),
         (
             "producer_run_id",
-            Yaml::str("${{ steps.discovery.outputs.producer_run_id }}"),
+            Yaml::str("${{ needs.discover-producer.outputs.producer_run_id }}"),
         ),
         (
             "producer_run_attempt",
-            Yaml::str("${{ steps.discovery.outputs.producer_run_attempt }}"),
+            Yaml::str("${{ needs.discover-producer.outputs.producer_run_attempt }}"),
         ),
     ])
 }
@@ -288,6 +291,57 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
         .product_release
         .as_ref()
         .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".into()))?;
+    let discovery_job = |phase: &str, depends: bool| -> Result<Yaml, RenderError> {
+        let mut discovery_steps =
+            generator_release::product_setup_steps(pins, ReleaseTarget::LinuxX86_64)?;
+        discovery_steps.push(discover(pins, phase)?);
+        let mut discovery = map(&[
+            ("runs-on", Yaml::str("ubuntu-26.04")),
+            ("timeout-minutes", Yaml::Int(360)),
+            (
+                "permissions",
+                strings(&[("actions", "read"), ("contents", "read")]),
+            ),
+            (
+                "outputs",
+                map(&[
+                    (
+                        "producer_run_id",
+                        Yaml::str("${{ steps.discovery.outputs.producer_run_id }}"),
+                    ),
+                    (
+                        "producer_run_attempt",
+                        Yaml::str("${{ steps.discovery.outputs.producer_run_attempt }}"),
+                    ),
+                    (
+                        "producer_artifact_id",
+                        Yaml::str("${{ steps.discovery.outputs.producer_artifact_id }}"),
+                    ),
+                    (
+                        "qualifier_run_id",
+                        Yaml::str("${{ steps.discovery.outputs.qualifier_run_id }}"),
+                    ),
+                    (
+                        "qualifier_run_attempt",
+                        Yaml::str("${{ steps.discovery.outputs.qualifier_run_attempt }}"),
+                    ),
+                    (
+                        "qualifier_job_id",
+                        Yaml::str("${{ steps.discovery.outputs.qualifier_job_id }}"),
+                    ),
+                    (
+                        "qualification_artifact_id",
+                        Yaml::str("${{ steps.discovery.outputs.qualification_artifact_id }}"),
+                    ),
+                ]),
+            ),
+            ("steps", Yaml::Seq(discovery_steps)),
+        ]);
+        if depends && let Yaml::Map(fields) = &mut discovery {
+            fields.push(("needs".into(), seq(&["discover-producer"])));
+        }
+        Ok(discovery)
+    };
     Ok(map(&[
         ("name", Yaml::str("Runner image release")),
         ("on", map(&[("push", map(&[("branches", seq(&["main"]))]))])),
@@ -305,6 +359,8 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
         (
             "jobs",
             map(&[
+                ("discover-producer", discovery_job("producer", false)?),
+                ("discover-artifacts", discovery_job("qualification", true)?),
                 ("publish-images", publish_job(pins)?),
                 ("attest-images", attest_job()),
                 ("release-images", release::release_job(pins)?),

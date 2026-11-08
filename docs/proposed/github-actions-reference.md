@@ -404,6 +404,11 @@ executable job, including CI, qualification, native image, signing, publication,
 recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
 keyword: queued time, environment approval, and successive jobs are separate
 from this per-job execution budget.
+Runner-family discovery uses separate read-only jobs for the CI producer and
+the qualification result, each bounded by a 350-minute wait in a 360-minute
+job. Qualification and publication run in separate jobs with their own budgets.
+These bounds fail closed when scheduling or upstream work takes longer; they do
+not promise completion for every possible queue delay or workflow configuration.
 
 A [reusable-workflow caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)
 allows a restricted set of job keys that excludes `timeout-minutes`. Emit the

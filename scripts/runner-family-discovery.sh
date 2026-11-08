@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 family_run() {
-  local workflow="$1" deadline="${2:-$((SECONDS + 1200))}" runs run state
+  local workflow="$1" deadline="$2" runs run state
   while (( SECONDS < deadline )); do
     runs="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=push&head_sha=$GITHUB_SHA&per_page=100")"
     run="$(jq -c --arg path ".github/workflows/$workflow" --arg sha "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" '
