@@ -654,6 +654,7 @@ crates/velnor-actions-orchestrator/src/crate_jobs_stage.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_steps.rs
 crates/velnor-actions-orchestrator/src/crate_registry_inventory.rs
 crates/velnor-actions-orchestrator/src/crate_release_archive.rs
+crates/velnor-actions-orchestrator/src/crate_release_archive_content.rs
 crates/velnor-actions-orchestrator/src/crate_release_archive_decompress.rs
 crates/velnor-actions-orchestrator/src/crate_release_archive_workspace.rs
 crates/velnor-actions-orchestrator/src/crate_release_artifact_pages.rs
