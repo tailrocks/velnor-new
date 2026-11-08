@@ -2,26 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bollard::models::ImageInspect;
-use velnor_runner_image_manifest::ImageKind;
+use velnor_runner_image_manifest::{ImageEntry, ImageKind};
 
 use super::ProviderFailure;
 use super::identity::SelectedDaemon;
 use super::image_acquisition::{
     DaemonSelection, ImageObservation, ImageReference, ImageSession, ImageStore,
 };
-use crate::artifact_admission::{
-    NativeArtifactProvider, RegistryProjection, VerifiedRunnerRelease,
-};
+use crate::artifact_admission::RegistryProjection;
 use crate::journal::{
     ImageImportState, Journal, RegistryImageIdentity, RegistryImageInspection,
-    RegistryImageObservation,
+    RegistryImageObservation, RegistryImageRecord,
 };
 
-pub(super) struct AdmittedRegistryImage {
-    pub(super) identity: RegistryImageIdentity,
-    pub(super) observation: RegistryImageObservation,
-    pub(super) configuration: bollard::models::ContainerConfig,
-    pub(super) projection: RegistryProjection,
+#[derive(Debug)]
+pub struct AcquiredRegistryImage {
+    pub(crate) identity: RegistryImageIdentity,
+    pub(crate) observation: RegistryImageObservation,
+    pub(crate) configuration: bollard::models::ContainerConfig,
+    pub(crate) projection: RegistryProjection,
 }
 
 pub(super) async fn reinspect_bound(
@@ -61,61 +60,159 @@ fn image_reference(identity: &RegistryImageIdentity) -> Result<ImageReference, P
         .map_err(|_| ProviderFailure::ImageIdentity)
 }
 
-pub(super) async fn admit(
-    provider: &NativeArtifactProvider<'_>,
-    release: &VerifiedRunnerRelease,
-    role: ImageKind,
-    journal: &Journal,
-    selected: &SelectedDaemon,
-    endpoint: &str,
-) -> Result<AdmittedRegistryImage, ProviderFailure> {
-    let (identity, projection) = registry_identity(provider, release, role, selected).await?;
-    let mut session = image_session(endpoint, selected).await?;
-    let reference = image_reference(&identity)?;
-    let record = journal
-        .prepare_registry_image(identity.clone())
-        .await
-        .map_err(|_| ProviderFailure::ImageImportJournal)?;
-    if matches!(
-        record.state,
-        ImageImportState::Requested | ImageImportState::Uncertain | ImageImportState::Aborted
-    ) {
-        return Err(ProviderFailure::ImageLoad);
+impl AcquiredRegistryImage {
+    #[must_use]
+    pub fn runtime_id(&self) -> &str {
+        self.observation.runtime_id()
     }
-    if let Some(image_inspect) = session
-        .inspect(&reference)
-        .await
-        .map_err(|_| ProviderFailure::ImageInspect)?
-    {
-        let (inspection, configuration) =
-            verified_inspection(&identity, &projection, image_inspect)?;
-        match record.state {
-            ImageImportState::Prepared => journal
-                .complete_preloaded_registry_image(&record, &inspection)
-                .await
-                .map_err(|_| ProviderFailure::ImageImportJournal)?,
-            ImageImportState::Completed => journal
-                .verify_completed_registry_image(&record, &inspection)
-                .await
-                .map_err(|_| ProviderFailure::ImageImportJournal)?,
-            _ => return Err(ProviderFailure::ImageLoad),
+}
+
+#[derive(Debug)]
+pub struct RegistryImageSpecification {
+    identity: RegistryImageIdentity,
+    projection: RegistryProjection,
+}
+
+impl RegistryImageSpecification {
+    pub fn new(
+        selected: &DaemonSelection,
+        image: &ImageEntry,
+        role: ImageKind,
+        source: &str,
+        manifest_sha: &str,
+        projection: RegistryProjection,
+    ) -> Result<Self, crate::error::HostError> {
+        let identity = RegistryImageIdentity::new(
+            &selected.engine_id,
+            &selected.docker_root_digest,
+            &selected.architecture,
+            source,
+            manifest_sha,
+            role,
+            image,
+        )?;
+        if !projection.matches(
+            role,
+            source,
+            &identity.registry_digest,
+            &identity.config_digest,
+        ) {
+            return Err(crate::error::HostError::Identity);
         }
-        return Ok(AdmittedRegistryImage {
+        Ok(Self {
             identity,
-            observation: inspection.observation().clone(),
-            configuration,
             projection,
-        });
+        })
     }
-    if record.state != ImageImportState::Prepared {
-        return Err(ProviderFailure::ImageLoad);
-    }
+}
+
+enum Prepared {
+    Existing(Box<AcquiredRegistryImage>),
+    Missing(Box<(ImageSession, RegistryImageRecord, ImageReference)>),
+}
+
+pub async fn acquire_registry_image(
+    journal: &Journal,
+    endpoint: &str,
+    spec: RegistryImageSpecification,
+) -> Result<AcquiredRegistryImage, crate::error::HostError> {
+    acquire(journal, endpoint, spec).await.map_err(|error| {
+        eprintln!("registry_image=unavailable reason={}", error.code());
+        crate::error::HostError::Docker
+    })
+}
+
+async fn acquire(
+    journal: &Journal,
+    endpoint: &str,
+    spec: RegistryImageSpecification,
+) -> Result<AcquiredRegistryImage, ProviderFailure> {
+    let RegistryImageSpecification {
+        identity,
+        projection,
+    } = spec;
+    let selected = DaemonSelection::new(
+        &identity.engine_id,
+        &identity.docker_root_digest,
+        &identity.daemon_architecture,
+    )
+    .map_err(|_| ProviderFailure::DaemonIdentity)?;
+    let prepared = tokio::time::timeout(super::PREPARE_TIMEOUT, async {
+        let mut session = ImageSession::connect(endpoint, &selected)
+            .await
+            .map_err(|_| ProviderFailure::DaemonIdentity)?;
+        let reference = image_reference(&identity)?;
+        let record = journal
+            .prepare_registry_image(identity.clone())
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?;
+        if matches!(
+            record.state,
+            ImageImportState::Requested | ImageImportState::Uncertain | ImageImportState::Aborted
+        ) {
+            return Err(ProviderFailure::ImageLoad);
+        }
+        if let Some(image_inspect) = session
+            .inspect(&reference)
+            .await
+            .map_err(|_| ProviderFailure::ImageInspect)?
+        {
+            let (inspection, configuration) =
+                verified_inspection(&identity, &projection, image_inspect)?;
+            match record.state {
+                ImageImportState::Prepared => journal
+                    .complete_preloaded_registry_image(&record, &inspection)
+                    .await
+                    .map_err(|_| ProviderFailure::ImageImportJournal)?,
+                ImageImportState::Completed => journal
+                    .verify_completed_registry_image(&record, &inspection)
+                    .await
+                    .map_err(|_| ProviderFailure::ImageImportJournal)?,
+                _ => return Err(ProviderFailure::ImageLoad),
+            }
+            return Ok(Prepared::Existing(Box::new(AcquiredRegistryImage {
+                identity: identity.clone(),
+                observation: inspection.observation().clone(),
+                configuration,
+                projection: projection.clone(),
+            })));
+        }
+        if record.state != ImageImportState::Prepared {
+            return Err(ProviderFailure::ImageLoad);
+        }
+        Ok(Prepared::Missing(Box::new((session, record, reference))))
+    })
+    .await
+    .map_err(|_| ProviderFailure::Timeout)??;
+    let (mut session, record, reference) = match prepared {
+        Prepared::Existing(image) => return Ok(*image),
+        Prepared::Missing(missing) => *missing,
+    };
+    settle_import(
+        journal,
+        &mut session,
+        &record,
+        &reference,
+        identity,
+        projection,
+    )
+    .await
+}
+
+async fn settle_import(
+    journal: &Journal,
+    session: &mut ImageSession,
+    record: &RegistryImageRecord,
+    reference: &ImageReference,
+    identity: RegistryImageIdentity,
+    projection: RegistryProjection,
+) -> Result<AcquiredRegistryImage, ProviderFailure> {
     let claim = journal
-        .claim_registry_image(&record)
+        .claim_registry_image(record)
         .await
         .map_err(|_| ProviderFailure::ImageImportJournal)?
         .ok_or(ProviderFailure::ImageImportJournal)?;
-    let result = match session.pull_and_inspect(&reference).await {
+    let result = match session.pull_and_inspect(reference).await {
         Ok(observation) => verified_inspection(&identity, &projection, observation),
         Err(_) => Err(ProviderFailure::ImageLoad),
     };
@@ -125,7 +222,7 @@ pub(super) async fn admit(
                 .complete_registry_image(claim, &inspection)
                 .await
                 .map_err(|_| ProviderFailure::ImageImportJournal)?;
-            Ok(AdmittedRegistryImage {
+            Ok(AcquiredRegistryImage {
                 identity,
                 observation: inspection.observation().clone(),
                 configuration,
@@ -140,33 +237,6 @@ pub(super) async fn admit(
             Err(error)
         }
     }
-}
-async fn registry_identity(
-    provider: &NativeArtifactProvider<'_>,
-    release: &VerifiedRunnerRelease,
-    role: ImageKind,
-    selected: &SelectedDaemon,
-) -> Result<(RegistryImageIdentity, RegistryProjection), ProviderFailure> {
-    let image = match role {
-        ImageKind::Runner => &release.manifest.images.runner,
-        ImageKind::Dind => &release.manifest.images.dind,
-        ImageKind::ResourceProbe => &release.manifest.images.resource_probe,
-    };
-    let projection = provider
-        .verified_registry_projection(role)
-        .await
-        .map_err(|_| ProviderFailure::NativeAdmission)?;
-    let identity = RegistryImageIdentity::new(
-        &selected.engine_id,
-        &selected.docker_root_digest,
-        &selected.architecture,
-        &release.source_sha,
-        &release.manifest_sha,
-        role,
-        image,
-    )
-    .map_err(|_| ProviderFailure::ImageIdentity)?;
-    Ok((identity, projection))
 }
 fn verified_inspection(
     identity: &RegistryImageIdentity,

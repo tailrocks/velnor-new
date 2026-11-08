@@ -20,7 +20,7 @@ mod registry_projection;
 mod runner_release;
 mod strict_json;
 
-pub(crate) use projection_cache::RegistryProjection;
+pub use projection_cache::RegistryProjection;
 pub(crate) use runner_release::VerifiedRunnerRelease;
 
 #[derive(Clone, PartialEq, Eq)]

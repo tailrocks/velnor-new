@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[expect(
+    dead_code,
+    reason = "The peer also supports registry acquisition scenarios."
+)]
 #[path = "image_session_public/peer.rs"]
 mod peer;
 

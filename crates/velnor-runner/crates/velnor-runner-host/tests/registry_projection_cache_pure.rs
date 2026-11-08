@@ -13,6 +13,7 @@ mod error;
 mod hash;
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "The integration test exercises the private cache policy."
 )]
 #[path = "../src/artifact_admission/projection_cache.rs"]
@@ -52,7 +53,7 @@ fn validated_projection_is_reused_only_for_the_same_image_identity()
 -> Result<(), Box<dyn std::error::Error>> {
     let (image, source, manifest, config) = fixture(ImageKind::Runner)?;
     let projection =
-        RegistryProjection::admit(&image, ImageKind::Runner, &source, &manifest, &config)?;
+        RegistryProjection::from_oci(&image, ImageKind::Runner, &source, &manifest, &config)?;
     let mut cache = ProjectionCache::default();
     cache.insert(&image, projection.clone());
     assert_eq!(
@@ -81,7 +82,7 @@ fn validated_projection_is_reused_only_for_the_same_image_identity()
         );
     }
     let (dind, dind_source, dind_manifest, dind_config) = fixture(ImageKind::Dind)?;
-    let dind_projection = RegistryProjection::admit(
+    let dind_projection = RegistryProjection::from_oci(
         &dind,
         ImageKind::Dind,
         &dind_source,
@@ -97,7 +98,7 @@ fn validated_projection_is_reused_only_for_the_same_image_identity()
     let mut corrupt_config = config;
     corrupt_config.push(b' ');
     assert!(
-        RegistryProjection::admit(
+        RegistryProjection::from_oci(
             &image,
             ImageKind::Runner,
             &source,

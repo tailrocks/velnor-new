@@ -22,9 +22,9 @@ const PULL_TIMEOUT: Duration = Duration::from_mins(30);
 
 #[derive(Debug)]
 pub struct DaemonSelection {
-    engine_id: String,
-    docker_root_digest: String,
-    architecture: String,
+    pub(super) engine_id: String,
+    pub(super) docker_root_digest: String,
+    pub(super) architecture: String,
 }
 
 impl DaemonSelection {

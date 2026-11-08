@@ -15,7 +15,7 @@ impl ImageProvider for ReleaseImageProvider<'_> {
         engine_id: &str,
         info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError> {
-        let result = tokio::time::timeout(PREPARE_TIMEOUT, async {
+        let result: Result<Option<VerifiedCandidate>, ProviderFailure> = async {
             if !daemon_platform_matches(info) {
                 return Ok(None);
             }
@@ -24,19 +24,26 @@ impl ImageProvider for ReleaseImageProvider<'_> {
                 .native
                 .as_ref()
                 .ok_or(ProviderFailure::NativeAdmission)?;
-            let release = native
-                .verified_runner_release()
+            let release = tokio::time::timeout(PREPARE_TIMEOUT, native.verified_runner_release())
                 .await
+                .map_err(|_| ProviderFailure::Timeout)?
                 .map_err(|_| ProviderFailure::NativeAdmission)?;
-            let admitted = super::registry_import::admit(
+            let selection = super::DaemonSelection::new(
+                &selected.engine_id,
+                &selected.docker_root_digest,
+                &selected.architecture,
+            )
+            .map_err(|_| ProviderFailure::DaemonIdentity)?;
+            let spec = super::registry_spec(
                 native,
                 &release,
                 velnor_runner_image_manifest::ImageKind::ResourceProbe,
-                journal,
-                &selected,
-                &self.endpoint,
+                &selection,
             )
             .await?;
+            let admitted = super::acquire_registry_image(journal, &self.endpoint, spec)
+                .await
+                .map_err(|_| ProviderFailure::ImageLoad)?;
             let mut hash = Sha256::new();
             hash.update(b"velnor-resource-probe-registry-binding-v1\0");
             for value in [
@@ -65,9 +72,8 @@ impl ImageProvider for ReleaseImageProvider<'_> {
                     manifest_sha256: release.manifest_sha.clone(),
                 },
             }))
-        })
-        .await
-        .unwrap_or(Err(ProviderFailure::Timeout));
+        }
+        .await;
         match result {
             Ok(Some(candidate)) => Ok(Some(candidate)),
             Ok(None) => {

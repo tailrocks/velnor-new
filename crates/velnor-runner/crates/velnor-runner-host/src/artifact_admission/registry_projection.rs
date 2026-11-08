@@ -70,7 +70,7 @@ pub(super) async fn verify(
         return Err(HostError::Identity);
     }
     let bytes = super::github::read_limited(response, CONFIG_LIMIT).await?;
-    RegistryProjection::admit(image, role, source, &manifest_bytes, &bytes)
+    RegistryProjection::from_oci(image, role, source, &manifest_bytes, &bytes)
 }
 
 async fn manifest_response(

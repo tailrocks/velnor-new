@@ -30,6 +30,10 @@ name = "registry_projection_cache_pure"
 path = "tests/registry_projection_cache_pure.rs"
 
 [[test]]
+name = "registry_acquisition_public"
+path = "tests/registry_acquisition_public.rs"
+
+[[test]]
 name = "registry_journal_public"
 path = "tests/registry_journal_public.rs"
 
@@ -86,3 +90,6 @@ velnor-resource-probe = { version = "=0.1.0", path = "../velnor-resource-probe" 
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = { version = "=3.7.0" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

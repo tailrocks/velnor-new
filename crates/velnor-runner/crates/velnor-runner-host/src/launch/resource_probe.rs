@@ -10,7 +10,8 @@ use crate::worker::ResourceBudget;
 pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
 pub use self::provider::{
-    DaemonSelection, ImageObservation, ImageReference, ImageSession, WorkerImage,
+    AcquiredRegistryImage, DaemonSelection, ImageObservation, ImageReference, ImageSession,
+    RegistryImageSpecification, RegistryProjection, WorkerImage, acquire_registry_image,
     verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 

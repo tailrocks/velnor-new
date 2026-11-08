@@ -22,6 +22,10 @@ mod identity;
 mod image_acquisition;
 pub use image_acquisition::{DaemonSelection, ImageObservation, ImageReference, ImageSession};
 mod registry_import;
+pub use crate::artifact_admission::RegistryProjection;
+pub use registry_import::{
+    AcquiredRegistryImage, RegistryImageSpecification, acquire_registry_image,
+};
 mod release_provider;
 
 mod worker_prepare;
@@ -128,4 +132,31 @@ fn hex(bytes: &[u8]) -> String {
         result.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     result
+}
+
+async fn registry_spec(
+    native: &NativeArtifactProvider<'_>,
+    release: &crate::artifact_admission::VerifiedRunnerRelease,
+    role: velnor_runner_image_manifest::ImageKind,
+    selected: &DaemonSelection,
+) -> Result<RegistryImageSpecification, ProviderFailure> {
+    use velnor_runner_image_manifest::ImageKind;
+    let image = match role {
+        ImageKind::Runner => &release.manifest.images.runner,
+        ImageKind::Dind => &release.manifest.images.dind,
+        ImageKind::ResourceProbe => &release.manifest.images.resource_probe,
+    };
+    let projection = native
+        .verified_registry_projection(role)
+        .await
+        .map_err(|_| ProviderFailure::NativeAdmission)?;
+    RegistryImageSpecification::new(
+        selected,
+        image,
+        role,
+        &release.source_sha,
+        &release.manifest_sha,
+        projection,
+    )
+    .map_err(|_| ProviderFailure::ImageIdentity)
 }

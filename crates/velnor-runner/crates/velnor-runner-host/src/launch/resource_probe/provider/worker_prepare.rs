@@ -24,26 +24,19 @@ pub(super) async fn prepare_worker_images(
     verify_selected_daemon(docker, &selected)
         .await
         .map_err(public_failure)?;
-    let runner = super::registry_import::admit(
-        native,
-        &release,
-        ImageKind::Runner,
-        journal,
-        &selected,
-        expected.endpoint(),
-    )
-    .await
-    .map_err(public_failure)?;
-    let dind = super::registry_import::admit(
-        native,
-        &release,
-        ImageKind::Dind,
-        journal,
-        &selected,
-        expected.endpoint(),
-    )
-    .await
-    .map_err(public_failure)?;
+    let selection = super::DaemonSelection::new(
+        &selected.engine_id,
+        &selected.docker_root_digest,
+        &selected.architecture,
+    )?;
+    let runner_spec = super::registry_spec(native, &release, ImageKind::Runner, &selection)
+        .await
+        .map_err(public_failure)?;
+    let runner = super::acquire_registry_image(journal, expected.endpoint(), runner_spec).await?;
+    let dind_spec = super::registry_spec(native, &release, ImageKind::Dind, &selection)
+        .await
+        .map_err(public_failure)?;
+    let dind = super::acquire_registry_image(journal, expected.endpoint(), dind_spec).await?;
     VerifiedWorkerImages::from_registry(
         expected,
         &release.source_sha,
@@ -78,7 +71,7 @@ fn setup<'a>(
     Ok((provider, selected))
 }
 
-fn worker_image(image: super::registry_import::AdmittedRegistryImage) -> RegistryWorkerImage {
+fn worker_image(image: super::registry_import::AcquiredRegistryImage) -> RegistryWorkerImage {
     RegistryWorkerImage {
         identity: image.identity,
         observation: image.observation,

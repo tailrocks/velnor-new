@@ -85,7 +85,8 @@ pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub use resource_probe::{
-    DaemonSelection, ImageObservation, ImageReference, ImageSession, WorkerImage,
+    AcquiredRegistryImage, DaemonSelection, ImageObservation, ImageReference, ImageSession,
+    RegistryImageSpecification, RegistryProjection, WorkerImage, acquire_registry_image,
     verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use steps::resume_deferred_offer_acquire_with_transport;

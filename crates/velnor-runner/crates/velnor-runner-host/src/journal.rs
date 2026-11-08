@@ -77,7 +77,7 @@ pub(crate) use doctor_probe::{
     DoctorProbeTicket,
 };
 pub(crate) use image_import::registry::{
-    RegistryImageIdentity, RegistryImageInspection, RegistryImageObservation,
+    RegistryImageIdentity, RegistryImageInspection, RegistryImageObservation, RegistryImageRecord,
 };
 pub(crate) use image_import::{
     ImageImportIdentity, ImageImportObservation, ImageImportRequest, ImageImportState,

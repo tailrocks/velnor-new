@@ -12,7 +12,7 @@ use velnor_runner_image_manifest::{
 const CONFIG_LIMIT: usize = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RegistryProjection {
+pub struct RegistryProjection {
     manifest_size: u64,
     configuration: Value,
     diff_ids: Vec<String>,
@@ -23,7 +23,7 @@ pub(crate) struct RegistryProjection {
 }
 
 impl RegistryProjection {
-    pub(super) fn admit(
+    pub fn from_oci(
         image: &ImageEntry,
         role: ImageKind,
         source: &str,

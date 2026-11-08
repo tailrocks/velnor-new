@@ -33,6 +33,7 @@ pub(super) struct Response {
     body: Vec<u8>,
     content_length: usize,
     close: bool,
+    gate: Option<Arc<(Mutex<bool>, std::sync::Condvar)>>,
 }
 
 impl Response {
@@ -43,6 +44,7 @@ impl Response {
             content_length: body.len(),
             body,
             close: false,
+            gate: None,
         }
     }
 
@@ -52,7 +54,17 @@ impl Response {
             content_length: body.len(),
             body,
             close: false,
+            gate: None,
         }
+    }
+
+    pub(super) fn gated(mut self, gate: Arc<(Mutex<bool>, std::sync::Condvar)>) -> Self {
+        self.gate = Some(gate);
+        self
+    }
+
+    pub(super) fn json_value(status: u16, value: &Value) -> Self {
+        Self::json(status, value)
     }
 
     pub(super) fn oversized() -> Self {
@@ -61,6 +73,7 @@ impl Response {
             body: Vec::new(),
             content_length: 4 * 1024 * 1024 + 1,
             close: true,
+            gate: None,
         }
     }
 
@@ -201,7 +214,7 @@ fn serve_connection(
     requests: &Mutex<Vec<Request>>,
     plan: &mut Plan,
 ) -> std::io::Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_read_timeout(Some(Duration::from_secs(60)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
     let mut reader = BufReader::new(stream.try_clone()?);
     loop {
@@ -216,6 +229,17 @@ fn serve_connection(
             .lock()
             .map_err(|_| std::io::Error::other("request log poisoned"))?
             .push(request);
+        if let Some(gate) = &response.gate {
+            let (lock, signal) = &**gate;
+            let mut released = lock
+                .lock()
+                .map_err(|_| std::io::Error::other("gate poisoned"))?;
+            while !*released {
+                released = signal
+                    .wait(released)
+                    .map_err(|_| std::io::Error::other("gate poisoned"))?;
+            }
+        }
         let close = response.close;
         write_response(stream, &response)?;
         if close {
