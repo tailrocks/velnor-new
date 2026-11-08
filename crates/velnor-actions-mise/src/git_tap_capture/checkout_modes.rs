@@ -38,9 +38,10 @@ pub(super) fn normalize(
             return Err(invalid("tap_checkout_mode_entry"));
         }
     }
+    let mut parent = None;
     for entry in entries {
         deadline.remaining()?;
-        let file = open_leaf(&root, &entry.path)?;
+        let file = open_leaf(&root, &mut parent, &entry.path, deadline)?;
         let observed_mode = ensure_regular(&file)?;
         let mode = match entry.mode {
             0o100_644 => 0o644,
@@ -55,24 +56,35 @@ pub(super) fn normalize(
     Ok(())
 }
 
-fn open_leaf(root: &OwnedFd, path: &str) -> Result<OwnedFd, crate::MiseError> {
-    let mut parent: Option<OwnedFd> = None;
-    let mut components = path.split('/').peekable();
-    while let Some(component) = components.next() {
-        let directory = parent
-            .as_ref()
-            .map_or_else(|| root.as_fd(), |directory| directory.as_fd());
-        if components.peek().is_some() {
-            parent = Some(
-                fs::openat(directory, component, DIRECTORY_FLAGS, Mode::empty())
-                    .map_err(|_| invalid("tap_checkout_directory"))?,
-            );
-        } else {
-            return fs::openat(directory, component, FILE_FLAGS, Mode::empty())
-                .map_err(|_| invalid("tap_checkout_file"));
+fn open_leaf(
+    root: &OwnedFd,
+    cached: &mut Option<(String, OwnedFd)>,
+    path: &str,
+    deadline: CheckDeadline,
+) -> Result<OwnedFd, crate::MiseError> {
+    let (parent_path, leaf) = path.rsplit_once('/').unwrap_or(("", path));
+    if cached.as_ref().is_none_or(|(path, _)| path != parent_path) {
+        *cached = None;
+        if !parent_path.is_empty() {
+            let mut parent: Option<OwnedFd> = None;
+            for component in parent_path.split('/') {
+                deadline.remaining()?;
+                let directory = parent
+                    .as_ref()
+                    .map_or_else(|| root.as_fd(), |directory| directory.as_fd());
+                parent = Some(
+                    fs::openat(directory, component, DIRECTORY_FLAGS, Mode::empty())
+                        .map_err(|_| invalid("tap_checkout_directory"))?,
+                );
+            }
+            *cached = parent.map(|directory| (parent_path.to_owned(), directory));
         }
     }
-    Err(invalid("tap_checkout_file"))
+    deadline.remaining()?;
+    let directory = cached
+        .as_ref()
+        .map_or_else(|| root.as_fd(), |(_, directory)| directory.as_fd());
+    fs::openat(directory, leaf, FILE_FLAGS, Mode::empty()).map_err(|_| invalid("tap_checkout_file"))
 }
 
 fn ensure_regular(file: &OwnedFd) -> Result<Mode, crate::MiseError> {

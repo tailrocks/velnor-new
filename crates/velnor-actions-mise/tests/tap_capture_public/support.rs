@@ -113,13 +113,7 @@ pub(super) fn fixture(
         invoke_git(git, Some(&working), &words(&["config", key, value]))?;
     }
 
-    fs::write(working.join("plain.txt"), b"plain tap bytes\n")?;
-    let executable = working.join("run me.sh");
-    fs::write(&executable, b"#!/bin/sh\nexit 0\n")?;
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
-    let nested = working.join("nested dir");
-    fs::create_dir(&nested)?;
-    fs::write(nested.join("data.bin"), [0, 1, 2, 255])?;
+    write_checkout_files(&working)?;
 
     let external_target = if include_link {
         let target = root.join("outside-checkout.txt");
@@ -164,6 +158,29 @@ pub(super) fn fixture(
         commit,
         external_target,
     })
+}
+
+fn write_checkout_files(working: &Path) -> Result<(), Box<dyn Error>> {
+    fs::write(working.join("plain.txt"), b"plain tap bytes\n")?;
+    let executable = working.join("run me.sh");
+    fs::write(&executable, b"#!/bin/sh\nexit 0\n")?;
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
+    let nested = working.join("nested dir");
+    fs::create_dir(&nested)?;
+    fs::write(nested.join("data.bin"), [0, 1, 2, 255])?;
+    for (path, bytes, mode) in [
+        ("a/deep/inside.txt", "deep bytes\n", 0o644),
+        ("a/same.txt", "first sibling bytes\n", 0o644),
+        ("a/sibling.sh", "executable sibling bytes\n", 0o755),
+        ("ab/same.txt", "prefix sibling bytes\n", 0o755),
+    ] {
+        let file = working.join(path);
+        fs::create_dir_all(file.parent().ok_or("fixture file parent missing")?)?;
+        fs::write(&file, bytes)?;
+        fs::set_permissions(&file, fs::Permissions::from_mode(mode))?;
+    }
+
+    Ok(())
 }
 
 pub(super) fn install_git_adapter(root: &Path) -> Result<PathBuf, Box<dyn Error>> {
