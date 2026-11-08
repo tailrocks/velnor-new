@@ -2,16 +2,48 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib.util
 import json
 import os
 import pathlib
 import subprocess
 import tempfile
+from unittest import mock
 
 SCRIPT = pathlib.Path(__file__).with_name('observe-hosted-checkout.py')
 
 
+def test_probe_classification():
+    spec = importlib.util.spec_from_file_location('checkout_observer', SCRIPT)
+    observer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(observer)
+    with mock.patch.object(observer.os.path, 'isfile', return_value=False):
+        assert observer.probe(['/missing']) == 'unavailable'
+    with mock.patch.object(observer.os.path, 'isfile', return_value=True):
+        with mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)):
+            assert observer.probe(['/tool']) == 'available'
+        with mock.patch.object(observer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)):
+            assert observer.probe(['/tool']) == 'rejected'
+        with mock.patch.object(observer.subprocess, 'run', side_effect=subprocess.TimeoutExpired('/tool', 3)):
+            assert observer.probe(['/tool']) == 'error_or_timeout'
+    with mock.patch.object(observer, 'probe', return_value='rejected'), \
+            mock.patch.object(observer.os.path, 'isfile', return_value=True), \
+            mock.patch.object(observer.os, 'access', return_value=False):
+        result = observer.sandbox_observation()
+        assert result['cgroup_v2_present'] is True
+        assert result['cgroup_root_writable'] is False
+        assert result['timeout_scope'] == 'direct-child-only'
+        assert result['systemd_environment'] == 'path-only-no-user-bus'
+    with mock.patch.object(observer, 'probe', return_value='unavailable'), \
+            mock.patch.object(observer.os.path, 'isfile', return_value=False), \
+            mock.patch.object(observer.os, 'access', return_value=True):
+        result = observer.sandbox_observation()
+        assert result['cgroup_v2_present'] is False
+        assert result['cgroup_root_writable'] is True
+
+
 def main():
+    test_probe_classification()
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory).resolve()
         (root / '.git/objects/pack').mkdir(parents=True)
@@ -34,6 +66,12 @@ def main():
         if result.returncode != 0:
             raise ValueError('valid checkout observation rejected')
         observed = json.loads(result.stdout)
+        capabilities = observed['sandbox_capabilities']
+        for key in ('unprivileged_user_network_namespace', 'bubblewrap_network_namespace', 'systemd_user_scope'):
+            if capabilities[key] not in ('available', 'unavailable', 'rejected', 'error_or_timeout'):
+                raise ValueError('invalid sandbox capability result')
+        if capabilities['termination_cleanup_tested'] is not False:
+            raise ValueError('cleanup must not be claimed from capability probe')
         if b'private-fixture-sentinel' in result.stdout:
             raise ValueError('config content leaked')
         if not observed['observation_only'] or observed['config_worktree_present'] or not observed['objects_tree_compatible']:

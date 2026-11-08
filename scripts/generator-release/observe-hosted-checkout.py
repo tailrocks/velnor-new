@@ -7,6 +7,32 @@ import os
 import pathlib
 import re
 import stat
+import subprocess
+
+
+def probe(argv):
+    if not os.path.isfile(argv[0]):
+        return 'unavailable'
+    try:
+        completed = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, timeout=3, check=False,
+                                   env={'PATH': '/usr/bin:/bin'})
+    except (OSError, subprocess.TimeoutExpired):
+        return 'error_or_timeout'
+    return 'available' if completed.returncode == 0 else 'rejected'
+
+
+def sandbox_observation():
+    return {
+        'unprivileged_user_network_namespace': probe(['/usr/bin/unshare', '--user', '--map-root-user', '--net', '/usr/bin/true']),
+        'bubblewrap_network_namespace': probe(['/usr/bin/bwrap', '--unshare-net', '--ro-bind', '/', '/', '--', '/usr/bin/true']),
+        'systemd_user_scope': probe(['/usr/bin/systemd-run', '--user', '--scope', '--quiet', '/usr/bin/true']),
+        'cgroup_v2_present': os.path.isfile('/sys/fs/cgroup/cgroup.controllers'),
+        'cgroup_root_writable': os.access('/sys/fs/cgroup', os.W_OK),
+        'termination_cleanup_tested': False,
+        'timeout_scope': 'direct-child-only',
+        'systemd_environment': 'path-only-no-user-bus',
+    }
 
 
 def main():
@@ -87,6 +113,7 @@ def main():
                 promisor |= entry.name.endswith('.promisor')
         result = {
             'observation_only': True,
+            'sandbox_capabilities': sandbox_observation(),
             'config_keys_not_examined': True,
             'runner_temp_owned_by_runner': runner_metadata.st_uid == os.geteuid(),
             'runner_temp_group_or_other_writable': bool(runner_metadata.st_mode & 0o022),
