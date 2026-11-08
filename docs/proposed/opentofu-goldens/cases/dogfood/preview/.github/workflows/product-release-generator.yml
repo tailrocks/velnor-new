@@ -1046,6 +1046,16 @@ jobs:
           SOURCES_CACHE_MATCHED_KEY: ${{ steps.sources-restore.outputs.cache-matched-key }}
         shell: bash
         run: "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nCARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\"\nexport CARGO_HOME\ntest -d \"$CARGO_HOME\"\ntest ! -L \"$CARGO_HOME\"\ntest \"$(cd \"$CARGO_HOME\" && pwd -P)\" = \"$CARGO_HOME\"\nmkdir -p \"$RUNNER_TEMP/source-qualification-artifacts/logs\"\nexport VELNOR_RUST_VERSION=''\"${VELNOR_TOOL_RUST}\"'' VELNOR_PREFETCH_RUST_ONLY=1\nbash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces\nfor manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do\n  mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\"'' -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path \"$GITHUB_WORKSPACE/$manifest\" > /dev/null\ndone\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\ntest -f source-preview/velnor-actions-x86_64-unknown-linux-gnu\ntest ! -L source-preview/velnor-actions-x86_64-unknown-linux-gnu\nchmod 0500 source-preview/velnor-actions-x86_64-unknown-linux-gnu\ntest \"$(source-preview/velnor-actions-x86_64-unknown-linux-gnu --version)\" = 'velnor-actions 0.1.78'\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(sha256sum \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-x86_64-unknown-linux-gnu\""
+  source-preview-publication:
+    name: Source preview publication
+    if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}
+    uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
 concurrency:
   group: ${{ github.repository }}-generator-${{ github.event_name }}-${{ startsWith(github.ref, 'refs/tags/sdk-preview-') && 'sdk-preview' || github.ref }}
   cancel-in-progress: false
