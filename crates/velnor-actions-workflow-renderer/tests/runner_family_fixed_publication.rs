@@ -184,6 +184,39 @@ fn family_coordinator_rejects_bad_signer_and_third_role_bytes_before_registry_wr
 }
 
 #[test]
+fn family_coordinator_rejects_third_archive_bytes_before_registry_writes()
+-> Result<(), Box<dyn Error>> {
+    let (parts, valid, valid_manifest_raw) = family_fixture("publish")?;
+    assert_eq!(valid["ok"], true);
+    assert!(
+        valid["registry_puts"]
+            .as_u64()
+            .is_some_and(|count| count > 0)
+    );
+    let valid_manifest: Value = serde_json::from_slice(&valid_manifest_raw)?;
+    assert_family_manifest(&valid_manifest, &valid["source_tags"], &parts);
+
+    let (_, rejected, manifest_raw) = family_fixture("tampered_third_archive")?;
+    let mutation = &rejected["archive_mutation"];
+    assert_eq!(
+        mutation["qualified_size_bytes"],
+        mutation["resource_probe_size_bytes"]
+    );
+    assert_eq!(mutation["runner_sha256"], mutation["qualified_sha256"]);
+    assert_eq!(mutation["dind_sha256"], mutation["qualified_sha256"]);
+    assert_ne!(
+        mutation["resource_probe_sha256"],
+        mutation["qualified_sha256"]
+    );
+    assert_eq!(rejected["registry_puts"], 0);
+    assert_eq!(rejected["stored_paths"], json!([]));
+    assert_eq!(rejected["ok"], false);
+    assert_eq!(rejected["error"], "Artifact differs from its signed bytes.");
+    assert_eq!(manifest_raw, Vec::<u8>::new());
+    Ok(())
+}
+
+#[test]
 fn family_coordinator_stops_when_current_main_changes_at_publication_boundaries()
 -> Result<(), Box<dyn Error>> {
     let (_, initial, initial_manifest) = family_fixture("stale_before_publish")?;

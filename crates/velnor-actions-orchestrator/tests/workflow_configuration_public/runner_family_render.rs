@@ -362,11 +362,23 @@ fn runner_family_rejects_unknown_configuration_fields() -> Result<(), Box<dyn Er
         "default",
         "default",
     )?;
-    let path = repo.path().join(".velnor/config.toml");
+    let root = repo.path();
+    super::runner_family_selection::copy_locked_tools(root)?;
+    fs::create_dir_all(root.join("scripts"))?;
+    let script = fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../scripts/check-runner-image-candidate.sh"),
+    )?;
+    fs::write(root.join("scripts/check-runner-image-candidate.sh"), script)?;
+    let path = root.join(".velnor/config.toml");
     let mut config = fs::read_to_string(&path)?;
-    config.push_str("\n[runner_image_family]\nunexpected = true\n");
+    config.push_str("\n[runner_image_family]\n");
+    fs::write(&path, &config)?;
+    let prepared = prepare(root)?;
+    assert!(finalized_jobs(&prepared)?.contains_key("image-runner-family-linux-amd64"));
+    config.push_str("unexpected = true\n");
     fs::write(path, config)?;
-    let error = prepare(repo.path()).err().ok_or("unknown field accepted")?;
+    let error = prepare(root).err().ok_or("unknown field accepted")?;
     assert!(error.to_string().contains("unknown_config_field"));
     Ok(())
 }

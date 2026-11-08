@@ -12,6 +12,7 @@ sys.path.insert(0, str(root))
 import job_image_authority_transport as transport
 import job_image_authority_registry as registry_module
 import runner_image_authority_candidate as candidate
+import runner_image_authority_custody as custody
 import runner_image_authority_identity as identity
 import runner_image_authority_publish as publication
 
@@ -33,6 +34,9 @@ graph = {
     "layer_digests": ["sha256:" + hashlib.sha256(parts["layer"]).hexdigest()],
 }
 archive_info = {"sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "size_bytes": archive.stat().st_size}
+role_archives = {role: root / f"{role}.oci.tar" for role in ("runner", "dind", "resource_probe")}
+for role_archive in role_archives.values():
+    role_archive.write_bytes(archive.read_bytes())
 context = {"path": "target/velnor-runner-family/resource_probe", "sha256": "b" * 64, "size_bytes": 1}
 versions = {"runner_version": "2.338.0", "docker_version": "29.9.1", "buildx_version": "0.38.0", "compose_version": "5.6.0", "node_version": "26.12.0"}
 roles = {}
@@ -119,9 +123,19 @@ class Network:
 transport.http.client.HTTPSConnection = Network
 transport.http.client.HTTPException = OSError
 transports = {role: transport.RegistryTransport(30, publication.registry.RegistryPolicy(profile)) for role, profile in publication.PROFILES.items()}
-inputs_for_roles = {role: {"archive": archive, "record": records[role].encode(), "envelope": envelopes[role].encode()} for role in records}
+inputs_for_roles = {role: {"archive": role_archives[role], "record": records[role].encode(), "envelope": envelopes[role].encode()} for role in records}
 if scenario == "tampered_third_record":
     inputs_for_roles["resource_probe"]["record"] += b"\n"
+if scenario == "tampered_third_archive":
+    path = inputs_for_roles["resource_probe"]["archive"]
+    changed = bytearray(path.read_bytes())
+    header = bytearray(changed[:512])
+    header[136:148] = b"00000000001\0"
+    header[148:156] = b"        "
+    checksum = sum(header)
+    header[148:156] = f"{checksum:06o}\0 ".encode()
+    changed[:512] = header
+    path.write_bytes(changed)
 tag_path = f"/v2/{publication.PROFILES['runner'].value}/manifests/sha-{source}"
 preseed = b"fixed-conflicting-source-tag"
 if scenario == "conflicting_source_tag":
@@ -136,10 +150,19 @@ try:
     manifest = publication.publish_family(inputs_for_roles, receipt_raw, json.dumps(verification).encode(), source, 101, 1, 202, 2, 303, lock_raw, root / "private", "actor", "password", transports, current_source)
     (root / "manifest.json").write_bytes(manifest)
     result = {"ok": True}
-except (publication.AuthorityError, identity.AuthorityError, candidate.AuthorityError, registry_module.AuthorityError) as error:
+except (publication.AuthorityError, identity.AuthorityError, candidate.AuthorityError, custody.AuthorityError, registry_module.AuthorityError) as error:
     result = {"ok": False, "error": str(error)}
 result["registry_puts"] = Network.puts
 result["stored_paths"] = sorted(path for host, path in Network.store if host == "ghcr.io")
+if scenario == "tampered_third_archive":
+    result["archive_mutation"] = {
+        "qualified_sha256": archive_info["sha256"],
+        "qualified_size_bytes": archive_info["size_bytes"],
+        "runner_sha256": hashlib.sha256(role_archives["runner"].read_bytes()).hexdigest(),
+        "dind_sha256": hashlib.sha256(role_archives["dind"].read_bytes()).hexdigest(),
+        "resource_probe_sha256": hashlib.sha256(role_archives["resource_probe"].read_bytes()).hexdigest(),
+        "resource_probe_size_bytes": role_archives["resource_probe"].stat().st_size,
+    }
 result["source_tags"] = {}
 for role, profile in publication.PROFILES.items():
     target = f"/v2/{profile.value}/manifests/sha-{source}"
