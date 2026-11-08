@@ -16,6 +16,7 @@ const OCI: &str = include_str!("../src/job_image_authority_oci.py");
 const REGISTRY: &str = include_str!("../src/runner_shared_job_image_authority_registry.py");
 const REGISTRY_PUBLISH: &str = include_str!("../src/runner_shared_job_image_authority_publish.py");
 const TRANSPORT: &str = include_str!("../src/runner_shared_job_image_authority_transport.py");
+const DRIVER: &str = include_str!("../src/runner_image_authority_driver.py");
 const FAMILY_FIXTURE: &str = include_str!("runner_family_fixed_publication_fixture.py");
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -31,6 +32,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 fn family_fixture(scenario: &str) -> Result<(ImageParts, Value, Vec<u8>), Box<dyn Error>> {
     let root = tempfile::tempdir()?;
     for (name, source) in [
+        ("runner_image_authority_driver.py", DRIVER),
         ("runner_image_authority_identity.py", IDENTITY),
         ("runner_image_authority_candidate.py", CANDIDATE),
         ("runner_image_authority_custody.py", CUSTODY),
@@ -271,5 +273,24 @@ fn family_coordinator_preserves_a_conflicting_source_tag() -> Result<(), Box<dyn
     assert_eq!(result["source_tags"]["dind"], Value::Null);
     assert_eq!(result["source_tags"]["resource_probe"], Value::Null);
     assert_eq!(manifest_raw, Vec::<u8>::new());
+    Ok(())
+}
+
+#[test]
+fn fixed_driver_preserves_existing_manifest_and_publishes_fresh_assets()
+-> Result<(), Box<dyn Error>> {
+    let (parts, fresh, raw) = family_fixture("driver_fresh")?;
+    assert_eq!(fresh["driver_exit"], 0, "{fresh}");
+    assert_eq!(fresh["files_valid"], true);
+    let manifest: Value = serde_json::from_slice(&raw)?;
+    assert_family_manifest(&manifest, &fresh["source_tags"], &parts);
+    let (_, existing, _) = family_fixture("driver_existing")?;
+    assert_eq!(existing["driver_exit"], 1, "{existing}");
+    assert!(
+        existing["driver_stderr"]
+            .as_str()
+            .is_some_and(|s| s.contains("FileExistsError"))
+    );
+    assert_eq!(existing["sentinel_preserved"], true);
     Ok(())
 }

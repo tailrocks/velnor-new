@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 import base64
 import hashlib
+import contextlib
+import io
+import os
+import runpy
 import json
 import sys
 from pathlib import Path
@@ -83,6 +87,8 @@ class Network:
         self.host = host
         self.headers = {}
         self.sent = bytearray()
+    def request(self, method, target, headers=None):
+        self.method, self.target = method, target
     def putrequest(self, method, target):
         self.method, self.target = method, target
     def putheader(self, name, value):
@@ -95,6 +101,8 @@ class Network:
         pass
     def getresponse(self):
         target = self.target
+        if self.host == "api.github.com" and self.method == "GET" and target == "/repos/tailrocks/velnor-new/git/ref/heads/main":
+            return Response(200, {}, json.dumps({"ref": "refs/heads/main", "object": {"type": "commit", "sha": source}}).encode())
         if self.method == "GET" and target == "/v2/":
             return Response(401, {"www-authenticate": 'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:fixture:pull,push"'})
         if self.method == "GET" and target.startswith("/token"):
@@ -145,6 +153,66 @@ def current_source():
     if scenario == "stale_before_publish" or (scenario == "stale_after_image" and runner_published):
         return "c" * 40
     return source
+
+def run_driver():
+    names = {
+        "runner": ("velnor-runner-linux-amd64.tar", "runner-image-publication.json", "runner-image-provenance.json"),
+        "dind": ("velnor-dind-linux-amd64.tar", "dind-image-publication.json", "dind-image-provenance.json"),
+        "resource_probe": ("velnor-resource-probe-linux-amd64.tar", "resource-probe-image-publication.json", "resource-probe-image-provenance.json"),
+    }
+    candidate_dir = root / "runner-family-candidate"
+    qualified = root / "runner-family-qualification"
+    authenticated = root / "runner-family-authenticated"
+    for directory in (candidate_dir, qualified, authenticated):
+        directory.mkdir(mode=0o700)
+    for role, (archive_name, record_name, envelope_name) in names.items():
+        (candidate_dir / archive_name).write_bytes(role_archives[role].read_bytes())
+        (candidate_dir / record_name).write_text(records[role])
+        (candidate_dir / envelope_name).write_text(envelopes[role])
+    (qualified / identity.RECEIPT_NAME).write_bytes(receipt_raw)
+    (authenticated / "qualification-verification.json").write_text(json.dumps(verification))
+    (authenticated / "runner.lock").write_bytes(lock_raw)
+    (authenticated / "LICENSE").write_bytes(b"fixture license\n")
+    (authenticated / "NOTICE").write_bytes(b"fixture notice\n")
+    assets = root / "runner-family-release" / "assets"
+    sentinel = b"existing manifest sentinel"
+    if scenario == "driver_existing":
+        assets.mkdir(parents=True)
+        (assets / "RUNNER_IMAGE_MANIFEST.json").write_bytes(sentinel)
+    os.environ.update({"RUNNER_TEMP": str(root), "GITHUB_SHA": source, "GITHUB_REPOSITORY": identity.REPOSITORY,
+        "GITHUB_REPOSITORY_ID": identity.REPOSITORY_ID, "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "push",
+        "GITHUB_WORKFLOW_REF": identity.REPOSITORY + "/.github/workflows/product-release-images.yml@refs/heads/main",
+        "GITHUB_WORKFLOW_SHA": source, "PRODUCER_RUN_ID": "101", "PRODUCER_RUN_ATTEMPT": "1",
+        "QUALIFIER_RUN_ID": "202", "QUALIFIER_RUN_ATTEMPT": "2", "QUALIFIER_JOB_ID": "303",
+        "GITHUB_ACTOR": "actor", "GH_TOKEN": "password"})
+    stderr = io.StringIO()
+    code = 0
+    with contextlib.redirect_stderr(stderr):
+        try:
+            runpy.run_path(str(root / "runner_image_authority_driver.py"), run_name="__main__")
+        except SystemExit as error:
+            code = error.code
+    result = {"driver_exit": code, "driver_stderr": stderr.getvalue()}
+    if scenario == "driver_existing":
+        result["sentinel_preserved"] = (assets / "RUNNER_IMAGE_MANIFEST.json").read_bytes() == sentinel
+    elif code == 0:
+        expected = {"RUNNER_IMAGE_MANIFEST.json", "SHA256SUMS", "LICENSE", "NOTICE"}
+        files = {p.name: p.read_bytes() for p in assets.iterdir()}
+        sums = "".join(f"{hashlib.sha256(files[name]).hexdigest()}  {name}\n" for name in ("RUNNER_IMAGE_MANIFEST.json", "LICENSE", "NOTICE")).encode()
+        result["files_valid"] = (set(files) == expected and files["SHA256SUMS"] == sums
+            and files["LICENSE"] == b"fixture license\n" and files["NOTICE"] == b"fixture notice\n")
+        (root / "manifest.json").write_bytes(files["RUNNER_IMAGE_MANIFEST.json"])
+    result["source_tags"] = {}
+    for role, profile in publication.PROFILES.items():
+        target = f"/v2/{profile.value}/manifests/sha-{source}"
+        body = Network.store.get(("ghcr.io", target))
+        result["source_tags"][role] = None if body is None else hashlib.sha256(body).hexdigest()
+    (root / "result.json").write_text(json.dumps(result))
+
+
+if scenario in ("driver_fresh", "driver_existing"):
+    run_driver()
+    raise SystemExit(0)
 
 try:
     manifest = publication.publish_family(inputs_for_roles, receipt_raw, json.dumps(verification).encode(), source, 101, 1, 202, 2, 303, lock_raw, root / "private", "actor", "password", transports, current_source)
