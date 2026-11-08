@@ -9,6 +9,7 @@ use velnor_runner_host::{HostError, KeychainReference, import_secret, read_secre
 
 use super::connect::ConnectError;
 use super::connection_state::{config_lock, persist_host, read_host};
+use super::token_input::normalize_token_line;
 
 const DEFAULT_RELEASE_READ_REFERENCE: &str = "keychain:com.tailrocks.velnor.host/release-read";
 
@@ -38,7 +39,7 @@ where
     Persist: FnOnce(&Path, &str) -> Result<(), ConnectError>,
 {
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    std::str::from_utf8(&secret).map_err(|_| ConnectError::Secret(HostError::Keychain))?;
+    let secret = normalize_token_line(&secret).ok_or(ConnectError::Secret(HostError::Keychain))?;
     let _config_lock = config_lock(state).map_err(|_| ConnectError::Lock)?;
     let mut config = read_host(state)?.ok_or(ConnectError::Config)?;
     let (reference, update) = if let Some(reference) = config.release_read_credential_ref() {
@@ -53,7 +54,7 @@ where
         (reference, Some(text))
     };
 
-    store(reference.service(), reference.account(), &secret).map_err(ConnectError::Secret)?;
+    store(reference.service(), reference.account(), secret).map_err(ConnectError::Secret)?;
     if let Some(text) = update {
         persist(state, &text)?;
     }

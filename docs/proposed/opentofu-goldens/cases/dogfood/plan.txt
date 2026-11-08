@@ -23,7 +23,7 @@ Detected stacks
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, example, lib, test; depends on velnor-actions-mise]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
     - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
-    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
+    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
     - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github]
@@ -73,7 +73,7 @@ Workflow to generate
     - rust-velnor-actions-workflow-renderer (32 steps)
     - rust-velnor-resource-probe (31 steps)
     - rust-velnor-runner-attestation (30 steps)
-    - rust-velnor-runner-cli (30 steps)
+    - rust-velnor-runner-cli (31 steps)
     - rust-velnor-runner-core (30 steps)
     - rust-velnor-runner-github (31 steps)
     - rust-velnor-runner-host (31 steps)
@@ -176,6 +176,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
@@ -227,7 +228,6 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default has no test targets; no test command emitted
