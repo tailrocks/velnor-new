@@ -232,6 +232,21 @@ def docker_base(client, root, target, tools, registry, image_platform):
             "--mount", f"type=bind,src={target},dst=/target", "--mount", f"type=bind,src={tools},dst=/tools,readonly",
             "--mount", f"type=bind,src={registry},dst=/usr/local/cargo/registry,readonly", "-w", "/work", IMAGE]
 
+def signed_controller_toolchain_setup():
+    return '''
+        t=/usr/local/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu
+        m="$t/lib/rustlib/multirust-channel-manifest.toml"
+        test "${RUSTUP_HOME:-}" = /usr/local/rustup
+        test -d "$t" && test ! -L "$t" && test -f "$m" && test ! -L "$m"
+        printf '%s  %s\\n' fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463 /tools/signed-controller/channel.toml | sha256sum -c - >/dev/null
+        find "$t" ! -type f ! -type d -print > /tmp/rust-special
+        test ! -s /tmp/rust-special
+        cp /tools/signed-controller/channel.toml "$m"
+        find "$t" -type d -exec chmod 755 {} +
+        find "$t" -type f -perm /111 -exec chmod 755 {} +
+        find "$t" -type f ! -perm /111 -exec chmod 644 {} +
+    '''
+
 
 def main():
     if len(sys.argv) != 4 or sys.argv[3] not in ("debug", "release"):
@@ -410,6 +425,8 @@ def main():
                 raise RuntimeError("fixture mise catalog identity is invalid")
             install_tool(source_tools / "mise_linux_amd64", tools / "bin/mise", digests[0], 192 * 1024 * 1024)
             rust = tools / "mise/installs/rust" / rust_versions[0]
+            if signed_controller and rust_versions[0] != "1.99.1":
+                raise RuntimeError("signed controller channel and Rust version differ")
             rust.parent.mkdir(parents=True, exist_ok=True)
             target = f"/usr/local/rustup/toolchains/{rust_versions[0]}-x86_64-unknown-linux-gnu"
             if rust.is_symlink():
@@ -466,7 +483,8 @@ def main():
         receipt = target / f"receipt-{nonce}"
         fixture_path = "/tools/bin:" if source_compiler else ""
         worker = read_regular(worker_path, 4096).decode() if kind == "image_publication" else ""
-        script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
+        setup = signed_controller_toolchain_setup() if signed_controller else ""
+        script = f'''set -eu; {setup} mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
         env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}", "-e", f"VELNOR_IMAGE_TEST_WORKER={worker}"]
         try:
             command(docker[:-1] + env_args + [IMAGE, "sh", "-c", script], env=docker_env)
