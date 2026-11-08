@@ -127,4 +127,7 @@ run = "python3 -I crates/velnor-actions-workflow-renderer/tests/hosted_gh_config
 
 [tasks.test-hosted-direct-release]
 description = "Qualify the direct Rust release workflow on the hosted runner"
-run = "python3 -I scripts/check-hosted-direct-release.py"
+run = [
+  "python3 -I scripts/test-hosted-direct-release-diagnostics.py",
+  "python3 -I scripts/check-hosted-direct-release.py",
+]
