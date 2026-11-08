@@ -40,6 +40,10 @@ mod derive_reexec;
 mod hard_fail;
 
 #[cfg(test)]
+#[path = "rust_tree_digest_pin/readonly.rs"]
+mod readonly;
+
+#[cfg(test)]
 #[path = "rust_tree_digest_pin/manifest.rs"]
 mod manifest;
 
