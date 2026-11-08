@@ -345,6 +345,9 @@ pub(crate) fn verify_before_upload<R: CrateRegistryRead>(
 }
 
 #[cfg(test)]
+#[path = "crate_release_semver/lockless_qualified_tests.rs"]
+mod lockless_qualified_tests;
+#[cfg(test)]
 #[path = "crate_release_semver/tests.rs"]
 mod tests;
 
