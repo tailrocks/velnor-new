@@ -18,6 +18,7 @@ impl<'a> Fixture<'a> {
         &self,
         digest: &str,
         commit: &str,
+        wrong_host: bool,
     ) -> Result<Identities, Box<dyn Error>> {
         self.git(&["init", "-b", "main"])?;
         self.git(&["config", "user.name", "Fixture"])?;
@@ -34,7 +35,7 @@ impl<'a> Fixture<'a> {
         fs::write(self.paths.repo.join(".velnor/config.toml"), CONFIG)?;
         fs::write(
             self.paths.repo.join(".velnor/release-manifest.json"),
-            manifest(digest, commit),
+            manifest(digest, commit, wrong_host),
         )?;
         self.git(&["add", "."])?;
         self.git(&["commit", "-m", "fixture base"])?;
@@ -87,7 +88,13 @@ impl<'a> Fixture<'a> {
     }
 }
 
-fn manifest(digest: &str, commit: &str) -> String {
+fn manifest(digest: &str, commit: &str, wrong_host: bool) -> String {
+    let host = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        _ => "unsupported",
+    };
     let targets = [
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
@@ -96,7 +103,7 @@ fn manifest(digest: &str, commit: &str) -> String {
     let targets = targets.iter().map(|target| serde_json::json!({
         "target": target,
         "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{}/velnor-actions-{}-{target}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_VERSION")),
-        "sha256": digest
+        "sha256": if wrong_host && *target == host { "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } else { digest }
     })).collect::<Vec<_>>();
     serde_json::json!({"schema":1,"version":env!("CARGO_PKG_VERSION"),"repository":"tailrocks/velnor-new","commit":commit,"targets":targets}).to_string()
 }

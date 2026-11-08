@@ -9,7 +9,38 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
+#[path = "command_stream/bounded_output.rs"]
+mod bounded_output;
+
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(unix)]
+#[test]
+fn deadline_retains_sanitized_command_progress() -> Result<(), Box<dyn std::error::Error>> {
+    let command =
+        shell("printf 'maintenance-phase: probe # ::warning::danger\\n'; exec sleep 120")?;
+    let mut progress = Vec::new();
+    let error = command
+        .run_until_with_progress(
+            1024,
+            CheckDeadline::after(Duration::from_secs(1))?,
+            &mut progress,
+        )
+        .err()
+        .ok_or_else(|| io::Error::other("expected deadline failure"))?;
+    let progress = String::from_utf8(progress)?;
+
+    assert!(
+        error
+            .to_string()
+            .contains("timeout_after_absolute_deadline")
+    );
+    assert!(progress.contains("velnor-progress stdout:"), "{progress}");
+    assert!(progress.contains("maintenance-phase: probe"), "{progress}");
+    assert!(progress.contains("\\x23"), "{progress}");
+    assert!(!progress.contains("\n::warning::danger"), "{progress}");
+    Ok(())
+}
 
 #[test]
 fn quiescent_file_stream_preserves_binary_stdout_and_bounded_stderr()
