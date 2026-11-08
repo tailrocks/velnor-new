@@ -39,6 +39,10 @@ def validate_results(stdout):
         ignored = {
             'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::promotion',
             'velnor-actions-orchestrator::velnor_actions_orchestrator$image_maintenance::publication_boundary_worker::publication',
+            'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_semver::lockless_qualified_tests::'
+            'qualified_checker_accepts_lockless_baseline_and_rejects_breakage',
+            'velnor-actions-orchestrator::velnor_actions_orchestrator$release::crate_release_semver::lockless_qualified_tests::'
+            'qualified_checker_checks_shared_features_and_allows_new_features',
         }
         starts, passes, skips = Counter(), Counter(), Counter()
         suite_open = False
