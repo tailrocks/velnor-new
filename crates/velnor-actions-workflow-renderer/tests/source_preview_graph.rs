@@ -49,7 +49,15 @@ fn main_producer_tag_publisher_and_stable_calls_have_separate_authority_graphs()
 }
 
 fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
-    assert!(!workflow.contains("  source-preview-publication:"));
+    let callers: Vec<_> = workflow
+        .match_indices("  source-preview-publication:")
+        .collect();
+    assert_eq!(callers.len(), 1);
+    let caller = job(workflow, "source-preview-publication")?;
+    assert!(caller.contains("if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}"));
+    assert!(caller.contains("uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e"));
+    assert!(caller.contains("    permissions:\n      actions: read\n      artifact-metadata: write\n      attestations: write\n      contents: write\n      id-token: write\n"));
+    assert!(!caller.contains("    needs:"));
     assert!(!workflow.contains("  workflow_dispatch:"));
     assert!(workflow.contains("  push:"));
     assert!(workflow.contains("sdk-preview-*"));

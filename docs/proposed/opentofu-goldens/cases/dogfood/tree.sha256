@@ -28,10 +28,10 @@
 - 0d1237145484ce6c4590a52d0ca435301de9376ca1eb6ff927f712f1f8197b5a  ./.github/workflows/homebrew-adoption.yml
 - 05b0771fa81379ebf93daaf290fe9363ccad7db680566e3c8eadbc54e15dd0e1  ./.github/workflows/job-image-candidate.yml
 - 997372d90865cd20a4c2ee24368207793ff6ab15240259e43860ce6d9813c95c  ./.github/workflows/product-release-binary.yml
-- 3f1428d7f647e6b6a7555f526aa645bcd12ed78b20b135001a7ed80db92ca5c2  ./.github/workflows/product-release-generator.yml
+- 593c8ca5cce1f5d6db4b5c96871df4b059309d6a5eb78c59dac7a112c22ae48a  ./.github/workflows/product-release-generator.yml
 - 0b79050024ff07ffc23244237dbfac2c18476576998018f86265240d452b9683  ./.github/workflows/product-release-images.yml
 - 20105b9dc455d021a1ee7f7245f468e23d95a196f7f0abd34833381ce8b2f746  ./.github/workflows/product-release.yml
 - 1998f8663ed773a5b292b095066d7d439d9b0123b7aec1ddd6d9ce51d51c60f0  ./.github/workflows/qualification.yml
-- 623445e15838b6f64468d25138d23c9163917f654cc51db8cdd72e85f3da3666  ./.github/workflows/source-preview-publication.yml
+- 6d0712cce1faadfbcf77cfd1f1bd05d27dc0ef4b337ccb59db2c3ddcbde7ca91  ./.github/workflows/source-preview-publication.yml
 - f6a2f5a9d2ecc9253485489b587d218f8e846a85260dfbcda9637dff6c2b8de8  ./.github/workflows/source-qualification.yml
 - cf1eb3872c827b59d1b74e7dfbe8757b1ef08d517412d53a6d5cd2713c25e39e  ./.github/workflows/state-seal.yml

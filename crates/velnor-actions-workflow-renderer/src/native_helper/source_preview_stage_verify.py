@@ -23,7 +23,7 @@ OWNER_ID = "78806509"
 MAX_GH_BYTES = 104_857_600
 MAX_VERIFY_OUTPUT = 16_777_216
 AUTHORITY_WORKFLOW = ".github/workflows/source-preview-publication.yml"
-PUBLICATION_AUTHORITY_SHA = None
+PUBLICATION_AUTHORITY_SHA = "3a3c641b531a69b7e4142b61aecf536007bb3f2e"
 
 
 def checked_authority(authority):
