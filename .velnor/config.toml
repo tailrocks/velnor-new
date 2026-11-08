@@ -54,6 +54,7 @@ globs = [
   "images/dind/**",
   "images/resource-probe/**",
   "scripts/native-image-candidate-inventory.py",
+  "scripts/native-image-cargo-cache.py",
   "scripts/bootstrap-owned-tool-builder.py",
   "scripts/owned_tool_source.py",
   ".config/nextest.toml",

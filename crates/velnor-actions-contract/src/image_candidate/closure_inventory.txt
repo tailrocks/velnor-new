@@ -1647,5 +1647,6 @@ scripts/generator-release/cargo-source-handoff.sh
 scripts/generator-release/create-release-manifest.sh
 scripts/generator-release/preflight-release-tag.sh
 scripts/native-image-candidate-inventory.py
+scripts/native-image-cargo-cache.py
 scripts/owned_tool_source.py
 scripts/upgrades/bump-gradle-catalog.py

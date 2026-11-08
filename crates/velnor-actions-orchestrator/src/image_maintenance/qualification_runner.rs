@@ -287,15 +287,15 @@ fn execute(
         return Err(internal("native_qualification_runner_identity"));
     }
     let mut arguments = vec![
-            "--noprofile".into(),
-            "--norc".into(),
-            "-p".into(),
-            "-e".into(),
-            "-o".into(),
-            "pipefail".into(),
-            "-c".into(),
-            script,
-            "velnor-native-qualification".into(),
+        "--noprofile".into(),
+        "--norc".into(),
+        "-p".into(),
+        "-e".into(),
+        "-o".into(),
+        "pipefail".into(),
+        "-c".into(),
+        script,
+        "velnor-native-qualification".into(),
     ];
     arguments.extend(task_env);
     arguments.extend(argv);
@@ -325,7 +325,58 @@ fn run_env(
     output
         .require_success("native qualification")
         .map_err(|error| internal(&format!("native_qualification_failed:{error}")))?;
+    if program == "/bin/bash" {
+        emit_archive_reuse(&output.stdout)?;
+    }
     Ok(())
+}
+
+fn emit_archive_reuse(bytes: &[u8]) -> Result<(), OrchestratorError> {
+    let mut seen = [false; 2];
+    for raw in bytes.split(|byte| *byte == b'\n') {
+        let Ok(line) = std::str::from_utf8(raw) else {
+            continue;
+        };
+        if !line.starts_with("velnor: native archive reuse ") {
+            continue;
+        }
+        let words = line.split(' ').collect::<Vec<_>>();
+        let ["velnor:", "native", "archive", "reuse", mode, count, size] = words.as_slice() else {
+            return Err(internal("native_archive_reuse_diagnostic"));
+        };
+        let slot = match *mode {
+            "mode=workspace" => 0,
+            "mode=fixture" => 1,
+            _ => return Err(internal("native_archive_reuse_diagnostic")),
+        };
+        let count = count
+            .strip_prefix("copied=")
+            .filter(|value| canonical_number(value))
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value <= 4096)
+            .ok_or_else(|| internal("native_archive_reuse_diagnostic"))?;
+        let size = size
+            .strip_prefix("bytes=")
+            .filter(|value| canonical_number(value))
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value <= 1024 * 1024 * 1024)
+            .ok_or_else(|| internal("native_archive_reuse_diagnostic"))?;
+        if seen[slot] || (count == 0) != (size == 0) {
+            return Err(internal("native_archive_reuse_diagnostic"));
+        }
+        seen[slot] = true;
+        println!("velnor: native archive reuse {mode} copied={count} bytes={size}");
+    }
+    if seen != [true, true] {
+        return Err(internal("native_archive_reuse_diagnostic"));
+    }
+    Ok(())
+}
+
+fn canonical_number(value: &str) -> bool {
+    !value.is_empty()
+        && (value == "0" || !value.starts_with('0'))
+        && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn path(path: &Path) -> Result<String, OrchestratorError> {

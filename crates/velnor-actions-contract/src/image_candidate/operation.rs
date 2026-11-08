@@ -119,6 +119,7 @@ umask 077
 mkdir -m 700 "$fixture_private"
 mkdir -m 700 "$fixture_private/cargo" "$fixture_private/mbx" "$fixture_private/target"
 export CARGO_HOME="$fixture_private/cargo" MBX_CACHE_DIR="$fixture_private/mbx" CARGO_TARGET_DIR="$fixture_private/target" MBX_TARGET_VIEWS=0
+/usr/bin/python3 -I -S "$GITHUB_WORKSPACE/scripts/native-image-cargo-cache.py" fixture
 cargo metadata --locked --format-version=1 --manifest-path "$fixture_root/Cargo.toml" > "$fixture_private/metadata.json"
 /usr/bin/find "$CARGO_HOME/registry/cache" -type f -name 'itoa-1.0.18.crate' -print0 > "$fixture_private/archives"
 mapfile -d '' -t archives < "$fixture_private/archives"
@@ -277,12 +278,13 @@ env -i -- "${{native_env[@]}}" "${{task_env[@]}}" "${{argv[@]}}"
 
 #[must_use]
 pub fn job_image_candidate_source_script(build: &str, target: CandidateSourceTarget) -> String {
-    let (binary_path, export_step, workflow_check, mbx_check) = match target {
+    let (binary_path, export_step, workflow_check, mbx_check, seed_step) = match target {
         CandidateSourceTarget::Checkout => (
             "target/release/velnor-actions",
             "printf 'VELNOR_NATIVE_IMAGE_ACTIONS=%s\\n' \"$image_binary\" >> \"$GITHUB_ENV\"",
             "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"",
             String::new(),
+            "",
         ),
         CandidateSourceTarget::Qualification => (
             "\"$RUNNER_TEMP/velnor-native-qualification/source-target/release/velnor-actions\"",
@@ -293,10 +295,11 @@ pub fn job_image_candidate_source_script(build: &str, target: CandidateSourceTar
                 super::NATIVE_MBX_VERSION,
                 super::NATIVE_MBX_LINUX_AMD64_BINARY_SHA256
             ),
+            "/usr/bin/python3 -I -S \"$GITHUB_WORKSPACE/scripts/native-image-cargo-cache.py\" workspace\n",
         ),
     };
     let script = format!(
-        "set -euo pipefail\ntrusted_git() {{ /usr/bin/env -i PATH=/usr/bin:/bin GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0 /usr/bin/git --git-dir=\"$GITHUB_WORKSPACE/.git\" --work-tree=\"$GITHUB_WORKSPACE\" -c core.fsmonitor=false \"$@\"; }}\nsource_sha=\"$(trusted_git rev-parse --verify HEAD)\"\ntest \"$source_sha\" = \"$GITHUB_SHA\"\n{mbx_check}\n{workflow_check}\nif ! trusted_git diff --cached --quiet --no-ext-diff --no-textconv --ignore-submodules=none || ! trusted_git diff --quiet --no-ext-diff --no-textconv --ignore-submodules=none; then\n  printf '%s\\n' 'The source checkout is not clean.' >&2\n  exit 1\nfi\nstatus_file=\"$(mktemp \"$RUNNER_TEMP/velnor-image-source-status.XXXXXXXX\")\"\ntrusted_git status --porcelain=v1 --untracked-files=all --ignore-submodules=none -z > \"$status_file\"\nif [[ -s \"$status_file\" ]]; then\n  printf '%s\\n' 'The source checkout is not clean.' >&2\n  exit 1\nfi\nmetadata_file=\"$(mktemp \"$RUNNER_TEMP/velnor-native-image-metadata.XXXXXXXX\")\"\nartifacts_file=\"$(mktemp \"$RUNNER_TEMP/velnor-native-image-artifacts.XXXXXXXX\")\"\ntrap 'rm -f \"$metadata_file\" \"$artifacts_file\"' EXIT\ncargo metadata --locked --format-version=1 --filter-platform x86_64-unknown-linux-gnu > \"$metadata_file\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {build} --message-format=json > \"$artifacts_file\"\npython3 scripts/native-image-candidate-inventory.py --check --root \"$GITHUB_WORKSPACE\" --metadata \"$metadata_file\" --artifacts \"$artifacts_file\" --target x86_64-unknown-linux-gnu\ntest -f {binary_path} && test ! -L {binary_path}\numask 077\nimage_binary_dir=\"$(mktemp -d \"$RUNNER_TEMP/velnor-native-image-actions.XXXXXXXX\")\"\nimage_binary=\"$image_binary_dir/velnor-native-image-actions\"\n( set -o noclobber; cat {binary_path} > \"$image_binary\" )\nchmod 0500 \"$image_binary\"\n{export_step}"
+        "set -euo pipefail\ntrusted_git() {{ /usr/bin/env -i PATH=/usr/bin:/bin GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_OPTIONAL_LOCKS=0 /usr/bin/git --git-dir=\"$GITHUB_WORKSPACE/.git\" --work-tree=\"$GITHUB_WORKSPACE\" -c core.fsmonitor=false \"$@\"; }}\nsource_sha=\"$(trusted_git rev-parse --verify HEAD)\"\ntest \"$source_sha\" = \"$GITHUB_SHA\"\n{mbx_check}\n{workflow_check}\nif ! trusted_git diff --cached --quiet --no-ext-diff --no-textconv --ignore-submodules=none || ! trusted_git diff --quiet --no-ext-diff --no-textconv --ignore-submodules=none; then\n  printf '%s\\n' 'The source checkout is not clean.' >&2\n  exit 1\nfi\nstatus_file=\"$(mktemp \"$RUNNER_TEMP/velnor-image-source-status.XXXXXXXX\")\"\ntrusted_git status --porcelain=v1 --untracked-files=all --ignore-submodules=none -z > \"$status_file\"\nif [[ -s \"$status_file\" ]]; then\n  printf '%s\\n' 'The source checkout is not clean.' >&2\n  exit 1\nfi\n{seed_step}metadata_file=\"$(mktemp \"$RUNNER_TEMP/velnor-native-image-metadata.XXXXXXXX\")\"\nartifacts_file=\"$(mktemp \"$RUNNER_TEMP/velnor-native-image-artifacts.XXXXXXXX\")\"\ntrap 'rm -f \"$metadata_file\" \"$artifacts_file\"' EXIT\ncargo metadata --locked --format-version=1 --filter-platform x86_64-unknown-linux-gnu > \"$metadata_file\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {build} --message-format=json > \"$artifacts_file\"\npython3 scripts/native-image-candidate-inventory.py --check --root \"$GITHUB_WORKSPACE\" --metadata \"$metadata_file\" --artifacts \"$artifacts_file\" --target x86_64-unknown-linux-gnu\ntest -f {binary_path} && test ! -L {binary_path}\numask 077\nimage_binary_dir=\"$(mktemp -d \"$RUNNER_TEMP/velnor-native-image-actions.XXXXXXXX\")\"\nimage_binary=\"$image_binary_dir/velnor-native-image-actions\"\n( set -o noclobber; cat {binary_path} > \"$image_binary\" )\nchmod 0500 \"$image_binary\"\n{export_step}"
     );
     script
 }

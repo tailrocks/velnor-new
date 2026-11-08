@@ -30,6 +30,10 @@ filter = 'package(=velnor-actions-orchestrator) and test(=impl_generate_p09_atom
 priority = 80
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-actions-cli) and binary(=native_image_qualification_public) and test(=real_native_qualification)'
+success-output = "immediate"
+
+[[profile.ci.overrides]]
 filter = 'package(velnor-actions-orchestrator) and test(bench_concurrent_lanes_2_and_4)'
 success-output = "immediate"
 

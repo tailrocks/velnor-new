@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(target_os = "linux")]
+#[path = "native_image_qualification_public/cargo_cache.rs"]
+mod cargo_cache;
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "native_image_qualification_public/service.rs"]
 mod service;
@@ -41,14 +45,7 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
             .arg(&temp);
         command
     };
-    let rejected = bounded(invoke().env("GITHUB_SHA", "invalid-source"), deadline)?;
-    assert_ne!(
-        rejected.status,
-        velnor_actions_mise::BoundedCommandStatus::Exited(0)
-    );
-    assert!(
-        String::from_utf8_lossy(&rejected.stderr).contains("native_qualification_source_identity")
-    );
+    reject_invalid_source(&mut invoke(), deadline)?;
 
     if deadline.saturating_duration_since(std::time::Instant::now())
         < service::CLEANUP_RESERVE + service::START_RESERVE
@@ -67,6 +64,7 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
         "qualification failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    report_archive_reuse(&output.stdout)?;
     let fixture_path = temp
         .join("velnor-native-image-qualification/target/release/velnor-native-image-qualification");
     let fixture = bounded(&mut Command::new(&fixture_path), deadline)?;
@@ -90,6 +88,41 @@ fn real_native_qualification() -> Result<(), Box<dyn std::error::Error>> {
     check_oci(&temp, daemon.container_id()?, &record, deadline)?;
     daemon.verify()?;
     daemon.close()?;
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn reject_invalid_source(
+    command: &mut std::process::Command,
+    deadline: std::time::Instant,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = bounded(command.env("GITHUB_SHA", "invalid-source"), deadline)?;
+    assert_ne!(
+        rejected.status,
+        velnor_actions_mise::BoundedCommandStatus::Exited(0)
+    );
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("native_qualification_source_identity")
+    );
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn report_archive_reuse(bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    for mode in ["workspace", "fixture"] {
+        let prefix = format!("velnor: native archive reuse mode={mode} ");
+        let text = std::str::from_utf8(bytes)?;
+        let lines = text
+            .lines()
+            .filter(|line| line.starts_with(&prefix))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            lines.len(),
+            1,
+            "missing or duplicate {mode} archive-reuse diagnostic"
+        );
+        println!("{}", lines[0]);
+    }
     Ok(())
 }
 

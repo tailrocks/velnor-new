@@ -12,4 +12,5 @@ mise.lock
 mise.toml
 rust-toolchain.toml
 scripts/bootstrap-owned-tool-builder.py
+scripts/native-image-cargo-cache.py
 scripts/owned_tool_source.py
