@@ -72,37 +72,35 @@ pub(crate) fn resolve_task_execution_to(
     validate_runner_temp_path(runner_temp)?;
     validate_run_key(run_key).map_err(internal_contract)?;
     validate_digest(expected_execution_digest).map_err(internal_contract)?;
-    let manifest = read_manifest(root, expected_generator_version)?;
-    let record = unique_record_by_execution_digest(&manifest, expected_execution_digest)?;
-    let task_id = record.task_id.as_str();
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    let producer;
+    let manifest;
+    let (record, entry, plan_task_digest) = if crate::task_producer::is_producer_job(job_id) {
+        producer = crate::task_producer::authorize_producer(
+            &plan,
+            root,
+            job_id.ok_or_else(|| internal("missing_github_job"))?,
+            None,
+            Some(expected_execution_digest),
+            Some(expected_generator_version),
+        )?;
+        (&producer.record, &producer.entry, producer.digest)
+    } else {
+        manifest = read_manifest(root, expected_generator_version)?;
+        let record = unique_record_by_execution_digest(&manifest, expected_execution_digest)?;
+        let (entry, digest) = crate::task_report::entry_and_digest_for_context(
+            &plan, &record.task_id, job_id,
+        )?;
+        (record, entry, digest)
+    };
     let obligation = plan
         .obligations
         .iter()
-        .find(|obligation| obligation.task_id == task_id)
+        .find(|obligation| obligation.task_id == record.task_id)
         .ok_or_else(|| internal("task_without_plan_obligation"))?;
     if obligation.decision != ObligationDecision::Execute {
         return Err(internal("task_not_executable_in_plan"));
     }
-    let producer_entry;
-    let (entry, plan_task_digest) =
-        match crate::task_report::entry_and_digest_for_context(&plan, task_id, job_id) {
-            Ok(result) => result,
-            Err(error) => {
-                let Some(job) = job_id else {
-                    return Err(error);
-                };
-                let (entry, digest) = crate::task_producer::authorize_producer(
-                    &plan,
-                    root,
-                    job,
-                    task_id,
-                    Some(expected_execution_digest),
-                )?;
-                producer_entry = entry;
-                (&producer_entry, digest)
-            }
-        };
     if record.task_digest != plan_task_digest
         || entry.task_digest != plan_task_digest
         || record.matrix_id != entry.id

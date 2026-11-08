@@ -192,6 +192,72 @@ fn reject_bad_source(f: &Fixture, job: &str, task: &str, digest: &str) -> TestRe
     Ok(())
 }
 
+fn immutable_manifest_survives_worktree_changes(
+    f: &Fixture,
+    job: &str,
+    task: &str,
+    digest: &str,
+) -> TestResult {
+    let frame_path = f.temp.path().join("resolved-frame");
+    let resolve = || -> TestResult<Vec<u8>> {
+        let output = f
+            .command(job, task, digest, &f.head, None)?
+            .env("VELNOR_PRODUCER_TEST_FRAME", &frame_path)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(fs::read(&frame_path)?)
+    };
+    let baseline = resolve()?;
+    let path = f
+        .repo
+        .path()
+        .join(velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH);
+    let original = fs::read(&path)?;
+    fs::write(&path, "corrupt")?;
+    for remove in [false, true] {
+        if remove {
+            fs::remove_file(&path)?;
+        }
+        assert_eq!(resolve()?, baseline);
+        let report = f.run(job, task, digest, &f.head, Some("0"))?;
+        assert!(
+            report.status.success(),
+            "{}",
+            String::from_utf8_lossy(&report.stderr)
+        );
+    }
+    for (name, value, expected) in [
+        (
+            "GITHUB_SHA",
+            "0000000000000000000000000000000000000000",
+            "producer_source_mismatch",
+        ),
+        (
+            "GITHUB_EVENT_NAME",
+            "pull_request",
+            "producer_event_not_authorized",
+        ),
+        (
+            "GITHUB_REF_PROTECTED",
+            "false",
+            "producer_event_not_authorized",
+        ),
+    ] {
+        let output = f
+            .command(job, task, digest, &f.head, None)?
+            .env(name, value)
+            .output()?;
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
+    }
+    fs::write(path, original)?;
+    Ok(())
+}
+
 #[test]
 fn producer_tasks_resolve_against_the_real_plan() -> TestResult {
     if std::env::var_os("VELNOR_PRODUCER_TEST_CHILD").is_some() {
@@ -200,10 +266,11 @@ fn producer_tasks_resolve_against_the_real_plan() -> TestResult {
         } else if std::env::var_os("VELNOR_PRODUCER_TEST_WRITE").is_some() {
             assert_eq!(velnor_actions_orchestrator::write_task_report()?, 1);
         } else {
-            assert!(
-                velnor_actions_orchestrator::resolve_task_execution()?
-                    .starts_with(b"VELNOR-TASK-EXECUTION-V1\0")
-            );
+            let frame = velnor_actions_orchestrator::resolve_task_execution()?;
+            assert!(frame.starts_with(b"VELNOR-TASK-EXECUTION-V1\0"));
+            if let Some(path) = std::env::var_os("VELNOR_PRODUCER_TEST_FRAME") {
+                fs::write(path, frame)?;
+            }
         }
         return Ok(());
     }
@@ -213,12 +280,13 @@ fn producer_tasks_resolve_against_the_real_plan() -> TestResult {
         if !both {
             super::producer_execution_limits::event_payload_bounds(&f, &job, &task, &digest)?;
         }
+        immutable_manifest_survives_worktree_changes(&f, &job, &task, &digest)?;
         reject_altered_plans(&f, &job, &task, &digest)?;
         reject_forged_membership(&f, &job, &task, &digest)?;
         reject_bad_source(&f, &job, &task, &digest)?;
         assert_eq!(
             fs::read_dir(f.temp.path().join("velnor-producer-reports"))?.count(),
-            2 * count + usize::from(!both)
+            2 * count + 2 + usize::from(!both)
         );
         assert_eq!(
             fs::read_dir(f.temp.path().join("velnor/r190001-a1"))?.count(),

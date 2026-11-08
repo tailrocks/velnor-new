@@ -85,26 +85,23 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    let producer_entry;
-    let (entry, digest, producer) = match entry_and_digest_for_context(&plan, task_id, job_id) {
-        Ok((entry, digest)) => (entry, digest, false),
-        Err(error) => {
-            let Some(job) = job_id else {
-                return Err(error);
-            };
-            let workspace = env::var_os("GITHUB_WORKSPACE")
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| internal("missing_workspace"))?;
-            let (entry, digest) = crate::task_producer::authorize_producer(
-                &plan,
-                Path::new(&workspace),
-                job,
-                task_id,
-                None,
-            )?;
-            producer_entry = entry;
-            (&producer_entry, digest, true)
-        }
+    let authorization;
+    let (entry, digest, producer) = if crate::task_producer::is_producer_job(job_id) {
+        let workspace = env::var_os("GITHUB_WORKSPACE")
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| internal("missing_workspace"))?;
+        authorization = crate::task_producer::authorize_producer(
+            &plan,
+            Path::new(&workspace),
+            job_id.ok_or_else(|| internal("missing_github_job"))?,
+            Some(task_id),
+            None,
+            None,
+        )?;
+        (&authorization.entry, authorization.digest, true)
+    } else {
+        let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
+        (entry, digest, false)
     };
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));

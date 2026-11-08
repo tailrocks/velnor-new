@@ -10,15 +10,29 @@ use velnor_actions_contract::workflow::{
 };
 use velnor_actions_contract::{canonical_json_bytes, parse_strict_json};
 
+pub(crate) struct ProducerAuthorization<'a> {
+    pub entry: velnor_actions_contract::MatrixEntry,
+    pub digest: &'a str,
+    pub record: velnor_actions_contract::TaskExecutionManifestEntryV1,
+}
+
+pub(crate) fn is_producer_job(job: Option<&str>) -> bool {
+    job.is_some_and(|job| {
+        job.starts_with(velnor_actions_contract::workflow::state_seal::STATE_PRODUCER_JOB_ID_PREFIX)
+    })
+}
+
 pub(crate) fn authorize_producer<'a>(
     plan: &'a velnor_actions_contract::Plan,
     root: &Path,
     job: &str,
-    task: &str,
+    task: Option<&str>,
     digest: Option<&str>,
-) -> Result<(velnor_actions_contract::MatrixEntry, &'a str), OrchestratorError> {
+    generator_version: Option<&str>,
+) -> Result<ProducerAuthorization<'a>, OrchestratorError> {
     validate_producer_context(plan)?;
-    let record = read_authorized_producer(root, &plan.head, job, task, digest)?;
+    let record = read_authorized_producer(root, &plan.head, job, task, digest, generator_version)?;
+    let task = record.task_id.as_str();
     let obligation = plan
         .obligations
         .iter()
@@ -63,7 +77,11 @@ pub(crate) fn authorize_producer<'a>(
             .map_err(internal_contract)?;
     entry.lane_variant = None;
     entry.validate(&plan.run_key).map_err(internal_contract)?;
-    Ok((entry, obligation.task_digest.as_str()))
+    Ok(ProducerAuthorization {
+        entry,
+        digest: obligation.task_digest.as_str(),
+        record,
+    })
 }
 
 fn validate_producer_context(
@@ -105,8 +123,9 @@ fn read_authorized_producer(
     root: &Path,
     head: &str,
     job: &str,
-    task: &str,
+    task: Option<&str>,
     digest: Option<&str>,
+    generator_version: Option<&str>,
 ) -> Result<velnor_actions_contract::TaskExecutionManifestEntryV1, OrchestratorError> {
     let (raw, descriptor_raw) = producer_source_blobs(root, head)?;
     let (marker, body) = raw
@@ -120,6 +139,9 @@ fn read_authorized_producer(
     let manifest: TaskExecutionManifestV1 = serde_json::from_value(value)
         .map_err(|_| internal("unparsable_task_execution_manifest"))?;
     manifest.validate().map_err(internal_contract)?;
+    if generator_version.is_some_and(|version| version != manifest.generator_version) {
+        return Err(internal("task_execution_version_mismatch"));
+    }
     if task_execution_manifest_marker_line(&manifest.generator_version)
         .map_err(internal_contract)?
         != marker
@@ -145,15 +167,28 @@ fn read_authorized_producer(
     {
         return Err(internal("producer_manifest_binding_mismatch"));
     }
-    let authorized = descriptor
+    let records = descriptor
         .producer_tasks
         .get(job)
-        .and_then(|tasks| tasks.get(task))
         .ok_or_else(|| internal("producer_task_not_in_source"))?;
+    let authorized = if let Some(task) = task {
+        records
+            .get(task)
+            .ok_or_else(|| internal("producer_task_not_in_source"))?
+    } else {
+        let digest = digest.ok_or_else(|| internal("producer_execution_digest_missing"))?;
+        records
+            .values()
+            .find(|value| value.as_str() == digest)
+            .ok_or_else(|| internal("producer_task_not_in_source"))?
+    };
     if digest.is_some_and(|digest| digest != authorized) {
         return Err(internal("producer_execution_digest_mismatch"));
     }
     let record = unique_record_by_execution_digest(&manifest, authorized)?.clone();
+    if task.is_some_and(|task| task != record.task_id) {
+        return Err(internal("producer_task_not_in_source"));
+    }
     Ok(record)
 }
 
