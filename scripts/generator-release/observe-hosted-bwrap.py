@@ -149,6 +149,27 @@ def namespace_pid(pid):
     return int(records[0][-1])
 
 
+def process_starttime(pid):
+    try:
+        with open(f'/proc/{pid}/stat', 'rb') as stream:
+            data = stream.read(4097)
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+    if len(data) > 4096 or b') ' not in data:
+        raise ValueError('invalid proc stat')
+    fields = data.rsplit(b') ', 1)[1].split()
+    if len(fields) < 20 or not fields[19].isdigit():
+        raise ValueError('invalid proc starttime')
+    return int(fields[19])
+
+
+def namespace_disappearance(namespace):
+    try:
+        return namespace not in owned_namespaces(), None
+    except PermissionError:
+        return None, 'permission_denied_inconclusive'
+
+
 def read_ready(stream, timeout):
     fd = stream.fileno()
     os.set_blocking(fd, False)
@@ -251,6 +272,11 @@ def observe():
                 result['reason'] = 'setsid_descendant_not_identified'
                 return result
             result['setsid_descendant_identified'] = True
+            leader = leaders[0]
+            starttime = process_starttime(leader)
+            if starttime is None:
+                result['reason'] = 'setsid_descendant_disappeared_before_termination'
+                return result
             PHASE = 'terminate_supervisor'
             os.kill(child.pid, signal.SIGKILL)
             child.wait(timeout=3)
@@ -260,8 +286,12 @@ def observe():
                 time.sleep(0.05)
             result.update(details)
             result['descendants_disappeared'] = not matching_pids(token)
+            result['identified_setsid_process_exited'] = process_starttime(leader) != starttime
+            result['identified_process_scope'] = 'handshaken-setsid-process-only'
             PHASE = 'namespace_scan'
-            result['observed_namespace_disappeared'] = namespace not in owned_namespaces()
+            result['observed_namespace_disappeared'], scan_issue = namespace_disappearance(namespace)
+            if scan_issue is not None:
+                result['namespace_scan'] = scan_issue
             result['unrelated_sentinel_survived'] = sentinel.poll() is None
             result['completed'] = True
             return result

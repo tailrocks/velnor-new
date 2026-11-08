@@ -19,6 +19,10 @@ spec.loader.exec_module(observer)
 
 
 def main():
+    with mock.patch.object(observer, 'owned_namespaces', side_effect=PermissionError):
+        assert observer.namespace_disappearance('pid:[2]') == (None, 'permission_denied_inconclusive')
+    with mock.patch.object(observer, 'owned_namespaces', return_value={'pid:[2]'}):
+        assert observer.namespace_disappearance('pid:[2]') == (False, None)
     stat_data = {
         '/proc/111/stat': b'111 (python) S 1 111 1 0\n',
         '/proc/222/stat': b'222 (python (fork)) S 111 222 222 0\n',
@@ -27,6 +31,27 @@ def main():
         assert observer.session_leaders([111, 222]) == [222]
     with mock.patch('builtins.open', return_value=io.BytesIO(b'Name:\tpython\nNSpid:\t222\t4\n')):
         assert observer.namespace_pid(222) == 4
+    stat_prefix = b'222 (python) S ' + b'1 ' * 18
+    with mock.patch('builtins.open', return_value=io.BytesIO(stat_prefix + b'123\n')):
+        starttime = observer.process_starttime(222)
+        assert starttime == 123
+    with mock.patch('builtins.open', side_effect=FileNotFoundError):
+        assert observer.process_starttime(222) is None
+    with mock.patch('builtins.open', return_value=io.BytesIO(stat_prefix + b'456\n')):
+        assert observer.process_starttime(222) != starttime
+    for payload in (b'bad', stat_prefix + b'bad\n'):
+        with mock.patch('builtins.open', return_value=io.BytesIO(payload)):
+            try:
+                observer.process_starttime(222)
+                raise AssertionError('invalid process starttime accepted')
+            except ValueError:
+                pass
+    with mock.patch('builtins.open', side_effect=PermissionError):
+        try:
+            observer.process_starttime(222)
+            raise AssertionError('inaccessible process identity accepted')
+        except PermissionError:
+            pass
     for payload in (b'Name:\tpython\n', b'NSpid:\t222\tnope\n', b'NSpid:\t1\nNSpid:\t2\n'):
         with mock.patch('builtins.open', return_value=io.BytesIO(payload)):
             try:
@@ -92,12 +117,15 @@ def main():
             mock.patch.object(observer, 'matching_pids', side_effect=[[999, 111, 222], [], []]), \
             mock.patch.object(observer, 'session_leaders', return_value=[222]), \
             mock.patch.object(observer, 'namespace_pid', return_value=4), \
+            mock.patch.object(observer, 'process_starttime', side_effect=[123, None]), \
             mock.patch.object(observer.os, 'readlink', side_effect=lambda path: 'pid:[1]' if str(path) == '/proc/self/ns/pid' else 'pid:[2]'), \
             mock.patch.object(observer, 'owned_namespaces', return_value={'pid:[1]'}), \
             mock.patch.object(observer.os, 'kill') as kill:
         result = observer.observe()
         assert result['completed'] and result['descendants_disappeared']
         assert result['setsid_descendant_identified']
+        assert result['identified_setsid_process_exited']
+        assert result['identified_process_scope'] == 'handshaken-setsid-process-only'
         assert result['unrelated_sentinel_survived'] and not result['cleanup_guaranteed']
         assert result['observed_namespace_disappeared'] and result['bubblewrap_version'] == 'bubblewrap 0.11.0'
         assert result['process_scan_scope'] == 'same-uid-only'
