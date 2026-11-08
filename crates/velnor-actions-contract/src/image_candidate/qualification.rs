@@ -23,6 +23,9 @@ printf '%s\n' docker/ docker/containerd docker/containerd-shim-runc-v2 docker/ct
 cmp /tmp/members /tmp/expected
 tar -tvzf /tmp/docker-private.tgz | awk 'substr($1,1,1) == "-" { n++; next } substr($1,1,1) == "d" { d++; next } { exit 1 } END { if (n != 8 || d != 1) exit 1 }'
 mkdir -m 700 /native /run/velnor-q
+chmod 0755 /native
+chgrp "$2" /run/velnor-q
+chmod 0710 /run/velnor-q
 for member in containerd containerd-shim-runc-v2 ctr docker docker-init docker-proxy dockerd runc; do
   tar -xOzf /tmp/docker-private.tgz "docker/$member" > "/native/$member"
   chmod 0555 "/native/$member"

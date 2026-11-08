@@ -21,6 +21,13 @@ impl IsolatedCommand {
             "--host".into(),
             "unix:///var/run/docker.sock".into(),
             "exec".into(),
+            "--user".into(),
+            format!(
+                "{}:{}",
+                rustix::process::geteuid().as_raw(),
+                rustix::process::getegid().as_raw()
+            )
+            .into(),
         ];
         for (key, value) in &self.extra_env {
             let mut pair = key.clone();

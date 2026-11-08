@@ -175,9 +175,13 @@ fn check_oci(
     record: &velnor_actions_contract::NativeImageQualificationRecord,
     deadline: std::time::Instant,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
+    use std::{fs, os::unix::fs::MetadataExt};
     let archive = temp.join("native-image-qualification.oci.tar");
-    assert_eq!(fs::metadata(&archive)?.len(), record.archive.size_bytes);
+    let metadata = fs::symlink_metadata(&archive)?;
+    assert!(metadata.is_file() && !metadata.file_type().is_symlink());
+    assert_ne!(rustix::process::geteuid().as_raw(), 0);
+    assert_eq!(metadata.uid(), rustix::process::geteuid().as_raw());
+    assert_eq!(metadata.len(), record.archive.size_bytes);
     assert_eq!(hash_file(&archive, deadline)?, record.archive.sha256);
     check_config_blob(&archive, record, deadline)?;
     let config = temp.join(".velnor-job-image-candidate/docker-config");

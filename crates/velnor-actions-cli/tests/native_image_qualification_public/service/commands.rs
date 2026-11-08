@@ -234,8 +234,15 @@ pub(crate) fn private_docker(container_id: &str) -> Result<Command> {
         return Err("invalid daemon container identity".into());
     }
     let mut command = host_docker();
+    let identity = format!(
+        "{}:{}",
+        rustix::process::geteuid().as_raw(),
+        rustix::process::getegid().as_raw()
+    );
     command.args([
         "exec",
+        "--user",
+        &identity,
         container_id,
         "/native/docker",
         "--host",
