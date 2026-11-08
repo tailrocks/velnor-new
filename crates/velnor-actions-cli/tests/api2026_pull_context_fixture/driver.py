@@ -135,7 +135,7 @@ def verify_sources(root, snapshot, entries, patterns=()):
     source_snapshot.verify_snapshot(snapshot, entries, read_tracked)
 
 
-def install_tool(source, target, expected, max_size=MAX_FILE):
+def install_tool(source, target, expected, max_size=MAX_FILE, mode=0o500):
     data = read_regular(source, max_size)
     if hashlib.sha256(data).hexdigest() != expected:
         raise RuntimeError("fixture tool does not match its qualified digest")
@@ -143,12 +143,14 @@ def install_tool(source, target, expected, max_size=MAX_FILE):
     if target.exists():
         if hashlib.sha256(read_regular(target, max_size)).hexdigest() != expected:
             raise RuntimeError("fixture tool cache is corrupt")
+        if stat.S_IMODE(target.stat().st_mode) != mode:
+            raise RuntimeError("fixture tool cache mode is incorrect")
         return
     fd, name = tempfile.mkstemp(dir=target.parent, prefix=".tool-")
     try:
         with os.fdopen(fd, "wb") as output:
             output.write(data)
-        os.chmod(name, 0o500)
+        os.chmod(name, mode)
         os.replace(name, target)
     finally:
         if os.path.exists(name): os.unlink(name)
@@ -401,6 +403,8 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         tools_view = tempfile.TemporaryDirectory(prefix="tools-", dir=cache)
         tools = pathlib.Path(tools_view.name)
+        if signed_controller:
+            tools.chmod(0o711)
         tuf = source_tools / "image-attestation-tuf"
         if kind == "image_publication":
             if not tuf.is_dir():
@@ -413,7 +417,8 @@ def main():
             stage_release_git(source_tools, tools, validation)
         if signed_controller:
             install_tool(source_tools / "release-plz-0.4.3", tools / "signed-controller/release-plz", "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466", 128 * 1024 * 1024)
-            install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024)
+            install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024, 0o444)
+            (tools / "signed-controller").chmod(0o711)
         if source_compiler:
             catalog = read_regular(validation / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
             versions = re.findall(r'pub const MISE_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
