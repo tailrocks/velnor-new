@@ -355,6 +355,9 @@ pub(super) fn verify_after_index_visibility(
 
 thread_local! { pub(super) static FIXTURE_SPARSE_INDEX: RefCell<Option<String>> = const { RefCell::new(None) }; }
 
+#[path = "crate_release_controller_git_fallback.rs"]
+mod git_fallback;
+
 pub(crate) fn configure_test_registry(home: &Path) -> Result<(), OrchestratorError> {
     FIXTURE_SPARSE_INDEX.with(|value| {
         if let Some(url) = value.borrow().as_ref() {
