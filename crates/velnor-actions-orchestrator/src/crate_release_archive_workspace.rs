@@ -30,39 +30,7 @@ pub(super) fn inherited_workspace_metadata(
     )
     .map_err(|_| invalid())?;
     let canonical_root = root.canonicalize().map_err(|_| invalid())?;
-    let workspace = if let Some(relative) = member
-        .get("package")
-        .and_then(|p| p.get("workspace"))
-        .and_then(toml::Value::as_str)
-    {
-        let absolute = root
-            .join(package_dir)
-            .join(relative)
-            .canonicalize()
-            .map_err(|_| invalid())?;
-        let path = absolute
-            .strip_prefix(&canonical_root)
-            .map_err(|_| invalid())?
-            .to_path_buf();
-        let manifest = parse(&path.join("Cargo.toml"))?;
-        if manifest.get("workspace").is_none_or(|v| !v.is_table()) {
-            return Err(invalid());
-        }
-        Some((path, manifest))
-    } else {
-        let mut found = None;
-        for ancestor in package_dir.ancestors() {
-            let candidate = ancestor.join("Cargo.toml");
-            if candidate.to_str().is_some_and(|name| files.contains(name)) {
-                let manifest = parse(&candidate)?;
-                if manifest.get("workspace").is_some_and(toml::Value::is_table) {
-                    found = Some((ancestor.to_path_buf(), manifest));
-                    break;
-                }
-            }
-        }
-        found
-    };
+    let workspace = find_workspace(root, package_dir, files, &member, &parse)?;
     let Some((workspace_dir, workspace)) = workspace else {
         return Ok(None);
     };
@@ -110,4 +78,49 @@ pub(super) fn inherited_workspace_metadata(
         return Ok(Some(relative));
     }
     Ok(None)
+}
+
+fn find_workspace(
+    root: &std::path::Path,
+    package_dir: &std::path::Path,
+    files: &std::collections::BTreeSet<String>,
+    member: &toml::Value,
+    parse: &impl Fn(&std::path::Path) -> Result<toml::Value, OrchestratorError>,
+) -> Result<Option<(std::path::PathBuf, toml::Value)>, OrchestratorError> {
+    let invalid = || internal("crate_archive_source_evidence_invalid");
+    let canonical_root = root.canonicalize().map_err(|_| invalid())?;
+    let workspace = if let Some(relative) = member
+        .get("package")
+        .and_then(|p| p.get("workspace"))
+        .and_then(toml::Value::as_str)
+    {
+        let absolute = root
+            .join(package_dir)
+            .join(relative)
+            .canonicalize()
+            .map_err(|_| invalid())?;
+        let path = absolute
+            .strip_prefix(&canonical_root)
+            .map_err(|_| invalid())?
+            .to_path_buf();
+        let manifest = parse(&path.join("Cargo.toml"))?;
+        if manifest.get("workspace").is_none_or(|v| !v.is_table()) {
+            return Err(invalid());
+        }
+        Some((path, manifest))
+    } else {
+        let mut found = None;
+        for ancestor in package_dir.ancestors() {
+            let candidate = ancestor.join("Cargo.toml");
+            if candidate.to_str().is_some_and(|name| files.contains(name)) {
+                let manifest = parse(&candidate)?;
+                if manifest.get("workspace").is_some_and(toml::Value::is_table) {
+                    found = Some((ancestor.to_path_buf(), manifest));
+                    break;
+                }
+            }
+        }
+        found
+    };
+    Ok(workspace)
 }

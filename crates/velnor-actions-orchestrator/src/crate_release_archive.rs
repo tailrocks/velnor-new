@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{OrchestratorError, internal::internal};
-use flate2::bufread::GzDecoder;
 use std::{
     collections::BTreeMap,
     io::{Cursor, Read},
@@ -26,7 +25,13 @@ pub fn verify_archive_tracked_content(
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     verify_archive_tracked_content_inner(
-        archive, root, source_sha, manifest, package, version, git, false,
+        archive,
+        root,
+        source_sha,
+        manifest,
+        (package, version),
+        git,
+        false,
     )
 }
 
@@ -40,7 +45,13 @@ pub(crate) fn verify_reconstructed_archive_tracked_content(
     git: &crate::crate_release_git::ReleaseGit,
 ) -> Result<(), OrchestratorError> {
     verify_archive_tracked_content_inner(
-        archive, root, source_sha, manifest, package, version, git, true,
+        archive,
+        root,
+        source_sha,
+        manifest,
+        (package, version),
+        git,
+        true,
     )
 }
 
@@ -49,12 +60,11 @@ fn verify_archive_tracked_content_inner(
     root: &std::path::Path,
     source_sha: &str,
     manifest: &str,
-    package: &str,
-    version: &str,
+    package_version: (&str, &str),
     git: &crate::crate_release_git::ReleaseGit,
     generated_lock: bool,
 ) -> Result<(), OrchestratorError> {
-    let invalid = || internal("crate_archive_source_evidence_invalid");
+    let (package, version) = package_version;
     let package_dir = source_package_dir(manifest, package, version)?;
     crate::verify_crate_release_source(root, source_sha, git)?;
     let files = tracked_paths(root, git)?;
@@ -75,61 +85,87 @@ fn verify_archive_tracked_content_inner(
         ) {
             continue;
         }
-        let local = package_dir.join(path);
-        let local = local.to_str().ok_or_else(invalid)?;
-        let relative = if files.contains(local) {
-            local.to_owned()
-        } else if generated_lock && path == "Cargo.lock" && *mode == 0 {
-            continue;
-        } else {
-            inherited_workspace_metadata(root, package_dir, &files, &archive, path)?
-                .ok_or_else(invalid)?
-        };
-        let path = root.join(&relative);
-        let source_relative = if std::fs::symlink_metadata(&path)
-            .map_err(|_| invalid())?
-            .file_type()
-            .is_symlink()
-        {
-            let canonical_root = root.canonicalize().map_err(|_| invalid())?;
-            let target = path.canonicalize().map_err(|_| invalid())?;
-            let target = target
-                .strip_prefix(canonical_root)
-                .map_err(|_| invalid())?
-                .to_str()
-                .ok_or_else(invalid)?;
-            if !files.contains(target) {
-                return Err(invalid());
-            }
-            target.to_owned()
-        } else {
-            relative
-        };
-        let source =
-            match crate::safe_read::read_repo_bytes(root, &source_relative, MAX_ARCHIVE as u64)? {
-                crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
-                crate::safe_read::RepoBytes::Absent => return Err(invalid()),
-            };
-        let metadata =
-            std::fs::symlink_metadata(root.join(source_relative)).map_err(|_| invalid())?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            if (metadata.permissions().mode() & 0o111 != 0) != (*mode != 0) {
-                return Err(invalid());
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = (metadata, mode);
-            return Err(invalid());
-        }
-        if source != *contents {
-            return Err(invalid());
-        }
+        verify_archive_file(
+            root,
+            package_dir,
+            &files,
+            &archive,
+            path,
+            (*mode, contents),
+            generated_lock,
+        )?;
     }
     crate::verify_crate_release_source(root, source_sha, git)
 }
+
+fn verify_archive_file(
+    root: &std::path::Path,
+    package_dir: &std::path::Path,
+    files: &std::collections::BTreeSet<String>,
+    archive: &ArchiveFiles,
+    path: &str,
+    entry: (u32, &[u8]),
+    generated_lock: bool,
+) -> Result<(), OrchestratorError> {
+    let invalid = || internal("crate_archive_source_evidence_invalid");
+    let (mode, contents) = entry;
+    let local = package_dir.join(path);
+    let local = local.to_str().ok_or_else(invalid)?;
+    let relative = if files.contains(local) {
+        local.to_owned()
+    } else if generated_lock && path == "Cargo.lock" && mode == 0 {
+        return Ok(());
+    } else {
+        inherited_workspace_metadata(root, package_dir, files, archive, path)?
+            .ok_or_else(invalid)?
+    };
+    let path = root.join(&relative);
+    let source_relative = if std::fs::symlink_metadata(&path)
+        .map_err(|_| invalid())?
+        .file_type()
+        .is_symlink()
+    {
+        let canonical_root = root.canonicalize().map_err(|_| invalid())?;
+        let target = path.canonicalize().map_err(|_| invalid())?;
+        let target = target
+            .strip_prefix(canonical_root)
+            .map_err(|_| invalid())?
+            .to_str()
+            .ok_or_else(invalid)?;
+        if !files.contains(target) {
+            return Err(invalid());
+        }
+        target.to_owned()
+    } else {
+        relative
+    };
+    let source =
+        match crate::safe_read::read_repo_bytes(root, &source_relative, MAX_ARCHIVE as u64)? {
+            crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
+            crate::safe_read::RepoBytes::Absent => return Err(invalid()),
+        };
+    let metadata = std::fs::symlink_metadata(root.join(source_relative)).map_err(|_| invalid())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if (metadata.permissions().mode() & 0o111 != 0) != (mode != 0) {
+            return Err(invalid());
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (metadata, mode);
+        return Err(invalid());
+    }
+    if source != contents {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+#[path = "crate_release_archive_decompress.rs"]
+mod decompress;
+use decompress::decompress_archive;
 
 #[path = "crate_release_archive_workspace.rs"]
 mod workspace;
@@ -256,18 +292,7 @@ pub(crate) fn read_archive(bytes: &[u8], prefix: &str) -> Result<ArchiveFiles, O
     if bytes.is_empty() || bytes.len() > MAX_ARCHIVE {
         return Err(internal("crate_archive_size_invalid"));
     }
-    let mut decoder = GzDecoder::new(Cursor::new(bytes));
-    let mut uncompressed = Vec::new();
-    decoder
-        .by_ref()
-        .take(MAX_UNPACKED + 1)
-        .read_to_end(&mut uncompressed)
-        .map_err(|_| internal("crate_archive_gzip_invalid"))?;
-    if uncompressed.len() as u64 > MAX_UNPACKED
-        || decoder.into_inner().position() != bytes.len() as u64
-    {
-        return Err(internal("crate_archive_gzip_trailing_or_large"));
-    }
+    let uncompressed = decompress_archive(bytes)?;
     let mut archive = tar::Archive::new(Cursor::new(&uncompressed));
     let entries = archive
         .entries()
