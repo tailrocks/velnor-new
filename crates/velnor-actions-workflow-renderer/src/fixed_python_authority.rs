@@ -26,37 +26,45 @@ pub(crate) fn materialize_steps(
     environment: &'static str,
     name: &'static str,
 ) -> Vec<Yaml> {
-    let initialize = format!(
-        "set -euo pipefail\numask 077\ndir=\"$(mktemp -d \"$RUNNER_TEMP/{prefix}.XXXXXXXX\")\"\nchmod 0700 \"$dir\"\nprintf '{environment}=%s\\n' \"$dir\" >> \"$GITHUB_ENV\"\n"
-    );
-    let mut result = vec![step(name.to_owned(), initialize)];
+    let mut result = Vec::new();
     for file in files {
-        let chunks = file.source.as_bytes().chunks(12_000);
+        let encoded = STANDARD.encode(file.source.as_bytes());
+        let chunks = encoded.as_bytes().chunks(20_000);
         let total = chunks.len();
         for (index, chunk) in chunks.enumerate() {
-            let redirect = if index == 0 { ">" } else { ">>" };
-            let encoded = STANDARD.encode(chunk);
-            let mut run = format!(
-                "set -euo pipefail\nset -C\n/usr/bin/python3 -I -S -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.argv[1], validate=True))' '{encoded}' {redirect} \"${environment}/{}\"\n",
+            let mut run = if result.is_empty() {
+                format!(
+                    "set -euo pipefail\numask 077\ndir=\"$(mktemp -d \"$RUNNER_TEMP/{prefix}.XXXXXXXX\")\"\nchmod 0700 \"$dir\"\nexport {environment}=\"$dir\"\nprintf '{environment}=%s\\n' \"$dir\" >> \"$GITHUB_ENV\"\n"
+                )
+            } else {
+                "set -euo pipefail\numask 077\n".to_owned()
+            };
+            let redirect = if index == 0 { "set -C\n" } else { "" };
+            let operation = if index == 0 { ">" } else { ">>" };
+            let chunk = String::from_utf8_lossy(chunk);
+            run = format!(
+                "{run}{redirect}printf '%s' '{chunk}' {operation} \"${environment}/{}.b64\"\n",
                 file.path
             );
             if index + 1 == total {
-                run.push_str("chmod 0400 \"$");
-                run.push_str(environment);
-                run.push('/');
-                run.push_str(file.path);
-                run.push_str("\"\n");
+                run = format!(
+                    "{run}/usr/bin/python3 -I -S -c 'import base64,sys; data=base64.b64decode(sys.stdin.buffer.read(), validate=True); open(sys.argv[1], \"xb\").write(data)' \"${environment}/{}\" < \"${environment}/{}.b64\"\nchmod 0400 \"${environment}/{}\"\nrm \"${environment}/{}.b64\"\n",
+                    file.path, file.path, file.path, file.path
+                );
             }
-            result.push(step(
+            let step_name = if result.is_empty() {
+                name.to_owned()
+            } else {
                 format!(
                     "Write fixed authority source {} ({}/{total})",
                     file.path,
                     index + 1
-                ),
-                run,
-            ));
+                )
+            };
+            result.push(step(step_name, run));
         }
     }
+
     result
 }
 

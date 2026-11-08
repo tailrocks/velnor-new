@@ -164,3 +164,6 @@ fn unsupported_oversized_scripts_are_rejected() {
         assert!(error.to_string().contains(expected));
     }
 }
+
+#[path = "bounded_script_adversarial.rs"]
+mod adversarial;

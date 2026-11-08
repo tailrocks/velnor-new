@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use base64::{Engine, engine::general_purpose::STANDARD};
-use std::error::Error;
+use std::{error::Error, fs, process::Command};
 
 type PrepareScript = (String, String, Vec<String>, Vec<String>);
 
@@ -24,24 +23,12 @@ pub(super) fn extract_prepare_script(workflow: &str) -> Result<PrepareScript, Bo
         .rsplit("name: Materialize fixed script")
         .next()
         .ok_or("missing materializer")?;
-    let mut bytes = Vec::new();
-    let mut materializers = Vec::new();
-    for line in group
+    let materializers = group
         .lines()
         .filter_map(|line| line.trim_start().strip_prefix("run: "))
-    {
-        let run: String = serde_json::from_str(line)?;
-        if let Some((_, tail)) = run.split_once("validate=True))' ") {
-            let encoded = tail
-                .strip_prefix('\'')
-                .and_then(|rest| rest.split_once('\''))
-                .map(|(chunk, _)| chunk)
-                .ok_or("invalid chunk")?;
-            bytes.extend(STANDARD.decode(encoded)?);
-        }
-        materializers.push(run);
-    }
-    let script = String::from_utf8(bytes)?;
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<String>, _>>()?;
+    let script = execute_materializers(&materializers)?;
     let expected_line = script
         .lines()
         .find(|line| line.starts_with("readonly prepare_expected_assets='"))
@@ -78,4 +65,33 @@ pub(super) fn check_project_tool_binding(
     assert!(script.contains("\"${VELNOR_TOOL_RUST}\""));
     assert!(script.contains("\"${VELNOR_TOOL_MR_BOXINGTON}\""));
     Ok(())
+}
+
+fn execute_materializers(runs: &[String]) -> Result<String, Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let env_file = temp.path().join("env");
+    fs::write(&env_file, "")?;
+    let mut directory = String::new();
+    for run in runs {
+        let output = Command::new("/bin/bash")
+            .args(["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", run])
+            .env("RUNNER_TEMP", temp.path())
+            .env("GITHUB_ENV", &env_file)
+            .env("VELNOR_FIXED_SCRIPT_DIR", &directory)
+            .output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "materializer failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        if let Some(value) = fs::read_to_string(&env_file)?
+            .lines()
+            .find_map(|line| line.strip_prefix("VELNOR_FIXED_SCRIPT_DIR="))
+        {
+            value.clone_into(&mut directory);
+        }
+    }
+    Ok(fs::read_to_string(format!("{directory}/script.sh"))?)
 }
