@@ -173,11 +173,14 @@ fn rendered_source_fetch_writes_the_runtime_path_and_rejects_invalid_responses()
     fs::create_dir(&untrusted)?;
     let untrusted_temp = untrusted.join("runner");
     fs::create_dir(&untrusted_temp)?;
+    fs::create_dir(untrusted_temp.join("velnor-gh-bootstrap-path"))?;
     stage_external_api(&untrusted, false)?;
     let untrusted_output = execute_step(&step, &untrusted, &untrusted_temp, false)?;
     assert_ne!(untrusted_output.status, BoundedCommandStatus::Exited(0));
     assert!(
-        String::from_utf8_lossy(&untrusted_output.stderr).contains("verified_gh_bootstrap_failed")
+        String::from_utf8_lossy(&untrusted_output.stderr).contains("velnor-gh-bootstrap-path"),
+        "{}",
+        String::from_utf8_lossy(&untrusted_output.stderr)
     );
     assert!(!untrusted.join("api/invoked").exists());
     assert!(
