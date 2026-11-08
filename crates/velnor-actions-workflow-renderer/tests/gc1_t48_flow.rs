@@ -168,12 +168,12 @@ pub(crate) fn check_flow_rejects_missing_fragment(fixture: &Fixture) -> Result<(
 
 #[test]
 fn gc1_t48_preserves_contract() -> Result<(), Box<dyn Error>> {
-    let text = candidate_text()?;
+    let text = crate::bounded_test_support::expose_materialized_sources(&candidate_text()?)?;
     check_producer_job_kept(&text)?;
     check_attest_data_only(&text)?;
     check_publish_data_only(&text)?;
     check_shared_counts(&text)?;
-    let again = candidate_text()?;
+    let again = crate::bounded_test_support::expose_materialized_sources(&candidate_text()?)?;
     if text != again {
         return Err(fail("authority render drifted between renders"));
     }

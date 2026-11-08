@@ -41,6 +41,7 @@ mod document_steps;
 mod error;
 mod expressions;
 mod final_steps;
+mod fixed_python_authority;
 pub mod freshness;
 pub mod guard;
 mod homebrew_adoption_seed;
