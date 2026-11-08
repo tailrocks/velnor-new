@@ -164,6 +164,43 @@ impl FamilyFixture {
         self.members[0].read_github_state()
     }
 
+    pub(crate) fn replace_runner_record(&self, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
+        let record_sha256 = super::hex(&Sha256::digest(bytes));
+        fs::write(self.assets.join("runner-image-publication.json"), bytes)?;
+        let proof_path = self.members[0]
+            .qualification_proof
+            .as_ref()
+            .ok_or("family proof")?;
+        let mut proof: Value = serde_json::from_slice(&fs::read(proof_path)?)?;
+        proof["images"]["runner"]["record_sha256"] = json!(record_sha256);
+        let proof_bytes = serde_json::to_vec(&proof)?;
+        fs::write(proof_path, &proof_bytes)?;
+        let proof_sha256 = super::hex(&Sha256::digest(&proof_bytes));
+        self.members[0].update_github_state(|state| {
+            let record_subject =
+                state["attestation"][0]["verificationResult"]["statement"]["subject"]
+                    .as_array_mut()
+                    .and_then(|subjects| {
+                        subjects
+                            .iter_mut()
+                            .find(|subject| subject["name"] == "runner-image-publication.json")
+                    })
+                    .ok_or("runner record attestation subject")?;
+            record_subject["digest"]["sha256"] = json!(record_sha256);
+            let proof_subject =
+                state["qualification_attestation"][0]["verificationResult"]["statement"]["subject"]
+                    .as_array_mut()
+                    .and_then(|subjects| {
+                        subjects
+                            .iter_mut()
+                            .find(|subject| subject["name"] == "RUNNER_IMAGE_QUALIFICATION.json")
+                    })
+                    .ok_or("runner qualification attestation subject")?;
+            proof_subject["digest"]["sha256"] = json!(proof_sha256);
+            Ok(())
+        })
+    }
+
     pub(crate) fn mutate(&self, change: impl FnOnce(&mut Value)) -> Result<(), Box<dyn Error>> {
         self.members[0].update_github_state(|state| {
             change(state);

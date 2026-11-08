@@ -5,20 +5,14 @@ use std::path::Path;
 
 use crate::error::HostError;
 
+mod exact_semver;
 mod files;
 mod manifest;
 pub(crate) mod runner_manifest;
 pub(crate) mod runner_qualification;
 mod schema5;
 
-fn is_exact_semver(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts.iter().all(|part| {
-            !(part.is_empty() || part.len() > 1 && part.starts_with('0'))
-                && part.bytes().all(|byte| byte.is_ascii_digit())
-        })
-}
+use exact_semver::is_exact_semver;
 
 pub fn validate_smoke(output: &Path, root: &Path) -> Result<(), HostError> {
     schema5::validate(output, root)

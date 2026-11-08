@@ -206,16 +206,24 @@ fn rejects_malformed_family_records_before_registry_writes() -> Result<(), Box<d
             serde_json::to_string(&record)?
         };
         assert_ne!(malformed, original);
-        fs::write(&path, &malformed)?;
+        fixture.replace_runner_record(malformed.as_bytes())?;
         let before = fixture.state()?;
         let rejected = fixture.invoke(false)?;
+        let after = fixture.state()?;
+        let registries_written = after["registries"]
+            .as_object()
+            .ok_or("registries")?
+            .values()
+            .filter(|registry| !registry["remote"].is_null())
+            .count();
         assert!(
             !rejected.status.success(),
-            "accepted malformed family record"
+            "accepted malformed family record; manifest_exists={}; registries_written={registries_written}",
+            fixture.manifest.exists(),
         );
         assert!(!fixture.manifest.exists());
         assert_eq!(fs::read_to_string(&path)?, malformed);
-        assert_registry_unchanged(&before, &fixture.state()?)?;
+        assert_registry_unchanged(&before, &after)?;
     }
     Ok(())
 }

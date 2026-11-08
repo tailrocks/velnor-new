@@ -30,6 +30,10 @@ name = "registry_journal_public"
 path = "tests/registry_journal_public.rs"
 
 [[test]]
+name = "runner_manifest_admission_public"
+path = "tests/runner_manifest_admission_public.rs"
+
+[[test]]
 name = "scaleset_installation_public"
 path = "tests/scaleset_installation_public.rs"
 
