@@ -54,6 +54,40 @@ packages = ["velnor-actions-cli"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = [
+  ".velnor/config.toml",
+  ".velnor/controller-approvals.json",
+  ".velnor/generator.lock",
+  ".velnor/mise.lock",
+  ".velnor/mise.toml",
+  ".velnor/runner.lock",
+  ".velnor/rust-toolchain.toml",
+  "images/runner/ubuntu-26.04/Dockerfile",
+  "mise.lock",
+  "rust-toolchain.toml",
+]
+packages = ["velnor-actions-cli"]
+
+[[stacks.rust.inputs]]
+globs = [
+  "crates/test_support/controller_approval_074.json",
+  "crates/test_support/generator_074.lock",
+  "crates/test_support/root_cargo_lock.rs",
+]
+packages = ["velnor-actions-cli", "velnor-actions-orchestrator"]
+
+[[stacks.rust.inputs]]
+globs = [".velnor/generator.lock"]
+packages = ["velnor-actions-mise"]
+
+[[stacks.rust.inputs]]
+globs = [
+  "images/dind/Dockerfile",
+  "images/runner/ubuntu-26.04/Dockerfile",
+]
+packages = ["velnor-actions-orchestrator"]
+
+[[stacks.rust.inputs]]
 globs = ["crates/velnor-actions-contract/**"]
 packages = ["velnor-actions-contract"]
 complete = true
