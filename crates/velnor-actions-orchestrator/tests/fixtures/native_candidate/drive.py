@@ -55,7 +55,8 @@ def assert_pending_upload(info, state, runner):
         "run_id": 12,
         "run_attempt": 1,
     }
-    assert started["schema"] == pending["schema"] == 1
+    assert started["schema"] == pending["schema"] == 2
+    assert [p["tag_target"] for p in started["receipt"]["packages"]] == [info["source_sha"]]
     assert started["identity"] == pending["identity"] == identity
     assert started["stage"] == "started" and started["completion"] is None
     assert pending["receipt"] == started["receipt"]
@@ -612,7 +613,9 @@ try:
                                 "source_sha": info["source_sha"], "run_id": 13, "run_attempt": 1}
             prior_identity = {"repository": info["repository"], "workflow_sha": info["workflow_sha"],
                               "source_sha": info["source_sha"], "run_id": 12, "run_attempt": 1}
-            assert prior["schema"] == completed["schema"] == 1
+            assert prior["schema"] == completed["schema"] == 2
+            assert [p["tag_target"] for p in prior["receipt"]["packages"]] == [info["source_sha"]]
+            assert [p["tag_target"] for p in completed["receipt"]["packages"]] == [info["source_sha"]]
             assert prior["stage"] == "started" and prior["identity"] == prior_identity
             assert completed["stage"] == "completed" and completed["identity"] == current_identity
             assert completed["receipt"]["identity"] == current_identity
