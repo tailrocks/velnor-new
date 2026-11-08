@@ -252,6 +252,7 @@ def main():
         raise RuntimeError("fixture scenario does not belong to target")
     package, test_target = targets[kind]
     image_attestation_tests = {
+        "crate_release_controller::tests::capacity::overflow::signed_start_rejects_oversized_observation_without_journal_writes",
         "release::package_release_signer::attestation::image_transport_tests::same_base_history_rejects_forged_tool",
         "release::package_release_signer::attestation::image_transport_tests::signed_controller_dispatch_rechecks_historical_authority",
         "release::package_release_signer::attestation::image_transport_tests::historical_release_assets_use_pinned_github_transport",
