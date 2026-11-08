@@ -4,7 +4,10 @@
 use super::*;
 use std::{
     os::unix::fs::{MetadataExt, PermissionsExt},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
 };
 
 pub(super) fn mutate_readonly_context(path: &Path) -> Result<(), Box<dyn Error>> {
@@ -158,29 +161,138 @@ fn destination_created_during_build_is_never_replaced() -> Result<(), Box<dyn Er
     })
 }
 
+#[derive(Default)]
+struct PublicationGate {
+    state: Mutex<PublicationGateState>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct PublicationGateState {
+    second_build_complete: bool,
+    release_second: bool,
+}
+
+impl PublicationGate {
+    fn wait_for_second_build(&self, timeout: Duration) -> bool {
+        let Ok(state) = self.state.lock() else {
+            return false;
+        };
+        self.changed
+            .wait_timeout_while(state, timeout, |state| !state.second_build_complete)
+            .is_ok_and(|(state, _)| state.second_build_complete)
+    }
+
+    fn hold_second_until_release(&self) -> Result<(), MiseError> {
+        let mut state = self.state.lock().map_err(|_| Self::gate_error())?;
+        state.second_build_complete = true;
+        self.changed.notify_all();
+        let (state, _) = self
+            .changed
+            .wait_timeout_while(state, Duration::from_secs(20), |state| {
+                !state.release_second
+            })
+            .map_err(|_| Self::gate_error())?;
+        if state.release_second {
+            Ok(())
+        } else {
+            Err(Self::gate_error())
+        }
+    }
+
+    fn release(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.release_second = true;
+            self.changed.notify_all();
+        }
+    }
+
+    fn gate_error() -> MiseError {
+        MiseError::SpawnFailed {
+            program: "fixture publication gate".into(),
+            message: "timed out or poisoned".into(),
+        }
+    }
+}
+
+struct ReleaseSecond(Arc<PublicationGate>);
+
+impl Drop for ReleaseSecond {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
+struct GatedBuildx {
+    inner: ExternalBuildx,
+    gate: Arc<PublicationGate>,
+}
+
+impl RunnerImageBuildExecution for GatedBuildx {
+    fn run(
+        &self,
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        let output = self.inner.run(command, deadline)?;
+        if command
+            .argv()
+            .iter()
+            .any(|argument| argument == "velnor-resource-probe:linux-amd64")
+        {
+            self.gate.hold_second_until_release()?;
+        }
+        Ok(output)
+    }
+}
+
 #[test]
 fn concurrent_builds_publish_exactly_one_complete_family() -> Result<(), Box<dyn Error>> {
     frozen_clock(|| {
-        let fixture = Fixture::new()?;
-        let first_request = fixture.request()?;
-        let second_request = fixture.request()?;
+        let first_fixture = Fixture::new()?;
+        let second_fixture = Fixture::new()?;
+        assert_ne!(first_fixture.contexts, second_fixture.contexts);
+        let first_request = first_fixture.request()?;
+        let mut second_request = second_fixture.request()?;
+        second_request.output_dir = first_fixture.output.clone();
+        let gate = Arc::new(PublicationGate::default());
         std::thread::scope(|scope| -> Result<(), Box<dyn Error>> {
+            let _release = ReleaseSecond(Arc::clone(&gate));
             let first = scope.spawn(|| {
                 frozen_clock(|| {
-                    build_runner_images_with_execution(&first_request, &fixture.execution())
+                    build_runner_images_with_execution(&first_request, &first_fixture.execution())
                 })
             });
-            let second = scope.spawn(|| {
+            let second_gate = Arc::clone(&gate);
+            let second = scope.spawn(move || {
                 frozen_clock(|| {
-                    build_runner_images_with_execution(&second_request, &fixture.execution())
+                    let execution = GatedBuildx {
+                        inner: second_fixture.execution(),
+                        gate: second_gate,
+                    };
+                    build_runner_images_with_execution(&second_request, &execution)
                 })
             });
+            let second_build_complete = gate.wait_for_second_build(Duration::from_secs(15));
             let first = first.join().map_err(|_| "first thread panicked")?;
+            gate.release();
             let second = second.join().map_err(|_| "second thread panicked")?;
-            assert_ne!(first.is_ok(), second.is_ok(), "{first:?} {second:?}");
+            assert!(
+                second_build_complete,
+                "second Buildx did not finish valid external work"
+            );
+            assert!(first.is_ok(), "first publication failed: {first:?}");
+            let second_error = match second {
+                Ok(()) => return Err("second build replaced a complete published family".into()),
+                Err(error) => error,
+            };
+            assert!(
+                second_error.to_string().contains("runner_builder_publish"),
+                "{second_error}"
+            );
             Ok(())
         })?;
-        assert_eq!(fs::read_dir(&fixture.output)?.count(), 10);
+        assert_eq!(fs::read_dir(&first_fixture.output)?.count(), 10);
         for name in [
             "velnor-runner-linux-amd64.tar",
             "velnor-dind-linux-amd64.tar",
@@ -193,14 +305,17 @@ fn concurrent_builds_publish_exactly_one_complete_family() -> Result<(), Box<dyn
             "job_start_hook",
             "job_started_hook",
         ] {
-            assert!(fixture.output.join(name).is_file(), "missing {name}");
+            assert!(first_fixture.output.join(name).is_file(), "missing {name}");
         }
         assert!(
-            !fs::read_dir(fixture.output.parent().ok_or("output parent")?)?.any(|entry| entry
-                .is_ok_and(|entry| entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".velnor-runner-author-")))
+            !fs::read_dir(first_fixture.output.parent().ok_or("output parent")?)?.any(|entry| {
+                entry.is_ok_and(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".velnor-runner-author-")
+                })
+            })
         );
         Ok(())
     })
