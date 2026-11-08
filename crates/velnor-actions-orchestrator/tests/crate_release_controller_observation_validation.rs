@@ -93,6 +93,7 @@ pub(super) fn fixture_journal_plan(
     let mut base_intent = intent.clone();
     base_intent.journal_predecessor = None;
     base_intent.recovery = None;
+    base_intent.continuation_source_sha = None;
     let base_intent_sha256 = test_hex(&Sha256::digest(
         velnor_actions_contract::canonical_json_bytes(&base_intent)?,
     ));

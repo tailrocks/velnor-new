@@ -13,6 +13,7 @@ pub(crate) fn exercise() -> Result<(), Box<dyn Error>> {
     exercise_case("push", 0, false)?;
     exercise_case("workflow_dispatch", 0, true)?;
     creation::exercise()?;
+    workspace::exercise()?;
     Ok(())
 }
 
@@ -124,6 +125,7 @@ pub(crate) fn run_child() -> Result<(), Box<dyn Error>> {
     use crate::release::package_release_signer::AdmittedStart;
     match std::env::var("VELNOR_CONTROLLER_RECOVERY_CASE") {
         Ok(case) if case == "creation" => return creation::run_child(),
+        Ok(case) if case == "workspace" => return workspace::run_child(),
         Err(std::env::VarError::NotPresent) => {}
         _ => return Err("invalid signed recovery case".into()),
     }
@@ -247,3 +249,5 @@ use verify::*;
 mod creation;
 #[path = "crate_release_controller_signed_history_recovery.rs"]
 mod recovery;
+#[path = "crate_release_controller_signed_history_workspace.rs"]
+mod workspace;
