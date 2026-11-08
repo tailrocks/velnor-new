@@ -70,7 +70,7 @@ const REAL_DIR: &str = "real() { if [ -e \"$1\" ] || [ -L \"$1\" ]; then { [ -d 
 
 const GET: &str = "get() { ev curl -q --proto \"=https\" --proto-redir \"=https\" --tlsv1.2 --fail --silent --show-error --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 --retry-max-time 180 --output \"$1\" \"$2\"; }";
 
-const PUT: &str = "put() { [ ! -d \"$2\" ] && ev rm -f \"$2.new\" && ev cp \"$1\" \"$2.new\" && ev chmod 0644 \"$2.new\" && ev mv -f \"$2.new\" \"$2\" || { ev rm -f \"$2.new\"; return 1; }; }";
+const PUT: &str = r#"put() { [ ! -d "$2" ] || return 1; ev mktemp "$2.XXXXXXXX" > "$d/put-path" || return 1; IFS= read -r put_tmp < "$d/put-path" || return 1; ev cp "$1" "$put_tmp" && ev chmod 0644 "$put_tmp" && ev mv -f "$put_tmp" "$2" || { ev rm -f "$put_tmp"; return 1; }; }"#;
 
 const CHANNEL_SHA_OK: &str = "channel_ok() { printf \"%s  %s\\n\" \"$want\" \"$d/channel.toml\" > \"$d/channel.sha256\"; $h -c \"$d/channel.sha256\" >/dev/null 2>&1; }";
 
@@ -320,6 +320,93 @@ mod archive_cache_tests {
         result?;
         assert!(!cache.join("digest.tar.xz").exists());
         assert_eq!(fs::read_dir(&cache)?.count(), 0);
+        Ok(())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod manifest_write_tests {
+    use super::PUT;
+    use std::{error::Error, fs, process::Command};
+
+    #[test]
+    fn concurrent_manifest_writers_preserve_verified_bytes_and_clean_up()
+    -> Result<(), Box<dyn Error>> {
+        let root = tempfile::tempdir()?;
+        let source = root.path().join("channel.toml");
+        let destination = root.path().join("installed.toml");
+        let gate = root.path().join("start");
+        let bytes = vec![b'x'; 4 * 1024 * 1024];
+        fs::write(&source, &bytes)?;
+        let script = format!(
+            "set -eu; ev() {{ /usr/bin/env \"$@\"; }}; {PUT}; while [ ! -f \"$gate\" ]; do sleep 0.01; done; put \"$source\" \"$destination\""
+        );
+        let mut children = Vec::new();
+        for index in 0..8 {
+            let work = root.path().join(format!("work-{index}"));
+            fs::create_dir(&work)?;
+            children.push(
+                Command::new("/bin/sh")
+                    .arg("-c")
+                    .arg(&script)
+                    .env("d", work)
+                    .env("source", &source)
+                    .env("destination", &destination)
+                    .env("gate", &gate)
+                    .spawn()?,
+            );
+        }
+        fs::write(&gate, b"start")?;
+        for mut child in children {
+            assert!(child.wait()?.success());
+        }
+        assert_eq!(fs::read(&destination)?, bytes);
+        assert_eq!(
+            fs::read_dir(root.path())?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("installed.toml."))
+                .count(),
+            0
+        );
+        fs::remove_file(&destination)?;
+        fs::create_dir(&destination)?;
+        let status = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(&script)
+            .env("d", root.path().join("work-0"))
+            .env("source", &source)
+            .env("destination", &destination)
+            .env("gate", &gate)
+            .status()?;
+        assert!(!status.success());
+        assert!(destination.is_dir());
+        fs::remove_dir(&destination)?;
+        fs::remove_file(&source)?;
+        let status = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(&script)
+            .env("d", root.path().join("work-0"))
+            .env("source", &source)
+            .env("destination", &destination)
+            .env("gate", &gate)
+            .status()?;
+        assert!(!status.success());
+        assert!(!destination.exists());
+        assert_eq!(
+            fs::read_dir(root.path())?
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .filter(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("installed.toml."))
+                .count(),
+            0
+        );
         Ok(())
     }
 }
