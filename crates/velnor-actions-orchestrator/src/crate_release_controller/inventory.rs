@@ -242,12 +242,17 @@ pub(crate) fn verify_capacity_rust(
             .iter()
             .any(|pin| pin.version() == rust && pin.target() == "x86_64-unknown-linux-gnu")
     {
-        crate::workflow::verify_rust_owned_argv(
-            &catalog,
-            crate::workflow::ToolchainPhase::Installed,
-        )
+        crate::workflow::verify_rust_owned_argv(&catalog, crate::workflow::ToolchainPhase::ReadOnly)
     } else {
-        crate::workflow::verify_rust_argv(&catalog)
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            crate::workflow::toolchain_script(
+                rust,
+                crate::workflow::ToolchainPhase::ReadOnly,
+                velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS,
+            ),
+        ]
     };
     let archive_cache = cargo_home
         .parent()

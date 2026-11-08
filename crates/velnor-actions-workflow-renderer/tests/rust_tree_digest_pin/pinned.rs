@@ -4,7 +4,7 @@
 #![cfg(target_os = "linux")]
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
 use velnor_actions_contract::StepKind;
@@ -32,6 +32,69 @@ fn p1_matching_tree_is_accepted_offline_in_both_phases() {
         fx.run(&script(phase, &[fixture_pin()]))
             .assert_offline_pinned();
     }
+}
+
+#[test]
+fn readonly_verifiers_share_the_tree_without_replacing_the_manifest() {
+    let fx = Fixture::standard();
+    let manifest = fx
+        .root()
+        .join("lib/rustlib/multirust-channel-manifest.toml");
+    let original_inode = fs::metadata(&manifest).expect("manifest").ino();
+    let before = fx.snapshot();
+    let code = script(ToolchainPhase::ReadOnly, &[fixture_pin()]);
+    std::thread::scope(|scope| {
+        let handles = (0..8)
+            .map(|_| {
+                let fx = &fx;
+                let code = &code;
+                scope.spawn(move || {
+                    let runner = tempfile::tempdir().expect("runner");
+                    let cargo = tempfile::tempdir().expect("cargo");
+                    fs::create_dir(cargo.path().join("bin")).expect("cargo bin");
+                    fs::write(cargo.path().join("bin/sentinel"), b"present").expect("sentinel");
+                    let outcome = fx.run_with_env(
+                        code,
+                        Path::new("/usr/bin"),
+                        &[
+                            ("RUNNER_TEMP", runner.path().to_str().expect("runner path")),
+                            ("CARGO_HOME", cargo.path().to_str().expect("cargo path")),
+                        ],
+                    );
+                    outcome.assert_offline_pinned();
+                    assert!(cargo.path().join("bin/sentinel").is_file());
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle.join().expect("verifier thread");
+        }
+    });
+    assert_eq!(
+        fs::metadata(&manifest).expect("manifest").ino(),
+        original_inode
+    );
+    assert_eq!(fx.snapshot(), before);
+}
+
+#[test]
+fn readonly_verifier_rejects_a_tampered_channel_without_repairing_it() {
+    let fx = Fixture::standard();
+    fx.put(
+        "lib/rustlib/multirust-channel-manifest.toml",
+        b"tampered",
+        0o644,
+    );
+    let before = fx.snapshot();
+    let outcome = fx.run(&script(ToolchainPhase::ReadOnly, &[fixture_pin()]));
+    assert!(
+        outcome
+            .stderr
+            .contains("rust_channel_manifest_digest_mismatch"),
+        "{outcome:?}"
+    );
+    assert!(outcome.requests.is_empty(), "{outcome:?}");
+    assert_eq!(fx.snapshot(), before);
 }
 
 #[test]

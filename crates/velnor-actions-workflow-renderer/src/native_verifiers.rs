@@ -19,6 +19,7 @@ use crate::native_verifiers_tree_digest::{
 pub enum ToolchainPhase {
     Restored,
     Installed,
+    ReadOnly,
 }
 
 pub const NOT_CATALOGUED_CODE: &str = "rust_channel_manifest_not_catalogued";
@@ -144,6 +145,9 @@ pub fn toolchain_script(
     if phase == ToolchainPhase::Installed {
         lines.push("install_manifest".to_owned());
     }
+    if phase == ToolchainPhase::ReadOnly {
+        lines.push("[ -f \"$m\" ] && [ ! -L \"$m\" ] && ev cp \"$m\" \"$d/channel.toml\" && channel_ok || fail \"rust_channel_manifest_digest_mismatch: installed channel manifest does not match the catalog\"".to_owned());
+    }
     lines.extend(pin_check_statements(trees, phase));
     if phase == ToolchainPhase::Restored {
         lines.push("install_manifest".to_owned());
@@ -168,7 +172,7 @@ pub fn rust_verifier_shell_step(
 ) -> Result<Step, crate::RenderError> {
     let name = match phase {
         ToolchainPhase::Restored => VERIFY_RESTORED_RUST_STEP,
-        ToolchainPhase::Installed => crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        ToolchainPhase::Installed | ToolchainPhase::ReadOnly => crate::VERIFY_RUST_TOOLCHAIN_STEP,
     };
     let homes = ToolHomes::runner_temp();
     let env = BTreeMap::from([
