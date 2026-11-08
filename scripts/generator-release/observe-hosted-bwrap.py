@@ -206,16 +206,21 @@ def parse_ready(line):
 
 
 def bind_namespace_init(line):
+    global PHASE
+    PHASE = 'init_info_parse'
     info = json.loads(line)
     if not isinstance(info, dict) or type(info.get('child-pid')) is not int or info['child-pid'] <= 1:
         raise ValueError('invalid info fd record')
     if not hasattr(os, 'pidfd_open'):
         raise ValueError('pidfd unavailable')
     pid = info['child-pid']
+    PHASE = 'init_pidfd_open'
     fd = os.pidfd_open(pid, 0)
     try:
+        PHASE = 'init_nspid'
         if namespace_pid(pid) != 1:
             raise ValueError('namespace init identity mismatch')
+        PHASE = 'init_pre_release_poll'
         if pidfd_signalled(fd, 0):
             raise ValueError('namespace init exited before release')
         return fd
@@ -298,12 +303,13 @@ def observe():
             fds.remove(info_write)
             os.close(gate_read)
             fds.remove(gate_read)
-            PHASE = 'bind_namespace_init'
+            PHASE = 'read_init_info'
             with os.fdopen(info_read, 'rb') as info_stream:
                 fds.remove(info_read)
                 init_pidfd = bind_namespace_init(read_ready(info_stream, 8))
             result['namespace_init_pidfd_bound'] = True
             result['gate_limitation'] = 'eof-may-release-not-fail-closed'
+            PHASE = 'gate_write'
             if os.write(gate_write, b'R') != 1:
                 raise OSError('incomplete gate write')
             os.close(gate_write)

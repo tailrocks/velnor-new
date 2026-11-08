@@ -38,6 +38,7 @@ def main():
             observer.bind_namespace_init(payload)
             raise AssertionError('invalid info record accepted')
         except ValueError:
+            assert observer.PHASE == 'init_info_parse'
             pass
     for nspid, signalled, accepted in ((1, False, True), (2, False, False), (1, True, False)):
         fd = os.open('/dev/null', os.O_RDONLY)
@@ -53,6 +54,7 @@ def main():
             except ValueError:
                 if accepted:
                     raise
+                assert observer.PHASE == ('init_nspid' if nspid != 1 else 'init_pre_release_poll')
     with mock.patch.object(observer, 'owned_namespaces', side_effect=PermissionError):
         assert observer.namespace_disappearance('pid:[2]') == (None, 'permission_denied_inconclusive')
     with mock.patch.object(observer, 'owned_namespaces', return_value={'pid:[2]'}):
@@ -148,7 +150,7 @@ def main():
             observer.observe()
             raise AssertionError('inaccessible init identity accepted')
         except PermissionError:
-            assert observer.PHASE == 'bind_namespace_init'
+            assert observer.PHASE == 'read_init_info'
             gate_write.assert_not_called()
             blocked_child.kill.assert_called_once()
     child = mock.Mock(pid=999)
