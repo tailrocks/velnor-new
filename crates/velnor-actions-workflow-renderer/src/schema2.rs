@@ -14,6 +14,20 @@ use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StandaloneWorkflow {
+    JobImageCandidate,
+}
+
+impl StandaloneWorkflow {
+    #[must_use]
+    pub const fn path(self) -> &'static str {
+        match self {
+            Self::JobImageCandidate => ".github/workflows/job-image-candidate.yml",
+        }
+    }
+}
+
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
 pub const PRODUCT_RELEASE_WORKFLOW: &str = product_release::WORKFLOW_PATH;
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";

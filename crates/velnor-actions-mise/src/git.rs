@@ -63,6 +63,28 @@ impl GitRequest {
         Self::allowed("show", args)
     }
 
+    pub fn ls_tree_exact(revision: &str, path: &str) -> Result<Self, MiseError> {
+        let valid_revision =
+            revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit());
+        let valid_path = !path.is_empty()
+            && path
+                .split('/')
+                .all(|part| !part.is_empty() && part != "." && part != "..")
+            && path.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+            });
+        if !valid_revision || !valid_path {
+            return Err(MiseError::ForbiddenPayload {
+                program: "git".to_owned(),
+                reason: "invalid_tree_lookup".to_owned(),
+            });
+        }
+        Ok(Self {
+            verb: "ls-tree".to_owned(),
+            args: vec!["-z".into(), revision.into(), "--".into(), path.into()],
+        })
+    }
+
     #[must_use]
     pub fn config(args: Vec<OsString>) -> Self {
         Self::allowed("config", args)

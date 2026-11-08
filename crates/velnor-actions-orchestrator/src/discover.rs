@@ -111,7 +111,8 @@ pub(crate) fn discover_with_options(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    let resolves = crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
+    let resolves =
+        crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
     let rules =
         crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
@@ -132,8 +133,7 @@ pub(crate) fn discover_with_options(
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let consumer_manifest_json =
-        consumer_manifest::for_policy(root, config.workflow.policy)?;
+    let consumer_manifest_json = consumer_manifest::for_policy(root, config.workflow.policy)?;
     let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     let discovery = Discovery {
@@ -155,6 +155,7 @@ pub(crate) fn discover_with_options(
             resolves,
             rules,
             config.stacks.rust.as_ref(),
+            config.workflow.policy == velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
         ),
         bun,
         dbt,
@@ -231,12 +232,7 @@ fn plan_workspaces(
         if !keep_roots.contains(&record.workspace_root) {
             continue;
         }
-        let outcome = profile_for_workspace(
-            root,
-            index,
-            &record,
-            config.stacks.rust.as_ref(),
-        )?;
+        let outcome = profile_for_workspace(root, index, &record, config.stacks.rust.as_ref())?;
         planned.push(PlannedWorkspace {
             record,
             profile: outcome.profile,

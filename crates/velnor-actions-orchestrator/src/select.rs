@@ -10,7 +10,9 @@ use velnor_actions_rust::SelectionBroadening;
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::NON_UTF8_PATH;
-use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
+use crate::select_affected::{
+    Ownership, affected_packages, has_unowned_file, scoped_standalone_workflow,
+};
 use crate::select_edges::{base_edges, head_edges};
 
 #[path = "select_ansible.rs"]
@@ -140,10 +142,12 @@ fn affected_from_changed(
     warnings: &mut Vec<String>,
     evidence: &mut ChangeEvidence,
 ) -> BTreeSet<String> {
-    if !changed
-        .iter()
-        .any(|path| selection_broadens_for_path(path).is_some())
-    {
+    let scoped_workflow = (!toolfiles)
+        .then(|| scoped_standalone_workflow(discovery, changed, root, base, head))
+        .flatten();
+    if !changed.iter().any(|path| {
+        selection_broadens_for_path(path).is_some() && scoped_workflow != Some(path.as_str())
+    }) {
         evidence.paths = Some(changed.clone());
     }
     let all_packages: BTreeSet<String> = discovery
@@ -162,7 +166,7 @@ fn affected_from_changed(
         );
         BTreeSet::new()
     } else {
-        if let Some(warning) = broadening_warning(changed) {
+        if let Some(warning) = broadening_warning(changed, scoped_workflow) {
             warnings.push(warning);
             return all_packages;
         }
@@ -196,7 +200,10 @@ fn affected_from_changed(
                     toolfiles
                         || check.check.selection
                             == velnor_actions_contract::config::CheckSelection::RustChanges
-                        || check.config_inputs.iter().any(|path| changed.contains(path))
+                        || check
+                            .config_inputs
+                            .iter()
+                            .any(|path| changed.contains(path))
                 })
                 .map(|check| check.check.id.clone()),
         );
@@ -205,7 +212,7 @@ fn affected_from_changed(
     affected
 }
 
-fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
+fn broadening_warning(changed: &BTreeSet<String>, scoped_workflow: Option<&str>) -> Option<String> {
     for (kind, warning) in [
         (
             SelectionBroadening::Lockfile,
@@ -225,6 +232,7 @@ fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
     }
     changed
         .iter()
+        .filter(|path| scoped_workflow != Some(path.as_str()))
         .find_map(|path| selection_broadens_for_path(path))
         .map(str::to_owned)
 }

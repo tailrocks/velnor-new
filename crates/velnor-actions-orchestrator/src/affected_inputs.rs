@@ -15,6 +15,7 @@ pub struct AffectedInputs {
     pub(crate) resolves: Vec<WorkspaceResolve>,
     pub(crate) rules: Vec<InputRule>,
     pub(crate) non_inputs: NonInputs,
+    pub(crate) velnor_repository: bool,
 }
 
 impl AffectedInputs {
@@ -22,11 +23,13 @@ impl AffectedInputs {
         resolves: Vec<WorkspaceResolve>,
         rules: Vec<InputRule>,
         rust: Option<&RustStackConfig>,
+        velnor_repository: bool,
     ) -> Self {
         Self {
             resolves,
             rules,
             non_inputs: rust.map(|rust| rust.non_inputs.clone()).unwrap_or_default(),
+            velnor_repository,
         }
     }
 }

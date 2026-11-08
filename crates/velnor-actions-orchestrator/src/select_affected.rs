@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+    time::Duration,
+};
 
 use velnor_actions_contract::reverse_closure;
 
@@ -233,4 +237,133 @@ pub(crate) fn manifest_dir(manifest: &str) -> String {
     manifest
         .rsplit_once('/')
         .map_or_else(String::new, |(dir, _)| dir.to_owned())
+}
+
+pub(crate) fn scoped_standalone_workflow(
+    discovery: &Discovery,
+    changed: &BTreeSet<String>,
+    root: &Path,
+    base: &str,
+    head: &str,
+) -> Option<&'static str> {
+    let path =
+        velnor_actions_workflow_renderer::schema2::StandaloneWorkflow::JobImageCandidate.path();
+    if !discovery.affected.velnor_repository
+        || !changed.contains(path)
+        || changed
+            .iter()
+            .any(|file| file == "Cargo.toml" || file.ends_with("/Cargo.toml"))
+        || changed.iter().any(|file| {
+            file != path
+                && (crate::decisions::selection_broadens_for_path(file).is_some()
+                    || crate::decisions::broadening_for_path(file).is_some())
+        })
+    {
+        return None;
+    }
+    if !has_complete_workflow_owners(discovery, path) {
+        return None;
+    }
+    for directory in [root.join(".github"), root.join(".github/workflows")] {
+        let metadata = std::fs::symlink_metadata(directory).ok()?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return None;
+        }
+    }
+    let metadata = std::fs::symlink_metadata(root.join(path)).ok()?;
+    if !metadata.file_type().is_file() {
+        return None;
+    }
+    let git_dir = root.join(".git");
+    let objects = git_dir.join("objects");
+    for directory in [&git_dir, &objects] {
+        let metadata = std::fs::symlink_metadata(directory).ok()?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return None;
+        }
+    }
+    match std::fs::symlink_metadata(objects.join("info/alternates")) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return None,
+    }
+    for revision in [base, head] {
+        regular_tree_entry(root, &git_dir, &objects, revision, path)?;
+    }
+    Some(path)
+}
+
+fn has_complete_workflow_owners(discovery: &Discovery, path: &str) -> bool {
+    let matching: Vec<_> = discovery
+        .affected
+        .rules
+        .iter()
+        .filter(|rule| rule.matches(path))
+        .collect();
+    if matching.is_empty() || matching.iter().any(|rule| !rule.complete) {
+        return false;
+    }
+    let claimed: BTreeSet<_> = matching
+        .iter()
+        .flat_map(|rule| rule.package_ids.iter())
+        .collect();
+    for name in ["velnor-actions-workflow-renderer", "velnor-archive-guard"] {
+        if !discovery
+            .workspaces
+            .iter()
+            .flat_map(|workspace| &workspace.record.packages)
+            .any(|package| {
+                package.name == name
+                    && package.in_workspace
+                    && !package.external
+                    && claimed.contains(&package.id)
+            })
+        {
+            return false;
+        }
+    }
+    true
+}
+
+fn regular_tree_entry(
+    root: &Path,
+    git_dir: &Path,
+    objects: &Path,
+    revision: &str,
+    path: &str,
+) -> Option<()> {
+    let request = velnor_actions_mise::GitRequest::ls_tree_exact(revision, path).ok()?;
+    let environment = [
+        ("GIT_NO_REPLACE_OBJECTS".into(), "1".into()),
+        ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+        ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
+        ("GIT_CONFIG_COUNT".into(), "0".into()),
+        ("GIT_CONFIG_PARAMETERS".into(), "".into()),
+        ("GIT_DIR".into(), git_dir.as_os_str().into()),
+        ("GIT_COMMON_DIR".into(), git_dir.as_os_str().into()),
+        ("GIT_OBJECT_DIRECTORY".into(), objects.as_os_str().into()),
+        ("GIT_ALTERNATE_OBJECT_DIRECTORIES".into(), "".into()),
+        ("GIT_NO_LAZY_FETCH".into(), "1".into()),
+        ("GIT_TERMINAL_PROMPT".into(), "0".into()),
+    ];
+    let output = request
+        .command_in(root)
+        .with_env(&environment)
+        .ok()?
+        .run_bounded(4096, Duration::from_secs(2))
+        .ok()?;
+    let output = output.require_success("git").ok()?;
+    let separator = output.stdout.iter().position(|byte| *byte == b'\t')?;
+    let (header, suffix) = output.stdout.split_at(separator);
+    let entry_path = suffix.get(1..)?;
+    let parts: Vec<_> = header.split(|byte| *byte == b' ').collect();
+    if parts.len() != 3
+        || parts[0] != b"100644"
+        || parts[1] != b"blob"
+        || parts[2].len() != 40
+        || !parts[2].iter().all(u8::is_ascii_hexdigit)
+        || entry_path.strip_suffix(&[0])? != path.as_bytes()
+    {
+        return None;
+    }
+    Some(())
 }

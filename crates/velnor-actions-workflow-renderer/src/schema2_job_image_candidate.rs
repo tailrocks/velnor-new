@@ -8,8 +8,6 @@ use crate::{RenderError, render::RenderedFile, runs_on::runs_on_yaml, yaml::Yaml
 
 use super::Schema2WorkflowRequest;
 
-pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
-
 const ARCHIVE: &str = "job-image.oci.tar";
 const RECORD: &str = "job-image-candidate.json";
 const ARTIFACT_NAME: &str = "velnor-job-image-candidate-${{ github.run_attempt }}";
@@ -31,7 +29,11 @@ pub(super) fn render_candidate_workflow(
         ));
     }
     let workflow = render(request)?;
-    super::file(WORKFLOW_PATH, &request.version, &workflow)
+    super::file(
+        super::StandaloneWorkflow::JobImageCandidate.path(),
+        &request.version,
+        &workflow,
+    )
 }
 
 fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
