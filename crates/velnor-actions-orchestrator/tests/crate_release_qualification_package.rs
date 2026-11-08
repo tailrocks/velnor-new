@@ -206,34 +206,7 @@ fn reconstructed_workspace_package_accepts_generated_lock_but_rejects_tampering(
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path().join("workspace");
-    std::fs::create_dir_all(root.join("crates/demo/src"))?;
-    std::fs::write(
-        root.join("Cargo.toml"),
-        "[workspace]\nresolver = '2'\nmembers = ['crates/demo']\n",
-    )?;
-    std::fs::write(
-        root.join("crates/demo/Cargo.toml"),
-        "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\n",
-    )?;
-    std::fs::write(
-        root.join("crates/demo/src/lib.rs"),
-        "pub fn answer() -> u8 { 42 }\n",
-    )?;
-    git(&root, &["init", "-q"])?;
-    let catalog = velnor_actions_mise::ToolCatalog::pinned();
-    let cargo = crate::release::crate_release_source::source_cargo_path(
-        catalog.version(velnor_actions_mise::PinnedTool::Rust),
-        &root,
-    )?;
-    let generated = Command::new(&cargo)
-        .args(["generate-lockfile", "--offline"])
-        .current_dir(&root)
-        .output()?;
-    if !generated.status.success() {
-        return Err(String::from_utf8_lossy(&generated.stderr)
-            .into_owned()
-            .into());
-    }
+    let cargo = prepare_workspace(&root)?;
     git(&root, &["add", "."])?;
     git(
         &root,
@@ -257,26 +230,7 @@ fn reconstructed_workspace_package_accepts_generated_lock_but_rejects_tampering(
         version: "0.1.1".into(),
         manifest: "crates/demo/Cargo.toml".into(),
     };
-    let target = tempfile::tempdir()?;
-    let packaged = Command::new(cargo)
-        .args([
-            "package",
-            "--locked",
-            "--offline",
-            "--no-verify",
-            "-p",
-            "demo",
-            "--target-dir",
-        ])
-        .arg(target.path())
-        .current_dir(&root)
-        .output()?;
-    if !packaged.status.success() {
-        return Err(String::from_utf8_lossy(&packaged.stderr)
-            .into_owned()
-            .into());
-    }
-    let archive = std::fs::read(target.path().join("package/demo-0.1.1.crate"))?;
+    let archive = package_workspace(cargo, &root)?;
     let git = ReleaseGit::host_fixture();
     verify_reconstructed_archive(&root, &sha, &intent, &package, &archive, &git)?;
     assert!(
@@ -314,6 +268,67 @@ fn reconstructed_workspace_package_accepts_generated_lock_but_rejects_tampering(
         .is_err()
     );
     Ok(())
+}
+
+fn prepare_workspace(
+    root: &std::path::Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(root.join("crates/demo/src"))?;
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nresolver = '2'\nmembers = ['crates/demo']\n",
+    )?;
+    std::fs::write(
+        root.join("crates/demo/Cargo.toml"),
+        "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\n",
+    )?;
+    std::fs::write(
+        root.join("crates/demo/src/lib.rs"),
+        "pub fn answer() -> u8 { 42 }\n",
+    )?;
+    git(root, &["init", "-q"])?;
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let cargo = crate::release::crate_release_source::source_cargo_path(
+        catalog.version(velnor_actions_mise::PinnedTool::Rust),
+        root,
+    )?;
+    let generated = Command::new(&cargo)
+        .args(["generate-lockfile", "--offline"])
+        .current_dir(root)
+        .output()?;
+    if !generated.status.success() {
+        return Err(String::from_utf8_lossy(&generated.stderr)
+            .into_owned()
+            .into());
+    }
+    Ok(cargo)
+}
+
+fn package_workspace(
+    cargo: std::path::PathBuf,
+    root: &std::path::Path,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let target = tempfile::tempdir()?;
+    let packaged = Command::new(cargo)
+        .args([
+            "package",
+            "--locked",
+            "--offline",
+            "--no-verify",
+            "-p",
+            "demo",
+            "--target-dir",
+        ])
+        .arg(target.path())
+        .current_dir(root)
+        .output()?;
+    if !packaged.status.success() {
+        return Err(String::from_utf8_lossy(&packaged.stderr)
+            .into_owned()
+            .into());
+    }
+    let archive = std::fs::read(target.path().join("package/demo-0.1.1.crate"))?;
+    Ok(archive)
 }
 
 #[path = "crate_release_qualification_package_metadata.rs"]

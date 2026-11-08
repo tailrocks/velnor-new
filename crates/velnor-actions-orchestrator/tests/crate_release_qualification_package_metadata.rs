@@ -95,70 +95,7 @@ fn workspace_metadata_scenario(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path().join("workspace");
-    std::fs::create_dir_all(root.join("crates/demo/src"))?;
-    std::fs::create_dir_all(root.join("docs"))?;
-    let metadata = match shared {
-        1 => "readme='docs/shared.md'\nlicense-file='docs/shared.md'\n",
-        2 => "readme='docs/shared.md'\nlicense-file='licenses/shared.md'\n",
-        _ => "readme='docs/guide.md'\nlicense-file='docs/legal.txt'\n",
-    };
-    std::fs::write(
-        root.join("Cargo.toml"),
-        format!(
-            "[workspace]\nresolver='2'\nmembers=['crates/demo']\n[workspace.package]\n{metadata}"
-        ),
-    )?;
-    std::fs::create_dir_all(root.join("licenses"))?;
-    std::fs::write(root.join("docs/shared.md"), "reviewed shared guide")?;
-    std::fs::write(root.join("licenses/shared.md"), "reviewed shared license")?;
-    let explicit_workspace = if explicit { "workspace='../..'\n" } else { "" };
-    std::fs::write(
-        root.join("crates/demo/Cargo.toml"),
-        format!(
-            "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\n{explicit_workspace}readme.workspace=true\nlicense-file.workspace=true\n"
-        ),
-    )?;
-    if collision {
-        std::fs::write(root.join("crates/demo/guide.md"), "member-local guide")?;
-        std::fs::write(root.join("crates/demo/legal.txt"), "member-local license")?;
-    }
-    std::fs::write(root.join("docs/guide.md"), "reviewed guide")?;
-    std::fs::write(root.join("docs/legal.txt"), "reviewed license")?;
-    std::fs::write(
-        root.join("crates/demo/src/lib.rs"),
-        "pub fn answer() -> u8 { 42 }\n",
-    )?;
-    git(&root, &["init", "-q"])?;
-    let catalog = velnor_actions_mise::ToolCatalog::pinned();
-    let cargo = crate::release::crate_release_source::source_cargo_path(
-        catalog.version(velnor_actions_mise::PinnedTool::Rust),
-        &root,
-    )?;
-    let generated = Command::new(&cargo)
-        .args(["generate-lockfile", "--offline"])
-        .current_dir(&root)
-        .output()?;
-    if !generated.status.success() {
-        return Err(String::from_utf8_lossy(&generated.stderr)
-            .into_owned()
-            .into());
-    }
-    git(&root, &["add", "."])?;
-    git(
-        &root,
-        &[
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-qm",
-            "workspace metadata",
-        ],
-    )?;
-    let sha = git(&root, &["rev-parse", "HEAD"])?;
+    let (cargo, sha) = prepare_metadata_workspace(&root, explicit, collision, shared)?;
     let mut intent = intent(&sha);
     intent.pr_write_paths = vec!["Cargo.toml".into(), "crates/demo/Cargo.toml".into()];
     let package = CrateReleaseSourcePackage {
@@ -188,57 +125,15 @@ fn workspace_metadata_scenario(
     let archive = std::fs::read(target.path().join("package/demo-0.1.1.crate"))?;
     let verified_git = ReleaseGit::host_fixture();
     verify_reconstructed_archive(&root, &sha, &intent, &package, &archive, &verified_git)?;
-    let without_lock = archive_without_lock(&archive)?;
-    crate::verify_archive_tracked_content(
-        &without_lock,
+    verify_metadata_archive(
         &root,
         &sha,
-        &package.manifest,
-        &package.name,
-        &package.version,
+        &intent,
+        &package,
+        &archive,
+        shared,
         &verified_git,
     )?;
-    let members: &[&str] = if shared == 0 {
-        &["demo-0.1.1/guide.md", "demo-0.1.1/legal.txt"]
-    } else {
-        &["demo-0.1.1/shared.md"]
-    };
-    for member in members {
-        assert!(
-            crate::verify_archive_tracked_content(
-                &tamper_archive_member(&without_lock, member)?,
-                &root,
-                &sha,
-                &package.manifest,
-                &package.name,
-                &package.version,
-                &verified_git
-            )
-            .is_err()
-        );
-        assert!(
-            verify_reconstructed_archive(
-                &root,
-                &sha,
-                &intent,
-                &package,
-                &tamper_archive_member(&archive, member)?,
-                &verified_git
-            )
-            .is_err()
-        );
-    }
-    assert!(
-        verify_reconstructed_archive(
-            &root,
-            &sha,
-            &intent,
-            &package,
-            &altered_workspace_archive(&archive, true)?,
-            &verified_git
-        )
-        .is_err()
-    );
     #[cfg(unix)]
     if !explicit && !collision && shared == 0 {
         let outside = temp.path().join("outside.md");
@@ -275,5 +170,141 @@ fn workspace_metadata_scenario(
             .is_err()
         );
     }
+    Ok(())
+}
+
+fn prepare_metadata_workspace(
+    root: &std::path::Path,
+    explicit: bool,
+    collision: bool,
+    shared: u8,
+) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(root.join("crates/demo/src"))?;
+    std::fs::create_dir_all(root.join("docs"))?;
+    let metadata = match shared {
+        1 => "readme='docs/shared.md'\nlicense-file='docs/shared.md'\n",
+        2 => "readme='docs/shared.md'\nlicense-file='licenses/shared.md'\n",
+        _ => "readme='docs/guide.md'\nlicense-file='docs/legal.txt'\n",
+    };
+    std::fs::write(
+        root.join("Cargo.toml"),
+        format!(
+            "[workspace]\nresolver='2'\nmembers=['crates/demo']\n[workspace.package]\n{metadata}"
+        ),
+    )?;
+    std::fs::create_dir_all(root.join("licenses"))?;
+    std::fs::write(root.join("docs/shared.md"), "reviewed shared guide")?;
+    std::fs::write(root.join("licenses/shared.md"), "reviewed shared license")?;
+    let explicit_workspace = if explicit { "workspace='../..'\n" } else { "" };
+    std::fs::write(
+        root.join("crates/demo/Cargo.toml"),
+        format!(
+            "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\n{explicit_workspace}readme.workspace=true\nlicense-file.workspace=true\n"
+        ),
+    )?;
+    if collision {
+        std::fs::write(root.join("crates/demo/guide.md"), "member-local guide")?;
+        std::fs::write(root.join("crates/demo/legal.txt"), "member-local license")?;
+    }
+    std::fs::write(root.join("docs/guide.md"), "reviewed guide")?;
+    std::fs::write(root.join("docs/legal.txt"), "reviewed license")?;
+    std::fs::write(
+        root.join("crates/demo/src/lib.rs"),
+        "pub fn answer() -> u8 { 42 }\n",
+    )?;
+    git(root, &["init", "-q"])?;
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    let cargo = crate::release::crate_release_source::source_cargo_path(
+        catalog.version(velnor_actions_mise::PinnedTool::Rust),
+        root,
+    )?;
+    let generated = Command::new(&cargo)
+        .args(["generate-lockfile", "--offline"])
+        .current_dir(root)
+        .output()?;
+    if !generated.status.success() {
+        return Err(String::from_utf8_lossy(&generated.stderr)
+            .into_owned()
+            .into());
+    }
+    git(root, &["add", "."])?;
+    git(
+        root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "workspace metadata",
+        ],
+    )?;
+    let sha = git(root, &["rev-parse", "HEAD"])?;
+    Ok((cargo, sha))
+}
+
+fn verify_metadata_archive(
+    root: &std::path::Path,
+    sha: &str,
+    intent: &CrateReleaseIntent,
+    package: &CrateReleaseSourcePackage,
+    archive: &[u8],
+    shared: u8,
+    verified_git: &ReleaseGit,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let without_lock = archive_without_lock(archive)?;
+    crate::verify_archive_tracked_content(
+        &without_lock,
+        root,
+        sha,
+        &package.manifest,
+        &package.name,
+        &package.version,
+        verified_git,
+    )?;
+    let members: &[&str] = if shared == 0 {
+        &["demo-0.1.1/guide.md", "demo-0.1.1/legal.txt"]
+    } else {
+        &["demo-0.1.1/shared.md"]
+    };
+    for member in members {
+        assert!(
+            crate::verify_archive_tracked_content(
+                &tamper_archive_member(&without_lock, member)?,
+                root,
+                sha,
+                &package.manifest,
+                &package.name,
+                &package.version,
+                verified_git
+            )
+            .is_err()
+        );
+        assert!(
+            verify_reconstructed_archive(
+                root,
+                sha,
+                intent,
+                package,
+                &tamper_archive_member(archive, member)?,
+                verified_git
+            )
+            .is_err()
+        );
+    }
+    assert!(
+        verify_reconstructed_archive(
+            root,
+            sha,
+            intent,
+            package,
+            &altered_workspace_archive(archive, true)?,
+            verified_git
+        )
+        .is_err()
+    );
     Ok(())
 }

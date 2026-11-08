@@ -64,36 +64,7 @@ fn qualified_checker_accepts_lockless_baseline_and_rejects_breakage()
         "pub fn stable_api() {}\n"
     );
     std::fs::write(source.join("src/lib.rs"), "pub fn different_api() {}\n")?;
-    let baseline = temp.path().join("diagnostic-baseline");
-    std::fs::create_dir(&baseline)?;
-    checker::extract_baseline(&archive, "demo", "0.1.0", &baseline)?;
-    let diagnostic_home = temp.path().join("diagnostic-home");
-    std::fs::create_dir(&diagnostic_home)?;
-    let mut diagnostic = std::process::Command::new(&checker);
-    diagnostic
-        .env_clear()
-        .env("HOME", &diagnostic_home)
-        .env("CARGO_HOME", &diagnostic_home)
-        .env("CARGO_NET_OFFLINE", "true")
-        .env("CARGO", source_cargo_path(&rust, &source)?);
-    for item in source_compiler_env(&rust, &git)? {
-        let text = item.to_str().ok_or("compiler environment is not UTF-8")?;
-        let (name, value) = text.split_once('=').ok_or("invalid compiler environment")?;
-        diagnostic.env(name, value);
-    }
-    let output = diagnostic
-        .args(["check-release", "--manifest-path"])
-        .arg(source.join("Cargo.toml"))
-        .args(["--package", "demo", "--baseline-root"])
-        .arg(&baseline)
-        .arg("--default-features")
-        .current_dir(&source)
-        .output()?;
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("function_missing")
-            || String::from_utf8_lossy(&output.stdout).contains("function_missing")
-    );
+    verify_checker_reports_missing_function(temp.path(), &source, &archive, &rust, &git, &checker)?;
     assert!(
         checker::run_check(
             &source,
@@ -110,6 +81,47 @@ fn qualified_checker_accepts_lockless_baseline_and_rejects_breakage()
     assert_eq!(
         std::fs::read_to_string(source.join("src/lib.rs"))?,
         "pub fn different_api() {}\n"
+    );
+    Ok(())
+}
+
+fn verify_checker_reports_missing_function(
+    temp: &std::path::Path,
+    source: &std::path::Path,
+    archive: &[u8],
+    rust: &str,
+    git: &crate::crate_release_git::ReleaseGit,
+    checker: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let baseline = temp.join("diagnostic-baseline");
+    std::fs::create_dir(&baseline)?;
+    checker::extract_baseline(archive, "demo", "0.1.0", &baseline)?;
+    let diagnostic_home = temp.join("diagnostic-home");
+    std::fs::create_dir(&diagnostic_home)?;
+    let mut diagnostic = std::process::Command::new(checker);
+    diagnostic
+        .env_clear()
+        .env("HOME", &diagnostic_home)
+        .env("CARGO_HOME", &diagnostic_home)
+        .env("CARGO_NET_OFFLINE", "true")
+        .env("CARGO", source_cargo_path(rust, source)?);
+    for item in source_compiler_env(rust, git)? {
+        let text = item.to_str().ok_or("compiler environment is not UTF-8")?;
+        let (name, value) = text.split_once('=').ok_or("invalid compiler environment")?;
+        diagnostic.env(name, value);
+    }
+    let output = diagnostic
+        .args(["check-release", "--manifest-path"])
+        .arg(source.join("Cargo.toml"))
+        .args(["--package", "demo", "--baseline-root"])
+        .arg(&baseline)
+        .arg("--default-features")
+        .current_dir(source)
+        .output()?;
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("function_missing")
+            || String::from_utf8_lossy(&output.stdout).contains("function_missing")
     );
     Ok(())
 }

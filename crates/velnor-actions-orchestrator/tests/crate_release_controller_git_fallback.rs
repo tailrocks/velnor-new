@@ -16,46 +16,7 @@ fn versioned_git_dependency_packages_with_registry_fallback()
     fs::create_dir(&source)?;
     fs::create_dir(&target)?;
     fs::create_dir(&cargo_home)?;
-    fs::create_dir(dependency.join("src"))?;
-    fs::write(
-        dependency.join("Cargo.toml"),
-        "[package]\nname='fixture_git_fallback'\nversion='0.1.1'\nedition='2021'\nlicense='MIT'\ndescription='fixture'\n",
-    )?;
-    fs::write(
-        dependency.join("src/lib.rs"),
-        "pub fn answer() -> u8 { 42 }\n",
-    )?;
-    git(&dependency, &["init", "-q"])?;
-    git(&dependency, &["add", "."])?;
-    git(
-        &dependency,
-        &[
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-qm",
-            "fixture",
-        ],
-    )?;
-    let output = Command::new(env!("CARGO"))
-        .args(["package", "--allow-dirty", "--no-verify", "--target-dir"])
-        .arg(&target)
-        .current_dir(&dependency)
-        .output()?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let archive = fs::read(target.join("package/fixture_git_fallback-0.1.1.crate"))?;
-    let server = SparseFixture::start("fixture_git_fallback", archive)?;
-    server
-        .index_visible
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let server = make_dependency_server(&dependency, &target)?;
     let (intent, _, _, _) = make_fixture(&source)?;
     let manifest = format!(
         "[package]\nname='demo'\nversion='0.1.1'\nedition='2021'\nlicense='MIT'\ndescription='fixture'\n[dependencies]\nfixture_git_fallback={{git='file://{}',version='0.1.1'}}\n",
@@ -118,4 +79,51 @@ fn versioned_git_dependency_packages_with_registry_fallback()
             > 0
     );
     Ok(())
+}
+
+fn make_dependency_server(
+    dependency: &Path,
+    target: &Path,
+) -> Result<SparseFixture, Box<dyn std::error::Error>> {
+    fs::create_dir(dependency.join("src"))?;
+    fs::write(
+        dependency.join("Cargo.toml"),
+        "[package]\nname='fixture_git_fallback'\nversion='0.1.1'\nedition='2021'\nlicense='MIT'\ndescription='fixture'\n",
+    )?;
+    fs::write(
+        dependency.join("src/lib.rs"),
+        "pub fn answer() -> u8 { 42 }\n",
+    )?;
+    git(dependency, &["init", "-q"])?;
+    git(dependency, &["add", "."])?;
+    git(
+        dependency,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+    )?;
+    let output = Command::new(env!("CARGO"))
+        .args(["package", "--allow-dirty", "--no-verify", "--target-dir"])
+        .arg(target)
+        .current_dir(dependency)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let archive = fs::read(target.join("package/fixture_git_fallback-0.1.1.crate"))?;
+    let server = SparseFixture::start("fixture_git_fallback", archive)?;
+    server
+        .index_visible
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    Ok(server)
 }
