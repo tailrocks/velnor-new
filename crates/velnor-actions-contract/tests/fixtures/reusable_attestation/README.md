@@ -34,3 +34,8 @@ matching only; those mutations do not create valid signatures.
 not authenticate a signature or establish policy custody, and returns no verified
 authority capability. A native cryptographic verifier must supply authenticated
 output before these bindings can support admission.
+
+Workflow references accept a named `refs/` reference or a canonical lowercase
+40-hex commit equal to that workflow's expected revision. Source Git refs still
+require `refs/`. The SHA-pinned callee test mutates captured output to exercise
+this structural rule; the genuine fixture remains a named-ref signature.

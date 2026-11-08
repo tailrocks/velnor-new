@@ -14,7 +14,7 @@ fn expected() -> ReusableAttestationBinding {
     let workflow = |path: &str| WorkflowRevision {
         repository: "tailrocks/velnor-new".into(),
         path: path.into(),
-        git_ref: "refs/heads/main".into(),
+        reference: "refs/heads/main".into(),
         revision: REVISION.into(),
     };
     let digest = Sha256::digest(SUBJECT)
@@ -147,6 +147,51 @@ fn malformed_oversized_duplicate_and_multiple_outputs_reject()
     );
     let mut binding = expected();
     binding.subjects.insert("invalid".into(), "invalid".into());
+    assert!(binding.check_untrusted_output_shape(OUTPUT).is_err());
+    Ok(())
+}
+
+#[test]
+fn structural_sha_pinned_callee_requires_matching_canonical_revision()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut value: serde_json::Value = serde_json::from_slice(OUTPUT)?;
+    let mut binding = expected();
+    binding.signer.reference = binding.signer.revision.clone();
+    let uri = format!(
+        "https://github.com/{}/{}@{}",
+        binding.signer.repository, binding.signer.path, binding.signer.reference
+    );
+    for field in ["subjectAlternativeName", "buildSignerURI"] {
+        value[0]["verificationResult"]["signature"]["certificate"][field] = serde_json::json!(uri);
+    }
+    value[0]["verificationResult"]["statement"]["predicate"]["runDetails"]["builder"]["id"] =
+        serde_json::json!(uri);
+    let output = serde_json::to_vec(&value)?;
+    assert!(binding.check_untrusted_output_shape(&output).is_ok());
+    for reference in [
+        "a".repeat(40),
+        REVISION.to_uppercase(),
+        REVISION[..39].into(),
+    ] {
+        binding.signer.reference = reference;
+        let uri = format!(
+            "https://github.com/{}/{}@{}",
+            binding.signer.repository, binding.signer.path, binding.signer.reference
+        );
+        for field in ["subjectAlternativeName", "buildSignerURI"] {
+            value[0]["verificationResult"]["signature"]["certificate"][field] =
+                serde_json::json!(uri);
+        }
+        value[0]["verificationResult"]["statement"]["predicate"]["runDetails"]["builder"]["id"] =
+            serde_json::json!(uri);
+        assert!(
+            binding
+                .check_untrusted_output_shape(&serde_json::to_vec(&value)?)
+                .is_err()
+        );
+    }
+    binding = expected();
+    binding.source.git_ref = binding.source.revision.clone();
     assert!(binding.check_untrusted_output_shape(OUTPUT).is_err());
     Ok(())
 }

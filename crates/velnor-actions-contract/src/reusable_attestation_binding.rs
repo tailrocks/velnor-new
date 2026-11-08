@@ -8,7 +8,7 @@ use serde_json::Value;
 pub struct WorkflowRevision {
     pub repository: String,
     pub path: String,
-    pub git_ref: String,
+    pub reference: String,
     pub revision: String,
 }
 
@@ -48,7 +48,7 @@ impl ReusableAttestationBinding {
         for workflow in [&self.signer, &self.caller] {
             let path = workflow.path.strip_prefix(".github/workflows/");
             if !crate::vcs::is_safe_github_repository(&workflow.repository)
-                || !valid_ref(&workflow.git_ref)
+                || !valid_workflow_reference(workflow)
                 || !hex(&workflow.revision, 40)
                 || !path.is_some_and(|p| {
                     !p.is_empty()
@@ -138,7 +138,7 @@ impl ReusableAttestationBinding {
 
     fn check_statement(&self, statement: &Value) -> Result<(), ContractError> {
         self.check_subjects(&statement["subject"])?;
-        let caller = serde_json::json!({"repository":format!("https://github.com/{}",self.caller.repository),"path":self.caller.path,"ref":self.caller.git_ref});
+        let caller = serde_json::json!({"repository":format!("https://github.com/{}",self.caller.repository),"path":self.caller.path,"ref":self.caller.reference});
         let dependencies = serde_json::json!([{"uri":format!("git+https://github.com/{}@{}",self.source.repository,self.source.git_ref),"digest":{"gitCommit":self.source.revision}}]);
         let predicate = &statement["predicate"];
         let github = &predicate["buildDefinition"]["internalParameters"]["github"];
@@ -194,8 +194,13 @@ impl ReusableAttestationBinding {
 fn workflow_uri(workflow: &WorkflowRevision) -> String {
     format!(
         "https://github.com/{}/{}@{}",
-        workflow.repository, workflow.path, workflow.git_ref
+        workflow.repository, workflow.path, workflow.reference
     )
+}
+
+fn valid_workflow_reference(workflow: &WorkflowRevision) -> bool {
+    valid_ref(&workflow.reference)
+        || (hex(&workflow.reference, 40) && workflow.reference == workflow.revision)
 }
 
 fn valid_ref(value: &str) -> bool {
