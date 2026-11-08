@@ -29,7 +29,7 @@ pub(super) struct ProcessGroupAnchor {
 
 impl ProcessGroupAnchor {
     pub(super) fn spawn() -> Result<Self, String> {
-        let mut child = anchor_command("/bin/cat")
+        let mut child = anchor_command("/bin/sh")
             .spawn()
             .map_err(|error| error.to_string())?;
         let stdin = child
@@ -126,6 +126,7 @@ fn reap_best_effort_child(child: &mut Child, deadline: Instant) {
 fn anchor_command(executable: &str) -> Command {
     let mut command = Command::new(executable);
     command
+        .args(["-c", "IFS= read -r _; kill -9 -$$"])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -257,5 +258,86 @@ mod tests {
             ticks.get() >= 2,
             "indeterminate state must wait for the deadline"
         );
+    }
+    #[test]
+    fn anchor_owner_child() -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::process::CommandExt as _;
+        let Some(root) = std::env::var_os("VELNOR_TEST_ANCHOR_ROOT") else {
+            return Ok(());
+        };
+        let anchor = super::ProcessGroupAnchor::spawn()?;
+        let mut command = if std::env::var_os("VELNOR_TEST_NESTED").is_some() {
+            let mut command = std::process::Command::new(std::env::current_exe()?);
+            command
+                .args([
+                    "--exact",
+                    "command::process_group::tests::anchor_owner_child",
+                    "--nocapture",
+                ])
+                .env_remove("VELNOR_TEST_NESTED");
+            command
+        } else {
+            let mut command = std::process::Command::new("/bin/sh");
+            command.args(["-c", "echo ready > \"$1/ready\"; (echo ready > \"$1/grandchild\"; sleep 2; echo escaped > \"$1/escaped\") & wait", "test"])
+                .arg(root);
+            command
+        };
+        let mut child = command.process_group(anchor.pgid()).spawn()?;
+        let _status = child.wait()?;
+        drop(anchor);
+        Ok(())
+    }
+
+    #[test]
+    fn anchor_drains_group_after_owner_is_killed() -> Result<(), Box<dyn std::error::Error>> {
+        owner_death(false)
+    }
+
+    #[test]
+    fn nested_anchor_drains_after_outer_owner_is_killed() -> Result<(), Box<dyn std::error::Error>>
+    {
+        owner_death(true)
+    }
+
+    fn owner_death(nested: bool) -> Result<(), Box<dyn std::error::Error>> {
+        use std::os::unix::process::CommandExt as _;
+        use std::time::{Duration, Instant};
+        let temp = tempfile::tempdir()?;
+        let mut owner_command = std::process::Command::new(std::env::current_exe()?);
+        if nested {
+            owner_command.env("VELNOR_TEST_NESTED", "1");
+        }
+        let mut owner = owner_command
+            .args([
+                "--exact",
+                "command::process_group::tests::anchor_owner_child",
+                "--nocapture",
+            ])
+            .env("VELNOR_TEST_ANCHOR_ROOT", temp.path())
+            .spawn()?;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !temp.path().join("ready").exists() || !temp.path().join("grandchild").exists() {
+            if Instant::now() >= deadline {
+                owner.kill()?;
+                return Err("owner did not start".into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let mut sentinel = std::process::Command::new("/bin/sh")
+            .args(["-c", "sleep 3; echo alive > \"$1/sentinel\"", "test"])
+            .arg(temp.path())
+            .process_group(0)
+            .spawn()?;
+        owner.kill()?;
+        owner.wait()?;
+        if !sentinel.wait()?.success() {
+            return Err("unrelated process failed".into());
+        }
+        assert!(temp.path().join("sentinel").exists());
+        assert!(
+            !temp.path().join("escaped").exists(),
+            "descendant survived owner death"
+        );
+        Ok(())
     }
 }
