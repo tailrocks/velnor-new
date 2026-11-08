@@ -317,7 +317,9 @@ def main():
         "::same_base_history_rejects_forged_tool",
         "::signed_controller_dispatch_rechecks_historical_authority",
     )
-    machine = "x86_64" if test.endswith(signed_history_tests) else platform.machine().lower()
+    signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
+    source_compiler = signed_controller or test == "crate_release_controller::tests::capacity::overflow::signed_start_rejects_oversized_observation_without_journal_writes"
+    machine = "x86_64" if source_compiler or test.endswith(signed_history_tests) else platform.machine().lower()
     arch = {"arm64":"aarch64", "aarch64":"aarch64", "x86_64":"x86_64", "amd64":"x86_64"}.get(machine)
     if arch is None:
         raise RuntimeError("unsupported isolated fixture host architecture")
@@ -352,10 +354,11 @@ def main():
     source_tools = pathlib.Path(configured_tools or "")
     if not source_tools.is_absolute():
         raise RuntimeError("set VELNOR_GH_FIXTURE_TOOLS to an absolute directory with qualified Linux gh and nextest")
-    signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
     required = [f"gh_{gh_platform}", f"cargo-nextest_{gh_platform}"]
+    if source_compiler:
+        required.append("mise_linux_amd64")
     if signed_controller:
-        required.extend(["mise_linux_amd64", "release-plz-0.4.3", "channel-rust-1.99.1.toml"])
+        required.extend(["release-plz-0.4.3", "channel-rust-1.99.1.toml"])
     if any(not (source_tools / name).is_file() for name in required):
         runner_temp = os.environ.get("RUNNER_TEMP")
         if not runner_temp or source_tools != pathlib.Path(runner_temp) / "velnor-gh-fixture-tools":
@@ -366,6 +369,8 @@ def main():
         args = ["/usr/bin/python3", "-I", str(validation / "scripts/prepare-gh-fixture-tools.py")]
         if signed_controller:
             args.append("--with-signed-controller")
+        elif source_compiler:
+            args.append("--with-source-compiler")
         subprocess.run(args, env=staging_env, check=True, timeout=780)
     cargo_home = pathlib.Path(os.environ.get("CARGO_HOME") or (pathlib.Path.home() / ".cargo"))
     registry = (cargo_home / "registry").resolve(strict=True)
@@ -394,6 +399,7 @@ def main():
         if signed_controller:
             install_tool(source_tools / "release-plz-0.4.3", tools / "signed-controller/release-plz", "678330a1f03330fb375d15be8d6e094d0f65d2b70e2af417c69fcec78fa74466", 128 * 1024 * 1024)
             install_tool(source_tools / "channel-rust-1.99.1.toml", tools / "signed-controller/channel.toml", "fb152be80975c194aa5fc684b2aec3a6e14e2b855efe2faa4e5f8ae6e590f463", 16 * 1024 * 1024)
+        if source_compiler:
             catalog = read_regular(validation / "crates/velnor-actions-mise/src/catalog.rs", 65536).decode()
             versions = re.findall(r'pub const MISE_VERSION: &str\s*=\s*"([^"\n]+)";', catalog)
             digests = re.findall(r'pub const MISE_BINARY_SHA256_LINUX_X64: &str\s*=\s*"([0-9a-f]{64})";', catalog)
@@ -435,7 +441,7 @@ def main():
             release = "--release" if profile == "release" else ""
             selection = "--lib" if test_target is None else f"--test {test_target}"
             fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release}; cargo test --locked --offline -p velnor-actions-orchestrator --lib --no-run --message-format=json {release} > /target/fixture-worker-messages;" if kind == "image_publication" else ""
-            build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if signed_controller else ""
+            build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if source_compiler else ""
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true {build_settings}; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
             if kind == "image_publication":
@@ -458,7 +464,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_UN)
         nonce = secrets.token_hex(32)
         receipt = target / f"receipt-{nonce}"
-        fixture_path = "/tools/bin:" if signed_controller else ""
+        fixture_path = "/tools/bin:" if source_compiler else ""
         worker = read_regular(worker_path, 4096).decode() if kind == "image_publication" else ""
         script = f'''set -eu; mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
         env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}", "-e", f"VELNOR_IMAGE_TEST_WORKER={worker}"]

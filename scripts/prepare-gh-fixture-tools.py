@@ -129,7 +129,7 @@ def stage_executable(command, destination, executable_digest, archive_url, archi
         extract_binary(archive, member, destination, executable_digest)
 
 
-def stage_signed_controller(root, destination, env):
+def stage_source_compiler(root, destination, env):
     catalog = (root / "crates/velnor-actions-mise/src/catalog.rs").read_text()
     matches = re.findall(r'pub const MISE_BINARY_SHA256_LINUX_X64: &str\s*=\s*"([0-9a-f]{64})";', catalog)
     if len(matches) != 1:
@@ -138,6 +138,10 @@ def stage_signed_controller(root, destination, env):
     if not mise:
         raise ValueError("fixture mise executable is missing")
     copy_verified(pathlib.Path(mise).resolve(strict=True), destination / "mise_linux_amd64", matches[0], 192 * 1024 * 1024)
+
+
+def stage_signed_controller(root, destination, env):
+    stage_source_compiler(root, destination, env)
     with tempfile.TemporaryDirectory(dir=destination, prefix=".signed-") as directory:
         root_dir = pathlib.Path(directory)
         channel = root_dir / "channel.toml"
@@ -252,8 +256,9 @@ def stage_recovery_release_assets(root, destination, assets, trusted_root_digest
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--with-image-tuf"], ["--with-signed-controller"], ["--with-recovery-fixture"]):
+    if sys.argv[1:] not in ([], ["--with-image-tuf"], ["--with-source-compiler"], ["--with-signed-controller"], ["--with-recovery-fixture"]):
         raise ValueError("unsupported fixture staging arguments")
+    with_source_compiler = sys.argv[1:] == ["--with-source-compiler"]
     with_image_tuf = sys.argv[1:] == ["--with-image-tuf"]
     with_recovery_fixture = sys.argv[1:] == ["--with-recovery-fixture"]
     with_signed_controller = sys.argv[1:] == ["--with-signed-controller"] or with_recovery_fixture
@@ -300,6 +305,10 @@ def main():
         f"https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-{nextest_version}/cargo-nextest-{nextest_version}-{target}.tar.gz",
         entry["nextest_archive_sha256"], "cargo-nextest", env,
     )
+    if with_source_compiler:
+        if arch != "x86_64":
+            raise ValueError("source compiler fixture requires Linux x86_64")
+        stage_source_compiler(root, destination, env)
     if with_signed_controller:
         if arch != "x86_64":
             raise ValueError("signed controller fixture requires Linux x86_64")

@@ -283,28 +283,20 @@ pub(crate) fn verify_capacity_rust(
         .map_err(|_| invalid())?;
     if !output.success {
         #[cfg(test)]
-        report_verifier_failure(&output.stderr);
+        verifier_diagnostics::report_verifier_failure(
+            &output.stderr,
+            output.code,
+            output.signal,
+            deadline.remaining().is_err(),
+        );
         return Err(invalid());
     }
     Ok(())
 }
 
 #[cfg(test)]
-fn report_verifier_failure(stderr: &[u8]) {
-    let text = String::from_utf8_lossy(stderr);
-    let category = [
-        "rust_component_tarball_digest_mismatch",
-        "rust_channel_manifest_digest_mismatch",
-        "rust_component_not_in_manifest",
-        "rust_toolchain_bytes_mismatch",
-        "rust_component_archive_invalid",
-        "curl: (",
-    ]
-    .into_iter()
-    .find(|candidate| text.contains(candidate))
-    .unwrap_or("other");
-    eprintln!("capacity verifier failure category: {category}");
-}
+#[path = "verifier_diagnostics.rs"]
+mod verifier_diagnostics;
 
 fn run_package_list_command(
     request: &crate::CratePackageSource<'_>,
