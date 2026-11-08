@@ -15,11 +15,12 @@ mod github;
 mod hash;
 mod inspection;
 mod manifest;
+mod projection_cache;
 mod registry_projection;
 mod runner_release;
 mod strict_json;
 
-pub(crate) use registry_projection::RegistryProjection;
+pub(crate) use projection_cache::RegistryProjection;
 pub(crate) use runner_release::VerifiedRunnerRelease;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -158,9 +159,9 @@ impl<'a> NativeArtifactProvider<'a> {
 
     pub(crate) async fn verified_registry_projection(
         &self,
-        release: &VerifiedRunnerRelease,
         role: velnor_runner_image_manifest::ImageKind,
     ) -> Result<RegistryProjection, HostError> {
+        let release = self.verified_runner_release().await?;
         if release.source_sha != self.key.source_sha {
             return Err(HostError::Identity);
         }
@@ -171,6 +172,13 @@ impl<'a> NativeArtifactProvider<'a> {
                 &release.manifest.images.resource_probe
             }
         };
-        registry_projection::verify(&self.client, image, role, &release.source_sha).await
+        let mut cache = release.projections.lock().await;
+        if let Some(projection) = cache.get(image, role, &release.source_sha) {
+            return Ok(projection);
+        }
+        let projection =
+            registry_projection::verify(&self.client, image, role, &release.source_sha).await?;
+        cache.insert(image, projection.clone());
+        Ok(projection)
     }
 }

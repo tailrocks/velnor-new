@@ -26,6 +26,10 @@ name = "image_session_public"
 path = "tests/image_session_public.rs"
 
 [[test]]
+name = "registry_projection_cache_pure"
+path = "tests/registry_projection_cache_pure.rs"
+
+[[test]]
 name = "registry_journal_public"
 path = "tests/registry_journal_public.rs"
 

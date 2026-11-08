@@ -153,7 +153,7 @@ async fn registry_identity(
         ImageKind::ResourceProbe => &release.manifest.images.resource_probe,
     };
     let projection = provider
-        .verified_registry_projection(release, role)
+        .verified_registry_projection(role)
         .await
         .map_err(|_| ProviderFailure::NativeAdmission)?;
     let identity = RegistryImageIdentity::new(

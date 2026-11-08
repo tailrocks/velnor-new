@@ -5,10 +5,7 @@ use std::collections::BTreeMap;
 
 use reqwest::{Client, Response, StatusCode, Url};
 use serde_json::Value;
-use velnor_runner_image_manifest::{
-    ImageEntry, ImageKind, admits_image_configuration, parse_oci_manifest,
-    project_oci_configuration, strict_json,
-};
+use velnor_runner_image_manifest::{ImageEntry, ImageKind, parse_oci_manifest, strict_json};
 
 use super::hash::{is_lower_hex, lowercase_hex, sha256};
 use crate::error::HostError;
@@ -18,43 +15,7 @@ const TOKEN_LIMIT: usize = 64 * 1024;
 const CONFIG_LIMIT: usize = 64 * 1024 * 1024;
 const ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json";
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RegistryProjection {
-    manifest_size: u64,
-    configuration: Value,
-    diff_ids: Vec<String>,
-    role: ImageKind,
-    source: String,
-    registry_digest: String,
-    config_digest: String,
-}
-
-impl RegistryProjection {
-    pub(crate) fn manifest_size(&self) -> u64 {
-        self.manifest_size
-    }
-
-    pub(crate) fn configuration(&self) -> &Value {
-        &self.configuration
-    }
-
-    pub(crate) fn diff_ids(&self) -> &[String] {
-        &self.diff_ids
-    }
-
-    pub(crate) fn matches(
-        &self,
-        role: ImageKind,
-        source: &str,
-        registry_digest: &str,
-        config_digest: &str,
-    ) -> bool {
-        self.role == role
-            && self.source == source
-            && self.registry_digest == registry_digest
-            && self.config_digest == config_digest
-    }
-}
+use super::projection_cache::RegistryProjection;
 
 pub(super) async fn verify(
     client: &Client,
@@ -88,13 +49,13 @@ pub(super) async fn verify(
     }
     let value = strict_json::parse_strict_json_bytes(&bytes, MANIFEST_LIMIT)
         .map_err(|_| HostError::Identity)?;
-    let (config, layers) = parse_oci_manifest(&value).map_err(|_| HostError::Identity)?;
+    let (config, _layers) = parse_oci_manifest(&value).map_err(|_| HostError::Identity)?;
     if format!("sha256:{}", config.digest) != image.config_digest
         || config.size > CONFIG_LIMIT as u64
     {
         return Err(HostError::Identity);
     }
-    let manifest_size = bytes.len() as u64;
+    let manifest_bytes = bytes;
     let config_url = format!(
         "https://ghcr.io/v2/{repository}/blobs/{}",
         image.config_digest
@@ -109,62 +70,7 @@ pub(super) async fn verify(
         return Err(HostError::Identity);
     }
     let bytes = super::github::read_limited(response, CONFIG_LIMIT).await?;
-    if bytes.len() as u64 != config.size || lowercase_hex(&sha256(&bytes)) != config.digest {
-        return Err(HostError::Identity);
-    }
-    let (configuration, diff_ids) = validate_config(&bytes, layers.len(), role, source)?;
-    Ok(RegistryProjection {
-        manifest_size,
-        configuration,
-        diff_ids,
-        role,
-        source: source.to_owned(),
-        registry_digest: image.registry_digest.clone(),
-        config_digest: image.config_digest.clone(),
-    })
-}
-
-fn validate_config(
-    bytes: &[u8],
-    layer_count: usize,
-    role: ImageKind,
-    source: &str,
-) -> Result<(Value, Vec<String>), HostError> {
-    let image_config = strict_json::parse_strict_json_bytes(bytes, CONFIG_LIMIT)
-        .map_err(|_| HostError::Identity)?;
-    let object = image_config.as_object().ok_or(HostError::Identity)?;
-    if object.get("os").and_then(Value::as_str) != Some("linux")
-        || object.get("architecture").and_then(Value::as_str) != Some("amd64")
-    {
-        return Err(HostError::Identity);
-    }
-    let diff_ids = object
-        .get("rootfs")
-        .and_then(Value::as_object)
-        .filter(|root| root.get("type").and_then(Value::as_str) == Some("layers"))
-        .and_then(|root| root.get("diff_ids"))
-        .and_then(Value::as_array)
-        .filter(|values| values.len() == layer_count)
-        .ok_or(HostError::Identity)?
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .filter(|value| digest(value))
-                .map(str::to_owned)
-                .ok_or(HostError::Identity)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let projection = project_oci_configuration(&image_config).map_err(|_| HostError::Identity)?;
-    if !admits_image_configuration(&projection, role, source) {
-        return Err(HostError::Identity);
-    }
-    let configuration = object
-        .get("config")
-        .and_then(Value::as_object)
-        .cloned()
-        .ok_or(HostError::Identity)?;
-    Ok((Value::Object(configuration), diff_ids))
+    RegistryProjection::admit(image, role, source, &manifest_bytes, &bytes)
 }
 
 async fn manifest_response(

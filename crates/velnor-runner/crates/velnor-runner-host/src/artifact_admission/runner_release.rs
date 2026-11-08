@@ -23,6 +23,7 @@ pub(crate) struct VerifiedRunnerRelease {
     pub(crate) source_sha: String,
     pub(crate) manifest_sha: String,
     pub(crate) manifest: RunnerImageManifest,
+    pub(super) projections: tokio::sync::Mutex<super::projection_cache::ProjectionCache>,
 }
 
 pub(super) async fn fetch_verified(
@@ -105,6 +106,7 @@ pub(super) async fn fetch_verified_for(
         source_sha: source_sha.to_owned(),
         manifest_sha: manifest_digest.to_owned(),
         manifest,
+        projections: tokio::sync::Mutex::default(),
     })
 }
 
