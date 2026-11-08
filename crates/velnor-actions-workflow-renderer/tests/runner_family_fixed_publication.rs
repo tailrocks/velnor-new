@@ -158,7 +158,7 @@ fn family_coordinator_publishes_three_authenticated_images_and_serializes_releas
 fn family_reads_all_graphs_with_anonymous_pull_tokens() -> Result<(), Box<dyn Error>> {
     let (_, public, manifest) = family_fixture("publish")?;
     assert_eq!(public["ok"], true);
-    assert!(!manifest.is_empty());
+    assert_ne!(manifest, [] as [u8; 0]);
     let reads = public["anonymous_reads"]
         .as_array()
         .ok_or("missing anonymous reads")?;
