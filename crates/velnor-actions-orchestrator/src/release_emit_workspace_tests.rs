@@ -4,6 +4,69 @@
 use super::{preview_consumer_intent, preview_fixture};
 
 #[test]
+fn workspace_validation_rejects_partial_bootstrap_maps() -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs;
+    let temp = tempfile::tempdir()?;
+    let root = temp.path();
+    preview_fixture(root)?;
+    fs::create_dir_all(root.join("beta/src"))?;
+    fs::write(
+        root.join("beta/Cargo.toml"),
+        "[package]\nname='beta'\nversion='0.1.0'\nedition='2021'\n",
+    )?;
+    fs::write(root.join("beta/src/lib.rs"), "")?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers=['beta']\nresolver='2'\n[package]\nname='demo'\nversion='0.1.0'\nedition='2021'\n",
+    )?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname='beta'\nversion='0.1.0'\n\n[[package]]\nname='demo'\nversion='0.1.0'\n",
+    )?;
+    commit_fixture(root, "workspace")?;
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()?;
+    assert!(output.status.success());
+    let sha = String::from_utf8(output.stdout)?.trim().to_owned();
+    let config_path = root.join(".velnor/config.toml");
+    let base = fs::read_to_string(&config_path)?.replace(
+        "packages = ['demo']",
+        "publishable_workspace = true\nauthentication = 'bootstrap-token'",
+    );
+    let config = |packages: &str| {
+        format!(
+            "{base}\n[stacks.rust.release.new_crates]\nsource_sha = '{sha}'\n[stacks.rust.release.new_crates.packages]\n{packages}\n"
+        )
+    };
+    fs::write(&config_path, config("demo = '0.1.0'"))?;
+    commit_fixture(root, "partial map")?;
+    let error =
+        crate::validate_crate_release_workspace(root, None).expect_err("partial map accepted");
+    assert!(
+        error
+            .to_string()
+            .contains("creation_package_selection_mismatch"),
+        "{error}"
+    );
+    fs::write(&config_path, config("demo = '0.1.0'\nbeta = '0.1.0'"))?;
+    commit_fixture(root, "complete map")?;
+    crate::validate_crate_release_workspace(root, None)?;
+    fs::write(&config_path, config("demo = '0.1.0'\nbeta = '0.2.0'"))?;
+    commit_fixture(root, "wrong version")?;
+    let error =
+        crate::validate_crate_release_workspace(root, None).expect_err("wrong version accepted");
+    assert!(
+        error
+            .to_string()
+            .contains("creation_package_version_mismatch"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn release_intent_includes_nested_auto_workspace_members() -> Result<(), Box<dyn std::error::Error>>
 {
     use std::fs;

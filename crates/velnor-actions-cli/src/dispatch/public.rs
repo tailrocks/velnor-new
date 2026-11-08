@@ -42,7 +42,7 @@ pub(crate) fn run_public() -> ExitCode {
             output_dir, mode, ..
         } => crate::dispatch_generate::run_generate(output_dir, mode, guard.as_ref()),
         Command::Unmanaged => crate::dispatch_unmanaged::run_unmanaged(),
-        Command::Config { command } => crate::dispatch_config::run_config(&command),
+        Command::Config { command } => crate::dispatch_config::run_config(&command, guard.as_ref()),
         Command::Deps { command } => crate::dispatch_deps::run_deps(&command),
         Command::Playwright { command } => crate::dispatch_deps::run_playwright(&command),
         Command::Homebrew { command } => {
@@ -72,6 +72,7 @@ fn supports_operator_guard(command: &Command) -> bool {
     matches!(
         command,
         Command::Plan
+            | Command::Config { command: crate::args::ConfigCommand::ValidateCrateRelease }
             | Command::Generate {
                 owned_tool_candidates_only: false,
                 ..

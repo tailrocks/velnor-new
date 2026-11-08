@@ -6,6 +6,37 @@ use std::{error::Error, fs};
 use super::fixture;
 
 #[test]
+fn crate_release_validation_obeys_operator_guard() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture::Fixture::new()?;
+    fixture.enable_release("crates-io")?;
+    let _ = fixture.plan("deny")?;
+    let result = fixture.invoke(&[
+        "--toolchain-guard",
+        fixture.guard.to_str().ok_or("non-UTF-8 guard path")?,
+        "config",
+        "validate-crate-release",
+    ])?;
+    assert!(!result.status.success());
+    assert!(
+        fixture::stderr(&result).contains("operator toolchain guard rejected metadata"),
+        "{}",
+        fixture::stderr(&result)
+    );
+    let _ = fixture.plan("allow")?;
+    let allowed = fixture.invoke_with_guard_policy(
+        &[
+            "--toolchain-guard",
+            fixture.guard.to_str().ok_or("non-UTF-8 guard path")?,
+            "config",
+            "validate-crate-release",
+        ],
+        true,
+    )?;
+    assert!(allowed.status.success(), "{}", fixture::stderr(&allowed));
+    Ok(())
+}
+
+#[test]
 fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
     let plan = fixture.invoke(&["plan"])?;

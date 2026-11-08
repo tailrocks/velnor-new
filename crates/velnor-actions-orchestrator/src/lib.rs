@@ -90,6 +90,7 @@ mod workflow;
 mod workflow_jobs;
 mod workflow_task_jobs;
 pub use release::crate_release_runtime::{parse_crate_release_intent, run_crate_release};
+pub use release::release_emit::validate_crate_release_workspace;
 
 #[expect(
     missing_debug_implementations,

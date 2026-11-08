@@ -197,6 +197,8 @@ pub(crate) enum HomebrewCommand {
 /// Config subcommands.
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigCommand {
+    /// Validate a crates.io release against its approved source workspace.
+    ValidateCrateRelease,
     /// Print the schema 2 config. `--write` stores that same text.
     Migrate {
         /// Target schema. Only `2` is accepted.
