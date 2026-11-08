@@ -12,6 +12,8 @@ use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::schema2::{Schema2WorkflowRequest, render_schema2_workflows};
 
 mod assets;
+#[path = "../../velnor-actions-workflow-renderer/tests/generator_release_prepare_fixture/extract.rs"]
+mod generator_extract;
 
 const REJECTION: &str = "external attestation rejection: passive subject is not authenticated";
 
@@ -68,6 +70,7 @@ impl Fixture {
         let root = tempfile::tempdir()?;
         fs::create_dir(root.path().join("checkout"))?;
         fs::create_dir(root.path().join("assets"))?;
+        fs::write(root.path().join("github-env"), "")?;
         assets::create(&root.path().join("assets"))?;
         fs::write(
             root.path().join("gh-transport.sh"),
@@ -83,6 +86,7 @@ impl Fixture {
         let response = assets::release_response(&root.join("assets"))?;
         fs::write(root.join("releases.json"), serde_json::to_vec(&response)?)?;
         Ok(Command::new("bash")
+            .arg("-e")
             .arg(root.join("reconcile.sh"))
             .current_dir(root.join("checkout"))
             .env_clear()
@@ -97,6 +101,10 @@ impl Fixture {
             .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
             .env("GITHUB_OUTPUT", root.join("output"))
             .env("VELNOR_TEST_GH_TRANSPORT", root.join("gh-transport.sh"))
+            .env("GITHUB_ENV", root.join("github-env"))
+            .env("RUNNER_TEMP", root)
+            .env("VELNOR_TOOL_RUST", "1.91.0")
+            .env("VELNOR_TOOL_MR_BOXINGTON", "1.0.0")
             .env("FIXTURE_RELEASES", root.join("releases.json"))
             .env("FIXTURE_ASSETS", root.join("assets"))
             .output()?)
@@ -119,24 +127,8 @@ fn reconcile_script() -> Result<String, Box<dyn Error>> {
         .iter()
         .find(|file| file.path == ".github/workflows/product-release.yml")
         .ok_or("missing rendered product release workflow")?;
-    let section = workflow
-        .bytes
-        .split("\n  prepare-generator:\n")
-        .nth(1)
-        .ok_or("missing generator prepare job")?;
-    let job = section
-        .split("\n  release-generator:\n")
-        .next()
-        .ok_or("missing generator job body")?;
-    let reconcile = job
-        .split("- name: Reconcile immutable family release\n")
-        .nth(1)
-        .ok_or("missing generator reconcile step")?;
-    let run = reconcile
-        .lines()
-        .find_map(|line| line.strip_prefix("        run: "))
-        .ok_or("missing generator reconcile script")?;
-    let script: String = serde_json::from_str(run)?;
+    let (script, _, _, _) = generator_extract::extract_prepare_script(&workflow.bytes)?;
+    generator_extract::check_project_tool_binding(&workflow.bytes, &script)?;
     let (before, remainder) = script.split_once("gh() {\n").ok_or("missing gh boundary")?;
     let (_, after) = remainder
         .split_once("}\nexport -f gh")
@@ -185,6 +177,8 @@ fn render_pins() -> Result<velnor_actions_workflow_renderer::ProductReleasePins,
         })
         .collect::<Result<Vec<_>, _>>()?;
     let mut pins = super::pins();
+    "${VELNOR_TOOL_RUST}".clone_into(&mut pins.rust_version);
+    "${VELNOR_TOOL_MR_BOXINGTON}".clone_into(&mut pins.mr_boxington_version);
     for argv in [
         &mut pins.install_gate_tools_argv,
         &mut pins.install_build_tools_argv,

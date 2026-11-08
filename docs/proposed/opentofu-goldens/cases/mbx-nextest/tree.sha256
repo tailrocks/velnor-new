@@ -14,5 +14,5 @@
 - d7ebb0b67e3d6fc4084863a0af18624ef7b7d4d29f2b30a2fa3996d32eb493bf  ./.github/velnor/producer-executions-v1.json
 - 24251c3039dcdf2d01ccccf5450beece1826026d2d3ad8a5c5b991a8c2b22c9d  ./.github/velnor/task-execution-manifest-v1.json
 - 32406a8befb4d8ffa8644c148de4510ab4398d4306bcbb4c7a4198f48423a4ba  ./.github/workflows/cache-prune.yml
-- 2035d9cb7d1db233e3d264650dfbd40e84ca61a932b9a86142bb5f0d609cece2  ./.github/workflows/ci.yml
-- ffba755e2c941b459dc868552de20f14788430809fa4bcbc87a03fcdef94ef46  ./.github/workflows/state-seal.yml
+- 5fc781b7df81f654a9948c8e438c31d0f3394b682bb058606741d8f349a1e46e  ./.github/workflows/ci.yml
+- 1bbb697dd7d0f80d38def6e754d5ba6c603c4d24a1bd415d6e2383153ca6696e  ./.github/workflows/state-seal.yml

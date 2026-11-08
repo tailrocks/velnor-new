@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{GH_VERSION, MBX_VERSION, RUST_VERSION};
+use super::GH_VERSION;
 use velnor_actions_workflow_renderer::schema2::ProductReleasePins;
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 
@@ -78,7 +78,7 @@ pub(super) fn pins() -> ProductReleasePins {
         .into_iter()
         .map(str::to_owned)
         .collect(),
-        rust_version: RUST_VERSION.to_owned(),
+        rust_version: "${VELNOR_TOOL_RUST}".to_owned(),
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
@@ -87,7 +87,7 @@ pub(super) fn pins() -> ProductReleasePins {
                 velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
             ),
         ],
-        mr_boxington_version: MBX_VERSION.to_owned(),
+        mr_boxington_version: "${VELNOR_TOOL_MR_BOXINGTON}".to_owned(),
         gh_version: GH_VERSION.to_owned(),
     }
 }

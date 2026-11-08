@@ -1445,6 +1445,7 @@ crates/velnor-actions-workflow-renderer/src/document_steps_internal_env.rs
 crates/velnor-actions-workflow-renderer/src/error.rs
 crates/velnor-actions-workflow-renderer/src/expressions.rs
 crates/velnor-actions-workflow-renderer/src/final_steps.rs
+crates/velnor-actions-workflow-renderer/src/fixed_python_authority.rs
 crates/velnor-actions-workflow-renderer/src/freshness.rs
 crates/velnor-actions-workflow-renderer/src/group_ledger_steps.rs
 crates/velnor-actions-workflow-renderer/src/guard.rs

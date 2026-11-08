@@ -586,3 +586,7 @@ selected `sdk-preview-*` tag policy and the owner reviewer. The stable
 and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).
 
 GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) returns published releases. Its [release listing endpoint](https://docs.github.com/en/rest/releases/releases#list-releases) includes drafts only for callers with push access. The preview draft job has contents write access and searches a bounded complete release listing before creating a release; the read-only source job does not infer draft absence from a hidden result. Candidate selection and later jobs retain the exact original artifact IDs recorded in the owned draft.
+
+## Workflow run-step length
+
+GitHub limits a single [`jobs.<job_id>.steps[*].run` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun) to 21,000 characters. Velnor materializes longer fixed Bash scripts in bounded steps after binding project tool references. It verifies the reconstructed bytes before running the original script. Oversized scripts with GitHub expressions or unsupported runner and shell settings fail generation.

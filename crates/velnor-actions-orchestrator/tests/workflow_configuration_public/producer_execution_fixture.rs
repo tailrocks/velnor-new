@@ -140,6 +140,7 @@ impl Fixture {
             .env("GITHUB_EVENT_PATH", payload)
             .env("GITHUB_RUN_ID", "190001")
             .env("GITHUB_RUN_ATTEMPT", "1")
+            .env(velnor_actions_contract::PLAN_ATTEMPT_ENV, "1")
             .env("GITHUB_JOB", job)
             .env("VELNOR_TASK_ID", task)
             .env("VELNOR_EXIT_CODE", exit.unwrap_or("0"))

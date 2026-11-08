@@ -38,8 +38,13 @@ with tempfile.TemporaryDirectory() as temporary:
     (remote / "src").mkdir(parents=True)
     (remote / "Cargo.toml").write_text('[package]\nname="git-dependency"\nversion="0.1.0"\nedition="2021"\n')
     (remote / "src/lib.rs").write_text('pub fn answer() -> u8 { 42 }\n')
-    env = {key: os.environ[key] for key in ("HOME", "USER", "RUSTUP_HOME") if key in os.environ}
-    env.update({"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
+    env = {key: os.environ[key] for key in ("USER", "RUSTUP_HOME") if key in os.environ}
+    env.setdefault("RUSTUP_HOME", str(pathlib.Path.home() / ".rustup"))
+    for key, name in (("HOME", "home"), ("MISE_DATA_DIR", "mise-data"), ("MISE_CACHE_DIR", "mise-cache"), ("MISE_STATE_DIR", "mise-state"), ("MISE_CONFIG_DIR", "mise-config")):
+        directory = base / name
+        directory.mkdir(mode=0o700)
+        env[key] = str(directory)
+    env.update({"PATH": str(pathlib.Path(cargo).parent) + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin"), "MISE_AUTO_INSTALL": "0", "MISE_EXEC_AUTO_INSTALL": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
     run(["git", "init", "-q"], remote, env)
     run(["git", "add", "."], remote, env)
     run(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"], remote, env)
