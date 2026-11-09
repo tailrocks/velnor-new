@@ -14,6 +14,8 @@ use velnor_actions_orchestrator::{
     crate_release_registry::{CrateRegistryRead, CrateRegistryResponse},
     crate_release_workspace_plan_with_registry,
 };
+#[path = "crate_workspace_plan_nested.rs"]
+mod nested;
 struct NoRegistry;
 impl CrateRegistryRead for NoRegistry {
     fn get(&self, _path: &str) -> Result<CrateRegistryResponse, OrchestratorError> {
