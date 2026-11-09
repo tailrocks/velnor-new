@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod recovery;
 mod storage;
 pub(in crate::journal) use storage::validate_rows;
 use storage::{abort_unclaimed_archive_imports, latest};

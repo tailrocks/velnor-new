@@ -8,6 +8,9 @@
 #[path = "image_session_public/peer.rs"]
 mod peer;
 
+#[path = "registry_acquisition_public/recovery.rs"]
+mod recovery;
+
 use peer::*;
 use serde_json::json;
 use sha2::{Digest, Sha256};

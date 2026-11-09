@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use bollard::models::ImageInspect;
+mod verify_config;
+
 use velnor_runner_image_manifest::{ImageEntry, ImageKind};
+use verify_config::verify_configuration;
 
 use super::ProviderFailure;
 use super::identity::SelectedDaemon;
@@ -116,10 +118,23 @@ pub async fn acquire_registry_image(
     endpoint: &str,
     spec: RegistryImageSpecification,
 ) -> Result<AcquiredRegistryImage, crate::error::HostError> {
-    acquire(journal, endpoint, spec).await.map_err(|error| {
-        eprintln!("registry_image=unavailable reason={}", error.code());
-        crate::error::HostError::Docker
+    let journal = journal.clone();
+    let endpoint = endpoint.to_owned();
+    tokio::spawn(async move {
+        let mut lock_name = journal.path().as_os_str().to_os_string();
+        lock_name.push(".registry-import.lock");
+        let lock_path = std::path::PathBuf::from(lock_name);
+        let lock = crate::daemon_lock::DaemonLock::try_acquire(&lock_path)?;
+        if !lock.matches_path(&lock_path) {
+            return Err(crate::error::HostError::Lock);
+        }
+        acquire(&journal, &endpoint, spec).await.map_err(|error| {
+            eprintln!("registry_image=unavailable reason={}", error.code());
+            crate::error::HostError::Docker
+        })
     })
+    .await
+    .map_err(|_| crate::error::HostError::Docker)?
 }
 
 async fn acquire(
@@ -137,51 +152,10 @@ async fn acquire(
         &identity.daemon_architecture,
     )
     .map_err(|_| ProviderFailure::DaemonIdentity)?;
-    let prepared = tokio::time::timeout(super::PREPARE_TIMEOUT, async {
-        let mut session = ImageSession::connect(endpoint, &selected)
-            .await
-            .map_err(|_| ProviderFailure::DaemonIdentity)?;
-        let reference = image_reference(&identity)?;
-        let record = journal
-            .prepare_registry_image(identity.clone())
-            .await
-            .map_err(|_| ProviderFailure::ImageImportJournal)?;
-        if matches!(
-            record.state,
-            ImageImportState::Requested | ImageImportState::Uncertain | ImageImportState::Aborted
-        ) {
-            return Err(ProviderFailure::ImageLoad);
-        }
-        if let Some(image_inspect) = session
-            .inspect(&reference)
-            .await
-            .map_err(|_| ProviderFailure::ImageInspect)?
-        {
-            let (inspection, configuration) =
-                verified_inspection(&identity, &projection, image_inspect)?;
-            match record.state {
-                ImageImportState::Prepared => journal
-                    .complete_preloaded_registry_image(&record, &inspection)
-                    .await
-                    .map_err(|_| ProviderFailure::ImageImportJournal)?,
-                ImageImportState::Completed => journal
-                    .verify_completed_registry_image(&record, &inspection)
-                    .await
-                    .map_err(|_| ProviderFailure::ImageImportJournal)?,
-                _ => return Err(ProviderFailure::ImageLoad),
-            }
-            return Ok(Prepared::Existing(Box::new(AcquiredRegistryImage {
-                identity: identity.clone(),
-                observation: inspection.observation().clone(),
-                configuration,
-                projection: projection.clone(),
-            })));
-        }
-        if record.state != ImageImportState::Prepared {
-            return Err(ProviderFailure::ImageLoad);
-        }
-        Ok(Prepared::Missing(Box::new((session, record, reference))))
-    })
+    let prepared = tokio::time::timeout(
+        super::PREPARE_TIMEOUT,
+        prepare(journal, endpoint, &selected, &identity, &projection),
+    )
     .await
     .map_err(|_| ProviderFailure::Timeout)??;
     let (mut session, record, reference) = match prepared {
@@ -199,6 +173,72 @@ async fn acquire(
     .await
 }
 
+async fn prepare(
+    journal: &Journal,
+    endpoint: &str,
+    selected: &DaemonSelection,
+    identity: &RegistryImageIdentity,
+    projection: &RegistryProjection,
+) -> Result<Prepared, ProviderFailure> {
+    let mut session = ImageSession::connect(endpoint, selected)
+        .await
+        .map_err(|_| ProviderFailure::DaemonIdentity)?;
+    let reference = image_reference(identity)?;
+    let record = journal
+        .prepare_registry_image(identity.clone())
+        .await
+        .map_err(|_| ProviderFailure::ImageImportJournal)?;
+    if matches!(
+        record.state,
+        ImageImportState::Uncertain | ImageImportState::Aborted
+    ) {
+        return Err(ProviderFailure::ImageLoad);
+    }
+    if let Some(image_inspect) = session
+        .inspect(&reference)
+        .await
+        .map_err(|_| ProviderFailure::ImageInspect)?
+    {
+        let (inspection, configuration) = verified_inspection(identity, projection, image_inspect)?;
+        match record.state {
+            ImageImportState::Prepared => journal
+                .complete_preloaded_registry_image(&record, &inspection)
+                .await
+                .map_err(|_| ProviderFailure::ImageImportJournal)?,
+            ImageImportState::Requested => {
+                let claim = journal
+                    .resume_registry_image(&record)
+                    .await
+                    .map_err(|_| ProviderFailure::ImageImportJournal)?;
+                journal
+                    .complete_registry_image(claim, &inspection)
+                    .await
+                    .map_err(|_| ProviderFailure::ImageImportJournal)?;
+            }
+            ImageImportState::Completed => journal
+                .verify_completed_registry_image(&record, &inspection)
+                .await
+                .map_err(|_| ProviderFailure::ImageImportJournal)?,
+            _ => return Err(ProviderFailure::ImageLoad),
+        }
+        return Ok(Prepared::Existing(Box::new(AcquiredRegistryImage {
+            identity: identity.clone(),
+            observation: inspection.observation().clone(),
+            configuration,
+            projection: projection.clone(),
+        })));
+    }
+    let record = match record.state {
+        ImageImportState::Prepared | ImageImportState::Requested => record,
+        ImageImportState::Completed => journal
+            .reopen_registry_image(&record)
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?,
+        _ => return Err(ProviderFailure::ImageLoad),
+    };
+    Ok(Prepared::Missing(Box::new((session, record, reference))))
+}
+
 async fn settle_import(
     journal: &Journal,
     session: &mut ImageSession,
@@ -207,11 +247,18 @@ async fn settle_import(
     identity: RegistryImageIdentity,
     projection: RegistryProjection,
 ) -> Result<AcquiredRegistryImage, ProviderFailure> {
-    let claim = journal
-        .claim_registry_image(record)
-        .await
-        .map_err(|_| ProviderFailure::ImageImportJournal)?
-        .ok_or(ProviderFailure::ImageImportJournal)?;
+    let claim = match record.state {
+        ImageImportState::Prepared => journal
+            .claim_registry_image(record)
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?
+            .ok_or(ProviderFailure::ImageImportJournal)?,
+        ImageImportState::Requested => journal
+            .resume_registry_image(record)
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?,
+        _ => return Err(ProviderFailure::ImageLoad),
+    };
     let result = match session.pull_and_inspect(reference).await {
         Ok(observation) => verified_inspection(&identity, &projection, observation),
         Err(_) => Err(ProviderFailure::ImageLoad),
@@ -321,52 +368,4 @@ fn verified_inspection(
     )
     .map_err(|_| ProviderFailure::ImageIdentity)?;
     Ok((inspection, configuration))
-}
-
-fn verify_configuration(
-    inspect: &ImageInspect,
-    identity: &RegistryImageIdentity,
-    projection: &RegistryProjection,
-) -> Result<bollard::models::ContainerConfig, ProviderFailure> {
-    let actual = inspect
-        .config
-        .as_ref()
-        .ok_or(ProviderFailure::ImageConfig)?;
-    let expected: bollard::models::ImageConfig =
-        serde_json::from_value(projection.configuration().clone())
-            .map_err(|_| ProviderFailure::ImageConfig)?;
-    let expected_health =
-        crate::resource_probe_release::runner_qualification::image_identity::source_healthcheck(
-            projection.configuration(),
-        )
-        .map_err(|_| ProviderFailure::ImageConfig)?;
-    if actual.labels != expected.labels
-        || actual.user != expected.user
-        || actual.working_dir != expected.working_dir
-        || actual.entrypoint != expected.entrypoint
-        || actual.cmd != expected.cmd
-        || actual.env != expected.env
-        || actual
-            .volumes
-            .as_ref()
-            .is_some_and(|volumes| !volumes.is_empty())
-        || !crate::resource_probe_release::runner_qualification::image_identity::same_healthcheck(
-            actual.healthcheck.as_ref(),
-            expected_health.as_ref(),
-        )
-    {
-        return Err(ProviderFailure::ImageConfig);
-    }
-    let config_value = serde_json::to_value(actual).map_err(|_| ProviderFailure::ImageConfig)?;
-    if let Some(worker) = match identity.role {
-        ImageKind::Runner => Some(super::WorkerImage::Runner),
-        ImageKind::Dind => Some(super::WorkerImage::Dind),
-        ImageKind::ResourceProbe => None,
-    } {
-        super::verify_worker_runtime_config(&config_value, worker, &identity.source_sha)
-            .map_err(|_| ProviderFailure::ImageConfig)?;
-    }
-    let configuration =
-        serde_json::from_value(config_value).map_err(|_| ProviderFailure::ImageConfig)?;
-    Ok(configuration)
 }
