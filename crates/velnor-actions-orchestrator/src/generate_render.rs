@@ -62,6 +62,7 @@ pub(super) fn render_all(
     let mut extra = crate::release::release_emit::release_files(prep)?;
     extra.extend(rehearsal_files(prep, version)?);
     extra.extend(crate::release::publish_emit::publish_files(prep, &mise)?);
+    extra.extend(crate::premerge_event_proof_emit::files(prep)?);
     extra.extend(crate::release::binary_release_emit::files(prep)?);
     extra.extend(crate::release::binary_preview_emit::files(prep)?);
     extra.extend(crate::planner::freshness_emit::freshness_files(prep)?);

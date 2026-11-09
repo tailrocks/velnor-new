@@ -140,3 +140,5 @@ mod crate_workspace_plan_public;
 #[cfg(test)]
 mod offline_attestation_test;
 mod task_producer;
+
+mod premerge_event_proof_emit;

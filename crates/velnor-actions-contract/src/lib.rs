@@ -50,6 +50,7 @@ pub mod propose;
 pub mod publication_retry;
 mod release_reexports;
 pub mod request_event;
+pub mod reusable_attestation_binding;
 pub mod run_key_env;
 pub mod secrets;
 pub mod source_preview;

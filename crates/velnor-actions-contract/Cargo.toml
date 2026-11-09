@@ -41,3 +41,7 @@ tempfile = { version = "=3.27.0" }
 [[test]]
 name = "crate_bootstrap_version_public"
 path = "tests/crate_bootstrap_version_public.rs"
+
+[[test]]
+name = "reusable_attestation_binding_public"
+path = "tests/reusable_attestation_binding_public.rs"

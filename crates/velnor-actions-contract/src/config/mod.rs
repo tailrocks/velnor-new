@@ -207,6 +207,9 @@ pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'pus
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub premerge_event_proof: Option<PremergeEventProofConfig>,
+
     pub schema: u32,
 
     pub workflow: WorkflowConfig,
@@ -273,3 +276,5 @@ pub use release_intent::{
     MAX_CRATE_RELEASE_PR_PATHS, is_cargo_version,
 };
 pub use release_validation::is_release_feature_name;
+mod premerge_event_proof;
+pub use premerge_event_proof::PremergeEventProofConfig;
