@@ -6,6 +6,56 @@ use super::scoped_workspace::{
 };
 use std::fs;
 
+fn family_workspace(
+    config: &str,
+) -> Result<super::scoped_workspace::ScopedRepo, Box<dyn std::error::Error>> {
+    let repo = scoped_workspace(config)?;
+    let root = repo.root();
+    let path = root.join(".velnor/config.toml");
+    let text = fs::read_to_string(&path)?.replace(
+        "default_branch = \"testmain\"",
+        "policy = \"velnor-repository-v1\"\ndefault_branch = \"main\"",
+    );
+    fs::write(path, text)?;
+    super::workflow_configuration_fixture::git(&["branch", "-m", "main"], root)?;
+    super::workflow_configuration_fixture::git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ],
+        root,
+    )?;
+    fs::write(
+        root.join(".velnor/generator.lock"),
+        include_str!("../../../../.velnor/generator.lock"),
+    )?;
+    fs::write(
+        root.join(".velnor/controller-approvals.json"),
+        include_str!("../../../../.velnor/controller-approvals.json"),
+    )?;
+    Ok(repo)
+}
+
+fn family_qualification_plan_without_base(
+    repo: &super::scoped_workspace::ScopedRepo,
+    head: &str,
+) -> Result<super::scoped_workspace::PlanRun, Box<dyn std::error::Error>> {
+    let repository = "tailrocks/velnor-new";
+    super::scoped_workspace::plan_request(&serde_json::json!({
+        "schema": 1, "op": "plan-v1", "run_key": "r190001-a1", "base": null,
+        "head": head, "event": "qualification", "root": repo.root().to_string_lossy(),
+        "repository": repository,
+        "qualification": {
+            "campaign": "fixture", "phase": "cold", "repository": repository,
+            "default_branch": "main", "git_ref": "refs/heads/main", "ref_protected": true,
+            "workflow_ref": format!("{repository}/.github/workflows/ci.yml@refs/heads/main"),
+            "workflow_sha": head, "source_sha": head, "run_id": 190_001, "run_attempt": 1,
+        },
+    }))
+}
+
 const HELPER_INPUTS: &str = r#"
 [[stacks.rust.inputs]]
 globs = ["apps/a1/**", "family-guard/**", "family-guarded/**", "images/dind/fixture-unrelated.txt", "images/resource-probe/fixture-unrelated.txt", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh"]
@@ -15,7 +65,7 @@ complete = true
 
 #[test]
 fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
-    let mut repo = scoped_workspace(&format!(
+    let mut repo = family_workspace(&format!(
         "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
     ))?;
     let root = repo.root();
@@ -84,7 +134,7 @@ fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
                     .map(String::as_str),
                 Some("run")
             );
-            let dispatch = super::scoped_workspace::qualification_plan_without_base(&repo, &head)?;
+            let dispatch = family_qualification_plan_without_base(&repo, &head)?;
             assert_eq!(
                 dispatch
                     .jobs()?
@@ -99,7 +149,7 @@ fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
 
 #[test]
 fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
-    let mut repo = scoped_workspace(&format!(
+    let mut repo = family_workspace(&format!(
         "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
     ))?;
     let root = repo.root();
@@ -141,7 +191,7 @@ fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
 #[test]
 fn invalid_archive_guard_manifest_selects_family_conservatively() -> TestResult {
     for variant in ["malformed", "missing", "symlink"] {
-        let mut repo = scoped_workspace(&format!(
+        let mut repo = family_workspace(&format!(
             "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
         ))?;
         let root = repo.root();
@@ -174,7 +224,7 @@ fn invalid_archive_guard_manifest_selects_family_conservatively() -> TestResult 
 
 #[test]
 fn unsupported_family_dockerfile_selects_family_conservatively() -> TestResult {
-    let mut repo = scoped_workspace(&format!(
+    let mut repo = family_workspace(&format!(
         "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
     ))?;
     let root = repo.root();
@@ -203,7 +253,7 @@ fn unsupported_family_dockerfile_selects_family_conservatively() -> TestResult {
 
 #[test]
 fn archive_guard_tree_changes_select_runner_family_without_sibling_fallback() -> TestResult {
-    let mut repo = scoped_workspace(&format!(
+    let mut repo = family_workspace(&format!(
         "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
     ))?;
     populate_family_fixture(repo.root())?;

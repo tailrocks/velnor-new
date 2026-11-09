@@ -5,6 +5,11 @@ use std::{error::Error, fs};
 use velnor_actions_contract::{PermissionLevel, WorkflowPolicy};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
+fn enable_family(config: &mut String) {
+    *config = config.replace("default_branch = \"testmain\"", "default_branch = \"main\"");
+    config.push_str("\n[runner_image_family]\n");
+}
+
 #[test]
 fn runner_family_job_is_plan_gated_and_in_required_fanin() -> Result<(), Box<dyn Error>> {
     let repo = super::maintenance_features::owner_feature_repo(
@@ -26,7 +31,7 @@ fn runner_family_job_is_plan_gated_and_in_required_fanin() -> Result<(), Box<dyn
     )?;
     let config_path = root.join(".velnor/config.toml");
     let mut config = fs::read_to_string(&config_path)?;
-    config.push_str("\n[runner_image_family]\n");
+    enable_family(&mut config);
     fs::write(config_path, config)?;
     let prepared = prepare(root)?;
     let jobs = finalized_jobs(&prepared)?;
@@ -178,7 +183,6 @@ fn assert_family(
     }
     Ok(())
 }
-
 fn assert_upload(job: &velnor_actions_contract::Job) -> Result<(), Box<dyn Error>> {
     let upload = job
         .steps
@@ -223,7 +227,6 @@ fn assert_upload(job: &velnor_actions_contract::Job) -> Result<(), Box<dyn Error
     assert_eq!(paths.lines().count(), 13);
     Ok(())
 }
-
 #[test]
 fn runner_family_rejects_untrusted_cargo_wrapper_configuration() -> Result<(), Box<dyn Error>> {
     for (old, new) in [
@@ -241,7 +244,7 @@ fn runner_family_rejects_untrusted_cargo_wrapper_configuration() -> Result<(), B
         super::runner_family_selection::copy_locked_tools(root)?;
         let config_path = root.join(".velnor/config.toml");
         let mut config = fs::read_to_string(&config_path)?;
-        config.push_str("\n[runner_image_family]\n");
+        enable_family(&mut config);
         fs::write(config_path, config)?;
         fs::create_dir_all(root.join("scripts"))?;
         fs::write(
@@ -252,16 +255,19 @@ fn runner_family_rejects_untrusted_cargo_wrapper_configuration() -> Result<(), B
         let mise = fs::read_to_string(&mise_path)?;
         assert!(mise.contains(old));
         fs::write(mise_path, mise.replacen(old, new, 1))?;
+        let error = prepare(root)
+            .and_then(|prepared| finalized_jobs(&prepared))
+            .err()
+            .ok_or_else(|| format!("accepted unsafe cargo wrapper {new}"))?;
         assert!(
-            prepare(root)
-                .and_then(|prepared| finalized_jobs(&prepared))
-                .is_err(),
-            "accepted unsafe cargo wrapper {new}"
+            ["ambiguous_compile_driver", "build_task_mise_cargo_wrapper"]
+                .iter()
+                .any(|reason| error.to_string().contains(reason)),
+            "{error}"
         );
     }
     Ok(())
 }
-
 #[test]
 fn runner_family_rejects_changed_mbx_workflow_selector() -> Result<(), Box<dyn Error>> {
     for replacement in [
@@ -279,7 +285,7 @@ fn runner_family_rejects_changed_mbx_workflow_selector() -> Result<(), Box<dyn E
         super::runner_family_selection::copy_locked_tools(root)?;
         let config_path = root.join(".velnor/config.toml");
         let mut config = fs::read_to_string(&config_path)?;
-        config.push_str("\n[runner_image_family]\n");
+        enable_family(&mut config);
         fs::write(config_path, config)?;
         fs::create_dir_all(root.join("scripts"))?;
         fs::write(
@@ -291,16 +297,19 @@ fn runner_family_rejects_changed_mbx_workflow_selector() -> Result<(), Box<dyn E
         let original = ", workflow = \"release.yml@refs/heads/main\"";
         assert!(mise.contains(original));
         fs::write(mise_path, mise.replacen(original, replacement, 1))?;
+        let error = prepare(root)
+            .and_then(|prepared| finalized_jobs(&prepared))
+            .err()
+            .ok_or_else(|| format!("accepted workflow selector {replacement}"))?;
         assert!(
-            prepare(root)
-                .and_then(|prepared| finalized_jobs(&prepared))
-                .is_err(),
-            "accepted workflow selector {replacement}"
+            ["build_task_mbx_selector", "runner_family_mbx_workflow"]
+                .iter()
+                .any(|reason| error.to_string().contains(reason)),
+            "{error}"
         );
     }
     Ok(())
 }
-
 #[test]
 fn runner_family_rejects_missing_or_invalid_mbx_lock_identity() -> Result<(), Box<dyn Error>> {
     for (old, replacement) in [
@@ -324,7 +333,7 @@ fn runner_family_rejects_missing_or_invalid_mbx_lock_identity() -> Result<(), Bo
         super::runner_family_selection::copy_locked_tools(root)?;
         let config_path = root.join(".velnor/config.toml");
         let mut config = fs::read_to_string(&config_path)?;
-        config.push_str("\n[runner_image_family]\n");
+        enable_family(&mut config);
         fs::write(config_path, config)?;
         fs::create_dir_all(root.join("scripts"))?;
         fs::write(
@@ -344,16 +353,22 @@ fn runner_family_rejects_missing_or_invalid_mbx_lock_identity() -> Result<(), Bo
         let changed = section.replacen(old, replacement, 1);
         lock.replace_range(start..end, &changed);
         fs::write(lock_path, lock)?;
+        let error = prepare(root)
+            .and_then(|prepared| finalized_jobs(&prepared))
+            .err()
+            .ok_or_else(|| format!("accepted invalid MBX lock {replacement}"))?;
         assert!(
-            prepare(root)
-                .and_then(|prepared| finalized_jobs(&prepared))
-                .is_err(),
-            "accepted invalid MBX lock {replacement}"
+            [
+                "build_task_artifact:mr-boxington",
+                "runner_family_mbx_identity"
+            ]
+            .iter()
+            .any(|reason| error.to_string().contains(reason)),
+            "{error}"
         );
     }
     Ok(())
 }
-
 #[test]
 fn runner_family_rejects_unknown_configuration_fields() -> Result<(), Box<dyn Error>> {
     let repo = super::maintenance_features::owner_feature_repo(
@@ -372,7 +387,7 @@ fn runner_family_rejects_unknown_configuration_fields() -> Result<(), Box<dyn Er
     fs::write(root.join("scripts/check-runner-image-candidate.sh"), script)?;
     let path = root.join(".velnor/config.toml");
     let mut config = fs::read_to_string(&path)?;
-    config.push_str("\n[runner_image_family]\n");
+    enable_family(&mut config);
     fs::write(&path, &config)?;
     let prepared = prepare(root)?;
     assert!(finalized_jobs(&prepared)?.contains_key("image-runner-family-linux-amd64"));
