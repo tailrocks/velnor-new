@@ -7,7 +7,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
 fn enable_family(config: &mut String) {
     *config = config.replace("default_branch = \"testmain\"", "default_branch = \"main\"");
-    config.push_str("\n[runner_image_family]\n");
+    config.push_str(super::runner_family_selection::FAMILY_CONFIG);
 }
 
 #[test]

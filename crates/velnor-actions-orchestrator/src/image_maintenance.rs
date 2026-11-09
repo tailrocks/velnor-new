@@ -7,6 +7,20 @@ use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
+#[path = "image_maintenance/mac_signer.rs"]
+mod mac_signer;
+pub use mac_signer::{VerifiedMacAttestation, VerifyMacAttestationRequest, verify_mac_attestation};
+
+#[path = "image_maintenance/mac_expected.rs"]
+mod mac_expected;
+#[path = "image_maintenance/mac_inbox.rs"]
+mod mac_inbox;
+#[path = "image_maintenance/mac_preview_sdk.rs"]
+mod mac_preview_sdk;
+
+#[path = "image_maintenance/mac_proof.rs"]
+pub(crate) mod mac_proof;
+
 #[path = "image_maintenance/build.rs"]
 mod build;
 #[path = "image_maintenance/runner_source_batch.rs"]

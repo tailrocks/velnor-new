@@ -17,6 +17,7 @@ use crate::config::private_wiring::PrivateWiring;
 use crate::crate_job_ids::{CrateGroupKey, JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
+use crate::matrix_step::{prepare_runtime_cosign_step, prepare_runtime_gh_step};
 
 #[path = "crate_jobs_inputs.rs"]
 mod inputs;
@@ -348,10 +349,8 @@ fn render_job(
         catalog, tools,
     )?);
     steps.extend(crate::matrix_step::verify_validators_step(catalog, tools));
-    steps.extend(crate::matrix_step::prepare_runtime_gh_step(
-        policy, suite, catalog,
-    )?);
-    steps.extend(crate::matrix_step::prepare_runtime_cosign_step(policy, suite, catalog)?);
+    steps.extend(prepare_runtime_gh_step(policy, suite, catalog)?);
+    steps.extend(prepare_runtime_cosign_step(policy, suite, catalog)?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));

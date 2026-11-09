@@ -23,6 +23,29 @@ pub(super) fn release_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError
             ("path", "${{ runner.temp }}/runner-family-release/assets"),
         ],
     ));
+    list.extend(publisher_steps(pins)?);
+    Ok(map(&[
+        ("runs-on", Yaml::str("ubuntu-26.04")),
+        ("timeout-minutes", Yaml::Int(120)),
+        ("needs", seq(&["publish-images", "attest-images"])),
+        (
+            "if",
+            Yaml::str("${{ needs.publish-images.outputs.action == 'build' }}"),
+        ),
+        (
+            "permissions",
+            strings(&[
+                ("actions", "read"),
+                ("attestations", "read"),
+                ("contents", "write"),
+            ]),
+        ),
+        ("steps", Yaml::Seq(list)),
+    ]))
+}
+
+fn publisher_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
+    let mut list = Vec::new();
     let script = format!(
         "set -eu\nmkdir -m 0700 assets\ncp \"$RUNNER_TEMP/runner-family-release/assets/RUNNER_IMAGE_MANIFEST.json\" \"$RUNNER_TEMP/runner-family-release/assets/SHA256SUMS\" \"$RUNNER_TEMP/runner-family-release/assets/LICENSE\" \"$RUNNER_TEMP/runner-family-release/assets/NOTICE\" assets/\n{}",
         product_release_family::runner_publish_script(pins)?
@@ -52,27 +75,26 @@ pub(super) fn release_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError
             ),
             ("VELNOR_RELEASE_ACTION", "build"),
             (
+                "VELNOR_MANIFEST_DIGEST",
+                "${{ needs.attest-images.outputs.manifest_digest }}",
+            ),
+            (
+                "VELNOR_CHECKSUMS_DIGEST",
+                "${{ needs.attest-images.outputs.checksums_digest }}",
+            ),
+            (
+                "VELNOR_LICENSE_DIGEST",
+                "${{ needs.attest-images.outputs.license_digest }}",
+            ),
+            (
+                "VELNOR_NOTICE_DIGEST",
+                "${{ needs.attest-images.outputs.notice_digest }}",
+            ),
+            (
                 "VELNOR_FAMILY_ASSETS",
                 "${{ runner.temp }}/runner-family-release/assets",
             ),
         ],
     ));
-    Ok(map(&[
-        ("runs-on", Yaml::str("ubuntu-26.04")),
-        ("timeout-minutes", Yaml::Int(120)),
-        ("needs", seq(&["publish-images", "attest-images"])),
-        (
-            "if",
-            Yaml::str("${{ needs.publish-images.outputs.action == 'build' }}"),
-        ),
-        (
-            "permissions",
-            strings(&[
-                ("actions", "read"),
-                ("attestations", "read"),
-                ("contents", "write"),
-            ]),
-        ),
-        ("steps", Yaml::Seq(list)),
-    ]))
+    Ok(list)
 }

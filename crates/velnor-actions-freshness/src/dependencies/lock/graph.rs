@@ -19,24 +19,24 @@ pub(super) fn check_membership(
     ctx: &mut FreshnessContext,
     relative: &str,
     locked: &[Value],
-    members: &BTreeSet<String>,
-    path_packages: &BTreeSet<String>,
+    expected: &BTreeSet<(String, String)>,
 ) {
     let local = locked
         .iter()
         .filter(|entry| entry.get("source").is_none())
-        .filter_map(|entry| entry.get("name").and_then(Value::as_str).map(str::to_owned))
+        .filter_map(|entry| {
+            Some((
+                entry.get("name")?.as_str()?.to_owned(),
+                version(entry)?.to_owned(),
+            ))
+        })
         .collect::<BTreeSet<_>>();
     let subject = if relative.is_empty() {
         "(lock-membership)".to_owned()
     } else {
         format!("{relative}/(lock-membership)")
     };
-    let expected = members
-        .union(path_packages)
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    if local == expected {
+    if &local == expected {
         ctx.pass_row(
             "lock-staleness",
             &subject,

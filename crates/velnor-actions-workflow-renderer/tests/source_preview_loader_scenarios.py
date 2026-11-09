@@ -14,7 +14,7 @@ import time
 root = Path(sys.argv[1])
 source = root / "src/native_helper"
 loader = (source / "source_preview_loader.py").read_text()
-original = [(source / name).read_bytes() for name in ("source_preview_bootstrap.py", "source_preview_exec.py")]
+original = [(root / "../velnor-actions-mise/src/source_preview/source_preview_bootstrap.py").read_bytes(), (source / "source_preview_exec.py").read_bytes()]
 digests = [hashlib.sha256(value).hexdigest() for value in original]
 
 

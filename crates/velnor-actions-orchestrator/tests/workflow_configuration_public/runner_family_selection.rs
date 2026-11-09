@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub(super) const FAMILY_CONFIG: &str = "\n[runner_image_family]\nmac_qualification = { runner_id = 21, companion_workflow_path = \".github/workflows/qualify-runner-family.yml\", companion_workflow_ref = \"refs/heads/main\", companion_workflow_sha = \"cccccccccccccccccccccccccccccccccccccccc\", docker_socket = \"unix:///tmp/fixture.sock\", state_dir = \"/tmp/fixture-state\", sdk = { channel = \"stable\", version = \"1.2.3\", source_sha = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", manifest_sha256 = \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" } }\n";
+
 use super::scoped_workspace::{
     DOCS_CONFIG, TestResult, commit, generate_lockfile, plan, put, scoped_workspace,
 };
@@ -65,9 +67,7 @@ complete = true
 
 #[test]
 fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
-    let mut repo = family_workspace(&format!(
-        "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
-    ))?;
+    let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     let root = repo.root();
     populate_family_fixture(root)?;
     repo.base = commit(root, "runner family baseline")?;
@@ -149,9 +149,7 @@ fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
 
 #[test]
 fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
-    let mut repo = family_workspace(&format!(
-        "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
-    ))?;
+    let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     let root = repo.root();
     populate_family_fixture(root)?;
     let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -191,9 +189,7 @@ fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
 #[test]
 fn invalid_archive_guard_manifest_selects_family_conservatively() -> TestResult {
     for variant in ["malformed", "missing", "symlink"] {
-        let mut repo = family_workspace(&format!(
-            "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
-        ))?;
+        let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
         let root = repo.root();
         populate_family_fixture(root)?;
         let manifest = root.join("scripts/archive-guard-inputs.txt");
@@ -224,9 +220,7 @@ fn invalid_archive_guard_manifest_selects_family_conservatively() -> TestResult 
 
 #[test]
 fn unsupported_family_dockerfile_selects_family_conservatively() -> TestResult {
-    let mut repo = family_workspace(&format!(
-        "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
-    ))?;
+    let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     let root = repo.root();
     populate_family_fixture(root)?;
     let path = root.join("images/resource-probe/Dockerfile");
@@ -253,9 +247,7 @@ fn unsupported_family_dockerfile_selects_family_conservatively() -> TestResult {
 
 #[test]
 fn archive_guard_tree_changes_select_runner_family_without_sibling_fallback() -> TestResult {
-    let mut repo = family_workspace(&format!(
-        "{DOCS_CONFIG}\n[runner_image_family]\n{HELPER_INPUTS}"
-    ))?;
+    let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     populate_family_fixture(repo.root())?;
     repo.base = commit(repo.root(), "archive guard baseline")?;
     for (path, expected) in [

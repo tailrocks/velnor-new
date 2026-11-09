@@ -300,7 +300,8 @@ fn callee<'a>(
     Ok(value.strip_prefix("./").map(Callee::Local))
 }
 
-pub(crate) const SOURCE_PREVIEW_AUTHORITY_SHA: &str = "3a3c641b531a69b7e4142b61aecf536007bb3f2e";
+pub(crate) const SOURCE_PREVIEW_AUTHORITY_SHA: &str =
+    velnor_actions_contract::source_preview::PUBLICATION_AUTHORITY_SHA;
 
 struct AuthorityJob {
     id: &'static str,

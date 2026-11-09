@@ -7,8 +7,8 @@ use velnor_actions_mise::catalog::lock::parse_generator_lock;
 
 const SOURCE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const CANDIDATE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const RECEIPT_SHA: &str = "7e5abb8027a67b5917ca4efa5b9c90a3b9ec48c0476119ee6415d15d50d47119";
-const RECEIPT: &str = r#"{"candidate":{"payload_artifact_id":23,"source_artifact_id":22},"ci":{"run_attempt":1,"run_id":12,"workflow_path":".github/workflows/ci.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"draft":{"run_attempt":1,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"payload":{"name":"velnor-actions-x86_64-unknown-linux-gnu","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","size":12345,"target":"x86_64-unknown-linux-gnu"},"producer":{"payload_archive_sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","payload_artifact_id":21,"producer_run_attempt":1,"producer_run_id":20},"qualification":{"run_attempt":1,"run_id":13,"workflow_path":".github/workflows/source-qualification.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/source-qualification.yml@refs/heads/main","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"release_id":10,"repository":"tailrocks/velnor-new","schema":2,"signer":{"run_attempt":2,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"source":{"run_attempt":1,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tag":"sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","version":"0.1.75"}"#;
+const RECEIPT_SHA: &str = "10e87bea4449847754c7cf142f0e5667ef3e2f5b9df9970e84d505dca59fd6b0";
+const RECEIPT: &str = r#"{"candidate_source_artifact_id":22,"ci":{"run_attempt":1,"run_id":12,"workflow_path":".github/workflows/ci.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"draft":{"run_attempt":1,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"qualification":{"run_attempt":1,"run_id":13,"workflow_path":".github/workflows/source-qualification.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/source-qualification.yml@refs/heads/main","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"release_id":10,"repository":"tailrocks/velnor-new","schema":3,"signer":{"run_attempt":2,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"source":{"run_attempt":1,"run_id":11,"workflow_path":".github/workflows/product-release-generator.yml","workflow_ref":"tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/tags/sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workflow_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tag":"sdk-preview-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","targets":{"darwin":{"candidate_payload_artifact_id":27,"payload":{"name":"velnor-actions-aarch64-apple-darwin","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","size":12345,"target":"aarch64-apple-darwin"},"producer":{"payload_archive_sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","payload_artifact_id":26,"producer_run_attempt":1,"producer_run_id":20},"qualification_job_id":28},"linux":{"candidate_payload_artifact_id":23,"payload":{"name":"velnor-actions-x86_64-unknown-linux-gnu","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","size":12345,"target":"x86_64-unknown-linux-gnu"},"producer":{"payload_archive_sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","payload_artifact_id":21,"producer_run_attempt":1,"producer_run_id":20},"qualification_job_id":25}},"version":"0.1.75"}"#;
 
 #[test]
 fn stable_plan_generator_retains_its_existing_wire_shape() -> Result<(), Box<dyn std::error::Error>>
@@ -39,7 +39,7 @@ fn lock_text() -> Result<String, std::fmt::Error> {
     let mut text = include_str!("../../../.velnor/generator.lock").to_owned();
     write!(
         &mut text,
-        "\n[planner-preview]\nschema = 2\nrepository = \"tailrocks/velnor-new\"\nversion = \"0.1.75\"\nsource_sha = \"{SOURCE}\"\ntag = \"sdk-preview-{SOURCE}\"\nrelease_id = 10\n"
+        "\n[planner-preview]\nschema = 3\nrepository = \"tailrocks/velnor-new\"\nversion = \"0.1.75\"\nsource_sha = \"{SOURCE}\"\ntag = \"sdk-preview-{SOURCE}\"\nrelease_id = 10\n"
     )?;
     for (role, path, id) in [
         (
@@ -75,16 +75,21 @@ fn lock_text() -> Result<String, std::fmt::Error> {
             "{role}_workflow_path = \"{path}\"\n{role}_workflow_ref = \"tailrocks/velnor-new/{path}@{git_ref}\"\n{role}_workflow_sha = \"{SOURCE}\"\n{role}_run_id = {id}\n{role}_run_attempt = {attempt}\n"
         )?;
     }
+    for (role, target, producer, candidate, job) in [
+        ("linux", "x86_64-unknown-linux-gnu", 21, 23, 25),
+        ("darwin", "aarch64-apple-darwin", 26, 27, 28),
+    ] {
+        write!(
+            &mut text,
+            "{role}_payload_target = \"{target}\"\n{role}_payload_name = \"velnor-actions-{target}\"\n{role}_payload_size = 12345\n{role}_payload_sha256 = \"{}\"\n{role}_producer_run_id = 20\n{role}_producer_run_attempt = 1\n{role}_producer_payload_artifact_id = {producer}\n{role}_producer_payload_archive_sha256 = \"{}\"\n{role}_candidate_payload_artifact_id = {candidate}\n{role}_qualification_job_id = {job}\n",
+            "c".repeat(64),
+            "e".repeat(64)
+        )?;
+    }
     write!(
         &mut text,
-        "payload_target = \"x86_64-unknown-linux-gnu\"\npayload_name = \"velnor-actions-x86_64-unknown-linux-gnu\"\npayload_size = 12345\npayload_sha256 = \"{}\"\nreceipt_sha256 = \"{RECEIPT_SHA}\"\nbundle_sha256 = \"{}\"\n",
-        "c".repeat(64),
+        "receipt_sha256 = \"{RECEIPT_SHA}\"\nbundle_sha256 = \"{}\"\ncandidate_source_artifact_id = 22\npublisher_run_attempt = 3\npublisher_job_id = 24\n",
         "d".repeat(64)
-    )?;
-    write!(
-        &mut text,
-        "producer_run_id = 20\nproducer_run_attempt = 1\nproducer_payload_artifact_id = 21\nproducer_payload_archive_sha256 = \"{}\"\ncandidate_source_artifact_id = 22\ncandidate_payload_artifact_id = 23\npublisher_run_attempt = 3\npublisher_job_id = 24\n",
-        "e".repeat(64)
     )?;
     Ok(text)
 }
@@ -96,10 +101,9 @@ fn preview_lock_binds_exact_receipt_without_changing_stable_authority()
     assert!(original.source_preview.is_none());
     assert!(original.staged_source_preview.is_none());
     let parsed = parse_generator_lock(&lock_text()?)?;
-    assert_eq!(parsed.generator.commit, original.generator.commit);
     assert_eq!(
-        parsed.generator.binaries.len(),
-        original.generator.binaries.len()
+        serde_json::to_value(&parsed.generator)?,
+        serde_json::to_value(&original.generator)?
     );
     let preview = parsed.source_preview.ok_or("preview missing")?;
     let staged_text = lock_text()?.replace("[planner-preview]", "[planner-preview-staged]");
@@ -136,19 +140,20 @@ fn preview_lock_binds_exact_receipt_without_changing_stable_authority()
 fn preview_lock_rejects_inconsistent_or_ambiguous_identity()
 -> Result<(), Box<dyn std::error::Error>> {
     let good = lock_text()?;
+    assert!(parse_generator_lock(&good)?.source_preview.is_some());
     for (from, to) in [
         ("release_id = 10", "release_id = 0"),
         ("ci_run_attempt = 1", "ci_run_attempt = 0"),
         (
-            "payload_target = \"x86_64-unknown-linux-gnu\"",
-            "payload_target = \"aarch64-apple-darwin\"",
+            "linux_payload_target = \"x86_64-unknown-linux-gnu\"",
+            "linux_payload_target = \"aarch64-apple-darwin\"",
         ),
         ("refs/heads/main", "refs/heads/other"),
         ("refs/tags/sdk-preview-", "refs/heads/sdk-preview-"),
         ("sdk-preview-", "preview-"),
         ("tag = \"sdk-preview-", "tag = \"other-"),
         ("receipt_sha256 = ", "missing_sha256 = "),
-        ("schema = 2\nrepository = ", "schema = 1\nrepository = "),
+        ("schema = 3\nrepository = ", "schema = 2\nrepository = "),
         ("source_run_id = 11", "source_run_id = 12"),
         ("source_run_attempt = 1", "source_run_attempt = 2"),
         ("draft_run_attempt = 1", "draft_run_attempt = 3"),
@@ -156,14 +161,35 @@ fn preview_lock_rejects_inconsistent_or_ambiguous_identity()
         ("publisher_run_attempt = 3", "publisher_run_attempt = 52"),
         ("publisher_job_id = 24", "publisher_job_id = 0"),
         (
+            "darwin_payload_target = \"aarch64-apple-darwin\"",
+            "darwin_payload_target = \"x86_64-unknown-linux-gnu\"",
+        ),
+        (
+            "darwin_payload_name = \"velnor-actions-aarch64-apple-darwin\"",
+            "darwin_payload_name = \"wrong\"",
+        ),
+        (
+            "darwin_producer_payload_artifact_id = 26",
+            "darwin_producer_payload_artifact_id = 21",
+        ),
+        (
+            "darwin_candidate_payload_artifact_id = 27",
+            "darwin_candidate_payload_artifact_id = 23",
+        ),
+        (
+            "darwin_qualification_job_id = 28",
+            "darwin_qualification_job_id = 25",
+        ),
+        (
             "candidate_source_artifact_id = 22",
             "candidate_source_artifact_id = 23",
         ),
         (
-            "producer_payload_artifact_id = 21",
-            "producer_payload_artifact_id = 0",
+            "linux_producer_payload_artifact_id = 21",
+            "linux_producer_payload_artifact_id = 0",
         ),
     ] {
+        assert!(good.contains(from), "mutation source missing: {from}");
         assert!(
             parse_generator_lock(&good.replacen(from, to, 1)).is_err(),
             "accepted {from}"

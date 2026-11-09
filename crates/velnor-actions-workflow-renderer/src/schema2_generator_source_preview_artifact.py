@@ -14,8 +14,10 @@ from urllib.parse import urlsplit
 import zipfile
 
 
-def download_verified_payload(client, artifact, output_path):
-    name = "velnor-actions-x86_64-unknown-linux-gnu"
+def download_verified_payload(client, artifact, output_path, target):
+    if target not in ("x86_64-unknown-linux-gnu", "aarch64-apple-darwin"):
+        raise ValueError("preview artifact target")
+    name = "velnor-actions-" + target
     limit = 256 * 1024 * 1024
     archive_limit = 257 * 1024 * 1024
     identity = artifact.get("id")
@@ -78,9 +80,15 @@ def download_verified_payload(client, artifact, output_path):
                 or not 20 <= entries[0].file_size <= limit):
             raise ValueError("preview artifact ZIP entry")
         payload = archive.read(entries[0])
-    if (len(payload) != entries[0].file_size or payload[:7] != b"\x7fELF\x02\x01\x01"
-            or payload[18:20] != b"\x3e\x00"):
-        raise ValueError("preview artifact ELF")
+    if len(payload) != entries[0].file_size:
+        raise ValueError("preview artifact payload size")
+    if target == "x86_64-unknown-linux-gnu":
+        if payload[:7] != b"\x7fELF\x02\x01\x01" or payload[18:20] != b"\x3e\x00":
+            raise ValueError("preview artifact ELF")
+    elif (len(payload) < 32 or payload[:4] != b"\xcf\xfa\xed\xfe"
+            or payload[4:8] != b"\x0c\x00\x00\x01"
+            or payload[12:16] != b"\x02\x00\x00\x00"):
+        raise ValueError("preview artifact Mach-O")
     path = Path(output_path)
     descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o500)
     try:
@@ -90,4 +98,4 @@ def download_verified_payload(client, artifact, output_path):
     except BaseException:
         path.unlink(missing_ok=True)
         raise
-    return {"target": "x86_64-unknown-linux-gnu", "name": name, "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+    return {"target": target, "name": name, "size": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}

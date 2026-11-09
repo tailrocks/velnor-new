@@ -14,7 +14,7 @@ import tempfile
 
 root = Path(sys.argv[1])
 fixture = root / "crates/velnor-actions-workflow-renderer/tests/fixtures/source_preview_signature"
-sys.path.insert(0, str(root / "crates/velnor-actions-workflow-renderer/src/native_helper"))
+sys.path.insert(0, str(root / "crates/velnor-actions-mise/src/source_preview"))
 spec = importlib.util.spec_from_file_location("source_preview_stage_verify", sys.path[0] + "/source_preview_stage_verify.py")
 stage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(stage)

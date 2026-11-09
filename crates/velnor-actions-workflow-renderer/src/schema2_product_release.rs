@@ -49,7 +49,7 @@ pub(super) fn render(
     let mut family_workflows = Vec::new();
     let mut actions = Vec::new();
     for family in families {
-        if request.runner_image_family && family == Family::Images {
+        if request.runner_image_family.is_some() && family == Family::Images {
             family_workflows.push((
                 family.workflow_path().to_owned(),
                 runner_image_release::render(request)?,
@@ -76,6 +76,11 @@ pub(super) fn render(
         ));
         if family == Family::Generator {
             family_workflows.push(super::generator_release::source_preview_authority(pins)?);
+            family_workflows.push(super::generator_release::source_preview_runtime_authority(
+                pins,
+            )?);
+            family_workflows
+                .push(super::generator_release::source_preview_mac_proof_authority(pins)?);
         }
         jobs.push(workflows::reusable_workflow_call(family));
     }

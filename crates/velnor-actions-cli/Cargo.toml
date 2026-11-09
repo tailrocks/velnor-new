@@ -95,9 +95,17 @@ default = ["generator"]
 generator = [
     "ledger-helper",
     "dep:serde_json",
+    "dep:base64",
+    "dep:sha2",
+    "dep:tempfile",
+    "dep:toml",
+    "dep:rustix",
+    "dep:velnor-actions-mise",
     "dep:velnor-actions-orchestrator",
     "dep:velnor-actions-freshness",
     "dep:clap",
+    "dep:velnor-runner-host",
+    "dep:tokio",
 ]
 ledger-helper = ["dep:velnor-actions-contract"]
 
@@ -116,12 +124,27 @@ name = "image_publication_public"
 path = "tests/image_publication_public.rs"
 required-features = ["generator"]
 
+[[test]]
+name = "mac_signer_early_public"
+path = "tests/mac_signer_early_public.rs"
+required-features = ["generator"]
+
 [dependencies]
+rustix = { version = "=1.1.5", features = ["fs", "process"], optional = true }
+toml = { version = "=1.1.8", optional = true }
+base64 = { workspace = true, optional = true }
+sha2 = { version = "=0.11.1", optional = true }
+tempfile = { version = "=3.27.0", optional = true }
+velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise", optional = true }
 serde_json = { workspace = true, optional = true }
 velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract", optional = true }
 velnor-actions-orchestrator = { version = "=0.1.78", path = "../velnor-actions-orchestrator", optional = true }
 velnor-actions-freshness = { version = "=0.1.78", path = "../velnor-actions-freshness", optional = true }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-host", optional = true }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "time"], optional = true }
 
 [lints]
 workspace = true

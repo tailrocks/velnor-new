@@ -119,19 +119,20 @@ pub(super) fn bash_step_with_id(id: &str, name: &str, run: &str) -> Yaml {
 }
 
 pub(super) fn bash_step_with_env(name: &str, run: &str, env: Vec<(&str, &str)>) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        (
+    let mut fields = vec![("name".to_owned(), Yaml::str(name))];
+    if !env.is_empty() {
+        fields.push((
             "env".to_owned(),
             Yaml::Map(
                 env.into_iter()
                     .map(|(key, value)| (key.to_owned(), Yaml::str(value)))
                     .collect(),
             ),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(run)),
-    ])
+        ));
+    }
+    fields.push(("shell".to_owned(), Yaml::str("bash")));
+    fields.push(("run".to_owned(), Yaml::str(run)));
+    Yaml::Map(fields)
 }
 
 pub(super) fn bash_step_with_token(

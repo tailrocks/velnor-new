@@ -75,7 +75,12 @@ fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
         assert!(stable.contains("inputs.release_action == 'build'"), "{id}");
         assert!(stable.contains("verify-release-caller"), "{id}");
     }
-    for id in ["source-preview-build", "source-preview-qualify"] {
+    for id in [
+        "source-preview-build-linux",
+        "source-preview-qualify-linux",
+        "source-preview-build-darwin",
+        "source-preview-qualify-darwin",
+    ] {
         let preview = job(workflow, id)?;
         assert!(preview.contains("github.event_name == 'push'"), "{id}");
         assert!(
@@ -88,7 +93,12 @@ fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
         );
         assert!(preview.contains("github.ref == 'refs/heads/main'"), "{id}");
         assert!(!preview.contains(": write"), "{id}");
-        assert!(preview.contains("runs-on: ubuntu-26.04"), "{id}");
+        let runner = if id.ends_with("darwin") {
+            "macos-15"
+        } else {
+            "ubuntu-26.04"
+        };
+        assert!(preview.contains(&format!("runs-on: {runner}")), "{id}");
         assert!(!preview.contains("verify-release-caller"), "{id}");
     }
     assert!(
@@ -169,21 +179,27 @@ fn assert_reusable_authority(workflow: &str, authority: &str) -> Result<(), Box<
 fn assert_publication_artifacts(authority: &str) -> Result<(), Box<dyn Error>> {
     let draft = job(authority, "source-preview-draft")?;
     assert!(draft.contains("needs.source-preview-source.outputs.source_artifact_id"));
-    assert!(draft.contains("needs.source-preview-source.outputs.payload_artifact_id"));
+    assert!(draft.contains("needs.source-preview-source.outputs.linux_payload_artifact_id"));
+    assert!(draft.contains("needs.source-preview-source.outputs.darwin_payload_artifact_id"));
     let admission = job(authority, "source-preview-source")?;
     assert!(!admission.contains("SDK_PREVIEW_VERSION"));
     assert!(admission.contains("source-preview-source-${{ github.run_attempt }}"));
-    assert!(admission.contains("source-preview-qualified-payload-${{ github.run_attempt }}"));
+    assert!(admission.contains("source-preview-qualified-payload-linux-${{ github.run_attempt }}"));
+    assert!(
+        admission.contains("source-preview-qualified-payload-darwin-${{ github.run_attempt }}")
+    );
     assert!(!materialized_script(admission)?.contains("/releases?per_page="));
     assert!(materialized_script(draft)?.contains("/releases?per_page=100&page="));
     assert!(draft.contains("source-preview-decision-${{ github.run_attempt }}"));
     assert!(draft.contains("steps.draft.outputs.source_artifact_id"));
-    assert!(draft.contains("steps.draft.outputs.payload_artifact_id"));
+    assert!(draft.contains("steps.draft.outputs.linux_payload_artifact_id"));
+    assert!(draft.contains("steps.draft.outputs.darwin_payload_artifact_id"));
     let attest = job(authority, "source-preview-attest")?;
     assert!(attest.contains("      contents: read"));
     assert!(!attest.contains("      contents: write"));
     assert!(attest.contains("needs.source-preview-draft.outputs.source_artifact_id"));
-    assert!(attest.contains("needs.source-preview-draft.outputs.payload_artifact_id"));
+    assert!(attest.contains("needs.source-preview-draft.outputs.linux_payload_artifact_id"));
+    assert!(attest.contains("needs.source-preview-draft.outputs.darwin_payload_artifact_id"));
     assert!(attest.contains("steps.prepare.outputs.sign == 'true'"));
     assert!(attest.contains("source-preview-signed-${{ github.run_attempt }}"));
     assert!(attest.contains("SDK_PREVIEW_RECEIPT.json.sigstore.jsonl"));
@@ -199,8 +215,8 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
 -> Result<(), Box<dyn Error>> {
     let files = rendered()?;
     let workflow = find_file(&files, ".github/workflows/product-release-generator.yml")?;
-    let qualifier = job(workflow, "source-preview-qualify")?;
-    assert!(qualifier.contains("needs.source-preview-build.outputs.artifact_id"));
+    let qualifier = job(workflow, "source-preview-qualify-linux")?;
+    assert!(qualifier.contains("needs.source-preview-build-linux.outputs.artifact_id"));
     assert!(qualifier.contains("source-preview/velnor-actions-x86_64-unknown-linux-gnu"));
     assert!(qualifier.contains("capture-opentofu-goldens.sh"));
     assert!(qualifier.contains("Restore Cargo sources"));
@@ -232,6 +248,16 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
         .map(|needle| script.find(needle).ok_or("missing qualification step"))
         .collect::<Result<Vec<_>, _>>()?;
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+    let mac = job(workflow, "source-preview-qualify-darwin")?;
+    assert!(mac.contains("runs-on: macos-15"));
+    assert!(mac.contains("needs.source-preview-build-darwin.outputs.artifact_id"));
+    assert!(!mac.contains(": write"));
+    assert!(!mac.contains("id-token:"));
+    let mac_script = step_script(mac, "Qualify exact source preview bytes")?;
+    assert!(mac_script.contains("source-preview/velnor-actions-aarch64-apple-darwin"));
+    assert!(mac_script.contains("capture-opentofu-goldens.sh"));
+    assert!(mac_script.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert!(!mac_script.contains("prefetch-locked-sources-for-qualification-workspaces"));
     Ok(())
 }
 
@@ -336,3 +362,6 @@ fn preview_publication_preserves_fixed_source_and_executor_authority() -> Result
 
 #[path = "source_preview_publication_bounds.rs"]
 mod publication_bounds;
+
+#[path = "source_preview_runtime_graph.rs"]
+mod runtime_graph;

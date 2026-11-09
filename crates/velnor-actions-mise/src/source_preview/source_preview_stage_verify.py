@@ -47,15 +47,16 @@ def verify_gh_binary(path):
     bootstrap.require(os.access(path, os.X_OK))
 
 
-def invoke_gh(path, receipt_path, bundle_path, source, expected_authority):
-    authority = checked_authority(expected_authority)
+def _invoke_gh(path, receipt_path, bundle_path, source, authority, policy, deadline):
     bootstrap.require(authority["sha"] != source)
     environment = {key: os.environ[key] for key in ("HOME", "LANG", "LC_ALL", "TMPDIR") if key in os.environ}
     environment.update({"PATH": "/usr/bin:/bin", "GH_PROMPT_DISABLED": "1"})
-    command = [path, "attestation", "verify", str(receipt_path), "--bundle", str(bundle_path), "--repo", bootstrap.REPOSITORY, "--signer-workflow", bootstrap.REPOSITORY + "/" + authority["path"], "--signer-digest", authority["sha"], "--source-digest", source, "--source-ref", "refs/tags/sdk-preview-" + source, "--format", "json"]
+    command = [path, "attestation", "verify", str(receipt_path), "--bundle", str(bundle_path), "--repo", policy["repository"], "--signer-workflow", policy["repository"] + "/" + authority["path"], "--signer-digest", authority["sha"], "--source-digest", source, "--source-ref", policy["source_ref"], "--format", "json"]
+    if policy.get("trusted_root") is not None:
+        command.extend(("--custom-trusted-root", str(policy["trusted_root"])))
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=environment, start_new_session=True)
     output = bytearray()
-    deadline = time.monotonic() + 90
+    deadline = min(deadline, time.monotonic() + 90)
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
@@ -79,10 +80,9 @@ def invoke_gh(path, receipt_path, bundle_path, source, expected_authority):
     return bootstrap.parse_json(output, MAX_VERIFY_OUTPUT)
 
 
-def certificate_matches(certificate, source, workflow, run_id, attempt, expected_authority):
-    authority = checked_authority(expected_authority)
+def _certificate_matches(certificate, source, workflow, run_id, attempt, authority, policy):
     signer_uri = "https://github.com/" + authority["ref"]
-    uri = f"https://github.com/{bootstrap.REPOSITORY}/{workflow}@refs/tags/sdk-preview-{source}"
+    uri = f"https://github.com/{policy['repository']}/{workflow}@{policy['source_ref']}"
     expected = {
         "issuer": "https://token.actions.githubusercontent.com",
         "subjectAlternativeName": signer_uri,
@@ -90,21 +90,36 @@ def certificate_matches(certificate, source, workflow, run_id, attempt, expected
         "buildSignerDigest": authority["sha"],
         "buildConfigURI": uri,
         "buildConfigDigest": source,
-        "sourceRepositoryURI": f"https://github.com/{bootstrap.REPOSITORY}",
-        "sourceRepositoryIdentifier": str(bootstrap.REPOSITORY_ID),
-        "sourceRepositoryOwnerURI": "https://github.com/tailrocks",
-        "sourceRepositoryOwnerIdentifier": OWNER_ID,
+        "sourceRepositoryURI": f"https://github.com/{policy['repository']}",
+        "sourceRepositoryIdentifier": str(policy["repository_id"]),
+        "sourceRepositoryOwnerURI": "https://github.com/" + policy["owner"],
+        "sourceRepositoryOwnerIdentifier": str(policy["owner_id"]),
         "sourceRepositoryDigest": source,
-        "sourceRepositoryRef": "refs/tags/sdk-preview-" + source,
-        "buildTrigger": "push",
+        "sourceRepositoryRef": policy["source_ref"],
+        "buildTrigger": policy["trigger"],
         "runnerEnvironment": "github-hosted",
-        "runInvocationURI": f"https://github.com/{bootstrap.REPOSITORY}/actions/runs/{run_id}/attempts/{attempt}",
+        "runInvocationURI": f"https://github.com/{policy['repository']}/actions/runs/{run_id}/attempts/{attempt}",
     }
     return authority["sha"] != source and isinstance(certificate, dict) and all(certificate.get(key) == value for key, value in expected.items())
 
 
-def verify_attestation(path, receipt, bundle, preview, temp_root, expected_authority):
+def _public_policy(source):
+    return {"repository": bootstrap.REPOSITORY, "repository_id": bootstrap.REPOSITORY_ID,
+            "owner": "tailrocks", "owner_id": OWNER_ID, "source_ref": "refs/tags/sdk-preview-" + source,
+            "trigger": "push", "trusted_root": None}
+
+
+def certificate_matches(certificate, source, workflow, run_id, attempt, expected_authority):
+    return _certificate_matches(certificate, source, workflow, run_id, attempt,
+                                checked_authority(expected_authority), _public_policy(source))
+
+
+def verify_attestation(path, receipt, bundle, preview, temp_root, expected_authority, deadline):
     authority = checked_authority(expected_authority)
+    _verify_attestation(path, receipt, bundle, preview, temp_root, authority, _public_policy(preview["source_sha"]), deadline)
+
+
+def _verify_attestation(path, receipt, bundle, preview, temp_root, authority, policy, deadline):
     bootstrap.require(authority["sha"] != preview["source_sha"])
     verify_gh_binary(path)
     with tempfile.TemporaryDirectory(prefix="source-preview-stage-", dir=temp_root) as temporary:
@@ -113,16 +128,16 @@ def verify_attestation(path, receipt, bundle, preview, temp_root, expected_autho
         bundle_path = root / "SDK_PREVIEW_RECEIPT.json.sigstore.jsonl"
         receipt_path.write_bytes(receipt)
         bundle_path.write_bytes(bundle)
-        verified = invoke_gh(path, receipt_path, bundle_path, preview["source_sha"], authority)
+        verified = _invoke_gh(path, receipt_path, bundle_path, preview["source_sha"], authority, policy, deadline)
     bootstrap.require(isinstance(verified, list) and len(verified) == 1)
     result = verified[0].get("verificationResult", {})
     certificate = result.get("signature", {}).get("certificate")
-    bootstrap.require(certificate_matches(certificate, preview["source_sha"], preview["signer_workflow_path"], preview["signer_run_id"], preview["signer_run_attempt"], authority))
+    bootstrap.require(_certificate_matches(certificate, preview["source_sha"], preview["signer_workflow_path"], preview["signer_run_id"], preview["signer_run_attempt"], authority, policy))
     statement = result.get("statement", {})
     bootstrap.require(statement.get("predicateType") == "https://slsa.dev/provenance/v1")
     subjects = statement.get("subject")
-    bootstrap.require(isinstance(subjects, list))
-    for name, digest in [("SDK_PREVIEW_RECEIPT.json", preview["receipt_sha256"]), (preview["payload_name"], preview["payload_sha256"])]:
+    bootstrap.require(isinstance(subjects, list) and len(subjects) == 3)
+    for name, digest in [("SDK_PREVIEW_RECEIPT.json", preview["receipt_sha256"]), (preview["linux_payload_name"], preview["linux_payload_sha256"]), (preview["darwin_payload_name"], preview["darwin_payload_sha256"])]:
         matches = [item for item in subjects if isinstance(item, dict) and item.get("name") == name]
         bootstrap.require(len(matches) == 1 and matches[0].get("digest") == {"sha256": digest})
 
@@ -187,7 +202,47 @@ def verify_publication_jobs(network, preview):
     bootstrap.require(pinned_job.get("name") == "Source preview publication / Publish source preview" and pinned_job.get("status") == "completed" and pinned_job.get("conclusion") == "success")
 
 
-def verify_staging(pr_number, gh_path, network, temp_root):
+def verify_target_producers(network, preview):
+    for target, label in (("linux", "Linux"), ("darwin", "Darwin")):
+        run_id = preview[f"{target}_producer_run_id"]
+        attempt = preview[f"{target}_producer_run_attempt"]
+        path = f"/repos/{bootstrap.REPOSITORY}/actions/runs/{run_id}/attempts/{attempt}"
+        run = network.api(path)
+        bootstrap.require(run.get("id") == run_id and run.get("run_attempt") == attempt)
+        bootstrap.require(run.get("head_sha") == preview["source_sha"] and run.get("head_branch") == "main")
+        bootstrap.require(run.get("event") == "push" and run.get("path", "").split("@", 1)[0] == ".github/workflows/product-release-generator.yml")
+        bootstrap.require(run.get("status") == "completed" and run.get("conclusion") == "success")
+        bootstrap.require(run.get("head_repository", {}).get("id") == bootstrap.REPOSITORY_ID)
+        verify_required_job(network, path, f"Build source preview {label}", preview["source_sha"])
+        job = verify_required_job(network, path, f"Qualify source preview {label}", preview["source_sha"])
+        bootstrap.require(job["id"] == preview[f"{target}_qualification_job_id"])
+        artifact_id = preview[f"{target}_producer_payload_artifact_id"]
+        artifact = network.api(f"/repos/{bootstrap.REPOSITORY}/actions/artifacts/{artifact_id}")
+        bootstrap.require(artifact.get("id") == artifact_id and artifact.get("expired") is False)
+        bootstrap.require(artifact.get("name") == f"source-preview-payload-{target}-{attempt}")
+        bootstrap.require(artifact.get("digest") == "sha256:" + preview[f"{target}_producer_payload_archive_sha256"])
+        bootstrap.require(artifact.get("workflow_run", {}).get("id") == run_id and artifact.get("workflow_run", {}).get("head_sha") == preview["source_sha"])
+
+
+def verify_preview(preview, gh_path, network, temp_root, expected_authority):
+    ci = verify_run(network, preview, "ci", "push")
+    qualification = verify_run(network, preview, "qualification", "workflow_dispatch")
+    verify_required_job(network, ci, "Required", preview["source_sha"])
+    verify_required_job(network, qualification, "Source qualification", preview["source_sha"])
+    verify_target_producers(network, preview)
+    verify_publication_jobs(network, preview)
+    tag_sha = bootstrap.verify_annotated_tag(preview, network)
+    receipt, bundle, payloads = bootstrap.download_verified_release(preview, network)
+    authority = checked_authority(expected_authority)
+    authority_ancestry = network.api(f"/repos/{bootstrap.REPOSITORY}/compare/{authority['sha']}...{preview['source_sha']}")
+    bootstrap.require(authority_ancestry.get("status") == "ahead" and authority_ancestry.get("merge_base_commit", {}).get("sha") == authority["sha"])
+    verify_attestation(gh_path, receipt, bundle, preview, temp_root, authority, network.deadline)
+    bootstrap.require(bootstrap.verify_annotated_tag(preview, network) == tag_sha)
+    return receipt, bundle, payloads
+
+
+def verify_staging(pr_number, gh_path, network, temp_root, role):
+    bootstrap.require(role in ("planner", "runtime"))
     bootstrap.require(bootstrap.number(pr_number))
     repository = network.api(f"/repos/{bootstrap.REPOSITORY}")
     bootstrap.require(repository.get("id") == bootstrap.REPOSITORY_ID and repository.get("full_name") == bootstrap.REPOSITORY and repository.get("default_branch") == "main")
@@ -202,37 +257,26 @@ def verify_staging(pr_number, gh_path, network, temp_root):
     main = network.api(f"/repos/{bootstrap.REPOSITORY}/commits/main")
     bootstrap.require(main.get("sha") == base["sha"])
     lock = bootstrap.read_github_lock(network, head["sha"])
-    preview = lock.get("planner-preview-staged")
+    preview = lock.get(f"{role}-preview-staged")
     bootstrap.validate_preview(preview, head["sha"])
     ancestry = network.api(f"/repos/{bootstrap.REPOSITORY}/compare/{preview['source_sha']}...{base['sha']}")
     bootstrap.require(ancestry.get("status") in ("identical", "ahead") and ancestry.get("merge_base_commit", {}).get("sha") == preview["source_sha"])
-    ci = verify_run(network, preview, "ci", "push")
-    qualification = verify_run(network, preview, "qualification", "workflow_dispatch")
-    verify_required_job(network, ci, "Required", preview["source_sha"])
-    verify_required_job(network, qualification, "Source qualification", preview["source_sha"])
-    verify_publication_jobs(network, preview)
-    tag_sha = bootstrap.verify_annotated_tag(preview, network)
-    receipt, bundle, _ = bootstrap.download_verified_release(preview, network)
-    authority = staging_authority()
-    authority_ancestry = network.api(f"/repos/{bootstrap.REPOSITORY}/compare/{authority['sha']}...{preview['source_sha']}")
-    bootstrap.require(authority_ancestry.get("status") == "ahead" and authority_ancestry.get("merge_base_commit", {}).get("sha") == authority["sha"])
-    verify_attestation(gh_path, receipt, bundle, preview, temp_root, authority)
+    verify_preview(preview, gh_path, network, temp_root, staging_authority())
     current = network.api(f"/repos/{bootstrap.REPOSITORY}/pulls/{pr_number}")
     bootstrap.require(current.get("number") == pr_number and current.get("state") == "open")
     bootstrap.require((current.get("head", {}).get("sha"), current.get("head", {}).get("repo", {}).get("id"), current.get("base", {}).get("sha")) == initial)
     bootstrap.require(current.get("base", {}).get("ref") == "main" and current.get("base", {}).get("repo", {}).get("id") == bootstrap.REPOSITORY_ID)
     bootstrap.require(network.api(f"/repos/{bootstrap.REPOSITORY}/commits/main").get("sha") == base["sha"])
-    bootstrap.require(bootstrap.verify_annotated_tag(preview, network) == tag_sha)
-    return {"repository": bootstrap.REPOSITORY, "pull_request": pr_number, "head_sha": head["sha"], "base_sha": base["sha"], "source_sha": preview["source_sha"], "receipt_sha256": preview["receipt_sha256"]}
+    return {"role": role, "repository": bootstrap.REPOSITORY, "pull_request": pr_number, "head_sha": head["sha"], "base_sha": base["sha"], "source_sha": preview["source_sha"], "receipt_sha256": preview["receipt_sha256"]}
 
 
 def main():
-    bootstrap.require(len(sys.argv) == 4)
+    bootstrap.require(len(sys.argv) == 5)
     pr_number = int(sys.argv[1])
     gh = str(Path(sys.argv[2]))
     temp_root = Path(sys.argv[3])
     bootstrap.require(temp_root.is_absolute() and temp_root.is_dir() and not temp_root.is_symlink())
-    result = verify_staging(pr_number, gh, bootstrap.GitHubTransport(os.environ.get("GH_TOKEN", "")), temp_root)
+    result = verify_staging(pr_number, gh, bootstrap.GitHubTransport(os.environ.get("GH_TOKEN", "")), temp_root, sys.argv[4])
     sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
 
 

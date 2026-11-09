@@ -18,20 +18,7 @@ impl VelnorConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.check_schema(file)?;
         self.workflow.validate(file)?;
-        if self.runner_image_family.is_some()
-            && (self.workflow.policy != super::WorkflowPolicy::VelnorRepositoryV1
-                || self
-                    .workflow
-                    .default_branch
-                    .as_deref()
-                    .is_some_and(|branch| branch != "main"))
-        {
-            return Err(ContractError::config(
-                file,
-                "runner_image_family",
-                "requires_velnor_owner_main",
-            ));
-        }
+        self.check_mac_qualification(file)?;
         if let Some(proof) = &self.premerge_event_proof {
             proof.validate(file)?;
         }
@@ -86,6 +73,34 @@ impl VelnorConfig {
         self.check_native_checks(file)?;
         validate_images(&self.images, file)?;
         self.check_shard_budgets(file)?;
+        Ok(())
+    }
+
+    fn check_mac_qualification(&self, file: &str) -> Result<(), ContractError> {
+        if self.runner_image_family.is_some()
+            && (self.workflow.policy != super::WorkflowPolicy::VelnorRepositoryV1
+                || self
+                    .workflow
+                    .default_branch
+                    .as_deref()
+                    .is_some_and(|branch| branch != "main"))
+        {
+            return Err(ContractError::config(
+                file,
+                "runner_image_family",
+                "requires_velnor_owner_main",
+            ));
+        }
+        if let Some(family) = &self.runner_image_family {
+            let mac = family.mac_qualification.as_ref().ok_or_else(|| {
+                ContractError::config(
+                    file,
+                    "runner_image_family.mac_qualification",
+                    "mac_qualification_required",
+                )
+            })?;
+            mac.validate(file)?;
+        }
         Ok(())
     }
 
@@ -163,5 +178,54 @@ impl VelnorConfig {
                 expected: "1 or 2",
             }),
         }
+    }
+}
+
+impl super::MacRunnerQualificationConfig {
+    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        let valid_hex = |value: &str, len: usize| {
+            value.len() == len
+                && value
+                    .bytes()
+                    .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        };
+        let clean_absolute = |value: &str| {
+            value.starts_with('/')
+                && value.len() > 1
+                && value.len() <= 4096
+                && !value.chars().any(char::is_control)
+                && value[1..]
+                    .split('/')
+                    .all(|part| !part.is_empty() && part != "." && part != "..")
+        };
+        if self.runner_id != 21
+            || self.companion_workflow_path != ".github/workflows/qualify-runner-family.yml"
+            || self.companion_workflow_ref != "refs/heads/main"
+            || !valid_hex(&self.companion_workflow_sha, 40)
+            || !self
+                .docker_socket
+                .strip_prefix("unix://")
+                .is_some_and(clean_absolute)
+            || !clean_absolute(&self.state_dir)
+            || !match &self.sdk {
+                super::MacSdkSelection::Stable {
+                    version,
+                    source_sha,
+                    manifest_sha256,
+                } => {
+                    valid_hex(source_sha, 40)
+                        && valid_hex(manifest_sha256, 64)
+                        && super::tools::is_exact_semver(version)
+                }
+                super::MacSdkSelection::SourcePreview {} => true,
+            }
+        {
+            return Err(ContractError::config(
+                file,
+                "runner_image_family.mac_qualification",
+                "mac_qualification_invalid",
+            ));
+        }
+        Ok(())
     }
 }

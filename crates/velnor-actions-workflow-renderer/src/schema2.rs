@@ -79,7 +79,7 @@ pub struct Schema2WorkflowRequest {
     pub mbx_qualification: Option<MbxQualificationPins>,
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
     pub product_release: Option<ProductReleasePins>,
-    pub runner_image_family: bool,
+    pub runner_image_family: Option<velnor_actions_contract::config::MacRunnerQualificationConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +144,7 @@ pub fn render_schema2_workflows(
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
         files.push(job_image_candidate::render_candidate_workflow(request)?);
-        if request.runner_image_family {
+        if request.runner_image_family.is_some() {
             files.push(file(
                 runner_image_qualification::CALLER_PATH,
                 &request.version,

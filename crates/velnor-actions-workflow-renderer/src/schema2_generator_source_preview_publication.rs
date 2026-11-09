@@ -8,9 +8,12 @@ use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}";
 const SOURCE_ID: &str = "${{ needs.source-preview-draft.outputs.source_artifact_id }}";
-const BUILD_ID: &str = "${{ needs.source-preview-draft.outputs.payload_artifact_id }}";
+const LINUX_ID: &str = "${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}";
+const DARWIN_ID: &str = "${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}";
 const FRESH_SOURCE_ID: &str = "${{ needs.source-preview-source.outputs.source_artifact_id }}";
-const FRESH_BUILD_ID: &str = "${{ needs.source-preview-source.outputs.payload_artifact_id }}";
+const FRESH_LINUX_ID: &str = "${{ needs.source-preview-source.outputs.linux_payload_artifact_id }}";
+const FRESH_DARWIN_ID: &str =
+    "${{ needs.source-preview-source.outputs.darwin_payload_artifact_id }}";
 const PAIR_ID: &str = "${{ needs.source-preview-attest.outputs.pair_id }}";
 
 pub(super) fn jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
@@ -48,11 +51,11 @@ fn source() -> Yaml {
     )
 }
 
-fn payload() -> Yaml {
+fn payload(id: &str, target: &str) -> Yaml {
     steps::download_step_by_id(
         "Download exact qualified payload",
-        BUILD_ID,
-        "source-preview-payload",
+        id,
+        &format!("source-preview-payload-{target}"),
     )
 }
 
@@ -74,7 +77,7 @@ fn script(mode: &str) -> String {
     let program = include_str!("schema2_generator_source_preview_publication.py");
     let authority = include_str!("schema2_generator_source_preview_authority.py");
     format!(
-        "set -eu\nenv -i PATH=/usr/bin:/bin HOME=\"$HOME\" GH_TOKEN=\"$GH_TOKEN\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_EVENT_NAME=\"$GITHUB_EVENT_NAME\" GITHUB_REF=\"$GITHUB_REF\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" RUNNER_TEMP=\"$RUNNER_TEMP\" GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" SOURCE_ARTIFACT_ID=\"$SOURCE_ARTIFACT_ID\" PAYLOAD_ARTIFACT_ID=\"$PAYLOAD_ARTIFACT_ID\" AUTHORITY_REPOSITORY=\"$AUTHORITY_REPOSITORY\" AUTHORITY_PATH=\"$AUTHORITY_PATH\" AUTHORITY_REF=\"$AUTHORITY_REF\" AUTHORITY_SHA=\"$AUTHORITY_SHA\" SIGN=\"${{SIGN:-}}\" PAIR_ORIGIN=\"${{PAIR_ORIGIN:-}}\" PAIR_ID=\"${{PAIR_ID:-}}\" RECEIPT_SHA256=\"${{RECEIPT_SHA256:-}}\" BUNDLE_SHA256=\"${{BUNDLE_SHA256:-}}\" PREVIEW_GH=\"${{PREVIEW_GH:-}}\" PREVIEW_MODE='{mode}' /usr/bin/python3 -I -S - <<'PY'\nimport os, sys\nsys.path.insert(0, os.path.join(os.environ['RUNNER_TEMP'], 'source-preview-support'))\n{authority}\n{program}\nPY"
+        "set -eu\nenv -i PATH=/usr/bin:/bin HOME=\"$HOME\" GH_TOKEN=\"$GH_TOKEN\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_EVENT_NAME=\"$GITHUB_EVENT_NAME\" GITHUB_REF=\"$GITHUB_REF\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" RUNNER_TEMP=\"$RUNNER_TEMP\" GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" SOURCE_ARTIFACT_ID=\"$SOURCE_ARTIFACT_ID\" LINUX_PAYLOAD_ARTIFACT_ID=\"$LINUX_PAYLOAD_ARTIFACT_ID\" DARWIN_PAYLOAD_ARTIFACT_ID=\"$DARWIN_PAYLOAD_ARTIFACT_ID\" AUTHORITY_REPOSITORY=\"$AUTHORITY_REPOSITORY\" AUTHORITY_PATH=\"$AUTHORITY_PATH\" AUTHORITY_REF=\"$AUTHORITY_REF\" AUTHORITY_SHA=\"$AUTHORITY_SHA\" SIGN=\"${{SIGN:-}}\" PAIR_ORIGIN=\"${{PAIR_ORIGIN:-}}\" PAIR_ID=\"${{PAIR_ID:-}}\" RECEIPT_SHA256=\"${{RECEIPT_SHA256:-}}\" BUNDLE_SHA256=\"${{BUNDLE_SHA256:-}}\" PREVIEW_GH=\"${{PREVIEW_GH:-}}\" PREVIEW_MODE='{mode}' /usr/bin/python3 -I -S - <<'PY'\nimport os, sys\nsys.path.insert(0, os.path.join(os.environ['RUNNER_TEMP'], 'source-preview-support'))\n{authority}\n{program}\nPY"
     )
 }
 
@@ -83,14 +86,15 @@ fn env() -> Vec<(&'static str, &'static str)> {
     values.extend([
         ("GH_TOKEN", "${{ github.token }}"),
         ("SOURCE_ARTIFACT_ID", SOURCE_ID),
-        ("PAYLOAD_ARTIFACT_ID", BUILD_ID),
+        ("LINUX_PAYLOAD_ARTIFACT_ID", LINUX_ID),
+        ("DARWIN_PAYLOAD_ARTIFACT_ID", DARWIN_ID),
     ]);
     values
 }
 
 fn supported_script(pins: &ProductReleasePins, mode: &str) -> String {
-    let bootstrap = include_str!("native_helper/source_preview_bootstrap.py");
-    let verifier = include_str!("native_helper/source_preview_stage_verify.py");
+    let bootstrap = velnor_actions_mise::source_preview::BOOTSTRAP;
+    let verifier = velnor_actions_mise::source_preview::STAGE_VERIFIER;
     format!(
         "set -eu\nmkdir -m 700 \"$RUNNER_TEMP/source-preview-support\"\ncat > \"$RUNNER_TEMP/source-preview-support/source_preview_bootstrap.py\" <<'BOOTSTRAP'\n{bootstrap}\nBOOTSTRAP\ncat > \"$RUNNER_TEMP/source-preview-support/source_preview_stage_verify.py\" <<'VERIFIER'\n{verifier}\nVERIFIER\nPREVIEW_GH=\"$(mise which gh --tool=gh@{})\"\nexport PREVIEW_GH\n{}",
         pins.gh_version,
@@ -114,11 +118,8 @@ fn draft(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
                 FRESH_SOURCE_ID,
                 "source-preview-metadata",
             ),
-            steps::download_step_by_id(
-                "Download exact qualified payload",
-                FRESH_BUILD_ID,
-                "source-preview-payload",
-            ),
+            payload(FRESH_LINUX_ID, "linux"),
+            payload(FRESH_DARWIN_ID, "darwin"),
             steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
             steps::mise_install_step("Install pinned GitHub CLI", &pins.install_gh_argv)?,
             identified(
@@ -130,7 +131,8 @@ fn draft(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
                         values.extend([
                             ("GH_TOKEN", "${{ github.token }}"),
                             ("SOURCE_ARTIFACT_ID", FRESH_SOURCE_ID),
-                            ("PAYLOAD_ARTIFACT_ID", FRESH_BUILD_ID),
+                            ("LINUX_PAYLOAD_ARTIFACT_ID", FRESH_LINUX_ID),
+                            ("DARWIN_PAYLOAD_ARTIFACT_ID", FRESH_DARWIN_ID),
                         ]);
                         values
                     },
@@ -160,7 +162,7 @@ fn attest(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let action = condition(
         identified(
             steps::attest_step(
-                "${{ runner.temp }}/SDK_PREVIEW_RECEIPT.json\nsource-preview-payload/velnor-actions-x86_64-unknown-linux-gnu",
+                "${{ runner.temp }}/SDK_PREVIEW_RECEIPT.json\nsource-preview-payload-linux/velnor-actions-x86_64-unknown-linux-gnu\nsource-preview-payload-darwin/velnor-actions-aarch64-apple-darwin",
             ),
             "attest",
         ),
@@ -172,7 +174,8 @@ fn attest(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
         job,
         vec![
             source(),
-            payload(),
+            payload(LINUX_ID, "linux"),
+            payload(DARWIN_ID, "darwin"),
             steps::download_step_by_id(
                 "Download draft decision",
                 "${{ needs.source-preview-draft.outputs.artifact_id }}",
@@ -254,7 +257,8 @@ fn publish(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
         job,
         vec![
             source(),
-            payload(),
+            payload(LINUX_ID, "linux"),
+            payload(DARWIN_ID, "darwin"),
             condition(
                 steps::download_step_by_id(
                     "Download exact signed pair",
@@ -285,8 +289,12 @@ fn draft_outputs() -> Yaml {
             Yaml::str("${{ steps.draft.outputs.source_artifact_id }}"),
         ),
         (
-            "payload_artifact_id".to_owned(),
-            Yaml::str("${{ steps.draft.outputs.payload_artifact_id }}"),
+            "linux_payload_artifact_id".to_owned(),
+            Yaml::str("${{ steps.draft.outputs.linux_payload_artifact_id }}"),
+        ),
+        (
+            "darwin_payload_artifact_id".to_owned(),
+            Yaml::str("${{ steps.draft.outputs.darwin_payload_artifact_id }}"),
         ),
         (
             "sign".to_owned(),

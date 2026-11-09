@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{RenderError, yaml::Yaml};
 
-const BOOTSTRAP: &str = include_str!("native_helper/source_preview_bootstrap.py");
+const BOOTSTRAP: &str = velnor_actions_mise::source_preview::BOOTSTRAP;
 const EXECUTOR: &str = include_str!("native_helper/source_preview_exec.py");
 const SETUP: &str = include_str!("native_helper/source_preview_setup.py");
 const LOADER: &str = include_str!("native_helper/source_preview_loader.py");
@@ -56,8 +56,8 @@ fn identity(preview: &velnor_actions_contract::source_preview::SourcePreviewLock
     serde_json::json!({
         "channel": "source-preview",
         "version": preview.receipt.version,
-        "target": preview.receipt.payload.target,
-        "sha256": preview.receipt.payload.sha256,
+        "target": preview.receipt.targets.linux.payload.target,
+        "sha256": preview.receipt.targets.linux.payload.sha256,
         "source_sha": preview.receipt.source_sha,
         "receipt_sha256": preview.receipt_sha256,
     })

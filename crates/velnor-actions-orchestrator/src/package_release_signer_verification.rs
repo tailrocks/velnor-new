@@ -51,7 +51,7 @@ pub(crate) fn verify_signed_package_with_deadline(
     receipt::require_expected_identity(&receipt, plan, expected)?;
     validate_release_directory(directory, &receipt)?;
     let runner_temp = absolute_env("RUNNER_TEMP")?;
-    let cosign = cosign::acquire_cosign(&runner_temp)?;
+    let cosign = cosign::acquire_cosign(&runner_temp, deadline)?;
     for asset in &receipt.assets {
         let path = directory.join(&asset.name);
         let data = read_regular_file(&path, 1024 * 1024 * 1024)?;

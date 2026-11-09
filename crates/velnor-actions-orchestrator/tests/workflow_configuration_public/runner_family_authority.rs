@@ -46,16 +46,31 @@ fn family_repo(
     Ok(repo)
 }
 
+fn family_repo_with_mac(
+    policy: WorkflowPolicy,
+    branch: &str,
+    enabled: bool,
+) -> Result<tempfile::TempDir, Box<dyn Error>> {
+    let repo = family_repo(policy, branch, false)?;
+    if enabled {
+        let config = repo.path().join(".velnor/config.toml");
+        let mut text = fs::read_to_string(&config)?;
+        text.push_str(super::runner_family_selection::FAMILY_CONFIG);
+        fs::write(config, text)?;
+    }
+    Ok(repo)
+}
+
 #[test]
 fn runner_family_requires_owner_policy_and_main_branch() -> Result<(), Box<dyn Error>> {
-    let owner = family_repo(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let owner = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
     assert!(prepare(owner.path()).is_ok());
-    let nonmain = family_repo(WorkflowPolicy::VelnorRepositoryV1, "other", true)?;
+    let nonmain = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "other", true)?;
     let error = prepare(nonmain.path())
         .err()
         .ok_or("non-main family accepted")?;
     assert!(format!("{error:?}").contains("requires_velnor_owner_main"));
-    let implicit = family_repo(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let implicit = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
     let config = implicit.path().join(".velnor/config.toml");
     fs::write(
         &config,
@@ -88,21 +103,21 @@ fn runner_family_requires_owner_policy_and_main_branch() -> Result<(), Box<dyn E
         .err()
         .ok_or("implicit non-main family accepted")?;
     assert!(format!("{error:?}").contains("requires_velnor_owner_main"));
-    let consumer = family_repo(WorkflowPolicy::ConsumerV1, "main", true)?;
+    let consumer = family_repo_with_mac(WorkflowPolicy::ConsumerV1, "main", true)?;
     let error = prepare(consumer.path())
         .err()
         .ok_or("consumer family accepted")?;
     assert!(format!("{error:?}").contains("requires_velnor_owner_main"));
-    let plain = family_repo(WorkflowPolicy::VelnorRepositoryV1, "other", false)?;
+    let plain = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "other", false)?;
     assert!(prepare(plain.path()).is_ok());
-    let plain_consumer = family_repo(WorkflowPolicy::ConsumerV1, "other", false)?;
+    let plain_consumer = family_repo_with_mac(WorkflowPolicy::ConsumerV1, "other", false)?;
     assert!(prepare(plain_consumer.path()).is_ok());
     Ok(())
 }
 
 #[test]
 fn native_authority_rejects_forged_runner_family_artifacts() -> Result<(), Box<dyn Error>> {
-    let repo = family_repo(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let repo = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
     let prepared = prepare(repo.path())?;
     assert!(finalized_jobs(&prepared).is_ok());
     for field in [
@@ -180,6 +195,79 @@ fn native_authority_rejects_forged_runner_family_artifacts() -> Result<(), Box<d
             matches!(final_result, Err(velnor_actions_orchestrator::OrchestratorError::Render { ref problem }) if problem == "invalid workflow: native_authority_graph"),
             "forged {field}: {final_result:?}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn runner_family_rejects_missing_mac_qualification_authority() -> Result<(), Box<dyn Error>> {
+    let repo = family_repo(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("runner family accepted without Mac qualification authority")?;
+    assert!(format!("{error:?}").contains("mac_qualification_required"));
+    Ok(())
+}
+
+#[test]
+fn runner_family_rejects_invalid_mac_authority_pins() -> Result<(), Box<dyn Error>> {
+    let repo = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let config = repo.path().join(".velnor/config.toml");
+    let valid = fs::read_to_string(&config)?;
+    assert!(
+        prepare(repo.path()).is_ok(),
+        "valid fixture authority rejected"
+    );
+    for (from, to) in [
+        ("runner_id = 21", "runner_id = 0"),
+        ("runner_id = 21", "runner_id = 22"),
+        (
+            ".github/workflows/qualify-runner-family.yml",
+            ".github/workflows/other.yml",
+        ),
+        (
+            ".github/workflows/qualify-runner-family.yml",
+            "../wrong.yml",
+        ),
+        ("refs/heads/main", "refs/heads/other"),
+        ("cccccccccccccccccccccccccccccccccccccccc", "not-a-sha"),
+        ("unix:///tmp/fixture.sock", "tcp://example.invalid"),
+        ("1.2.3", "1.2"),
+        ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "not-a-sha"),
+        (
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "not-a-digest",
+        ),
+    ] {
+        fs::write(&config, valid.replacen(from, to, 1))?;
+        let error = prepare(repo.path())
+            .err()
+            .ok_or("invalid Mac authority accepted")?;
+        assert!(format!("{error:?}").contains("mac_qualification_invalid"));
+    }
+    Ok(())
+}
+
+#[test]
+fn runner_family_requires_canonical_persistent_mac_paths() -> Result<(), Box<dyn Error>> {
+    let repo = family_repo_with_mac(WorkflowPolicy::VelnorRepositoryV1, "main", true)?;
+    let config = repo.path().join(".velnor/config.toml");
+    let valid = fs::read_to_string(&config)?;
+    assert!(
+        prepare(repo.path()).is_ok(),
+        "absolute Mac state directory rejected"
+    );
+    for (from, to) in [
+        ("/tmp/fixture-state", "relative-state"),
+        ("/tmp/fixture-state", "/tmp/../state"),
+        ("unix:///tmp/fixture.sock", "unix:///tmp/../fixture.sock"),
+        ("unix:///tmp/fixture.sock", "unix:////tmp/fixture.sock"),
+    ] {
+        fs::write(&config, valid.replacen(from, to, 1))?;
+        let error = prepare(repo.path())
+            .err()
+            .ok_or("noncanonical Mac path accepted")?;
+        assert!(format!("{error:?}").contains("mac_qualification_invalid"));
     }
     Ok(())
 }

@@ -3,12 +3,30 @@
 
 use super::*;
 
+fn family_files() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
+    let mut request = request()?;
+    request.runner_image_family = Some(
+        velnor_actions_contract::config::MacRunnerQualificationConfig {
+            runner_id: 21,
+            companion_workflow_path: ".github/workflows/qualify-runner-family.yml".to_owned(),
+            companion_workflow_ref: "refs/heads/main".to_owned(),
+            companion_workflow_sha: "c".repeat(40),
+            docker_socket: "unix:///tmp/fixture.sock".to_owned(),
+            state_dir: "/tmp/fixture-state".to_owned(),
+            sdk: velnor_actions_contract::config::MacSdkSelection::Stable {
+                version: "1.2.3".to_owned(),
+                source_sha: "a".repeat(40),
+                manifest_sha256: "b".repeat(64),
+            },
+        },
+    );
+    Ok(render_schema2_workflows(&request)?)
+}
+
 #[test]
 fn runner_qualification_requires_exact_receipt_and_source_free_signer() -> Result<(), Box<dyn Error>>
 {
-    let mut request = request()?;
-    request.runner_image_family = true;
-    let files = render_schema2_workflows(&request)?;
+    let files = family_files()?;
     let caller = find_file(&files, ".github/workflows/runner-image-qualification.yml")?;
     let signer = find_file(
         &files,
@@ -43,7 +61,7 @@ fn runner_qualification_requires_exact_receipt_and_source_free_signer() -> Resul
     assert!(release_discovery.contains("timeout-minutes: 360"));
     assert!(!release_discovery.contains("packages: write"));
     assert!(release_discovery.contains("discover-producer"));
-    let publisher = job_section(release, "  publish-images:", Some("  attest-images:"))?;
+    let publisher = job_section(release, "  publish-images:", Some("  verify-mac-proof:"))?;
     assert!(publisher.contains("discover-artifacts"));
     assert!(publisher.contains("packages: write"));
     let qualifier = job_section(caller, "  qualify-images:", Some("  attest-qualification:"))?;

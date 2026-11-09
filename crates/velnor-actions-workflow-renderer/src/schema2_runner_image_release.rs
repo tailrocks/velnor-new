@@ -3,6 +3,8 @@
 
 use crate::{RenderError, steps, yaml::Yaml};
 use velnor_actions_contract::ReleaseTarget;
+#[path = "schema2_runner_image_release/attest.rs"]
+mod attest;
 #[path = "schema2_runner_image_release/authority.rs"]
 mod authority;
 #[path = "schema2_runner_image_release/release.rs"]
@@ -243,106 +245,8 @@ fn publish_outputs() -> Yaml {
     ])
 }
 
-fn attest_job() -> Yaml {
-    let download = action(
-        "Download exact release assets",
-        steps::DOWNLOAD_ARTIFACT_USES,
-        &[
-            (
-                "artifact-ids",
-                "${{ needs.publish-images.outputs.artifact_id }}",
-            ),
-            ("path", "${{ runner.temp }}/runner-family-release/assets"),
-        ],
-    );
-    let attest = action(
-        "Attest release assets",
-        steps::ATTEST_BUILD_PROVENANCE_USES,
-        &[(
-            "subject-path",
-            "${{ runner.temp }}/runner-family-release/assets/RUNNER_IMAGE_MANIFEST.json\n${{ runner.temp }}/runner-family-release/assets/SHA256SUMS\n${{ runner.temp }}/runner-family-release/assets/LICENSE\n${{ runner.temp }}/runner-family-release/assets/NOTICE",
-        )],
-    );
-    map(&[
-        ("runs-on", Yaml::str("ubuntu-26.04")),
-        ("timeout-minutes", Yaml::Int(10)),
-        ("needs", seq(&["publish-images"])),
-        (
-            "if",
-            Yaml::str("${{ needs.publish-images.outputs.action == 'build' }}"),
-        ),
-        (
-            "permissions",
-            strings(&[
-                ("actions", "read"),
-                ("attestations", "write"),
-                ("contents", "read"),
-                ("id-token", "write"),
-            ]),
-        ),
-        (
-            "steps",
-            Yaml::Seq(vec![release_artifact_check(), download, attest]),
-        ),
-    ])
-}
-
 pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let pins = request
-        .product_release
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".into()))?;
-    let discovery_job = |phase: &str, depends: bool| -> Result<Yaml, RenderError> {
-        let mut discovery_steps =
-            generator_release::product_setup_steps(pins, ReleaseTarget::LinuxX86_64)?;
-        discovery_steps.push(discover(pins, phase)?);
-        let mut discovery = map(&[
-            ("runs-on", Yaml::str("ubuntu-26.04")),
-            ("timeout-minutes", Yaml::Int(360)),
-            (
-                "permissions",
-                strings(&[("actions", "read"), ("contents", "read")]),
-            ),
-            (
-                "outputs",
-                map(&[
-                    (
-                        "producer_run_id",
-                        Yaml::str("${{ steps.discovery.outputs.producer_run_id }}"),
-                    ),
-                    (
-                        "producer_run_attempt",
-                        Yaml::str("${{ steps.discovery.outputs.producer_run_attempt }}"),
-                    ),
-                    (
-                        "producer_artifact_id",
-                        Yaml::str("${{ steps.discovery.outputs.producer_artifact_id }}"),
-                    ),
-                    (
-                        "qualifier_run_id",
-                        Yaml::str("${{ steps.discovery.outputs.qualifier_run_id }}"),
-                    ),
-                    (
-                        "qualifier_run_attempt",
-                        Yaml::str("${{ steps.discovery.outputs.qualifier_run_attempt }}"),
-                    ),
-                    (
-                        "qualifier_job_id",
-                        Yaml::str("${{ steps.discovery.outputs.qualifier_job_id }}"),
-                    ),
-                    (
-                        "qualification_artifact_id",
-                        Yaml::str("${{ steps.discovery.outputs.qualification_artifact_id }}"),
-                    ),
-                ]),
-            ),
-            ("steps", Yaml::Seq(discovery_steps)),
-        ]);
-        if depends && let Yaml::Map(fields) = &mut discovery {
-            fields.push(("needs".into(), seq(&["discover-producer"])));
-        }
-        Ok(discovery)
-    };
+    let pins = release_pins(request)?;
     Ok(map(&[
         ("name", Yaml::str("Runner image release")),
         ("on", map(&[("push", map(&[("branches", seq(&["main"]))]))])),
@@ -360,12 +264,110 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
         (
             "jobs",
             map(&[
-                ("discover-producer", discovery_job("producer", false)?),
-                ("discover-artifacts", discovery_job("qualification", true)?),
+                ("discover-producer", discovery_job(pins, "producer", false)?),
+                (
+                    "discover-artifacts",
+                    discovery_job(pins, "qualification", true)?,
+                ),
                 ("publish-images", publish_job(pins)?),
-                ("attest-images", attest_job()),
+                (
+                    "verify-mac-proof",
+                    match &request
+                        .runner_image_family
+                        .as_ref()
+                        .ok_or_else(|| {
+                            RenderError::InvalidWorkflow(
+                                "mac_qualification_authority_unavailable".into(),
+                            )
+                        })?
+                        .sdk
+                    {
+                        velnor_actions_contract::config::MacSdkSelection::Stable { .. } => {
+                            attest::verify_job(
+                                pins,
+                                request.runner_image_family.as_ref().ok_or_else(|| {
+                                    RenderError::InvalidWorkflow(
+                                        "mac_qualification_authority_unavailable".into(),
+                                    )
+                                })?,
+                            )?
+                        }
+                        velnor_actions_contract::config::MacSdkSelection::SourcePreview {} => {
+                            attest::preview_call()?
+                        }
+                    },
+                ),
+                ("attest-images", attest::attest_job()),
                 ("release-images", release::release_job(pins)?),
             ]),
         ),
     ]))
+}
+
+fn discovery_job(
+    pins: &ProductReleasePins,
+    phase: &str,
+    depends: bool,
+) -> Result<Yaml, RenderError> {
+    let mut discovery_steps =
+        generator_release::product_setup_steps(pins, ReleaseTarget::LinuxX86_64)?;
+    discovery_steps.push(discover(pins, phase)?);
+    let mut discovery = map(&[
+        ("runs-on", Yaml::str("ubuntu-26.04")),
+        ("timeout-minutes", Yaml::Int(360)),
+        (
+            "permissions",
+            strings(&[("actions", "read"), ("contents", "read")]),
+        ),
+        (
+            "outputs",
+            map(&[
+                (
+                    "producer_run_id",
+                    Yaml::str("${{ steps.discovery.outputs.producer_run_id }}"),
+                ),
+                (
+                    "producer_run_attempt",
+                    Yaml::str("${{ steps.discovery.outputs.producer_run_attempt }}"),
+                ),
+                (
+                    "producer_artifact_id",
+                    Yaml::str("${{ steps.discovery.outputs.producer_artifact_id }}"),
+                ),
+                (
+                    "qualifier_run_id",
+                    Yaml::str("${{ steps.discovery.outputs.qualifier_run_id }}"),
+                ),
+                (
+                    "qualifier_run_attempt",
+                    Yaml::str("${{ steps.discovery.outputs.qualifier_run_attempt }}"),
+                ),
+                (
+                    "qualifier_job_id",
+                    Yaml::str("${{ steps.discovery.outputs.qualifier_job_id }}"),
+                ),
+                (
+                    "qualification_artifact_id",
+                    Yaml::str("${{ steps.discovery.outputs.qualification_artifact_id }}"),
+                ),
+            ]),
+        ),
+        ("steps", Yaml::Seq(discovery_steps)),
+    ]);
+    if depends && let Yaml::Map(fields) = &mut discovery {
+        fields.push(("needs".into(), seq(&["discover-producer"])));
+    }
+    Ok(discovery)
+}
+
+fn release_pins(request: &Schema2WorkflowRequest) -> Result<&ProductReleasePins, RenderError> {
+    let mac = request.runner_image_family.as_ref().ok_or_else(|| {
+        RenderError::InvalidWorkflow("mac_qualification_authority_unavailable".into())
+    })?;
+    mac.validate("runner_image_family.mac_qualification")
+        .map_err(RenderError::Contract)?;
+    request
+        .product_release
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".into()))
 }

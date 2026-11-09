@@ -78,6 +78,46 @@ pub(crate) fn verify_published_sdk_binding(
     })
 }
 
+pub(crate) fn verify_sdk_for_mac(
+    expected: &velnor_actions_contract::runner_image_manifest::mac_attestation::MacSdkIdentity,
+    generator_lock: &velnor_actions_contract::GeneratorLock,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    if expected.repository != SDK_REPOSITORY || expected.target != "aarch64-apple-darwin" {
+        return Err(internal("sdk_release_selection_invalid"));
+    }
+    let velnor_actions_contract::runner_image_manifest::mac_attestation::MacSdkAuthority::Stable {
+        release_manifest_sha256,
+    } = &expected.authority
+    else {
+        return Err(internal("sdk_release_selection_invalid"));
+    };
+    let candidate = load_sdk_release_candidate(
+        &expected.version,
+        &expected.source_commit,
+        release_manifest_sha256,
+        deadline,
+    )?;
+    velnor_actions_mise::catalog::lock::verify_lock_against_manifest(
+        generator_lock,
+        &candidate.manifest,
+    )
+    .map_err(|_| internal("sdk_release_generator_lock_mismatch"))?;
+    let target = candidate
+        .manifest
+        .record_for_target(&expected.target)
+        .ok_or_else(|| internal("sdk_release_host_target_missing"))?;
+    if target.sha256 != expected.asset_sha256 {
+        return Err(internal("sdk_release_binary_manifest_mismatch"));
+    }
+    verify_sdk_release_attestation(
+        &candidate,
+        &expected.source_commit,
+        release_manifest_sha256,
+        deadline,
+    )
+}
+
 fn validate_selection(
     transition: &velnor_actions_contract::homebrew_adoption::HomebrewAdoptionTransition,
     version: &str,
@@ -99,10 +139,24 @@ fn validate_selection(
 
 #[path = "homebrew_adoption_sdk_binding_assets.rs"]
 mod assets;
+pub(crate) use assets::sha256_current_executable;
 #[path = "homebrew_adoption_sdk_binding_digest.rs"]
 mod digest;
 use assets::{
-    compare_stable_versions, load_sdk_release_candidate, verify_published_adoption_callee,
-    verify_sdk_release_attestation,
+    load_sdk_release_candidate, verify_published_adoption_callee, verify_sdk_release_attestation,
 };
 use digest::{is_sha, is_sha256};
+
+fn compare_stable_versions(
+    left: &str,
+    right: &str,
+) -> Result<std::cmp::Ordering, OrchestratorError> {
+    let parse = |version: &str| -> Result<(u64, u64, u64), OrchestratorError> {
+        let mut parts = version.split('.').map(str::parse::<u64>);
+        match (parts.next(), parts.next(), parts.next(), parts.next()) {
+            (Some(Ok(a)), Some(Ok(b)), Some(Ok(c)), None) => Ok((a, b, c)),
+            _ => Err(internal("sdk_version_invalid")),
+        }
+    };
+    Ok(parse(left)?.cmp(&parse(right)?))
+}

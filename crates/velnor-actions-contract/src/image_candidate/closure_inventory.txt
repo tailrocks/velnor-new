@@ -83,6 +83,9 @@ crates/velnor-actions-cli/src/dispatch_tap_prepare.rs
 crates/velnor-actions-cli/src/dispatch_unmanaged.rs
 crates/velnor-actions-cli/src/entry.rs
 crates/velnor-actions-cli/src/ledger_helper.rs
+crates/velnor-actions-cli/src/mac_attestation_assembly.rs
+crates/velnor-actions-cli/src/mac_dispatch.rs
+crates/velnor-actions-cli/src/mac_step_output.rs
 crates/velnor-actions-cli/src/main.rs
 crates/velnor-actions-contract/Cargo.toml
 crates/velnor-actions-contract/src/archive.rs
@@ -393,6 +396,7 @@ crates/velnor-actions-freshness/src/dependencies.rs
 crates/velnor-actions-freshness/src/dependencies/lock.rs
 crates/velnor-actions-freshness/src/dependencies/lock/graph.rs
 crates/velnor-actions-freshness/src/dependencies/lock/identity.rs
+crates/velnor-actions-freshness/src/dependencies/path_dependencies.rs
 crates/velnor-actions-freshness/src/dependencies/workspace.rs
 crates/velnor-actions-freshness/src/evidence.rs
 crates/velnor-actions-freshness/src/evidence/advisories.rs
@@ -515,6 +519,11 @@ crates/velnor-actions-mise/src/restore.rs
 crates/velnor-actions-mise/src/restore_evidence.rs
 crates/velnor-actions-mise/src/reuse.rs
 crates/velnor-actions-mise/src/runtime_paths.rs
+crates/velnor-actions-mise/src/source_preview.rs
+crates/velnor-actions-mise/src/source_preview/source_preview_bootstrap.py
+crates/velnor-actions-mise/src/source_preview/source_preview_run_verified.py
+crates/velnor-actions-mise/src/source_preview/source_preview_runtime.py
+crates/velnor-actions-mise/src/source_preview/source_preview_stage_verify.py
 crates/velnor-actions-mise/src/steps.rs
 crates/velnor-actions-mise/src/steps_rust_target.rs
 crates/velnor-actions-mise/src/template.rs
@@ -759,6 +768,11 @@ crates/velnor-actions-orchestrator/src/image_maintenance/build.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_candidate.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_install.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/build_support.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_expected.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_inbox.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_preview_sdk.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_proof.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_signer.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/promotion.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_attestation.rs
@@ -772,6 +786,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_family.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/attestor.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/ci.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/mac_jobs.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/pagination.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/publisher.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/read.rs
@@ -789,6 +804,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/runner_family_admission
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_family_admission/provenance.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_profiles.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/runner_source_batch.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/sigstore-trusted-root.json
 crates/velnor-actions-orchestrator/src/image_maintenance/source.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/validate.rs
 crates/velnor-actions-orchestrator/src/image_prebuilt.rs
@@ -812,6 +828,7 @@ crates/velnor-actions-orchestrator/src/lock_audit_names.rs
 crates/velnor-actions-orchestrator/src/lock_audit_prepare.rs
 crates/velnor-actions-orchestrator/src/lock_audit_rust.rs
 crates/velnor-actions-orchestrator/src/lock_audit_vectors.rs
+crates/velnor-actions-orchestrator/src/matrix_cosign.rs
 crates/velnor-actions-orchestrator/src/matrix_step.rs
 crates/velnor-actions-orchestrator/src/matrix_step_reports.rs
 crates/velnor-actions-orchestrator/src/matrix_tofu_env.rs
@@ -1385,11 +1402,9 @@ crates/velnor-actions-workflow-renderer/src/native_helper/acquire.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/consumer_evidence.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/published_lock.rs
 crates/velnor-actions-workflow-renderer/src/native_helper/release_binary.rs
-crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_bootstrap.py
 crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_exec.py
 crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_loader.py
 crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_setup.py
-crates/velnor-actions-workflow-renderer/src/native_helper/source_preview_stage_verify.py
 crates/velnor-actions-workflow-renderer/src/native_image_jobs.rs
 crates/velnor-actions-workflow-renderer/src/native_job_builders.rs
 crates/velnor-actions-workflow-renderer/src/native_verifiers.rs
@@ -1510,8 +1525,10 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_release_workflow_s
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_artifact.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_authority.py
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_mac_proof.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_publication.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_runtime.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_source.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_tag.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification.rs
@@ -1535,8 +1552,10 @@ crates/velnor-actions-workflow-renderer/src/schema2_release_eligibility.rs
 crates/velnor-actions-workflow-renderer/src/schema2_release_prepare.sh
 crates/velnor-actions-workflow-renderer/src/schema2_release_publish.sh
 crates/velnor-actions-workflow-renderer/src/schema2_resource_probe_image.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_draft_verify.sh
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/attest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authority.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
@@ -1667,6 +1686,8 @@ crates/velnor-runner/crates/velnor-runner-image-manifest/src/build_source.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/candidate.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/inventory.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/lib.rs
+crates/velnor-runner/crates/velnor-runner-image-manifest/src/mac_attestation.rs
+crates/velnor-runner/crates/velnor-runner-image-manifest/src/mac_qualification.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/model.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_configuration.rs
 crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_grammar.rs

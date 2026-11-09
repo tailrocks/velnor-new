@@ -272,7 +272,32 @@ pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RunnerImageFamilyConfig {}
+pub struct RunnerImageFamilyConfig {
+    pub mac_qualification: Option<MacRunnerQualificationConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MacRunnerQualificationConfig {
+    pub runner_id: u64,
+    pub companion_workflow_path: String,
+    pub companion_workflow_ref: String,
+    pub companion_workflow_sha: String,
+    pub docker_socket: String,
+    pub state_dir: String,
+    pub sdk: MacSdkSelection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "channel", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum MacSdkSelection {
+    Stable {
+        version: String,
+        source_sha: String,
+        manifest_sha256: String,
+    },
+    SourcePreview {},
+}
 
 pub const RUNNER_IMAGE_FAMILY_JOB_ID: &str = "image-runner-family-linux-amd64";
 pub const RUNNER_IMAGE_FAMILY_JOB_TIMEOUT_MINUTES: u16 = 330;

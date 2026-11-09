@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     PLAN_ARTIFACT, RUN_DIR_EXPR, RUNNER,
-    bootstrap::{bootstrap_script, direct_run},
+    bootstrap::{BootstrapEnv, bootstrap_script, direct_run},
 };
 
 pub(super) fn plan_job(
@@ -217,7 +217,12 @@ fn bootstrap_steps(job: &str, pins: &ProductReleasePins) -> Result<Vec<Yaml>, Re
     let setup = crate::mise_setup_step(&pins.linux_x86_64_setup)?;
     let setup_yaml =
         crate::document_steps::non_internal_step_to_yaml(job, &setup, &BTreeMap::new(), RUNNER)?;
-    let script = bootstrap_script();
+    let script = bootstrap_script(&BootstrapEnv {
+        version: "VELNOR_HOMEBREW_ADOPTION_VERSION",
+        source_sha: "VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA",
+        manifest_sha256: "VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256",
+        gh: "VELNOR_ADOPTION_GH",
+    });
     let env = BTreeMap::from([
         ("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned()),
         (

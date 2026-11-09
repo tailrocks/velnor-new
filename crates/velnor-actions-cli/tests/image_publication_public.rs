@@ -3,6 +3,11 @@
 
 use std::{error::Error, fs};
 
+#[path = "image_publication_public/mac_assembly.rs"]
+mod mac_assembly;
+#[path = "image_publication_public/mac_assembly_preview.rs"]
+mod mac_assembly_preview;
+
 #[path = "image_publication_public/attempt_identity.rs"]
 mod attempt_identity;
 #[path = "image_publication_public/job_identity.rs"]

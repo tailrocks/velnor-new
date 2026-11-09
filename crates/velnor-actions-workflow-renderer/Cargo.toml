@@ -97,3 +97,10 @@ path = "tests/cargo_source_handoff_public.rs"
 [[test]]
 name = "premerge_event_proof_public"
 path = "tests/premerge_event_proof_public.rs"
+[[test]]
+name = "runner_draft_publication_public"
+path = "tests/runner_draft_publication_public.rs"
+
+[[test]]
+name = "source_preview_dsse_public"
+path = "tests/source_preview_dsse_public.rs"

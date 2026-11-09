@@ -55,8 +55,6 @@ mod checkout_history;
 mod checkout_history_plan;
 #[path = "workflow_configuration_public/crane_prerequisite.rs"]
 mod crane_prerequisite;
-#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
-mod mac_proof_cosign;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/family_save_suppression.rs"]
@@ -81,6 +79,8 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/local_action_annotation.rs"]
 mod local_action_annotation;
+#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
+mod mac_proof_cosign;
 #[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
 mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]

@@ -54,6 +54,12 @@ pub struct GeneratorLock {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staged_source_preview: Option<crate::source_preview::SourcePreviewLock>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_preview: Option<crate::source_preview::SourcePreviewLock>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staged_runtime_preview: Option<crate::source_preview::SourcePreviewLock>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,14 +227,24 @@ impl GeneratorLock {
             .find(|record| record.target == target)
     }
 
+    fn validate_previews(&self) -> Result<(), ContractError> {
+        for preview in [
+            &self.source_preview,
+            &self.staged_source_preview,
+            &self.runtime_preview,
+            &self.staged_runtime_preview,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            preview.validate_shape()?;
+        }
+        Ok(())
+    }
+
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         check_schema(self.schema)?;
-        if let Some(preview) = &self.source_preview {
-            preview.validate_shape()?;
-        }
-        if let Some(preview) = &self.staged_source_preview {
-            preview.validate_shape()?;
-        }
+        self.validate_previews()?;
         if self.generator.binary.trim().is_empty() {
             return Err(ContractError::config(
                 file,

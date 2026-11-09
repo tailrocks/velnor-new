@@ -18,7 +18,7 @@ assert len(project_tool_keys) == 14 and len(set(project_tool_keys)) == 14
 sys.path.insert(0, str(root / "src/native_helper"))
 spec = importlib.util.spec_from_file_location("preview_fixture", root / "tests/source_preview_bootstrap_scenarios.py")
 fixture = importlib.util.module_from_spec(spec)
-sys.argv = [str(root / "tests/source_preview_bootstrap_scenarios.py"), str(root / "src/native_helper/source_preview_bootstrap.py")]
+sys.argv = [str(root / "tests/source_preview_bootstrap_scenarios.py"), str(root / "../velnor-actions-mise/src/source_preview/source_preview_bootstrap.py")]
 spec.loader.exec_module(fixture)
 import source_preview_bootstrap as bootstrap
 import source_preview_exec as executor

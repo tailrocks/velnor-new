@@ -35,7 +35,7 @@ fn enabled_runner_family_prepares_a_planned_job() -> Result<(), Box<dyn Error>> 
     let config_path = root.join(".velnor/config.toml");
     let mut config = fs::read_to_string(&config_path)?
         .replace("default_branch = \"testmain\"", "default_branch = \"main\"");
-    config.push_str("\n[runner_image_family]\n");
+    config.push_str(super::runner_family_selection::FAMILY_CONFIG);
     fs::write(config_path, config)?;
     let prepared = prepare(root)?;
     let jobs = finalized_jobs(&prepared)?;
@@ -209,7 +209,7 @@ fn prepare_family_inputs(root: &Path) -> Result<(), Box<dyn Error>> {
     let config_path = root.join(".velnor/config.toml");
     let mut config = fs::read_to_string(&config_path)?
         .replace("default_branch = \"testmain\"", "default_branch = \"main\"");
-    config.push_str("\n[runner_image_family]\n");
+    config.push_str(super::runner_family_selection::FAMILY_CONFIG);
     fs::write(config_path, config)?;
     Ok(())
 }

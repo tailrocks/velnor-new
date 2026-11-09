@@ -12,6 +12,13 @@ use velnor_actions_orchestrator::{
     validate_job_candidate, verify_runner_publication,
 };
 
+#[path = "mac_attestation_assembly.rs"]
+mod mac_attestation_assembly;
+#[path = "mac_dispatch.rs"]
+mod mac_dispatch;
+#[path = "mac_step_output.rs"]
+mod mac_step_output;
+
 struct PublishImageArguments<'a> {
     profile: &'a ImagePublicationProfileArg,
     source_commit: &'a str,
@@ -32,7 +39,12 @@ struct PublishImageArguments<'a> {
 mod tests;
 
 fn deadline_minutes(command: &ImageMaintenanceCommand) -> u16 {
-    if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
+    if matches!(
+        command,
+        ImageMaintenanceCommand::VerifyMacAttestation { .. }
+    ) {
+        130
+    } else if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
         velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES
     } else if matches!(
         command,
@@ -46,6 +58,12 @@ fn deadline_minutes(command: &ImageMaintenanceCommand) -> u16 {
 }
 
 pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
+    if matches!(
+        command,
+        ImageMaintenanceCommand::QualifyRunnerFamilyMac { .. }
+    ) {
+        return report(mac_dispatch::qualify_mac_request(command));
+    }
     let minutes = deadline_minutes(command);
     let deadline = match CheckDeadline::after(Duration::from_mins(u64::from(minutes))) {
         Ok(deadline) => deadline,
@@ -59,6 +77,15 @@ fn run_with_deadline(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     match command {
+        ImageMaintenanceCommand::VerifyMacAttestation { .. } => {
+            mac_dispatch::verify_mac_request(command, deadline)
+        }
+        ImageMaintenanceCommand::AssembleMacAttestation { .. } => {
+            mac_attestation_assembly::run(command)
+        }
+        ImageMaintenanceCommand::QualifyRunnerFamilyMac { .. } => {
+            mac_dispatch::qualify_mac_request(command)
+        }
         ImageMaintenanceCommand::InstallBuildx { root, runner_temp } => {
             install_request(root, runner_temp, deadline)
         }
@@ -114,14 +141,7 @@ fn run_with_deadline(
         ImageMaintenanceCommand::BuildRunnerImages { .. } => {
             build_runner_request(command, deadline)
         }
-        ImageMaintenanceCommand::PromoteImage {
-            image_id,
-            source_commit,
-        } => promote_image(&PromoteImageRequest {
-            image_id: image_id.clone(),
-            source_commit: source_commit.clone(),
-            deadline,
-        }),
+        ImageMaintenanceCommand::PromoteImage { .. } => promote_request(command, deadline),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
         ImageMaintenanceCommand::PublishRunnerImages(args) => {
             runner_publication_request(args, deadline, false)
@@ -130,6 +150,26 @@ fn run_with_deadline(
             runner_publication_request(args, deadline, true)
         }
     }
+}
+
+fn promote_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::PromoteImage {
+        image_id,
+        source_commit,
+    } = command
+    else {
+        return Err(OrchestratorError::Internal {
+            problem: "promotion_command".to_owned(),
+        });
+    };
+    promote_image(&PromoteImageRequest {
+        image_id: image_id.clone(),
+        source_commit: source_commit.clone(),
+        deadline,
+    })
 }
 
 fn build_runner_request(

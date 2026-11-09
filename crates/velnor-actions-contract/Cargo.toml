@@ -41,3 +41,7 @@ path = "tests/crate_bootstrap_version_public.rs"
 [[test]]
 name = "reusable_attestation_binding_public"
 path = "tests/reusable_attestation_binding_public.rs"
+
+[[test]]
+name = "source_preview_pair_public"
+path = "tests/source_preview_pair_public.rs"

@@ -234,6 +234,10 @@ fn publish_script_for(
             "@PREPARE_SCRIPT@",
             &prepare_script_for(family, pins, runner)?,
         )
+        .replace(
+            "@DRAFT_VERIFY@\n",
+            if runner { RUNNER_DRAFT_VERIFY } else { "" },
+        )
         .replace("@REPOSITORY@", eligibility::REPOSITORY)
         .replace("@WORKFLOW_PATH@", family.workflow_path())
         .replace("@TAG_PREFIX@", family.tag_prefix())
@@ -250,6 +254,8 @@ fn publish_script_for(
             &publish_asset_verification(&paths),
         ))
 }
+
+const RUNNER_DRAFT_VERIFY: &str = include_str!("schema2_runner_draft_verify.sh");
 
 fn download_commands(family: Family, runner: bool) -> Result<String, RenderError> {
     match family {

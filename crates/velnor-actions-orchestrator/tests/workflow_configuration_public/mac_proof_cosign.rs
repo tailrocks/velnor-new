@@ -41,7 +41,7 @@ fn mac_proof_tool_is_ready_only_for_its_repository_test_owner() -> Result<(), Bo
             .filter(|task| task.task_kind == "nextest" && task.display_name == package)
             .map(|task| task.task_id.as_str())
             .collect::<BTreeSet<_>>();
-        assert!(!nextest.is_empty());
+        assert_ne!(nextest.iter().next(), None);
         let jobs = finalized_jobs(&prepared)?;
         let mut preparations = 0;
         for job in jobs.values() {
@@ -75,7 +75,7 @@ fn mac_proof_tool_is_ready_only_for_its_repository_test_owner() -> Result<(), Bo
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            assert!(!executions.is_empty());
+            assert_ne!(executions, [] as [usize; 0]);
             assert!(executions.iter().all(|position| index < *position));
             preparations += 1;
         }

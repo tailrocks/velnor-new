@@ -79,13 +79,14 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
         "schema":"velnor.runner-image-mac-attestation.v1",
         "public_authority":{"repository":"tailrocks/velnor-new","repository_id":1_390_620_900,"source_commit":"a".repeat(40),"release_run_id":1,"release_run_attempt":1,"producer_artifact_id":9,"publisher_artifact_id":1},
         "companion":{"repository":"donbeave/velnor-mac-qualification","repository_id":1_450_917_587,"owner_id":139_017,"workflow_path":".github/workflows/qualify.yml","workflow_ref":"refs/heads/main","workflow_sha":"c".repeat(40),"run_id":2,"run_attempt":1,"qualification_job_id":3,"runner_id":4,"receipt_artifact_id":5,"receipt_artifact_digest":format!("sha256:{}","d".repeat(64))},
-        "sdk":{"repository":"tailrocks/velnor-new","version":"1.2.3","source_commit":"e".repeat(40),"release_manifest_sha256":"f".repeat(64),"target":"aarch64-apple-darwin","asset_sha256":"a".repeat(64)},
+        "sdk":{"repository":"tailrocks/velnor-new","version":"1.2.3","source_commit":"e".repeat(40),"authority":{"channel":"stable","release_manifest_sha256":"f".repeat(64)},"target":"aarch64-apple-darwin","asset_sha256":"a".repeat(64)},
         "qualification":{"receipt_base64":STANDARD.encode(&native),"native_receipt_sha256":hash}
     });
     let bytes = serde_json::to_vec(&envelope)?;
     let (_, parsed) = parse_mac_qualification_attestation(&bytes)
         .map_err(|_| "valid signed envelope rejected")?;
     assert_eq!(parsed.publisher_artifact_id, 1);
+    check_preview_authority(&envelope)?;
     let raw = String::from_utf8(bytes)?;
     let duplicate = raw.replacen('{', "{\"schema\":\"duplicate\",", 1);
     assert!(
@@ -123,6 +124,39 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
     assert!(
         parse_mac_qualification_attestation(&serde_json::to_vec(&unknown)?).is_err(),
         "unknown envelope field accepted"
+    );
+    Ok(())
+}
+
+fn check_preview_authority(envelope: &serde_json::Value) -> Result<(), Box<dyn Error>> {
+    use velnor_runner_image_manifest::mac_attestation::parse_mac_qualification_attestation;
+    let mut preview = envelope.clone();
+    *preview
+        .pointer_mut("/sdk/authority")
+        .ok_or("sdk authority missing")? = json!({
+        "channel": "source-preview", "receipt_sha256": "1".repeat(64),
+        "bundle_sha256": "2".repeat(64), "authority_sha": "3".repeat(40), "release_id": 4
+    });
+    assert!(
+        parse_mac_qualification_attestation(&serde_json::to_vec(&preview)?).is_ok(),
+        "valid preview identity rejected"
+    );
+    let mut confused = preview.clone();
+    confused
+        .pointer_mut("/sdk/authority")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or("sdk authority missing")?
+        .insert("release_manifest_sha256".into(), json!("f".repeat(64)));
+    assert!(
+        parse_mac_qualification_attestation(&serde_json::to_vec(&confused)?).is_err(),
+        "mixed SDK authorities accepted"
+    );
+    *preview
+        .pointer_mut("/sdk/authority/release_id")
+        .ok_or("release ID missing")? = json!(0);
+    assert!(
+        parse_mac_qualification_attestation(&serde_json::to_vec(&preview)?).is_err(),
+        "zero preview release ID accepted"
     );
     Ok(())
 }

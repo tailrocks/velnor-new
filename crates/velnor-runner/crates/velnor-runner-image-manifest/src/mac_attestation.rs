@@ -56,9 +56,23 @@ pub struct MacSdkIdentity {
     pub repository: String,
     pub version: String,
     pub source_commit: String,
-    pub release_manifest_sha256: String,
+    pub authority: MacSdkAuthority,
     pub target: String,
     pub asset_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "channel", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum MacSdkAuthority {
+    Stable {
+        release_manifest_sha256: String,
+    },
+    SourcePreview {
+        receipt_sha256: String,
+        bundle_sha256: String,
+        authority_sha: String,
+        release_id: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -66,6 +80,25 @@ pub struct MacSdkIdentity {
 pub struct MacQualificationEvidence {
     pub receipt_base64: String,
     pub native_receipt_sha256: String,
+}
+
+fn valid_sdk_authority(authority: &MacSdkAuthority) -> bool {
+    match authority {
+        MacSdkAuthority::Stable {
+            release_manifest_sha256,
+        } => hex(release_manifest_sha256, 64),
+        MacSdkAuthority::SourcePreview {
+            receipt_sha256,
+            bundle_sha256,
+            authority_sha,
+            release_id,
+        } => {
+            hex(receipt_sha256, 64)
+                && hex(bundle_sha256, 64)
+                && hex(authority_sha, 40)
+                && *release_id != 0
+        }
+    }
 }
 
 pub fn parse_mac_qualification_attestation(
@@ -103,7 +136,7 @@ pub fn parse_mac_qualification_attestation(
         || sdk.repository != "tailrocks/velnor-new"
         || !version(&sdk.version)
         || !hex(&sdk.source_commit, 40)
-        || !hex(&sdk.release_manifest_sha256, 64)
+        || !valid_sdk_authority(&sdk.authority)
         || sdk.target != "aarch64-apple-darwin"
         || !hex(&sdk.asset_sha256, 64)
         || !hex(&envelope.qualification.native_receipt_sha256, 64)

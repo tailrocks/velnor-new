@@ -7,6 +7,59 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ImageMaintenanceCommand {
+    #[command(about = "Verify the authenticated production Mac proof before attestation.")]
+    VerifyMacAttestation {
+        #[arg(long)]
+        producer_run_id: u64,
+        #[arg(long)]
+        producer_run_attempt: u32,
+        #[arg(long)]
+        producer_artifact_id: u64,
+        #[arg(long)]
+        publisher_artifact_id: u64,
+        #[arg(long)]
+        assets_dir: PathBuf,
+        #[arg(long)]
+        runner_temp: PathBuf,
+    },
+    #[command(about = "Assemble an unsigned structural Mac qualification envelope.")]
+    AssembleMacAttestation {
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        runner_lock: PathBuf,
+        #[arg(long)]
+        generator_lock: PathBuf,
+        #[arg(long)]
+        sdk_evidence: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    #[command(about = "Qualify the exact published Runner family on the production Mac.")]
+    QualifyRunnerFamilyMac {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        runner_lock: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        run_id: u64,
+        #[arg(long)]
+        run_attempt: u32,
+        #[arg(long)]
+        publisher_artifact_id: u64,
+        #[arg(long)]
+        docker_socket: String,
+        #[arg(long)]
+        state_dir: PathBuf,
+        #[arg(long)]
+        receipt_output: PathBuf,
+    },
     /// Install the source-pinned Buildx plugin into a private runner directory.
     InstallBuildx {
         #[arg(long)]
