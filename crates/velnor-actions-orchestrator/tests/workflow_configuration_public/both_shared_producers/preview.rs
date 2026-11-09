@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{error::Error, fmt::Write as _, fs, process::Command};
 use velnor_actions_contract::ExecutionMode;
 use velnor_actions_orchestrator::{GenerateOptions, prepare, render_staged_tree_with};
@@ -29,6 +30,7 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     );
     let yaml: Value = serde_saphyr::from_str(workflow)?;
     assert_identity_steps(&tree, &yaml)?;
+    assert_executor_behavior(&yaml)?;
     let seal: Value = serde_saphyr::from_str(
         tree.get(velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH)
             .ok_or("missing preview state seal")?,
@@ -156,7 +158,7 @@ fn assert_setup_script(setup: &Value) -> Result<(), Box<dyn Error>> {
     let helper_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../velnor-actions-workflow-renderer/src/native_helper");
     let integrity = Command::new("/usr/bin/python3")
-        .args(["-I", "-c", "import base64,json,pathlib,re,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); d=pathlib.Path(sys.argv[2]); b=pathlib.Path(sys.argv[3]); assert p[:3] == [(d/'source_preview_setup.py').read_text(),b.read_text(),(d/'source_preview_exec.py').read_text()]; identity=json.loads(bytes.fromhex(sys.argv[1].split(chr(34))[-2])); assert identity['channel']=='source-preview' and identity['source_sha']==sys.argv[4] and identity['receipt_sha256']==sys.argv[5]", script])
+        .args(["-I", "-c", "import base64,json,pathlib,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); d=pathlib.Path(sys.argv[2]); b=pathlib.Path(sys.argv[3]); assert p[:2] == [(d/'source_preview_setup.py').read_text(),b.read_text()]; identity=json.loads(bytes.fromhex(sys.argv[1].split(chr(34))[-2])); assert identity['channel']=='source-preview' and identity['source_sha']==sys.argv[4] and identity['receipt_sha256']==sys.argv[5]", script])
         .arg(helper_dir)
         .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../velnor-actions-mise/src/source_preview/source_preview_bootstrap.py"))
         .arg(SOURCE)
@@ -208,6 +210,63 @@ fn assert_setup_script(setup: &Value) -> Result<(), Box<dyn Error>> {
         "malformed protected identity must fail"
     );
     assert!(!candidate.path().join("CANARY").exists());
+    Ok(())
+}
+
+fn assert_executor_behavior(yaml: &Value) -> Result<(), Box<dyn Error>> {
+    let steps = yaml["jobs"]["plan"]["steps"]
+        .as_array()
+        .ok_or("missing plan steps")?;
+    let setup = steps
+        .iter()
+        .find(|step| step["name"] == "Stage protected preview launcher")
+        .ok_or("missing preview setup")?;
+    let script = setup["run"].as_str().ok_or("missing setup script")?;
+    let directory = tempfile::tempdir()?;
+    let executor = directory.path().join("source_preview_exec.py");
+    let output = Command::new("/usr/bin/python3")
+        .args(["-I", "-c", "import base64,json,pathlib,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); pathlib.Path(sys.argv[2]).write_text(p[2])", script])
+        .arg(&executor)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut digest = String::with_capacity(64);
+    for byte in Sha256::digest(fs::read(&executor)?) {
+        write!(digest, "{byte:02x}")?;
+    }
+    assert!(
+        steps.iter().any(|step| step.to_string().contains(&digest)),
+        "loader does not authenticate emitted executor"
+    );
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-workflow-renderer");
+    let keys = serde_json::to_string(
+        &velnor_actions_contract::config::project_tool_resolver::PROJECT_TOOL_KEYS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>(),
+    )?;
+    let mut scenarios = vec!["source_preview_exec_policy_scenarios.py"];
+    if cfg!(target_os = "linux") {
+        scenarios.push("source_preview_exec_scenarios.py");
+    }
+    for scenario in scenarios {
+        let output = Command::new("python3")
+            .arg("-B")
+            .arg(root.join("tests").join(scenario))
+            .arg(&root)
+            .arg(&keys)
+            .arg(&executor)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{scenario}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     Ok(())
 }
 

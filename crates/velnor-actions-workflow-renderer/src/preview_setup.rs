@@ -10,9 +10,23 @@ use sha2::{Digest, Sha256};
 use crate::{RenderError, yaml::Yaml};
 
 const BOOTSTRAP: &str = velnor_actions_mise::source_preview::BOOTSTRAP;
-const EXECUTOR: &str = include_str!("native_helper/source_preview_exec.py");
+const EXECUTOR_TEMPLATE: &str = include_str!("native_helper/source_preview_exec.py");
 const SETUP: &str = include_str!("native_helper/source_preview_setup.py");
 const LOADER: &str = include_str!("native_helper/source_preview_loader.py");
+
+fn executor() -> &'static str {
+    static EXECUTOR: OnceLock<String> = OnceLock::new();
+    EXECUTOR.get_or_init(|| {
+        let keys = velnor_actions_contract::config::project_tool_resolver::PROJECT_TOOL_KEYS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        EXECUTOR_TEMPLATE.replace(
+            "\"__VELNOR_PROJECT_TOOL_KEYS__\"",
+            &serde_json::json!(keys).to_string(),
+        )
+    })
+}
 
 pub(crate) const LOADER_SCRUB_KEYS: &[&str] = &[
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
@@ -73,7 +87,7 @@ pub(crate) fn loader_command(
         "-c".to_owned(),
         format!("exec(bytes.fromhex(\"{}\"))", hex(LOADER.as_bytes())),
         hex(Sha256::digest(BOOTSTRAP.as_bytes()).as_ref()),
-        hex(Sha256::digest(EXECUTOR.as_bytes()).as_ref()),
+        hex(Sha256::digest(executor().as_bytes()).as_ref()),
         identity(preview),
     ]
 }
@@ -84,7 +98,7 @@ pub(crate) fn acquire_step(
     static PAYLOAD: OnceLock<Result<String, String>> = OnceLock::new();
     let compressed = PAYLOAD
         .get_or_init(|| {
-            let payload = serde_json::json!([SETUP, BOOTSTRAP, EXECUTOR]).to_string();
+            let payload = serde_json::json!([SETUP, BOOTSTRAP, executor()]).to_string();
             let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
             encoder
                 .write_all(payload.as_bytes())

@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import hashlib
 import copy
 import fcntl
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +16,7 @@ import sys
 import tempfile
 import tomllib
 import traceback
+import zlib
 
 root = Path(sys.argv[1]).resolve()
 sdk_path = Path(sys.argv[2]).resolve()
@@ -24,10 +27,9 @@ renderer = root / "crates/velnor-actions-workflow-renderer"
 sys.path.insert(0, str(renderer / "src/native_helper"))
 spec = importlib.util.spec_from_file_location("preview_external_fixture", renderer / "tests/source_preview_bootstrap_scenarios.py")
 fixture = importlib.util.module_from_spec(spec)
-sys.argv = [str(renderer / "tests/source_preview_bootstrap_scenarios.py"), str(renderer / "src/native_helper/source_preview_bootstrap.py")]
+sys.argv = [str(renderer / "tests/source_preview_bootstrap_scenarios.py"), str(root / "crates/velnor-actions-mise/src/source_preview/source_preview_bootstrap.py")]
 spec.loader.exec_module(fixture)
 import source_preview_bootstrap as bootstrap
-import source_preview_exec as executor
 
 sdk_temporary = None
 if sdk_path.stat().st_size > bootstrap.MAX_PAYLOAD:
@@ -194,6 +196,18 @@ with tempfile.TemporaryDirectory() as directory:
     shutil.copy(root / ".velnor/controller-approvals.json", repo / ".velnor/controller-approvals.json")
     (repo / "mise.toml").write_text('[tasks.fixture-check]\nrun = "false"\n')
     first, network, plan_temp = prepare(repo, temporary, "plan", sdk)
+    generation_env = {**os.environ, "CARGO_NET_OFFLINE": "true", "GIT_TERMINAL_PROMPT": "0"}
+    generation = subprocess.run([str(sdk_path), "generate"], cwd=repo, env=generation_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    assert generation.returncode == 0, "fixture could not generate its preview workflow: " + generation.stderr.decode(errors="replace")
+    workflow = (repo / ".github/workflows/ci.yml").read_text()
+    payloads = re.findall(r'p=json.loads\(zlib.decompress\(base64.b64decode\(\\?"([A-Za-z0-9+/=]+)\\?"\)', workflow)
+    assert payloads and len(set(payloads)) == 1, "preview setup payload missing or inconsistent"
+    payload = json.loads(zlib.decompress(base64.b64decode(payloads[0])))
+    executor_path = temporary / "source_preview_exec.py"
+    executor_path.write_text(payload[2])
+    spec = importlib.util.spec_from_file_location("source_preview_exec", executor_path)
+    executor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(executor)
     request = plan_temp / "plan-v1-request.json"
     request.write_text(json.dumps({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "base": base, "head": head, "event": "pull_request", "root": str(repo)}))
     status, log = launch(first, network, repo, plan_temp, "plan-v1", {"VELNOR_REQUEST_FILE": str(request)})
@@ -265,7 +279,6 @@ with tempfile.TemporaryDirectory() as directory:
     git(repo, "commit", "-s", "-m", "add fixture lock", "-m", "Co-authored-by: Codex <codex@openai.com>")
     rust_head = git(repo, "rev-parse", "HEAD")
     context, network, rust_temp = prepare(repo, temporary, "rust-plan", sdk)
-    generation_env = {**os.environ, "CARGO_NET_OFFLINE": "true", "GIT_TERMINAL_PROMPT": "0"}
     generation = subprocess.run([str(sdk_path), "generate"], cwd=repo, env=generation_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     assert generation.returncode == 0, "fixture could not generate its real Rust manifest: " + generation.stderr.decode(errors="replace")
     manifest_file = repo / ".github/velnor/task-execution-manifest-v1.json"
