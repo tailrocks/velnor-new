@@ -310,7 +310,7 @@ struct AuthorityJob {
 }
 
 fn validate_source_preview_authority() -> Result<(), RenderError> {
-    const BLOB_SHA256: &str = "61f89e771ae4ba322078ebd354d5a66da7a15767361eadeccbe6a7f68e412cde";
+    const BLOB_SHA256: &str = "b157479660663d7241291be5f392f4338e6b60a2063bda61d7aa02f82f94990e";
     const JOBS: &[AuthorityJob] = &[
         AuthorityJob {
             id: "source-preview-source",

@@ -1208,7 +1208,7 @@ jobs:
   source-preview-publication:
     name: Source preview publication
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}
-    uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e
+    uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c
     permissions:
       actions: read
       artifact-metadata: write

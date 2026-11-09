@@ -4,7 +4,7 @@
 use crate::{workflow_timeout, yaml::Yaml};
 
 const CALLER: &str = ".github/workflows/product-release-generator.yml";
-const AUTHORITY: &str = "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e";
+const AUTHORITY: &str = "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c";
 
 fn document(id: &str, reference: Option<Yaml>, extra: Vec<(String, Yaml)>) -> Yaml {
     let mut fields = Vec::new();
@@ -68,20 +68,20 @@ fn unrelated_or_ambiguous_reusable_jobs_fail_closed() {
             CALLER,
             "source-preview-publication",
             AUTHORITY.replace(
-                "3a3c641b531a69b7e4142b61aecf536007bb3f2e",
-                "3a3c641b531a69b7e4142b61aecf536007bb3f2f",
+                "72701af69f6f9b693e639814fcf479409da3295c",
+                "72701af69f6f9b693e639814fcf479409da3295d",
             ),
         ),
         (
             CALLER,
             "source-preview-publication",
-            AUTHORITY.replace("3a3c641b531a69b7e4142b61aecf536007bb3f2e", "main"),
+            AUTHORITY.replace("72701af69f6f9b693e639814fcf479409da3295c", "main"),
         ),
         (
             CALLER,
             "source-preview-publication",
             AUTHORITY.replace(
-                "3a3c641b531a69b7e4142b61aecf536007bb3f2e",
+                "72701af69f6f9b693e639814fcf479409da3295c",
                 "${{ github.sha }}",
             ),
         ),

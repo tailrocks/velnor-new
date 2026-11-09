@@ -111,8 +111,8 @@ for changed in (dict(authority, ref=bootstrap.REPOSITORY + "/" + stage.AUTHORITY
 assert stage.staging_authority() == {
     "repository": bootstrap.REPOSITORY,
     "path": ".github/workflows/source-preview-publication.yml",
-    "ref": bootstrap.REPOSITORY + "/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e",
-    "sha": "3a3c641b531a69b7e4142b61aecf536007bb3f2e",
+    "ref": bootstrap.REPOSITORY + "/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c",
+    "sha": "72701af69f6f9b693e639814fcf479409da3295c",
 }
 enabled_authority_sha = stage.PUBLICATION_AUTHORITY_SHA
 try:

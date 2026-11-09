@@ -589,9 +589,9 @@ GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/rele
 GitHub limits a single [`jobs.<job_id>.steps[*].run` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun) to 21,000 characters. Velnor materializes longer fixed Bash scripts in bounded steps after binding project tool references. It verifies the reconstructed bytes before running the original script. Oversized scripts with GitHub expressions or unsupported runner and shell settings fail generation.
 
 The source preview caller admits only the immutable
-[publication authority](https://github.com/tailrocks/velnor-new/blob/3a3c641b531a69b7e4142b61aecf536007bb3f2e/.github/workflows/source-preview-publication.yml)
-at commit `3a3c641b531a69b7e4142b61aecf536007bb3f2e`. The reviewed workflow
-blob has SHA-256 `61f89e771ae4ba322078ebd354d5a66da7a15767361eadeccbe6a7f68e412cde`.
+[publication authority](https://github.com/tailrocks/velnor-new/blob/72701af69f6f9b693e639814fcf479409da3295c/.github/workflows/source-preview-publication.yml)
+at commit `72701af69f6f9b693e639814fcf479409da3295c`. The reviewed workflow
+blob has SHA-256 `b157479660663d7241291be5f392f4338e6b60a2063bda61d7aa02f82f94990e`.
 Its source job has a five-minute timeout; draft, attest and publish have
 ten-minute timeouts and depend in order on their predecessors. It has no
 nested reusable workflow calls. Timeout admission uses this fixed authority
