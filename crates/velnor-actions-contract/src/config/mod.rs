@@ -203,6 +203,9 @@ pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'pus
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub premerge_event_proof: Option<PremergeEventProofConfig>,
+
     pub schema: u32,
 
     pub workflow: WorkflowConfig,
@@ -274,3 +277,6 @@ pub struct RunnerImageFamilyConfig {}
 pub const RUNNER_IMAGE_FAMILY_JOB_ID: &str = "image-runner-family-linux-amd64";
 pub const RUNNER_IMAGE_FAMILY_JOB_TIMEOUT_MINUTES: u16 = 330;
 pub const RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES: u16 = 110;
+
+mod premerge_event_proof;
+pub use premerge_event_proof::PremergeEventProofConfig;

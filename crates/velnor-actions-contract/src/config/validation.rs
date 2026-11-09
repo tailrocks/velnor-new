@@ -32,6 +32,9 @@ impl VelnorConfig {
                 "requires_velnor_owner_main",
             ));
         }
+        if let Some(proof) = &self.premerge_event_proof {
+            proof.validate(file)?;
+        }
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;

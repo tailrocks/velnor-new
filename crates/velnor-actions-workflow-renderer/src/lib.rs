@@ -68,6 +68,7 @@ pub mod plan_format;
 mod plan_gate;
 pub mod plan_report;
 pub mod plan_sources;
+pub mod premerge_event_proof;
 pub mod preseed;
 mod preseed_closure;
 mod preview_setup;

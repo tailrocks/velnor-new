@@ -289,3 +289,6 @@ mod runner_family_source;
 
 #[path = "workflow_configuration_public/runner_family_authority.rs"]
 mod runner_family_authority;
+
+#[path = "workflow_configuration_public/premerge_event_proof.rs"]
+mod premerge_event_proof;

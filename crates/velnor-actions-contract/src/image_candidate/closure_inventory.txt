@@ -131,6 +131,7 @@ crates/velnor-actions-contract/src/config/mise_task_suites.rs
 crates/velnor-actions-contract/src/config/mod.rs
 crates/velnor-actions-contract/src/config/native_checks.rs
 crates/velnor-actions-contract/src/config/playwright_lock.rs
+crates/velnor-actions-contract/src/config/premerge_event_proof.rs
 crates/velnor-actions-contract/src/config/preview_policy.rs
 crates/velnor-actions-contract/src/config/private_sources.rs
 crates/velnor-actions-contract/src/config/project_tool_grammar.rs
@@ -257,6 +258,7 @@ crates/velnor-actions-contract/src/propose/task.rs
 crates/velnor-actions-contract/src/publication_retry.rs
 crates/velnor-actions-contract/src/release_reexports.rs
 crates/velnor-actions-contract/src/request_event.rs
+crates/velnor-actions-contract/src/reusable_attestation_binding.rs
 crates/velnor-actions-contract/src/review_completion.rs
 crates/velnor-actions-contract/src/run_key_env.rs
 crates/velnor-actions-contract/src/runner_image_manifest.rs
@@ -955,6 +957,7 @@ crates/velnor-actions-orchestrator/src/playwright_install.rs
 crates/velnor-actions-orchestrator/src/playwright_lock.rs
 crates/velnor-actions-orchestrator/src/playwright_resolve.rs
 crates/velnor-actions-orchestrator/src/playwright_system_deps.rs
+crates/velnor-actions-orchestrator/src/premerge_event_proof_emit.rs
 crates/velnor-actions-orchestrator/src/prepare.rs
 crates/velnor-actions-orchestrator/src/preseed_manifest.rs
 crates/velnor-actions-orchestrator/src/preview_aggregate.rs
@@ -1407,6 +1410,9 @@ crates/velnor-actions-workflow-renderer/src/plan_sources/cargo_fetch.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/source_cache.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/state_select.rs
 crates/velnor-actions-workflow-renderer/src/playwright_install_step.rs
+crates/velnor-actions-workflow-renderer/src/premerge_event_probe.py
+crates/velnor-actions-workflow-renderer/src/premerge_event_proof.rs
+crates/velnor-actions-workflow-renderer/src/premerge_source.py
 crates/velnor-actions-workflow-renderer/src/preseed.rs
 crates/velnor-actions-workflow-renderer/src/preseed_closure.rs
 crates/velnor-actions-workflow-renderer/src/preseed_digest.rs
