@@ -6,8 +6,22 @@ use super::*;
 #[test]
 fn release_tool_expectations_require_a_valid_consumer_manifest()
 -> Result<(), Box<dyn std::error::Error>> {
+    use sha2::{Digest as _, Sha256};
+    use std::fmt::Write as _;
+
     let version = env!("CARGO_PKG_VERSION");
-    let raw = consumer_manifest(version);
+    let host = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        _ => return Err("unsupported test host".into()),
+    };
+    let executable = std::fs::read(std::env::current_exe()?)?;
+    let mut digest = String::new();
+    for byte in Sha256::digest(executable) {
+        write!(digest, "{byte:02x}")?;
+    }
+    let raw = consumer_manifest(version, host, &digest);
     let acquire = |json: &str| {
         crate::planner::pins::consumer_acquire_step_with_manifest(
             "ubuntu-26.04",
@@ -16,6 +30,34 @@ fn release_tool_expectations_require_a_valid_consumer_manifest()
         )
     };
     assert!(acquire(&raw).is_ok());
+    let mut wrong_binary: serde_json::Value = serde_json::from_str(&raw)?;
+    let targets = wrong_binary["targets"].as_array_mut().ok_or("targets")?;
+    let host_record = targets
+        .iter_mut()
+        .find(|target| target["target"] == host)
+        .ok_or("host target")?;
+    host_record["sha256"] = if digest == "b".repeat(64) {
+        "c".repeat(64)
+    } else {
+        "b".repeat(64)
+    }
+    .into();
+    let Err(error) = acquire(&serde_json::to_string(&wrong_binary)?) else {
+        return Err("wrong host digest must fail".into());
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("release_manifest_binary_mismatch")
+    );
+    let mut other_binary: serde_json::Value = serde_json::from_str(&raw)?;
+    let targets = other_binary["targets"].as_array_mut().ok_or("targets")?;
+    let other_record = targets
+        .iter_mut()
+        .find(|target| target["target"] != host)
+        .ok_or("other target")?;
+    other_record["sha256"] = "b".repeat(64).into();
+    assert!(acquire(&serde_json::to_string(&other_binary)?).is_ok());
     let mut wrong: serde_json::Value = serde_json::from_str(&raw)?;
     wrong["version"] = "9.9.9".into();
     assert!(acquire(&serde_json::to_string(&wrong)?).is_err());

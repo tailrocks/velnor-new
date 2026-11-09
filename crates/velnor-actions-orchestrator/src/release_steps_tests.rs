@@ -16,11 +16,12 @@ use velnor_actions_workflow_renderer::{MiseSetup, setup::MISE_BINARY_SHA256_LINU
 
 use super::{JobInputs, assemble_jobs};
 
-fn consumer_manifest(generator_version: &str) -> String {
+fn consumer_manifest(generator_version: &str, host: &str, host_digest: &str) -> String {
     let commit = "b".repeat(40);
     let digest = "a".repeat(64);
     let targets = ReleaseTarget::ALL.iter().map(|target| {
         let target = target.triple();
+        let digest = if target == host { host_digest } else { &digest };
         format!("{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{generator_version}/velnor-actions-{generator_version}-{target}\",\"sha256\":\"{digest}\"}}")
     }).collect::<Vec<_>>().join(",");
     format!(
