@@ -186,6 +186,94 @@ private DinD socket, and different private and outer daemon IDs. Qualification
 uses unique resource ownership and bounded cleanup. It removes only its own
 containers and volumes and preserves unrelated sentinels and built images.
 
+## Additional production Mac qualification
+
+Final manifest attestation and release require production Mac qualification of
+the three published digests. This is an additional gate: retain the existing
+CI artifact authentication, prepublication qualification, source provenance,
+Required check, main reachability and canonical publication authority. A private
+workflow dispatch never authorizes image or release publication.
+
+The operator may use a dedicated private repository-scoped official runner.
+Enumerate and trust its complete writer, workflow and action surface; labels
+alone do not establish admission. Keep private fork workflows disabled, audit
+repository access, and enroll the unmodified runner through the operator
+deployment path.
+Pin the repository and owner numeric IDs, reviewed workflow path and commit,
+permitted ref, and server-assigned runner ID in the public authority policy.
+Do not use an OIDC smoke workflow as the qualification authority.
+The operator controller dispatches the private workflow at a branch or tag ref
+and checks that the actual run and workflow commit equal the reviewed pin.
+The dispatch API does not accept a raw commit SHA. The controller credential
+stays outside both workflows.
+
+The operator stages bounded manifest, lock and request data in the private
+repository. Treat that transport as untrusted. The source-free Mac operation
+verifies exact bytes and anonymously pulls the three recorded GHCR digests.
+It uses the same supported classic/containerd identity and configuration checks
+as host admission, including independent registry graph verification. It must
+prove the production daemon/root/store binding, platform and versions, private
+Runner/DinD communication, distinct inner and outer daemon IDs, and cleanup.
+Candidate containers receive neither controller nor Actions credentials, host
+home directories, Keychain access, SSH agents, or controller configuration.
+The native workflow is a reviewed, immutable-pinned trusted surface with no
+checkout or untrusted source execution. Do not pass a local PAT to the workflow
+or qualifier. Strip GitHub and Actions token variables before qualification.
+A separate native service account or sandbox is optional defense in depth;
+same-user execution does not claim isolation from a compromised trusted native
+workflow or SDK.
+
+Record owned mutation intent durably before Docker changes in a private,
+operator-owned persistent directory outside job workspace and temporary
+cleanup. Bind recovery to the selected daemon and exact resource ownership.
+Caller cancellation retains the operation owner until settlement. Process
+restart reconciles durable state and preserves unrelated resources. An unknown
+create outcome cannot be declared settled from inspection alone, whether the
+resource is missing or visible; retain it unresolved until actual settlement
+is durably recorded.
+No receipt is emitted while cleanup or recovery is uncertain. The operation
+has one 80-minute deadline and a separate 10-minute cleanup allowance within a
+105-minute Mac job limit.
+
+A separate source-free hosted Ubuntu 26.04 job directly depends on the Mac job
+and authenticates its successful execution and exact same-run receipt artifact
+through its own repository API. The closed workflow has exactly one possible
+producer of that receipt artifact: the Mac job. Run association in artifact
+metadata alone does not establish uploader job identity.
+It checks the actual job runner ID, source/workflow commit, run and attempt,
+then signs only the validated receipt with GitHub OIDC and pinned Cosign.
+The Mac job has only the read permissions needed for its staged inputs and no
+OIDC signing or publication permission. The hosted attestor has only actions
+and contents read plus OIDC token write permission. Neither job receives a
+broad cross-repository credential.
+
+The signed receipt envelope binds both public and private repository IDs,
+public source commit,
+canonical release run and attempt, original producer artifact identity, exact
+manifest and lock hashes, all three image identities, SDK source/asset identity,
+private workflow commit, run/attempt/job/runner identities, daemon observations,
+and successful cleanup. Reject duplicate, unknown, missing or mismatched fields.
+The exact qualified manifest bytes must remain unchanged before final signing.
+
+The operator may return the receipt and Sigstore bundle through a bounded,
+content-addressed, data-only non-default Git branch in the public repository.
+The branch must contain no workflow or executable payload and must not trigger
+publication. Transport credentials, Git commits and receipt filenames confer
+no qualification authority. The public verifier authenticates the bundle's
+signature, chain, transparency evidence and signing-time validity, then checks
+its exact issuer and workflow identity plus verified certificate extensions:
+repository/owner IDs, private visibility, hosted signer environment, workflow
+and source/configuration digests, ref, and invocation run/attempt. Missing or
+inconsistent claims fail closed. Compare every public source, artifact, manifest,
+lock and image binding to the canonical job's own authenticated inputs; reject
+replay from another source, run, attempt or manifest.
+
+The public signer remains
+`product-release-images.yml@refs/heads/main`. The private signature authenticates
+only this additional Mac evidence and cannot replace any original image-byte
+provenance, qualification attestation, manifest trust root or release trigger.
+A missing proof or unavailable private authority keeps final release closed.
+
 Complete producer and consumer integration before release. Retain unreachable
 archive helpers only until GHCR publication and anonymous digest-pull proof;
 then remove them. There is no permanent archive publisher, loader, or fallback.

@@ -594,3 +594,19 @@ Its source job has a five-minute timeout; draft, attest and publish have
 ten-minute timeouts and depend in order on their predecessors. It has no
 nested reusable workflow calls. Timeout admission uses this fixed authority
 record, not a candidate workflow generated in the caller's checkout.
+
+## Private production Mac runner constraints
+
+GitHub documents repository-scoped runner registration separately from
+organization runner groups in its [runner administration API](https://docs.github.com/en/rest/actions/self-hosted-runners#create-a-registration-token-for-a-repository).
+A repository-scoped runner trusts the repository's reviewed writer/workflow
+surface; it does not imply organization group workflow restrictions.
+The [workflow dispatch API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+accepts a branch or tag ref. Admission must compare the actual run and workflow
+commit to its pin rather than claim that dispatch accepts a raw commit SHA.
+
+The [OIDC reference](https://docs.github.com/en/actions/reference/security/oidc)
+and pinned [Fulcio certificate extensions](https://github.com/sigstore/fulcio/blob/24deee31680022186e823592f8a2d760841fe043/docs/oid-info.md)
+define the identity fields used by the additional Mac proof. Cosign issuer/SAN
+verification alone does not check every repository, workflow and invocation
+extension required by the runner image contract.
