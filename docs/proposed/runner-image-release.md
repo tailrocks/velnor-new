@@ -274,6 +274,28 @@ only this additional Mac evidence and cannot replace any original image-byte
 provenance, qualification attestation, manifest trust root or release trigger.
 A missing proof or unavailable private authority keeps final release closed.
 
+The public verifier shares one 130-minute deadline across authentication,
+proof polling, and verification. Polling does not reset that deadline. Its
+hosted job has a 140-minute limit. These limits bound waiting and failure;
+they do not guarantee private runner availability or successful completion.
+
+Cosign verifies the original envelope and bundle against the SDK's compiled
+Sigstore trusted root. The root's SHA-256 is
+`6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`.
+Refresh requires an authenticated Sigstore TUF target, independent review,
+and a new qualified SDK. There is no runtime trust-root override or insecure
+verification fallback. Chain, certificate transparency, transparency-log, and
+signing-time verification remain required.
+
+Successful verification emits the four validated asset digests. Final GitHub
+attestation uses each asset's fixed subject name and verified subject digest.
+It does not hash a mutable local pathname after verification. Before publishing
+the draft release, the publisher compares the exact four server asset names
+and digests with those verified subjects. A mismatch leaves the draft closed.
+All supported Runner-family release writers share the product-release
+concurrency group. This serialization does not protect against administrators
+or applications writing outside that authority.
+
 Complete producer and consumer integration before release. Retain unreachable
 archive helpers only until GHCR publication and anonymous digest-pull proof;
 then remove them. There is no permanent archive publisher, loader, or fallback.

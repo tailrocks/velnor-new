@@ -610,3 +610,10 @@ and pinned [Fulcio certificate extensions](https://github.com/sigstore/fulcio/bl
 define the identity fields used by the additional Mac proof. Cosign issuer/SAN
 verification alone does not check every repository, workflow and invocation
 extension required by the runner image contract.
+
+The pinned [attest-build-provenance action inputs](https://github.com/actions/attest-build-provenance/blob/4d101475d8b20a2381f78447822ac1eab6504dd8/action.yml#L7-L23)
+accept `subject-digest` in `algorithm:hex_digest` form together with
+`subject-name`. This mode is exclusive with `subject-path` and
+`subject-checksums`. Runner-family final attestation passes the four names and
+digests emitted by the authenticated native verifier, so later local file
+changes cannot select different attestation subjects.
