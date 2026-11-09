@@ -12,7 +12,8 @@ use super::super::{
     ProductReleasePins, Schema2WorkflowRequest, generator_release, product_release_family,
 };
 
-const PUBLICATION_ALLOWANCE_MINUTES: i64 = 50;
+const PUBLICATION_ALLOWANCE_MINUTES: i64 =
+    velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_PUBLICATION_JOB_TIMEOUT_MINUTES as i64;
 const DISCOVERY_MINUTES: i64 = 350;
 
 fn map(items: &[(&str, Yaml)]) -> Yaml {

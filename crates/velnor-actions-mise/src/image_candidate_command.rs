@@ -142,6 +142,16 @@ impl ImageCandidateCommand {
         })
     }
 
+    pub fn run_build(
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        let (output, _drained) =
+            command.run_quiescent_progress_until(OUTPUT_LIMIT, deadline, &mut std::io::stderr())?;
+        output.require_success(command.program().to_string_lossy().as_ref())?;
+        Ok(output)
+    }
+
     pub fn run(
         command: &IsolatedCommand,
         deadline: CheckDeadline,

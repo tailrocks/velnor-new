@@ -74,6 +74,7 @@ impl IsolatedCommand {
                 stderr_cap,
                 stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
                 progress: None,
+                truncate: false,
             };
             let result = self.run_streams(
                 &mut streams,
@@ -115,6 +116,7 @@ pub(super) struct Streams<'a> {
     pub(super) stderr_cap: usize,
     stderr: Vec<u8>,
     progress: Option<super::progress::ProgressSink<'a>>,
+    truncate: bool,
 }
 
 #[cfg(unix)]
@@ -128,6 +130,7 @@ impl<'a> Streams<'a> {
             stderr_cap,
             stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
             progress: None,
+            truncate: false,
         }
     }
 
@@ -144,7 +147,13 @@ impl<'a> Streams<'a> {
             stderr_cap: cap,
             stderr: Vec::with_capacity(cap.min(64 * 1024)),
             progress: None,
+            truncate: false,
         }
+    }
+
+    pub(super) fn truncate(mut self) -> Self {
+        self.truncate = true;
+        self
     }
 
     pub(super) fn observe(mut self, output: &'a mut dyn Write, deadline: CheckDeadline) -> Self {
@@ -196,9 +205,9 @@ impl<'a> Streams<'a> {
                 .checked_add(u64::try_from(accepted).map_err(|error| error.to_string())?)
                 .ok_or_else(|| "output_limit_exceeded".to_owned())?;
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stdout", prefix)?;
+                progress.chunk("stdout", if self.truncate { bytes } else { prefix })?;
             }
-            if accepted < bytes.len() || next > self.stdout_cap {
+            if !self.truncate && (accepted < bytes.len() || next > self.stdout_cap) {
                 return Err(format!("stdout_limit_exceeded:{}", self.stdout_cap));
             }
             Ok(())
@@ -224,9 +233,9 @@ impl Streams<'_> {
             let prefix = &bytes[..accepted];
             self.stderr.extend_from_slice(prefix);
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stderr", prefix)?;
+                progress.chunk("stderr", if self.truncate { bytes } else { prefix })?;
             }
-            if accepted < bytes.len() || next > self.stderr_cap {
+            if !self.truncate && (accepted < bytes.len() || next > self.stderr_cap) {
                 return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));
             }
             Ok(())

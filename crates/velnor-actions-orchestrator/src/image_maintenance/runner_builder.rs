@@ -159,7 +159,7 @@ fn build_all(
             )
             .map_err(|_| internal("runner_build_command"))?;
             execution
-                .run(&command, request.deadline)
+                .run_build(&command, request.deadline)
                 .map_err(|_| internal("runner_build_failed"))?;
             contexts.revalidate(request.deadline)?;
             buildx.revalidate()?;

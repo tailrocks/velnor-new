@@ -277,6 +277,8 @@ pub struct RunnerImageFamilyConfig {}
 pub const RUNNER_IMAGE_FAMILY_JOB_ID: &str = "image-runner-family-linux-amd64";
 pub const RUNNER_IMAGE_FAMILY_JOB_TIMEOUT_MINUTES: u16 = 330;
 pub const RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES: u16 = 110;
+pub const RUNNER_IMAGE_FAMILY_PUBLICATION_JOB_TIMEOUT_MINUTES: u16 = 50;
+pub const RUNNER_IMAGE_FAMILY_PUBLICATION_TIMEOUT_MINUTES: u16 = 40;
 
 mod premerge_event_proof;
 pub use premerge_event_proof::PremergeEventProofConfig;

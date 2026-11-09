@@ -9,10 +9,10 @@ use crate::{OrchestratorError, internal::internal};
 
 #[path = "image_maintenance/build.rs"]
 mod build;
-#[path = "image_maintenance/source.rs"]
-mod source;
 #[path = "image_maintenance/runner_source_batch.rs"]
 mod runner_source_batch;
+#[path = "image_maintenance/source.rs"]
+mod source;
 
 #[path = "image_maintenance/validate.rs"]
 mod validate;
@@ -107,6 +107,12 @@ pub fn build_runner_images(request: &BuildRunnerImagesRequest) -> Result<(), Orc
 }
 
 pub trait RunnerImageBuildExecution {
+    fn run_build(
+        &self,
+        command: &velnor_actions_mise::IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<velnor_actions_mise::ProcessOutput, velnor_actions_mise::MiseError>;
+
     fn run(
         &self,
         command: &velnor_actions_mise::IsolatedCommand,
@@ -115,6 +121,14 @@ pub trait RunnerImageBuildExecution {
 }
 
 impl RunnerImageBuildExecution for velnor_actions_mise::ImageCandidateCommand {
+    fn run_build(
+        &self,
+        command: &velnor_actions_mise::IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<velnor_actions_mise::ProcessOutput, velnor_actions_mise::MiseError> {
+        velnor_actions_mise::ImageCandidateCommand::run_build(command, deadline)
+    }
+
     fn run(
         &self,
         command: &velnor_actions_mise::IsolatedCommand,

@@ -11,6 +11,8 @@ use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
 #[path = "command_stream/bounded_output.rs"]
 mod bounded_output;
+#[path = "command_stream/build_progress.rs"]
+mod build_progress;
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 

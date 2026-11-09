@@ -174,6 +174,12 @@ permission only in the relevant publishing jobs and caller. Confirm package
 association, permissions, and public visibility. A public repository alone does
 not prove a public package. Anonymous pulls must use no stored user login.
 
+The native family publication and verification commands each have a 40-minute
+deadline. The publication job has a 50-minute limit, leaving a combined
+10-minute allowance for its other setup and release work when those commands
+run within the job. This allowance does not guarantee completion for every
+cold network or setup duration.
+
 Required live proof covers all three digest pulls on a GitHub-hosted runner
 and the Mac, source/version/platform checks, Runner communication through its
 private DinD socket, and different private and outer daemon IDs. Qualification

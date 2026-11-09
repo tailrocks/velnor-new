@@ -27,12 +27,26 @@ struct PublishImageArguments<'a> {
     receipt_output: &'a Path,
 }
 
-pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
-    let minutes = if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
+#[cfg(test)]
+#[path = "dispatch_image_maintenance_tests.rs"]
+mod tests;
+
+fn deadline_minutes(command: &ImageMaintenanceCommand) -> u16 {
+    if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
         velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES
+    } else if matches!(
+        command,
+        ImageMaintenanceCommand::PublishRunnerImages(_)
+            | ImageMaintenanceCommand::VerifyRunnerPublication(_)
+    ) {
+        velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_PUBLICATION_TIMEOUT_MINUTES
     } else {
         10
-    };
+    }
+}
+
+pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
+    let minutes = deadline_minutes(command);
     let deadline = match CheckDeadline::after(Duration::from_mins(u64::from(minutes))) {
         Ok(deadline) => deadline,
         Err(error) => return report_error(&error),

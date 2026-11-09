@@ -29,6 +29,14 @@ struct ExternalBuildx {
     mutate_context: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 impl RunnerImageBuildExecution for ExternalBuildx {
+    fn run_build(
+        &self,
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run(command, deadline)
+    }
+
     fn run(&self, command: &IsolatedCommand, _: CheckDeadline) -> Result<ProcessOutput, MiseError> {
         let result = self.execute(command).map_err(|e| MiseError::SpawnFailed {
             program: "docker".into(),

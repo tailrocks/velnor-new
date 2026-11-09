@@ -32,6 +32,14 @@ struct CountedBuildx {
 }
 
 impl RunnerImageBuildExecution for CountedBuildx {
+    fn run_build(
+        &self,
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run(command, deadline)
+    }
+
     fn run(
         &self,
         command: &IsolatedCommand,
@@ -113,6 +121,14 @@ struct RacingBuildx {
 }
 
 impl RunnerImageBuildExecution for RacingBuildx {
+    fn run_build(
+        &self,
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run(command, deadline)
+    }
+
     fn run(
         &self,
         command: &IsolatedCommand,
@@ -229,6 +245,14 @@ struct GatedBuildx {
 }
 
 impl RunnerImageBuildExecution for GatedBuildx {
+    fn run_build(
+        &self,
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.run(command, deadline)
+    }
+
     fn run(
         &self,
         command: &IsolatedCommand,
