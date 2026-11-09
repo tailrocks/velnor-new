@@ -18,6 +18,9 @@ impl VelnorConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.check_schema(file)?;
         self.workflow.validate(file)?;
+        if let Some(proof) = &self.premerge_event_proof {
+            proof.validate(file)?;
+        }
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;

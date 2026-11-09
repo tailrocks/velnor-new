@@ -145,3 +145,5 @@ pub mod review_completion;
 
 mod image_candidate;
 pub use image_candidate::*;
+
+pub mod reusable_attestation_binding;

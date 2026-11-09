@@ -200,6 +200,9 @@ pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'pus
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub premerge_event_proof: Option<PremergeEventProofConfig>,
+
     pub schema: u32,
 
     pub workflow: WorkflowConfig,
@@ -260,3 +263,6 @@ pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
 pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;
+
+mod premerge_event_proof;
+pub use premerge_event_proof::PremergeEventProofConfig;
