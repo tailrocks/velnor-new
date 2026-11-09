@@ -55,7 +55,7 @@ fn assert_caller_bootstrap(workflow: &str) -> Result<(), Box<dyn Error>> {
     assert_eq!(callers.len(), 1);
     let caller = job(workflow, "source-preview-publication")?;
     assert!(caller.contains("if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}"));
-    assert!(caller.contains("uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@3a3c641b531a69b7e4142b61aecf536007bb3f2e"));
+    assert!(caller.contains("uses: tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c"));
     assert!(caller.contains("    permissions:\n      actions: read\n      artifact-metadata: write\n      attestations: write\n      contents: write\n      id-token: write\n"));
     assert!(!caller.contains("    needs:"));
     assert!(!workflow.contains("  workflow_dispatch:"));

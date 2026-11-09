@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const RUNTIME_AUTHORITY_SHA: Option<&str> = None;
-pub const PUBLICATION_AUTHORITY_SHA: &str = "3a3c641b531a69b7e4142b61aecf536007bb3f2e";
+pub const PUBLICATION_AUTHORITY_SHA: &str = "72701af69f6f9b693e639814fcf479409da3295c";
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SIGNER_WORKFLOW: &str = ".github/workflows/product-release-generator.yml";
