@@ -109,20 +109,14 @@ fn validate(values: &[Value], r: &WitnessRequest, branch: &str) -> Result<(), Or
         return Err(invalid());
     }
     let approvals = approvals.as_array().ok_or_else(invalid)?;
-    if approvals.len() != 1
-        || approvals[0]["state"] != "approved"
-        || approvals[0]["user"]["type"] != "User"
-        || approvals[0]["user"]["id"].as_u64() != Some(r.reviewer_id)
-    {
-        return Err(invalid());
-    }
-    let environments = approvals[0]["environments"]
-        .as_array()
-        .ok_or_else(invalid)?;
-    if environments.len() != 1
-        || environments[0]["id"].as_u64() != Some(id)
-        || environments[0]["name"].as_str() != Some(r.environment.as_str())
-    {
+    let approval = crate::crate_release_github::trusted_environment_approval(
+        approvals,
+        id,
+        &r.environment,
+        r.reviewer_id,
+    )
+    .ok_or_else(invalid)?;
+    if approval["state"] != "approved" || approval["user"]["type"] != "User" {
         return Err(invalid());
     }
     Ok(())

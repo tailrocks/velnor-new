@@ -307,3 +307,61 @@ fn recovery_authorization_requires_owner_review_of_the_complete_policy() {
     ));
     assert!(authorize_github_candidate(&input, &candidate, &fixture).is_ok());
 }
+
+#[test]
+fn environment_approval_allows_unrelated_protection_history_without_losing_human_authority() {
+    use velnor_actions_orchestrator::crate_release_github::verify_environment_approval;
+    let mut fixture = Fixture::valid();
+    let trusted = fixture.approvals[0].clone();
+    let extra = json!({"state":"approved","user":{"type":"Bot","id":501},"comment":"rule passed","environments":[{"id":22,"name":"release"}]});
+    for history in [
+        vec![trusted.clone(), extra.clone()],
+        vec![extra.clone(), trusted.clone()],
+    ] {
+        fixture.approvals = history;
+        assert!(verify_environment_approval(&request(), &fixture).is_ok());
+    }
+    let mut multi = trusted.clone();
+    multi["environments"]
+        .as_array_mut()
+        .expect("environments")
+        .push(json!({"id":23,"name":"other"}));
+    fixture.approvals = vec![extra.clone(), multi];
+    assert!(verify_environment_approval(&request(), &fixture).is_ok());
+    for history in [vec![extra.clone()], vec![trusted.clone(), trusted.clone()]] {
+        fixture.approvals = history;
+        assert!(verify_environment_approval(&request(), &fixture).is_err());
+    }
+    for (field, value) in [
+        ("state", json!("rejected")),
+        ("user", json!({"type":"Bot","id":99})),
+        ("comment", json!("wrong")),
+        (
+            "environments",
+            json!([{"id":22,"name":"release"},{"id":22,"name":"release"}]),
+        ),
+    ] {
+        let mut invalid = trusted.clone();
+        invalid[field] = value;
+        fixture.approvals = vec![extra.clone(), invalid];
+        assert!(
+            verify_environment_approval(&request(), &fixture).is_err(),
+            "{field}"
+        );
+    }
+    for (field, value) in [
+        ("state", json!("rejected")),
+        ("user", Value::Null),
+        ("environments", json!([{"id":22,"name":"wrong"}])),
+        ("environments", json!([{"id":999,"name":"release"}])),
+    ] {
+        let mut invalid = extra.clone();
+        invalid[field] = value;
+        fixture.approvals = vec![trusted.clone(), invalid];
+        assert!(verify_environment_approval(&request(), &fixture).is_err());
+    }
+    let mut conflicting = trusted.clone();
+    conflicting["state"] = json!("rejected");
+    fixture.approvals = vec![trusted, conflicting, extra];
+    assert!(verify_environment_approval(&request(), &fixture).is_err());
+}

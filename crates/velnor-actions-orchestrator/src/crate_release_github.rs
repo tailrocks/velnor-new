@@ -352,6 +352,7 @@ use reviews::{encode, require, valid_sha, valid_utc, validate_request, verify_re
 #[path = "crate_release_github_tags.rs"]
 mod tags;
 
+pub(crate) use authorization::trusted_environment_approval;
 pub use authorization::{
     GitHubAuthorized, authorize_github_candidate, read_github_tag, read_github_tag_evidence,
     verify_environment_approval,

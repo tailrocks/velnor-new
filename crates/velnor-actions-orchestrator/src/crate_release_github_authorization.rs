@@ -111,21 +111,13 @@ pub fn verify_environment_approval(
     let approvals = response
         .as_array()
         .ok_or_else(|| internal("crate_release_approvals_invalid"))?;
-    let related: Vec<&Value> = approvals
-        .iter()
-        .filter(|approval| {
-            approval["environments"].as_array().is_some_and(|envs| {
-                envs.iter().any(|env| {
-                    env["id"].as_u64() == Some(id)
-                        && env["name"]
-                            .as_str()
-                            .is_some_and(|name| name.eq_ignore_ascii_case(&request.environment))
-                })
-            })
-        })
-        .collect();
-    require(related.len() == 1, "environment_approval_count")?;
-    let approval = related[0];
+    let approval = trusted_environment_approval(
+        approvals,
+        id,
+        &request.environment,
+        request.trusted_reviewer_id,
+    )
+    .ok_or_else(|| internal("crate_release_environment_approval_count"))?;
     let expected = format!(
         "I reviewed the complete release policy at {} and source {}, and authorize this source for run {}.",
         request.workflow_sha, request.source_sha, request.run_id
@@ -137,6 +129,49 @@ pub fn verify_environment_approval(
             && approval["comment"].as_str() == Some(expected.as_str()),
         "environment_approval",
     )
+}
+
+pub(crate) fn trusted_environment_approval<'a>(
+    approvals: &'a [Value],
+    environment_id: u64,
+    environment_name: &str,
+    reviewer_id: u64,
+) -> Option<&'a Value> {
+    let mut selected = None;
+    for approval in approvals {
+        let environments = approval["environments"].as_array()?;
+        let mut target = false;
+        for environment in environments {
+            let id = environment["id"].as_u64().filter(|id| *id > 0)?;
+            let name = environment["name"]
+                .as_str()
+                .filter(|name| !name.is_empty())?;
+            let name_matches = name.eq_ignore_ascii_case(environment_name);
+            if (id == environment_id) != name_matches {
+                return None;
+            }
+            if id == environment_id {
+                if target {
+                    return None;
+                }
+                target = true;
+            }
+        }
+        if !target {
+            continue;
+        }
+        let actor_id = approval["user"]["id"].as_u64().filter(|id| *id > 0)?;
+        approval["user"]["type"]
+            .as_str()
+            .filter(|kind| !kind.is_empty())?;
+        if approval["state"].as_str() != Some("approved") {
+            return None;
+        }
+        if actor_id == reviewer_id && selected.replace(approval).is_some() {
+            return None;
+        }
+    }
+    selected
 }
 
 pub fn read_github_tag(

@@ -138,3 +138,68 @@ fn approval_rejects_reruns_and_policy_change_during_verification() {
     f.reads.set(0);
     assert!(verify_rehearsal_approval(&f.request, "main", &f).is_err());
 }
+
+#[test]
+fn rehearsal_approval_allows_unrelated_history_but_requires_unique_human_authority() {
+    let f = Fixture::new();
+    let route = "repos/acme/example/actions/runs/33/approvals";
+    let trusted = f.values.borrow().get(route).expect("fixture")[0].clone();
+    let extra = json!({"state":"approved","user":{"type":"Bot","id":501},"comment":"rule passed","environments":[{"id":77,"name":"staging"}]});
+    for history in [
+        vec![trusted.clone(), extra.clone()],
+        vec![extra.clone(), trusted.clone()],
+    ] {
+        f.values.borrow_mut().insert(route.into(), json!(history));
+        assert!(verify_rehearsal_approval(&f.request, "main", &f).is_ok());
+    }
+    let mut multi = trusted.clone();
+    multi["environments"]
+        .as_array_mut()
+        .expect("environments")
+        .push(json!({"id":78,"name":"other"}));
+    f.values
+        .borrow_mut()
+        .insert(route.into(), json!([extra.clone(), multi]));
+    assert!(verify_rehearsal_approval(&f.request, "main", &f).is_ok());
+    for history in [vec![extra.clone()], vec![trusted.clone(), trusted.clone()]] {
+        f.values.borrow_mut().insert(route.into(), json!(history));
+        assert!(verify_rehearsal_approval(&f.request, "main", &f).is_err());
+    }
+    for (field, value) in [
+        ("state", json!("rejected")),
+        ("user", json!({"type":"Bot","id":55})),
+        (
+            "environments",
+            json!([{"id":77,"name":"staging"},{"id":77,"name":"staging"}]),
+        ),
+    ] {
+        let mut invalid = trusted.clone();
+        invalid[field] = value;
+        f.values
+            .borrow_mut()
+            .insert(route.into(), json!([extra.clone(), invalid]));
+        assert!(
+            verify_rehearsal_approval(&f.request, "main", &f).is_err(),
+            "{field}"
+        );
+    }
+    for (field, value) in [
+        ("state", json!("rejected")),
+        ("user", Value::Null),
+        ("environments", json!([{"id":77,"name":"wrong"}])),
+        ("environments", json!([{"id":999,"name":"staging"}])),
+    ] {
+        let mut invalid = extra.clone();
+        invalid[field] = value;
+        f.values
+            .borrow_mut()
+            .insert(route.into(), json!([trusted.clone(), invalid]));
+        assert!(verify_rehearsal_approval(&f.request, "main", &f).is_err());
+    }
+    let mut conflicting = trusted.clone();
+    conflicting["state"] = json!("rejected");
+    f.values
+        .borrow_mut()
+        .insert(route.into(), json!([trusted, conflicting, extra]));
+    assert!(verify_rehearsal_approval(&f.request, "main", &f).is_err());
+}
