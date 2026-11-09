@@ -3,7 +3,6 @@
 
 use velnor_runner_image_manifest::strict_json;
 
-const MAX_OUTPUT: usize = 4 * 1024 * 1024;
 const MAX_MESSAGE: usize = 64 * 1024;
 const MAX_MESSAGES: usize = 16_384;
 
@@ -14,7 +13,6 @@ pub(super) struct PullDecoder<'a> {
     digest: &'a str,
     reference: &'a str,
     pending: Vec<u8>,
-    total: usize,
     messages: usize,
     digest_seen: bool,
     terminal_seen: bool,
@@ -26,7 +24,6 @@ impl<'a> PullDecoder<'a> {
             digest,
             reference,
             pending: Vec::new(),
-            total: 0,
             messages: 0,
             digest_seen: false,
             terminal_seen: false,
@@ -34,31 +31,34 @@ impl<'a> PullDecoder<'a> {
     }
 
     pub(super) fn push(&mut self, chunk: &[u8]) -> Result<(), DecodeError> {
-        self.total = self
-            .total
-            .checked_add(chunk.len())
-            .filter(|size| *size <= MAX_OUTPUT)
-            .ok_or(DecodeError)?;
-        self.pending.extend_from_slice(chunk);
-        while let Some(end) = self.pending.iter().position(|byte| *byte == b'\n') {
-            if end > MAX_MESSAGE {
+        for part in chunk.split_inclusive(|byte| *byte == b'\n') {
+            let complete = part.last() == Some(&b'\n');
+            let content = if complete {
+                &part[..part.len() - 1]
+            } else {
+                part
+            };
+            if self
+                .pending
+                .len()
+                .checked_add(content.len())
+                .is_none_or(|size| size > MAX_MESSAGE)
+            {
                 return Err(DecodeError);
             }
-            let line = self.pending.drain(..=end).collect::<Vec<_>>();
-            if !line.iter().all(u8::is_ascii_whitespace) {
-                self.message(&line)?;
+            self.pending.extend_from_slice(content);
+            if complete {
+                let line = std::mem::take(&mut self.pending);
+                self.line(&line)?;
             }
-        }
-        if self.pending.len() > MAX_MESSAGE {
-            return Err(DecodeError);
         }
         Ok(())
     }
 
     pub(super) fn finish(mut self) -> Result<(), DecodeError> {
-        if !self.pending.iter().all(u8::is_ascii_whitespace) {
+        if !self.pending.is_empty() {
             let line = std::mem::take(&mut self.pending);
-            self.message(&line)?;
+            self.line(&line)?;
         }
         if !self.terminal_seen {
             return Err(DecodeError);
@@ -66,7 +66,15 @@ impl<'a> PullDecoder<'a> {
         Ok(())
     }
 
-    fn message(&mut self, bytes: &[u8]) -> Result<(), DecodeError> {
+    fn line(&mut self, bytes: &[u8]) -> Result<(), DecodeError> {
+        if bytes.iter().all(u8::is_ascii_whitespace) {
+            self.messages = self
+                .messages
+                .checked_add(1)
+                .filter(|count| *count <= MAX_MESSAGES)
+                .ok_or(DecodeError)?;
+            return Ok(());
+        }
         validate_message(
             bytes,
             &mut self.messages,

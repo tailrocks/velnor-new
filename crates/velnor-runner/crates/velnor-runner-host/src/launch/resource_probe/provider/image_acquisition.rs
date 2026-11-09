@@ -241,14 +241,34 @@ impl ImageSession {
             .append_pair("tag", &image.digest)
             .append_pair("platform", "linux/amd64");
         let path = format!("{}?{}", url.path(), url.query().ok_or(HostError::Identity)?);
-        let (status, bytes) = self.request(Method::POST, &path, PULL_TIMEOUT).await?;
-        if !status.is_success() {
-            return Err(HostError::Docker);
-        }
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri(path)
+            .header("host", "localhost")
+            .body(Full::<Bytes>::default())
+            .map_err(|_| HostError::Docker)?;
         let reference = image.reference();
-        let mut decoder = PullDecoder::new(&image.digest, &reference);
-        decoder.push(&bytes).map_err(|_| HostError::Docker)?;
-        decoder.finish().map_err(|_| HostError::Docker)?;
+        tokio::time::timeout(PULL_TIMEOUT, async {
+            let response = self
+                .sender
+                .send_request(request)
+                .await
+                .map_err(|_| HostError::Docker)?;
+            if !response.status().is_success() {
+                return Err(HostError::Docker);
+            }
+            let mut decoder = PullDecoder::new(&image.digest, &reference);
+            let mut body = response.into_body();
+            while let Some(frame) = body.frame().await {
+                let frame = frame.map_err(|_| HostError::Docker)?;
+                if let Some(data) = frame.data_ref() {
+                    decoder.push(data).map_err(|_| HostError::Docker)?;
+                }
+            }
+            decoder.finish().map_err(|_| HostError::Docker)
+        })
+        .await
+        .map_err(|_| HostError::Docker)??;
         self.inspect_inner(image).await?.ok_or(HostError::Identity)
     }
 

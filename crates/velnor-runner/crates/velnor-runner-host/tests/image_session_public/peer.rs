@@ -58,6 +58,10 @@ impl Response {
         }
     }
 
+    pub(super) fn body_bytes(&self) -> Vec<u8> {
+        self.body.clone()
+    }
+
     pub(super) fn gated(mut self, gate: Arc<(Mutex<bool>, std::sync::Condvar)>) -> Self {
         self.gate = Some(gate);
         self

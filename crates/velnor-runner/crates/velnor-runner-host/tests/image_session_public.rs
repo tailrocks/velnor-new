@@ -8,6 +8,9 @@
 #[path = "image_session_public/peer.rs"]
 mod peer;
 
+#[path = "image_session_public/stream.rs"]
+mod stream;
+
 use std::path::Path;
 use std::{error::Error, io};
 
