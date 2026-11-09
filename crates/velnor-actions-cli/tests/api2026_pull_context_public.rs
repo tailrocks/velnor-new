@@ -83,6 +83,19 @@ fn frozen_capture_preserves_indexed_and_dirty_source() -> Result<(), Box<dyn Err
 }
 
 #[test]
+fn image_worker_listing_preserves_executable_custody() -> Result<(), Box<dyn Error>> {
+    let status = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-B"])
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/api2026_pull_context_fixture/worker_listing_probe.py"
+        ))
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
 fn sparse_source_snapshot_respects_only_reviewed_exclusions() -> Result<(), Box<dyn Error>> {
     let status = std::process::Command::new("/usr/bin/python3")
         .arg("-I")

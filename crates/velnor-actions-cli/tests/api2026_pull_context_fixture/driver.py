@@ -52,6 +52,77 @@ def read_regular(path, max_size=MAX_FILE):
         os.close(fd)
 
 
+def worker_executable(target, profile, triple):
+    try:
+        return checked_worker_executable(target, profile, triple)
+    except (KeyError, TypeError, AttributeError) as error:
+        raise RuntimeError("malformed worker metadata") from error
+
+
+def checked_worker_executable(target, profile, triple):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError("duplicate worker metadata key")
+            result[key] = value
+        return result
+    def load(name):
+        return json.loads(read_regular(target / name, 1024 * 1024), object_pairs_hook=unique)
+    cargo = load("fixture-cargo.json")
+    listing = load("fixture-worker-binaries.json")
+    packages = [package for package in cargo["packages"]
+                if package.get("name") == "velnor-actions-orchestrator"
+                and package.get("manifest_path") == "/work/crates/velnor-actions-orchestrator/Cargo.toml"
+                and package.get("source") is None]
+    if len(packages) != 1 or not isinstance(packages[0].get("id"), str):
+        raise RuntimeError("invalid worker workspace package")
+    package_id = packages[0]["id"]
+    if (not isinstance(cargo["workspace_members"], list)
+            or cargo["workspace_members"].count(package_id) != 1
+            or sum(package.get("id") == package_id for package in cargo["packages"]) != 1):
+        raise RuntimeError("worker package is not a unique workspace member")
+    meta = listing["rust-build-meta"]
+    if (meta["target-directory"] != "/target" or meta["build-directory"] != "/target"
+            or meta["base-output-directories"] != [profile]
+            or meta["platforms"]["host"]["platform"]["triple"] != triple
+            or meta["platforms"]["targets"] != []
+            or meta["target-platform"] is not None
+            or meta["target-platforms"] != [{"triple": triple, "target-features": "unknown"}]):
+        raise RuntimeError("invalid worker build platform")
+    records = listing["rust-binaries"]
+    if not isinstance(records, dict) or list(records) != ["velnor-actions-orchestrator"]:
+        raise RuntimeError("ambiguous worker executable")
+    record = records["velnor-actions-orchestrator"]
+    expected = {"binary-id": "velnor-actions-orchestrator", "binary-name": "velnor_actions_orchestrator",
+                "package-id": package_id, "kind": "lib", "build-platform": "target"}
+    if any(type(record.get(key)) is not str or record[key] != value for key, value in expected.items()):
+        raise RuntimeError("invalid worker executable identity")
+    raw = record.get("binary-path")
+    if not isinstance(raw, str):
+        raise RuntimeError("invalid worker executable path")
+    path = pathlib.PurePosixPath(raw)
+    if (str(path) != raw or path.parent != pathlib.PurePosixPath(f"/target/{profile}/deps")
+            or not re.fullmatch(r"velnor_actions_orchestrator-[0-9a-f]+", path.name)):
+        raise RuntimeError("invalid worker executable path")
+    current = os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in (profile, "deps"):
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
+            os.close(current)
+            current = child
+        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=current)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or not info.st_mode & 0o111 or info.st_size == 0:
+                raise RuntimeError("worker is not an owned regular executable")
+        finally:
+            os.close(fd)
+    finally:
+        os.close(current)
+    return raw
+
+
 def read_tracked(root, raw_name):
     parts = raw_name.split(b"/")
     if any(part in (b"", b".", b"..") for part in parts):
@@ -463,21 +534,14 @@ def main():
         if not binary_meta.is_file() or not cargo_meta.is_file() or (kind == "image_publication" and not worker_path.is_file()):
             release = "--release" if profile == "release" else ""
             selection = "--lib" if test_target is None else f"--test {test_target}"
-            fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release}; cargo test --locked --offline -p velnor-actions-orchestrator --lib --no-run --message-format=json {release} > /target/fixture-worker-messages;" if kind == "image_publication" else ""
+            fixture_example = f"cargo build --locked --offline -p velnor-actions-cli --features generator --example image-publication-fixture {release}; /tools/cargo-nextest nextest list --locked --offline -p velnor-actions-orchestrator --lib {release} --list-type binaries-only --message-format json > /target/fixture-worker-binaries.json;" if kind == "image_publication" else ""
             build_settings = "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0" if source_compiler else ""
             if kind == "cli":
                 build_settings += " CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0"
             build = f'''set -eu; export HOME=/tmp PATH=/tools:/usr/local/cargo/bin:/usr/bin:/bin RUSTUP_TOOLCHAIN=1.99.1-{triple} CARGO_TARGET_DIR=/target CARGO_NET_OFFLINE=true {build_settings}; cargo metadata --locked --offline --all-features --filter-platform {triple} --format-version 1 > /target/fixture-cargo.tmp; {fixture_example} /tools/cargo-nextest nextest list --locked --offline -p {package} {selection} {release} --list-type binaries-only --message-format json > /target/fixture-binaries.tmp; mv /target/fixture-cargo.tmp /target/fixture-cargo.json; mv /target/fixture-binaries.tmp /target/fixture-binaries.json'''
             command(docker[:-1] + ["--user", f"{os.getuid()}:{os.getgid()}", IMAGE, "sh", "-c", build], env=docker_env)
             if kind == "image_publication":
-                messages = (target / "fixture-worker-messages").read_text().splitlines()
-                executables = [item["executable"] for item in map(json.loads, messages)
-                               if item.get("reason") == "compiler-artifact"
-                               and item.get("target", {}).get("name") == "velnor_actions_orchestrator"
-                               and item.get("profile", {}).get("test") is True and item.get("executable")]
-                if len(executables) != 1 or not executables[0].startswith(f"/target/{profile}/deps/"):
-                    raise RuntimeError("invalid orchestrator fixture executable")
-                worker_path.write_text(executables[0])
+                worker_path.write_text(worker_executable(target, profile, triple))
             verify_sources(root, snapshot, entries, patterns)
             if fingerprint(entries, arch, profile, kind, registry_fingerprint(packages, registry)) != key:
                 binary_meta.unlink(missing_ok=True); cargo_meta.unlink(missing_ok=True)
@@ -490,7 +554,9 @@ def main():
         nonce = secrets.token_hex(32)
         receipt = target / f"receipt-{nonce}"
         fixture_path = "/tools/bin:" if source_compiler else ""
-        worker = read_regular(worker_path, 4096).decode() if kind == "image_publication" else ""
+        worker = worker_executable(target, profile, triple) if kind == "image_publication" else ""
+        if kind == "image_publication" and read_regular(worker_path, 4096).decode() != worker:
+            raise RuntimeError("cached worker executable identity changed")
         setup = signed_controller_toolchain_setup() if signed_controller else ""
         script = f'''set -eu; cd /tmp; {setup} mkdir /tmp/fixture-tls /tmp/fixture-home; openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/fixture-tls/key.pem -out /tmp/fixture-tls/cert.pem -days 1 -subj /CN=api.github.com -addext subjectAltName=DNS:api.github.com,DNS:tuf-repo.github.com,DNS:tuf-repo-cdn.sigstore.dev >/dev/null 2>&1; cat /tmp/fixture-tls/cert.pem >> /etc/ssl/certs/ca-certificates.crt; chown -R {os.getuid()}:{os.getgid()} /tmp/fixture-tls /tmp/fixture-home; exec setpriv --reuid={os.getuid()} --regid={os.getgid()} --clear-groups /bin/sh -c 'cd /work; export HOME=/tmp/fixture-home PATH={fixture_path}/tools:/usr/local/cargo/bin:/usr/bin:/bin MISE_DATA_DIR=/tools/mise VELNOR_GH_TEST_TLS_ROOT=/tmp/fixture-tls VELNOR_GH_FIXTURE_WORKER=container-v1 VELNOR_GH_FIXTURE_SCENARIO="$FIXTURE_SCENARIO" VELNOR_GH_FIXTURE_TARGET="$FIXTURE_TARGET" VELNOR_GH_FIXTURE_CACHE_KEY="$FIXTURE_KEY" VELNOR_GH_FIXTURE_ARCH="$FIXTURE_ARCH" VELNOR_GH_FIXTURE_NONCE="$FIXTURE_NONCE"; if [ "$FIXTURE_TARGET" = image_attestation ]; then export GH_TOKEN=fixture_token VELNOR_TEST_ATTESTATION_ROOT=/work/crates/velnor-actions-orchestrator/tests/attestation_fixtures/historical/trusted-root.jsonl; fi; if [ "$FIXTURE_TARGET" = image_publication ]; then export VELNOR_IMAGE_PUBLICATION_FIXTURE="/target/$FIXTURE_PROFILE/examples/image-publication-fixture"; fi; exec /tools/cargo-nextest nextest run --cargo-metadata /target/fixture-cargo.json --binaries-metadata /target/fixture-binaries.json -E "test(=$FIXTURE_SCENARIO)" --no-tests fail' '''
         env_args = ["-e", f"FIXTURE_SCENARIO={test}", "-e", f"FIXTURE_TARGET={kind}", "-e", f"FIXTURE_KEY={key}", "-e", f"FIXTURE_ARCH={arch}", "-e", f"FIXTURE_NONCE={nonce}", "-e", f"FIXTURE_PROFILE={profile}", "-e", f"VELNOR_IMAGE_TEST_WORKER={worker}"]
