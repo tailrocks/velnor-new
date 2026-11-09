@@ -34,6 +34,7 @@ struct Registry {
     wrong_tag_target: Option<()>,
     wrong_tag_sha: Option<()>,
     access_checks: Cell<usize>,
+    write_calls: Cell<usize>,
     reject_access: Option<()>,
     inject_after_list: Cell<bool>,
     change_source_after_list: RefCell<Option<std::path::PathBuf>>,
@@ -99,6 +100,7 @@ impl JournalIo for Registry {
         Ok(self.refs.borrow().get(reference).cloned())
     }
     fn create_blob(&self, _: &str, content: &[u8]) -> Result<String, OrchestratorError> {
+        self.write_calls.set(self.write_calls.get() + 1);
         let mut hasher = Sha1::new();
         hasher.update(format!("blob {}\0", content.len()).as_bytes());
         hasher.update(content);
@@ -119,6 +121,7 @@ impl JournalIo for Registry {
         })
     }
     fn create_tag_object(&self, _: &str, tag: &JournalTag) -> Result<String, OrchestratorError> {
+        self.write_calls.set(self.write_calls.get() + 1);
         let raw = raw_tag(tag);
         let mut hasher = Sha1::new();
         hasher.update(format!("tag {}\0", raw.len()).as_bytes());
@@ -140,6 +143,7 @@ impl JournalIo for Registry {
         Ok(id)
     }
     fn create_ref(&self, _: &str, reference: &str, tag_sha: &str) -> Result<(), OrchestratorError> {
+        self.write_calls.set(self.write_calls.get() + 1);
         if self.fail_ref_before_write.is_some() {
             return Err(err());
         }
@@ -312,6 +316,8 @@ fn raw_tag(tag: &JournalTag) -> Vec<u8> {
     .into_bytes()
 }
 
+#[path = "crate_release_journal_public/chain_mutations.rs"]
+mod chain_mutations;
 #[path = "crate_release_journal_public/chain_support.rs"]
 mod chain_support;
 #[path = "crate_release_journal_public/completion.rs"]
