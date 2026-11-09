@@ -6,6 +6,9 @@ use crate::{workflow_timeout, yaml::Yaml};
 const CALLER: &str = ".github/workflows/product-release-generator.yml";
 const AUTHORITY: &str = "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c";
 
+const RUNTIME_CALLER: &str = ".github/workflows/product-release-images.yml";
+const RUNTIME_AUTHORITY: &str = "tailrocks/velnor-new/.github/workflows/source-preview-mac-proof.yml@533d225c08785adc4367340e1db4dc111ee2b5a2";
+
 fn document(id: &str, reference: Option<Yaml>, extra: Vec<(String, Yaml)>) -> Yaml {
     let mut fields = Vec::new();
     if let Some(value) = reference {
@@ -47,7 +50,101 @@ fn protected_source_preview_uses_its_own_reviewed_budget() {
 
 #[test]
 fn unrelated_or_ambiguous_reusable_jobs_fail_closed() {
-    for (path, id, reference) in [
+    for (path, id, reference) in runtime_reference_cases()
+        .into_iter()
+        .chain(publication_reference_cases())
+    {
+        assert!(
+            workflow_timeout::validate_tree(&[(
+                path,
+                &document(id, Some(Yaml::str(reference)), vec![])
+            )])
+            .is_err()
+        );
+    }
+    for (path, id, authority) in [
+        (CALLER, "source-preview-publication", AUTHORITY),
+        (RUNTIME_CALLER, "verify-mac-proof", RUNTIME_AUTHORITY),
+    ] {
+        assert!(workflow_timeout::validate_tree(&[(path, &document(id, None, vec![]))]).is_err());
+        assert!(
+            workflow_timeout::validate_tree(&[(
+                path,
+                &document(id, Some(Yaml::Map(vec![])), vec![])
+            )])
+            .is_err()
+        );
+        for field in ["steps", "runs-on", "timeout-minutes"] {
+            assert!(
+                workflow_timeout::validate_tree(&[(
+                    path,
+                    &document(
+                        id,
+                        Some(Yaml::str(authority)),
+                        vec![(field.to_owned(), Yaml::str("ambiguous"))]
+                    )
+                )])
+                .is_err()
+            );
+        }
+        let local = document(
+            id,
+            Some(Yaml::str("./.github/workflows/missing.yml")),
+            vec![],
+        );
+        assert!(workflow_timeout::validate_tree(&[(path, &local)]).is_err());
+    }
+}
+
+fn runtime_reference_cases() -> Vec<(&'static str, &'static str, String)> {
+    vec![
+        (RUNTIME_CALLER, "different", RUNTIME_AUTHORITY.to_owned()),
+        (CALLER, "verify-mac-proof", RUNTIME_AUTHORITY.to_owned()),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY.replace("tailrocks/", "other/"),
+        ),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY.replace("source-preview-mac-proof.yml@", "other.yml@"),
+        ),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY.replace(
+                "533d225c08785adc4367340e1db4dc111ee2b5a2",
+                "533d225c08785adc4367340e1db4dc111ee2b5a3",
+            ),
+        ),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY.replace("533d225c08785adc4367340e1db4dc111ee2b5a2", "main"),
+        ),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY.replace(
+                "533d225c08785adc4367340e1db4dc111ee2b5a2",
+                "${{ github.sha }}",
+            ),
+        ),
+        (
+            RUNTIME_CALLER,
+            "verify-mac-proof",
+            RUNTIME_AUTHORITY
+                .split('@')
+                .next()
+                .unwrap_or_default()
+                .to_owned(),
+        ),
+    ]
+}
+
+fn publication_reference_cases() -> Vec<(&'static str, &'static str, String)> {
+    vec![
         (CALLER, "different", AUTHORITY.to_owned()),
         (
             ".github/workflows/other.yml",
@@ -90,41 +187,5 @@ fn unrelated_or_ambiguous_reusable_jobs_fail_closed() {
             "source-preview-publication",
             AUTHORITY.split('@').next().unwrap_or_default().to_owned(),
         ),
-    ] {
-        assert!(
-            workflow_timeout::validate_tree(&[(
-                path,
-                &document(id, Some(Yaml::str(reference)), vec![])
-            )])
-            .is_err()
-        );
-    }
-    let id = "source-preview-publication";
-    assert!(workflow_timeout::validate_tree(&[(CALLER, &document(id, None, vec![]))]).is_err());
-    assert!(
-        workflow_timeout::validate_tree(&[(
-            CALLER,
-            &document(id, Some(Yaml::Map(vec![])), vec![])
-        )])
-        .is_err()
-    );
-    for field in ["steps", "runs-on", "timeout-minutes"] {
-        assert!(
-            workflow_timeout::validate_tree(&[(
-                CALLER,
-                &document(
-                    id,
-                    Some(Yaml::str(AUTHORITY)),
-                    vec![(field.to_owned(), Yaml::str("ambiguous"))]
-                )
-            )])
-            .is_err()
-        );
-    }
-    let local = document(
-        id,
-        Some(Yaml::str("./.github/workflows/missing.yml")),
-        vec![],
-    );
-    assert!(workflow_timeout::validate_tree(&[(CALLER, &local)]).is_err());
+    ]
 }

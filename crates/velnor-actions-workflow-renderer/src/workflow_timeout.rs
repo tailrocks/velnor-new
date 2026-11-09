@@ -7,6 +7,9 @@ use velnor_actions_contract::JobTimeout;
 
 use crate::{RenderError, workflow_size, yaml::Yaml};
 
+#[path = "workflow_timeout/authority.rs"]
+mod authority;
+
 pub(super) struct HomebrewAdoptionCalleeScope {
     source_sha: String,
     transition_id: String,
@@ -253,7 +256,7 @@ pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderErr
 
 enum Callee<'a> {
     Local(&'a str),
-    SourcePreview,
+    ReviewedExternal,
 }
 
 fn callee<'a>(
@@ -273,15 +276,8 @@ fn callee<'a>(
     {
         return Err(invalid(id, "mixed_reusable_job"));
     }
-    if path == ".github/workflows/product-release-generator.yml"
-        && id == "source-preview-publication"
-        && value
-            == &format!(
-                "tailrocks/velnor-new/.github/workflows/source-preview-publication.yml@{SOURCE_PREVIEW_AUTHORITY_SHA}"
-            )
-    {
-        validate_source_preview_authority()?;
-        return Ok(Some(Callee::SourcePreview));
+    if authority::admits(path, id, value)? {
+        return Ok(Some(Callee::ReviewedExternal));
     }
     let filename = value
         .strip_prefix("./.github/workflows/")
@@ -298,67 +294,6 @@ fn callee<'a>(
         return Err(invalid(id, "noncanonical_callee"));
     }
     Ok(value.strip_prefix("./").map(Callee::Local))
-}
-
-pub(crate) const SOURCE_PREVIEW_AUTHORITY_SHA: &str =
-    velnor_actions_contract::source_preview::PUBLICATION_AUTHORITY_SHA;
-
-struct AuthorityJob {
-    id: &'static str,
-    minutes: u32,
-    needs: &'static [&'static str],
-}
-
-fn validate_source_preview_authority() -> Result<(), RenderError> {
-    const BLOB_SHA256: &str = "b157479660663d7241291be5f392f4338e6b60a2063bda61d7aa02f82f94990e";
-    const JOBS: &[AuthorityJob] = &[
-        AuthorityJob {
-            id: "source-preview-source",
-            minutes: 5,
-            needs: &[],
-        },
-        AuthorityJob {
-            id: "source-preview-draft",
-            minutes: 10,
-            needs: &["source-preview-source"],
-        },
-        AuthorityJob {
-            id: "source-preview-attest",
-            minutes: 10,
-            needs: &["source-preview-source", "source-preview-draft"],
-        },
-        AuthorityJob {
-            id: "source-preview-publish",
-            minutes: 10,
-            needs: &[
-                "source-preview-source",
-                "source-preview-draft",
-                "source-preview-attest",
-            ],
-        },
-    ];
-    if !lower_hex(BLOB_SHA256, 64) || !lower_hex(SOURCE_PREVIEW_AUTHORITY_SHA, 40) {
-        return Err(invalid(
-            "source-preview-publication",
-            "invalid_authority_identity",
-        ));
-    }
-    let mut seen = BTreeSet::new();
-    for job in JOBS {
-        JobTimeout::try_from(job.minutes).map_err(RenderError::Contract)?;
-        if job
-            .needs
-            .iter()
-            .any(|dependency| !seen.contains(dependency))
-            || !seen.insert(job.id)
-        {
-            return Err(invalid(
-                "source-preview-publication",
-                "invalid_authority_graph",
-            ));
-        }
-    }
-    Ok(())
 }
 
 fn jobs<'a>(document: &'a Yaml, path: &str) -> Result<&'a [(String, Yaml)], RenderError> {

@@ -77,6 +77,7 @@ fn run_with_deadline(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     match command {
+        ImageMaintenanceCommand::AdmitMacPublication { .. } => mac_dispatch::admit_publication_request(command, deadline),
         ImageMaintenanceCommand::VerifyMacAttestation { .. } => {
             mac_dispatch::verify_mac_request(command, deadline)
         }

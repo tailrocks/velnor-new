@@ -8,7 +8,8 @@ use sha2::{Digest, Sha256};
 use velnor_actions_contract::runner_image_manifest::{
     RunnerImageManifest,
     mac_attestation::{
-        MacCompanionAuthority, MacPublicAuthority, MacSdkIdentity,
+        MAC_COMPANION_REPOSITORY_ID, MAC_COMPANION_RUNNER_ID, MacCompanionAuthority,
+        MacPublicAuthority, MacSdkIdentity,
         parse_mac_qualification_attestation, receipt_matches_manifest,
     },
 };
@@ -56,7 +57,7 @@ pub fn verify_mac_qualification(
         workflow_path: ".github/workflows/qualify-runner-family.yml",
         workflow_ref: "refs/heads/main",
         workflow_sha: request.workflow_sha,
-        runner_id: 21,
+        runner_id: MAC_COMPANION_RUNNER_ID,
     };
     verify_with_policy(request, &policy)
 }
@@ -169,6 +170,7 @@ fn verify_certificate_claims(
         private.repository, private.run_id, private.run_attempt
     );
     let repo = format!("https://github.com/{}", private.repository);
+    let repository_id = MAC_COMPANION_REPOSITORY_ID.to_string();
     let checks = [
         (8, "https://token.actions.githubusercontent.com"),
         (9, identity.as_str()),
@@ -177,7 +179,7 @@ fn verify_certificate_claims(
         (12, repo.as_str()),
         (13, policy.workflow_sha),
         (14, policy.workflow_ref),
-        (15, "1450917587"),
+        (15, repository_id.as_str()),
         (16, "https://github.com/donbeave"),
         (17, "139017"),
         (18, identity.as_str()),

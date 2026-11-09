@@ -111,6 +111,26 @@ checksum, asset-inventory, attestation, immutable-release, and source/workflow
 verification apply to those exact bytes. Published historical releases remain
 unchanged.
 
+After uploading those four assets for a new draft, the source-free
+`publish-images` job uploads a separate Actions artifact named
+`runner-image-publication-context-${{ github.run_attempt }}`. It contains only
+`runner-image-publication-context.json`; it is not a GitHub Release asset.
+The artifact is emitted only when reconciliation selects `build` and the asset
+upload succeeds. The publisher exposes the context artifact ID and digest as
+job outputs.
+
+The closed `velnor.runner-image-publication-context.v1` document contains
+`schema`, `repository`, `repository_id`, `source_commit`, `public_run_id`,
+`public_run_attempt`, `producer_run_id`, `producer_run_attempt`,
+`producer_artifact_id`, `publisher_artifact_id`, `publisher_artifact_digest`,
+`manifest_sha256`, and `runner_lock_sha256`. The producer fields come from
+`discover-producer`; the publisher fields come from the four-asset upload.
+The repository is `tailrocks/velnor-new` with ID `1390620900`. The publisher
+hashes the manifest and authenticated source lock it used. IDs and attempts
+are positive integers. The source commit is 40 lowercase hexadecimal
+characters. Each digest uses `sha256:<64 lowercase hex>`. Missing, duplicate,
+or unknown fields fail admission.
+
 Manifest schema version 2 requires these fields:
 
 | Field | Contract |
@@ -235,17 +255,34 @@ No receipt is emitted while cleanup or recovery is uncertain. The operation
 has one 80-minute deadline and a separate 10-minute cleanup allowance within a
 105-minute Mac job limit.
 
-A separate source-free hosted Ubuntu 26.04 job directly depends on the Mac job
-and authenticates its successful execution and exact same-run receipt artifact
-through its own repository API. The closed workflow has exactly one possible
-producer of that receipt artifact: the Mac job. Run association in artifact
-metadata alone does not establish uploader job identity.
-It checks the actual job runner ID, source/workflow commit, run and attempt,
-then signs only the validated receipt with GitHub OIDC and pinned Cosign.
-The Mac job has only the read permissions needed for its staged inputs and no
-OIDC signing or publication permission. The hosted attestor has only actions
-and contents read plus OIDC token write permission. Neither job receives a
-broad cross-repository credential.
+A source-free hosted Ubuntu 26.04 admission job directly depends on the Mac
+job and authenticates its successful execution and exact same-run receipt
+artifact through the private repository API. The reviewed workflow has one
+possible receipt uploader: the Mac job. Run association in artifact metadata
+does not identify the uploader. The admission job checks the actual job runner
+ID, source and workflow commit, run, and attempt.
+
+Before assembling the envelope, the admission job runs the verified Linux SDK's
+`image-maintenance admit-mac-publication` operation with a read-only public
+repository token. The operation authenticates the public source, current main,
+release run and attempt, and successful `publish-images` job. It compares the
+source workflow with the workflow generated from that source configuration and
+SDK version. That closed workflow establishes the context uploader. The
+operation checks the unique context artifact's run, name, size, digest, ZIP
+inventory, and closed JSON fields. The context archive is at most 64 KiB. Its
+JSON member is at most 8 KiB. It compares the publisher artifact and four
+staged asset bytes with the context, and checks the manifest and source lock
+hashes. It also authenticates the captured producer CI run, attempt, successful
+Required job, and uniquely named producer artifact. A later CI run does not
+replace the captured producer.
+
+The admission job has no OIDC permission and removes OIDC request variables
+from pre-sign processes. A separate hosted signer depends on admission and
+receives only the admitted envelope artifact ID and digest. It verifies that
+artifact and the same-run workflow before signing with GitHub OIDC and pinned
+Cosign. The Mac job has only the read permissions needed for its staged inputs
+and no OIDC signing or publication permission. Neither job receives a broad
+cross-repository credential.
 
 The signed receipt envelope binds both public and private repository IDs,
 public source commit,

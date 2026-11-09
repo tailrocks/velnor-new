@@ -38,9 +38,9 @@ pub struct VerifiedMacAttestation {
     pub notice_sha256: String,
 }
 
-struct VerifiedAssets {
-    manifest: Vec<u8>,
-    digests: [String; 4],
+pub(super) struct VerifiedAssets {
+    pub(super) manifest: Vec<u8>,
+    pub(super) digests: [String; 4],
 }
 
 #[derive(Deserialize)]
@@ -215,22 +215,14 @@ fn authenticate(
     if github::ci::main_sha(token, deadline)? != source {
         return Err(internal("mac_release_main_changed"));
     }
-    let ci = github::ci::authenticate_source(source, token, deadline)?;
-    if ci.id != request.producer_run_id || ci.attempt != request.producer_run_attempt {
-        return Err(internal("mac_release_producer_mismatch"));
-    }
+    github::ci::authenticate_captured(source, request.producer_run_id, request.producer_run_attempt, token, deadline)?;
     github::authenticate_runner_producer_artifact(
-        source,
-        ci.id,
-        ci.attempt,
-        request.producer_artifact_id,
-        token,
-        deadline,
+        source, request.producer_run_id, request.producer_run_attempt, request.producer_artifact_id, token, deadline,
     )?;
     github::authenticate_release_jobs(source, run, attempt, token, deadline, execution)
 }
 
-fn verify_publisher_artifact(
+pub(super) fn verify_publisher_artifact(
     request: &VerifyMacAttestationRequest,
     source: &str,
     run: u64,
@@ -262,6 +254,7 @@ fn verify_publisher_artifact(
         return Err(invalid());
     }
     let mut zip = zip::ZipArchive::new(Cursor::new(archive)).map_err(|_| invalid())?;
+    zip.validate_header_consistency().map_err(|_| invalid())?;
     if zip.len() != 4 {
         return Err(invalid());
     }
@@ -306,7 +299,7 @@ fn verify_publisher_artifact(
     })
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(super) fn hex(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 16] = b"0123456789abcdef";
     bytes
         .iter()

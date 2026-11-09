@@ -260,6 +260,9 @@ fn extract_zip(
     let mut source = DeadlineIo::new(source, deadline);
     let mut archive =
         ZipArchive::new(&mut source).map_err(|error| archive_error(&error.to_string()))?;
+    archive
+        .validate_header_consistency()
+        .map_err(|error| archive_error(&error.to_string()))?;
     if archive.len() > MAX_ENTRIES {
         return Err(internal("tool_archive_entry_limit"));
     }

@@ -6,7 +6,7 @@ use crate::{
 };
 use velnor_actions_contract::{
     config::VelnorConfig,
-    runner_image_manifest::mac_attestation::{MacSdkAuthority, MacSdkIdentity},
+    runner_image_manifest::mac_attestation::{MAC_COMPANION_RUNNER_ID, MacSdkAuthority, MacSdkIdentity},
 };
 use velnor_actions_mise::{CheckDeadline, catalog::lock::parse_generator_lock};
 
@@ -31,6 +31,13 @@ pub(super) fn load_source(
     q_execution: bool,
     deadline: CheckDeadline,
 ) -> Result<ExpectedMacSource, OrchestratorError> {
+    let (config, lock, workflow) = load_workflow_source(source, deadline)?;
+    let mac = config.runner_image_family.as_ref().and_then(|family| family.mac_qualification.as_ref()).ok_or_else(|| internal("mac_authority_source_invalid"))?;
+    let sdk = sdk_identity(mac, &lock, &SdkRequest { source, run, attempt, token, runner_temp, q_execution, deadline })?;
+    Ok(ExpectedMacSource { workflow_sha: mac.companion_workflow_sha.clone(), sdk, generator_lock: lock, config, workflow })
+}
+
+pub(super) fn load_workflow_source(source: &str, deadline: CheckDeadline) -> Result<(VelnorConfig, velnor_actions_contract::GeneratorLock, Vec<u8>), OrchestratorError> {
     let invalid = || internal("mac_authority_source_invalid");
     let mut files = read_protected_source_files(
         REPOSITORY,
@@ -56,7 +63,7 @@ pub(super) fn load_source(
         .as_ref()
         .and_then(|family| family.mac_qualification.as_ref())
         .ok_or_else(invalid)?;
-    if mac.runner_id != 21
+    if mac.runner_id != MAC_COMPANION_RUNNER_ID
         || mac.companion_workflow_path != ".github/workflows/qualify-runner-family.yml"
         || mac.companion_workflow_ref != "refs/heads/main"
     {
@@ -65,28 +72,8 @@ pub(super) fn load_source(
     let bytes = files.remove(".velnor/generator.lock").ok_or_else(invalid)?;
     let lock = parse_generator_lock(std::str::from_utf8(&bytes).map_err(|_| invalid())?)
         .map_err(|_| invalid())?;
-    let sdk = sdk_identity(
-        mac,
-        &lock,
-        &SdkRequest {
-            source,
-            run,
-            attempt,
-            token,
-            runner_temp,
-            q_execution,
-            deadline,
-        },
-    )?;
-    Ok(ExpectedMacSource {
-        workflow_sha: mac.companion_workflow_sha.clone(),
-        sdk,
-        workflow: files
-            .remove(".github/workflows/product-release-images.yml")
-            .ok_or_else(invalid)?,
-        generator_lock: lock,
-        config,
-    })
+    let workflow = files.remove(".github/workflows/product-release-images.yml").ok_or_else(invalid)?;
+    Ok((config, lock, workflow))
 }
 
 struct SdkRequest<'a> {
@@ -151,10 +138,15 @@ fn sdk_identity(
 
 impl ExpectedMacSource {
     pub(super) fn verify_workflow(&self) -> Result<(), OrchestratorError> {
+        verify_workflow(&self.config, &self.sdk.version, &self.workflow)
+    }
+}
+
+pub(super) fn verify_workflow(config: &VelnorConfig, version: &str, workflow: &[u8]) -> Result<(), OrchestratorError> {
         let files = crate::routing::extra_files(
-            &self.config,
+            config,
             &velnor_actions_mise::ToolCatalog::pinned(),
-            &self.sdk.version,
+            version,
         )?;
         let mut matches = files
             .iter()
@@ -162,9 +154,8 @@ impl ExpectedMacSource {
         let file = matches
             .next()
             .ok_or_else(|| internal("mac_authority_workflow_missing"))?;
-        if matches.next().is_some() || file.bytes.as_bytes() != self.workflow {
+        if matches.next().is_some() || file.bytes.as_bytes() != workflow {
             return Err(internal("mac_authority_workflow_mismatch"));
         }
         Ok(())
     }
-}

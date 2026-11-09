@@ -135,11 +135,11 @@ toml = { version = "=1.1.8", optional = true }
 base64 = { workspace = true, optional = true }
 sha2 = { version = "=0.11.1", optional = true }
 tempfile = { version = "=3.27.0", optional = true }
-velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise", optional = true }
+velnor-actions-mise = { version = "=0.1.79", path = "../velnor-actions-mise", optional = true }
 serde_json = { workspace = true, optional = true }
-velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract", optional = true }
-velnor-actions-orchestrator = { version = "=0.1.78", path = "../velnor-actions-orchestrator", optional = true }
-velnor-actions-freshness = { version = "=0.1.78", path = "../velnor-actions-freshness", optional = true }
+velnor-actions-contract = { version = "=0.1.79", path = "../velnor-actions-contract", optional = true }
+velnor-actions-orchestrator = { version = "=0.1.79", path = "../velnor-actions-orchestrator", optional = true }
+velnor-actions-freshness = { version = "=0.1.79", path = "../velnor-actions-freshness", optional = true }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -151,10 +151,10 @@ workspace = true
 
 [dev-dependencies]
 base64 = { workspace = true }
-velnor-archive-guard = { version = "=0.1.78", path = "../velnor-archive-guard" }
+velnor-archive-guard = { version = "=0.1.79", path = "../velnor-archive-guard" }
 serde-saphyr = "=2.1.0"
-velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
+velnor-actions-contract = { version = "=0.1.79", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.79", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 tar = { version = "=0.4.46", default-features = false }

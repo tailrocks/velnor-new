@@ -7,6 +7,14 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ImageMaintenanceCommand {
+    #[command(about = "Admit the selected public producer before Mac signing.")]
+    AdmitMacPublication {
+        #[arg(long)] source_commit: String,
+        #[arg(long)] release_run_id: u64,
+        #[arg(long)] release_run_attempt: u32,
+        #[arg(long)] assets_dir: PathBuf,
+        #[arg(long)] runner_temp: PathBuf,
+    },
     #[command(about = "Verify the authenticated production Mac proof before attestation.")]
     VerifyMacAttestation {
         #[arg(long)]

@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::ContractError;
+use crate::{
+    errors::ContractError, runner_image_manifest::mac_attestation::MAC_COMPANION_RUNNER_ID,
+};
 
 use super::{
     VelnorConfig, check_receipt_budget, validate_images, validate_qualified_tools,
@@ -198,7 +200,7 @@ impl super::MacRunnerQualificationConfig {
                     .split('/')
                     .all(|part| !part.is_empty() && part != "." && part != "..")
         };
-        if self.runner_id != 21
+        if self.runner_id != MAC_COMPANION_RUNNER_ID
             || self.companion_workflow_path != ".github/workflows/qualify-runner-family.yml"
             || self.companion_workflow_ref != "refs/heads/main"
             || !valid_hex(&self.companion_workflow_sha, 40)

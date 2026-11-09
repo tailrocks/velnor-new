@@ -78,14 +78,15 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
     let envelope = json!({
         "schema":"velnor.runner-image-mac-attestation.v1",
         "public_authority":{"repository":"tailrocks/velnor-new","repository_id":1_390_620_900,"source_commit":"a".repeat(40),"release_run_id":1,"release_run_attempt":1,"producer_artifact_id":9,"publisher_artifact_id":1},
-        "companion":{"repository":"donbeave/velnor-mac-qualification","repository_id":1_450_917_587,"owner_id":139_017,"workflow_path":".github/workflows/qualify.yml","workflow_ref":"refs/heads/main","workflow_sha":"c".repeat(40),"run_id":2,"run_attempt":1,"qualification_job_id":3,"runner_id":4,"receipt_artifact_id":5,"receipt_artifact_digest":format!("sha256:{}","d".repeat(64))},
+        "companion":{"repository":"donbeave/velnor-mac-qualification","repository_id":1_451_604_567,"owner_id":139_017,"workflow_path":".github/workflows/qualify.yml","workflow_ref":"refs/heads/main","workflow_sha":"c".repeat(40),"run_id":2,"run_attempt":1,"qualification_job_id":3,"runner_id":4,"receipt_artifact_id":5,"receipt_artifact_digest":format!("sha256:{}","d".repeat(64))},
         "sdk":{"repository":"tailrocks/velnor-new","version":"1.2.3","source_commit":"e".repeat(40),"authority":{"channel":"stable","release_manifest_sha256":"f".repeat(64)},"target":"aarch64-apple-darwin","asset_sha256":"a".repeat(64)},
         "qualification":{"receipt_base64":STANDARD.encode(&native),"native_receipt_sha256":hash}
     });
     let bytes = serde_json::to_vec(&envelope)?;
-    let (_, parsed) = parse_mac_qualification_attestation(&bytes)
+    let (identity, parsed) = parse_mac_qualification_attestation(&bytes)
         .map_err(|_| "valid signed envelope rejected")?;
     assert_eq!(parsed.publisher_artifact_id, 1);
+    assert_eq!(identity.companion.repository_id, 1_451_604_567);
     check_preview_authority(&envelope)?;
     let raw = String::from_utf8(bytes)?;
     let duplicate = raw.replacen('{', "{\"schema\":\"duplicate\",", 1);
@@ -99,6 +100,8 @@ fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(
         ("/public_authority/release_run_id", json!(2)),
         ("/public_authority/publisher_artifact_id", json!(2)),
         ("/companion/owner_id", json!(1)),
+        ("/companion/repository_id", json!(1_450_917_587)),
+        ("/companion/repository_id", json!(1_451_604_568)),
         ("/companion/workflow_ref", json!("refs/heads/other")),
         ("/sdk/target", json!("x86_64-unknown-linux-gnu")),
         ("/qualification/receipt_base64", json!("!")),

@@ -7,6 +7,10 @@ use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
+#[path = "image_maintenance/mac_publication_context.rs"]
+mod mac_publication_context;
+pub use mac_publication_context::{AdmitMacPublicationRequest, AdmittedMacPublication, admit_mac_publication};
+
 #[path = "image_maintenance/mac_signer.rs"]
 mod mac_signer;
 pub use mac_signer::{VerifiedMacAttestation, VerifyMacAttestationRequest, verify_mac_attestation};

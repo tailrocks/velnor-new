@@ -15,6 +15,9 @@ use self::read::get_json;
 mod attestor;
 #[path = "publication_github/ci.rs"]
 pub(in crate::image_maintenance) mod ci;
+#[path = "publication_github/context.rs"]
+mod context;
+pub(in crate::image_maintenance) use context::{authenticate_publication_context_run, context_artifact_id};
 #[path = "publication_github/mac_jobs.rs"]
 mod mac_jobs;
 #[path = "publication_github/pagination.rs"]
