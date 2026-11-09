@@ -301,13 +301,13 @@ fn public_qualifier_distinguishes_absence_from_cleanup_failures() -> TestResult<
         );
         if fault == ApiFault::CleanupStillPresent {
             assert_eq!(state.containers.len(), 1);
-            assert_eq!(state.volumes.len(), 1);
+            assert_eq!(state.volumes.len(), 2);
             let container = &state.containers[0];
             assert_eq!(container.role, "runner-socket-query");
-            assert_eq!(
-                container.host_config["Mounts"][0]["Source"],
-                state.volumes[0]
-            );
+            let mounted = container.host_config["Mounts"][0]["Source"]
+                .as_str()
+                .ok_or("missing mounted volume")?;
+            assert!(state.volumes.iter().any(|name| name == mounted));
         }
     }
     Ok(())

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use crate::error::HostError;
 
-use super::{docker, family, image_identity, probe_image, receipt};
+use super::{family, image_identity, receipt};
 
 fn valid_socket(value: &str) -> bool {
     let path = value.strip_prefix("unix://").unwrap_or(value);
@@ -136,7 +136,7 @@ pub(in super::super) async fn check_candidate(
 }
 
 struct Execution {
-    qualification: docker::Qualification,
+    qualification: velnor_runner_qualification::Qualification,
     daemon: image_identity::DaemonEvidence,
 }
 
@@ -151,9 +151,9 @@ async fn execute_family(
     let runner = &family.runner.inspection.oci.platform_manifest_digest;
     let dind = &family.dind.inspection.oci.platform_manifest_digest;
     let probe = &family.probe.inspection.oci.platform_manifest_digest;
-    let qualification = docker::qualify(
+    let qualification = Box::pin(velnor_runner_qualification::qualify(
         &docker,
-        &family.source,
+        &family.source.qualification_identity(),
         runner,
         dind,
         [
@@ -161,9 +161,9 @@ async fn execute_family(
             image_identity::source_healthcheck(&family.dind.inspection.configuration)?,
         ],
         end,
-    )
+    ))
     .await?;
-    probe_image::qualify(
+    velnor_runner_qualification::qualify_probe(
         &docker,
         probe,
         &daemon.root,
@@ -230,7 +230,7 @@ fn make_proof(
 }
 
 fn report_qualification(
-    qualification: &docker::Qualification,
+    qualification: &velnor_runner_qualification::Qualification,
     runner: &str,
     dind: &str,
     source_sha: &str,

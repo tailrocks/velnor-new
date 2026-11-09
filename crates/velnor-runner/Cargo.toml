@@ -4,6 +4,7 @@
 [workspace]
 members = [
     "crates/velnor-runner-core",
+    "crates/velnor-runner-qualification",
     "crates/velnor-runner-github",
     "crates/velnor-runner-host",
     "crates/velnor-runner-image-manifest",

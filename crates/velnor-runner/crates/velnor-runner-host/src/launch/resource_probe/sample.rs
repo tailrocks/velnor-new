@@ -63,7 +63,7 @@ impl Observation {
             observed_at,
             startup_evidence,
         } = input;
-        let effective_cpu_millicores = record.effective_cpu_millicores(cpus)?;
+        let effective_cpu_millicores = super::record::effective_cpu_millicores(&record, cpus)?;
         (cpus > 0
             && inspected_host_pid > 0
             && record.probe_host_pid == inspected_host_pid

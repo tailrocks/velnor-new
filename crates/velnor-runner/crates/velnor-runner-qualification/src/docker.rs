@@ -1,33 +1,36 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::time::Duration;
+use std::time::Instant;
 
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::models::ImageInspect;
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
 
 use super::deadline;
 use super::probes::{self, DaemonIdentity};
 use super::resources::OwnedResources;
-use super::source::SourceSnapshot;
 use super::tool_versions::{self, VersionEvidence};
+use crate::SourceIdentity;
 
 const IMAGE_TIMEOUT: Duration = Duration::from_secs(5);
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
 const IMAGE_KIND_LABEL: &str = "io.velnor.image.kind";
 
-pub(super) struct Qualification {
-    pub(super) outer: DaemonIdentity,
-    pub(super) inner_id: String,
-    pub(super) versions: VersionEvidence,
+#[derive(Debug)]
+pub struct Qualification {
+    pub outer: DaemonIdentity,
+    pub inner_id: String,
+    pub versions: VersionEvidence,
 }
 
-pub(super) async fn qualify(
+pub async fn qualify(
     docker: &Docker,
-    source: &SourceSnapshot,
+    source: &SourceIdentity,
     runner_id: &str,
     dind_id: &str,
     healthchecks: [Option<bollard::models::HealthConfig>; 2],
@@ -51,9 +54,115 @@ pub(super) async fn qualify(
     }
 }
 
+pub struct QualificationSession {
+    docker: Docker,
+    daemon: DaemonIdentity,
+    root: String,
+    resources: OwnedResources,
+}
+
+impl std::fmt::Debug for QualificationSession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("QualificationSession")
+            .finish_non_exhaustive()
+    }
+}
+
+pub async fn open_qualification_session(
+    docker: Docker,
+    journal_path: PathBuf,
+    root: String,
+) -> Result<QualificationSession, HostError> {
+    tokio::spawn(async move {
+        let daemon = probes::inspect_outer(&docker).await?;
+        if daemon.root != root {
+            return Err(HostError::Identity);
+        }
+        let mut resources = OwnedResources::journaled(&[], &journal_path, &daemon)?;
+        if probes::inspect_outer(&docker).await? != daemon {
+            return Err(HostError::Identity);
+        }
+        super::deadline(resources.cleanup(&docker), Duration::from_secs(600)).await??;
+        resources.reset()?;
+        Ok(QualificationSession {
+            docker,
+            daemon,
+            root,
+            resources,
+        })
+    })
+    .await
+    .map_err(|_| HostError::Docker)?
+}
+
+impl QualificationSession {
+    pub async fn qualify(
+        self,
+        source: SourceIdentity,
+        runner_id: String,
+        dind_id: String,
+        probe_id: String,
+        healthchecks: [Option<bollard::models::HealthConfig>; 3],
+        end: Instant,
+    ) -> Result<Qualification, HostError> {
+        tokio::spawn(async move {
+            let Self {
+                docker,
+                daemon,
+                root,
+                mut resources,
+            } = self;
+            let [runner_health, dind_health, probe_health] = healthchecks;
+            resources.set_healthchecks(&[
+                (&runner_id, runner_health),
+                (&dind_id, dind_health),
+                (&probe_id, probe_health),
+            ]);
+            let result = match super::remaining(end) {
+                Ok(limit) => Box::pin(super::deadline(
+                    async {
+                        if probes::inspect_outer(&docker).await? != daemon {
+                            return Err(HostError::Identity);
+                        }
+                        let result = qualify_with_resources(
+                            &docker,
+                            &source,
+                            &runner_id,
+                            &dind_id,
+                            &mut resources,
+                        )
+                        .await?;
+                        super::probe_image::run(&docker, &probe_id, &root, &mut resources).await?;
+                        if probes::inspect_outer(&docker).await? != daemon {
+                            return Err(HostError::Identity);
+                        }
+                        Ok(result)
+                    },
+                    limit,
+                ))
+                .await
+                .and_then(std::convert::identity),
+                Err(error) => Err(error),
+            };
+            let cleanup = if probes::inspect_outer(&docker).await? == daemon {
+                super::deadline(resources.cleanup(&docker), Duration::from_secs(600)).await?
+            } else {
+                Err(HostError::Identity)
+            };
+            match (result, cleanup) {
+                (Ok(result), Ok(())) => Ok(result),
+                (Err(error), Ok(())) | (_, Err(error)) => Err(error),
+            }
+        })
+        .await
+        .map_err(|_| HostError::Docker)?
+    }
+}
+
 async fn qualify_with_resources(
     docker: &Docker,
-    source: &SourceSnapshot,
+    source: &SourceIdentity,
     runner_id: &str,
     dind_id: &str,
     resources: &mut OwnedResources,
@@ -92,7 +201,7 @@ async fn qualify_with_resources(
 
 async fn inspect_image(
     docker: &Docker,
-    source: &SourceSnapshot,
+    source: &SourceIdentity,
     image_id: &str,
     expected_kind: &str,
 ) -> Result<(), HostError> {
@@ -110,7 +219,7 @@ async fn inspect_image(
 
 fn validate_image(
     image: &ImageInspect,
-    source: &SourceSnapshot,
+    source: &SourceIdentity,
     image_id: &str,
     expected_kind: &str,
 ) -> Result<(), HostError> {

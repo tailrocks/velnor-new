@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use reqwest::{Client, Response, StatusCode, Url};
+use reqwest::{Client, Url};
 use serde_json::Value;
 use velnor_runner_image_manifest::{ImageEntry, ImageKind, parse_oci_manifest, strict_json};
 
@@ -13,9 +13,11 @@ use crate::error::HostError;
 const MANIFEST_LIMIT: usize = 4 * 1024 * 1024;
 const TOKEN_LIMIT: usize = 64 * 1024;
 const CONFIG_LIMIT: usize = 64 * 1024 * 1024;
-const ACCEPT: &str = "application/vnd.oci.image.manifest.v1+json";
 
 use super::projection_cache::RegistryProjection;
+use super::registry_transport::{
+    AnonymousRegistryTransport, RegistryRequest, RegistryResponse, RegistryTransport,
+};
 
 pub(super) async fn verify(
     client: &Client,
@@ -23,93 +25,92 @@ pub(super) async fn verify(
     role: ImageKind,
     source: &str,
 ) -> Result<RegistryProjection, HostError> {
-    if image.repository != role.repository()
-        || image.registry_digest != image.platform_manifest_digest
-        || !digest(&image.registry_digest)
-        || !digest(&image.config_digest)
-        || !is_lower_hex(source, 40)
-    {
-        return Err(HostError::Identity);
+    RegistryProjection::fetch(
+        &AnonymousRegistryTransport(client.clone()),
+        image,
+        role,
+        source,
+    )
+    .await
+}
+
+impl RegistryProjection {
+    pub async fn fetch(
+        transport: &dyn RegistryTransport,
+        image: &ImageEntry,
+        role: ImageKind,
+        source: &str,
+    ) -> Result<RegistryProjection, HostError> {
+        if image.repository != role.repository()
+            || image.registry_digest != image.platform_manifest_digest
+            || !digest(&image.registry_digest)
+            || !digest(&image.config_digest)
+            || !is_lower_hex(source, 40)
+        {
+            return Err(HostError::Identity);
+        }
+        let repository = image
+            .repository
+            .strip_prefix("ghcr.io/")
+            .ok_or(HostError::Identity)?;
+        let manifest_url = format!(
+            "https://ghcr.io/v2/{repository}/manifests/{}",
+            image.registry_digest
+        );
+        let (response, bearer) = manifest_response(transport, &manifest_url, repository).await?;
+        if response.status != 200 {
+            return Err(HostError::Identity);
+        }
+        let bytes = response.body;
+        if format!("sha256:{}", lowercase_hex(&sha256(&bytes))) != image.registry_digest {
+            return Err(HostError::Identity);
+        }
+        let value = strict_json::parse_strict_json_bytes(&bytes, MANIFEST_LIMIT)
+            .map_err(|_| HostError::Identity)?;
+        let (config, _) = parse_oci_manifest(&value).map_err(|_| HostError::Identity)?;
+        if format!("sha256:{}", config.digest) != image.config_digest
+            || config.size > CONFIG_LIMIT as u64
+        {
+            return Err(HostError::Identity);
+        }
+        let config_url = format!(
+            "https://ghcr.io/v2/{repository}/blobs/{}",
+            image.config_digest
+        );
+        let response = get(transport, config_url, false, bearer, CONFIG_LIMIT).await?;
+        let response = follow_blob_redirect(transport, response).await?;
+        if response.status != 200 {
+            return Err(HostError::Identity);
+        }
+        RegistryProjection::from_oci(image, role, source, &bytes, &response.body)
     }
-    let repository = image
-        .repository
-        .strip_prefix("ghcr.io/")
-        .ok_or(HostError::Identity)?;
-    let manifest_url = format!(
-        "https://ghcr.io/v2/{repository}/manifests/{}",
-        image.registry_digest
-    );
-    let (response, bearer) = manifest_response(client, &manifest_url, repository).await?;
-    if response.status() != StatusCode::OK {
-        return Err(HostError::Identity);
-    }
-    let bytes = super::github::read_limited(response, MANIFEST_LIMIT).await?;
-    if format!("sha256:{}", lowercase_hex(&sha256(&bytes))) != image.registry_digest {
-        return Err(HostError::Identity);
-    }
-    let value = strict_json::parse_strict_json_bytes(&bytes, MANIFEST_LIMIT)
-        .map_err(|_| HostError::Identity)?;
-    let (config, _layers) = parse_oci_manifest(&value).map_err(|_| HostError::Identity)?;
-    if format!("sha256:{}", config.digest) != image.config_digest
-        || config.size > CONFIG_LIMIT as u64
-    {
-        return Err(HostError::Identity);
-    }
-    let manifest_bytes = bytes;
-    let config_url = format!(
-        "https://ghcr.io/v2/{repository}/blobs/{}",
-        image.config_digest
-    );
-    let mut request = client.get(config_url);
-    if let Some(token) = bearer {
-        request = request.bearer_auth(token);
-    }
-    let response = request.send().await.map_err(|_| HostError::Identity)?;
-    let response = follow_blob_redirect(client, response).await?;
-    if response.status() != StatusCode::OK {
-        return Err(HostError::Identity);
-    }
-    let bytes = super::github::read_limited(response, CONFIG_LIMIT).await?;
-    RegistryProjection::from_oci(image, role, source, &manifest_bytes, &bytes)
 }
 
 async fn manifest_response(
-    client: &Client,
+    transport: &dyn RegistryTransport,
     url: &str,
     repository: &str,
-) -> Result<(Response, Option<String>), HostError> {
-    let response = client
-        .get(url)
-        .header(reqwest::header::ACCEPT, ACCEPT)
-        .send()
-        .await
-        .map_err(|_| HostError::Identity)?;
-    if response.status() != StatusCode::UNAUTHORIZED {
+) -> Result<(RegistryResponse, Option<String>), HostError> {
+    let response = get(transport, url.to_owned(), true, None, MANIFEST_LIMIT).await?;
+    if response.status != 401 {
         return Ok((response, None));
     }
-    let challenge = response
-        .headers()
-        .get(reqwest::header::WWW_AUTHENTICATE)
-        .and_then(|value| value.to_str().ok())
-        .ok_or(HostError::Identity)?;
-    validate_challenge(challenge, repository)?;
-    let mut url_token = Url::parse("https://ghcr.io/token").map_err(|_| HostError::Identity)?;
-    url_token
+    validate_challenge(
+        response.challenge.as_deref().ok_or(HostError::Identity)?,
+        repository,
+    )?;
+    let mut token_url = Url::parse("https://ghcr.io/token").map_err(|_| HostError::Identity)?;
+    token_url
         .query_pairs_mut()
         .append_pair("service", "ghcr.io")
         .append_pair("scope", &format!("repository:{repository}:pull"));
-    let response = client
-        .get(url_token)
-        .send()
-        .await
-        .map_err(|_| HostError::Identity)?;
-    if response.status() != StatusCode::OK {
+    let response = get(transport, token_url.into(), false, None, TOKEN_LIMIT).await?;
+    if response.status != 200 {
         return Err(HostError::Identity);
     }
-    let bytes = super::github::read_limited(response, TOKEN_LIMIT).await?;
-    let token = strict_json::parse_strict_json_bytes(&bytes, TOKEN_LIMIT)
+    let value = strict_json::parse_strict_json_bytes(&response.body, TOKEN_LIMIT)
         .map_err(|_| HostError::Identity)?;
-    let token = token
+    let token = value
         .get("token")
         .and_then(Value::as_str)
         .filter(|value| {
@@ -117,32 +118,29 @@ async fn manifest_response(
         })
         .ok_or(HostError::Identity)?
         .to_owned();
-    let response = client
-        .get(url)
-        .header(reqwest::header::ACCEPT, ACCEPT)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .map_err(|_| HostError::Identity)?;
+    let response = get(
+        transport,
+        url.to_owned(),
+        true,
+        Some(token.clone()),
+        MANIFEST_LIMIT,
+    )
+    .await?;
     Ok((response, Some(token)))
 }
 
-async fn follow_blob_redirect(client: &Client, response: Response) -> Result<Response, HostError> {
-    if response.status() == StatusCode::OK {
+async fn follow_blob_redirect(
+    transport: &dyn RegistryTransport,
+    response: RegistryResponse,
+) -> Result<RegistryResponse, HostError> {
+    if response.status == 200 {
         return Ok(response);
     }
-    if !matches!(
-        response.status(),
-        StatusCode::TEMPORARY_REDIRECT | StatusCode::FOUND
-    ) {
+    if !matches!(response.status, 302 | 307) {
         return Err(HostError::Identity);
     }
-    let location = response
-        .headers()
-        .get(reqwest::header::LOCATION)
-        .and_then(|value| value.to_str().ok())
-        .ok_or(HostError::Identity)?;
-    let url = Url::parse(location).map_err(|_| HostError::Identity)?;
+    let url = Url::parse(response.location.as_deref().ok_or(HostError::Identity)?)
+        .map_err(|_| HostError::Identity)?;
     if url.scheme() != "https"
         || url.host_str() != Some("pkg-containers.githubusercontent.com")
         || !url.username().is_empty()
@@ -152,11 +150,28 @@ async fn follow_blob_redirect(client: &Client, response: Response) -> Result<Res
     {
         return Err(HostError::Identity);
     }
-    client
-        .get(url)
-        .send()
-        .await
-        .map_err(|_| HostError::Identity)
+    get(transport, url.into(), false, None, CONFIG_LIMIT).await
+}
+
+async fn get(
+    transport: &dyn RegistryTransport,
+    url: String,
+    accept_manifest: bool,
+    bearer: Option<String>,
+    body_limit: usize,
+) -> Result<RegistryResponse, HostError> {
+    let response = transport
+        .get(RegistryRequest {
+            url,
+            accept_manifest,
+            bearer,
+            body_limit,
+        })
+        .await?;
+    if response.body.len() > body_limit {
+        return Err(HostError::Frame);
+    }
+    Ok(response)
 }
 
 fn validate_challenge(challenge: &str, repository: &str) -> Result<(), HostError> {

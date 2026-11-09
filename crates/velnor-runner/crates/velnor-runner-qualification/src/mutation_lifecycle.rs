@@ -7,7 +7,7 @@ use std::time::Duration;
 use bollard::errors::Error as DockerError;
 use tokio::task::JoinHandle;
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
 
 use super::deadline;
 use super::resources::OwnedResources;
@@ -36,6 +36,21 @@ pub(super) struct PendingMutation {
     pub(super) kind: MutationKind,
     pub(super) task: Option<JoinHandle<MutationResult>>,
     pub(super) outcome: Option<MutationResult>,
+}
+
+impl PendingMutation {
+    pub(super) fn recovered(kind: MutationKind) -> Self {
+        let identity = match &kind {
+            MutationKind::Container(name) => format!("container {name}"),
+            MutationKind::Volume(name) => format!("volume {name}"),
+        };
+        Self {
+            identity,
+            kind,
+            task: None,
+            outcome: None,
+        }
+    }
 }
 
 pub(super) enum MutationWait {
@@ -103,10 +118,24 @@ impl OwnedResources {
         let index = self.pending_mutations.len() - 1;
         match wait(&mut self.pending_mutations[index], timeout).await {
             MutationWait::Settled(MutationResult::Created(value)) => {
+                let kind = self.pending_mutations[index].kind.clone();
+                let name = match (&kind, &value) {
+                    (MutationKind::Container(name), MutationValue::ContainerId(id)) => {
+                        self.bind_container_id(name, id)?;
+                        name
+                    }
+                    (MutationKind::Volume(name), MutationValue::Volume) => name,
+                    _ => return Err(HostError::Identity),
+                };
+                self.settle(name)?;
                 self.pending_mutations.remove(index);
                 Ok(value)
             }
             MutationWait::Settled(MutationResult::Rejected(error)) => {
+                let name = match &self.pending_mutations[index].kind {
+                    MutationKind::Container(name) | MutationKind::Volume(name) => name.clone(),
+                };
+                self.settle(&name)?;
                 self.pending_mutations.remove(index);
                 Err(error)
             }

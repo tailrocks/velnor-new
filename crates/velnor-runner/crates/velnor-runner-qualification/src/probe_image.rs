@@ -10,10 +10,10 @@ use bollard::query_parameters::StartContainerOptions;
 use super::mutation_lifecycle::{self, MutationKind, MutationResult, MutationValue};
 use super::resources::OwnedResources;
 use super::{create_options, deadline, read_logs, remaining, wait_success};
-use crate::error::HostError;
-use crate::resource_probe_record::ProbeRecord;
+use crate::error::QualificationError as HostError;
+use crate::probe_record::ProbeRecord;
 
-pub(super) async fn qualify(
+pub async fn qualify(
     docker: &Docker,
     image: &str,
     root: &str,
@@ -34,7 +34,7 @@ pub(super) async fn qualify(
     }
 }
 
-async fn run(
+pub(super) async fn run(
     docker: &Docker,
     image: &str,
     root: &str,

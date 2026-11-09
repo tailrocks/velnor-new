@@ -5,23 +5,23 @@ use std::time::Duration;
 
 use bollard::Docker;
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
 
 use super::probes::{self, CommandSpec};
 use super::resources::OwnedResources;
-use super::source::SourceSnapshot;
+use crate::SourceIdentity;
 
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct VersionEvidence {
-    pub(super) runner_listener: String,
-    pub(super) runner_docker: String,
-    pub(super) dind_docker: String,
-    pub(super) dind_daemon: String,
-    pub(super) runner_buildx: String,
-    pub(super) runner_compose: String,
-    pub(super) runner_node: String,
+pub struct VersionEvidence {
+    pub runner_listener: String,
+    pub runner_docker: String,
+    pub dind_docker: String,
+    pub dind_daemon: String,
+    pub runner_buildx: String,
+    pub runner_compose: String,
+    pub runner_node: String,
 }
 
 struct ExistingVersionOutputs {
@@ -39,7 +39,7 @@ struct RunnerToolOutputs {
 
 pub(super) async fn verify_versions(
     docker: &Docker,
-    source: &SourceSnapshot,
+    source: &SourceIdentity,
     runner_id: &str,
     dind_id: &str,
     resources: &mut OwnedResources,

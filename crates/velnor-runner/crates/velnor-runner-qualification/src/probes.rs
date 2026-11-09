@@ -10,7 +10,7 @@ use bollard::models::{ContainerCreateBody, HostConfig, SystemInfo};
 use bollard::query_parameters::StartContainerOptions;
 use futures_util::StreamExt;
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
 
 use super::mutation_lifecycle::{self, MutationKind, MutationResult, MutationValue};
 use super::resources::OwnedResources;
@@ -22,10 +22,10 @@ const READINESS_TIMEOUT: Duration = Duration::from_secs(15);
 const READINESS_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct DaemonIdentity {
-    pub(super) id: String,
-    pub(super) root: String,
-    pub(super) version: String,
+pub struct DaemonIdentity {
+    pub id: String,
+    pub root: String,
+    pub version: String,
 }
 
 pub(super) struct CommandSpec<'a> {

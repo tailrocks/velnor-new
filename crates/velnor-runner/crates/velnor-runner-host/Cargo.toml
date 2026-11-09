@@ -84,6 +84,7 @@ uuid = { version = "=1.28.0", features = ["v4"] }
 zeroize = { workspace = true }
 velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner-image-manifest" }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
+velnor-runner-qualification = { version = "=0.1.0", path = "../velnor-runner-qualification" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }
 velnor-resource-probe = { version = "=0.1.0", path = "../velnor-resource-probe" }
 
@@ -93,3 +94,7 @@ security-framework = { version = "=3.7.0" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+
+[[test]]
+name = "mac_qualification_facade_public"
+path = "tests/mac_qualification_facade_public.rs"

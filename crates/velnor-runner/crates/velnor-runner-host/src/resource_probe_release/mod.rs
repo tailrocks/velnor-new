@@ -7,7 +7,10 @@ use crate::error::HostError;
 
 mod exact_semver;
 mod files;
+mod mac;
 mod manifest;
+pub use crate::artifact_admission::{RegistryRequest, RegistryResponse, RegistryTransport};
+pub use mac::{MacRunnerQualificationRequest, MacRunnerQualifier};
 pub(crate) mod runner_manifest;
 pub(crate) mod runner_qualification;
 mod schema5;

@@ -28,6 +28,19 @@ pub(crate) struct SourceSnapshot {
     pub(crate) node_version: String,
 }
 
+impl SourceSnapshot {
+    pub(super) fn qualification_identity(&self) -> velnor_runner_qualification::SourceIdentity {
+        velnor_runner_qualification::SourceIdentity {
+            source_sha: self.source_sha.clone(),
+            runner_version: self.runner_version.clone(),
+            docker_version: self.docker_version.clone(),
+            buildx_version: self.buildx_version.clone(),
+            compose_version: self.compose_version.clone(),
+            node_version: self.node_version.clone(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct RunnerVersions {
     #[serde(rename = "runner_version")]

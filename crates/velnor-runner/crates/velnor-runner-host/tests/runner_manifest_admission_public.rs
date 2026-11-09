@@ -200,3 +200,46 @@ fn rejects_each_non_exact_lock_version() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn mac_qualifier_rejects_invalid_manifest_before_docker_or_receipt() -> TestResult {
+    use std::os::unix::net::UnixListener;
+    use velnor_runner_host::resource_probe_release::{
+        MacRunnerQualificationRequest, MacRunnerQualifier,
+    };
+
+    let temp = tempfile::tempdir()?;
+    let socket = temp.path().join("docker.sock");
+    let listener = UnixListener::bind(&socket)?;
+    listener.set_nonblocking(true)?;
+    let manifest = temp.path().join("manifest.json");
+    let lock = temp.path().join("runner.lock");
+    let output = temp.path().join("receipt.json");
+    std::fs::write(&manifest, b"{}")?;
+    std::fs::write(&lock, LOCK)?;
+    let request = MacRunnerQualificationRequest {
+        manifest,
+        runner_lock: lock,
+        source_commit: SOURCE.to_owned(),
+        run_id: 1,
+        run_attempt: 1,
+        publisher_artifact_id: 1,
+        docker_socket: format!("unix://{}", socket.display()),
+        state_dir: temp.path().to_owned(),
+        receipt_output: output.clone(),
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    assert!(
+        runtime
+            .block_on(MacRunnerQualifier::anonymous()?.qualify(request))
+            .is_err()
+    );
+    assert_eq!(
+        listener.accept().err().map(|error| error.kind()),
+        Some(std::io::ErrorKind::WouldBlock)
+    );
+    assert!(!output.exists());
+    Ok(())
+}

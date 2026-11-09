@@ -17,6 +17,8 @@ mod attested_grammar;
 mod build_source;
 mod candidate;
 mod inventory;
+pub mod mac_attestation;
+pub mod mac_qualification;
 mod oci_configuration;
 mod oci_grammar;
 mod provenance;

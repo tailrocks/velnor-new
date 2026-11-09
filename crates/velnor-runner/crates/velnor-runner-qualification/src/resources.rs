@@ -2,21 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::time::Duration;
+
+use crate::journal::{Journal, State};
+use crate::probes::DaemonIdentity;
+use serde::{Deserialize, Serialize};
 
 use bollard::Docker;
-use bollard::models::{ContainerCreateBody, HostConfig, VolumeCreateRequest};
-use bollard::query_parameters::StartContainerOptions;
+use bollard::models::VolumeCreateRequest;
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
 
 use super::mutation_lifecycle::{
     self, MutationKind, MutationResult, MutationValue, PendingMutation,
 };
-use super::{
-    QUALIFIER_LABEL, create_options, deadline, mount, remaining, valid_container_id,
-    validate_host_config, volume_owned,
-};
+use super::{QUALIFIER_LABEL, deadline, valid_container_id, validate_host_config, volume_owned};
 
 const DOCKER_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -27,8 +28,14 @@ pub(super) struct OwnedResources {
     pub(super) pending_mutations: Vec<PendingMutation>,
     healthchecks: HashMap<String, Option<bollard::models::HealthConfig>>,
     next_container: u8,
+    pub(super) journal: Option<Journal>,
+    pub(super) daemon: Option<DaemonIdentity>,
+    pub(super) settled: Vec<String>,
+    pub(super) deleting: Vec<String>,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct TrackedContainer {
     pub(super) name: String,
     pub(super) role: String,
@@ -56,7 +63,121 @@ impl OwnedResources {
                 .map(|(id, health)| ((*id).to_owned(), health.clone()))
                 .collect(),
             next_container: 0,
+            journal: None,
+            daemon: None,
+            settled: Vec::new(),
+            deleting: Vec::new(),
         })
+    }
+
+    pub(super) fn journaled(
+        images: &[(&str, Option<bollard::models::HealthConfig>)],
+        path: &Path,
+        daemon: &DaemonIdentity,
+    ) -> Result<Self, HostError> {
+        let (journal, state) = Journal::open(path, daemon)?;
+        let mut resources = Self::new(images)?;
+        resources.journal = Some(journal);
+        resources.daemon = Some(daemon.clone());
+        if let Some(state) = state {
+            if state.run_id.len() != 32
+                || !state
+                    .run_id
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err(HostError::Ownership);
+            }
+            resources.run_id = state.run_id;
+            resources.containers = state.containers;
+            resources.volumes = state.volumes;
+            resources.settled = state.settled;
+            resources.deleting = state.deleting;
+            for container in &resources.containers {
+                if !resources.settled.contains(&container.name) {
+                    resources.pending_mutations.push(PendingMutation::recovered(
+                        MutationKind::Container(container.name.clone()),
+                    ));
+                }
+            }
+            for volume in &resources.volumes {
+                if !resources.settled.contains(volume) {
+                    resources.pending_mutations.push(PendingMutation::recovered(
+                        MutationKind::Volume(volume.clone()),
+                    ));
+                }
+            }
+        } else {
+            resources.persist()?;
+        }
+        Ok(resources)
+    }
+
+    pub(super) fn reset(&mut self) -> Result<(), HostError> {
+        let fresh = Self::new(&[])?;
+        self.run_id = fresh.run_id;
+        self.containers.clear();
+        self.volumes.clear();
+        self.pending_mutations.clear();
+        self.settled.clear();
+        self.deleting.clear();
+        self.next_container = 0;
+        self.persist()
+    }
+
+    pub(super) fn persist(&self) -> Result<(), HostError> {
+        if let (Some(journal), Some(daemon)) = (&self.journal, &self.daemon) {
+            journal.save(&State {
+                daemon_id: daemon.id.clone(),
+                daemon_root: daemon.root.clone(),
+                daemon_version: daemon.version.clone(),
+                run_id: self.run_id.clone(),
+                containers: self.containers.clone(),
+                volumes: self.volumes.clone(),
+                settled: self.settled.clone(),
+                deleting: self.deleting.clone(),
+            })?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn settle(&mut self, name: &str) -> Result<(), HostError> {
+        if !self.settled.iter().any(|item| item == name) {
+            self.settled.push(name.to_owned());
+        }
+        self.persist()
+    }
+
+    pub(super) fn set_healthchecks(
+        &mut self,
+        images: &[(&str, Option<bollard::models::HealthConfig>)],
+    ) {
+        self.healthchecks = images
+            .iter()
+            .map(|(id, health)| ((*id).to_owned(), health.clone()))
+            .collect();
+    }
+
+    pub(super) fn begin_delete(&mut self, identity: &str) -> Result<(), HostError> {
+        if self.journal.is_some() {
+            if !self.deleting.is_empty() {
+                return Err(HostError::Cleanup);
+            }
+            self.deleting.push(identity.to_owned());
+            self.persist()?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn finish_delete(&mut self, identity: &str) -> Result<(), HostError> {
+        if self.journal.is_some() {
+            if self.deleting.as_slice() != [identity] {
+                return Err(HostError::Ownership);
+            }
+            self.deleting.clear();
+            self.persist()?;
+        }
+        Ok(())
     }
 
     pub(super) fn socket_volume(&self) -> String {
@@ -78,6 +199,7 @@ impl OwnedResources {
             _ => return Err(HostError::Identity),
         };
         self.volumes.push(name.clone());
+        self.persist()?;
         let request = VolumeCreateRequest {
             name: Some(name.clone()),
             labels: Some(self.labels(role)),
@@ -117,115 +239,6 @@ impl OwnedResources {
         Ok(name)
     }
 
-    pub(super) async fn start_dind(
-        &mut self,
-        docker: &Docker,
-        image_id: &str,
-        socket_volume: &str,
-        data_volume: &str,
-    ) -> Result<String, HostError> {
-        let dind_deadline = Instant::now() + Duration::from_secs(10);
-        let (name, id) = self
-            .create_dind(docker, image_id, socket_volume, data_volume, dind_deadline)
-            .await?;
-        self.start_and_verify_dind(
-            docker,
-            image_id,
-            &[socket_volume, data_volume],
-            &name,
-            &id,
-            dind_deadline,
-        )
-        .await?;
-        Ok(id)
-    }
-
-    async fn create_dind(
-        &mut self,
-        docker: &Docker,
-        image_id: &str,
-        socket_volume: &str,
-        data_volume: &str,
-        dind_deadline: Instant,
-    ) -> Result<(String, String), HostError> {
-        let name = self.register_container("dind")?;
-        let mounts = vec![
-            mount(socket_volume, "/run"),
-            mount(data_volume, "/var/lib/docker"),
-        ];
-        let config = ContainerCreateBody {
-            image: Some(image_id.to_owned()),
-            labels: Some(self.labels("dind")),
-            host_config: Some(HostConfig {
-                privileged: Some(true),
-                network_mode: Some("none".to_owned()),
-                port_bindings: None,
-                mounts: Some(mounts),
-                auto_remove: Some(false),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        let client = docker.clone();
-        let options = create_options(&name);
-        let create_timeout = remaining(dind_deadline)?;
-        let mutation = mutation_lifecycle::spawn(
-            format!("container {name}"),
-            MutationKind::Container(name.clone()),
-            async move {
-                let created = match client.create_container(Some(options), config).await {
-                    Ok(created) => created,
-                    Err(error) => return mutation_lifecycle::uncertain_docker(&error),
-                };
-                if valid_container_id(&created.id).is_err() {
-                    return mutation_lifecycle::uncertain(HostError::Identity);
-                }
-                MutationResult::Created(MutationValue::ContainerId(created.id))
-            },
-        );
-        let id = match self.await_mutation(mutation, create_timeout).await? {
-            MutationValue::ContainerId(id) => id,
-            MutationValue::Volume => return Err(HostError::Identity),
-        };
-        self.bind_container_id(&name, &id)?;
-        Ok((name, id))
-    }
-
-    async fn start_and_verify_dind(
-        &self,
-        docker: &Docker,
-        image_id: &str,
-        volumes: &[&str],
-        name: &str,
-        id: &str,
-        dind_deadline: Instant,
-    ) -> Result<(), HostError> {
-        let inspect = deadline(
-            docker.inspect_container(id, None),
-            remaining(dind_deadline)?,
-        )
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        self.validate_inspect(&inspect, name, id, "dind", image_id, volumes)?;
-        deadline(
-            docker.start_container(id, None::<StartContainerOptions>),
-            remaining(dind_deadline)?,
-        )
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        let inspect = deadline(
-            docker.inspect_container(id, None),
-            remaining(dind_deadline)?,
-        )
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        self.validate_inspect(&inspect, name, id, "dind", image_id, volumes)?;
-        if inspect.state.and_then(|state| state.running) != Some(true) {
-            return Err(HostError::Docker);
-        }
-        Ok(())
-    }
-
     pub(super) fn register_container(&mut self, role: &str) -> Result<String, HostError> {
         let name = self.next_name(role)?;
         self.containers.push(TrackedContainer {
@@ -233,6 +246,7 @@ impl OwnedResources {
             role: role.to_owned(),
             id: None,
         });
+        self.persist()?;
         Ok(name)
     }
 
@@ -247,7 +261,7 @@ impl OwnedResources {
             return Err(HostError::Ownership);
         }
         tracked.id = Some(id.to_owned());
-        Ok(())
+        self.persist()
     }
 
     pub(super) fn validate_inspect(
@@ -273,10 +287,7 @@ impl OwnedResources {
             .healthchecks
             .get(image_id)
             .ok_or(HostError::Ownership)?;
-        if !super::image_identity::same_healthcheck(
-            config.healthcheck.as_ref(),
-            expected_health.as_ref(),
-        ) {
+        if !crate::same_healthcheck(config.healthcheck.as_ref(), expected_health.as_ref()) {
             return Err(HostError::Ownership);
         }
         let labels = config.labels.as_ref().ok_or(HostError::Ownership)?;

@@ -285,7 +285,7 @@ async fn settle_import(
         }
     }
 }
-fn verified_inspection(
+pub(super) fn verified_inspection(
     identity: &RegistryImageIdentity,
     projection: &RegistryProjection,
     observation: ImageObservation,

@@ -3,16 +3,16 @@
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) const MAX_OUTPUT_BYTES: usize = 2048;
-pub(crate) const SCHEMA_VERSION: u8 = 5;
+pub const MAX_OUTPUT_BYTES: usize = 2048;
+pub const SCHEMA_VERSION: u8 = 5;
 const MAX_PSI_BPS: u64 = 10_000;
-pub(crate) const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
+pub const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
 const BTRFS_MAGIC: u64 = 0x9123_683e;
 const TMPFS_MAGIC: u64 = 0x0102_1994;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum InodePolicy {
+pub enum InodePolicy {
     Finite,
 
     DynamicBtrfs,
@@ -22,89 +22,90 @@ pub(crate) enum InodePolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CpuAncestorLimit {
-    pub(crate) path: String,
-    pub(crate) cpuset_cpus_count: u32,
-    pub(crate) cpu_quota_micros: Option<u64>,
-    pub(crate) cpu_period_micros: u64,
+pub struct CpuAncestorLimit {
+    pub path: String,
+    pub cpuset_cpus_count: u32,
+    pub cpu_quota_micros: Option<u64>,
+    pub cpu_period_micros: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ProbeRecord {
-    pub(crate) schema_version: u8,
+pub struct ProbeRecord {
+    pub schema_version: u8,
 
-    pub(crate) docker_root_mount_target: String,
+    pub docker_root_mount_target: String,
 
-    pub(crate) docker_root_mount_source: String,
+    pub docker_root_mount_source: String,
 
-    pub(crate) docker_root_mount_root: String,
+    pub docker_root_mount_root: String,
 
-    pub(crate) docker_root_mount_id: u64,
+    pub docker_root_mount_id: u64,
 
-    pub(crate) docker_root_device_major: u32,
+    pub docker_root_device_major: u32,
 
-    pub(crate) docker_root_device_minor: u32,
+    pub docker_root_device_minor: u32,
 
-    pub(crate) docker_root_statx_device_major: u32,
+    pub docker_root_statx_device_major: u32,
 
-    pub(crate) docker_root_statx_device_minor: u32,
+    pub docker_root_statx_device_minor: u32,
 
-    pub(crate) docker_root_fs_type_magic: u64,
+    pub docker_root_fs_type_magic: u64,
 
-    pub(crate) docker_root_fs_type_name: String,
+    pub docker_root_fs_type_name: String,
 
-    pub(crate) docker_root_filesystem_id: u64,
+    pub docker_root_filesystem_id: u64,
 
-    pub(crate) guest_boot_id: String,
+    pub guest_boot_id: String,
 
-    pub(crate) docker_root_free_bytes: u64,
+    pub docker_root_free_bytes: u64,
 
-    pub(crate) docker_root_total_bytes: u64,
+    pub docker_root_total_bytes: u64,
 
-    pub(crate) docker_root_available_bytes: u64,
+    pub docker_root_available_bytes: u64,
 
-    pub(crate) docker_root_inode_total: u64,
+    pub docker_root_inode_total: u64,
 
-    pub(crate) docker_root_inode_free: u64,
+    pub docker_root_inode_free: u64,
 
-    pub(crate) docker_root_inode_available: u64,
+    pub docker_root_inode_available: u64,
 
-    pub(crate) docker_root_inode_policy: InodePolicy,
+    pub docker_root_inode_policy: InodePolicy,
 
-    pub(crate) memory_available_bytes: u64,
+    pub memory_available_bytes: u64,
 
-    pub(crate) load_milli: u64,
+    pub load_milli: u64,
 
-    pub(crate) memory_psi_some_avg10_bps: Option<u64>,
+    pub memory_psi_some_avg10_bps: Option<u64>,
 
-    pub(crate) probe_cgroup_path: String,
+    pub probe_cgroup_path: String,
 
-    pub(crate) probe_cgroup_memory_max_bytes: Option<u64>,
+    pub probe_cgroup_memory_max_bytes: Option<u64>,
 
-    pub(crate) probe_cgroup_memory_current_bytes: u64,
+    pub probe_cgroup_memory_current_bytes: u64,
 
-    pub(crate) probe_cgroup_swap_max_bytes: Option<u64>,
+    pub probe_cgroup_swap_max_bytes: Option<u64>,
 
-    pub(crate) probe_cgroup_swap_current_bytes: u64,
+    pub probe_cgroup_swap_current_bytes: u64,
 
-    pub(crate) probe_cgroup_cpu_quota_micros: Option<u64>,
+    pub probe_cgroup_cpu_quota_micros: Option<u64>,
 
-    pub(crate) probe_cgroup_cpu_period_micros: u64,
+    pub probe_cgroup_cpu_period_micros: u64,
 
-    pub(crate) probe_cgroup_cpuset_cpus_count: u32,
+    pub probe_cgroup_cpuset_cpus_count: u32,
 
-    pub(crate) cpu_ancestor_limits: Vec<CpuAncestorLimit>,
+    pub cpu_ancestor_limits: Vec<CpuAncestorLimit>,
 
-    pub(crate) probe_host_pid: u32,
+    pub probe_host_pid: u32,
 
-    pub(crate) probe_namespace_pid: u32,
+    pub probe_namespace_pid: u32,
 
-    pub(crate) probe_cgroup_pids_max: Option<u64>,
+    pub probe_cgroup_pids_max: Option<u64>,
 }
 
 impl ProbeRecord {
-    pub(crate) fn parse_schema5(output: &[u8]) -> Option<Self> {
+    #[must_use]
+    pub fn parse_schema5(output: &[u8]) -> Option<Self> {
         if !valid_framing(output) {
             return None;
         }
@@ -224,7 +225,8 @@ impl ProbeRecord {
         parent_cpuset.is_none_or(|count| self.probe_cgroup_cpuset_cpus_count <= count)
     }
 
-    pub(crate) fn ancestor_capacity_millicores(&self, ncpu: u32) -> Option<u64> {
+    #[must_use]
+    pub fn ancestor_capacity_millicores(&self, ncpu: u32) -> Option<u64> {
         if ncpu == 0 || self.probe_cgroup_cpuset_cpus_count == 0 {
             return None;
         }

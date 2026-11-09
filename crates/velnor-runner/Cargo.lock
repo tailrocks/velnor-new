@@ -3930,6 +3930,7 @@ dependencies = [
  "velnor-runner-core",
  "velnor-runner-github",
  "velnor-runner-image-manifest",
+ "velnor-runner-qualification",
  "zeroize",
 ]
 
@@ -3940,6 +3941,21 @@ dependencies = [
  "base64 0.23.1",
  "serde",
  "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "velnor-runner-qualification"
+version = "0.1.0"
+dependencies = [
+ "bollard",
+ "futures-util",
+ "getrandom 0.4.3",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

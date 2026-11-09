@@ -17,6 +17,8 @@ mod inspection;
 mod manifest;
 mod projection_cache;
 mod registry_projection;
+mod registry_transport;
+pub use registry_transport::{RegistryRequest, RegistryResponse, RegistryTransport};
 mod runner_release;
 mod strict_json;
 
@@ -181,4 +183,20 @@ impl<'a> NativeArtifactProvider<'a> {
         cache.insert(image, projection.clone());
         Ok(projection)
     }
+}
+
+pub(crate) fn anonymous_registry_transport()
+-> Result<std::sync::Arc<dyn RegistryTransport>, HostError> {
+    Ok(std::sync::Arc::new(
+        registry_transport::AnonymousRegistryTransport(github::client()?),
+    ))
+}
+
+pub(crate) async fn verify_candidate_registry_projection(
+    transport: &dyn RegistryTransport,
+    image: &velnor_runner_image_manifest::ImageEntry,
+    role: velnor_runner_image_manifest::ImageKind,
+    source: &str,
+) -> Result<RegistryProjection, HostError> {
+    RegistryProjection::fetch(transport, image, role, source).await
 }

@@ -22,7 +22,9 @@ mod inspect;
 pub(crate) mod jit_conflict;
 mod name_taken;
 mod resource_probe;
-pub(crate) use resource_probe::{ProjectedCandidate, inspect_projected_candidate};
+pub(crate) use resource_probe::{
+    ProjectedCandidate, inspect_projected_candidate, qualify_mac_family,
+};
 pub(crate) mod retirement;
 pub(crate) mod scoped_runtime;
 

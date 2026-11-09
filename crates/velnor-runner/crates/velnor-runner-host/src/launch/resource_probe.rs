@@ -33,7 +33,7 @@ mod ops;
 mod owned_cgroups;
 mod projection;
 mod provider;
-pub(crate) use provider::{ProjectedCandidate, inspect_projected_candidate};
+pub(crate) use provider::{ProjectedCandidate, inspect_projected_candidate, qualify_mac_family};
 pub(crate) mod publication;
 mod readiness;
 pub(crate) use readiness::collect as collect_readiness_sample;

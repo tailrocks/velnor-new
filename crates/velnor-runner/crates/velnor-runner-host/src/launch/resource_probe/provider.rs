@@ -21,6 +21,8 @@ mod failure;
 mod identity;
 mod image_acquisition;
 pub use image_acquisition::{DaemonSelection, ImageObservation, ImageReference, ImageSession};
+mod mac_qualification;
+pub(crate) use mac_qualification::qualify_mac_family;
 mod registry_import;
 pub use crate::artifact_admission::RegistryProjection;
 pub use registry_import::{

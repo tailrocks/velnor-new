@@ -152,11 +152,13 @@ fn validate_image(image: &ImageInspect, expected: &ProjectedCandidate) -> Result
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<BTreeMap<_, _>>()
     });
-    if !same_healthcheck(config.healthcheck.as_ref(), source_healthcheck.as_ref())
-        || config
-            .volumes
-            .as_ref()
-            .is_some_and(|volumes| !volumes.is_empty())
+    if !velnor_runner_qualification::same_healthcheck(
+        config.healthcheck.as_ref(),
+        source_healthcheck.as_ref(),
+    ) || config
+        .volumes
+        .as_ref()
+        .is_some_and(|volumes| !volumes.is_empty())
         || labels != admitted_labels
         || config.user != admitted.user
         || config.working_dir != admitted.working_dir
@@ -213,23 +215,4 @@ pub(crate) fn source_healthcheck(
         return Err(HostError::Identity);
     }
     Ok(config.healthcheck)
-}
-
-pub(crate) fn same_healthcheck(
-    left: Option<&bollard::models::HealthConfig>,
-    right: Option<&bollard::models::HealthConfig>,
-) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(left), Some(right)) => {
-            left.test == right.test
-                && left.interval.unwrap_or_default() == right.interval.unwrap_or_default()
-                && left.timeout.unwrap_or_default() == right.timeout.unwrap_or_default()
-                && left.retries.unwrap_or_default() == right.retries.unwrap_or_default()
-                && left.start_period.unwrap_or_default() == right.start_period.unwrap_or_default()
-                && left.start_interval.unwrap_or_default()
-                    == right.start_interval.unwrap_or_default()
-        }
-        _ => false,
-    }
 }

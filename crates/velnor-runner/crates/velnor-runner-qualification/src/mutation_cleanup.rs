@@ -4,15 +4,17 @@
 use std::time::{Duration, Instant};
 
 use bollard::Docker;
+use bollard::errors::Error as DockerError;
 use bollard::query_parameters::{RemoveContainerOptionsBuilder, RemoveVolumeOptionsBuilder};
 
-use crate::error::HostError;
+use crate::error::QualificationError as HostError;
+use crate::host_config::validate_ownership;
 
 use super::mutation_lifecycle::{
     MutationKind, MutationResult, MutationValue, MutationWait, PendingMutation, wait,
 };
 use super::resources::{OwnedResources, TrackedContainer};
-use super::{QUALIFIER_LABEL, deadline, missing, valid_container_id, volume_owned};
+use super::{deadline, missing, volume_owned};
 
 const RECOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 const RECOVERY_POLL: Duration = Duration::from_millis(100);
@@ -30,11 +32,14 @@ enum Observation {
 
 struct ContainerCleanup {
     failed: bool,
-    unresolved_uncertain: bool,
+    containers_remain: bool,
 }
 
 impl OwnedResources {
     pub(super) async fn cleanup(&mut self, docker: &Docker) -> Result<(), HostError> {
+        if !self.deleting.is_empty() {
+            return Err(HostError::Cleanup);
+        }
         let mut failed = false;
         let mut uncertain_containers = Vec::new();
         let mut observed_containers = Vec::new();
@@ -81,7 +86,7 @@ impl OwnedResources {
         failed |= self
             .cleanup_volumes(
                 docker,
-                containers.unresolved_uncertain,
+                containers.containers_remain,
                 &uncertain_volumes,
                 &observed_volumes,
             )
@@ -93,6 +98,9 @@ impl OwnedResources {
         } else if failed {
             Err(HostError::Cleanup)
         } else {
+            if let Some(journal) = &self.journal {
+                journal.clear()?;
+            }
             Ok(())
         }
     }
@@ -103,7 +111,28 @@ impl OwnedResources {
         mutation: &mut PendingMutation,
     ) -> Recovery {
         let end = Instant::now() + RECOVERY_TIMEOUT;
-        let mut owned_observed = false;
+        let owned_observed = false;
+        if self.journal.is_some() {
+            loop {
+                match wait(mutation, RECOVERY_POLL).await {
+                    MutationWait::Settled(MutationResult::Created(value)) => {
+                        return if self.record_created(mutation, value).is_ok() {
+                            Recovery::Resolved
+                        } else {
+                            Recovery::Unresolved { owned_observed }
+                        };
+                    }
+                    MutationWait::Settled(MutationResult::Rejected(_)) => {
+                        return Recovery::Resolved;
+                    }
+                    MutationWait::Settled(MutationResult::Uncertain(_)) => {
+                        return Recovery::Unresolved { owned_observed };
+                    }
+                    MutationWait::Pending if Instant::now() < end => {}
+                    MutationWait::Pending => return Recovery::Unresolved { owned_observed },
+                }
+            }
+        }
         loop {
             match wait(mutation, RECOVERY_POLL).await {
                 MutationWait::Settled(MutationResult::Created(value)) => {
@@ -118,12 +147,12 @@ impl OwnedResources {
             }
             match self.observe_owned(docker, mutation, end).await {
                 Ok(Observation::Owned(value)) => {
-                    if self.record_created(mutation, value).is_err() {
-                        return Recovery::Unresolved { owned_observed };
-                    }
-                    owned_observed = true;
                     if mutation.outcome.is_some() {
-                        return Recovery::Resolved;
+                        return if self.record_created(mutation, value).is_ok() {
+                            Recovery::Resolved
+                        } else {
+                            Recovery::Unresolved { owned_observed }
+                        };
                     }
                 }
                 Ok(Observation::Missing) | Err(HostError::DockerTimeout | HostError::Docker) => {}
@@ -184,9 +213,10 @@ impl OwnedResources {
     ) -> Result<(), HostError> {
         match (&mutation.kind, value) {
             (MutationKind::Container(name), MutationValue::ContainerId(id)) => {
-                self.bind_container_id(name, &id)
+                self.bind_container_id(name, &id)?;
+                self.settle(name)
             }
-            (MutationKind::Volume(_), MutationValue::Volume) => Ok(()),
+            (MutationKind::Volume(name), MutationValue::Volume) => self.settle(name),
             _ => Err(HostError::Identity),
         }
     }
@@ -202,27 +232,32 @@ impl OwnedResources {
     }
 
     async fn cleanup_containers(
-        &self,
+        &mut self,
         docker: &Docker,
         uncertain: &[String],
         observed: &[String],
     ) -> ContainerCleanup {
         let mut cleanup = ContainerCleanup {
             failed: false,
-            unresolved_uncertain: false,
+            containers_remain: false,
         };
-        for container in self.containers.iter().rev() {
+        for container in self.containers.clone().iter().rev() {
+            if !self.deleting.is_empty() {
+                cleanup.failed = true;
+                cleanup.containers_remain = true;
+                break;
+            }
             let was_uncertain = uncertain.iter().any(|name| name == &container.name);
             let unresolved = was_uncertain && !observed.iter().any(|name| name == &container.name);
             let failed = unresolved || self.cleanup_container(docker, container).await.is_err();
             cleanup.failed |= failed;
-            cleanup.unresolved_uncertain |= was_uncertain && failed;
+            cleanup.containers_remain |= failed;
         }
         cleanup
     }
 
     async fn cleanup_container(
-        &self,
+        &mut self,
         docker: &Docker,
         container: &TrackedContainer,
     ) -> Result<(), HostError> {
@@ -237,20 +272,31 @@ impl OwnedResources {
             Err(_) => return Err(HostError::Docker),
         };
         let id = validate_ownership(&self.run_id, &inspect, container)?;
+        let id = id.to_owned();
+        let identity = format!("container:{id}");
+        self.begin_delete(&identity)?;
         let options = RemoveContainerOptionsBuilder::new()
             .force(true)
             .v(false)
             .build();
         match deadline(
-            docker.remove_container(id, Some(options)),
+            docker.remove_container(&id, Some(options)),
             Duration::from_secs(3),
         )
         .await?
         {
             Ok(()) => {}
             Err(error) if missing(&error) => {}
+            Err(DockerError::DockerResponseServerError {
+                status_code: 400..=499,
+                ..
+            }) => {
+                self.finish_delete(&identity)?;
+                return Err(HostError::Cleanup);
+            }
             Err(_) => return Err(HostError::Cleanup),
         }
+        self.finish_delete(&identity)?;
         match deadline(
             docker.inspect_container(&container.name, None),
             Duration::from_secs(3),
@@ -263,14 +309,17 @@ impl OwnedResources {
     }
 
     async fn cleanup_volumes(
-        &self,
+        &mut self,
         docker: &Docker,
         unresolved_containers: bool,
         uncertain_volumes: &[String],
         observed_volumes: &[String],
     ) -> bool {
         let mut failed = false;
-        for name in self.volumes.iter().rev() {
+        for name in self.volumes.clone().iter().rev() {
+            if !self.deleting.is_empty() {
+                return true;
+            }
             if unresolved_containers
                 || (uncertain_volumes.iter().any(|uncertain| uncertain == name)
                     && !observed_volumes.iter().any(|observed| observed == name))
@@ -284,7 +333,7 @@ impl OwnedResources {
         failed
     }
 
-    async fn cleanup_volume(&self, docker: &Docker, name: &str) -> Result<(), HostError> {
+    async fn cleanup_volume(&mut self, docker: &Docker, name: &str) -> Result<(), HostError> {
         let volume = match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
             Ok(volume) => volume,
             Err(error) if missing(&error) => return Ok(()),
@@ -294,6 +343,8 @@ impl OwnedResources {
         if !volume_owned(&volume, name, &self.run_id, role) {
             return Err(HostError::Ownership);
         }
+        let identity = format!("volume:{name}");
+        self.begin_delete(&identity)?;
         let options = RemoveVolumeOptionsBuilder::new().force(false).build();
         match deadline(
             docker.remove_volume(name, Some(options)),
@@ -303,42 +354,19 @@ impl OwnedResources {
         {
             Ok(()) => {}
             Err(error) if missing(&error) => {}
+            Err(DockerError::DockerResponseServerError {
+                status_code: 400..=499,
+                ..
+            }) => {
+                self.finish_delete(&identity)?;
+                return Err(HostError::Cleanup);
+            }
             Err(_) => return Err(HostError::Cleanup),
         }
+        self.finish_delete(&identity)?;
         match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
             Err(error) if missing(&error) => Ok(()),
             _ => Err(HostError::Cleanup),
         }
     }
-}
-
-fn validate_ownership<'a>(
-    run_id: &str,
-    inspect: &'a bollard::models::ContainerInspectResponse,
-    tracked: &TrackedContainer,
-) -> Result<&'a str, HostError> {
-    let id = inspect.id.as_deref().ok_or(HostError::Ownership)?;
-    valid_container_id(id)?;
-    if tracked.id.as_deref().is_some_and(|recorded| recorded != id)
-        || inspect
-            .name
-            .as_deref()
-            .is_none_or(|name| name.strip_prefix('/').unwrap_or(name) != tracked.name)
-    {
-        return Err(HostError::Ownership);
-    }
-    let labels = inspect
-        .config
-        .as_ref()
-        .and_then(|config| config.labels.as_ref())
-        .ok_or(HostError::Ownership)?;
-    if labels.get(QUALIFIER_LABEL).map(String::as_str) != Some(run_id)
-        || labels
-            .get("io.velnor.runner-image-qualifier.role")
-            .map(String::as_str)
-            != Some(tracked.role.as_str())
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(id)
 }

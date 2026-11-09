@@ -32,7 +32,7 @@ pub(super) fn verify_configuration(
             .volumes
             .as_ref()
             .is_some_and(|volumes| !volumes.is_empty())
-        || !crate::resource_probe_release::runner_qualification::image_identity::same_healthcheck(
+        || !velnor_runner_qualification::same_healthcheck(
             actual.healthcheck.as_ref(),
             expected_health.as_ref(),
         )

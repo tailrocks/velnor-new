@@ -173,3 +173,146 @@ fn malformed_oci_projection_is_rejected() -> TestResult {
     );
     Ok(())
 }
+
+struct FixtureRegistryTransport {
+    responses: std::sync::Mutex<
+        std::collections::VecDeque<velnor_runner_host::resource_probe_release::RegistryResponse>,
+    >,
+    requests: std::sync::Mutex<Vec<velnor_runner_host::resource_probe_release::RegistryRequest>>,
+}
+
+impl velnor_runner_host::resource_probe_release::RegistryTransport for FixtureRegistryTransport {
+    fn get(
+        &self,
+        request: velnor_runner_host::resource_probe_release::RegistryRequest,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        velnor_runner_host::resource_probe_release::RegistryResponse,
+                        velnor_runner_host::HostError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.requests
+                .lock()
+                .map_err(|_| velnor_runner_host::HostError::Identity)?
+                .push(request);
+            self.responses
+                .lock()
+                .map_err(|_| velnor_runner_host::HostError::Identity)?
+                .pop_front()
+                .ok_or(velnor_runner_host::HostError::Identity)
+        })
+    }
+}
+
+fn registry_response(
+    status: u16,
+    challenge: Option<&str>,
+    location: Option<&str>,
+    body: Vec<u8>,
+) -> velnor_runner_host::resource_probe_release::RegistryResponse {
+    velnor_runner_host::resource_probe_release::RegistryResponse {
+        status,
+        challenge: challenge.map(str::to_owned),
+        location: location.map(str::to_owned),
+        body,
+    }
+}
+
+#[tokio::test]
+async fn anonymous_registry_transport_verifies_challenge_and_exact_image_graph() -> TestResult {
+    let (image, manifest, config, source) = fixture()?;
+    let challenge = "Bearer realm=\"https://ghcr.io/token\",service=\"ghcr.io\",scope=\"repository:tailrocks/velnor-resource-probe:pull\"";
+    let replies = || {
+        std::collections::VecDeque::from([
+            registry_response(401, Some(challenge), None, vec![]),
+            registry_response(200, None, None, br#"{"token":"anonymous"}"#.to_vec()),
+            registry_response(200, None, None, manifest.clone()),
+            registry_response(200, None, None, config.clone()),
+        ])
+    };
+    let good = FixtureRegistryTransport {
+        responses: std::sync::Mutex::new(replies()),
+        requests: std::sync::Mutex::new(Vec::new()),
+    };
+    let actual =
+        RegistryProjection::fetch(&good, &image, ImageKind::ResourceProbe, &source).await?;
+    let expected = RegistryProjection::from_oci(
+        &image,
+        ImageKind::ResourceProbe,
+        &source,
+        &manifest,
+        &config,
+    )?;
+    assert_eq!(actual, expected);
+    verify_anonymous_requests(&good)?;
+    for scenario in [
+        "challenge",
+        "scope",
+        "manifest",
+        "config",
+        "redirect",
+        "oversized",
+    ] {
+        let mut responses = replies();
+        match scenario {
+            "challenge" => responses[0].challenge = Some("Bearer realm=\"https://attacker.invalid/token\",service=\"ghcr.io\",scope=\"repository:tailrocks/velnor-resource-probe:pull\"".to_owned()),
+            "scope" => responses[0].challenge = Some("Bearer realm=\"https://ghcr.io/token\",service=\"ghcr.io\",scope=\"repository:tailrocks/other:pull\"".to_owned()),
+            "manifest" => responses[2].body.push(b' '),
+            "config" => responses[3].body.push(b' '),
+            "redirect" => responses[3] = registry_response(302, None, Some("https://attacker.invalid/blob"), vec![]),
+            "oversized" => responses[1].body = vec![0; 64 * 1024 + 1],
+            _ => return Err("unknown scenario".into()),
+        }
+        let transport = FixtureRegistryTransport {
+            responses: std::sync::Mutex::new(responses),
+            requests: std::sync::Mutex::new(Vec::new()),
+        };
+        assert!(
+            RegistryProjection::fetch(&transport, &image, ImageKind::ResourceProbe, &source)
+                .await
+                .is_err(),
+            "invalid {scenario} accepted"
+        );
+    }
+    let mut bad_manifest: serde_json::Value = serde_json::from_slice(&manifest)?;
+    bad_manifest["mediaType"] = json!("application/json");
+    let bad_manifest = serde_json::to_vec(&bad_manifest)?;
+    let mut bad_image = image.clone();
+    bad_image.registry_digest = digest(&bad_manifest);
+    bad_image.platform_manifest_digest = bad_image.registry_digest.clone();
+    let mut responses = replies();
+    responses[2].body = bad_manifest;
+    let transport = FixtureRegistryTransport {
+        responses: std::sync::Mutex::new(responses),
+        requests: std::sync::Mutex::new(Vec::new()),
+    };
+    assert!(
+        RegistryProjection::fetch(&transport, &bad_image, ImageKind::ResourceProbe, &source)
+            .await
+            .is_err(),
+        "wrong manifest media type accepted"
+    );
+    Ok(())
+}
+
+fn verify_anonymous_requests(transport: &FixtureRegistryTransport) -> TestResult {
+    let requests = transport.requests.lock().map_err(|_| "request lock")?;
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.starts_with("https://ghcr.io/"))
+    );
+    assert!(requests[0].bearer.is_none() && requests[1].bearer.is_none());
+    assert!(
+        requests[2..]
+            .iter()
+            .all(|request| request.bearer.as_deref() == Some("anonymous"))
+    );
+    Ok(())
+}
