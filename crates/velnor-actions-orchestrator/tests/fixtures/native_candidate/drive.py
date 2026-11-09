@@ -524,6 +524,16 @@ try:
     if process.wait() != 0:
         raise RuntimeError("native controller test failed")
     if new_run:
+        with urllib.request.urlopen(info["origin"] + "/__fixture/state") as response:
+            interrupted = json.load(response)
+        assert interrupted["uploads"] == interrupted["upload_attempts"] == 1
+        assert "refs/tags/velnor-receipt/12/1/reconciled" not in interrupted["refs"]
+        assert "refs/tags/velnor-receipt/12/1/operation-2" not in interrupted["refs"]
+        assert f"refs/tags/{info['package']}-v{info['version']}" not in interrupted["refs"]
+        assert interrupted["release"] is None
+        assert_pending_upload(info, interrupted, runner)
+        accepted = (pathlib.Path("/workspace") / ("final-" + mode) / "fixture-upload.crate").read_bytes()
+        assert hashlib.sha256(accepted).hexdigest() == interrupted["published_sha256"]
         with urllib.request.urlopen(urllib.request.Request(
                 info["origin"] + "/__fixture/advance-recovery", data=b"{}", method="POST")) as response:
             continuation = json.load(response)
