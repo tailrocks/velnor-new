@@ -167,6 +167,15 @@ fn release_consumer_manifest_sentinel_never_bypasses_executable_binding()
 }
 
 #[test]
+#[cfg(target_arch = "aarch64")]
+fn unsupported_linux_arm_consumer_host_is_rejected() -> Result<(), Box<dyn Error>> {
+    fixture::run(
+        fixture::Scenario::UnsupportedHost,
+        "unsupported_consumer_host",
+    )
+}
+
+#[test]
 fn absent_rest_merge_sha_reaches_owned_locator_gate() -> Result<(), Box<dyn Error>> {
     fixture::run(
         fixture::Scenario::Valid,

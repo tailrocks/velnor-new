@@ -19,6 +19,8 @@ mod git;
 mod provider;
 #[path = "api2026_pull_context_fixture/server.rs"]
 mod server;
+#[path = "api2026_pull_context_fixture/state.rs"]
+mod state;
 #[path = "api2026_pull_context_fixture/worker.rs"]
 mod worker;
 
@@ -27,6 +29,8 @@ pub(crate) enum Scenario {
     ReleaseSentinel,
     MissingManifest,
     WrongHost,
+    #[cfg(target_arch = "aarch64")]
+    UnsupportedHost,
     Valid,
     ReversedParents,
     ChangedRef,
@@ -71,23 +75,21 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
     write_event(&paths, &identities)?;
     provider::write(&paths, &identities, scenario)?;
     let _server = server::start(&paths, &identities)?;
-    let output = invoke(&paths, &identities, scenario)?;
+    let (output, before) = invoke(&paths, &identities, scenario)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
         output.status.success(),
         scenario.is_deadline_child(),
         "unexpected fixture status: {stderr}"
     );
+    let no_requests = before.is_some()
+        || matches!(
+            scenario,
+            Scenario::ReleaseSentinel | Scenario::MissingManifest
+        );
     let requests = match fs::read_to_string(paths.root.join("provider/requests.log")) {
         Ok(requests) => requests,
-        Err(error)
-            if matches!(
-                scenario,
-                Scenario::ReleaseSentinel | Scenario::MissingManifest
-            ) && error.kind() == io::ErrorKind::NotFound =>
-        {
-            String::new()
-        }
+        Err(error) if no_requests && error.kind() == io::ErrorKind::NotFound => String::new(),
         Err(error) => return Err(error.into()),
     };
     assert!(
@@ -95,6 +97,7 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
         "expected {expected}, got {stderr}; fixture routes: {requests}"
     );
     assert_safe_api_failure(scenario, &stderr, &requests);
+    state::verify(&paths.root, before, &requests)?;
     assert!(!paths.runner_temp.join("velnor/local/plan.json").exists());
     assert!(
         !paths
@@ -219,7 +222,11 @@ fn write_event(paths: &Paths, ids: &Identities) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output, Box<dyn Error>> {
+fn invoke(
+    paths: &Paths,
+    ids: &Identities,
+    scenario: Scenario,
+) -> Result<(Output, Option<state::Tree>), Box<dyn Error>> {
     let cli = env!("CARGO_BIN_EXE_velnor-actions");
     let mise_data =
         std::env::var_os("MISE_DATA_DIR").ok_or("qualified gh data directory missing")?;
@@ -252,6 +259,7 @@ fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output,
     };
     command.env_clear();
     pass_worker_environment(&mut command)?;
+    let before = state::before(scenario, &paths.root).transpose()?;
     let output = command
         .current_dir(&paths.repo)
         .env(
@@ -286,7 +294,7 @@ fn invoke(paths: &Paths, ids: &Identities, scenario: Scenario) -> Result<Output,
                 .join("velnor/request/plan-v1-request.json"),
         )
         .output()?;
-    Ok(output)
+    Ok((output, before))
 }
 
 fn pass_worker_environment(command: &mut Command) -> Result<(), Box<dyn Error>> {

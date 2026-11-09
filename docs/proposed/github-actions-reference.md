@@ -599,3 +599,18 @@ Its source job has a five-minute timeout; draft, attest and publish have
 ten-minute timeouts and depend in order on their predecessors. It has no
 nested reusable workflow calls. Timeout admission uses this fixed authority
 record, not a candidate workflow generated in the caller's checkout.
+
+## Isolated consumer fixture architectures
+
+CLI consumer fixtures use Linux AMD64, matching the supported Linux consumer
+release target. The Linux ARM rejection test is compiled only on native
+`aarch64` test hosts and runs the pinned ARM container and tools. Local green
+and guard-bypass mutation runs verify the reviewed revision; AMD64 CI does not
+continuously execute that ARM case.
+
+The Ubuntu 26.04
+[software inventory](https://github.com/actions/runner-images/blob/fad015e47059f40cf0786dcb4593384f6a0720d3/images/ubuntu/Ubuntu2604-Readme.md),
+[toolset](https://github.com/actions/runner-images/blob/fad015e47059f40cf0786dcb4593384f6a0720d3/images/ubuntu/toolsets/toolset-2604.json),
+and [Docker installation script](https://github.com/actions/runner-images/blob/fad015e47059f40cf0786dcb4593384f6a0720d3/images/ubuntu/scripts/build/install-docker.sh)
+do not establish an ARM binfmt/QEMU guarantee for AMD64 runners. The suite uses
+the native-host compile gate instead of depending on an unqualified emulator.

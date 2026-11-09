@@ -336,7 +336,8 @@ def main():
     )
     signed_controller = test.endswith("::signed_controller_dispatch_rechecks_historical_authority")
     source_compiler = signed_controller or test == "crate_release_controller::tests::capacity::overflow::signed_start_rejects_oversized_observation_without_journal_writes"
-    machine = "x86_64" if source_compiler or test.endswith(signed_history_tests) else platform.machine().lower()
+    unsupported_consumer = kind == "cli" and test == "unsupported_linux_arm_consumer_host_is_rejected"
+    machine = "aarch64" if unsupported_consumer else "x86_64" if kind == "cli" or source_compiler or test.endswith(signed_history_tests) else platform.machine().lower()
     arch = {"arm64":"aarch64", "aarch64":"aarch64", "x86_64":"x86_64", "amd64":"x86_64"}.get(machine)
     if arch is None:
         raise RuntimeError("unsupported isolated fixture host architecture")

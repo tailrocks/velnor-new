@@ -31,6 +31,8 @@ impl Scenario {
             }
             Self::MissingManifest => "debug_consumer_plan_requires_release_manifest",
             Self::WrongHost => "consumer_plan_rejects_executable_digest_in_wrong_host_row",
+            #[cfg(target_arch = "aarch64")]
+            Self::UnsupportedHost => "unsupported_linux_arm_consumer_host_is_rejected",
             Self::Valid => "absent_rest_merge_sha_reaches_owned_locator_gate",
             Self::ReversedParents => "reversed_api_merge_parents_are_rejected",
             Self::ChangedRef => "changed_merge_ref_is_rejected",
