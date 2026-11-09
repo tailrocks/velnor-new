@@ -57,6 +57,8 @@ fn release_required_ci_requires_default_branch_push_and_repository_identity() {
 
 struct Rerun {
     same_suite: bool,
+    equal_started: bool,
+    latest_app_id: u64,
     conclusion: &'static str,
     status: &'static str,
     recorded: bool,
@@ -81,7 +83,10 @@ impl GitHubAdmissionRead for Rerun {
             let mut new = response["check_runs"][0].clone();
             new["id"] = json!(2);
             new["check_suite"]["id"] = json!(if self.same_suite { 123 } else { 124 });
-            new["started_at"] = json!("2026-11-03T15:01:00Z");
+            if !self.equal_started {
+                new["started_at"] = json!("2026-11-03T15:01:00Z");
+            }
+            new["app"]["id"] = json!(self.latest_app_id);
             new["status"] = json!(self.status);
             new["conclusion"] = json!(self.conclusion);
             let checks = if self.recorded {
@@ -127,6 +132,8 @@ fn rerun_lifecycle(same_suite: bool) -> Result<(), Box<dyn std::error::Error>> {
     let admitted = verify_github_evidence(&input, &Fixture::valid())?;
     let mut rerun = Rerun {
         same_suite,
+        equal_started: false,
+        latest_app_id: 15368,
         conclusion: "success",
         status: "completed",
         recorded: true,
@@ -154,5 +161,44 @@ fn rerun_lifecycle(same_suite: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut forged = admitted.clone();
     forged.release_pr = Some(999);
     assert!(authorize_github_candidate(&input, &forged, &rerun).is_err());
+    Ok(())
+}
+
+#[test]
+fn equal_start_times_select_authenticated_latest_required_attempt()
+-> Result<(), Box<dyn std::error::Error>> {
+    for same_suite in [true, false] {
+        let mut rerun = Rerun {
+            same_suite,
+            equal_started: true,
+            latest_app_id: 15368,
+            conclusion: "success",
+            status: "completed",
+            recorded: true,
+            recorded_conclusion: "failure",
+            recorded_event: "push",
+        };
+        let candidate = verify_github_evidence(&request(), &rerun)?;
+        assert_eq!(candidate.required_check_id, 2);
+
+        rerun.recorded_conclusion = "success";
+        rerun.conclusion = "failure";
+        assert!(matches!(
+            verify_github_evidence(&request(), &rerun),
+            Err(OrchestratorError::Internal { problem }) if problem == "crate_release_required_failed"
+        ));
+
+        rerun.status = "in_progress";
+        rerun.conclusion = "";
+        assert!(verify_github_evidence(&request(), &rerun).is_err());
+
+        rerun.status = "completed";
+        rerun.conclusion = "success";
+        rerun.latest_app_id = 42;
+        assert!(matches!(
+            verify_github_evidence(&request(), &rerun),
+            Err(OrchestratorError::Internal { problem }) if problem == "crate_release_check_app"
+        ));
+    }
     Ok(())
 }
