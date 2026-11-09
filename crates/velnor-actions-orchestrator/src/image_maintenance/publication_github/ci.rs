@@ -57,6 +57,19 @@ pub(in crate::image_maintenance) fn authenticate_source(
     Ok(identity)
 }
 
+pub(in crate::image_maintenance) fn authenticate_captured(
+    source: &str, id: u64, attempt: u32, token: &str, deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let route = format!("repos/tailrocks/velnor-new/actions/runs/{id}/attempts/{attempt}");
+    let run: WorkflowRun = get_json(&route, token, deadline)?;
+    validate_ci_run_inventory(std::slice::from_ref(&run), source)?;
+    if run.id != id || run.run_attempt != attempt || run.status != "completed"
+        || run.conclusion.as_deref() != Some("success") {
+        return Err(internal("image_publication_ci_captured_not_success"));
+    }
+    validate_required_ci_jobs(source, token, CiIdentity { id, attempt }, deadline)
+}
+
 pub(super) fn revalidate(
     request: &PublishImageRequest,
     producer: &AuthenticatedProducer,

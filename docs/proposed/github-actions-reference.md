@@ -597,6 +597,15 @@ ten-minute timeouts and depend in order on their predecessors. It has no
 nested reusable workflow calls. Timeout admission uses this fixed authority
 record, not a candidate workflow generated in the caller's checkout.
 
+The image release caller separately admits the immutable
+[Mac proof authority](https://github.com/tailrocks/velnor-new/blob/533d225c08785adc4367340e1db4dc111ee2b5a2/.github/workflows/source-preview-mac-proof.yml)
+at commit `533d225c08785adc4367340e1db4dc111ee2b5a2`. Its reviewed workflow
+blob has SHA-256 `ff3ef47eb0f5ea6e43eedb505c5aea15a1ba2e8f523d81959f81e592034b3f1c`.
+It contains one `verify` job with a 140-minute timeout, no predecessors, and no
+nested reusable workflow calls. This record applies only to the
+`verify-mac-proof` job in `product-release-images.yml`; other external references
+remain rejected.
+
 ## Private production Mac runner constraints
 
 GitHub documents repository-scoped runner registration separately from

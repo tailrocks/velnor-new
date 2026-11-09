@@ -384,3 +384,11 @@ mod family_publication;
 mod qualification_provenance;
 #[path = "image_publication_public/source_absences.rs"]
 mod source_absences;
+
+#[path = "image_publication_public/stored_zip.rs"]
+mod stored_zip;
+
+#[path = "image_publication_public/context_fixture.rs"]
+mod context_fixture;
+#[path = "image_publication_public/publication_context.rs"]
+mod publication_context;

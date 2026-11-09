@@ -252,3 +252,7 @@ with explicit package scope and source-SHA tags. Its single-platform manifest
 and authenticated GitHub Release inventory are distinct from job-candidate
 evidence and the general multi-platform `[[images]]` promotion contract above.
 Neither existing publication path is duplicated or weakened for that profile.
+Its publisher also uploads a separate, attempt-named Actions context artifact
+that binds the selected producer and the exact four-asset upload. That context
+is not a GitHub Release asset. The Runner contract defines its admission before
+private Mac signing.

@@ -219,7 +219,7 @@ pub use super::image_maintenance::mac_proof::{
 };
 
 pub use super::image_maintenance::{
-    AdmitRunnerImagesRequest, BuildJobCandidateRequest, BuildRunnerImagesRequest,
+    AdmitMacPublicationRequest, AdmittedMacPublication, admit_mac_publication, AdmitRunnerImagesRequest, BuildJobCandidateRequest, BuildRunnerImagesRequest,
     CheckJobSourceRequest, ImagePublicationProfile, InstallBuildxRequest, PromoteImageRequest,
     PublishImageRequest, PublishRunnerImagesRequest, RunnerImageBuildExecution,
     RunnerImageBuildPurpose, ValidateJobCandidateRequest, VerifiedMacAttestation,

@@ -12,7 +12,7 @@ const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 
 const METADATA: &str = "${{ runner.temp }}/source-preview-metadata.json";
 pub(super) const AUTHORITY_PATH: &str = ".github/workflows/source-preview-publication.yml";
 const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> =
-    Some(crate::workflow_timeout::SOURCE_PREVIEW_AUTHORITY_SHA);
+    Some(velnor_actions_contract::source_preview::PUBLICATION_AUTHORITY_SHA);
 
 pub(super) fn producer_jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
     Ok(vec![

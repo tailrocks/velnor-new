@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const RUNTIME_AUTHORITY_SHA: Option<&str> = None;
+pub const RUNTIME_AUTHORITY_SHA: Option<&str> = Some("533d225c08785adc4367340e1db4dc111ee2b5a2");
 pub const PUBLICATION_AUTHORITY_SHA: &str = "72701af69f6f9b693e639814fcf479409da3295c";
 
 const REPOSITORY: &str = "tailrocks/velnor-new";

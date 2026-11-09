@@ -163,6 +163,9 @@ fn publisher_env() -> [(&'static str, &'static str); 7] {
     ]
 }
 
+#[path = "schema2_runner_image_release/context.rs"]
+mod context;
+
 fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
     let mut list = tools(pins)?;
     list.extend(downloads());
@@ -209,6 +212,7 @@ fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
         ));
     }
     list.push(upload);
+    list.extend(context::steps());
     Ok(map(&[
         ("runs-on", Yaml::str("ubuntu-26.04")),
         ("timeout-minutes", Yaml::Int(PUBLICATION_ALLOWANCE_MINUTES)),
@@ -230,6 +234,14 @@ fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
 fn publish_outputs() -> Yaml {
     map(&[
         ("action", Yaml::str("${{ steps.reconcile.outputs.action }}")),
+        (
+            "context_artifact_id",
+            Yaml::str("${{ steps.context.outputs.artifact-id }}"),
+        ),
+        (
+            "context_artifact_digest",
+            Yaml::str("${{ steps.context.outputs.artifact-digest }}"),
+        ),
         (
             "artifact_id",
             Yaml::str("${{ steps.assets.outputs.artifact-id }}"),

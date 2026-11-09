@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(super) const FAMILY_CONFIG: &str = "\n[runner_image_family]\nmac_qualification = { runner_id = 21, companion_workflow_path = \".github/workflows/qualify-runner-family.yml\", companion_workflow_ref = \"refs/heads/main\", companion_workflow_sha = \"cccccccccccccccccccccccccccccccccccccccc\", docker_socket = \"unix:///tmp/fixture.sock\", state_dir = \"/tmp/fixture-state\", sdk = { channel = \"stable\", version = \"1.2.3\", source_sha = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", manifest_sha256 = \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" } }\n";
+pub(super) const FAMILY_CONFIG: &str = "\n[runner_image_family]\nmac_qualification = { runner_id = 2, companion_workflow_path = \".github/workflows/qualify-runner-family.yml\", companion_workflow_ref = \"refs/heads/main\", companion_workflow_sha = \"cccccccccccccccccccccccccccccccccccccccc\", docker_socket = \"unix:///tmp/fixture.sock\", state_dir = \"/tmp/fixture-state\", sdk = { channel = \"stable\", version = \"1.2.3\", source_sha = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", manifest_sha256 = \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\" } }\n";
 
 use super::scoped_workspace::{
     DOCS_CONFIG, TestResult, commit, generate_lockfile, plan, put, scoped_workspace,

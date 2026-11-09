@@ -82,7 +82,7 @@ pub(super) fn fixture() -> Result<Fixture, Box<dyn Error>> {
     };
     let receipt = json!({"schema":"velnor.runner-image-mac-qualification.v1","source_commit":source,"run_id":7,"run_attempt":1,"publisher_artifact_id":9,"manifest_sha256":hash(&manifest_bytes),"runner_lock_sha256":hash(runner_lock),"platform":"linux/amd64","images":{"runner":receipt_image("runner"),"dind":receipt_image("dind"),"resource_probe":receipt_image("resource_probe")},"outer_daemon":{"id":"outer","root":"/var/lib/docker","store":"classic"},"inner_daemon_id":"inner","versions":versions,"cleanup_complete":true});
     let receipt_bytes = serde_json::to_vec(&receipt)?;
-    let context = json!({"public_authority":{"repository":"tailrocks/velnor-new","repository_id":1_390_620_900,"source_commit":source,"release_run_id":7,"release_run_attempt":1,"producer_artifact_id":8,"publisher_artifact_id":9},"companion":{"repository":"donbeave/velnor-mac-qualification","repository_id":1_450_917_587,"owner_id":139_017,"workflow_path":".github/workflows/qualify-runner-family.yml","workflow_ref":"refs/heads/main","workflow_sha":"e".repeat(40),"run_id":10,"run_attempt":1,"qualification_job_id":11,"runner_id":21,"receipt_artifact_id":12,"receipt_artifact_digest":format!("sha256:{}", "f".repeat(64))},"sdk":{"repository":"tailrocks/velnor-new","version":sdk["version"],"source_commit":sdk["commit"],"authority":{"channel":"stable","release_manifest_sha256":hash(&sdk_bytes)},"target":"aarch64-apple-darwin","asset_sha256":"a".repeat(64)}});
+    let context = json!({"public_authority":{"repository":"tailrocks/velnor-new","repository_id":1_390_620_900,"source_commit":source,"release_run_id":7,"release_run_attempt":1,"producer_artifact_id":8,"publisher_artifact_id":9},"companion":{"repository":"donbeave/velnor-mac-qualification","repository_id":1_451_604_567,"owner_id":139_017,"workflow_path":".github/workflows/qualify-runner-family.yml","workflow_ref":"refs/heads/main","workflow_sha":"e".repeat(40),"run_id":10,"run_attempt":1,"qualification_job_id":11,"runner_id":2,"receipt_artifact_id":12,"receipt_artifact_digest":format!("sha256:{}", "f".repeat(64))},"sdk":{"repository":"tailrocks/velnor-new","version":sdk["version"],"source_commit":sdk["commit"],"authority":{"channel":"stable","release_manifest_sha256":hash(&sdk_bytes)},"target":"aarch64-apple-darwin","asset_sha256":"a".repeat(64)}});
     for (name, data) in [
         ("context.json", serde_json::to_vec(&context)?),
         ("receipt.json", receipt_bytes.clone()),
@@ -117,6 +117,8 @@ fn unsigned_mac_assembly_binds_exact_inputs_and_never_clobbers() -> Result<(), B
     );
     let output = fs::read(dir.path().join("output.json"))?;
     let parsed: Value = serde_json::from_slice(&output)?;
+    assert_eq!(parsed["companion"]["repository_id"], 1_451_604_567_u64);
+    assert_eq!(parsed["companion"]["runner_id"], 2_u64);
     assert_eq!(
         STANDARD.decode(
             parsed["qualification"]["receipt_base64"]
@@ -160,6 +162,15 @@ fn reject_invalid_inputs(
     context: &Value,
     receipt: &Value,
 ) -> Result<(), Box<dyn Error>> {
+    let mut bad = context.clone();
+    bad["companion"]["repository_id"] = json!(1_450_917_587_u64);
+    fs::write(dir.join("context.json"), serde_json::to_vec(&bad)?)?;
+    assert!(!invoke(dir)?.status.success());
+    assert!(!dir.join("output.json").exists());
+    assert_eq!(
+        fs::read(dir.join("receipt.json"))?,
+        serde_json::to_vec(receipt)?
+    );
     let mut bad = context.clone();
     bad["public_authority"]["release_run_id"] = json!(999);
     fs::write(dir.join("context.json"), serde_json::to_vec(&bad)?)?;

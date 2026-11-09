@@ -6,6 +6,18 @@ use velnor_actions_orchestrator::{CheckDeadline, OrchestratorError};
 
 use super::mac_step_output;
 
+pub(super) fn admit_publication_request(command: &ImageMaintenanceCommand, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::AdmitMacPublication { source_commit, release_run_id, release_run_attempt, assets_dir, runner_temp } = command else {
+        return Err(OrchestratorError::Internal { problem: "mac_publication_command".to_owned() });
+    };
+    let result = velnor_actions_orchestrator::admit_mac_publication(&velnor_actions_orchestrator::AdmitMacPublicationRequest {
+        source_commit: source_commit.clone(), release_run_id: *release_run_id, release_run_attempt: *release_run_attempt,
+        assets_dir: assets_dir.clone(), runner_temp: runner_temp.clone(), deadline,
+    })?;
+    println!("{}", serde_json::to_string(&result).map_err(|_| OrchestratorError::Internal { problem: "mac_publication_output".to_owned() })?);
+    Ok(())
+}
+
 pub(super) fn verify_mac_request(
     command: &ImageMaintenanceCommand,
     deadline: CheckDeadline,

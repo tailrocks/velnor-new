@@ -219,8 +219,9 @@ fn runner_family_rejects_invalid_mac_authority_pins() -> Result<(), Box<dyn Erro
         "valid fixture authority rejected"
     );
     for (from, to) in [
-        ("runner_id = 21", "runner_id = 0"),
-        ("runner_id = 21", "runner_id = 22"),
+        ("runner_id = 2", "runner_id = 0"),
+        ("runner_id = 2", "runner_id = 21"),
+        ("runner_id = 2", "runner_id = 22"),
         (
             ".github/workflows/qualify-runner-family.yml",
             ".github/workflows/other.yml",

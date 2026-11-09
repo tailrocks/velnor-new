@@ -772,6 +772,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/mac_expected.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_inbox.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_preview_sdk.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_proof.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_publication_context.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_signer.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/promotion.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication.rs
@@ -786,6 +787,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_family.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/attestor.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/ci.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/context.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/mac_jobs.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/pagination.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/publisher.rs
@@ -1557,6 +1559,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_runner_image_qualification.r
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/attest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authority.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/context.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
@@ -1626,6 +1629,7 @@ crates/velnor-actions-workflow-renderer/src/workflow_policy.rs
 crates/velnor-actions-workflow-renderer/src/workflow_size.rs
 crates/velnor-actions-workflow-renderer/src/workflow_task_jobs.rs
 crates/velnor-actions-workflow-renderer/src/workflow_timeout.rs
+crates/velnor-actions-workflow-renderer/src/workflow_timeout/authority.rs
 crates/velnor-actions-workflow-renderer/src/yaml.rs
 crates/velnor-actions-workflow-renderer/src/yaml_emit.rs
 crates/velnor-actions-workflow-renderer/src/yaml_share.rs

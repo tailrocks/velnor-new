@@ -101,7 +101,7 @@ fn pins() -> ProductReleasePins {
 fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
     let mut request = Schema2WorkflowRequest {
         runner_image_family: Some(MacRunnerQualificationConfig {
-            runner_id: 21,
+            runner_id: 2,
             companion_workflow_path: ".github/workflows/qualify-runner-family.yml".to_owned(),
             companion_workflow_ref: "refs/heads/main".to_owned(),
             companion_workflow_sha: "c".repeat(40),
@@ -346,3 +346,6 @@ fn runner_release_attests_verified_digests_and_keeps_mutated_uploads_draft()
     verify_attestation_job(jobs)?;
     verify_digest_gate(&release_publish_script(jobs)?)
 }
+
+#[path = "runner_publication_context.rs"]
+mod runner_publication_context;

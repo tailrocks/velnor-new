@@ -101,6 +101,9 @@ fn valid_sdk_authority(authority: &MacSdkAuthority) -> bool {
     }
 }
 
+pub const MAC_COMPANION_REPOSITORY_ID: u64 = 1_451_604_567;
+pub const MAC_COMPANION_RUNNER_ID: u64 = 2;
+
 pub fn parse_mac_qualification_attestation(
     bytes: &[u8],
 ) -> Result<(MacQualificationAttestation, MacRunnerQualificationReceipt), ImageContractError> {
@@ -122,7 +125,7 @@ pub fn parse_mac_qualification_attestation(
         || public.producer_artifact_id == 0
         || public.publisher_artifact_id == 0
         || companion.repository != "donbeave/velnor-mac-qualification"
-        || companion.repository_id != 1_450_917_587
+        || companion.repository_id != MAC_COMPANION_REPOSITORY_ID
         || companion.owner_id != 139_017
         || !workflow_path(&companion.workflow_path)
         || companion.workflow_ref != "refs/heads/main"

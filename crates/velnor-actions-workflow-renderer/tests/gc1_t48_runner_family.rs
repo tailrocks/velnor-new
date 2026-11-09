@@ -7,7 +7,7 @@ fn family_files() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>,
     let mut request = request()?;
     request.runner_image_family = Some(
         velnor_actions_contract::config::MacRunnerQualificationConfig {
-            runner_id: 21,
+            runner_id: 2,
             companion_workflow_path: ".github/workflows/qualify-runner-family.yml".to_owned(),
             companion_workflow_ref: "refs/heads/main".to_owned(),
             companion_workflow_sha: "c".repeat(40),
