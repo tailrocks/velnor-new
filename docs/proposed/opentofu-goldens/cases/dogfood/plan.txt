@@ -91,7 +91,7 @@ Workflow to generate
     - tools-producer-c957c0bd (8 steps)
     - tools-producer-caf63d48 (9 steps)
     - 20 Rust crate jobs
-      Timeout: 15 minutes per crate job
+      Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint

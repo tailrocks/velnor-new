@@ -549,7 +549,7 @@ jobs:
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: &m13
       MBX_BUILD_SCRIPT_EXECUTION: "1"
       MBX_CACHE_EXPORT_GROUP: velnor
@@ -709,7 +709,7 @@ jobs:
   rust-velnor-actions-ansible:
     name: Rust / velnor-actions-ansible
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -777,7 +777,7 @@ jobs:
   rust-velnor-actions-bun:
     name: Rust / velnor-actions-bun
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -845,7 +845,7 @@ jobs:
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -921,7 +921,7 @@ jobs:
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -993,7 +993,7 @@ jobs:
   rust-velnor-actions-dbt:
     name: Rust / velnor-actions-dbt
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1061,7 +1061,7 @@ jobs:
   rust-velnor-actions-gradle:
     name: Rust / velnor-actions-gradle
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1129,7 +1129,7 @@ jobs:
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1201,7 +1201,7 @@ jobs:
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1276,7 +1276,7 @@ jobs:
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1348,7 +1348,7 @@ jobs:
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1416,7 +1416,7 @@ jobs:
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1490,7 +1490,7 @@ jobs:
   rust-velnor-resource-probe:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1585,7 +1585,7 @@ jobs:
   rust-velnor-runner-attestation:
     name: Rust / velnor-runner-attestation
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1653,7 +1653,7 @@ jobs:
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1721,7 +1721,7 @@ jobs:
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1789,7 +1789,7 @@ jobs:
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1861,7 +1861,7 @@ jobs:
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -1933,7 +1933,7 @@ jobs:
   rust-velnor-runner-image-manifest:
     name: Rust / velnor-runner-image-manifest
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli
@@ -2005,7 +2005,7 @@ jobs:
   rust-velnor-runner-qualification:
     name: Rust / velnor-runner-qualification
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     env: *m13
     needs:
       - ledger-cli

@@ -23,7 +23,7 @@
 - 61b0f9a9a188a5d07196ab50508e85872c5e151a3932a8b34a95ae00b00cceda  ./.github/velnor/producer-executions-v1.json
 - 70342882cd54bbe37f67b48ab401d211f5623fe6aff101526a16cd53f64c0d93  ./.github/velnor/task-execution-manifest-v1.json
 - 434f4ff8f91d912cfcadc9dfb8aa3dca90d6d8d38f930088bae01c61cb7e6a2a  ./.github/workflows/cache-prune.yml
-- cbf25d9f9bed5b31ad7c82e40da495d93779e0ffb4a5130f1a30a8614de834f0  ./.github/workflows/ci.yml
+- bd09498ea4e1d0ffd2ba61aaaaf07037b3f79557852d97f3928f621eed77f20f  ./.github/workflows/ci.yml
 - d47d75a0ca7dcb28e0db18a2aed23764dfda586768d1e03f07f8dbc65b3c6a29  ./.github/workflows/freshness.yml
 - 0d1237145484ce6c4590a52d0ca435301de9376ca1eb6ff927f712f1f8197b5a  ./.github/workflows/homebrew-adoption.yml
 - 963d9cdb4b4985d1b80c33721d377310eff9da82c398264cc46dcdd1dec197fe  ./.github/workflows/job-image-candidate.yml
