@@ -116,3 +116,5 @@ pub(crate) mod tool_catalog_resolve;
 pub use api::*;
 
 mod task_producer;
+
+mod premerge_event_proof_emit;
