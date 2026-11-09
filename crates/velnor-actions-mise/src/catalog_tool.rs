@@ -15,10 +15,11 @@ pub enum PinnedTool {
     ReleasePlz,
     Crane,
     Bun,
+    Cosign,
 }
 
 impl PinnedTool {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -29,6 +30,7 @@ impl PinnedTool {
         Self::ReleasePlz,
         Self::Crane,
         Self::Bun,
+        Self::Cosign,
     ];
 
     #[must_use]
@@ -44,6 +46,7 @@ impl PinnedTool {
             Self::ReleasePlz => "release-plz",
             Self::Crane => "crane",
             Self::Bun => "bun",
+            Self::Cosign => "cosign",
         }
     }
 

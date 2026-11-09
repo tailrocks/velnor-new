@@ -58,6 +58,7 @@ enum SuiteTool {
     OpenTofuExecution,
     BunExecution,
     CraneExecution,
+    CosignExecution,
     GhAttestation,
 }
 
@@ -80,6 +81,10 @@ impl CrateSuite {
         self.owns(SuiteTool::CraneExecution)
     }
 
+    pub(crate) fn owns_cosign(self) -> bool {
+        self.owns(SuiteTool::CosignExecution)
+    }
+
     fn owns_gh_attestation(self) -> bool {
         self.owns(SuiteTool::GhAttestation)
     }
@@ -93,7 +98,11 @@ const NO_SUITE_TOOLS: &[SuiteTool] = &[];
 const CLI_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::CraneExecution];
 const MISE_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 const RENDERER_TOOLS: &[SuiteTool] = &[SuiteTool::GhAttestation];
-const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators, SuiteTool::BunExecution];
+const ORCHESTRATOR_TOOLS: &[SuiteTool] = &[
+    SuiteTool::GenerateValidators,
+    SuiteTool::BunExecution,
+    SuiteTool::CosignExecution,
+];
 
 const SUITE_TOOL_OWNERS: [CrateSuite; 14] = [
     CrateSuite {
@@ -195,7 +204,7 @@ fn prepare_install_opentofu(
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LaneTools(BTreeSet<PinnedTool>);
+pub(crate) struct LaneTools(pub(super) BTreeSet<PinnedTool>);
 
 impl LaneTools {
     pub(crate) fn rust(catalog: &ToolCatalog) -> Self {

@@ -55,6 +55,8 @@ mod checkout_history;
 mod checkout_history_plan;
 #[path = "workflow_configuration_public/crane_prerequisite.rs"]
 mod crane_prerequisite;
+#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
+mod mac_proof_cosign;
 #[path = "workflow_configuration_public/empty_suite.rs"]
 mod empty_suite;
 #[path = "workflow_configuration_public/family_save_suppression.rs"]

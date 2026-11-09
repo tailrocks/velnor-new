@@ -307,7 +307,7 @@ fn prebuilt_image_repo() -> Result<tempfile::TempDir, Box<dyn Error>> {
     Ok(repo)
 }
 
-fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
+pub(super) fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let manifest = root.join("Cargo.toml");
     let contents = fs::read_to_string(&manifest)?;
     fs::write(
@@ -327,7 +327,7 @@ fn rename_root_package(root: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn write_project_mise(root: &Path) -> Result<(), Box<dyn Error>> {
+pub(super) fn write_project_mise(root: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(
         root.join("mise.toml"),
         include_str!("../../../../mise.toml"),

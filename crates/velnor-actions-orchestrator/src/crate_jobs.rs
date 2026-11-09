@@ -351,6 +351,7 @@ fn render_job(
     steps.extend(crate::matrix_step::prepare_runtime_gh_step(
         policy, suite, catalog,
     )?);
+    steps.extend(crate::matrix_step::prepare_runtime_cosign_step(policy, suite, catalog)?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog));

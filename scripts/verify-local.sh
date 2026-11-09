@@ -213,6 +213,26 @@ else
   echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
   fail "toolchain (pinned nextest missing)"
 fi
+if [ "$(uname -s)" = Linux ]; then
+  COSIGN_POLICY="$(toml_tool_pin .velnor/version-policy.toml cosign 2>>"$TOOLCHAIN_LOG")"
+  if [[ ! "$COSIGN_POLICY" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    fail "toolchain (missing exact Cosign policy pin)"
+    exit 1
+  fi
+  if [ -z "${VELNOR_TEST_COSIGN:-}" ]; then
+    COSIGN_SPEC="aqua:sigstore/cosign@$COSIGN_POLICY"
+    if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "$COSIGN_SPEC" >>"$TOOLCHAIN_LOG" 2>&1; then
+      fail "toolchain (Cosign install failed; log: $TOOLCHAIN_LOG)"
+      exit 1
+    fi
+    VELNOR_TEST_COSIGN="$(MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which cosign --tool "$COSIGN_SPEC" 2>>"$TOOLCHAIN_LOG")"
+  fi
+  if [[ "$VELNOR_TEST_COSIGN" != /* || ! -f "$VELNOR_TEST_COSIGN" || ! -x "$VELNOR_TEST_COSIGN" ]]; then
+    fail "toolchain (pinned Cosign executable unavailable)"
+    exit 1
+  fi
+  export VELNOR_TEST_COSIGN
+fi
 pass "toolchain"
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
