@@ -5,6 +5,10 @@ on 2026-10-28. This is the target for their GitHub Release archive distribution.
 macOS host and attestation-helper binaries retain their existing GitHub Release
 distribution and exact-source compatibility checks.
 
+`[runner_image_family]` is supported only by the Velnor repository policy with
+`main` as the resolved default branch. Consumer repositories and other default
+branches must leave this option absent.
+
 The current product-release image producer still writes Docker-save archives,
 attests the shared `image-assets` artifact, and has no per-image publication
 record or `qualify-images` job. The native OCI publisher therefore rejects its

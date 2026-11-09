@@ -286,3 +286,6 @@ mod runner_family_render;
 
 #[path = "workflow_configuration_public/runner_family_source.rs"]
 mod runner_family_source;
+
+#[path = "workflow_configuration_public/runner_family_authority.rs"]
+mod runner_family_authority;

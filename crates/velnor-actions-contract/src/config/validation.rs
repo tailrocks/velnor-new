@@ -18,6 +18,20 @@ impl VelnorConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         self.check_schema(file)?;
         self.workflow.validate(file)?;
+        if self.runner_image_family.is_some()
+            && (self.workflow.policy != super::WorkflowPolicy::VelnorRepositoryV1
+                || self
+                    .workflow
+                    .default_branch
+                    .as_deref()
+                    .is_some_and(|branch| branch != "main"))
+        {
+            return Err(ContractError::config(
+                file,
+                "runner_image_family",
+                "requires_velnor_owner_main",
+            ));
+        }
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;

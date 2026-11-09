@@ -12,6 +12,7 @@ pub(super) fn matches(
     config: &VelnorConfig,
     generated: &BTreeMap<String, GeneratedOwner>,
     sources: &Sources,
+    runner_family_tools: Option<&[crate::verification_jobs::BuildTaskTool]>,
     policy: &WorkflowTaskPolicy,
 ) -> bool {
     match policy {
@@ -43,6 +44,7 @@ pub(super) fn matches(
         }
         WorkflowTaskPolicy::Image(policy) => config.images.iter().any(|image| matches!((velnor_actions_contract::canonical_json_bytes(image), velnor_actions_contract::canonical_json_bytes(&policy.image)), (Ok(expected), Ok(actual)) if expected == actual)),
         WorkflowTaskPolicy::RunnerFamily(policy) => config.runner_image_family.is_some()
+            && runner_family_tools == Some(policy.bootstrap.selected_tools.as_slice())
             && approved_mise(config, ReleaseTarget::LinuxX86_64.triple(), &policy.bootstrap.mise_setup)
             && policy.bootstrap.task.id == "runner-image-family"
             && policy.bootstrap.task.mise_task == "check-runner-image-candidate"

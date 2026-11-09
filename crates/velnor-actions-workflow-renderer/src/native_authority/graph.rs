@@ -22,6 +22,7 @@ pub(crate) struct AuthorityBinding {
     generated: BTreeMap<String, super::inputs::generated::GeneratedOwner>,
     workflow_required: BTreeSet<String>,
     workflow_sources: BTreeMap<String, Option<String>>,
+    runner_family_tools: Option<Vec<crate::verification_jobs::BuildTaskTool>>,
 }
 
 type WorkflowOwners = BTreeMap<String, Vec<String>>;
@@ -87,6 +88,7 @@ pub(super) fn build(
         AuthorityBinding {
             check_mise: super::check_mise::CheckMiseSetups::build(input)?,
             workflow_sources: super::task_sources::admit(input.config, input.workflow_sources)?,
+            runner_family_tools: input.runner_family_tools.map(<[_]>::to_vec),
             generated,
             workflow_required,
             commands: super::support_commands::build(input)?,

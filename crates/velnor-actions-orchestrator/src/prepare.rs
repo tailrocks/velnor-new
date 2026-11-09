@@ -110,9 +110,8 @@ fn prepare_inner(
         load_generator_admission(&canonical, leg, config.workflow.policy)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
-    validate_verification_branch(&config, &default_branch)?;
-    let mut discovery =
-        discover_with_options(&canonical, &config, &catalog, phases, guard)?;
+    validate_branch_authority(&config, &default_branch)?;
+    let mut discovery = discover_with_options(&canonical, &config, &catalog, phases, guard)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
@@ -212,10 +211,17 @@ fn load_published_generator_lock(
     Ok(Some(lock))
 }
 
-fn validate_verification_branch(
+fn validate_branch_authority(
     config: &VelnorConfig,
     default_branch: &str,
 ) -> Result<(), OrchestratorError> {
+    if config.runner_image_family.is_some() && default_branch != "main" {
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            "runner_image_family",
+            "requires_velnor_owner_main",
+        ));
+    }
     if config.workflow.verification_branch.as_deref() == Some(default_branch) {
         return Err(OrchestratorError::config(
             crate::config::CONFIG_REL,
@@ -299,7 +305,8 @@ pub(crate) fn check_velnor_identity(
         return Ok(());
     }
     if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
-        && velnor_actions_contract::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
+        && velnor_actions_contract::validate_repository_slug(&hint).as_deref()
+            != Some(VELNOR_IDENTITY)
     {
         return Err(OrchestratorError::IdentityRejected {
             problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"

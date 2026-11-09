@@ -112,6 +112,7 @@ impl AuthorityBinding {
             &self.config,
             &self.generated,
             &self.workflow_sources,
+            self.runner_family_tools.as_deref(),
             policy,
         )
     }
@@ -139,6 +140,7 @@ impl AuthorityBinding {
             generated: BTreeMap::new(),
             workflow_required: BTreeSet::new(),
             workflow_sources: BTreeMap::new(),
+            runner_family_tools: None,
         })
     }
 }
