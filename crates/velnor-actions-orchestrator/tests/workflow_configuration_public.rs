@@ -79,6 +79,8 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/local_action_annotation.rs"]
 mod local_action_annotation;
+#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
+mod mac_proof_cosign;
 #[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
 mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
@@ -271,6 +273,24 @@ mod producer_execution_fixture;
 
 #[path = "workflow_configuration_public/producer_execution_limits.rs"]
 mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/runner_family_sdk_baseline.rs"]
+mod runner_family_sdk_baseline;
+
+#[path = "workflow_configuration_public/runner_family_selection.rs"]
+mod runner_family_selection;
+
+#[path = "workflow_configuration_public/runner_family_guard.rs"]
+mod runner_family_guard;
+
+#[path = "workflow_configuration_public/runner_family_render.rs"]
+mod runner_family_render;
+
+#[path = "workflow_configuration_public/runner_family_source.rs"]
+mod runner_family_source;
+
+#[path = "workflow_configuration_public/runner_family_authority.rs"]
+mod runner_family_authority;
 
 #[path = "workflow_configuration_public/premerge_event_proof.rs"]
 mod premerge_event_proof;

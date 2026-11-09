@@ -126,6 +126,7 @@ family_gh release create "$release_tag" \
   --draft
 assert_tag_target
 family_gh release upload "$release_tag" @ASSET_PATHS@ --repo "$release_repository"
+@DRAFT_VERIFY@
 check_eligibility_identity
 family_gh release edit "$release_tag" --draft=false --verify-tag --repo "$release_repository"
 

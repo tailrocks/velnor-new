@@ -29,7 +29,7 @@ pub(super) struct Blob {
 }
 
 pub(super) struct OciArchive {
-    pub(super) path: std::path::PathBuf,
+    pub(super) path: Option<std::path::PathBuf>,
     pub(super) file: File,
     pub(super) initial: fs::Metadata,
     pub(super) layout: Vec<u8>,
@@ -45,10 +45,28 @@ struct ArchiveEntries {
 
 pub(super) fn load_archive(path: &Path) -> Result<OciArchive> {
     check_deadline()?;
-    let mut file = open_regular(path)?;
+    let file = open_regular(path)?;
+    load_opened_archive(file, Some(path.to_path_buf()))
+}
+
+pub(super) fn load_archive_file(file: &File) -> Result<OciArchive> {
+    check_deadline()?;
+    let file = file
+        .try_clone()
+        .map_err(|_| OciCandidateError("archive_open"))?;
+    load_opened_archive(file, None)
+}
+
+fn load_opened_archive(mut file: File, path: Option<std::path::PathBuf>) -> Result<OciArchive> {
+    check_deadline()?;
     let initial = file
         .metadata()
         .map_err(|_| OciCandidateError("archive_stat"))?;
+    if !initial.is_file() {
+        return Err(OciCandidateError("archive_not_regular"));
+    }
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| OciCandidateError("archive_seek"))?;
     if initial.len() > MAX_OCI_CANDIDATE_ARCHIVE_BYTES {
         return Err(OciCandidateError("archive_size_limit"));
     }
@@ -62,7 +80,7 @@ pub(super) fn load_archive(path: &Path) -> Result<OciArchive> {
     file.seek(SeekFrom::Start(0))
         .map_err(|_| OciCandidateError("archive_seek"))?;
     Ok(OciArchive {
-        path: path.to_path_buf(),
+        path,
         file,
         initial,
         layout: entries
@@ -152,7 +170,7 @@ fn read_archive_entries(archive: &mut tar::Archive<File>) -> Result<ArchiveEntri
 
 pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, u64)> {
     check_deadline()?;
-    verify_file_identity(&archive.path, &archive.file, &archive.initial)?;
+    verify_file_identity(archive.path.as_deref(), &archive.file, &archive.initial)?;
     archive
         .file
         .seek(SeekFrom::Start(0))
@@ -179,7 +197,7 @@ pub(super) fn authenticate_archive(archive: &mut OciArchive) -> Result<(String, 
     if size != archive.initial.len() {
         return Err(OciCandidateError("archive_size_changed"));
     }
-    verify_file_identity(&archive.path, &archive.file, &archive.initial)?;
+    verify_file_identity(archive.path.as_deref(), &archive.file, &archive.initial)?;
     Ok((hex(&sha2::Digest::finalize(digest)), size))
 }
 
@@ -278,12 +296,10 @@ fn open_regular(path: &Path) -> Result<File> {
     Ok(file)
 }
 
-fn verify_file_identity(path: &Path, file: &File, initial: &fs::Metadata) -> Result<()> {
+fn verify_file_identity(path: Option<&Path>, file: &File, initial: &fs::Metadata) -> Result<()> {
     let current = file
         .metadata()
         .map_err(|_| OciCandidateError("archive_stat"))?;
-    let path_metadata =
-        fs::symlink_metadata(path).map_err(|_| OciCandidateError("archive_stat"))?;
     if current.len() != initial.len()
         || current.dev() != initial.dev()
         || current.ino() != initial.ino()
@@ -291,12 +307,18 @@ fn verify_file_identity(path: &Path, file: &File, initial: &fs::Metadata) -> Res
         || current.mtime_nsec() != initial.mtime_nsec()
         || current.ctime() != initial.ctime()
         || current.ctime_nsec() != initial.ctime_nsec()
-        || path_metadata.dev() != initial.dev()
-        || path_metadata.ino() != initial.ino()
-        || !path_metadata.is_file()
-        || path_metadata.file_type().is_symlink()
     {
         return Err(OciCandidateError("archive_identity_changed"));
+    }
+    if let Some(path) = path {
+        let named = fs::symlink_metadata(path).map_err(|_| OciCandidateError("archive_stat"))?;
+        if named.dev() != initial.dev()
+            || named.ino() != initial.ino()
+            || !named.is_file()
+            || named.file_type().is_symlink()
+        {
+            return Err(OciCandidateError("archive_identity_changed"));
+        }
     }
     Ok(())
 }

@@ -214,10 +214,18 @@ pub use super::homebrew::qualification::execute_homebrew_qualification_from_env;
 pub use super::homebrew::runtime::execute_native_homebrew_check_from_env;
 pub(crate) use super::package_release_publish::{release_policy_admission, stable_tag_origin};
 
+pub use super::image_maintenance::mac_proof::{
+    VerifyMacQualificationRequest, verify_mac_qualification,
+};
+
 pub use super::image_maintenance::{
-    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckJobSourceRequest,
-    ImagePublicationProfile, InstallBuildxRequest, PromoteImageRequest, PublishImageRequest,
-    ValidateJobCandidateRequest, admit_runner_images, build_job_candidate, check_job_source,
-    install_buildx, promote_image, publish_image, validate_job_candidate,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, BuildRunnerImagesRequest,
+    CheckJobSourceRequest, ImagePublicationProfile, InstallBuildxRequest, PromoteImageRequest,
+    PublishImageRequest, PublishRunnerImagesRequest, RunnerImageBuildExecution,
+    RunnerImageBuildPurpose, ValidateJobCandidateRequest, VerifiedMacAttestation,
+    VerifyMacAttestationRequest, admit_runner_images, build_job_candidate, build_runner_images,
+    build_runner_images_with_execution, check_job_source, install_buildx, promote_image,
+    publish_image, publish_runner_images, validate_job_candidate, verify_mac_attestation,
+    verify_runner_publication,
 };
 pub use velnor_actions_mise::CheckDeadline;

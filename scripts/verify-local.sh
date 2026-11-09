@@ -213,6 +213,47 @@ else
   echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
   fail "toolchain (pinned nextest missing)"
 fi
+GH_POLICY="$(toml_tool_pin .velnor/version-policy.toml gh 2>>"$TOOLCHAIN_LOG")"
+if [[ ! "$GH_POLICY" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "toolchain (missing exact GitHub CLI policy pin)"
+  exit 1
+fi
+if [ -z "${VELNOR_GH_BINARY:-}" ]; then
+  GH_SPEC="gh@$GH_POLICY"
+  if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "$GH_SPEC" >>"$TOOLCHAIN_LOG" 2>&1; then
+    fail "toolchain (GitHub CLI install failed; log: $TOOLCHAIN_LOG)"
+    exit 1
+  fi
+  GH_PREPARED="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which gh --tool "$GH_SPEC" 2>>"$TOOLCHAIN_LOG")"
+  if [[ "$GH_PREPARED" != /* || ! -f "$GH_PREPARED" || ! -x "$GH_PREPARED" ]]; then
+    fail "toolchain (pinned GitHub CLI executable unavailable)"
+    exit 1
+  fi
+  unset VELNOR_GH_BINARY
+elif [[ "$VELNOR_GH_BINARY" != /* || ! -f "$VELNOR_GH_BINARY" || ! -x "$VELNOR_GH_BINARY" ]]; then
+  fail "toolchain (explicit GitHub CLI executable unavailable)"
+  exit 1
+fi
+if [ "$(uname -s)" = Linux ]; then
+  COSIGN_POLICY="$(toml_tool_pin .velnor/version-policy.toml cosign 2>>"$TOOLCHAIN_LOG")"
+  if [[ ! "$COSIGN_POLICY" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    fail "toolchain (missing exact Cosign policy pin)"
+    exit 1
+  fi
+  if [ -z "${VELNOR_TEST_COSIGN:-}" ]; then
+    COSIGN_SPEC="aqua:sigstore/cosign@$COSIGN_POLICY"
+    if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "$COSIGN_SPEC" >>"$TOOLCHAIN_LOG" 2>&1; then
+      fail "toolchain (Cosign install failed; log: $TOOLCHAIN_LOG)"
+      exit 1
+    fi
+    VELNOR_TEST_COSIGN="$(MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which cosign --tool "$COSIGN_SPEC" 2>>"$TOOLCHAIN_LOG")"
+  fi
+  if [[ "$VELNOR_TEST_COSIGN" != /* || ! -f "$VELNOR_TEST_COSIGN" || ! -x "$VELNOR_TEST_COSIGN" ]]; then
+    fail "toolchain (pinned Cosign executable unavailable)"
+    exit 1
+  fi
+  export VELNOR_TEST_COSIGN
+fi
 pass "toolchain"
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check

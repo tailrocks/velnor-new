@@ -1,0 +1,1 @@
+SYNTHETIC TEST FIXTURE ONLY. No Mac job, daemon, image qualification, publication or release authority is asserted. Accepted only by isolated private verifier tests.

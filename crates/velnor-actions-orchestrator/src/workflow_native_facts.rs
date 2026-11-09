@@ -212,6 +212,9 @@ pub(super) fn workflow_sources(
         .collect::<Vec<_>>();
     for policy in &prepared.workflow_tasks {
         if let velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy::NativeImage(policy) = policy { workflow_sources.push(WorkflowSourceFact { path: policy.task.script.clone(), sha256: Some(policy.source_sha256.clone()) }); }
+        if let velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy::RunnerFamily(policy) = policy {
+            workflow_sources.push(WorkflowSourceFact { path: "scripts/check-runner-image-candidate.sh".into(), sha256: Some(policy.script_sha256.clone()) });
+        }
     }
     workflow_sources
 }

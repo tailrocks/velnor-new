@@ -7,10 +7,11 @@ The candidate cannot plan its own build, qualification, publication, or adoption
 
 ## Publication authority
 
-A protected `main` push builds and qualifies one Linux x86-64 SDK with the fixed
-pinned build command. Qualification downloads that build artifact by ID and
-executes those exact bytes against the committed generation oracle. Qualification
-does not rebuild the SDK or derive expected results from the candidate.
+A protected `main` push builds one Linux x86-64 SDK and one Darwin arm64 SDK
+with fixed pinned build commands. Qualification downloads each original build
+artifact by ID and executes those exact bytes on the matching architecture
+against the committed generation oracle. Qualification does not rebuild either
+SDK or derive expected results from the candidate.
 
 An annotated `sdk-preview-<full-source-sha>` tag authorizes publication. The tag
 points directly to the qualified source commit, which remains reachable from
@@ -35,8 +36,9 @@ only from that authority; candidate files are data and never execute with the
 owner credential. Its arguments are `create <source-sha> <pinned-gh-path>
 <trusted-verifier-sha>`.
 
-The canonical tag annotation binds the source, package version, producer run and
-attempt, artifact ID, archive digest, and successful immutability precheck time.
+The canonical tag annotation binds the source, package version, and each target's
+producer run, attempt, artifact ID, and archive digest. It also binds the
+successful immutability precheck time.
 The tag authority verifies the authenticated push actor and rerun actor, the
 annotated tag object, both rulesets, and the complete annotation. The precheck
 must precede tag creation by at most one minute and be no older than 15 minutes
@@ -47,17 +49,19 @@ or move the tag. Repository administrators remain trusted to preserve immutable
 releases throughout admission and publication; an old precheck does not prove
 the current administration setting.
 
-The tag workflow retrieves the successful main producer artifact by ID.
-The archive must match its authenticated GitHub digest before bounded extraction.
-The artifact contains exactly one regular SDK executable. The tag workflow
-retains those same bytes as an immutable artifact in the tag run.
+The tag workflow retrieves both successful main producer artifacts by ID.
+Each archive must match its authenticated GitHub digest before bounded
+extraction and contain exactly its target's regular SDK executable. ELF x86-64
+and Mach-O arm64 validation reject swapped or unsupported payloads. The tag
+workflow retains each original executable as an immutable artifact in the tag
+run. It preserves the separate original and retained artifact identities.
 
-Source-free jobs create a draft, attest the canonical receipt and SDK together,
+Source-free jobs create a draft, attest the canonical receipt and both SDK executables together,
 and publish through the protected `generator-source-preview` environment. It
 requires the owner reviewer and admits only tags matching `sdk-preview-*` through
 a tag-specific deployment policy. The stable `generator-release` environment
 retains its separate protection. These jobs
-perform no repository checkout or candidate execution. They verify both signed
+perform no repository checkout or candidate execution. They verify all three signed
 subjects, certificate and run identities, the tag, draft identity, and exact
 asset hashes. The publisher rechecks source ancestry and the tag before
 publication, then requires an immutable release with the complete asset set.
@@ -105,17 +109,24 @@ The release contains these assets:
 - `SDK_PREVIEW_RECEIPT.json`
 - `SDK_PREVIEW_RECEIPT.json.sigstore.jsonl`
 - `velnor-actions-x86_64-unknown-linux-gnu`
+- `velnor-actions-aarch64-apple-darwin`
 
-The schema-2 receipt records the repository, package version, source SHA, tag,
+The schema-3 receipt records the repository, package version, source SHA, tag,
 release ID, source admission, draft preparation, signing, CI, qualification,
-producer artifact, candidate artifacts, and payload identity. Each workflow tuple
-contains its path, ref, source SHA, run ID, and exact attempt. Source, draft, and
-signer share the tag run but may have different attempts, ordered from source to
-signer. The producer and candidate records bind the original artifact IDs; the
-producer also binds the archive digest. The payload identity contains its target,
-name, size, and SHA-256 digest. The receipt uses sorted JSON object keys, compact
-separators, and no final newline. The Sigstore bundle binds both the receipt and
-payload subjects.
+and retained source artifact identity. Its closed `targets` object contains
+exactly `linux` and `darwin`. Each target binds its original producer run and
+attempt, artifact ID, archive digest, retained candidate payload artifact ID,
+qualification job ID, and payload target, name, size, and SHA-256 digest.
+Original and retained artifacts remain distinct. Each target's qualification
+job belongs to its authenticated producer run and attempt. The separate
+source-qualification dispatch remains required. Missing, duplicate, extra, or
+cross-assigned target identities fail closed.
+
+Each workflow tuple contains its path, ref, source SHA, run ID, and exact attempt.
+Source, draft, and signer share the tag run but may have different attempts,
+ordered from source to signer. The receipt uses sorted JSON object keys, compact
+separators, and no final newline. The Sigstore bundle binds the receipt and both
+payload subjects. The immutable release contains exactly the four listed assets.
 
 The lock records the complete receipt identity, the hashes of the receipt and
 bundle, and the successful publisher's exact attempt and job ID. Publisher
@@ -133,7 +144,7 @@ separate from the stable generator records in `.velnor/generator.lock`.
 A staged entry does not select a preview SDK for ordinary CI.
 
 Staging approval uses the verifier from an independently authenticated, already
-merged protected commit. The verifier checks the immutable release, both signed
+merged protected commit. The verifier checks the immutable release, all three signed
 subjects, exact run attempts, successful required jobs, and source ancestry.
 Independent review binds that result to the staging pull request's current head
 and base. The operator checks those identities again before merging.
@@ -169,3 +180,26 @@ task execution, report writing, and Required.
 Tests of parser rules, API policy, or historical signed fixtures do not establish
 that a new preview was published successfully. Adoption requires a real signed
 publication and successful verification of that publication before staging.
+
+## Runtime SDK selection
+
+Planner preview approval selects the CI controller only. It does not authorize
+Mac qualification or native publication operations. Runtime selection requires
+its own `[runtime-preview-staged]` entry, followed by activation of that exact
+identity in `[runtime-preview]` from the protected base. Both sections live in
+`.velnor/generator.lock`, separately from the planner sections and stable
+generator records. A candidate cannot stage and approve itself.
+
+Stable and preview runtime identities are distinct types. Stable selection
+retains the stable release manifest and complete stable target inventory.
+Preview selection binds the immutable preview release, source, independent
+publication authority, receipt and bundle digests, complete paired target
+inventory, and the selected host executable's exact digest. A receipt digest is
+never interpreted as a stable release-manifest digest. The running executable
+must match the selected authenticated target bytes.
+
+Linux native signing and Darwin qualification consume their respective targets
+from the same approved preview. SDK source, image source, and adoption commit
+remain separate identities. A preview executable is not installed or described
+as the stable SDK with the same numeric package version. Unsupported targets,
+missing approval, or failed verification fail closed.

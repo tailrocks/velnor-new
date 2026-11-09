@@ -52,7 +52,7 @@ class GitHub:
         self.deadline = time.monotonic() + 180
 
     def request(self, method, path, body=None, allowed=(200,)):
-        require(path == "/user" or path == "/users/donbeave" or path.startswith("/repos/" + REPOSITORY + "/"))
+        require(path == "/user" or path == "/users/donbeave" or path == "/repos/" + REPOSITORY or path.startswith("/repos/" + REPOSITORY + "/"))
         remaining = self.deadline - time.monotonic()
         require(remaining > 0)
         connection = http.client.HTTPSConnection("api.github.com", timeout=min(30, remaining), context=ssl.create_default_context())
@@ -145,16 +145,21 @@ def create(source, gh, trusted_revision):
         gate["verify_default_ancestry"](client, source)
         version = gate["source_version"](client, source)
         proof = gate["producer_inputs"](client, source)
-        require(set(proof) == {"producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256"})
-        artifact = gate["producer_artifact"](client, source, proof["producer_run_id"], proof["producer_run_attempt"])
-        require(artifact.get("id") == proof["payload_artifact_id"] and artifact.get("digest") == "sha256:" + proof["payload_archive_sha256"])
-        gate["download_verified_payload"](client, artifact, Path(temporary).resolve() / "producer-payload")
+        require(set(proof) == {"linux", "darwin"})
+        artifacts = {}
+        for target, triple in (("linux", "x86_64-unknown-linux-gnu"), ("darwin", "aarch64-apple-darwin")):
+            item = proof[target]
+            require(set(item) == {"producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256", "qualification_job_id"})
+            artifact, job_id = gate["producer_artifact"](client, source, item["producer_run_id"], item["producer_run_attempt"], target)
+            require(artifact.get("id") == item["payload_artifact_id"] and artifact.get("digest") == "sha256:" + item["payload_archive_sha256"] and job_id == item["qualification_job_id"])
+            gate["download_verified_payload"](client, artifact, Path(temporary).resolve() / target, triple)
+            artifacts[target] = artifact
         tag = "sdk-preview-" + source
         reference = "/repos/" + REPOSITORY + "/git/ref/tags/" + tag
         absent(client, reference)
         require(client.get("/repos/" + REPOSITORY + "/immutable-releases").get("enabled") is True)
         checked = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
-        record = {"schema": 1, "repository": REPOSITORY, "artifact": "generator", "source_sha": source, "version": version, **proof, "immutability": {"enabled": True, "checked_at": checked}}
+        record = {"schema": 2, "repository": REPOSITORY, "artifact": "generator", "source_sha": source, "version": version, "targets": proof, "immutability": {"enabled": True, "checked_at": checked}}
         message = canonical(record).decode("utf-8")
         gate["annotation"](message, source, checked, now_utc(), version)
         body = canonical({"tag": tag, "message": message, "object": source, "type": "commit", "tagger": {"name": "Alexey Zhokhov", "email": "alexey@zhokhov.com", "date": checked}})
@@ -163,8 +168,11 @@ def create(source, gh, trusted_revision):
         require(isinstance(oid, str) and re.fullmatch("[0-9a-f]{40}", oid) and created.get("tag") == tag and created.get("object", {}).get("type") == "commit" and created.get("object", {}).get("sha") == source)
         check_main(client, source)
         gate["verify_tag_rules"](client)
-        latest = gate["producer_artifact"](client, source, proof["producer_run_id"], proof["producer_run_attempt"])
-        require(latest.get("id") == artifact["id"] and latest.get("digest") == artifact["digest"] and latest.get("size_in_bytes") == artifact["size_in_bytes"])
+        for target in ("linux", "darwin"):
+            item = proof[target]
+            latest, job_id = gate["producer_artifact"](client, source, item["producer_run_id"], item["producer_run_attempt"], target)
+            original = artifacts[target]
+            require(latest.get("id") == original["id"] and latest.get("digest") == original["digest"] and latest.get("size_in_bytes") == original["size_in_bytes"] and job_id == item["qualification_job_id"])
         absent(client, reference)
         require(client.get("/repos/" + REPOSITORY + "/immutable-releases").get("enabled") is True)
         current = now_utc()

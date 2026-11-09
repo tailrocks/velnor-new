@@ -4,20 +4,24 @@
 use super::{
     OciCandidateError, OciCandidateEvidence, OciCandidateInspection, OciImageConfiguration, Result,
     archive::{OciArchive, authenticate_archive, hash_blob},
-    check_deadline, config,
+    check_deadline,
     json::parse,
     layer::{LayerDescriptor, verify_layers},
 };
+mod attested;
+mod registry;
 #[path = "graph_support.rs"]
 mod support;
-use support::{
-    Descriptor, add_reference, descriptor, is_layer_media_type, read_referenced, reject_unknown,
-    sha256,
+pub(super) use attested::project_attested_oci_file;
+pub use attested::{AttestedProjection, UntrustedEnvelopeInspection, verify_provenance_envelope};
+pub use registry::{
+    OciRegistryManifest, OciRegistryProjection, inspect_registry_configuration,
+    inspect_registry_manifest,
 };
+use support::{OciDescriptor, add_reference, descriptor, read_referenced, reject_unknown, sha256};
 
 const INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 const MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
-const CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.image.config.v1+json";
 
 #[derive(Clone, Copy)]
 enum ConfigurationProjection {
@@ -101,71 +105,35 @@ fn inspect_graph_inner(
     }
     let manifest_raw = read_referenced(&mut archive, &descriptor)?;
     check_deadline()?;
-    inspect_manifest(archive, &descriptor, &manifest_raw, projection)
+    let annotated =
+        index_obj.contains_key("annotations") || manifests[0].get("annotations").is_some();
+    let (mut inspection, archive) =
+        inspect_manifest(archive, &descriptor, &manifest_raw, projection)?;
+    inspection.index_has_annotations = annotated;
+    Ok((inspection, archive))
 }
 
 fn inspect_manifest(
     archive: OciArchive,
-    manifest_descriptor: &Descriptor,
+    manifest_descriptor: &OciDescriptor,
     manifest_raw: &[u8],
     projection: ConfigurationProjection,
 ) -> Result<(OciCandidateInspection, OciArchive)> {
-    let manifest = parse(manifest_raw)?;
-    let manifest_obj = manifest
-        .as_object()
-        .ok_or(OciCandidateError("oci_manifest_shape"))?;
-    reject_unknown(
-        manifest_obj,
-        &[
-            "schemaVersion",
-            "mediaType",
-            "config",
-            "layers",
-            "annotations",
-        ],
-    )?;
-    if manifest_obj
-        .get("schemaVersion")
-        .and_then(serde_json::Value::as_u64)
-        != Some(2)
-        || manifest_obj
-            .get("mediaType")
-            .and_then(serde_json::Value::as_str)
-            != Some(MANIFEST_MEDIA_TYPE)
-    {
-        return Err(OciCandidateError("oci_manifest_identity"));
-    }
-    let config = descriptor(
-        manifest_obj
-            .get("config")
-            .ok_or(OciCandidateError("oci_config_missing"))?,
-        false,
-    )?;
-    if config.media_type != CONFIG_MEDIA_TYPE {
-        return Err(OciCandidateError("oci_config_media_type"));
-    }
-    let layers_value = manifest_obj
-        .get("layers")
-        .and_then(serde_json::Value::as_array)
-        .filter(|layers| !layers.is_empty())
-        .ok_or(OciCandidateError("oci_layers_missing"))?;
-    let layers = layers_value
-        .iter()
-        .map(|value| descriptor(value, false).map(Into::into))
-        .collect::<Result<Vec<LayerDescriptor>>>()?;
-    if layers
-        .iter()
-        .any(|layer| !is_layer_media_type(&layer.media_type))
-    {
-        return Err(OciCandidateError("oci_layer_media_type"));
-    }
+    let (config, layers) = parse_manifest(manifest_raw)?;
     inspect_config_and_blobs(archive, manifest_descriptor, &config, &layers, projection)
+}
+
+fn parse_manifest(manifest_raw: &[u8]) -> Result<(OciDescriptor, Vec<LayerDescriptor>)> {
+    let manifest = parse(manifest_raw)?;
+    let (config, layers) = velnor_runner_image_manifest::parse_oci_manifest(&manifest)
+        .map_err(|error| OciCandidateError(error.0))?;
+    Ok((config, layers.into_iter().map(Into::into).collect()))
 }
 
 fn inspect_config_and_blobs(
     mut archive: OciArchive,
-    manifest_descriptor: &Descriptor,
-    config: &Descriptor,
+    manifest_descriptor: &OciDescriptor,
+    config: &OciDescriptor,
     layers: &[LayerDescriptor],
     projection: ConfigurationProjection,
 ) -> Result<(OciCandidateInspection, OciArchive)> {
@@ -193,14 +161,17 @@ fn inspect_config_and_blobs(
         OciCandidateInspection {
             evidence,
             configuration,
+            manifest_media_type: manifest_descriptor.media_type.clone(),
+            diff_ids: expected_diff_ids,
+            index_has_annotations: false,
         },
         archive,
     ))
 }
 
 fn collect_references(
-    manifest: &Descriptor,
-    config: &Descriptor,
+    manifest: &OciDescriptor,
+    config: &OciDescriptor,
     layers: &[LayerDescriptor],
 ) -> Result<std::collections::BTreeMap<String, (u64, String)>> {
     let mut referenced = std::collections::BTreeMap::new();
@@ -283,8 +254,8 @@ fn layer_digests(layers: &[LayerDescriptor]) -> Vec<String> {
 
 fn candidate_evidence(
     archive: &OciArchive,
-    manifest_descriptor: &Descriptor,
-    config: &Descriptor,
+    manifest_descriptor: &OciDescriptor,
+    config: &OciDescriptor,
     layer_digests: Vec<String>,
     archive_digest: String,
     archive_size: u64,
@@ -305,12 +276,20 @@ fn candidate_evidence(
 
 fn read_expected_diff_ids(
     archive: &mut OciArchive,
-    config: &Descriptor,
+    config: &OciDescriptor,
     layer_count: usize,
     projection: ConfigurationProjection,
 ) -> Result<(Vec<String>, OciImageConfiguration)> {
     let config_raw = read_referenced(archive, config)?;
     let image_config = parse(&config_raw)?;
+    project_configuration(&image_config, layer_count, projection)
+}
+
+fn project_configuration(
+    image_config: &serde_json::Value,
+    layer_count: usize,
+    projection: ConfigurationProjection,
+) -> Result<(Vec<String>, OciImageConfiguration)> {
     let object = image_config
         .as_object()
         .ok_or(OciCandidateError("oci_config_shape"))?;
@@ -343,7 +322,10 @@ fn read_expected_diff_ids(
     check_deadline()?;
     let projected = match projection {
         ConfigurationProjection::Ignore => OciImageConfiguration::default(),
-        ConfigurationProjection::Include => config::project(&image_config)?,
+        ConfigurationProjection::Include => {
+            velnor_runner_image_manifest::project_oci_configuration(image_config)
+                .map_err(|error| OciCandidateError(error.0))?
+        }
     };
     Ok((diff_ids, projected))
 }

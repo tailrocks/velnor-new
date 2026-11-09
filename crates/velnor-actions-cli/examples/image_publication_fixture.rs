@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 mod crane;
 #[path = "image_publication_fixture/digest.rs"]
 mod digest;
+#[path = "image_publication_fixture/family_registry.rs"]
+mod family_registry;
 #[path = "image_publication_fixture/pagination.rs"]
 mod pagination;
 #[path = "image_publication_fixture/registry.rs"]
@@ -57,7 +59,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
     let result = match program {
         "gh" => gh(&payload[1..], &state).map(|()| ExitCode::SUCCESS),
-        "crane" => crane::run(&payload[1..], &mut state, &state_path),
+        "crane" => family_registry::run(&payload[1..], &mut state, &state_path),
         other => Err(format!("unsupported fixture payload: {other}").into()),
     };
     match result {

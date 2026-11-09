@@ -7,7 +7,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     ImageCandidateArchive, ImageCandidateOci, ImageCandidateRecord, RunnerImagePublicationLock,
-    RunnerImagePublicationRecord, parse_image_candidate_record,
+    RunnerImagePublicationProvenance, RunnerImagePublicationRecord, parse_image_candidate_record,
     parse_runner_image_publication_record,
 };
 
@@ -18,7 +18,7 @@ use super::{ImagePublicationProfile, PublishImageRequest};
 use runner_profiles::ImageKind;
 
 #[path = "publication_authority_oci.rs"]
-mod oci;
+pub(super) mod oci;
 #[path = "publication_authority_source.rs"]
 mod source;
 
@@ -29,7 +29,9 @@ pub(super) fn verify_source_inputs(
     source::verify_source_inputs(candidate, source_files)
 }
 
-pub(super) fn source_paths(profile: ImagePublicationProfile) -> &'static [&'static str] {
+pub(super) fn source_paths(
+    profile: ImagePublicationProfile,
+) -> Result<&'static [&'static str], OrchestratorError> {
     source::source_paths(profile)
 }
 
@@ -60,6 +62,7 @@ pub(super) struct CandidateRecord {
     pub lock: Option<RunnerImagePublicationLock>,
     pub buildx_builder: Option<String>,
     pub record_sha256: String,
+    pub provenance: Option<RunnerImagePublicationProvenance>,
 }
 
 #[derive(Deserialize)]
@@ -140,6 +143,7 @@ fn from_job(record: ImageCandidateRecord) -> Result<CandidateRecord, Orchestrato
         lock: None,
         buildx_builder: Some(record.build.builder),
         record_sha256: String::new(),
+        provenance: None,
     })
 }
 
@@ -178,6 +182,7 @@ fn from_runner(
         lock: Some(record.lock),
         buildx_builder: None,
         record_sha256: String::new(),
+        provenance: Some(record.provenance),
     })
 }
 
@@ -260,7 +265,7 @@ pub(super) fn tag(source_commit: &str) -> String {
     format!("sha-{source_commit}")
 }
 
-fn hash_regular_file(
+pub(super) fn hash_regular_file(
     path: &Path,
     limit: u64,
     deadline: Option<velnor_actions_mise::CheckDeadline>,

@@ -215,6 +215,7 @@ async fn acquire_scoped_offer_inner(
         input.host_journal,
         input.resource_budget,
         input.release_read_secret,
+        input.selected_engine.endpoint(),
     )
     .await
     else {

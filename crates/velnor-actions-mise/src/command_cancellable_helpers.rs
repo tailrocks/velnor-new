@@ -108,8 +108,12 @@ pub(super) fn spawn_child(
     command: &IsolatedCommand,
     anchor: &mut Option<ProcessGroupAnchor>,
     reserved_cleanup_deadline: Option<Instant>,
+    input: Option<std::fs::File>,
 ) -> Result<Child, String> {
     let mut child_command = command.command();
+    if let Some(input) = input {
+        child_command.stdin(Stdio::from(input));
+    }
     match spawn_owned_command(&mut child_command, anchor.as_ref()) {
         Ok(child) => Ok(child),
         Err(error) => Err(cleanup_context(

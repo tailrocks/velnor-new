@@ -13,10 +13,9 @@ use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     IMAGE_CANDIDATE_SCHEMA, IMAGE_CANDIDATE_SOURCE_INPUTS, ImageCandidateArchive,
     ImageCandidateBuild, ImageCandidateOci, ImageCandidateRecord, ImageCandidateSource,
-    ImageCandidateSourceClosure, ImageCandidateWorkflow, RUNNER_IMAGE_PUBLICATION_SCHEMA,
-    RUNNER_PUBLICATION_SOURCE_INPUTS, RunnerImagePublicationLock, RunnerImagePublicationRecord,
-    RunnerImagePublicationSource, native_image_candidate_inputs, serialize_image_candidate_record,
-    serialize_image_candidate_source_closure,
+    ImageCandidateWorkflow, RUNNER_IMAGE_PUBLICATION_SCHEMA, RunnerImagePublicationLock,
+    RunnerImagePublicationRecord, RunnerImagePublicationSource, native_image_candidate_inputs,
+    runner_publication_source_inputs, serialize_image_candidate_record,
 };
 
 pub(super) use super::encoding::encode_base64;
@@ -24,6 +23,9 @@ use super::{FixtureProfile, oci};
 #[path = "records/qualification.rs"]
 mod qualification;
 pub(super) use qualification::{qualification_attestation, qualification_proof};
+#[path = "records/attestation.rs"]
+mod attestation;
+pub(super) use attestation::{AttestationInput, attestation, workflow_uri};
 
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 pub(super) const QUALIFICATION_ATTEST_WORKFLOW: &str =
@@ -58,6 +60,7 @@ struct RunnerRecordInput<'a> {
     oci: ImageCandidateOci,
     workflow: ImageCandidateWorkflow,
     source_files: &'a BTreeMap<String, Vec<u8>>,
+    provenance: &'a velnor_actions_contract::RunnerImagePublicationProvenance,
 }
 
 pub(super) fn source_files(
@@ -71,7 +74,7 @@ pub(super) fn source_files(
     let paths: Vec<&str> = match profile {
         FixtureProfile::Job => native_image_candidate_inputs().to_vec(),
         FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => {
-            RUNNER_PUBLICATION_SOURCE_INPUTS.to_vec()
+            runner_publication_source_inputs()?.to_vec()
         }
     };
     paths
@@ -80,7 +83,8 @@ pub(super) fn source_files(
             let bytes = if profile == FixtureProfile::Job && !semantic.contains(path) {
                 format!("fixture source: {path}\n").into_bytes()
             } else {
-                fs::read(root.join(path))?
+                fs::read(root.join(path))
+                    .map_err(|error| format!("fixture input {path}: {error}"))?
             };
             Ok(((*path).to_owned(), bytes))
         })
@@ -150,6 +154,10 @@ pub(super) fn make_record(input: RecordInput<'_>) -> Result<Vec<u8>, Box<dyn Err
                 oci,
                 workflow,
                 source_files,
+                provenance: image
+                    .provenance
+                    .as_ref()
+                    .ok_or("runner provenance missing")?,
             })
         }
     }
@@ -164,6 +172,7 @@ fn runner_record(input: RunnerRecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>
         oci,
         workflow,
         source_files,
+        provenance,
     } = input;
     let lock_bytes = source_files
         .get(".velnor/runner.lock")
@@ -205,6 +214,7 @@ fn runner_record(input: RunnerRecordInput<'_>) -> Result<Vec<u8>, Box<dyn Error>
                 .ok_or("node lock version")?
                 .to_owned(),
         },
+        provenance: provenance.clone(),
     };
     Ok(serde_json::to_vec(&record)?)
 }
@@ -236,7 +246,7 @@ pub(super) fn state_value(
         "workflow_run":{"id":run_id,"head_sha":authority_sha,"head_branch":"main"}});
     let ci_run = json!({"id":profile.ci_run_id(),"run_number":23,"run_attempt":run_attempt,"path":".github/workflows/ci.yml","event":"push","head_branch":"main","head_sha":source,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"completed","conclusion":"success"});
-    let publisher = json!({"id":profile.publisher_run_id(),"run_attempt":1,"event":"push","path":".github/workflows/publish.yml","head_branch":"main","head_sha":source,
+    let publisher = json!({"id":profile.publisher_run_id(),"run_attempt":1,"event":"push","path":profile.publication_workflow_path(),"head_branch":"main","head_sha":source,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"in_progress","conclusion":null});
     let qualifier = json!({"id":profile.qualification_run_id(),"run_attempt":1,"event":"push","path":".github/workflows/runner-image-qualification.yml","head_branch":"main","head_sha":source,
         "head_repository":{"id":1_390_620_900,"full_name":REPOSITORY},"status":"completed","conclusion":"success",
@@ -268,83 +278,6 @@ pub(super) fn state_value(
         "source_commit":source,"main_sha":main_sha,"source_files":source_files,"producer":producer,"requested_attempt":run_attempt,"artifacts":[artifact],
         "jobs":jobs,"attestor":attestor,"ci_run":ci_run,"ci_jobs":ci_jobs,"ci_job_pages":null,"publisher":publisher,"qualifier":qualifier,"qualifier_jobs":qualifier_jobs,"attestation":attestation,"qualification_attestation":qualification_attestation,
         "crane":{"tag_reference":tag_reference,"tag_digest":null,"manifest_reference":null,"remote":null,"promotion_tags":{},"promotion_operations":[],"fail_blob_readback":false,"corrupt_remote_blob":null,"remote_manifest_response_corruption":null}})
-}
-
-pub(super) fn attestation(
-    profile: FixtureProfile,
-    source: &str,
-    authority_sha: &str,
-    archive_sha: &str,
-    record_sha: &str,
-    source_files: &BTreeMap<String, Vec<u8>>,
-    run_attempt: u32,
-) -> Result<Value, Box<dyn Error>> {
-    let caller_path = profile.workflow_path();
-    let signer_path = caller_path;
-    let caller_uri = workflow_uri(caller_path);
-    let signer_uri = workflow_uri(signer_path);
-    let invocation = format!(
-        "https://github.com/{REPOSITORY}/actions/runs/{}/attempts/{run_attempt}",
-        profile.run_id(),
-    );
-    let mut subjects = BTreeMap::from([
-        (profile.archive_name().to_owned(), archive_sha.to_owned()),
-        (profile.record_name().to_owned(), record_sha.to_owned()),
-    ]);
-    let extra_digest = if profile == FixtureProfile::Job {
-        let inputs = source_files
-            .iter()
-            .map(|(path, bytes)| (path.clone(), hex(&Sha256::digest(bytes))))
-            .collect();
-        let closure = ImageCandidateSourceClosure::new(source.to_owned(), inputs)?;
-        hex(&Sha256::digest(serialize_image_candidate_source_closure(
-            &closure,
-        )?))
-    } else {
-        hex(&Sha256::digest(b"fixture source closure"))
-    };
-    let extra_names: &[&str] = match profile {
-        FixtureProfile::Job => &["job-image-native-source-closure.json"],
-        FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => &[
-            "velnor-runner-linux-amd64.tar",
-            "velnor-dind-linux-amd64.tar",
-            "velnor-resource-probe-linux-amd64.tar",
-            "RESOURCE_PROBE_MANIFEST.json",
-            "LICENSE",
-            "NOTICE",
-            "SHA256SUMS",
-            "runner-image-publication.json",
-            "dind-image-publication.json",
-            "resource-probe-image-publication.json",
-        ],
-    };
-    for name in extra_names {
-        subjects
-            .entry((*name).to_owned())
-            .or_insert_with(|| extra_digest.clone());
-    }
-    let subject_values = subjects
-        .iter()
-        .map(|(name, digest)| json!({"name":name,"digest":{"sha256":digest}}))
-        .collect::<Vec<_>>();
-    let source_digest = match profile {
-        FixtureProfile::Job => source,
-        FixtureProfile::Runner | FixtureProfile::Dind | FixtureProfile::ResourceProbe => {
-            authority_sha
-        }
-    };
-    Ok(
-        json!([{"verificationResult":{"statement":{"predicateType":"https://slsa.dev/provenance/v1","subject":subject_values,
-        "predicate":{"buildDefinition":{"internalParameters":{"github":{"event_name":"push"}}}}},
-        "signature":{"certificate":{"issuer":"https://token.actions.githubusercontent.com","subjectAlternativeName":signer_uri,
-            "sourceRepositoryURI":format!("https://github.com/{REPOSITORY}"),"sourceRepositoryOwnerURI":"https://github.com/tailrocks","sourceRepositoryIdentifier":"1390620900",
-            "sourceRepositoryDigest":source_digest,"sourceRepositoryRef":"refs/heads/main","buildSignerURI":signer_uri,"buildSignerDigest":authority_sha,
-            "buildConfigURI":caller_uri,"buildConfigDigest":authority_sha,"buildTrigger":"push","runInvocationURI":invocation,"runnerEnvironment":"github-hosted"}}}}]),
-    )
-}
-
-pub(super) fn workflow_uri(path: &str) -> String {
-    format!("https://github.com/{REPOSITORY}/{path}@refs/heads/main")
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {

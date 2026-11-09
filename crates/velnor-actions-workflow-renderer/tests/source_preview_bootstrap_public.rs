@@ -3,6 +3,39 @@
 
 use std::{error::Error, path::Path, process::Command};
 
+#[cfg(unix)]
+#[test]
+fn runtime_install_keeps_output_and_owned_files_consistent() -> Result<(), Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output = Command::new("python3")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .arg(root.join("tests/source_preview_handoff_scenarios.py"))
+        .arg(root.join("../velnor-actions-mise/src/source_preview"))
+        .output()?;
+    assert!(
+        output.status.success(),
+        "runtime handoff lost cleanup ownership: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+#[test]
+fn runtime_preview_requires_current_main_and_protected_parent() -> Result<(), Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output = Command::new("python3")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .arg(root.join("tests/source_preview_runtime_scenarios.py"))
+        .arg(root.join("../velnor-actions-mise/src/source_preview"))
+        .output()?;
+    assert!(
+        output.status.success(),
+        "runtime preview accepted an untrusted source: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
 #[test]
 fn source_preview_requires_successful_exact_source_jobs() -> Result<(), Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -25,7 +58,7 @@ fn protected_base_controls_preview_acquisition() -> Result<(), Box<dyn Error>> {
     let output = Command::new("python3")
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(root.join("tests/source_preview_bootstrap_scenarios.py"))
-        .arg(root.join("src/native_helper/source_preview_bootstrap.py"))
+        .arg(root.join("../velnor-actions-mise/src/source_preview/source_preview_bootstrap.py"))
         .output()?;
     assert!(
         output.status.success(),
@@ -52,7 +85,7 @@ fn source_preview_draft_requires_exact_source_and_payload() -> Result<(), Box<dy
 }
 
 #[test]
-fn source_preview_artifact_requires_bounded_verified_elf() -> Result<(), Box<dyn Error>> {
+fn source_preview_artifact_requires_exact_supported_target_bytes() -> Result<(), Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new("python3")
         .env("PYTHONDONTWRITEBYTECODE", "1")

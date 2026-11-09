@@ -30,6 +30,25 @@ pub(super) struct PublishedImage {
     pub idempotent: bool,
 }
 
+pub(super) fn verify_published(
+    repository: &str,
+    tag: &str,
+    expected: &ImageCandidateOci,
+    deadline: CheckDeadline,
+) -> Result<PublishedImage, OrchestratorError> {
+    let config = private_docker_config()?;
+    let digest = &expected.platform_manifest_digest;
+    if read_tag_digest(&config, &format!("{repository}@{digest}"), deadline)? != *digest
+        || read_tag_digest(&config, &format!("{repository}:{tag}"), deadline)? != *digest
+    {
+        return Err(internal("image_publication_registry_changed"));
+    }
+    Ok(PublishedImage {
+        digest: digest.clone(),
+        idempotent: true,
+    })
+}
+
 #[derive(Debug, Deserialize)]
 struct Manifest {
     #[serde(rename = "schemaVersion")]

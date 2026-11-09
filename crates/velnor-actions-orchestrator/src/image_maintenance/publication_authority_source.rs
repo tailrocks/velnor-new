@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
-use velnor_actions_contract::config::analyze_dockerfile;
 use velnor_actions_contract::{
-    RUNNER_PUBLICATION_SOURCE_INPUTS, RunnerPublicationDockerfileContext,
-    native_image_candidate_inputs, runner_publication_dockerfile_context,
+    RunnerPublicationDockerfileContext, native_image_candidate_inputs,
+    runner_publication_dockerfile_context, runner_publication_source_inputs,
 };
 
 use crate::{OrchestratorError, internal::internal};
@@ -18,7 +17,7 @@ pub(super) fn verify_source_inputs(
     candidate: &CandidateRecord,
     source_files: &BTreeMap<String, Vec<u8>>,
 ) -> Result<(), OrchestratorError> {
-    if source_files.len() != source_paths(candidate.profile).len()
+    if source_files.len() != source_paths(candidate.profile)?.len()
         || candidate
             .source_inputs
             .keys()
@@ -200,12 +199,15 @@ fn verify_lock_urls(lock: &toml::Value, runner: &str, dind: &str) -> Result<(), 
     Ok(())
 }
 
-pub(super) fn source_paths(profile: super::ImagePublicationProfile) -> &'static [&'static str] {
+pub(super) fn source_paths(
+    profile: super::ImagePublicationProfile,
+) -> Result<&'static [&'static str], OrchestratorError> {
     match profile {
-        super::ImagePublicationProfile::Job => native_image_candidate_inputs(),
+        super::ImagePublicationProfile::Job => Ok(native_image_candidate_inputs()),
         super::ImagePublicationProfile::Runner
         | super::ImagePublicationProfile::Dind
-        | super::ImagePublicationProfile::ResourceProbe => &RUNNER_PUBLICATION_SOURCE_INPUTS,
+        | super::ImagePublicationProfile::ResourceProbe => runner_publication_source_inputs()
+            .map_err(|_| internal("image_publication_source_inventory")),
     }
 }
 
@@ -218,25 +220,16 @@ fn verify_dockerfile_context(
         .ok_or_else(|| internal("image_publication_source_dockerfile_missing"))?;
     let text = std::str::from_utf8(bytes)
         .map_err(|_| internal("image_publication_source_dockerfile_utf8"))?;
-    let facts =
-        analyze_dockerfile(text).map_err(|_| internal("image_publication_source_dockerfile"))?;
-    if !context_sources_match(&facts.context_sources, context) {
-        return Err(internal("image_publication_source_context"));
-    }
-    Ok(())
-}
-
-fn context_sources_match(
-    actual: &BTreeSet<String>,
-    context: RunnerPublicationDockerfileContext,
-) -> bool {
-    let expected_len = context.tracked_sources.len() + context.generated_sources.len();
-    actual.len() == expected_len
-        && context
-            .tracked_sources
-            .iter()
-            .chain(context.generated_sources)
-            .all(|source| actual.contains(*source))
+    context.analyze(text).map(|_| ()).map_err(|error| {
+        let code =
+            match error {
+                velnor_actions_contract::config::DockerfileProblem::UnsupportedRunnerSyntax(
+                    value,
+                ) if value == "role_context" => "image_publication_source_context",
+                _ => "image_publication_source_dockerfile",
+            };
+        internal(code)
+    })
 }
 
 fn normalize_lock_lines(dockerfile: &str) -> Vec<String> {

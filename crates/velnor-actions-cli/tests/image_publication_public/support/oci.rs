@@ -12,7 +12,9 @@ use std::{
 use flate2::{Compression, GzBuilder};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use velnor_actions_contract::ImageCandidateOci;
+use velnor_actions_contract::{
+    ImageCandidateOci, RunnerImageNamedContext, RunnerImagePublicationProvenance,
+};
 
 use super::FixtureProfile;
 
@@ -27,7 +29,16 @@ pub(crate) struct Layout {
     pub(crate) index: Vec<u8>,
     pub(crate) identity: ImageCandidateOci,
     pub(crate) inventory: BTreeMap<String, Vec<u8>>,
+    pub(crate) provenance: Option<RunnerImagePublicationProvenance>,
+    pub(crate) envelope: Option<Vec<u8>>,
+    pub(crate) contexts: BTreeMap<String, (RunnerImageNamedContext, Vec<u8>)>,
 }
+
+#[path = "oci/attested.rs"]
+mod attested;
+#[path = "../../../../velnor-actions-orchestrator/tests/runner_image_build_public/archive.rs"]
+mod captured_archive;
+pub(crate) use attested::{create_runner_for, create_runner_with_config, runner_config};
 
 impl Layout {
     pub(crate) fn write_directory(&self, destination: &Path) -> Result<(), Box<dyn Error>> {
@@ -188,6 +199,9 @@ fn create_with_layer_payload(
             layer_digests: vec![format!("sha256:{layer_digest}")],
         },
         inventory,
+        provenance: None,
+        envelope: None,
+        contexts: BTreeMap::new(),
     })
 }
 

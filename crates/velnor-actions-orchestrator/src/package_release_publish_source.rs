@@ -237,3 +237,48 @@ fn source_entry_kind(mode: &str) -> &'static str {
         _ => "blob",
     }
 }
+
+pub(crate) fn read_protected_source_files(
+    repository: &str,
+    repository_id: u64,
+    default_branch: &str,
+    source_sha: &str,
+    paths: &[&str],
+    max_bytes: usize,
+    deadline: CheckDeadline,
+) -> Result<std::collections::BTreeMap<String, Vec<u8>>, OrchestratorError> {
+    if !velnor_actions_contract::vcs::is_safe_github_repository(repository)
+        || repository_id == 0
+        || default_branch.is_empty()
+        || default_branch.len() > 255
+        || default_branch.bytes().any(|byte| byte.is_ascii_control())
+        || !github::is_lowercase_git_sha(source_sha)
+        || paths.is_empty()
+        || paths.len() > 32
+        || max_bytes == 0
+        || max_bytes
+            > velnor_actions_contract::package_release_policy::MAX_CARGO_VERSION_MANIFEST_BYTES
+    {
+        return Err(internal("package_public_source_file_selection_invalid"));
+    }
+    deadline
+        .remaining()
+        .map_err(|_| internal("package_public_verification_deadline"))?;
+    let api = GitHubApi::new(repository.to_owned()).with_deadline(deadline);
+    api.verify_preview_repository_identity(repository_id, default_branch)?;
+    let mut source = release_policy_admission::SourceFiles::new(&api, source_sha)?;
+    let mut files = std::collections::BTreeMap::new();
+    for path in paths {
+        if path.is_empty() || files.contains_key(*path) {
+            return Err(internal("package_public_source_file_selection_invalid"));
+        }
+        let bytes = source
+            .read_bounded_if_present(path, max_bytes)?
+            .ok_or_else(|| internal("package_public_source_file_missing"))?;
+        files.insert((*path).to_owned(), bytes);
+    }
+    deadline
+        .remaining()
+        .map_err(|_| internal("package_public_verification_deadline"))?;
+    Ok(files)
+}

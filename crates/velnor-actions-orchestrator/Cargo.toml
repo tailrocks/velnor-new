@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "runner_image_build_public"
+path = "tests/runner_image_build_public.rs"
+
+[[test]]
 name = "controller_approval_public"
 path = "tests/controller_approval_public.rs"
 
@@ -39,6 +43,7 @@ test-render-capture = ["velnor-actions-workflow-renderer/test-render-capture"]
 [dependencies]
 velnor-archive-guard = { version = "=0.1.78", path = "../velnor-archive-guard" }
 base64 = { workspace = true }
+x509-cert = { version = "=0.2.5", default-features = false }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
 tar = { version = "=0.4.46", default-features = false }

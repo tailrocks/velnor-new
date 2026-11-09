@@ -38,6 +38,7 @@ pub(crate) fn assert_tofu_inventory_rejected(
         rust_provider: NativeRustProvider::Rustup,
         cargo_workspaces: &[],
         workflow_sources: &sources,
+        runner_family_tools: None,
         generated_sources: &[],
         rust_tasks: &[],
         tofu_tasks: &tasks,

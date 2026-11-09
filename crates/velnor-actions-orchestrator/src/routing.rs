@@ -167,5 +167,9 @@ fn workflow_request(
         mbx_qualification,
         mise_pin_qualification,
         product_release,
+        runner_image_family: config
+            .runner_image_family
+            .as_ref()
+            .and_then(|family| family.mac_qualification.clone()),
     })
 }

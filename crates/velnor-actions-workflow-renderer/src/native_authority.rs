@@ -59,6 +59,7 @@ pub struct NativeAuthorityInput<'a> {
     pub rust_provider: NativeRustProvider,
     pub cargo_workspaces: &'a [CargoWorkspaceFact],
     pub workflow_sources: &'a [WorkflowSourceFact],
+    pub runner_family_tools: Option<&'a [crate::verification_jobs::BuildTaskTool]>,
     pub generated_sources: &'a [GeneratedSourceFact],
     pub rust_tasks: &'a [RustTaskFact],
     pub tofu_tasks: &'a [TofuTaskFact],
@@ -110,6 +111,9 @@ fn reject_unsupported_preview(
 impl NativeAuthority {
     pub fn build(input: NativeAuthorityInput<'_>) -> Result<Self, NativeAuthorityError> {
         input.config.validate("config.toml")?;
+        if input.config.runner_image_family.is_some() != input.runner_family_tools.is_some() {
+            return Err(invalid("runner_family_tool_projection_missing"));
+        }
         reject_unsupported_preview(&input)?;
         if input.config.workflow.policy == WorkflowPolicy::ConsumerV1
             && input

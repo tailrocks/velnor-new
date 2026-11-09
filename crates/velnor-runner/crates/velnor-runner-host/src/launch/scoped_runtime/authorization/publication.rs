@@ -19,8 +19,11 @@ pub(crate) async fn prepare_listener(
     guest_image: &crate::worker::guest_image::GuestImageFile,
     deadline: Instant,
 ) -> Result<RunnerReadyBootstrap, PendingScopedExecution> {
-    let provider =
-        crate::launch::resource_probe::release_image_provider(context.secret, context.host);
+    let provider = crate::launch::resource_probe::release_image_provider(
+        context.secret,
+        context.host,
+        context.engine.endpoint(),
+    );
     let provider = provider.as_ref().map_err(|error| *error);
     Box::pin(prepare_listener_with_provider(
         ready,

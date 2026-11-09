@@ -17,8 +17,8 @@ const MAX_CI_RUNS: usize = 999;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::image_maintenance) struct CiIdentity {
-    pub(super) id: u64,
-    pub(super) attempt: u32,
+    pub(in crate::image_maintenance) id: u64,
+    pub(in crate::image_maintenance) attempt: u32,
 }
 
 pub(in crate::image_maintenance) fn main_sha(

@@ -208,6 +208,8 @@ struct PartialConfig {
     #[serde(default)]
     images: Vec<velnor_actions_contract::config::ImageConfig>,
     #[serde(default)]
+    runner_image_family: Option<velnor_actions_contract::config::RunnerImageFamilyConfig>,
+    #[serde(default)]
     publish: velnor_actions_contract::config::PublishConfig,
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
@@ -267,6 +269,7 @@ impl PartialConfig {
             private_sources: self.private_sources,
             upgrades: self.upgrades,
             images: self.images,
+            runner_image_family: self.runner_image_family,
             publish: self.publish,
             tools: self.tools,
         })

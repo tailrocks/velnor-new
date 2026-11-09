@@ -28,6 +28,19 @@ pub(crate) struct SourceSnapshot {
     pub(crate) node_version: String,
 }
 
+impl SourceSnapshot {
+    pub(super) fn qualification_identity(&self) -> velnor_runner_qualification::SourceIdentity {
+        velnor_runner_qualification::SourceIdentity {
+            source_sha: self.source_sha.clone(),
+            runner_version: self.runner_version.clone(),
+            docker_version: self.docker_version.clone(),
+            buildx_version: self.buildx_version.clone(),
+            compose_version: self.compose_version.clone(),
+            node_version: self.node_version.clone(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct RunnerVersions {
     #[serde(rename = "runner_version")]
@@ -55,8 +68,8 @@ pub(crate) async fn load(root: &Path, source_sha: &str) -> Result<SourceSnapshot
     if canonical != root {
         return Err(HostError::Path);
     }
-    validate_source(&canonical, source_sha).await?;
-    let lock_bytes = read_commit_lock(&canonical, source_sha).await?;
+    Box::pin(validate_source(&canonical, source_sha)).await?;
+    let lock_bytes = Box::pin(read_commit_lock(&canonical, source_sha)).await?;
     require_worktree_lock(&canonical, &lock_bytes)?;
     let versions = parse_versions(&lock_bytes)?;
     Ok(SourceSnapshot {
@@ -72,8 +85,8 @@ pub(crate) async fn load(root: &Path, source_sha: &str) -> Result<SourceSnapshot
 }
 
 pub(crate) async fn revalidate(snapshot: &SourceSnapshot) -> Result<(), HostError> {
-    validate_source(&snapshot.root, &snapshot.source_sha).await?;
-    let commit_lock = read_commit_lock(&snapshot.root, &snapshot.source_sha).await?;
+    Box::pin(validate_source(&snapshot.root, &snapshot.source_sha)).await?;
+    let commit_lock = Box::pin(read_commit_lock(&snapshot.root, &snapshot.source_sha)).await?;
     if commit_lock != snapshot.lock_bytes {
         return Err(HostError::Identity);
     }

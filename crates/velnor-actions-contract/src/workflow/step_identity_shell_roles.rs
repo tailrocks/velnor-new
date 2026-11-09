@@ -11,7 +11,7 @@ impl StepRole {
         matches!(run.as_slice(), [mise, no_config, no_env, no_hooks, install, tool]
             if mise == "mise" && no_config == "--no-config" && no_env == "--no-env"
                 && no_hooks == "--no-hooks" && install == "install"
-                && matches!(tool.as_str(), "gh@2.103.2" | "gh@2.103.3"))
+                && matches!(tool.as_str(), "gh@2.103.2" | "gh@2.103.3" | "aqua:sigstore/cosign@3.1.4"))
     }
     pub(super) const fn is_shell_only(self) -> bool {
         matches!(
@@ -41,6 +41,7 @@ impl StepRole {
                 | Self::PlanFormat
                 | Self::MsrvQualification
                 | Self::CargoSourcesFetch
+                | Self::RunnerFamilySourcesPrefetch
                 | Self::CacheKeys
                 | Self::PreseedBuild
                 | Self::PreseedManifest

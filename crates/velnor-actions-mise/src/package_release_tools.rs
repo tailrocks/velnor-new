@@ -176,9 +176,32 @@ impl PinnedCosign {
         bundle: &Path,
         identity: &CosignCertificateIdentity,
     ) -> Result<IsolatedCommand, MiseError> {
+        self.verify_blob_with_root(subject, bundle, identity, None)
+    }
+
+    pub fn verify_blob_command_with_trusted_root(
+        &self,
+        subject: &Path,
+        bundle: &Path,
+        identity: &CosignCertificateIdentity,
+        trusted_root: &Path,
+    ) -> Result<IsolatedCommand, MiseError> {
+        self.verify_blob_with_root(subject, bundle, identity, Some(trusted_root))
+    }
+
+    fn verify_blob_with_root(
+        &self,
+        subject: &Path,
+        bundle: &Path,
+        identity: &CosignCertificateIdentity,
+        trusted_root: Option<&Path>,
+    ) -> Result<IsolatedCommand, MiseError> {
         let cert_identity = identity.certificate_identity();
-        self.command(vec![
-            OsString::from("verify-blob"),
+        let mut args = vec![OsString::from("verify-blob")];
+        if let Some(root) = trusted_root {
+            args.extend([OsString::from("--trusted-root"), path_arg(root)?]);
+        }
+        args.extend([
             OsString::from("--bundle"),
             path_arg(bundle)?,
             OsString::from("--certificate-identity"),
@@ -194,7 +217,8 @@ impl PinnedCosign {
             OsString::from("--certificate-github-workflow-trigger"),
             OsString::from(identity.trigger.as_str()),
             path_arg(subject)?,
-        ])
+        ]);
+        self.command(args)
     }
 
     fn command(&self, args: Vec<OsString>) -> Result<IsolatedCommand, MiseError> {

@@ -33,12 +33,11 @@ pub(crate) enum PromotionCase {
 
 impl Fixture {
     pub(crate) fn new_unlabeled_promotion() -> Result<Self, Box<dyn Error>> {
-        Self::new_with_image(
-            FixtureProfile::Runner,
-            oci::create(&"a".repeat(40))?,
-            1,
-            FixtureProfile::Runner.artifact_id(),
-        )
+        let mut fixture = Self::new_for(FixtureProfile::Runner)?;
+        let image = oci::create(&fixture.source)?;
+        fixture.expected_digest = image.identity.platform_manifest_digest;
+        fixture.expected_inventory = image.inventory;
+        Ok(fixture)
     }
 
     pub(crate) fn set_promotion_case(&self, case: PromotionCase) -> Result<(), Box<dyn Error>> {

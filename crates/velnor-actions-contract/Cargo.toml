@@ -21,6 +21,7 @@ test = false
 workspace = true
 
 [dependencies]
+velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-image-manifest" }
 semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -40,3 +41,7 @@ path = "tests/crate_bootstrap_version_public.rs"
 [[test]]
 name = "reusable_attestation_binding_public"
 path = "tests/reusable_attestation_binding_public.rs"
+
+[[test]]
+name = "source_preview_pair_public"
+path = "tests/source_preview_pair_public.rs"

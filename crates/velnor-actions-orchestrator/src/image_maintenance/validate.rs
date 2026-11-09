@@ -4,6 +4,7 @@
 use std::{fs, io::Read, os::unix::fs::MetadataExt, path::Path};
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     ImageCandidateRecord, parse_image_candidate_record, parse_image_candidate_source_closure,
 };
@@ -184,7 +185,9 @@ struct RunnerLockVersions {
     node: String,
 }
 
-pub(super) fn validate_runner_lock(bytes: &[u8]) -> Result<(), OrchestratorError> {
+pub(super) fn validate_runner_lock(
+    bytes: &[u8],
+) -> Result<velnor_actions_contract::RunnerImagePublicationLock, OrchestratorError> {
     let text = std::str::from_utf8(bytes).map_err(|_| internal("runner_image_lock_utf8"))?;
     let lock: RunnerLockVersions =
         toml::from_str(text).map_err(|_| internal("runner_image_lock_parse"))?;
@@ -200,7 +203,14 @@ pub(super) fn validate_runner_lock(bytes: &[u8]) -> Result<(), OrchestratorError
     {
         return Err(internal("runner_image_lock_version"));
     }
-    Ok(())
+    Ok(velnor_actions_contract::RunnerImagePublicationLock {
+        sha256: source::hex(&Sha256::digest(bytes)),
+        runner_version: lock.runner,
+        docker_version: lock.docker,
+        buildx_version: lock.buildx,
+        compose_version: lock.compose,
+        node_version: lock.node,
+    })
 }
 
 pub(super) fn read_lock(root: &Path) -> Result<BuildxLock, OrchestratorError> {

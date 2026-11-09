@@ -1,0 +1,292 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "name": "pkg:docker/velnor-dind@linux-amd64?platform=linux%2Famd64",
+      "digest": {
+        "sha256": "30f89408c445cb034b1f1ba6f497adeb996573a3fc2432e040fa55fa550d945b"
+      }
+    }
+  ],
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+      "resolvedDependencies": [
+        {
+          "uri": "pkg:docker/ubuntu@26.04?digest=sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a&platform=linux%2Famd64",
+          "digest": {
+            "sha256": "42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a"
+          }
+        }
+      ],
+      "externalParameters": {
+        "configSource": {
+          "path": "Dockerfile"
+        },
+        "request": {
+          "frontend": "dockerfile.v0",
+          "args": {
+            "build-arg:VELNOR_SOURCE_SHA": "d79f2567a63c12df6550bc789b4b2faf2961dd19",
+            "context:resource_probe": "local:resource_probe",
+            "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+            "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c"
+          },
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
+            },
+            {
+              "name": "resource_probe"
+            }
+          ],
+          "root": {
+            "configSource": {
+              "path": "Dockerfile"
+            },
+            "request": {
+              "args": {
+                "build-arg:VELNOR_SOURCE_SHA": "d79f2567a63c12df6550bc789b4b2faf2961dd19",
+                "context:resource_probe": "local:resource_probe",
+                "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+                "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c",
+                "vcs:localdir:context": "images/dind",
+                "vcs:localdir:dockerfile": "images/dind",
+                "vcs:localdir:resource_probe": "prebuilt/probe",
+                "vcs:revision": "d79f2567a63c12df6550bc789b4b2faf2961dd19",
+                "vcs:source": "https://github.com/tailrocks/velnor-new"
+              }
+            }
+          },
+          "compatibilityVersion": 30
+        }
+      },
+      "internalParameters": {
+        "buildConfig": {
+          "digestMapping": {
+            "sha256:1a54a95892241ec4ab6a19cc0c424dea5a1f2eddf045f0cc40a6a4bae616afb4": "step3",
+            "sha256:54e5022ac76e8819e0bc5270e8e4f5c67788bb3d59d3e1e32cbb67af2e10d07f": "step2",
+            "sha256:a26bacf104ff906147e4d00e792c272e806326923a1f28348fc03d931709172e": "step0",
+            "sha256:c1047ff8a8ec0b05658ee63734d50d541a4a2e4b2ce44d73ff9921f92240999a": "step1"
+          },
+          "llbDefinition": [
+            {
+              "id": "step0",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "image.resolvemode": "local"
+                    },
+                    "identifier": "docker-image://docker.io/library/ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a"
+                  }
+                },
+                "constraints": {},
+                "platform": {
+                  "Architecture": "amd64",
+                  "OS": "linux"
+                }
+              }
+            },
+            {
+              "id": "step1",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"resource_probe\"]",
+                      "local.sharedkeyhint": "context:resource_probe-probe:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://resource_probe"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step2",
+              "inputs": [
+                "step0:0",
+                "step1:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/resource_probe",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/resource_probe",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": 0,
+                        "output": 0,
+                        "secondaryInput": 1
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step3",
+              "inputs": [
+                "step2:0"
+              ],
+              "op": {
+                "Op": {}
+              }
+            }
+          ]
+        },
+        "builderPlatform": "linux/arm64",
+        "dockerfileVersion": "1.27.0"
+      }
+    },
+    "runDetails": {
+      "builder": {
+        "id": ""
+      },
+      "metadata": {
+        "invocationId": "jhil5qvl38ki9vvkkg5eyc159",
+        "startedOn": "2026-11-07T22:14:48.405106619+07:00",
+        "finishedOn": "2026-11-07T22:14:48.642466655+07:00",
+        "buildkit_metadata": {
+          "vcs": {
+            "localdir:context": "images/dind",
+            "localdir:dockerfile": "images/dind",
+            "localdir:resource_probe": "prebuilt/probe",
+            "revision": "d79f2567a63c12df6550bc789b4b2faf2961dd19",
+            "source": "https://github.com/tailrocks/velnor-new"
+          },
+          "source": {
+            "locations": {
+              "step0": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 1
+                        },
+                        "end": {
+                          "line": 1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step1": {},
+              "step2": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 3
+                        },
+                        "end": {
+                          "line": 3
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "infos": [
+              {
+                "filename": "Dockerfile",
+                "language": "Dockerfile",
+                "data": "RlJPTSB1YnVudHU6MjYuMDRAc2hhMjU2OjQyNTI3NjQ5ZGJjNGY5MTk3YTYwNzNmNDI2ZjQ4OGNiZmYwZTljYzlmMmFmY2UzMmQ5MWMzODNlNDg3NTYzNGEKQVJHIFZFTE5PUl9TT1VSQ0VfU0hBCkNPUFkgLS1mcm9tPXJlc291cmNlX3Byb2JlIC9yZXNvdXJjZV9wcm9iZSAvcmVzb3VyY2VfcHJvYmUK",
+                "llbDefinition": [
+                  {
+                    "id": "step0",
+                    "op": {
+                      "Op": {
+                        "source": {
+                          "identifier": "local://dockerfile",
+                          "attrs": {
+                            "local.differ": "none",
+                            "local.followpaths": "[\"Dockerfile\",\"Dockerfile.dockerignore\",\"dockerfile\"]",
+                            "local.sharedkeyhint": "dockerfile"
+                          }
+                        }
+                      },
+                      "constraints": {}
+                    }
+                  },
+                  {
+                    "id": "step1",
+                    "op": {
+                      "Op": {}
+                    },
+                    "inputs": [
+                      "step0:0"
+                    ]
+                  }
+                ],
+                "digestMapping": {
+                  "sha256:ca1220f60479edf56816f820be8110d80732eabb8a56a482a113a117f77e8656": "step1",
+                  "sha256:fe9654f38ac2153ebd60f4d119bce1f4bee2f3268b4c33390d0d2ff87ae671e0": "step0"
+                }
+              }
+            ]
+          },
+          "layers": {
+            "step0:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                }
+              ]
+            ],
+            "step2:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:74f0a3d39e6a5c3f4a784a0496aa9a3c321da6b9769588cec445cc5ea2890840",
+                  "size": 113
+                }
+              ]
+            ]
+          }
+        },
+        "buildkit_completeness": {
+          "request": true,
+          "resolvedDependencies": false
+        }
+      }
+    }
+  }
+}

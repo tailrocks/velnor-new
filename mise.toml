@@ -56,6 +56,8 @@ VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
+printf "maintenance-phase: native-image-inventory\n"
+python3 scripts/test-native-image-candidate-inventory.py
 printf "maintenance-phase: diagnostics-build\n"
 ARTIFACT_MESSAGES="$(mktemp)"
 trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT

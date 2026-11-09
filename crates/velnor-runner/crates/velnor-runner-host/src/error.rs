@@ -138,3 +138,20 @@ impl HostError {
         }
     }
 }
+
+impl From<velnor_runner_qualification::QualificationError> for HostError {
+    fn from(error: velnor_runner_qualification::QualificationError) -> Self {
+        use velnor_runner_qualification::QualificationError;
+        match error {
+            QualificationError::Docker => Self::Docker,
+            QualificationError::DockerTimeout => Self::DockerTimeout,
+            QualificationError::Identity => Self::Identity,
+            QualificationError::Ownership => Self::Ownership,
+            QualificationError::Cleanup => Self::Cleanup,
+            QualificationError::ContainerCreateUncertain => Self::ContainerCreateUncertain,
+            QualificationError::VolumeCreateUncertain => Self::VolumeCreateUncertain,
+            QualificationError::DindReadiness => Self::DindReadiness,
+            QualificationError::Frame => Self::Frame,
+        }
+    }
+}

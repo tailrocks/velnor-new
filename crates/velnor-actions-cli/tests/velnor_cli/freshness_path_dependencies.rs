@@ -10,6 +10,9 @@ use std::{
 
 use serde_json::Value;
 
+#[path = "freshness_path_fixture.rs"]
+mod fixture;
+
 type FileSnapshot = Vec<(PathBuf, Vec<u8>)>;
 
 #[test]
@@ -205,6 +208,18 @@ fn freshness_reports_a_missing_workspace_member_once() -> Result<(), Box<dyn Err
     );
     assert_eq!(snapshot_inputs(&repo, &[])?, before);
     Ok(())
+}
+
+#[test]
+fn recursive_cross_workspace_target_path_dependencies_require_exact_lock_membership()
+-> Result<(), Box<dyn Error>> {
+    fixture::recursive_cross_workspace_target_path_dependencies_require_exact_lock_membership()
+}
+
+#[test]
+fn root_lock_membership_authorizes_reachable_package_versions_by_manifest_identity()
+-> Result<(), Box<dyn Error>> {
+    fixture::root_lock_membership_authorizes_reachable_package_versions_by_manifest_identity()
 }
 
 fn create_fixture(repo: &Path, inherited: bool) -> Result<(), Box<dyn Error>> {

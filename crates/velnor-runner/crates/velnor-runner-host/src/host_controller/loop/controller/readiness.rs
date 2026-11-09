@@ -180,7 +180,10 @@ async fn sample_for_refresh(
         return Ok(None);
     };
     let Some(sample) = Box::pin(crate::launch::collect_readiness_sample(
-        docker, journal, secret,
+        docker,
+        journal,
+        secret,
+        selected.endpoint(),
     ))
     .await?
     else {

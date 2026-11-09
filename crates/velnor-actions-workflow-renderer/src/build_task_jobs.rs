@@ -24,7 +24,9 @@ pub(crate) const CARGO_BINSTALL_ONLY_ENV: &str = "MISE_CARGO_BINSTALL_ONLY";
 pub struct BuildTaskTool {
     pub key: String,
     pub version: String,
+    pub specifiers: Vec<String>,
     pub backend: String,
+    pub workflow: Option<String>,
     pub os: Vec<String>,
     pub config_options: BTreeMap<String, String>,
     pub lock_options: BTreeMap<String, String>,
@@ -38,6 +40,8 @@ pub struct BuildTaskArtifact {
     pub url_api: Option<String>,
     pub signer: Option<String>,
     pub provenance: Option<String>,
+    pub repository_id: Option<String>,
+    pub owner_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]

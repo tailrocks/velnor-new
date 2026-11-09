@@ -76,9 +76,11 @@ pub(crate) use doctor_probe::{
     DoctorProbeOutcome, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState,
     DoctorProbeTicket,
 };
+pub(crate) use image_import::registry::{
+    RegistryImageIdentity, RegistryImageInspection, RegistryImageObservation, RegistryImageRecord,
+};
 pub(crate) use image_import::{
-    ImageImportDescriptor, ImageImportIdentity, ImageImportInspection, ImageImportObservation,
-    ImageImportRecord, ImageImportRequest, ImageImportState,
+    ImageImportIdentity, ImageImportObservation, ImageImportRequest, ImageImportState,
 };
 pub(crate) use scale_set_create::{
     CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateNoEffect,

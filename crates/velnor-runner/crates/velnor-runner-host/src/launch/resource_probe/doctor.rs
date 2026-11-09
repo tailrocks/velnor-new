@@ -17,6 +17,7 @@ pub(super) async fn run(
     journal: &Journal,
     secret: &ReleaseReadSecret,
     ticket: &DoctorProbeTicket,
+    endpoint: &str,
 ) -> Result<Option<Value>, HostError> {
     let record = journal
         .doctor_probe_request_by_nonce(ticket.nonce())
@@ -38,7 +39,7 @@ pub(super) async fn run(
     }
     let result = async {
         let token = secret.as_provider_token()?;
-        let provider = ReleaseImageProvider::from_compiled_source(token, journal)
+        let provider = ReleaseImageProvider::from_compiled_source(token, journal, endpoint)
             .map_err(|_| HostError::Docker)?;
         Box::pin(super::lifecycle::collect_for_doctor(
             docker, journal, &provider, ticket,

@@ -100,8 +100,74 @@ pub(crate) fn policies(
         .chain(dbt_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .chain(ansible_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .collect::<Vec<_>>();
+    if let Some(policy) = runner_family_policy(root, config, discovery)? {
+        workflow_tasks.push(policy);
+    }
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     Ok(workflow_tasks)
+}
+
+fn runner_family_policy(
+    root: &std::path::Path,
+    config: &VelnorConfig,
+    discovery: &crate::discover::Discovery,
+) -> Result<Option<WorkflowTaskPolicy>, OrchestratorError> {
+    if config.runner_image_family.is_none() {
+        return Ok(None);
+    }
+    let bytes = match crate::safe_read::read_repo_bytes(
+        root,
+        "scripts/check-runner-image-candidate.sh",
+        1024 * 1024,
+    )? {
+        crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
+        crate::safe_read::RepoBytes::Absent => {
+            return Err(OrchestratorError::Contract {
+                problem: "runner_family_script_missing".into(),
+            });
+        }
+    };
+    let (tools, mise_config, mise_lock, rust_toolchain) =
+        crate::build_tasks::runner_family_tools(discovery)?;
+    let mut prefetch_sha256 = std::collections::BTreeMap::new();
+    for path in velnor_actions_workflow_renderer::verification_jobs::FAMILY_PREFETCH_SOURCES {
+        let bytes = match crate::safe_read::read_repo_bytes(root, path, 1024 * 1024)? {
+            crate::safe_read::RepoBytes::Bytes(bytes) => bytes,
+            crate::safe_read::RepoBytes::Absent => {
+                return Err(OrchestratorError::Contract {
+                    problem: "runner_family_prefetch_source_missing".into(),
+                });
+            }
+        };
+        prefetch_sha256.insert(path.to_owned(), crate::generator::sha256_hex(&bytes));
+    }
+    let task = velnor_actions_contract::VerificationTask {
+        id: "runner-image-family".into(),
+        mise_task: "check-runner-image-candidate".into(),
+        source: velnor_actions_contract::MiseTaskSource {
+            mise_config: "mise.toml".into(),
+            working_directory: ".".into(),
+        },
+        runner: velnor_actions_contract::VerificationRunner::LinuxX64,
+        timeout_minutes: 120,
+    };
+    let bootstrap = velnor_actions_workflow_renderer::VerificationTaskPolicy {
+        task,
+        runner_label: "ubuntu-26.04".into(),
+        scale_set_token: None,
+        mise_setup: crate::pins::resolve_mise_setup(config, "ubuntu-26.04")?,
+        selected_tools: tools,
+        mise_config_sha256: Some(mise_config),
+        mise_lock_sha256: Some(mise_lock),
+        rust_toolchain_sha256: Some(rust_toolchain),
+    };
+    Ok(Some(WorkflowTaskPolicy::RunnerFamily(
+        velnor_actions_workflow_renderer::verification_jobs::RunnerFamilyPolicy {
+            bootstrap,
+            script_sha256: crate::generator::sha256_hex(&bytes),
+            prefetch_sha256,
+        },
+    )))
 }
 
 pub(crate) fn insert_jobs(
@@ -121,6 +187,13 @@ pub(crate) fn insert_jobs(
             WorkflowTaskPolicy::NativeImage(policy) => vec![(
                 policy.job_id(),
                 build_native_image_job(policy, CHECKOUT_USES)?,
+            )],
+            WorkflowTaskPolicy::RunnerFamily(policy) => vec![(
+                velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID.to_owned(),
+                velnor_actions_workflow_renderer::verification_jobs::build_runner_family_job(
+                    policy,
+                    CHECKOUT_USES,
+                )?,
             )],
             WorkflowTaskPolicy::Bun(policy) => vec![(
                 policy.id.clone(),

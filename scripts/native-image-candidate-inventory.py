@@ -54,7 +54,12 @@ def make_prerequisites(path):
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as error:
         raise InventoryError(f"cannot read compiler dep-info {path}") from error
+    return parse_make_prerequisites(text, path)
+
+
+def parse_make_prerequisites(text, path):
     text = text.replace("\\\r\n", " ").replace("\\\n", " ")
+    text = text.splitlines()[0] if text else ""
     escaped = False
     separator = None
     for index, character in enumerate(text):

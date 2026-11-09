@@ -27,8 +27,12 @@ mod qualification;
 mod source;
 #[path = "schema2_generator_source_preview.rs"]
 mod source_preview;
+#[path = "schema2_generator_source_preview_mac_proof.rs"]
+mod source_preview_mac_proof;
 #[path = "schema2_generator_source_preview_publication.rs"]
 mod source_preview_publication;
+#[path = "schema2_generator_source_preview_runtime.rs"]
+mod source_preview_runtime;
 #[path = "schema2_generator_release_workflow_steps.rs"]
 mod workflow_steps;
 
@@ -48,6 +52,24 @@ pub(super) fn source_preview_authority(
     Ok((
         source_preview::AUTHORITY_PATH.to_owned(),
         source_preview::authority_document(pins)?,
+    ))
+}
+
+pub(super) fn source_preview_runtime_authority(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    Ok((
+        source_preview_runtime::PATH.to_owned(),
+        source_preview_runtime::document(pins)?,
+    ))
+}
+
+pub(super) fn source_preview_mac_proof_authority(
+    pins: &ProductReleasePins,
+) -> Result<(String, Yaml), RenderError> {
+    Ok((
+        source_preview_mac_proof::PATH.to_owned(),
+        source_preview_mac_proof::document(pins)?,
     ))
 }
 

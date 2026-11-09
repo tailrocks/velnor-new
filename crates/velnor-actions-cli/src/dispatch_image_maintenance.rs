@@ -4,11 +4,20 @@
 use crate::args::{ImageMaintenanceCommand, ImagePublicationProfileArg};
 use std::{fmt::Display, path::Path, process::ExitCode, time::Duration};
 use velnor_actions_orchestrator::{
-    AdmitRunnerImagesRequest, BuildJobCandidateRequest, CheckDeadline, CheckJobSourceRequest,
-    ImagePublicationProfile, InstallBuildxRequest, OrchestratorError, PromoteImageRequest,
-    PublishImageRequest, ValidateJobCandidateRequest, admit_runner_images, build_job_candidate,
-    check_job_source, install_buildx, promote_image, publish_image, validate_job_candidate,
+    AdmitRunnerImagesRequest, BuildJobCandidateRequest, BuildRunnerImagesRequest, CheckDeadline,
+    CheckJobSourceRequest, ImagePublicationProfile, InstallBuildxRequest, OrchestratorError,
+    PromoteImageRequest, PublishImageRequest, PublishRunnerImagesRequest, RunnerImageBuildPurpose,
+    ValidateJobCandidateRequest, admit_runner_images, build_job_candidate, build_runner_images,
+    check_job_source, install_buildx, promote_image, publish_image, publish_runner_images,
+    validate_job_candidate, verify_runner_publication,
 };
+
+#[path = "mac_attestation_assembly.rs"]
+mod mac_attestation_assembly;
+#[path = "mac_dispatch.rs"]
+mod mac_dispatch;
+#[path = "mac_step_output.rs"]
+mod mac_step_output;
 
 struct PublishImageArguments<'a> {
     profile: &'a ImagePublicationProfileArg,
@@ -25,8 +34,38 @@ struct PublishImageArguments<'a> {
     receipt_output: &'a Path,
 }
 
+#[cfg(test)]
+#[path = "dispatch_image_maintenance_tests.rs"]
+mod tests;
+
+fn deadline_minutes(command: &ImageMaintenanceCommand) -> u16 {
+    if matches!(
+        command,
+        ImageMaintenanceCommand::VerifyMacAttestation { .. }
+    ) {
+        130
+    } else if matches!(command, ImageMaintenanceCommand::BuildRunnerImages { .. }) {
+        velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_BUILD_TIMEOUT_MINUTES
+    } else if matches!(
+        command,
+        ImageMaintenanceCommand::PublishRunnerImages(_)
+            | ImageMaintenanceCommand::VerifyRunnerPublication(_)
+    ) {
+        velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_PUBLICATION_TIMEOUT_MINUTES
+    } else {
+        10
+    }
+}
+
 pub(crate) fn run(command: &ImageMaintenanceCommand) -> ExitCode {
-    let deadline = match CheckDeadline::after(Duration::from_mins(10)) {
+    if matches!(
+        command,
+        ImageMaintenanceCommand::QualifyRunnerFamilyMac { .. }
+    ) {
+        return report(mac_dispatch::qualify_mac_request(command));
+    }
+    let minutes = deadline_minutes(command);
+    let deadline = match CheckDeadline::after(Duration::from_mins(u64::from(minutes))) {
         Ok(deadline) => deadline,
         Err(error) => return report_error(&error),
     };
@@ -38,6 +77,15 @@ fn run_with_deadline(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     match command {
+        ImageMaintenanceCommand::VerifyMacAttestation { .. } => {
+            mac_dispatch::verify_mac_request(command, deadline)
+        }
+        ImageMaintenanceCommand::AssembleMacAttestation { .. } => {
+            mac_attestation_assembly::run(command)
+        }
+        ImageMaintenanceCommand::QualifyRunnerFamilyMac { .. } => {
+            mac_dispatch::qualify_mac_request(command)
+        }
         ImageMaintenanceCommand::InstallBuildx { root, runner_temp } => {
             install_request(root, runner_temp, deadline)
         }
@@ -90,15 +138,90 @@ fn run_with_deadline(
             descriptors_output,
             deadline,
         ),
-        ImageMaintenanceCommand::PromoteImage {
-            image_id,
-            source_commit,
-        } => promote_image(&PromoteImageRequest {
-            image_id: image_id.clone(),
-            source_commit: source_commit.clone(),
-            deadline,
-        }),
+        ImageMaintenanceCommand::BuildRunnerImages { .. } => {
+            build_runner_request(command, deadline)
+        }
+        ImageMaintenanceCommand::PromoteImage { .. } => promote_request(command, deadline),
         ImageMaintenanceCommand::PublishImage { .. } => publish_request(command, deadline),
+        ImageMaintenanceCommand::PublishRunnerImages(args) => {
+            runner_publication_request(args, deadline, false)
+        }
+        ImageMaintenanceCommand::VerifyRunnerPublication(args) => {
+            runner_publication_request(args, deadline, true)
+        }
+    }
+}
+
+fn promote_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::PromoteImage {
+        image_id,
+        source_commit,
+    } = command
+    else {
+        return Err(OrchestratorError::Internal {
+            problem: "promotion_command".to_owned(),
+        });
+    };
+    promote_image(&PromoteImageRequest {
+        image_id: image_id.clone(),
+        source_commit: source_commit.clone(),
+        deadline,
+    })
+}
+
+fn build_runner_request(
+    command: &ImageMaintenanceCommand,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let ImageMaintenanceCommand::BuildRunnerImages {
+        root,
+        source_commit,
+        runner_temp,
+        contexts_dir,
+        publication_records,
+        output_dir,
+    } = command
+    else {
+        unreachable!()
+    };
+    build_runner_images(&BuildRunnerImagesRequest {
+        root: root.clone(),
+        source_commit: source_commit.to_owned(),
+        runner_temp: runner_temp.clone(),
+        contexts_dir: contexts_dir.clone(),
+        purpose: if *publication_records {
+            RunnerImageBuildPurpose::Publication
+        } else {
+            RunnerImageBuildPurpose::Qualification
+        },
+        output_dir: output_dir.clone(),
+        deadline,
+    })
+}
+
+fn runner_publication_request(
+    args: &crate::args::RunnerFamilyPublicationArgs,
+    deadline: CheckDeadline,
+    verify_only: bool,
+) -> Result<(), OrchestratorError> {
+    let request = PublishRunnerImagesRequest {
+        source_commit: args.source_commit.clone(),
+        producer_run_id: args.producer_run_id,
+        producer_run_attempt: args.producer_run_attempt,
+        artifact_id: args.artifact_id,
+        assets_dir: args.assets_dir.clone(),
+        qualification_proof: args.qualification_proof.clone(),
+        private_scratch: args.private_scratch.clone(),
+        manifest_output: args.manifest_output.clone(),
+        deadline,
+    };
+    if verify_only {
+        verify_runner_publication(&request)
+    } else {
+        publish_runner_images(&request)
     }
 }
 

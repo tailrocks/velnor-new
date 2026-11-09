@@ -35,12 +35,29 @@ path = "tests/oci_candidate_configuration_public.rs"
 name = "golden_collector_public"
 path = "tests/golden_collector_public.rs"
 
+[[test]]
+name = "attested_projection_public"
+path = "tests/attested_projection_public.rs"
+
+[[test]]
+name = "held_file_public"
+path = "tests/held_file_public.rs"
+
+[[test]]
+name = "provenance_envelope_public"
+path = "tests/provenance_envelope_public.rs"
+
+[[test]]
+name = "registry_graph_public"
+path = "tests/registry_graph_public.rs"
+
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 serde = { workspace = true }
 rustix = { version = "=1.1.5", default-features = false, features = ["fs", "process", "std"] }
 serde_json = { workspace = true }
 velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
+velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-image-manifest" }
 sha2 = { version = "=0.11.1", default-features = false }
 tar = { version = "=0.4.46", default-features = false }
 tempfile = { version = "=3.27.0" }

@@ -22,6 +22,7 @@ pub(crate) struct AuthorityBinding {
     generated: BTreeMap<String, super::inputs::generated::GeneratedOwner>,
     workflow_required: BTreeSet<String>,
     workflow_sources: BTreeMap<String, Option<String>>,
+    runner_family_tools: Option<Vec<crate::verification_jobs::BuildTaskTool>>,
 }
 
 type WorkflowOwners = BTreeMap<String, Vec<String>>;
@@ -87,6 +88,7 @@ pub(super) fn build(
         AuthorityBinding {
             check_mise: super::check_mise::CheckMiseSetups::build(input)?,
             workflow_sources: super::task_sources::admit(input.config, input.workflow_sources)?,
+            runner_family_tools: input.runner_family_tools.map(<[_]>::to_vec),
             generated,
             workflow_required,
             commands: super::support_commands::build(input)?,
@@ -115,6 +117,12 @@ fn metadata_ir(
         job.check_runner.clone_from(&fact.check_runner);
         job.needs.clone_from(&fact.needs);
         job.outputs.clone_from(&fact.outputs);
+        if matches!(&fact.source, LogicalJobSource::WorkflowTask { owner } if owner == "runner-image-family")
+            && fact.id == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID
+            && input.config.runner_image_family.is_some()
+        {
+            job.env = velnor_actions_contract::JobEnv::RustToolchain;
+        }
         if let LogicalJobSource::NamedCheck { id } = &fact.source {
             job.steps.push(named_check_metadata(input, id)?);
         }

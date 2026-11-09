@@ -9,7 +9,7 @@ policy = "velnor-repository-v1"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
-crate_timeout_minutes = 15
+crate_timeout_minutes = 45
 plan_timeout_minutes = 15
 pull_request_cache_policy = "read-only"
 
@@ -51,6 +51,16 @@ globs = [
   "scripts/native-image-candidate-inventory.py",
 ]
 packages = ["velnor-actions-cli"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner/crates/velnor-runner-host/**",
+  ".velnor/runner.lock",
+  "crates/velnor-runner/Cargo.toml",
+  "crates/velnor-runner/Cargo.lock",
+]
+packages = ["velnor-runner-host"]
 complete = true
 
 [[stacks.rust.inputs]]
@@ -125,6 +135,14 @@ globs = [
   "fixtures/bun-workspace-suites/input/.velnor/config.toml",
   "mise.toml",
   "mise.lock",
+  "rust-toolchain.toml",
+  "images/runner/ubuntu-26.04/Dockerfile",
+  "images/dind/Dockerfile",
+  "images/resource-probe/Dockerfile",
+  "scripts/check-runner-image-candidate.sh",
+  "scripts/runner-family-discovery.sh",
+  "scripts/resolve-runner-family-producer.sh",
+  "scripts/resolve-runner-family-publication.sh",
   "scripts/generator-release/create-release-manifest.sh",
   "scripts/generator-release/source-qualification-validator-recipes.json",
   "Cargo.toml",
@@ -282,6 +300,7 @@ inputs = [
   "crates/velnor-actions-cli/src/dispatch_generate_warnings.rs",
   "crates/velnor-actions-cli/src/dispatch_homebrew_adoption.rs",
   "crates/velnor-actions-cli/src/dispatch_image_maintenance.rs",
+  "crates/velnor-actions-cli/src/dispatch_image_maintenance_tests.rs",
   "crates/velnor-actions-cli/src/dispatch/native_validator_tool_qualification.rs",
   "crates/velnor-actions-cli/src/dispatch_local_release.rs",
   "crates/velnor-actions-cli/src/dispatch_owned_tool_publication.rs",
@@ -299,6 +318,9 @@ inputs = [
   "crates/velnor-actions-cli/src/dispatch_unmanaged.rs",
   "crates/velnor-actions-cli/src/entry.rs",
   "crates/velnor-actions-cli/src/ledger_helper.rs",
+  "crates/velnor-actions-cli/src/mac_attestation_assembly.rs",
+  "crates/velnor-actions-cli/src/mac_dispatch.rs",
+  "crates/velnor-actions-cli/src/mac_step_output.rs",
   "crates/velnor-actions-cli/src/main.rs",
   "crates/velnor-actions-cli/tests/api2026_pull_context_fixture.rs",
   "crates/velnor-actions-cli/tests/api2026_pull_context_fixture/git.rs",
@@ -493,9 +515,22 @@ inputs = [
   "crates/velnor-actions-contract/src/image_candidate.rs",
   "crates/velnor-actions-contract/src/image_candidate/closure.rs",
   "crates/velnor-actions-contract/src/image_candidate/record.rs",
-  "crates/velnor-actions-contract/src/image_candidate/runner_publication.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/attested_grammar.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/build_source.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/candidate.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/inventory.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/lib.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_inventory.txt",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_absences.txt",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/model.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_configuration.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/oci_grammar.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/provenance.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_publication.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_qualification.rs",
+  "crates/velnor-runner/crates/velnor-runner-image-manifest/src/strict_json.rs",
   "crates/velnor-actions-contract/src/image_candidate/runner_publication_context.rs",
-  "crates/velnor-actions-contract/src/image_candidate/runner_qualification.rs",
   "crates/velnor-actions-contract/src/lib.rs",
   "crates/velnor-actions-contract/src/manifest.rs",
   "crates/velnor-actions-contract/src/manifest_checks.rs",
@@ -628,6 +663,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/dependencies/lock.rs",
   "crates/velnor-actions-freshness/src/dependencies/lock/graph.rs",
   "crates/velnor-actions-freshness/src/dependencies/lock/identity.rs",
+  "crates/velnor-actions-freshness/src/dependencies/path_dependencies.rs",
   "crates/velnor-actions-freshness/src/dependencies/workspace.rs",
   "crates/velnor-actions-freshness/src/evidence.rs",
   "crates/velnor-actions-freshness/src/evidence/advisories.rs",
@@ -806,8 +842,11 @@ inputs = [
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/archive_tar_framing.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/config.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested/envelope.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/attested/output.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph/registry.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/graph_support.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/json.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/oci_candidate/layer.rs",
@@ -864,6 +903,11 @@ inputs = [
   "rust-toolchain.toml",
   "scripts/archive-guard-build-namespace.sh",
   "scripts/archive-guard-inputs.txt",
+  "scripts/native-image-candidate-inventory.py",
+  "scripts/runner-family-source-inventory.py",
+  "scripts/runner-family-root-inventory.py",
+  "scripts/runner-family-host-inventory.py",
+  "scripts/test-native-image-candidate-inventory.py",
   "scripts/build-owned-archive-guard.sh",
   "scripts/check-owned-archive-guard-sources.sh",
   "scripts/owned_archive_preflight.py",

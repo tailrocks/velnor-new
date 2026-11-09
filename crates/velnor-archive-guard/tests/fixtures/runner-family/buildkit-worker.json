@@ -1,0 +1,610 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "name": "pkg:docker/velnor-runner@linux-amd64?platform=linux%2Famd64",
+      "digest": {
+        "sha256": "278be766fad54e0455f85493cb1455d291bb0f0c80d0a1fa11f29db8f66ac41b"
+      }
+    }
+  ],
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+      "resolvedDependencies": [
+        {
+          "uri": "pkg:docker/ubuntu@26.04?digest=sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a&platform=linux%2Famd64",
+          "digest": {
+            "sha256": "42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a"
+          }
+        }
+      ],
+      "externalParameters": {
+        "configSource": {
+          "path": "Dockerfile"
+        },
+        "request": {
+          "frontend": "dockerfile.v0",
+          "args": {
+            "build-arg:VELNOR_SOURCE_SHA": "c62093c1fe676074f8146dbbd0a87ffa37114e46",
+            "context:job_start_hook": "local:job_start_hook",
+            "context:job_started_hook": "local:job_started_hook",
+            "context:resource_probe": "local:resource_probe",
+            "context:storage_init": "local:storage_init",
+            "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+            "sharedkey:localdir:job_start_hook": "hook:1da4e91258c91b2c",
+            "sharedkey:localdir:job_started_hook": "started:1da4e91258c91b2c",
+            "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c",
+            "sharedkey:localdir:storage_init": "storage:1da4e91258c91b2c"
+          },
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
+            },
+            {
+              "name": "job_start_hook"
+            },
+            {
+              "name": "job_started_hook"
+            },
+            {
+              "name": "resource_probe"
+            },
+            {
+              "name": "storage_init"
+            }
+          ],
+          "root": {
+            "configSource": {
+              "path": "Dockerfile"
+            },
+            "request": {
+              "args": {
+                "build-arg:VELNOR_SOURCE_SHA": "c62093c1fe676074f8146dbbd0a87ffa37114e46",
+                "context:job_start_hook": "local:job_start_hook",
+                "context:job_started_hook": "local:job_started_hook",
+                "context:resource_probe": "local:resource_probe",
+                "context:storage_init": "local:storage_init",
+                "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+                "sharedkey:localdir:job_start_hook": "hook:1da4e91258c91b2c",
+                "sharedkey:localdir:job_started_hook": "started:1da4e91258c91b2c",
+                "sharedkey:localdir:resource_probe": "probe:1da4e91258c91b2c",
+                "sharedkey:localdir:storage_init": "storage:1da4e91258c91b2c",
+                "vcs:localdir:context": "images/runner/ubuntu-26.04",
+                "vcs:localdir:dockerfile": "images/runner/ubuntu-26.04",
+                "vcs:localdir:job_start_hook": "prebuilt/hook",
+                "vcs:localdir:job_started_hook": "prebuilt/started",
+                "vcs:localdir:resource_probe": "prebuilt/probe",
+                "vcs:localdir:storage_init": "prebuilt/storage",
+                "vcs:revision": "c62093c1fe676074f8146dbbd0a87ffa37114e46",
+                "vcs:source": "https://github.com/tailrocks/velnor-new"
+              }
+            }
+          },
+          "compatibilityVersion": 30
+        }
+      },
+      "internalParameters": {
+        "buildConfig": {
+          "digestMapping": {
+            "sha256:0cee9dc496caf195cd358f23cde4c5e9dc9d44697df40de015dfe9a5366ee73d": "step6",
+            "sha256:2f97beed1ccb9952529b8c2f0f9f018d4ac82a433697986dfcbd977fddb79761": "step5",
+            "sha256:5bab03f4798fb6997ed3bd5185f9e6b9a7026b09561bbfff197c34f1e562a839": "step8",
+            "sha256:5cf074dd9c21775af2ba814bf393206f7f297646559091b2946ca3b9c6867223": "step2",
+            "sha256:65269fe47cebe63362e55aee34d75e2992be271dedc43c802fb3c695a7b6557b": "step4",
+            "sha256:75ad3068dd2d0cb7f7f9350d1cab8956fbbfe8fe231af0fe384dbcb19f4df11c": "step1",
+            "sha256:867f8c3c9bd62295db5e341009d118fdf8569d90f7374320b16926ed914cca3d": "step3",
+            "sha256:a26bacf104ff906147e4d00e792c272e806326923a1f28348fc03d931709172e": "step0",
+            "sha256:bd0af3468aa60aa88563c862e33317ca790b83b7682c13e153d9b4830317851d": "step9",
+            "sha256:e9f6ed613c1f3cc9aa434333db23291e62d5a32421303bed6fab633a630e2307": "step7"
+          },
+          "llbDefinition": [
+            {
+              "id": "step0",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "image.resolvemode": "local"
+                    },
+                    "identifier": "docker-image://docker.io/library/ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a"
+                  }
+                },
+                "constraints": {},
+                "platform": {
+                  "Architecture": "amd64",
+                  "OS": "linux"
+                }
+              }
+            },
+            {
+              "id": "step1",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"resource_probe\"]",
+                      "local.sharedkeyhint": "context:resource_probe-probe:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://resource_probe"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step2",
+              "inputs": [
+                "step0:0",
+                "step1:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/resource_probe",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/resource_probe",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": 0,
+                        "output": 0,
+                        "secondaryInput": 1
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step3",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"storage_init\"]",
+                      "local.sharedkeyhint": "context:storage_init-storage:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://storage_init"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step4",
+              "inputs": [
+                "step2:0",
+                "step3:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/storage_init",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/storage_init",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": 0,
+                        "output": 0,
+                        "secondaryInput": 1
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step5",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"job_start_hook\"]",
+                      "local.sharedkeyhint": "context:job_start_hook-hook:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://job_start_hook"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step6",
+              "inputs": [
+                "step4:0",
+                "step5:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/job_start_hook",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/job_start_hook",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": 0,
+                        "output": 0,
+                        "secondaryInput": 1
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step7",
+              "op": {
+                "Op": {
+                  "source": {
+                    "attrs": {
+                      "local.followpaths": "[\"job_started_hook\"]",
+                      "local.sharedkeyhint": "context:job_started_hook-started:1da4e91258c91b2c"
+                    },
+                    "identifier": "local://job_started_hook"
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step8",
+              "inputs": [
+                "step6:0",
+                "step7:0"
+              ],
+              "op": {
+                "Op": {
+                  "file": {
+                    "actions": [
+                      {
+                        "Action": {
+                          "copy": {
+                            "allowEmptyWildcard": true,
+                            "allowWildcard": true,
+                            "createDestPath": true,
+                            "dest": "/job_started_hook",
+                            "dirCopyContents": true,
+                            "followSymlink": true,
+                            "mode": -1,
+                            "src": "/job_started_hook",
+                            "timestamp": -1
+                          }
+                        },
+                        "input": 0,
+                        "output": 0,
+                        "secondaryInput": 1
+                      }
+                    ]
+                  }
+                },
+                "constraints": {}
+              }
+            },
+            {
+              "id": "step9",
+              "inputs": [
+                "step8:0"
+              ],
+              "op": {
+                "Op": {}
+              }
+            }
+          ]
+        },
+        "builderPlatform": "linux/arm64",
+        "dockerfileVersion": "1.27.0"
+      }
+    },
+    "runDetails": {
+      "builder": {
+        "id": ""
+      },
+      "metadata": {
+        "invocationId": "wgakg2814fitt4dcwskmdbqem",
+        "startedOn": "2026-11-07T22:07:49.261740249+07:00",
+        "finishedOn": "2026-11-07T22:07:52.236447428+07:00",
+        "buildkit_metadata": {
+          "vcs": {
+            "localdir:context": "images/runner/ubuntu-26.04",
+            "localdir:dockerfile": "images/runner/ubuntu-26.04",
+            "localdir:job_start_hook": "prebuilt/hook",
+            "localdir:job_started_hook": "prebuilt/started",
+            "localdir:resource_probe": "prebuilt/probe",
+            "localdir:storage_init": "prebuilt/storage",
+            "revision": "c62093c1fe676074f8146dbbd0a87ffa37114e46",
+            "source": "https://github.com/tailrocks/velnor-new"
+          },
+          "source": {
+            "locations": {
+              "step0": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 1
+                        },
+                        "end": {
+                          "line": 1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step1": {},
+              "step2": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 3
+                        },
+                        "end": {
+                          "line": 3
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step3": {},
+              "step4": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 4
+                        },
+                        "end": {
+                          "line": 4
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step5": {},
+              "step6": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 5
+                        },
+                        "end": {
+                          "line": 5
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step7": {},
+              "step8": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 6
+                        },
+                        "end": {
+                          "line": 6
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "infos": [
+              {
+                "filename": "Dockerfile",
+                "language": "Dockerfile",
+                "data": "RlJPTSB1YnVudHU6MjYuMDRAc2hhMjU2OjQyNTI3NjQ5ZGJjNGY5MTk3YTYwNzNmNDI2ZjQ4OGNiZmYwZTljYzlmMmFmY2UzMmQ5MWMzODNlNDg3NTYzNGEKQVJHIFZFTE5PUl9TT1VSQ0VfU0hBCkNPUFkgLS1mcm9tPXJlc291cmNlX3Byb2JlIC9yZXNvdXJjZV9wcm9iZSAvcmVzb3VyY2VfcHJvYmUKQ09QWSAtLWZyb209c3RvcmFnZV9pbml0IC9zdG9yYWdlX2luaXQgL3N0b3JhZ2VfaW5pdApDT1BZIC0tZnJvbT1qb2Jfc3RhcnRfaG9vayAvam9iX3N0YXJ0X2hvb2sgL2pvYl9zdGFydF9ob29rCkNPUFkgLS1mcm9tPWpvYl9zdGFydGVkX2hvb2sgL2pvYl9zdGFydGVkX2hvb2sgL2pvYl9zdGFydGVkX2hvb2sK",
+                "llbDefinition": [
+                  {
+                    "id": "step0",
+                    "op": {
+                      "Op": {
+                        "source": {
+                          "identifier": "local://dockerfile",
+                          "attrs": {
+                            "local.differ": "none",
+                            "local.followpaths": "[\"Dockerfile\",\"Dockerfile.dockerignore\",\"dockerfile\"]",
+                            "local.sharedkeyhint": "dockerfile"
+                          }
+                        }
+                      },
+                      "constraints": {}
+                    }
+                  },
+                  {
+                    "id": "step1",
+                    "op": {
+                      "Op": {}
+                    },
+                    "inputs": [
+                      "step0:0"
+                    ]
+                  }
+                ],
+                "digestMapping": {
+                  "sha256:29a0182e6775b152d7a70cdd4c1d657dd007a0dd556b25dc1d0ba5a2ec28ecfd": "step1",
+                  "sha256:9ec0fbfa153d693bc2d4480260bdcec14924f9cf5e029f36aabd5ed1e9687613": "step0"
+                }
+              }
+            ]
+          },
+          "layers": {
+            "step0:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                }
+              ]
+            ],
+            "step2:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:74f0a3d39e6a5c3f4a784a0496aa9a3c321da6b9769588cec445cc5ea2890840",
+                  "size": 113
+                }
+              ]
+            ],
+            "step4:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:74f0a3d39e6a5c3f4a784a0496aa9a3c321da6b9769588cec445cc5ea2890840",
+                  "size": 113
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:b9daad0248079fd4a8bce58222f51033441ad092c8071ecea82f7326a7f1e6cd",
+                  "size": 113
+                }
+              ]
+            ],
+            "step6:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:74f0a3d39e6a5c3f4a784a0496aa9a3c321da6b9769588cec445cc5ea2890840",
+                  "size": 113
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:b9daad0248079fd4a8bce58222f51033441ad092c8071ecea82f7326a7f1e6cd",
+                  "size": 113
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:e750f5b9d4d06842c4390101d960c8e505d784196fa51926eccc689d0178ae64",
+                  "size": 114
+                }
+              ]
+            ],
+            "step8:0": [
+              [
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:435bf5c20694c99dd5a9877e58e24b26a2207fcf8c692a3c3ce3c867770a5b41",
+                  "size": 42149117
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d9d511d19a19ebdeda520e0752f184d457905c7a310df5b748d133a51274ecd4",
+                  "size": 391
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:74f0a3d39e6a5c3f4a784a0496aa9a3c321da6b9769588cec445cc5ea2890840",
+                  "size": 113
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:b9daad0248079fd4a8bce58222f51033441ad092c8071ecea82f7326a7f1e6cd",
+                  "size": 113
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:e750f5b9d4d06842c4390101d960c8e505d784196fa51926eccc689d0178ae64",
+                  "size": 114
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:d999861cd9eb12801a0490282d2ac805839da362419000f06e2afb24c243112f",
+                  "size": 115
+                }
+              ]
+            ]
+          }
+        },
+        "buildkit_completeness": {
+          "request": true,
+          "resolvedDependencies": false
+        }
+      }
+    }
+  }
+}

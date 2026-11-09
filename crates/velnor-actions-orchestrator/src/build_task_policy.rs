@@ -276,3 +276,45 @@ struct BuildTaskSourceDigests {
     rust_toolchain: Option<String>,
     selected_tools: Vec<BuildTaskTool>,
 }
+
+pub(crate) fn runner_family_tools(
+    discovery: &Discovery,
+) -> Result<(Vec<BuildTaskTool>, String, String, String), OrchestratorError> {
+    let root = root_build_task_sources(discovery)?;
+    if root
+        .mise_config
+        .tools
+        .get("mr-boxington")
+        .and_then(|selector| selector.workflow.as_deref())
+        != Some("release.yml@refs/heads/main")
+    {
+        return Err(failure("runner_family_mbx_workflow"));
+    }
+    let tools = crate::build_task_tools::resolve_selected_tool_keys(
+        &["mr-boxington".to_owned(), "rust".to_owned()],
+        root.mise_config,
+        root.mise_lock,
+        root.rust_version,
+        &root.rust_lock_options,
+        "linux-x64",
+    )?;
+    let artifact = tools
+        .iter()
+        .find(|tool| tool.key == "mr-boxington")
+        .and_then(|tool| tool.artifact.as_ref())
+        .ok_or_else(|| failure("runner_family_mbx_identity"))?;
+    if artifact.repository_id.is_none()
+        || artifact.signer.as_deref()
+            != Some(
+                "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml",
+            )
+    {
+        return Err(failure("runner_family_mbx_identity"));
+    }
+    Ok((
+        tools,
+        native_sha256(root.mise_check)?,
+        root.lock_sha256,
+        root.rust_sha256,
+    ))
+}

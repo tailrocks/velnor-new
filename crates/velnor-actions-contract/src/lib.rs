@@ -49,6 +49,7 @@ pub mod publication_retry;
 mod release_reexports;
 pub mod request_event;
 pub mod run_key_env;
+pub mod runner_image_manifest;
 pub mod secrets;
 pub mod source_preview;
 pub mod staged_reads;

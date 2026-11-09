@@ -41,19 +41,28 @@ def annotation(message, source, tagger_date, now, version):
     if not isinstance(message, str) or len(message.encode()) > 8192:
         raise ValueError("SDK preview annotation size")
     record = json.loads(message, object_pairs_hook=unique_object)
-    keys = {"schema", "repository", "artifact", "source_sha", "version", "producer_run_id",
-            "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256", "immutability"}
+    keys = {"schema", "repository", "artifact", "source_sha", "version", "targets", "immutability"}
     canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
     if set(record) != keys or message not in (canonical, canonical + "\n"):
         raise ValueError("SDK preview annotation shape")
-    if (type(record["schema"]) is not int or record["schema"] != 1
+    if (type(record["schema"]) is not int or record["schema"] != 2
             or record["repository"] != REPOSITORY or record["artifact"] != "generator"
             or record["source_sha"] != source or record["version"] != version):
         raise ValueError("SDK preview annotation identity")
-    for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id"):
-        positive(record[key])
-    if not re.fullmatch("[0-9a-f]{64}", record["payload_archive_sha256"]):
-        raise ValueError("SDK preview annotated archive digest")
+    targets = record["targets"]
+    if not isinstance(targets, dict) or set(targets) != {"linux", "darwin"}:
+        raise ValueError("SDK preview annotated targets")
+    ids = []
+    for target in targets.values():
+        if not isinstance(target, dict) or set(target) != {"producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256", "qualification_job_id"}:
+            raise ValueError("SDK preview annotated producer")
+        for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id", "qualification_job_id"):
+            positive(target[key])
+        if not re.fullmatch("[0-9a-f]{64}", target["payload_archive_sha256"]):
+            raise ValueError("SDK preview annotated archive digest")
+        ids.append(target["payload_artifact_id"])
+    if len(set(ids)) != 2:
+        raise ValueError("SDK preview annotated artifacts")
     precheck = record["immutability"]
     if not isinstance(precheck, dict) or set(precheck) != {"enabled", "checked_at"} or precheck["enabled"] is not True:
         raise ValueError("SDK preview owner immutability precheck")
@@ -107,7 +116,8 @@ def admit_tag(client, source, version):
     if (run.get("id") != run_id or positive(run.get("run_attempt")) < attempt
             or run.get("head_sha") != source or run.get("head_branch") != tag
             or run.get("event") != "push" or run.get("path", "").split("@", 1)[0] != WORKFLOW
-            or run.get("head_repository", {}).get("full_name") != REPOSITORY):
+            or run.get("head_repository", {}).get("full_name") != REPOSITORY
+            or run.get("head_repository", {}).get("id") != REPOSITORY_ID):
         raise ValueError("SDK preview tag run identity")
     now = checked_time(run.get("created_at"))
     verify_tag_rules(client)

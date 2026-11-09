@@ -86,7 +86,11 @@ fn validate_workflow_task_runner(
         .config
         .image_for_build_job(&fact.id)
         .and_then(|(image, platform)| (image.id == owner).then_some(platform.runs_on()));
-    let mut candidates = task_runners.chain(image_runner);
+    let family_runner = (input.config.runner_image_family.is_some()
+        && owner == "runner-image-family"
+        && fact.id == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID)
+        .then_some("ubuntu-26.04");
+    let mut candidates = task_runners.chain(image_runner).chain(family_runner);
     let Some(expected) = candidates.next() else {
         return Err(invalid("native_workflow_task_runner_identity"));
     };

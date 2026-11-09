@@ -28,6 +28,7 @@ pub(crate) struct NativeMiseConfig {
     pub(crate) tools: BTreeMap<String, NativeToolSelector>,
     pub(crate) tasks: BTreeMap<String, NativeMiseTask>,
     pub(crate) settings: NativeMiseSettings,
+    pub(crate) cargo_wrapper: Option<bool>,
 }
 
 impl NativeMiseConfig {
@@ -54,6 +55,7 @@ pub(crate) struct NativeToolSelector {
     pub(crate) version: Option<String>,
     pub(crate) os: Option<Vec<String>>,
     pub(crate) mr_boxington: Option<bool>,
+    pub(crate) workflow: Option<String>,
     pub(crate) config_options: BTreeMap<String, String>,
     pub(crate) unsupported_options: Vec<String>,
     pub(crate) valid_shape: bool,
@@ -99,6 +101,23 @@ pub(crate) fn native_mise_source(
     })
 }
 
+fn valid_cargo_wrapper(value: &toml::Value) -> bool {
+    let Some(wrappers) = value.as_table() else {
+        return false;
+    };
+    let Some(cargo) = wrappers.get("cargo").and_then(toml::Value::as_table) else {
+        return false;
+    };
+    let Some(env) = cargo.get("env").and_then(toml::Value::as_table) else {
+        return false;
+    };
+    wrappers.len() == 1
+        && cargo.len() == 2
+        && env.len() == 1
+        && cargo.get("command").and_then(toml::Value::as_str) == Some("mbx")
+        && env.get("MBX_CARGO_SHIM_MODE").and_then(toml::Value::as_str) == Some("1")
+}
+
 fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     let root = value.as_table()?;
     let mut config = NativeMiseConfig {
@@ -119,6 +138,9 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
                 .tasks
                 .insert(name.clone(), crate::native_mise_tasks::parse_task(value));
         }
+    }
+    if let Some(wrappers) = root.get("wrappers") {
+        config.cargo_wrapper = Some(valid_cargo_wrapper(wrappers));
     }
     if let Some(settings) = root.get("settings") {
         config.settings = parse_native_settings(settings);
@@ -142,6 +164,10 @@ pub(crate) fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelec
         .and_then(toml::Value::as_str)
         .map(ToOwned::to_owned);
     let mr_boxington = table.get("mr_boxington").and_then(toml::Value::as_bool);
+    let workflow = table
+        .get("workflow")
+        .and_then(toml::Value::as_str)
+        .map(ToOwned::to_owned);
     let os = match table.get("os") {
         Some(value) => value.as_array().and_then(|items| {
             items
@@ -161,11 +187,14 @@ pub(crate) fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelec
         .filter(|key| {
             !matches!(
                 key.as_str(),
-                "version" | "os" | "matching_regex" | "mr_boxington"
+                "version" | "os" | "matching_regex" | "mr_boxington" | "workflow"
             )
         })
         .cloned()
         .collect::<Vec<_>>();
+    if table.contains_key("workflow") && workflow.is_none() {
+        unsupported_options.push("workflow.shape".to_owned());
+    }
     if table.contains_key("version") && version.is_none() {
         unsupported_options.push("version.shape".to_owned());
     }
@@ -186,6 +215,7 @@ pub(crate) fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelec
         version,
         os,
         mr_boxington,
+        workflow,
         config_options,
         unsupported_options,
         valid_shape,
