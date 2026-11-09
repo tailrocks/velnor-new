@@ -66,7 +66,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             count = int((state / "pull-count").read_text()) + 1
             (state / "pull-count").write_text(str(count))
             if failure == "merge-api-deadline" and count >= 2:
+                (state / "delayed-pull-count").write_text(str(count))
                 time.sleep(15)
+                (state / "delayed-pull-completed").write_text(str(count))
             filename = "pull-ready.json" if mode not in ("none", "pending") and count >= 3 else "pull.json"
         elif route == "repos/test-owner/test-tap/git/matching-refs/pull/17/merge":
             if mode == "false" or (mode != "none" and int((state / "pull-count").read_text()) < 3):

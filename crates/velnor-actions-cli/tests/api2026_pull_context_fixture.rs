@@ -11,6 +11,8 @@ use std::{
 use tempfile::TempDir;
 use worker::sha256;
 
+#[path = "api2026_pull_context_fixture/deadline_boundaries.rs"]
+mod deadline_boundaries;
 #[path = "api2026_pull_context_fixture/driver.rs"]
 mod driver;
 #[path = "api2026_pull_context_fixture/git.rs"]
@@ -97,6 +99,7 @@ pub(crate) fn run(scenario: Scenario, expected: &str) -> Result<(), Box<dyn Erro
         "expected {expected}, got {stderr}; fixture routes: {requests}"
     );
     assert_safe_api_failure(scenario, &stderr, &requests);
+    deadline_boundaries::assert_reached(&paths, scenario, &requests)?;
     state::verify(&paths.root, before, &requests)?;
     assert!(!paths.runner_temp.join("velnor/local/plan.json").exists());
     assert!(
