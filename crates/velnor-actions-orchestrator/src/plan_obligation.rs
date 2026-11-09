@@ -27,6 +27,8 @@ use crate::select::group_changed;
 
 #[path = "plan_obligation_identity.rs"]
 mod identity;
+#[path = "plan_job_image_candidate.rs"]
+mod job_image_candidate;
 
 use identity::planned_identity;
 
@@ -41,6 +43,8 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) catalog: &'a ToolCatalog,
     pub(crate) wire: GroupWire<'a>,
     pub(crate) changed: bool,
+    pub(crate) change_evidence: &'a crate::select::ChangeEvidence,
+    pub(crate) affected_packages: Option<&'a BTreeSet<String>>,
     pub(crate) snapshot: &'a ExecutionSnapshot,
     pub(crate) root: &'a Path,
     pub(crate) named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
@@ -76,6 +80,9 @@ pub(crate) fn plan_group(
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
+    if task.task_id == velnor_actions_contract::JOB_IMAGE_CANDIDATE_TASK_ID {
+        return job_image_candidate::derive(inputs);
+    }
     if Stack::from_id(&task.stack_id) == Some(Stack::Native) {
         let check = inputs
             .discovery

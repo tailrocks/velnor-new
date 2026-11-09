@@ -12,7 +12,12 @@ use super::tool_sources;
 use crate::git_paths::split_nul_paths;
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+fn diff_files(
+    root: &Path,
+    base: &str,
+    head: &str,
+    added_only: bool,
+) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
     let mut args = vec![
@@ -21,6 +26,9 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
         OsString::from(format!("{base}...{head}")),
         OsString::from("--"),
     ];
+    if added_only {
+        args.insert(2, OsString::from("--diff-filter=A"));
+    }
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
     args.insert(0, OsString::from("-z"));
     let output = GitRequest::diff(args)
@@ -32,13 +40,17 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
     split_nul_paths(&output.stdout)
 }
 
+pub(super) fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
+    diff_files(root, base, head, true)
+}
+
 pub(super) fn change_sets(
     root: &Path,
     base: &str,
     head: &str,
     warnings: &mut Vec<String>,
 ) -> Option<(BTreeSet<String>, bool)> {
-    let changed = match changed_files(root, base, head) {
+    let changed = match diff_files(root, base, head, false) {
         Ok(files) => files,
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));

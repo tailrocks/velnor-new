@@ -129,6 +129,7 @@ crates/velnor-actions-contract/src/config/mise_task_suites.rs
 crates/velnor-actions-contract/src/config/mod.rs
 crates/velnor-actions-contract/src/config/native_checks.rs
 crates/velnor-actions-contract/src/config/playwright_lock.rs
+crates/velnor-actions-contract/src/config/premerge_event_proof.rs
 crates/velnor-actions-contract/src/config/preview_policy.rs
 crates/velnor-actions-contract/src/config/private_sources.rs
 crates/velnor-actions-contract/src/config/project_tool_grammar.rs
@@ -256,6 +257,7 @@ crates/velnor-actions-contract/src/propose/task.rs
 crates/velnor-actions-contract/src/publication_retry.rs
 crates/velnor-actions-contract/src/release_reexports.rs
 crates/velnor-actions-contract/src/request_event.rs
+crates/velnor-actions-contract/src/reusable_attestation_binding.rs
 crates/velnor-actions-contract/src/review_completion.rs
 crates/velnor-actions-contract/src/run_key_env.rs
 crates/velnor-actions-contract/src/secrets.rs
@@ -319,6 +321,7 @@ crates/velnor-actions-contract/src/workflow/plan.rs
 crates/velnor-actions-contract/src/workflow/plan_jobs.rs
 crates/velnor-actions-contract/src/workflow/platform.rs
 crates/velnor-actions-contract/src/workflow/producer.rs
+crates/velnor-actions-contract/src/workflow/producer_execution_manifest.rs
 crates/velnor-actions-contract/src/workflow/producer_order.rs
 crates/velnor-actions-contract/src/workflow/producer_roles.rs
 crates/velnor-actions-contract/src/workflow/producer_state.rs
@@ -941,6 +944,7 @@ crates/velnor-actions-orchestrator/src/playwright_install.rs
 crates/velnor-actions-orchestrator/src/playwright_lock.rs
 crates/velnor-actions-orchestrator/src/playwright_resolve.rs
 crates/velnor-actions-orchestrator/src/playwright_system_deps.rs
+crates/velnor-actions-orchestrator/src/premerge_event_proof_emit.rs
 crates/velnor-actions-orchestrator/src/prepare.rs
 crates/velnor-actions-orchestrator/src/preseed_manifest.rs
 crates/velnor-actions-orchestrator/src/preview_aggregate.rs
@@ -1120,6 +1124,7 @@ crates/velnor-actions-orchestrator/src/tap_writer_prepare.rs
 crates/velnor-actions-orchestrator/src/tap_writer_receipt.rs
 crates/velnor-actions-orchestrator/src/tap_writer_result.rs
 crates/velnor-actions-orchestrator/src/task_execution.rs
+crates/velnor-actions-orchestrator/src/task_producer.rs
 crates/velnor-actions-orchestrator/src/task_report.rs
 crates/velnor-actions-orchestrator/src/task_report/observation.rs
 crates/velnor-actions-orchestrator/src/task_report/write.rs
@@ -1300,6 +1305,7 @@ crates/velnor-actions-workflow-renderer/src/document_steps_internal_env.rs
 crates/velnor-actions-workflow-renderer/src/error.rs
 crates/velnor-actions-workflow-renderer/src/expressions.rs
 crates/velnor-actions-workflow-renderer/src/final_steps.rs
+crates/velnor-actions-workflow-renderer/src/fixed_python_authority.rs
 crates/velnor-actions-workflow-renderer/src/freshness.rs
 crates/velnor-actions-workflow-renderer/src/group_ledger_steps.rs
 crates/velnor-actions-workflow-renderer/src/guard.rs
@@ -1388,6 +1394,9 @@ crates/velnor-actions-workflow-renderer/src/plan_sources/cargo_fetch.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/source_cache.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/state_select.rs
 crates/velnor-actions-workflow-renderer/src/playwright_install_step.rs
+crates/velnor-actions-workflow-renderer/src/premerge_event_probe.py
+crates/velnor-actions-workflow-renderer/src/premerge_event_proof.rs
+crates/velnor-actions-workflow-renderer/src/premerge_source.py
 crates/velnor-actions-workflow-renderer/src/preseed.rs
 crates/velnor-actions-workflow-renderer/src/preseed_closure.rs
 crates/velnor-actions-workflow-renderer/src/preseed_digest.rs
@@ -1521,6 +1530,7 @@ crates/velnor-actions-workflow-renderer/src/steps_shell.rs
 crates/velnor-actions-workflow-renderer/src/support.rs
 crates/velnor-actions-workflow-renderer/src/support_private_tokens.rs
 crates/velnor-actions-workflow-renderer/src/support_tokens.rs
+crates/velnor-actions-workflow-renderer/src/task_producer_manifest.rs
 crates/velnor-actions-workflow-renderer/src/task_script.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper_declared.rs

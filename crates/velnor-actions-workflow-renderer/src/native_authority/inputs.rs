@@ -88,6 +88,7 @@ pub enum SuitePhase {
 #[derive(Debug, Clone)]
 pub enum LogicalJobSource {
     Task(NativeTaskFact),
+    JobImageCandidate,
     NamedCheck {
         id: String,
     },

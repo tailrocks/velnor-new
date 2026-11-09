@@ -65,6 +65,8 @@ mod feature_toggles;
 mod final_fanin;
 #[path = "workflow_configuration_public/install_profile.rs"]
 mod install_profile;
+#[path = "workflow_configuration_public/job_image_candidate_plan.rs"]
+mod job_image_candidate_plan;
 #[path = "workflow_configuration_public/lane_inventory_dispatch.rs"]
 mod lane_inventory_dispatch;
 #[path = "workflow_configuration_public/ledger_cli_build_env.rs"]
@@ -262,3 +264,17 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+#[path = "workflow_configuration_public/producer_execution.rs"]
+mod producer_execution;
+
+#[path = "workflow_configuration_public/producer_execution_support.rs"]
+mod producer_execution_support;
+
+#[path = "workflow_configuration_public/producer_execution_fixture.rs"]
+mod producer_execution_fixture;
+
+#[path = "workflow_configuration_public/producer_execution_limits.rs"]
+mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/premerge_event_proof.rs"]
+mod premerge_event_proof;

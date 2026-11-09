@@ -43,6 +43,8 @@ pub struct Discovery {
     pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     pub native_checks: Vec<velnor_actions_contract::config::NativeHomebrewCheck>,
+    pub(crate) job_image_candidate:
+        Option<velnor_actions_workflow_renderer::verification_jobs::JobImageCandidateExecution>,
     pub statuses: Vec<DetectionStatus>,
     pub workspaces: Vec<PlannedWorkspace>,
     pub proposals: Vec<ProposedTask>,
@@ -122,14 +124,7 @@ pub(crate) fn discover_with_options(
                 problem: err.to_string(),
             })?;
     let native_checks = config.native_checks.clone();
-    proposals.extend(mise_checks.iter().map(|item| item.proposal.clone()));
-    proposals.extend(
-        native_checks
-            .iter()
-            .map(crate::internal_plan::native_homebrew_checks::proposal)
-            .collect::<Result<Vec<_>, _>>()?,
-    );
-    proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    let job_image_candidate = finalize_proposals(&mut proposals, &mise_checks, config, catalog)?;
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
@@ -140,6 +135,7 @@ pub(crate) fn discover_with_options(
         gradle_roots,
         mise_checks,
         native_checks,
+        job_image_candidate,
         statuses,
         workspaces,
         proposals,
@@ -163,6 +159,41 @@ pub(crate) fn discover_with_options(
     };
     crate::non_inputs::validate(root, config, &discovery)?;
     Ok(discovery)
+}
+
+fn finalize_proposals(
+    proposals: &mut Vec<ProposedTask>,
+    mise_checks: &[velnor_actions_mise::DiscoveredCheck],
+    config: &VelnorConfig,
+    catalog: &ToolCatalog,
+) -> Result<
+    Option<velnor_actions_workflow_renderer::verification_jobs::JobImageCandidateExecution>,
+    OrchestratorError,
+> {
+    proposals.extend(mise_checks.iter().map(|item| item.proposal.clone()));
+    proposals.extend(
+        config
+            .native_checks
+            .iter()
+            .map(crate::internal_plan::native_homebrew_checks::proposal)
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+    let candidate = if velnor_actions_contract::job_image_candidate_enabled(config) {
+        let execution = velnor_actions_workflow_renderer::verification_jobs::JobImageCandidateExecution::for_catalog(catalog, config.resources.compiler_process_budget.min(velnor_actions_contract::config::MAX_CRATE_BUILD_JOBS))
+            .map_err(|error| OrchestratorError::Contract { problem: error.to_string() })?;
+        proposals.push(
+            execution
+                .proposal()
+                .map_err(|error| OrchestratorError::Contract {
+                    problem: error.to_string(),
+                })?,
+        );
+        Some(execution)
+    } else {
+        None
+    };
+    proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    Ok(candidate)
 }
 
 fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {

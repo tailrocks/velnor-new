@@ -59,6 +59,12 @@ pub(super) fn validate(
         rust: rust.clone(),
         mr_boxington: mr_boxington.clone(),
         export_rustup,
+        build_jobs: input
+            .argv
+            .get(16)
+            .ok_or_else(|| invalid("build_jobs"))?
+            .parse()
+            .map_err(|_| invalid("build_jobs"))?,
     };
     crate::image_candidate::validate_job_image_candidate_operation(input.argv, input.env, &inputs)
 }

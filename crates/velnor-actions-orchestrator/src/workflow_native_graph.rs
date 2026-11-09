@@ -38,6 +38,7 @@ pub(super) fn graph(
         }
     }
     insert_named_checks(input, &mut sources, &mut ordered);
+    insert_job_image_candidate(input, jobs, &mut sources, &mut ordered)?;
     insert_gradle(input, &mut sources, &mut ordered);
     insert_suites(input, jobs, &mut sources, &mut ordered);
     for (id, root) in seed_ids {
@@ -147,6 +148,40 @@ fn task_source(
         _ => return Err(problem("native_graph_unknown_task_stack")),
     };
     Ok(source)
+}
+
+fn insert_job_image_candidate(
+    input: &WorkflowBuildInput<'_>,
+    jobs: &BTreeMap<String, Job>,
+    sources: &mut Sources,
+    ordered: &mut Vec<String>,
+) -> Result<(), OrchestratorError> {
+    let proposal = input
+        .discovery
+        .proposals
+        .iter()
+        .find(|task| task.task_id == velnor_actions_contract::JOB_IMAGE_CANDIDATE_TASK_ID);
+    let id = velnor_actions_contract::JOB_IMAGE_CANDIDATE_JOB_ID;
+    let Some(execution) = input.discovery.job_image_candidate.as_ref() else {
+        if velnor_actions_contract::job_image_candidate_enabled(input.config)
+            || proposal.is_some()
+            || jobs.contains_key(id)
+        {
+            return Err(problem("native_graph_candidate_execution_missing"));
+        }
+        return Ok(());
+    };
+    let proposal = proposal.ok_or_else(|| problem("native_graph_candidate_proposal_missing"))?;
+    velnor_actions_contract::validate_job_image_candidate_proposal(proposal, execution.inputs())?;
+    if !jobs.contains_key(id)
+        || sources
+            .insert(id.to_owned(), LogicalJobSource::JobImageCandidate)
+            .is_some()
+    {
+        return Err(problem("native_graph_candidate_job_missing_or_duplicate"));
+    }
+    ordered.push(id.to_owned());
+    Ok(())
 }
 
 fn insert_named_checks(

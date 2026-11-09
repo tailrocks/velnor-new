@@ -13,6 +13,7 @@ pub const JOB_IMAGE_CANDIDATE_TASK_ID: &str = "internal/job-image-candidate/oci-
 pub const JOB_IMAGE_CANDIDATE_UNIT_ID: &str = "job-image-candidate";
 pub const JOB_IMAGE_CANDIDATE_TASK_KIND: &str = "job_image_candidate";
 pub const JOB_IMAGE_CANDIDATE_JOB_ID: &str = "task-job-image-candidate";
+pub const JOB_IMAGE_CANDIDATE_ARTIFACT_PREFIX: &str = "velnor-job-image-candidate-";
 pub const JOB_IMAGE_CANDIDATE_RUNNER: &str = "ubuntu-26.04";
 pub const JOB_IMAGE_CANDIDATE_MAX_SCRIPT_BYTES: usize = 32768;
 pub const JOB_IMAGE_CANDIDATE_LOADER: &str = "import os,sys; os.execve('/bin/bash',['/bin/bash','--noprofile','--norc','-p','-e','-o','pipefail','-c',bytes.fromhex(sys.argv[1]).decode('utf-8'),'velnor',*sys.argv[2:]],dict(os.environ))";

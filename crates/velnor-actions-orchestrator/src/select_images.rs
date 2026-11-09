@@ -17,6 +17,7 @@ const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct ChangeEvidence {
     pub(crate) paths: Option<BTreeSet<String>>,
+    pub(crate) added_paths: Option<BTreeSet<String>>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

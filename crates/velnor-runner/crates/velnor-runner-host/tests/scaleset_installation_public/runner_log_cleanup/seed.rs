@@ -345,3 +345,29 @@ async fn seed_cleanup_witness(
     .await?;
     Ok(())
 }
+
+pub(super) async fn retry_committed(
+    state_dir: &Path,
+    observer: &mut Option<(turso::Database, turso::Connection)>,
+) -> TestResult<bool> {
+    if observer.is_none() {
+        let path = state_dir.join("journal.db");
+        let database = turso::Builder::new_local(path.to_str().ok_or("journal path utf8")?)
+            .build()
+            .await?;
+        let connection = database.connect()?;
+        *observer = Some((database, connection));
+    }
+    let (_, connection) = observer.as_ref().ok_or("retry observer unavailable")?;
+    let mut rows = connection.query(
+        "SELECT attempts, claim_generation, lease_until, retry_after FROM connection_completion_cleanup WHERE intent_id = 1 AND connection_id = 'conn-test-1' AND scale_set_id = 7 AND runner_request_id = 11 AND runner_id = 21",
+        (),
+    ).await?;
+    let Some(row) = rows.next().await? else {
+        return Err("completion cleanup row missing".into());
+    };
+    Ok(row.get::<i64>(0)? > 0
+        && row.get::<i64>(1)? > 0
+        && row.get::<i64>(2)? == 0
+        && row.get::<i64>(3)? > 0)
+}

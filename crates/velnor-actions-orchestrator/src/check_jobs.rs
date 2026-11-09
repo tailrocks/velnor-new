@@ -17,6 +17,9 @@ use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
+#[path = "job_image_candidate_job.rs"]
+mod job_image_candidate_job;
+
 pub(crate) fn build_check_jobs(
     policy: WorkflowPolicy,
     discovery: &Discovery,
@@ -70,6 +73,11 @@ pub(crate) fn build_check_jobs(
             id.clone(),
             native_check_job(check, &id, acquire, catalog, helper_version)?,
         ));
+    }
+    if let Some(candidate) =
+        job_image_candidate_job::build(policy, discovery, catalog, published_lock, helper_version)?
+    {
+        jobs.push(candidate);
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)

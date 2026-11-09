@@ -20,7 +20,7 @@ pub struct JobImageCandidateExecution {
 }
 
 impl JobImageCandidateExecution {
-    pub fn for_catalog(catalog: &ToolCatalog) -> Result<Self, RenderError> {
+    pub fn for_catalog(catalog: &ToolCatalog, build_jobs: u32) -> Result<Self, RenderError> {
         if catalog.is_emission() {
             return Err(RenderError::InvalidWorkflow(
                 "candidate_catalog_must_be_concrete".to_owned(),
@@ -31,6 +31,7 @@ impl JobImageCandidateExecution {
             rust: emission.tool_spec(PinnedTool::Rust),
             mr_boxington: emission.tool_spec(PinnedTool::MrBoxington),
             export_rustup: emission.exports_rustup_toolchain(),
+            build_jobs,
         };
         Ok(Self {
             argv: inputs.argv().map_err(RenderError::Contract)?,

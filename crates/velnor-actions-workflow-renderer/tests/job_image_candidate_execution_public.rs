@@ -19,7 +19,7 @@ fn project_tool_selectors_remain_visible_to_runtime_materialization() -> Result<
     let catalog = ToolCatalog::pinned()
         .with_project_tool(PinnedTool::Rust, "1.90.0")?
         .with_project_tool(PinnedTool::MrBoxington, "0.1.0")?;
-    let execution = JobImageCandidateExecution::for_catalog(&catalog)?;
+    let execution = JobImageCandidateExecution::for_catalog(&catalog, 2)?;
     assert_eq!(execution.argv()[13], "rust@${VELNOR_TOOL_RUST}");
     assert_eq!(
         execution.argv()[14],
@@ -27,7 +27,7 @@ fn project_tool_selectors_remain_visible_to_runtime_materialization() -> Result<
     );
     execution.proposal()?;
     let without_export =
-        JobImageCandidateExecution::for_catalog(&catalog.with_export_rustup_toolchain(false))?;
+        JobImageCandidateExecution::for_catalog(&catalog.with_export_rustup_toolchain(false), 2)?;
     assert_eq!(without_export.argv()[15], "no-export");
     assert!(
         !without_export
@@ -41,7 +41,14 @@ fn project_tool_selectors_remain_visible_to_runtime_materialization() -> Result<
 
 #[test]
 fn canonical_candidate_factory_is_admitted_only_by_its_closed_execution_contract() -> Result<()> {
-    let execution = JobImageCandidateExecution::for_catalog(&ToolCatalog::pinned())?;
+    let execution = JobImageCandidateExecution::for_catalog(&ToolCatalog::pinned(), 2)?;
+    assert_eq!(
+        execution
+            .environment()
+            .get("CARGO_BUILD_JOBS")
+            .map(String::as_str),
+        Some("2")
+    );
     let proposal = execution.proposal()?;
     velnor_actions_contract::validate_job_image_candidate_proposal(&proposal, execution.inputs())?;
     let mut wrong_inputs = execution.inputs().clone();
@@ -52,6 +59,7 @@ fn canonical_candidate_factory_is_admitted_only_by_its_closed_execution_contract
     );
     let identity = identity(&execution)?;
     identity.validate()?;
+    assert_build_budgets(&execution, &identity)?;
     let entry = entry(&execution, &identity)?;
     entry.validate("r101-a1")?;
     assert_eq!(
@@ -60,6 +68,18 @@ fn canonical_candidate_factory_is_admitted_only_by_its_closed_execution_contract
     );
     let mut record = record(&execution, &entry)?;
     record.validate()?;
+    for mutate_argv in [false, true] {
+        let mut changed = record.clone();
+        if mutate_argv {
+            changed.argv[16] = "1".to_owned();
+        } else {
+            changed
+                .env
+                .insert("CARGO_BUILD_JOBS".to_owned(), "1".to_owned());
+        }
+        refresh(&mut changed)?;
+        assert!(changed.validate().is_err());
+    }
     let frame = record.nul_frame()?;
     assert!(frame.starts_with(velnor_actions_contract::TASK_EXECUTION_FRAME_MAGIC.as_bytes()));
     for field in frame.split(|byte| *byte == 0) {
@@ -96,6 +116,43 @@ fn canonical_candidate_factory_is_admitted_only_by_its_closed_execution_contract
         .insert("MISE_NO_CONFIG".to_owned(), "0".to_owned());
     refresh(&mut record)?;
     assert!(record.validate().is_err());
+    Ok(())
+}
+
+fn assert_build_budgets(
+    execution: &JobImageCandidateExecution,
+    identity: &TaskIdentity,
+) -> Result<()> {
+    assert_eq!(identity.stack_extension.data["build_jobs"], 2);
+    let single = JobImageCandidateExecution::for_catalog(&ToolCatalog::pinned(), 1)?;
+    let single_identity = self::identity(&single)?;
+    single_identity.validate()?;
+    assert_eq!(
+        single
+            .environment()
+            .get("CARGO_BUILD_JOBS")
+            .map(String::as_str),
+        Some("1")
+    );
+    assert_eq!(single_identity.stack_extension.data["build_jobs"], 1);
+    assert_ne!(
+        velnor_actions_contract::input_digest(identity)?,
+        velnor_actions_contract::input_digest(&single_identity)?
+    );
+    let single_entry = entry(&single, &single_identity)?;
+    single_entry.validate("r101-a1")?;
+    assert_eq!(
+        NativeTaskKind::from_entry(&single_entry)?,
+        NativeTaskKind::JobImageCandidate
+    );
+    record(&single, &single_entry)?.validate()?;
+    assert!(JobImageCandidateExecution::for_catalog(&ToolCatalog::pinned(), 0).is_err());
+    assert!(JobImageCandidateExecution::for_catalog(&ToolCatalog::pinned(), 65).is_err());
+    for budget in [0, 65] {
+        let mut invalid = execution.inputs().clone();
+        invalid.build_jobs = budget;
+        assert!(invalid.validate().is_err());
+    }
     Ok(())
 }
 

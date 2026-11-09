@@ -164,6 +164,7 @@ pub(super) fn generator_owned(relative: &Path) -> bool {
         .map(|format| format.path)
         .chain(RELEASE_TREE_PATHS.iter().copied())
         .chain(std::iter::once(TASK_EXECUTION_MANIFEST_PATH))
+        .chain(std::iter::once(velnor_actions_contract::workflow::producer_execution_manifest::PRODUCER_EXECUTION_MANIFEST_PATH))
         .any(|path| {
             Path::new(path)
                 .strip_prefix(".github")

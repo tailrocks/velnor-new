@@ -12,7 +12,8 @@ const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 
 const PAYLOAD: &str = "velnor-actions-x86_64-unknown-linux-gnu";
 const METADATA: &str = "${{ runner.temp }}/source-preview-metadata.json";
 pub(super) const AUTHORITY_PATH: &str = ".github/workflows/source-preview-publication.yml";
-const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> = None;
+const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> =
+    Some(crate::workflow_timeout::SOURCE_PREVIEW_AUTHORITY_SHA);
 
 pub(super) fn producer_jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
     Ok(vec![build_job(pins)?, qualify_job(pins)?])

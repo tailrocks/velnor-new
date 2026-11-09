@@ -41,6 +41,7 @@ mod document_steps;
 mod error;
 mod expressions;
 mod final_steps;
+mod fixed_python_authority;
 pub mod freshness;
 pub mod guard;
 mod homebrew_adoption_seed;
@@ -67,6 +68,7 @@ pub mod plan_format;
 mod plan_gate;
 pub mod plan_report;
 pub mod plan_sources;
+pub mod premerge_event_proof;
 pub mod preseed;
 mod preseed_closure;
 mod preview_setup;
@@ -144,3 +146,5 @@ mod root_api;
 pub use self::root_api::*;
 
 pub mod review_completion;
+
+mod task_producer_manifest;

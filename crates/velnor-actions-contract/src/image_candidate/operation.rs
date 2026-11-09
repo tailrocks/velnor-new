@@ -15,10 +15,14 @@ pub struct JobImageCandidateInputs {
     pub rust: String,
     pub mr_boxington: String,
     pub export_rustup: bool,
+    pub build_jobs: u32,
 }
 
 impl JobImageCandidateInputs {
     pub fn validate(&self) -> Result<(), ContractError> {
+        if !(1..=crate::config::MAX_CRATE_BUILD_JOBS).contains(&self.build_jobs) {
+            return Err(invalid("build_jobs"));
+        }
         for (selector, prefix, project_ref) in [
             (&self.rust, "rust@", "${VELNOR_TOOL_RUST}"),
             (
@@ -56,6 +60,7 @@ impl JobImageCandidateInputs {
         .into_iter()
         .map(|(key, value)| (key.to_owned(), value.to_owned()))
         .collect::<std::collections::BTreeMap<_, _>>();
+        env.insert("CARGO_BUILD_JOBS".to_owned(), self.build_jobs.to_string());
         if self.export_rustup {
             env.insert("RUSTUP_TOOLCHAIN".to_owned(), self.rust[5..].to_owned());
         }
@@ -83,6 +88,7 @@ impl JobImageCandidateInputs {
                 ]
             })
             .collect();
+        let build_jobs = self.build_jobs.to_string();
         Ok([
             "mise",
             "--no-config",
@@ -104,6 +110,7 @@ impl JobImageCandidateInputs {
             } else {
                 "no-export"
             },
+            &build_jobs,
         ]
         .into_iter()
         .map(str::to_owned)

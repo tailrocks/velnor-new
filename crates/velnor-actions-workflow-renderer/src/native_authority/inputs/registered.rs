@@ -17,6 +17,7 @@ pub(super) struct RegisteredSources {
     seen_generated: BTreeSet<String>,
     seen_workflow: BTreeSet<String>,
     seen_ledger_cli: bool,
+    seen_job_image_candidate: bool,
 }
 
 impl RegisteredSources {
@@ -38,6 +39,7 @@ impl RegisteredSources {
             seen_suites: BTreeSet::new(),
             seen_workflow: BTreeSet::new(),
             seen_ledger_cli: false,
+            seen_job_image_candidate: false,
         })
     }
 
@@ -47,30 +49,8 @@ impl RegisteredSources {
         input: &NativeAuthorityInput<'_>,
     ) -> Result<bool, NativeAuthorityError> {
         match &fact.source {
-            LogicalJobSource::NamedCheck { id } => {
-                let runner = input
-                    .config
-                    .checks
-                    .iter()
-                    .find(|check| check.id == *id)
-                    .map(|check| &check.runner)
-                    .or_else(|| {
-                        input
-                            .config
-                            .native_checks
-                            .iter()
-                            .find(|check| check.id == *id)
-                            .map(|check| &check.runner)
-                    });
-                if fact.id != format!("check-{id}")
-                    || runner.is_none_or(|runner| {
-                        fact.check_runner.as_ref() != Some(runner) || fact.runs_on != runner.label
-                    })
-                {
-                    return Err(invalid("native_check_job_identity"));
-                }
-                Ok(true)
-            }
+            LogicalJobSource::JobImageCandidate => self.job_image_candidate(fact, input),
+            LogicalJobSource::NamedCheck { id } => named_check(fact, id, input),
             LogicalJobSource::Gradle { root, project } => self.gradle(fact, root, project),
             LogicalJobSource::Suite { id, phase } => self.suite(fact, id, *phase, input),
             LogicalJobSource::WorkflowTask { owner } => {
@@ -126,6 +106,25 @@ impl RegisteredSources {
             }
             LogicalJobSource::Task(_) => Err(invalid("native_registered_task_source")),
         }
+    }
+
+    fn job_image_candidate(
+        &mut self,
+        fact: &LogicalJobFact,
+        input: &NativeAuthorityInput<'_>,
+    ) -> Result<bool, NativeAuthorityError> {
+        if !velnor_actions_contract::job_image_candidate_enabled(input.config)
+            || fact.id != velnor_actions_contract::JOB_IMAGE_CANDIDATE_JOB_ID
+            || fact.runs_on != velnor_actions_contract::JOB_IMAGE_CANDIDATE_RUNNER
+            || fact.check_runner.is_some()
+            || !fact.outputs.is_empty()
+            || fact.needs.len() != 1
+            || fact.needs[0] != crate::render::PLAN_JOB_ID
+            || std::mem::replace(&mut self.seen_job_image_candidate, true)
+        {
+            return Err(invalid("native_job_image_candidate_identity"));
+        }
+        Ok(true)
     }
 
     fn gradle(
@@ -239,8 +238,42 @@ impl RegisteredSources {
         if self.seen_workflow != workflow {
             return Err(invalid("native_graph_incomplete_workflow_tasks"));
         }
+        if self.seen_job_image_candidate
+            != velnor_actions_contract::job_image_candidate_enabled(input.config)
+        {
+            return Err(invalid("native_graph_incomplete_job_image_candidate"));
+        }
         Ok(())
     }
+}
+
+fn named_check(
+    fact: &LogicalJobFact,
+    id: &str,
+    input: &NativeAuthorityInput<'_>,
+) -> Result<bool, NativeAuthorityError> {
+    let runner = input
+        .config
+        .checks
+        .iter()
+        .find(|check| check.id == id)
+        .map(|check| &check.runner)
+        .or_else(|| {
+            input
+                .config
+                .native_checks
+                .iter()
+                .find(|check| check.id == id)
+                .map(|check| &check.runner)
+        });
+    if fact.id != format!("check-{id}")
+        || runner.is_none_or(|runner| {
+            fact.check_runner.as_ref() != Some(runner) || fact.runs_on != runner.label
+        })
+    {
+        return Err(invalid("native_check_job_identity"));
+    }
+    Ok(true)
 }
 
 fn gradle_projects(

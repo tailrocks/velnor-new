@@ -170,6 +170,8 @@ pub(crate) fn check_policy_mode(config: &VelnorConfig) -> Result<(), Orchestrato
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PartialConfig {
+    #[serde(default)]
+    premerge_event_proof: Option<velnor_actions_contract::config::PremergeEventProofConfig>,
     schema: Option<u32>,
     #[serde(default)]
     workflow: PartialWorkflow,
@@ -246,6 +248,7 @@ impl PartialConfig {
             OrchestratorError::config(CONFIG_REL, "schema", "missing_required_schema")
         })?;
         Ok(VelnorConfig {
+            premerge_event_proof: self.premerge_event_proof,
             schema,
             workflow: self.workflow.materialize(),
             resources: self.resources.materialize(),

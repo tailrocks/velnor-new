@@ -97,6 +97,11 @@ pub(crate) fn classify_changed(
         }
     }
     let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
+    if discovery.job_image_candidate.is_some() {
+        evidence.added_paths = changes::added_files(root, base, head)
+            .ok()
+            .filter(|added| added.is_subset(&changed));
+    }
     Some(affected_from_changed(
         discovery,
         &changed,
@@ -142,6 +147,9 @@ fn affected_from_changed(
     warnings: &mut Vec<String>,
     evidence: &mut ChangeEvidence,
 ) -> BTreeSet<String> {
+    if toolfiles {
+        evidence.added_paths = None;
+    }
     let scoped_workflow = (!toolfiles)
         .then(|| scoped_standalone_workflow(discovery, changed, root, base, head))
         .flatten();
@@ -153,6 +161,7 @@ fn affected_from_changed(
     let all_packages: BTreeSet<String> = discovery
         .proposals
         .iter()
+        .filter(|task| task.task_id != velnor_actions_contract::JOB_IMAGE_CANDIDATE_TASK_ID)
         .map(|task| task.identity.unit_id.clone())
         .collect();
     let tofu_affected = if changed.is_empty() {
@@ -168,11 +177,13 @@ fn affected_from_changed(
     } else {
         if let Some(warning) = broadening_warning(changed, scoped_workflow) {
             warnings.push(warning);
+            evidence.added_paths = None;
             return all_packages;
         }
         let Some(keys) = crate::select_tofu::tofu_keys_or_broaden(
             root, base, head, discovery, changed, warnings,
         ) else {
+            evidence.added_paths = None;
             return all_packages;
         };
         keys
@@ -189,6 +200,7 @@ fn affected_from_changed(
         (root, base, head),
         warnings,
     ) else {
+        evidence.added_paths = None;
         return all_packages;
     };
     if !rust_changed.is_empty() || toolfiles {

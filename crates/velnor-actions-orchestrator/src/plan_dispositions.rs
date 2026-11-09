@@ -49,6 +49,8 @@ pub(crate) fn finalize_dispositions(
     for obligation in obligations.iter() {
         let unaffected = obligation.decision == ObligationDecision::NotAffected
             && (obligation.job_id.starts_with(CRATE_JOB_ID_PREFIX)
+                || (obligation.job_id == velnor_actions_contract::JOB_IMAGE_CANDIDATE_JOB_ID
+                    && obligation.task_id == velnor_actions_contract::JOB_IMAGE_CANDIDATE_TASK_ID)
                 || obligation.job_id.starts_with("check-"));
         skippable
             .entry(&obligation.job_id)

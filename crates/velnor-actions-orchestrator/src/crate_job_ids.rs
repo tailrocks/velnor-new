@@ -66,6 +66,11 @@ impl<'a> JobOwners<'a> {
         if member.no_targets {
             return Ok(None);
         }
+        if member.task_id == velnor_actions_contract::JOB_IMAGE_CANDIDATE_TASK_ID {
+            return Ok(Some(
+                velnor_actions_contract::JOB_IMAGE_CANDIDATE_JOB_ID.to_owned(),
+            ));
+        }
         if matches!(
             Stack::require_known(&member.stack_id)?,
             Stack::Mise | Stack::Native
