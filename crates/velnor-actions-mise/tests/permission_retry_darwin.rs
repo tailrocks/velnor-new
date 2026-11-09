@@ -52,11 +52,7 @@ fn anchored_persistent_permission_returns_error_without_receipt()
             .run_quiescent_until(32, deadline(Duration::from_secs(2))?)
             .err()
             .ok_or_else(|| io::Error::other("persistent EPERM returned a receipt"))?;
-        assert!(
-            error
-                .to_string()
-                .contains("observe_group:Operation not permitted")
-        );
+        assert!(error.to_string().contains("group_drain_deadline_exhausted"));
         assert!(
             started.elapsed() >= Duration::from_millis(1800),
             "persistent EPERM returned before the drain deadline"
