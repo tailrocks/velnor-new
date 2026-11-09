@@ -146,8 +146,7 @@ impl ImageCandidateCommand {
         command: &IsolatedCommand,
         deadline: CheckDeadline,
     ) -> Result<ProcessOutput, MiseError> {
-        let (output, _drained) =
-            command.run_quiescent_progress_until(OUTPUT_LIMIT, deadline, &mut std::io::stderr())?;
+        let (output, _drained) = command.run_quiescent_prefix_until(OUTPUT_LIMIT, deadline)?;
         output.require_success(command.program().to_string_lossy().as_ref())?;
         Ok(output)
     }

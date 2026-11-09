@@ -53,3 +53,48 @@ fn image_build_reports_failure_and_times_out_without_finishing()
     );
     Ok(())
 }
+
+#[test]
+fn image_build_finishes_when_caller_stderr_is_not_drained() -> Result<(), Box<dyn std::error::Error>>
+{
+    const MARKER: &str = "VELNOR_TEST_BUILD_PROGRESS_MARKER";
+    if let Some(path) = std::env::var_os(MARKER) {
+        let output = ImageCandidateCommand::run_build(
+            &shell_with_arg(
+                "head -c 150000 /dev/zero; head -c 150000 /dev/zero >&2; printf archive > \"$1\"",
+                &path,
+            )?,
+            CheckDeadline::after(Duration::from_secs(10))?,
+        )?;
+        assert!(output.success);
+        return Ok(());
+    }
+    let directory = TestDirectory::new()?;
+    let archive = directory.path().join("unread-stderr-archive");
+    let mut child = std::process::Command::new(std::env::current_exe()?)
+        .args(["--exact", "command_stream::build_progress::image_build_finishes_when_caller_stderr_is_not_drained", "--nocapture"])
+        .env(MARKER, &archive)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    let until = std::time::Instant::now() + Duration::from_secs(15);
+    let completed = loop {
+        if let Some(status) = child.try_wait()? {
+            break Some(status);
+        }
+        if std::time::Instant::now() >= until {
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    if completed.is_none() {
+        drop(child.stderr.take());
+        child.wait()?;
+    }
+    assert!(
+        completed.is_some_and(|status| status.success()),
+        "build stalled or failed with unread stderr"
+    );
+    assert_eq!(std::fs::read(archive)?, b"archive");
+    Ok(())
+}

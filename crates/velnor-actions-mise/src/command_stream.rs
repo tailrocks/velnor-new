@@ -205,7 +205,7 @@ impl<'a> Streams<'a> {
                 .checked_add(u64::try_from(accepted).map_err(|error| error.to_string())?)
                 .ok_or_else(|| "output_limit_exceeded".to_owned())?;
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stdout", if self.truncate { bytes } else { prefix })?;
+                progress.chunk("stdout", prefix)?;
             }
             if !self.truncate && (accepted < bytes.len() || next > self.stdout_cap) {
                 return Err(format!("stdout_limit_exceeded:{}", self.stdout_cap));
@@ -233,7 +233,7 @@ impl Streams<'_> {
             let prefix = &bytes[..accepted];
             self.stderr.extend_from_slice(prefix);
             if let Some(progress) = &mut self.progress {
-                progress.chunk("stderr", if self.truncate { bytes } else { prefix })?;
+                progress.chunk("stderr", prefix)?;
             }
             if !self.truncate && (accepted < bytes.len() || next > self.stderr_cap) {
                 return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));

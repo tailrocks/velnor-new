@@ -86,16 +86,13 @@ impl IsolatedCommand {
     }
 
     #[cfg(unix)]
-    pub fn run_quiescent_progress_until(
+    pub fn run_quiescent_prefix_until(
         &self,
         cap: usize,
         deadline: CheckDeadline,
-        progress: &mut dyn std::io::Write,
     ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
         let (work_deadline, cleanup_deadline) = quiescent_deadlines(deadline)?;
-        let mut streams = Streams::memory(cap)
-            .truncate()
-            .observe(progress, work_deadline);
+        let mut streams = Streams::memory(cap).truncate();
         let (mut output, receipt) = self.run_streams_with_policy(
             &mut streams,
             work_deadline,
@@ -284,11 +281,10 @@ impl IsolatedCommand {
     }
 
     #[cfg(not(unix))]
-    pub fn run_quiescent_progress_until(
+    pub fn run_quiescent_prefix_until(
         &self,
         cap: usize,
         deadline: CheckDeadline,
-        _progress: &mut dyn std::io::Write,
     ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
         self.run_quiescent_until(cap, deadline)
     }
