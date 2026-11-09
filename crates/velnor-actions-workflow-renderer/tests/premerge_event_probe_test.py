@@ -158,6 +158,17 @@ class PremergeProof(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 self.receipt(api)
 
+    def test_tag_or_unverifiable_branch_policy_type_rejects(self):
+        for mutation in ('tag', 'missing', 'null'):
+            api = Api()
+            policy = api.values['repos/example/project/environments/premerge-proof/deployment-branch-policies?per_page=100']['branch_policies'][0]
+            if mutation == 'missing':
+                del policy['type']
+            else:
+                policy['type'] = 'tag' if mutation == 'tag' else None
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.receipt(api)
+
     def test_reobservation_rejects_head_drift(self):
         class Drift(Api):
             def get(self, route):
