@@ -117,6 +117,7 @@ pub(super) fn build_steps(
     verify_name: &str,
     verify: &str,
     pins: &crate::schema2::ProductReleasePins,
+    stable_sources: bool,
 ) -> Result<Vec<Yaml>, crate::RenderError> {
     let cross = product.target == ReleaseTarget::MacosX86_64;
     let build_argv = if cross {
@@ -140,6 +141,19 @@ pub(super) fn build_steps(
         )?);
     }
     steps.push(workflow_steps::verify_rust_step(pins)?);
+    if stable_sources {
+        let mut source_prepare = workflow_steps::bash_step_with_env(
+            "Prepare locked source handoff",
+            "bash scripts/generator-release/stable-source-producer.sh",
+            vec![("VELNOR_RUST_VERSION", &pins.rust_version)],
+        );
+        if let Yaml::Map(fields) = &mut source_prepare {
+            fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+        }
+        steps.push(source_prepare);
+        steps.push(workflow_steps::source_identity_step());
+        steps.push(workflow_steps::source_upload_step(product));
+    }
     steps.extend([
         workflow_steps::bash_step("Build velnor-actions with MBX", &build),
         workflow_steps::bash_step(verify_name, verify),
@@ -283,7 +297,7 @@ fn verify_provenance_in_directory(
 
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nbash scripts/build-owned-archive-guard.sh\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
     )
 }
 

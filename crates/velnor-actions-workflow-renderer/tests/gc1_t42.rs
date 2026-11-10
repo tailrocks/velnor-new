@@ -79,7 +79,7 @@ fn verify_lint_argv() -> Vec<String> {
     ])
 }
 
-fn pins() -> ProductReleasePins {
+pub(crate) fn pins() -> ProductReleasePins {
     let setup = mise_setup();
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
@@ -379,3 +379,6 @@ mod source_preview_graph;
 
 #[path = "source_preview_env_yaml_public.rs"]
 mod source_preview_env_yaml_public;
+
+#[path = "stable_source_graph.rs"]
+mod stable_source_graph;

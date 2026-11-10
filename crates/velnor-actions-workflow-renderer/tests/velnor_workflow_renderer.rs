@@ -97,3 +97,5 @@ pub mod workflow_size;
 )]
 #[path = "../src/workflow_timeout.rs"]
 mod workflow_timeout;
+
+mod stable_sources_qualification_graph;

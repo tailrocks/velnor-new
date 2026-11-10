@@ -1516,6 +1516,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_features.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_archive.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_assets.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_release_build.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_candidate_manifest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_homebrew_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_jobs.rs
@@ -1562,6 +1563,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authori
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/context.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
+crates/velnor-actions-workflow-renderer/src/schema2_stable_sources_qualification.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
 crates/velnor-actions-workflow-renderer/src/setup.rs
 crates/velnor-actions-workflow-renderer/src/sources_producer.rs
