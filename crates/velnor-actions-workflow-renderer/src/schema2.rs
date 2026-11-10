@@ -60,6 +60,8 @@ mod resource_probe_image;
 mod runner_image_qualification;
 #[path = "schema2_generator_source_qualification.rs"]
 mod source_qualification;
+#[path = "schema2_stable_sources_qualification.rs"]
+mod stable_sources_qualification;
 pub use product_release_pins::ProductReleasePins;
 
 pub fn render_consumer_binary_release(
@@ -233,6 +235,15 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
         return Err(RenderError::InvalidWorkflow(
             "missing_mise_pin_qualification_pins".to_owned(),
         ));
+    }
+    if request
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        let pins = request.product_release.as_ref().ok_or_else(|| {
+            RenderError::InvalidWorkflow("product_release_pins_missing".to_owned())
+        })?;
+        jobs.extend(stable_sources_qualification::jobs(pins)?);
     }
     Ok(document("Qualification", mode_trigger(), jobs))
 }

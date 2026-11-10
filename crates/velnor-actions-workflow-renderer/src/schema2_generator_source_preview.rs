@@ -236,6 +236,7 @@ fn build_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), 
             assets::linux_verify(product.binary)
         },
         pins,
+        false,
     )?);
     action_steps.push(steps::bash_step(
         "Name raw preview payload",
@@ -250,7 +251,11 @@ fn build_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), 
         &[],
         steps::perm(&[("contents", "read")]),
         MAIN_PUSH,
-        JobTimeout::PRODUCT_COMPILER,
+        if darwin {
+            JobTimeout::PRODUCT_MACOS_COMPILER
+        } else {
+            JobTimeout::PRODUCT_COMPILER
+        },
     );
     fields.push((
         "env".to_owned(),

@@ -44,6 +44,7 @@ pub(super) fn job(
         workflow_steps::verify_rust_step(pins)?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
     ];
+    action_steps.extend(source_steps(job.product, pins));
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset files",
@@ -74,29 +75,35 @@ pub(super) fn job(
             )],
         ),
     ]);
-    let call = jobs::local_action_with_inputs(
-        job.action,
-        job.name,
-        action_steps,
-        vec![
-            (
-                "artifact_id",
-                "Artifact ID from this target's build job",
-                &format!("${{{{ needs.{}.outputs.artifact_id }}}}", job.build_job),
-            ),
-            (
-                "manifest_artifact_id",
-                "Artifact ID of the canonical candidate manifest",
-                "${{ needs.candidate-manifest.outputs.artifact_id }}",
-            ),
-            (
-                "manifest_sha256",
-                "SHA-256 of the canonical candidate manifest bytes",
-                "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
-            ),
-        ],
-        actions,
-    )?;
+    let source_names = [
+        "artifact_id",
+        "sources_id",
+        "sources_digest",
+        "sources_tree",
+        "sources_root_lock",
+        "sources_runner_lock",
+        "sources_attempt",
+    ];
+    let source_values =
+        source_names.map(|name| format!("${{{{ needs.{}.outputs.{name} }}}}", job.build_job));
+    let mut inputs: Vec<_> = source_names
+        .iter()
+        .zip(source_values.iter())
+        .map(|(name, value)| (*name, "Producer artifact identity", value.as_str()))
+        .collect();
+    inputs.extend([
+        (
+            "manifest_artifact_id",
+            "Canonical manifest artifact ID",
+            "${{ needs.candidate-manifest.outputs.artifact_id }}",
+        ),
+        (
+            "manifest_sha256",
+            "Canonical manifest SHA-256",
+            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
+        ),
+    ]);
+    let call = jobs::local_action_with_inputs(job.action, job.name, action_steps, inputs, actions)?;
     let mut fields = with_permissions(
         workflow_steps::with_needs(
             base(job.name, job.runs_on, JobTimeout::PRODUCT_QUALIFICATION),
@@ -106,4 +113,53 @@ pub(super) fn job(
     );
     fields.retain(|(key, _)| key != "name");
     Ok(finish(job.id, fields, vec![job.source_step.clone(), call]))
+}
+
+pub(super) fn source_steps(product: ProductAsset, pins: &ProductReleasePins) -> Vec<Yaml> {
+    let mut admission = workflow_steps::bash_step_with_env(
+        "Admit exact same-run Cargo source artifact",
+        "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        vec![
+            ("GH_TOKEN", "${{ github.token }}"),
+            ("SOURCES_ID", "${{ inputs.sources_id }}"),
+            ("SOURCES_DIGEST", "${{ inputs.sources_digest }}"),
+            ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
+            ("SOURCES_ROOT_LOCK", "${{ inputs.sources_root_lock }}"),
+            ("SOURCES_RUNNER_LOCK", "${{ inputs.sources_runner_lock }}"),
+            ("SOURCES_ATTEMPT", "${{ inputs.sources_attempt }}"),
+            ("SOURCES_NAME", product.workflow_artifact),
+        ],
+    );
+    if let Yaml::Map(fields) = &mut admission {
+        fields.push(("id".to_owned(), Yaml::str("sources-admission")));
+    }
+    let mut download = workflow_steps::download_step_by_id(
+        "Download admitted Cargo sources",
+        "${{ inputs.sources_id }}",
+        "${{ runner.temp }}/stable-cargo-download",
+    );
+    if let Yaml::Map(fields) = &mut download {
+        fields.push(("id".to_owned(), Yaml::str("download-sources")));
+        fields.push((
+            "if".to_owned(),
+            Yaml::str("${{ steps.sources-admission.outputs.admitted == 'true' }}"),
+        ));
+        fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
+    vec![
+        admission,
+        download,
+        workflow_steps::bash_step_with_env(
+            "Prepare complete locked Cargo sources",
+            "bash scripts/generator-release/stable-source-consumer.sh",
+            vec![
+                ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
+                (
+                    "SOURCES_DOWNLOADED",
+                    "${{ steps.download-sources.outcome }}",
+                ),
+                ("VELNOR_RUST_VERSION", &pins.rust_version),
+            ],
+        ),
+    ]
 }
