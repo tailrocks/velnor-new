@@ -13,7 +13,7 @@ use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
 use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
-use dispatch::{ActiveRecoveryTarget, active_recovery_target};
+use dispatch::{ActiveRecoveryTarget, active_recovery_target, supports_stop};
 
 pub(super) async fn active(
     docker: &Docker,
@@ -23,7 +23,7 @@ pub(super) async fn active(
     deadline: &Deadline,
     row: ProbeRow,
 ) -> Result<(), HostError> {
-    if row.phase == ProbePhase::Quarantined {
+    if row.phase == ProbePhase::Quarantined && row.container_id.is_some() {
         return Err(HostError::Ownership);
     }
     match active_recovery_target(row.helper_role(), row.work())? {
@@ -107,7 +107,10 @@ async fn bind_created_by_name(
     projection: &ProbeProjection,
     deadline: &Deadline,
 ) -> Result<ProbeCleanupEvidence, HostError> {
-    if row.phase != ProbePhase::CreateRequested {
+    if !matches!(
+        row.phase,
+        ProbePhase::CreateRequested | ProbePhase::Quarantined
+    ) {
         return quarantine(journal, row, deadline).await;
     }
     let Some(response) = inspect::by_reference(docker, &projection.name, deadline).await? else {
@@ -372,16 +375,6 @@ fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjec
         return Err(HostError::Ownership);
     }
     Ok(projection)
-}
-
-fn supports_stop(phase: ProbePhase) -> bool {
-    matches!(
-        phase,
-        ProbePhase::StartRequested
-            | ProbePhase::Started
-            | ProbePhase::WaitRequested
-            | ProbePhase::StopRequested
-    )
 }
 
 async fn quarantine<T>(

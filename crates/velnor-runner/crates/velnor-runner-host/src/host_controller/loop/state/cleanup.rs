@@ -15,6 +15,24 @@ pub(super) async fn collect_proven_pending_cleanup(
     collect_acquired_cleanup(connection).await
 }
 
+pub(in crate::host_controller::loop_driver) fn wake_completion_with_fresh_admin(
+    connection: &mut PreparedConnection,
+) -> Result<(), HostError> {
+    let Some(completion) = connection.completion.as_ref() else {
+        return Ok(());
+    };
+    if let Some(credentials) = connection.credentials.as_mut()
+        && credentials
+            .link
+            .refresh_admin(&connection.binding, credentials.github_pat.expose())
+            .is_ok()
+    {
+        completion.refresh_admin(credentials.link.admin_origin(), credentials.link.token())?;
+    }
+    completion.notify();
+    Ok(())
+}
+
 async fn collect_ready_cleanup(connection: &mut PreparedConnection) -> Result<(), HostError> {
     let ready = connection
         .ready_intents

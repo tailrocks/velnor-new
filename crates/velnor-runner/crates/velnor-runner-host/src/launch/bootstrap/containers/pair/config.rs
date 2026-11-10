@@ -83,7 +83,9 @@ pub(in crate::launch::bootstrap::containers) fn tmpfs_options(
     if bytes == 0 || inodes == 0 {
         return Err(HostError::Identity);
     }
-    Ok(format!("rw,nosuid,nodev,size={bytes},nr_inodes={inodes}"))
+    Ok(format!(
+        "rw,exec,nosuid,nodev,size={bytes},nr_inodes={inodes}"
+    ))
 }
 
 pub(in crate::launch::bootstrap::containers) fn limits_for(
@@ -123,28 +125,26 @@ pub(in crate::launch::bootstrap::containers) fn fixed_mounts(
     names: &WorkerIdentityNames,
     role: BootstrapContainerRole,
 ) -> Result<Vec<Mount>, HostError> {
-    let mut mounts = Vec::new();
+    let home = storage_volume(names, StorageRole::RunnerHome)?;
+    let work = storage_volume(names, StorageRole::RunnerWork)?;
+    let run = storage_volume(names, StorageRole::SharedRun)?;
+    let metadata = storage_volume(names, StorageRole::EngineMetadata)?;
+    let mut mounts = vec![
+        volume_mount(home.clone(), "/home/runner", false),
+        volume_mount(work, "/home/runner/_work", false),
+        volume_mount(run, "/run", false),
+    ];
     match role {
         BootstrapContainerRole::Runner => {
-            let home = storage_volume(names, StorageRole::RunnerHome)?;
-            mounts.push(volume_mount(home.clone(), "/home/runner", false));
-            mounts.push(volume_subpath_mount(
-                home,
-                "/opt/velnor/source-proof/inbox",
-                false,
-                Some("source-proof/inbox"),
-            ));
-            mounts.push(volume_mount(
-                storage_volume(names, StorageRole::RunnerWork)?,
-                "/home/runner/_work",
-                false,
-            ));
-            mounts.push(volume_mount(
-                storage_volume(names, StorageRole::SharedRun)?,
-                "/run",
-                false,
-            ));
-            let metadata = storage_volume(names, StorageRole::EngineMetadata)?;
+            mounts.insert(
+                1,
+                volume_subpath_mount(
+                    home,
+                    "/opt/velnor/source-proof/inbox",
+                    false,
+                    Some("source-proof/inbox"),
+                ),
+            );
             for (subpath, target) in [
                 ("runtime-identity", "/.velnor-runtime-identity"),
                 ("job-facts", "/opt/velnor/job-facts"),
@@ -160,26 +160,10 @@ pub(in crate::launch::bootstrap::containers) fn fixed_mounts(
         }
         BootstrapContainerRole::Dind => {
             mounts.push(volume_mount(
-                storage_volume(names, StorageRole::RunnerHome)?,
-                "/home/runner",
-                false,
-            ));
-            mounts.push(volume_mount(
-                storage_volume(names, StorageRole::RunnerWork)?,
-                "/home/runner/_work",
-                false,
-            ));
-            mounts.push(volume_mount(
-                storage_volume(names, StorageRole::SharedRun)?,
-                "/run",
-                false,
-            ));
-            mounts.push(volume_mount(
                 storage_volume(names, StorageRole::DindData)?,
                 "/var/lib/docker",
                 false,
             ));
-            let metadata = storage_volume(names, StorageRole::EngineMetadata)?;
             for (subpath, target) in [
                 ("job-facts", "/opt/velnor/job-facts"),
                 ("runtime-identity", "/.velnor-runtime-identity"),
@@ -301,6 +285,36 @@ fn container_labels(
     ])
 }
 
+fn container_memory_limit(
+    plan: &StorageProvisioningPlan,
+    role: BootstrapContainerRole,
+    base_memory_bytes: i64,
+) -> Result<i64, HostError> {
+    let roles: &[StorageRole] = match role {
+        BootstrapContainerRole::Runner => &[
+            StorageRole::RunnerHome,
+            StorageRole::RunnerWork,
+            StorageRole::RunnerTmp,
+            StorageRole::RunnerShm,
+            StorageRole::SharedRun,
+        ],
+        BootstrapContainerRole::Dind => &[
+            StorageRole::RunnerHome,
+            StorageRole::RunnerWork,
+            StorageRole::SharedRun,
+            StorageRole::DindData,
+            StorageRole::DindTmp,
+            StorageRole::DindShm,
+        ],
+    };
+    let mut total = u64::try_from(base_memory_bytes).map_err(|_| HostError::Identity)?;
+    for storage_role in roles {
+        let (bytes, _) = plan_charge(plan, *storage_role)?;
+        total = total.checked_add(bytes).ok_or(HostError::Identity)?;
+    }
+    i64::try_from(total).map_err(|_| HostError::Identity)
+}
+
 fn host_config(
     plan: &StorageProvisioningPlan,
     names: &WorkerIdentityNames,
@@ -312,6 +326,7 @@ fn host_config(
         BootstrapContainerRole::Runner => budget.runner(),
         BootstrapContainerRole::Dind => budget.dind(),
     };
+    let memory = container_memory_limit(plan, role, limits.memory_bytes)?;
     let (pids, privileged) = limits_for(role);
     Ok(HostConfig {
         mounts: Some(fixed_mounts(names, role)?),
@@ -326,8 +341,8 @@ fn host_config(
         security_opt: (role == BootstrapContainerRole::Runner)
             .then(|| vec![crate::worker::seccomp::runner_security_opt()]),
         nano_cpus: Some(limits.nano_cpus),
-        memory: Some(limits.memory_bytes),
-        memory_swap: Some(limits.memory_bytes),
+        memory: Some(memory),
+        memory_swap: Some(memory),
         pids_limit: Some(pids),
         log_config: Some(HostConfigLogConfig {
             typ: Some("json-file".to_owned()),

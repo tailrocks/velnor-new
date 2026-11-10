@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_resource_probe::cleanup_observer_wire::{CleanupObserverBinding, CleanupObserverRecord};
-
 use crate::{
     error::HostError,
     journal::{StorageCleanupIdentity, StorageCleanupObserverWitness},
@@ -39,54 +37,11 @@ pub(super) fn validate_observations(
     {
         return Err(HostError::Ownership);
     }
-    validate_record(
+    velnor_resource_probe::cleanup_observer_wire::validate_cleanup_observer_record(
         record,
         binding,
         observer.operation_id(),
         witness.binding_sha256(),
     )
-}
-
-fn validate_record(
-    record: &CleanupObserverRecord,
-    binding: &CleanupObserverBinding,
-    operation_id: &str,
-    binding_sha256: &str,
-) -> Result<(), HostError> {
-    let volumes = binding
-        .volume_mountpoints
-        .iter()
-        .map(|volume| volume.mountpoint.clone())
-        .collect::<Vec<_>>();
-    let namespaces = [&binding.runner, &binding.dind]
-        .into_iter()
-        .map(
-            |process| velnor_resource_probe::cleanup_observer_wire::NamespaceIdentity {
-                device: process.namespace_device,
-                inode: process.namespace_inode,
-            },
-        )
-        .collect::<Vec<_>>();
-    if record.schema_version != 1
-        || record.operation_id != operation_id
-        || record.binding_sha256 != binding_sha256
-        || record.guest_boot_id.as_deref() != Some(binding.expected_guest_boot_id.as_str())
-        || !record.docker_root.as_ref().is_some_and(|root| {
-            velnor_resource_probe::cleanup_observer_wire::docker_root_matches(
-                &binding.docker_root,
-                root,
-            )
-        })
-        || !record.complete
-        || !record.owned_references_absent
-        || !record.issues.is_empty()
-        || record.owned_reference_count != 0
-        || record.absent_volume_mountpoints != volumes
-        || record.absent_tmpfs_devices.as_slice() != binding.owned_tmpfs_devices.as_slice()
-        || record.absent_mount_namespaces != namespaces
-        || record.absent_cgroup_paths.as_ref() != Some(&binding.cgroup_paths)
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(())
+    .map_err(|_| HostError::Ownership)
 }

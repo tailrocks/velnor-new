@@ -15,7 +15,6 @@ use rustix::fs::{AtFlags, Mode, OFlags, StatxFlags, fstatfs, open, statx};
 
 const NSFS_MAGIC: i64 = 0x6e73_6673;
 const TIME_LIMIT: Duration = Duration::from_secs(30);
-const TMPFS_MAGIC: i64 = 0x0102_1994;
 
 pub(super) fn decode_mount_path(value: &str) -> Option<String> {
     let mut output = Vec::with_capacity(value.len());
@@ -98,10 +97,6 @@ pub(super) struct DescriptorObservation {
     pub device: [u32; 2],
     pub inode: u64,
     pub filesystem_magic: i64,
-}
-
-pub(super) fn tmpfs_magic() -> i64 {
-    TMPFS_MAGIC
 }
 
 pub(super) fn device_pair(value: u64) -> [u32; 2] {

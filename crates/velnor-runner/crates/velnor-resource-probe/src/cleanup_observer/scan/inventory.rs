@@ -11,12 +11,14 @@ use super::{
     super::CleanupObserverRequest,
     helpers::{
         add_issue, expired, io_vanished, linux_device, namespace_identity, namespace_link,
-        numeric_name, observe_descriptor, process_start_ticks, tmpfs_magic, vanished,
+        numeric_name, observe_descriptor, process_start_ticks, read_bounded, vanished,
     },
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
+use crate::cleanup_observer_wire::{descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices};
 
 const PROC: &str = "/proc";
+const SELF_MOUNTINFO_LIMIT: usize = 1_048_576;
 const MAX_PROCESSES: usize = 4096;
 const MAX_TASKS: usize = 16_384;
 const MAX_FDS_PER_TASK: usize = 4096;
@@ -37,6 +39,9 @@ struct ScanContext<'a> {
     started: Instant,
     namespace_ids: [([u32; 2], u64); 2],
     tmpfs_devices: HashSet<u64>,
+    observer_pid: u32,
+    observer_namespace: Option<([u32; 2], u64)>,
+    observer_tmpfs_devices: HashSet<u64>,
 }
 
 pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Inventory {
@@ -79,6 +84,16 @@ pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Invent
 
 fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_> {
     let binding = &request.binding;
+    let observer_pid = std::process::id();
+    let observer_namespace = namespace_identity("/proc/self/ns/mnt").ok();
+    let self_mountinfo = read_bounded(
+        "/proc/self/mountinfo",
+        SELF_MOUNTINFO_LIMIT,
+        "cleanup_self_mountinfo",
+    )
+    .unwrap_or_default();
+    let observer_tmpfs_devices =
+        observer_runtime_tmpfs_devices(observer_pid, observer_namespace, binding, &self_mountinfo);
     ScanContext {
         request,
         started,
@@ -94,6 +109,9 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
             .iter()
             .map(|device| linux_device(u64::from(device[0]), u64::from(device[1])))
             .collect(),
+        observer_pid,
+        observer_namespace,
+        observer_tmpfs_devices,
     }
 }
 
@@ -148,18 +166,22 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
             return;
         }
     };
-    if context.namespace_ids.contains(&namespace) {
+    let owned_namespace = context.namespace_ids.contains(&namespace);
+    if owned_namespace {
         inventory.owned_reference_count = inventory.owned_reference_count.saturating_add(1);
     }
+    let is_observer_task = pid == context.observer_pid
+        && context.observer_namespace == Some(namespace)
+        && !owned_namespace;
     let new_namespace = inventory.namespaces.insert(namespace);
     if new_namespace {
         if inventory.namespaces.len() > MAX_NAMESPACES {
             add_issue(&mut inventory.issues, "namespace_limit");
         } else {
-            scan_task_mounts(pid, tid, context, inventory);
+            scan_task_mounts(pid, tid, is_observer_task, context, inventory);
         }
     }
-    scan_descriptors(pid, tid, context, inventory);
+    scan_descriptors(pid, tid, is_observer_task, context, inventory);
     match process_start_ticks(&stat_path, tid) {
         Ok(value) if value == start_before => {}
         Err(error) if vanished(&error) => {}
@@ -167,7 +189,13 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
     }
 }
 
-fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
+fn scan_task_mounts(
+    pid: u32,
+    tid: u32,
+    is_observer_task: bool,
+    context: &ScanContext<'_>,
+    inventory: &mut Inventory,
+) {
     let Some(bytes) = read_task_mountinfo(pid, tid, &mut inventory.issues) else {
         return;
     };
@@ -182,7 +210,8 @@ fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &m
     check_tmpfs_mounts(
         pid,
         &bytes,
-        &context.tmpfs_devices,
+        is_observer_task,
+        (&context.tmpfs_devices, &context.observer_tmpfs_devices),
         &context.namespace_ids,
         &mut inventory.owned_reference_count,
         &mut inventory.issues,
@@ -194,7 +223,13 @@ fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &m
     }
 }
 
-fn scan_descriptors(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
+fn scan_descriptors(
+    pid: u32,
+    tid: u32,
+    is_observer_task: bool,
+    context: &ScanContext<'_>,
+    inventory: &mut Inventory,
+) {
     let fd_path = format!("{PROC}/{pid}/task/{tid}/fd");
     let fds = match fs::read_dir(fd_path) {
         Ok(fds) => fds,
@@ -222,12 +257,13 @@ fn scan_descriptors(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &m
             add_issue(&mut inventory.issues, "descriptor_limit");
             break;
         }
-        observe_task_descriptor(&fd.path(), context, inventory);
+        observe_task_descriptor(&fd.path(), is_observer_task, context, inventory);
     }
 }
 
 fn observe_task_descriptor(
     path: &std::path::Path,
+    is_observer_task: bool,
     context: &ScanContext<'_>,
     inventory: &mut Inventory,
 ) {
@@ -250,11 +286,14 @@ fn observe_task_descriptor(
                         && *device == observation.device
                 })
     });
-    let tmpfs_reference = observation.filesystem_magic == tmpfs_magic()
-        && context.tmpfs_devices.contains(&linux_device(
-            u64::from(observation.device[0]),
-            u64::from(observation.device[1]),
-        ));
+    let tmpfs_reference = descriptor_has_owned_tmpfs(
+        is_observer_task,
+        observation.filesystem_magic,
+        observation.device,
+        &observation.target,
+        &context.tmpfs_devices,
+        &context.observer_tmpfs_devices,
+    );
     if namespace_reference || tmpfs_reference {
         inventory.owned_reference_count = inventory.owned_reference_count.saturating_add(1);
     }

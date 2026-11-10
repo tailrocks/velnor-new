@@ -166,7 +166,7 @@ impl Journal {
         in_transaction(self, async |connection| {
             let changed = connection
                 .execute(
-                    "UPDATE resource_probe_operations SET container_id = ?1, phase = 'container_created' WHERE operation_id = ?2 AND helper_role = 'resource-probe' AND operation_name = 'velnor-resource-probe-' || operation_id AND phase = 'create_requested' AND container_id IS NULL",
+                    "UPDATE resource_probe_operations SET container_id = ?1, phase = 'container_created' WHERE operation_id = ?2 AND helper_role = 'resource-probe' AND operation_name = 'velnor-resource-probe-' || operation_id AND phase IN ('create_requested', 'quarantined') AND container_id IS NULL",
                     (container_id.to_owned(), operation_id.to_owned()),
                 )
                 .await

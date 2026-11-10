@@ -165,8 +165,12 @@ impl Observation {
     pub(super) fn into_start_permit(self, budget: ResourceBudget) -> Option<StartPermit> {
         let pair = budget.pair();
         let reserve = budget.admission_reserve();
+        let retained_memory = retained_tmpfs_bytes()?;
         let required_cpu = pair.cpu_millicores.checked_add(reserve.cpu_millicores)?;
-        let required_memory = pair.memory_bytes.checked_add(reserve.memory_bytes)?;
+        let required_memory = pair
+            .memory_bytes
+            .checked_add(retained_memory)?
+            .checked_add(reserve.memory_bytes)?;
         let recent = self.is_recent_at(Instant::now());
         (recent
             && self.record.docker_root_free_bytes >= 10 * 1024 * 1024 * 1024
@@ -248,11 +252,22 @@ impl StartPermit {
         expected_engine_id: &str,
         expected_docker_root_digest: &str,
     ) -> Option<crate::journal::StorageProvisioningAdmission> {
-        self.observation.storage_provisioning_admission(
+        let admission = self.observation.storage_provisioning_admission(
             profile,
             expected_engine_id,
             expected_docker_root_digest,
-        )
+        )?;
+        admission
+            .validate_for(
+                profile,
+                self.sample_generation_id(),
+                expected_engine_id,
+                expected_docker_root_digest,
+                self.memory_bytes,
+                Instant::now(),
+            )
+            .ok()?;
+        Some(admission)
     }
 
     pub(super) fn consume(self, current_engine_id: &str, current_root_digest: &str) -> bool {

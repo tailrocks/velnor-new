@@ -12,13 +12,15 @@ use crate::{
         StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver,
         StorageProvisioningPlan, StorageProvisioningRole, StorageRole,
     },
-    launch::bootstrap::{BootstrapContainerRole, ObservedContainerCgroup, ObservedStorageRole},
+    launch::bootstrap::ObservedStorageRole,
 };
 use sha2::{Digest, Sha256};
-use velnor_resource_probe::{
-    InodePolicy,
-    worker_binding::{OwnedCgroupObservation, SelfStorageObservation},
-};
+use velnor_resource_probe::{InodePolicy, worker_binding::OwnedCgroupObservation};
+
+#[path = "capacity/cgroups.rs"]
+mod cgroups;
+
+pub use cgroups::observed_cgroups;
 
 pub(super) fn observed_roles(
     plan: &StorageProvisioningPlan,
@@ -146,34 +148,6 @@ pub(super) fn usage_credit(
         )),
         StorageMedium::Disk => Ok((0, 0)),
     }
-}
-
-pub(super) fn observed_cgroup(
-    observation: &SelfStorageObservation,
-    role: BootstrapContainerRole,
-    container_id: &str,
-) -> Result<ObservedContainerCgroup, HostError> {
-    let limits = &observation.self_leaf_limits;
-    if observation.container_id != container_id
-        || limits.cgroup_path.is_empty()
-        || limits.memory_max_bytes.is_none_or(|value| value == 0)
-        || limits.cpu_quota_micros.is_none_or(|value| value == 0)
-        || limits.cpu_period_micros == 0
-        || limits.pids_max.is_none_or(|value| value == 0)
-        || limits.pids_current > limits.pids_max.unwrap_or_default()
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(ObservedContainerCgroup {
-        role,
-        container_id: container_id.to_owned(),
-        path: limits.cgroup_path.clone(),
-        memory_max_bytes: limits.memory_max_bytes,
-        memory_current_bytes: limits.memory_current_bytes,
-        cpu_quota_micros: limits.cpu_quota_micros,
-        cpu_period_micros: limits.cpu_period_micros,
-        pids_max: limits.pids_max,
-    })
 }
 
 pub(super) fn instance_binding_digest(

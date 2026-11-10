@@ -36,11 +36,11 @@ const MIB: u64 = 1 << 20;
 
 const TMPFS_ROLES: [(StorageRole, u64, u64); 8] = [
     (StorageRole::RunnerHome, 2 * GIB, 262_144),
-    (StorageRole::RunnerWork, 4 * GIB, 524_288),
+    (StorageRole::RunnerWork, 7 * GIB, 524_288),
     (StorageRole::RunnerTmp, 512 * MIB, 32_768),
     (StorageRole::RunnerShm, 64 * MIB, 4_096),
     (StorageRole::SharedRun, 16 * MIB, 4_096),
-    (StorageRole::DindData, 4 * GIB, 262_144),
+    (StorageRole::DindData, GIB, 262_144),
     (StorageRole::DindTmp, 512 * MIB, 32_768),
     (StorageRole::DindShm, 64 * MIB, 4_096),
 ];
@@ -214,7 +214,10 @@ fn matching_origins(probe: &ProbeImageOrigin, workers: &WorkerImagesOrigin) -> b
     }
 }
 
-fn make_profile(generation_id: &str, disk_pool_id: &str) -> Result<StorageProfile, HostError> {
+pub(crate) fn make_profile(
+    generation_id: &str,
+    disk_pool_id: &str,
+) -> Result<StorageProfile, HostError> {
     let disk_pool = disk_pool_id.to_owned();
     let disk_reserve = DISK_MINIMUM_RESERVE_BYTES.max(DISK_IMPORT_BASELINE_BYTES);
     let mut pools = vec![StoragePoolLimit::new_with_inode_policy(

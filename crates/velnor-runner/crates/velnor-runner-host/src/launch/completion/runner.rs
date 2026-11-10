@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_runner_github::session::Transport;
-use velnor_runner_github::{RunnerReference, get_runner_by_name, remove_runner};
+use velnor_runner_github::RunnerReference;
 
 use super::{Context, EffectBudget, Failure, run_effect};
-use crate::error::HostError;
 use crate::journal::{CleanupClaim, CompletedLaunch, CompletionIdentity};
 
 pub(super) async fn reconcile(
@@ -14,25 +12,12 @@ pub(super) async fn reconcile(
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
 ) -> Result<(), Failure> {
-    reconcile_with_transport(
-        context.journal,
-        context.transport,
-        context.admin,
-        launch,
-        claim,
-        budget,
-    )
-    .await
-}
+    let mut session = context
+        .admin
+        .session()
+        .map_err(|error| Failure::request("runner credentials", error))?;
+    let journal = context.journal;
 
-async fn reconcile_with_transport<T: Transport + ?Sized>(
-    journal: &crate::launch::completion::journal_ref::CompletionJournal,
-    transport: &mut T,
-    admin: &crate::listen::Secret,
-    launch: &CompletedLaunch,
-    claim: CleanupClaim,
-    budget: &mut EffectBudget<'_>,
-) -> Result<(), Failure> {
     let identity = &launch.identity;
     let found = run_effect(
         journal,
@@ -40,10 +25,7 @@ async fn reconcile_with_transport<T: Transport + ?Sized>(
         launch.intent.id,
         claim,
         "runner lookup",
-        || async {
-            get_runner_by_name(transport, &identity.runner_name, admin.expose())
-                .map_err(|_| HostError::Endpoint)
-        },
+        || async { session.lookup(&identity.runner_name) },
     )
     .await?;
     if found
@@ -59,10 +41,7 @@ async fn reconcile_with_transport<T: Transport + ?Sized>(
             launch.intent.id,
             claim,
             "runner delete",
-            || async {
-                remove_runner(transport, identity.runner_id, admin.expose())
-                    .map_err(|_| HostError::Endpoint)
-            },
+            || async { session.remove(identity.runner_id) },
         )
         .await?;
     }
@@ -72,10 +51,7 @@ async fn reconcile_with_transport<T: Transport + ?Sized>(
         launch.intent.id,
         claim,
         "runner absence lookup",
-        || async {
-            get_runner_by_name(transport, &identity.runner_name, admin.expose())
-                .map_err(|_| HostError::Endpoint)
-        },
+        || async { session.lookup(&identity.runner_name) },
     )
     .await?;
     if absent.is_some() {

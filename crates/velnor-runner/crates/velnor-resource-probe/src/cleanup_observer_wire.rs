@@ -4,8 +4,13 @@
 use serde::{Deserialize, Serialize};
 
 mod request_validation;
+mod tmpfs_reference;
 
 pub use request_validation::validate_request;
+pub use tmpfs_reference::{
+    descriptor_has_owned_tmpfs, linux_device, mountinfo_line_has_owned_tmpfs,
+    observer_runtime_tmpfs_devices, parse_mountinfo_device,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -259,4 +264,44 @@ pub struct NamespaceIdentity {
     pub device: [u32; 2],
 
     pub inode: u64,
+}
+
+pub fn validate_cleanup_observer_record(
+    record: &CleanupObserverRecord,
+    binding: &CleanupObserverBinding,
+    operation_id: &str,
+    binding_sha256: &str,
+) -> Result<(), &'static str> {
+    let volumes = binding
+        .volume_mountpoints
+        .iter()
+        .map(|volume| volume.mountpoint.clone())
+        .collect::<Vec<_>>();
+    let namespaces = [&binding.runner, &binding.dind]
+        .into_iter()
+        .map(|process| NamespaceIdentity {
+            device: process.namespace_device,
+            inode: process.namespace_inode,
+        })
+        .collect::<Vec<_>>();
+    if record.schema_version != 1
+        || record.operation_id != operation_id
+        || record.binding_sha256 != binding_sha256
+        || record.guest_boot_id.as_deref() != Some(binding.expected_guest_boot_id.as_str())
+        || !record
+            .docker_root
+            .as_ref()
+            .is_some_and(|root| docker_root_matches(&binding.docker_root, root))
+        || !record.complete
+        || !record.owned_references_absent
+        || !record.issues.is_empty()
+        || record.owned_reference_count != 0
+        || record.absent_volume_mountpoints != volumes
+        || record.absent_tmpfs_devices.as_slice() != binding.owned_tmpfs_devices.as_slice()
+        || record.absent_mount_namespaces != namespaces
+        || record.absent_cgroup_paths.as_ref() != Some(&binding.cgroup_paths)
+    {
+        return Err("cleanup_record_mismatch");
+    }
+    Ok(())
 }

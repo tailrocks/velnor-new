@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::{future::Future, time::Instant};
 
 use bollard::Docker;
 use velnor_resource_probe::{
@@ -41,45 +41,64 @@ pub(super) struct PublisherExecution<'a> {
     pub(super) deadline: Instant,
 }
 
-pub(super) async fn publish(
+pub(super) async fn publish<T, F, Fut>(
     execution: PublisherExecution<'_>,
     request: velnor_resource_probe::execution_publication::ExecutionPublicationContext,
     parent: crate::journal::ExecutionPublicationParent,
-) -> Result<ExecutionPublicationRecord, HostError> {
-    match Box::pin(publish_request(
+    persist: F,
+) -> Result<T, HostError>
+where
+    F: FnOnce(ExecutionPublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
+    Box::pin(publish_request(
         execution,
         PublicationRequest::Control(request),
         parent,
+        |record| async move {
+            match record {
+                PublicationRecord::Control(value) => persist(*value).await,
+                PublicationRecord::JobFacts(_) => Err(HostError::Identity),
+            }
+        },
     ))
-    .await?
-    {
-        PublicationRecord::Control(value) => Ok(*value),
-        PublicationRecord::JobFacts(_) => Err(HostError::Identity),
-    }
+    .await
 }
 
-pub(super) async fn publish_job_facts(
+pub(super) async fn publish_job_facts<T, F, Fut>(
     execution: PublisherExecution<'_>,
     request: JobFactsPublicationContext,
     parent: crate::journal::ExecutionPublicationParent,
-) -> Result<JobFactsPublicationRecord, HostError> {
-    match Box::pin(publish_request(
+    persist: F,
+) -> Result<T, HostError>
+where
+    F: FnOnce(JobFactsPublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
+    Box::pin(publish_request(
         execution,
         PublicationRequest::JobFacts(request),
         parent,
+        |record| async move {
+            match record {
+                PublicationRecord::JobFacts(value) => persist(*value).await,
+                PublicationRecord::Control(_) => Err(HostError::Identity),
+            }
+        },
     ))
-    .await?
-    {
-        PublicationRecord::JobFacts(value) => Ok(*value),
-        PublicationRecord::Control(_) => Err(HostError::Identity),
-    }
+    .await
 }
 
-async fn publish_request(
+async fn publish_request<T, F, Fut>(
     execution: PublisherExecution<'_>,
     request: PublicationRequest,
     parent: crate::journal::ExecutionPublicationParent,
-) -> Result<PublicationRecord, HostError> {
+    persist: F,
+) -> Result<T, HostError>
+where
+    F: FnOnce(PublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
     let PublisherExecution {
         docker,
         journal,
@@ -140,6 +159,7 @@ async fn publish_request(
         },
         projection,
         context,
+        persist,
     ))
     .await
 }

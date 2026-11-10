@@ -100,7 +100,9 @@ pub(super) async fn run(
     deadline: &Deadline,
 ) -> Result<ObservedProbeRecord, HostError> {
     let result = execute(docker, journal, projection, memory_total, deadline, image).await;
-    if result.is_err() {
+    if let Err(error) = &result
+        && !matches!(error, HostError::DockerTimeout)
+    {
         recover_current(docker, journal, projection, deadline).await;
     }
     result

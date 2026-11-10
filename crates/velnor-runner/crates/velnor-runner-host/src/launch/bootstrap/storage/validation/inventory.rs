@@ -81,21 +81,8 @@ const ATTACHMENTS: [(StorageRole, StorageObserver, &str); 20] = [
 use super::{BTRFS_SUPER_MAGIC, valid_digest};
 
 pub(super) fn validate_roles(roles: &[ObservedStorageRole]) -> Result<(), HostError> {
-    const PHYSICAL: [StorageRole; 11] = [
-        StorageRole::RunnerRoot,
-        StorageRole::RunnerHome,
-        StorageRole::RunnerWork,
-        StorageRole::RunnerTmp,
-        StorageRole::RunnerShm,
-        StorageRole::SharedRun,
-        StorageRole::DindRoot,
-        StorageRole::DindData,
-        StorageRole::DindTmp,
-        StorageRole::DindShm,
-        StorageRole::EngineMetadata,
-    ];
-    if roles.len() != PHYSICAL.len()
-        || PHYSICAL.iter().any(|role| {
+    if roles.len() != StorageRole::PHYSICAL.len()
+        || StorageRole::PHYSICAL.iter().any(|role| {
             roles
                 .iter()
                 .filter(|observed| observed.role == *role)
@@ -174,6 +161,7 @@ fn validate_role(role: &ObservedStorageRole) -> Result<(), HostError> {
 pub(super) fn validate_attachments(
     roles: &[ObservedStorageRole],
     attachments: &[ObservedStorageAttachment],
+    root_backings: &[super::super::VerifiedRootBackingMapping],
     runner_container_id: &str,
     dind_container_id: &str,
 ) -> Result<(), HostError> {
@@ -182,7 +170,13 @@ pub(super) fn validate_attachments(
     }
     validate_engine_metadata_views(roles, attachments)?;
     for item in attachments {
-        validate_attachment(roles, item, runner_container_id, dind_container_id)?;
+        validate_attachment(
+            roles,
+            root_backings,
+            item,
+            runner_container_id,
+            dind_container_id,
+        )?;
     }
     Ok(())
 }
@@ -322,6 +316,7 @@ fn has_expected_attachment_set(attachments: &[ObservedStorageAttachment]) -> boo
 
 fn validate_attachment(
     roles: &[ObservedStorageRole],
+    root_backings: &[super::super::VerifiedRootBackingMapping],
     item: &ObservedStorageAttachment,
     runner_container_id: &str,
     dind_container_id: &str,
@@ -341,6 +336,7 @@ fn validate_attachment(
         .iter()
         .find(|role| role.role == item.role)
         .ok_or(HostError::Journal)?;
+    let is_root = matches!(item.role, StorageRole::RunnerRoot | StorageRole::DindRoot);
     let device_matches = item.fs_type_magic == BTRFS_SUPER_MAGIC
         || (item.device_major, item.device_minor)
             == (item.statx_device_major, item.statx_device_minor);
@@ -355,8 +351,17 @@ fn validate_attachment(
         || item.filesystem_id == 0
         || !device_matches
         || !valid_digest(&item.filesystem_instance_digest)
-        || (item.role != StorageRole::EngineMetadata || item.observer == StorageObserver::Probe)
-            && item.filesystem_instance_digest != observed_role.filesystem_instance_digest
+        || (is_root
+            && !super::root_attachment_matches_backing(
+                root_backings,
+                item,
+                expected_container,
+                &observed_role.filesystem_instance_digest,
+            ))
+        || (!is_root
+            && (item.role != StorageRole::EngineMetadata
+                || item.observer == StorageObserver::Probe)
+            && item.filesystem_instance_digest != observed_role.filesystem_instance_digest)
     {
         return Err(HostError::Journal);
     }

@@ -285,8 +285,8 @@ impl PreparedConnection {
                     let pending = *pending;
                     let wake_cleanup = pending.requires_cleanup_wake();
                     self.retain_pending(request_id, pending);
-                    if wake_cleanup && let Some(completion) = self.completion.as_ref() {
-                        completion.notify();
+                    if wake_cleanup {
+                        self.wake_completion_with_fresh_admin()?;
                     }
                 }
             }
@@ -318,6 +318,10 @@ impl PreparedConnection {
 
     pub(super) async fn collect_proven_pending_cleanup(&mut self) -> Result<(), HostError> {
         cleanup::collect_proven_pending_cleanup(self).await
+    }
+
+    pub(super) fn wake_completion_with_fresh_admin(&mut self) -> Result<(), HostError> {
+        cleanup::wake_completion_with_fresh_admin(self)
     }
 
     pub(super) fn retain_pending(&mut self, request_id: i64, pending: PendingScopedExecution) {

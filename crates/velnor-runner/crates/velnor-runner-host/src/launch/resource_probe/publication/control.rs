@@ -24,9 +24,31 @@ pub(in crate::launch) async fn publish_challenge_with_provider<
     claim: &ExecutionChallengePublicationClaim,
     provider: &P,
 ) -> Result<ExecutionChallengePublicationReceipt, HostError> {
+    let connection_journal = input.connection_journal;
+    let mut recorded = false;
+    match publish_challenge_inner(input, claim, provider, &mut recorded).await {
+        Ok(receipt) => Ok(receipt),
+        Err(error) => {
+            if !recorded {
+                connection_journal
+                    .mark_execution_challenge_uncertain(claim)
+                    .await?;
+            }
+            Err(error)
+        }
+    }
+}
+
+async fn publish_challenge_inner<P: crate::launch::resource_probe::ImageProvider>(
+    input: ControlPublicationInput<'_>,
+    claim: &ExecutionChallengePublicationClaim,
+    provider: &P,
+    recorded: &mut bool,
+) -> Result<ExecutionChallengePublicationReceipt, HostError> {
     let ControlPublicationInput {
         docker,
         journal,
+        connection_journal,
         selected,
         images,
         release_secret: _,
@@ -48,7 +70,7 @@ pub(in crate::launch) async fn publish_challenge_with_provider<
     let operation_id = Uuid::new_v4().simple().to_string();
     let request = challenge_request(claim, channel, guest_boot_id, operation_id.clone())?;
     let parent = ExecutionPublicationParent::challenge(claim, metadata, guest_boot_id)?;
-    let record = Box::pin(super::execute::publish(
+    Box::pin(super::execute::publish(
         super::execute::PublisherExecution {
             docker,
             journal,
@@ -61,26 +83,54 @@ pub(in crate::launch) async fn publish_challenge_with_provider<
         },
         request,
         parent,
+        |record| async {
+            let receipt = challenge_publication_receipt(
+                claim,
+                channel,
+                metadata,
+                record,
+                &operation_id,
+                guest_boot_id,
+                &volume,
+            )?;
+            connection_journal
+                .record_execution_challenge_published(claim, &receipt)
+                .await?;
+            *recorded = true;
+            Ok(receipt)
+        },
     ))
-    .await?;
-    challenge_publication_receipt(
-        claim,
-        channel,
-        metadata,
-        record,
-        &operation_id,
-        guest_boot_id,
-        &volume,
-    )
+    .await
 }
 
 pub(crate) async fn publish_decision(
     input: ControlPublicationInput<'_>,
     claim: &ExecutionDecisionDeliveryClaim,
 ) -> Result<ExecutionDecisionDeliveryReceipt, HostError> {
+    let connection_journal = input.connection_journal;
+    let mut recorded = false;
+    match publish_decision_inner(input, claim, &mut recorded).await {
+        Ok(receipt) => Ok(receipt),
+        Err(error) => {
+            if !recorded {
+                connection_journal
+                    .mark_execution_decision_uncertain(claim)
+                    .await?;
+            }
+            Err(error)
+        }
+    }
+}
+
+async fn publish_decision_inner(
+    input: ControlPublicationInput<'_>,
+    claim: &ExecutionDecisionDeliveryClaim,
+    recorded: &mut bool,
+) -> Result<ExecutionDecisionDeliveryReceipt, HostError> {
     let ControlPublicationInput {
         docker,
         journal,
+        connection_journal,
         selected,
         images,
         release_secret,
@@ -106,7 +156,7 @@ pub(crate) async fn publish_decision(
     let operation_id = Uuid::new_v4().simple().to_string();
     let request = decision_request(claim, channel, guest_boot_id, operation_id.clone())?;
     let parent = ExecutionPublicationParent::decision(claim, metadata, guest_boot_id)?;
-    let record = Box::pin(super::execute::publish(
+    Box::pin(super::execute::publish(
         super::execute::PublisherExecution {
             docker,
             journal,
@@ -119,15 +169,22 @@ pub(crate) async fn publish_decision(
         },
         request,
         parent,
+        |record| async {
+            let receipt = decision_delivery_receipt(
+                claim,
+                channel,
+                metadata,
+                record,
+                &operation_id,
+                guest_boot_id,
+                &volume,
+            )?;
+            connection_journal
+                .record_execution_decision_delivered(claim, &receipt)
+                .await?;
+            *recorded = true;
+            Ok(receipt)
+        },
     ))
-    .await?;
-    decision_delivery_receipt(
-        claim,
-        channel,
-        metadata,
-        record,
-        &operation_id,
-        guest_boot_id,
-        &volume,
-    )
+    .await
 }

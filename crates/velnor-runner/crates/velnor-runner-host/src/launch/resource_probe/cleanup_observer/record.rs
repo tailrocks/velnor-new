@@ -67,8 +67,8 @@ fn validate_record(
             .is_some_and(|guest| docker_root_matches(guest, &request.binding.docker_root))
         || !record.complete
         || !record.owned_references_absent
-        || record.owned_reference_count != 0
         || !record.issues.is_empty()
+        || record.owned_reference_count != 0
         || record.absent_volume_mountpoints != expected_volumes
         || record.absent_tmpfs_devices.as_slice() != request.binding.owned_tmpfs_devices
         || record.absent_mount_namespaces.as_slice() != expected_namespaces

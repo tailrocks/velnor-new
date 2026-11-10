@@ -246,10 +246,11 @@ async fn publish_decision(
         .claim_execution_decision_delivery(source.request().intent_id())
         .await?
         .ok_or(HostError::Journal)?;
-    let receipt = match crate::launch::resource_probe::publication::publish_decision(
+    crate::launch::resource_probe::publication::publish_decision(
         crate::launch::resource_probe::publication::ControlPublicationInput {
             docker: context.docker,
             journal: context.host,
+            connection_journal: context.scoped,
             selected: context.engine,
             images: context.images,
             release_secret: context.secret,
@@ -261,26 +262,5 @@ async fn publish_decision(
         &claim,
     )
     .await
-    {
-        Ok(receipt) => receipt,
-        Err(error) => {
-            context
-                .scoped
-                .mark_execution_decision_uncertain(&claim)
-                .await?;
-            return Err(error);
-        }
-    };
-    if let Err(error) = context
-        .scoped
-        .record_execution_decision_delivered(&claim, &receipt)
-        .await
-    {
-        context
-            .scoped
-            .mark_execution_decision_uncertain(&claim)
-            .await?;
-        return Err(error);
-    }
-    Ok(())
+    .map(|_| ())
 }

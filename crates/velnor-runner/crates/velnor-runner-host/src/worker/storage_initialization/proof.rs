@@ -107,7 +107,7 @@ pub(crate) struct VerifiedStorageInitializerAwaitingHandoff {
 }
 
 impl VerifiedStorageInitializerAwaitingHandoff {
-    pub(super) fn after_ready(
+    pub(crate) fn after_ready(
         connection_id: &str,
         claim: &StorageInitializationClaim,
         started: &VerifiedStorageInitializerStarted,
@@ -243,7 +243,7 @@ impl VerifiedStorageInitializerResult {
         &self.ready_digest
     }
 
-    pub(super) fn after_validated_result(
+    pub(crate) fn after_validated_result(
         claim: &StorageInitializationClaim,
         result: &ObservedStorageInitialization,
     ) -> Result<Self, HostError> {
