@@ -404,6 +404,13 @@ executable job, including CI, qualification, native image, signing, publication,
 recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
 keyword: queued time, environment approval, and successive jobs are separate
 from this per-job execution budget.
+Runner-family production has a 330-minute job budget and a 110-minute build
+command deadline. The remaining 220 minutes cover all other job phases together.
+Discovery uses separate read-only jobs for the CI producer and the qualification
+result, each bounded by a 350-minute wait in a 360-minute job. Qualification
+and publication run in separate jobs with their own budgets.
+These bounds fail closed when scheduling or upstream work takes longer; they do
+not promise completion for every possible queue delay or workflow configuration.
 
 A [reusable-workflow caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)
 allows a restricted set of job keys that excludes `timeout-minutes`. Emit the
@@ -534,6 +541,8 @@ workflow-token authentication and a deadline. Source:
 
 The [workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) identifies reusable workflows through `referenced_workflows`, including their path and resolved `sha`; a SHA-pinned entry can omit `ref`. Bind the resolved workflow identity independently of the caller's source identity and do not require optional fields to establish a SHA-pinned reference.
 
+The official runner's [v2.338.2 `JobContext`](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/JobContext.cs) exposes `check_run_id`, `workflow_ref`, `workflow_sha`, `workflow_repository`, and `workflow_file_path`. Admission matches the current job's check-run ID to the [workflow-jobs API](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) `check_run_url` for the exact attempt, then checks the defining reusable workflow against the run's resolved references. A SHA-pinned private fixture run, `42585338912` attempt 1, confirmed this correlation on 2026-11-09 and confirmed that its reusable reference omitted `ref`. Missing or ambiguous identity fields fail closed. This fixture establishes context compatibility only; it does not establish SDK or runner-image qualification.
+
 A reusable signer's certificate URI can use a branch-qualified ref while its resolved workflow SHA is carried separately. The certificate also identifies the caller workflow and SHA, event, run ID and attempt. Field decoding establishes representation only: admission must verify the signed attestation, trusted issuer and exact workflow/source digests.
 
 ## Commit archive retrieval
@@ -574,3 +583,64 @@ selected `sdk-preview-*` tag policy and the owner reviewer. The stable
 and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).
 
 GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) returns published releases. Its [release listing endpoint](https://docs.github.com/en/rest/releases/releases#list-releases) includes drafts only for callers with push access. The preview draft job has contents write access and searches a bounded complete release listing before creating a release; the read-only source job does not infer draft absence from a hidden result. Candidate selection and later jobs retain the exact original artifact IDs recorded in the owned draft.
+
+## Workflow run-step length
+
+GitHub limits a single [`jobs.<job_id>.steps[*].run` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun) to 21,000 characters. Velnor materializes longer fixed Bash scripts in bounded steps after binding project tool references. It verifies the reconstructed bytes before running the original script. Oversized scripts with GitHub expressions or unsupported runner and shell settings fail generation.
+
+The source preview caller admits only the immutable
+[publication authority](https://github.com/tailrocks/velnor-new/blob/72701af69f6f9b693e639814fcf479409da3295c/.github/workflows/source-preview-publication.yml)
+at commit `72701af69f6f9b693e639814fcf479409da3295c`. The reviewed workflow
+blob has SHA-256 `b157479660663d7241291be5f392f4338e6b60a2063bda61d7aa02f82f94990e`.
+Its source job has a five-minute timeout; draft, attest and publish have
+ten-minute timeouts and depend in order on their predecessors. It has no
+nested reusable workflow calls. Timeout admission uses this fixed authority
+record, not a candidate workflow generated in the caller's checkout.
+
+The image release caller separately admits the immutable
+[Mac proof authority](https://github.com/tailrocks/velnor-new/blob/533d225c08785adc4367340e1db4dc111ee2b5a2/.github/workflows/source-preview-mac-proof.yml)
+at commit `533d225c08785adc4367340e1db4dc111ee2b5a2`. Its reviewed workflow
+blob has SHA-256 `ff3ef47eb0f5ea6e43eedb505c5aea15a1ba2e8f523d81959f81e592034b3f1c`.
+It contains one `verify` job with a 140-minute timeout, no predecessors, and no
+nested reusable workflow calls. This record applies only to the
+`verify-mac-proof` job in `product-release-images.yml`; other external references
+remain rejected.
+
+## Private production Mac runner constraints
+
+GitHub documents repository-scoped runner registration separately from
+organization runner groups in its [runner administration API](https://docs.github.com/en/rest/actions/self-hosted-runners#create-a-registration-token-for-a-repository).
+A repository-scoped runner trusts the repository's reviewed writer/workflow
+surface; it does not imply organization group workflow restrictions.
+The [workflow dispatch API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+accepts a branch or tag ref. Admission must compare the actual run and workflow
+commit to its pin rather than claim that dispatch accepts a raw commit SHA.
+
+The [OIDC reference](https://docs.github.com/en/actions/reference/security/oidc)
+and pinned [Fulcio certificate extensions](https://github.com/sigstore/fulcio/blob/24deee31680022186e823592f8a2d760841fe043/docs/oid-info.md)
+define the identity fields used by the additional Mac proof. Cosign issuer/SAN
+verification alone does not check every repository, workflow and invocation
+extension required by the runner image contract.
+
+The pinned [attest-build-provenance action inputs](https://github.com/actions/attest-build-provenance/blob/4d101475d8b20a2381f78447822ac1eab6504dd8/action.yml#L7-L23)
+accept `subject-digest` in `algorithm:hex_digest` form together with
+`subject-name`. This mode is exclusive with `subject-path` and
+`subject-checksums`. Runner-family final attestation passes the four names and
+digests emitted by the authenticated native verifier, so later local file
+changes cannot select different attestation subjects.
+
+### Artifact download extraction
+
+The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
+records the download action's extraction and digest boundary. Verify artifact
+producer and identity before download; the digest check runs after extraction.
+
+### Hosted macOS source qualification
+
+The [runner image label table](https://github.com/actions/runner-images/blob/main/README.md)
+identifies `macos-15` as ARM64 and `macos-15-intel` as x64. The published
+[ARM64](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md)
+and [Intel](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+inventories do not list GNU coreutils as a guaranteed tool. Source qualification
+uses the platform `shasum -a 256` command for lock identities instead of relying
+on `sha256sum`.

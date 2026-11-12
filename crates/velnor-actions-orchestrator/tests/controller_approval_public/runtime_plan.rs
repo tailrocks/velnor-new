@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "../support/consumer_manifest.rs"]
+mod consumer_manifest_fixture;
+
 use std::{error::Error, fs, io, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 use serde_json::{Value, json};
@@ -32,6 +35,7 @@ fn public_plan_identity_uses_effective_runtime_for_runner_target() -> Result<(),
     assert_all_targets_rotate(&approved, &compiled)?;
 
     fs::write(root.join(".velnor/config.toml"), &consumer_config)?;
+    consumer_manifest_fixture::write(root, &std::env::current_exe()?)?;
     write_approvals(root, super::super::BASE_APPROVALS)?;
     let consumer = plan_obligations(&request)?;
     assert_all_targets_equal(&compiled, &consumer, "ConsumerV1 ignores compiled runtime")?;

@@ -111,12 +111,7 @@ fn unsettled_dind_reply(state: &mut State, is_dind: bool, id: &str, name: &str) 
     if !is_dind {
         return None;
     }
-    let fault = [
-        ApiFault::OwnedUnsettledDindCreate,
-        ApiFault::OwnedUnsettledDindRemovalFailure,
-    ]
-    .into_iter()
-    .any(|fault| state.take_fault(fault));
+    let fault = state.take_fault(ApiFault::OwnedUnsettledDindCreate);
     if !fault {
         return None;
     }
@@ -278,13 +273,24 @@ fn remove_container(path: &str, state: &mut State) -> Reply {
     let Some(id) = path_id(path, "containers/", "") else {
         return missing("container");
     };
-    if state.plan.fault == Some(ApiFault::OwnedUnsettledDindRemovalFailure)
-        && state
-            .containers
-            .get(&id)
-            .is_some_and(|container| container.role == "dind")
+    if matches!(
+        state.plan.fault,
+        Some(
+            ApiFault::KnownDindRemovalFailure
+                | ApiFault::KnownDindRemovalBadRequest
+                | ApiFault::KnownDindRemovalConflict
+        )
+    ) && state
+        .containers
+        .get(&id)
+        .is_some_and(|container| container.role == "dind")
     {
-        return server_error();
+        state.failed_delete_id = Some(id);
+        return match state.plan.fault {
+            Some(ApiFault::KnownDindRemovalBadRequest) => Reply::bytes(400, Vec::new()),
+            Some(ApiFault::KnownDindRemovalConflict) => Reply::bytes(409, Vec::new()),
+            _ => server_error(),
+        };
     }
     if state.take_fault(ApiFault::CleanupNotFound) {
         state.containers.remove(&id);

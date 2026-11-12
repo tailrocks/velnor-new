@@ -23,3 +23,11 @@ pub fn source_fingerprint(root: &std::path::Path) -> Result<String, String> {
         .map(|(fingerprint, _)| fingerprint)
         .map_err(|error| format!("cannot verify archive guard source tree: {error}"))
 }
+
+pub fn source_claims(root: &std::path::Path) -> Result<Vec<String>, String> {
+    let inputs = archive_guard_inputs::read_entries(root)
+        .map_err(|error| format!("cannot verify archive guard source claims: {error}"))?;
+    let mut paths = vec![archive_guard_inputs::MANIFEST.to_owned()];
+    paths.extend(inputs.entries.into_iter().map(|entry| entry.path));
+    Ok(paths)
+}

@@ -21,6 +21,7 @@ SOURCE = "a" * 40
 BASE = "b" * 40
 HEAD = "c" * 40
 PAYLOAD = b"real selected SDK bytes"
+DARWIN_PAYLOAD = b"real Darwin SDK bytes"
 BUNDLE = b"previously verified receipt bundle bytes"
 
 
@@ -29,10 +30,12 @@ def sha(value):
 
 
 def record(source=SOURCE):
-    value = {"schema": 2, "repository": bootstrap.REPOSITORY, "version": "0.1.75", "source_sha": source, "tag": "sdk-preview-" + source, "release_id": 10, "payload_target": bootstrap.TARGET, "payload_name": "velnor-actions-x86_64-unknown-linux-gnu", "payload_size": len(PAYLOAD), "payload_sha256": sha(PAYLOAD), "bundle_sha256": sha(BUNDLE)}
+    value = {"schema": 3, "repository": bootstrap.REPOSITORY, "version": "0.1.75", "source_sha": source, "tag": "sdk-preview-" + source, "release_id": 10, "bundle_sha256": sha(BUNDLE)}
     for role, path, run in [("source", ".github/workflows/product-release-generator.yml", 11), ("draft", ".github/workflows/product-release-generator.yml", 11), ("signer", ".github/workflows/product-release-generator.yml", 11), ("ci", ".github/workflows/ci.yml", 12), ("qualification", ".github/workflows/source-qualification.yml", 13)]:
         value.update({role + "_workflow_path": path, role + "_workflow_ref": f"{bootstrap.REPOSITORY}/{path}@" + ("refs/tags/sdk-preview-" + source if role in ("source", "draft", "signer") else "refs/heads/main"), role + "_workflow_sha": source, role + "_run_id": run, role + "_run_attempt": 1})
-    value.update({"producer_run_id": 20, "producer_run_attempt": 1, "producer_payload_artifact_id": 21, "producer_payload_archive_sha256": "e" * 64, "candidate_source_artifact_id": 22, "candidate_payload_artifact_id": 23, "publisher_run_attempt": 3, "publisher_job_id": 24, "signer_run_attempt": 2})
+    value.update({"candidate_source_artifact_id": 22, "publisher_run_attempt": 3, "publisher_job_id": 24, "signer_run_attempt": 2})
+    for prefix, target, payload, producer_id, retained_id, job_id in (("linux", bootstrap.TARGET, PAYLOAD, 21, 23, 26), ("darwin", "aarch64-apple-darwin", DARWIN_PAYLOAD, 27, 28, 29)):
+        value.update({f"{prefix}_producer_run_id": 20, f"{prefix}_producer_run_attempt": 1, f"{prefix}_producer_payload_artifact_id": producer_id, f"{prefix}_producer_payload_archive_sha256": "e" * 64, f"{prefix}_candidate_payload_artifact_id": retained_id, f"{prefix}_qualification_job_id": job_id, f"{prefix}_payload_target": target, f"{prefix}_payload_name": "velnor-actions-" + target, f"{prefix}_payload_size": len(payload), f"{prefix}_payload_sha256": sha(payload)})
     receipt = json.dumps(bootstrap.receipt_from_record(value), sort_keys=True, separators=(",", ":")).encode()
     value["receipt_sha256"] = sha(receipt)
     return value, receipt
@@ -40,12 +43,20 @@ def record(source=SOURCE):
 
 valid_retry, retry_receipt = record()
 bootstrap.validate_preview(valid_retry, HEAD)
+assert bootstrap.approved_preview({"runtime-preview": valid_retry}, {"runtime-preview-staged": valid_retry}, "runtime", HEAD) == valid_retry
+for candidate_lock, base_lock in (({"runtime-preview": valid_retry}, {"planner-preview-staged": valid_retry}), ({}, {"runtime-preview": valid_retry}), ({"runtime-preview": valid_retry}, {})):
+    try:
+        bootstrap.approved_preview(candidate_lock, base_lock, "runtime", HEAD)
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("unapproved runtime preview was accepted")
 assert json.loads(retry_receipt)["signer"]["run_attempt"] == 2
 assert "publisher_run_attempt" not in json.loads(retry_receipt)
 for field, value in (
     ("source_run_id", 99), ("source_run_attempt", 2), ("draft_run_attempt", 3),
     ("publisher_run_attempt", 1), ("publisher_run_attempt", 52),
-    ("publisher_job_id", 0), ("producer_payload_artifact_id", 0),
+    ("publisher_job_id", 0), ("linux_producer_payload_artifact_id", 0),
     ("candidate_source_artifact_id", 23), ("schema", 1),
     ("unapproved", True),
 ):
@@ -97,12 +108,23 @@ for changed in (dict(authority, ref=bootstrap.REPOSITORY + "/" + stage.AUTHORITY
         pass
     else:
         raise AssertionError("accepted mutable or missing publication authority")
+assert stage.staging_authority() == {
+    "repository": bootstrap.REPOSITORY,
+    "path": ".github/workflows/source-preview-publication.yml",
+    "ref": bootstrap.REPOSITORY + "/.github/workflows/source-preview-publication.yml@72701af69f6f9b693e639814fcf479409da3295c",
+    "sha": "72701af69f6f9b693e639814fcf479409da3295c",
+}
+enabled_authority_sha = stage.PUBLICATION_AUTHORITY_SHA
 try:
-    stage.staging_authority()
-except bootstrap.AdmissionError:
-    pass
-else:
-    raise AssertionError("bootstrap enabled staging without an independent authority pin")
+    stage.PUBLICATION_AUTHORITY_SHA = None
+    try:
+        stage.staging_authority()
+    except bootstrap.AdmissionError:
+        pass
+    else:
+        raise AssertionError("staging accepted a missing publication authority pin")
+finally:
+    stage.PUBLICATION_AUTHORITY_SHA = enabled_authority_sha
 
 
 class RoleEvidence:
@@ -181,7 +203,7 @@ class FakeGitHub:
         if "/releases/" in path:
             source = self.value["source_sha"]
             prefix = f"https://github.com/{bootstrap.REPOSITORY}/releases/download/sdk-preview-{source}/"
-            rows = [("SDK_PREVIEW_RECEIPT.json", self.receipt), ("SDK_PREVIEW_RECEIPT.json.sigstore.jsonl", BUNDLE), (self.value["payload_name"], PAYLOAD)]
+            rows = [("SDK_PREVIEW_RECEIPT.json", self.receipt), ("SDK_PREVIEW_RECEIPT.json.sigstore.jsonl", BUNDLE), (self.value["linux_payload_name"], PAYLOAD), (self.value["darwin_payload_name"], DARWIN_PAYLOAD)]
             if self.missing:
                 rows.pop()
             return {"id": 10, "tag_name": "sdk-preview-" + source, "target_commitish": source, "draft": False, "prerelease": True, "immutable": True, "assets": [{"name": name, "state": "uploaded", "size": len(data), "digest": "sha256:" + sha(data), "browser_download_url": prefix + name} for name, data in rows]}
@@ -196,7 +218,8 @@ class FakeGitHub:
             return self.receipt
         if url.endswith("SDK_PREVIEW_RECEIPT.json.sigstore.jsonl"):
             return BUNDLE
-        return PAYLOAD + (b"!" if self.tamper else b"")
+        selected = DARWIN_PAYLOAD if url.endswith("velnor-actions-aarch64-apple-darwin") else PAYLOAD
+        return selected + (b"!" if self.tamper else b"")
 
 
 def scenario(base_section, mutation=None):

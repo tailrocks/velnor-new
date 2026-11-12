@@ -15,7 +15,7 @@ mod build_task_lock_validation;
 
 #[path = "build_task_policy.rs"]
 mod source_policy;
-pub(crate) use source_policy::policies;
+pub(crate) use source_policy::{policies, runner_family_tools};
 
 fn checked_source<'a>(
     checks: &'a [ToolInputCheck],
@@ -60,7 +60,7 @@ fn validate_config_shape(
     config: &NativeMiseConfig,
     rust_toolchain_version: &str,
 ) -> Result<(), OrchestratorError> {
-    let allowed = ["min_version", "settings", "tasks", "tools"];
+    let allowed = ["min_version", "settings", "tasks", "tools", "wrappers"];
     if config
         .root_keys
         .iter()
@@ -70,6 +70,9 @@ fn validate_config_shape(
             .all(|key| config.root_keys.iter().any(|actual| actual == key))
     {
         return Err(failure("build_task_mise_config_root"));
+    }
+    if config.cargo_wrapper == Some(false) {
+        return Err(failure("build_task_mise_cargo_wrapper"));
     }
     if !config.min_version_supported() {
         return Err(failure("build_task_mise_min_version"));
@@ -90,6 +93,7 @@ fn validate_config_shape(
         || rust.os.is_some()
         || !rust.config_options.is_empty()
         || rust.mr_boxington != Some(true)
+        || rust.workflow.is_some()
     {
         return Err(failure("build_task_rust_selector"));
     }
@@ -103,6 +107,10 @@ fn validate_config_shape(
         || mbx.os.is_some()
         || !mbx.config_options.is_empty()
         || mbx.mr_boxington.is_some()
+        || mbx
+            .workflow
+            .as_deref()
+            .is_some_and(|workflow| workflow != "release.yml@refs/heads/main")
     {
         return Err(failure("build_task_mbx_selector"));
     }

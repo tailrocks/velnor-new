@@ -170,6 +170,8 @@ pub(crate) fn check_policy_mode(config: &VelnorConfig) -> Result<(), Orchestrato
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PartialConfig {
+    #[serde(default)]
+    premerge_event_proof: Option<velnor_actions_contract::config::PremergeEventProofConfig>,
     schema: Option<u32>,
     #[serde(default)]
     workflow: PartialWorkflow,
@@ -205,6 +207,8 @@ struct PartialConfig {
     upgrades: Option<velnor_actions_contract::config::UpgradesConfig>,
     #[serde(default)]
     images: Vec<velnor_actions_contract::config::ImageConfig>,
+    #[serde(default)]
+    runner_image_family: Option<velnor_actions_contract::config::RunnerImageFamilyConfig>,
     #[serde(default)]
     publish: velnor_actions_contract::config::PublishConfig,
     #[serde(default)]
@@ -246,6 +250,7 @@ impl PartialConfig {
             OrchestratorError::config(CONFIG_REL, "schema", "missing_required_schema")
         })?;
         Ok(VelnorConfig {
+            premerge_event_proof: self.premerge_event_proof,
             schema,
             workflow: self.workflow.materialize(),
             resources: self.resources.materialize(),
@@ -264,6 +269,7 @@ impl PartialConfig {
             private_sources: self.private_sources,
             upgrades: self.upgrades,
             images: self.images,
+            runner_image_family: self.runner_image_family,
             publish: self.publish,
             tools: self.tools,
         })

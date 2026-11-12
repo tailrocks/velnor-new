@@ -262,6 +262,8 @@ fn lock_from_doc(doc: &TomlDoc) -> Result<GeneratorLock, LockError> {
         actions,
         source_preview: parse_source_preview(doc, "planner-preview")?,
         staged_source_preview: parse_source_preview(doc, "planner-preview-staged")?,
+        runtime_preview: parse_source_preview(doc, "runtime-preview")?,
+        staged_runtime_preview: parse_source_preview(doc, "runtime-preview-staged")?,
     })
 }
 
@@ -270,14 +272,14 @@ fn parse_source_preview(
     section: &str,
 ) -> Result<Option<velnor_actions_contract::source_preview::SourcePreviewLock>, LockError> {
     use velnor_actions_contract::source_preview::{
-        SourcePreviewCandidate, SourcePreviewLock, SourcePreviewPayload, SourcePreviewProducer,
-        SourcePreviewReceipt, SourcePreviewRun,
+        SourcePreviewLock, SourcePreviewPayload, SourcePreviewProducer, SourcePreviewReceipt,
+        SourcePreviewRun, SourcePreviewTarget, SourcePreviewTargets,
     };
     let mut sections = doc.iter().filter(|(name, _)| name == section);
     let Some((_, values)) = sections.next() else {
         return Ok(None);
     };
-    if sections.next().is_some() || values.len() != 45 {
+    if sections.next().is_some() || values.len() != 56 {
         return Err(invalid("invalid_planner_preview_section".to_owned()));
     }
     let number = |key: &str| -> Result<u64, LockError> {
@@ -296,6 +298,26 @@ fn parse_source_preview(
                 .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
         })
     };
+    let target = |prefix: &str| -> Result<SourcePreviewTarget, LockError> {
+        let field = |suffix: &str| format!("{prefix}_{suffix}");
+        Ok(SourcePreviewTarget {
+            producer: SourcePreviewProducer {
+                producer_run_id: number(&field("producer_run_id"))?,
+                producer_run_attempt: u32::try_from(number(&field("producer_run_attempt"))?)
+                    .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
+                payload_artifact_id: number(&field("producer_payload_artifact_id"))?,
+                payload_archive_sha256: entry(values, &field("producer_payload_archive_sha256"))?,
+            },
+            candidate_payload_artifact_id: number(&field("candidate_payload_artifact_id"))?,
+            qualification_job_id: number(&field("qualification_job_id"))?,
+            payload: SourcePreviewPayload {
+                target: entry(values, &field("payload_target"))?,
+                name: entry(values, &field("payload_name"))?,
+                size: number(&field("payload_size"))?,
+                sha256: entry(values, &field("payload_sha256"))?,
+            },
+        })
+    };
     let preview = SourcePreviewLock {
         receipt: SourcePreviewReceipt {
             schema: u32::try_from(number("schema")?)
@@ -310,22 +332,10 @@ fn parse_source_preview(
             signer: run("signer")?,
             ci: run("ci")?,
             qualification: run("qualification")?,
-            producer: SourcePreviewProducer {
-                producer_run_id: number("producer_run_id")?,
-                producer_run_attempt: u32::try_from(number("producer_run_attempt")?)
-                    .map_err(|_| invalid("invalid_planner_preview_attempt".to_owned()))?,
-                payload_artifact_id: number("producer_payload_artifact_id")?,
-                payload_archive_sha256: entry(values, "producer_payload_archive_sha256")?,
-            },
-            candidate: SourcePreviewCandidate {
-                source_artifact_id: number("candidate_source_artifact_id")?,
-                payload_artifact_id: number("candidate_payload_artifact_id")?,
-            },
-            payload: SourcePreviewPayload {
-                target: entry(values, "payload_target")?,
-                name: entry(values, "payload_name")?,
-                size: number("payload_size")?,
-                sha256: entry(values, "payload_sha256")?,
+            candidate_source_artifact_id: number("candidate_source_artifact_id")?,
+            targets: SourcePreviewTargets {
+                linux: target("linux")?,
+                darwin: target("darwin")?,
             },
         },
         receipt_sha256: entry(values, "receipt_sha256")?,

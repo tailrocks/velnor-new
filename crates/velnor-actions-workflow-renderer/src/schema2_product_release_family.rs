@@ -107,6 +107,20 @@ impl Family {
     }
 
     fn asset_paths(self) -> Vec<String> {
+        self.asset_paths_for(false)
+    }
+
+    fn asset_paths_for(self, runner: bool) -> Vec<String> {
+        if self == Self::Images && runner {
+            return [
+                "RUNNER_IMAGE_MANIFEST.json",
+                "LICENSE",
+                "NOTICE",
+                "SHA256SUMS",
+            ]
+            .map(|name| format!("assets/{name}"))
+            .to_vec();
+        }
         match self {
             Self::Images => [
                 "velnor-runner-linux-amd64.tar",
@@ -131,21 +145,28 @@ impl Family {
             Self::Generator => super::generator_release::publication_asset_paths(),
         }
     }
-
-    pub(super) fn asset_names(self) -> Vec<String> {
-        self.asset_paths()
-            .into_iter()
-            .filter_map(|path| path.rsplit('/').next().map(str::to_owned))
-            .collect()
-    }
 }
 
 pub(super) fn prepare_script(
     family: Family,
     pins: &ProductReleasePins,
 ) -> Result<String, RenderError> {
+    prepare_script_for(family, pins, false)
+}
+
+pub(super) fn runner_prepare_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    prepare_script_for(Family::Images, pins, true)
+}
+
+fn prepare_script_for(
+    family: Family,
+    pins: &ProductReleasePins,
+    runner: bool,
+) -> Result<String, RenderError> {
     let checksum = checksum_check(family, "$temp_dir", Some(pins))?;
-    let downloads = download_commands(family)?;
+    let downloads = download_commands(family, runner)?;
+    let paths = family.asset_paths_for(runner);
+    let names = asset_names(&paths);
     let gh_function = super::generator_release::gh_function(pins)?;
     Ok(PREPARE_TEMPLATE
         .replace("@GH_FUNCTION@", &gh_function)
@@ -155,13 +176,15 @@ pub(super) fn prepare_script(
         .replace("@LABEL@", family.label())
         .replace(
             "@ASSET_NAMES_JSON@",
-            &json_asset_array(&family.asset_names()),
+            &json_asset_array(&names),
         )
         .replace("@DOWNLOAD_COMMANDS@", &downloads)
         .replace("@CHECKSUM_COMMAND@", &checksum)
         .replace(
             "@ASSET_VERIFY_COMMANDS@",
-            &prepare_asset_verification(family),
+            &if runner {
+                format!("{}\n: \"${{VELNOR_FAMILY_ASSETS:?}}\"\nfor name in RUNNER_IMAGE_MANIFEST.json SHA256SUMS LICENSE NOTICE; do cmp -- \"$temp_dir/assets/$name\" \"$VELNOR_FAMILY_ASSETS/$name\" || fail 'existing release differs from authenticated publication'; done", prepare_asset_verification(family, &paths))
+            } else { prepare_asset_verification(family, &paths) },
         ))
 }
 
@@ -169,12 +192,26 @@ pub(super) fn publish_script(
     family: Family,
     pins: &ProductReleasePins,
 ) -> Result<String, RenderError> {
+    publish_script_for(family, pins, false)
+}
+
+pub(super) fn runner_publish_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    publish_script_for(Family::Images, pins, true)
+}
+
+fn publish_script_for(
+    family: Family,
+    pins: &ProductReleasePins,
+    runner: bool,
+) -> Result<String, RenderError> {
     if family == Family::Generator {
         return Err(RenderError::InvalidWorkflow(
             "generator_publisher_must_remain_inside_typed_graph".to_owned(),
         ));
     }
     let gh_function = super::generator_release::gh_function(pins)?;
+    let paths = family.asset_paths_for(runner);
+    let names = asset_names(&paths);
     Ok(PUBLISH_TEMPLATE
         .replace(
             "@CONFIRMATION_GH_FUNCTION@",
@@ -187,34 +224,44 @@ pub(super) fn publish_script(
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(
             "@ELIGIBILITY_FUNCTION@",
-            &eligibility::publisher_definition(),
+            &if runner {
+                eligibility::runner_publisher_definition()
+            } else {
+                eligibility::publisher_definition()
+            },
         )
-        .replace("@PREPARE_SCRIPT@", &prepare_script(family, pins)?)
+        .replace(
+            "@PREPARE_SCRIPT@",
+            &prepare_script_for(family, pins, runner)?,
+        )
+        .replace(
+            "@DRAFT_VERIFY@\n",
+            if runner { RUNNER_DRAFT_VERIFY } else { "" },
+        )
         .replace("@REPOSITORY@", eligibility::REPOSITORY)
         .replace("@WORKFLOW_PATH@", family.workflow_path())
         .replace("@TAG_PREFIX@", family.tag_prefix())
         .replace("@FIXED_TAG@", family.fixed_tag().as_deref().unwrap_or(""))
         .replace("@LABEL@", family.label())
-        .replace(
-            "@ASSET_NAMES_JSON@",
-            &json_asset_array(&family.asset_names()),
-        )
-        .replace("@ASSET_PATHS@", &shell_words(&family.asset_paths()))
+        .replace("@ASSET_NAMES_JSON@", &json_asset_array(&names))
+        .replace("@ASSET_PATHS@", &shell_words(&paths))
         .replace(
             "@CHECKSUM_COMMAND@",
             &checksum_check(family, ".", Some(pins))?,
         )
         .replace(
             "@ASSET_VERIFY_COMMANDS@",
-            &publish_asset_verification(family),
+            &publish_asset_verification(&paths),
         ))
 }
 
-fn download_commands(family: Family) -> Result<String, RenderError> {
+const RUNNER_DRAFT_VERIFY: &str = include_str!("schema2_runner_draft_verify.sh");
+
+fn download_commands(family: Family, runner: bool) -> Result<String, RenderError> {
     match family {
         Family::Images | Family::Binary => Ok(format!(
             "mkdir -p \"$temp_dir/assets\" || fail 'could not create release asset directory'\ngh release download \"$prepare_tag\" --repo \"$repository\" --dir \"$temp_dir/assets\" {} || fail 'release asset download failed'",
-            download_patterns(&family.asset_names())
+            download_patterns(&asset_names(&family.asset_paths_for(runner)))
         )),
         Family::Generator => grouped_download_commands(family.asset_paths()),
     }
@@ -271,8 +318,7 @@ fn checksum_check(
     }
 }
 
-fn prepare_asset_verification(family: Family) -> String {
-    let assets = family.asset_paths();
+fn prepare_asset_verification(family: Family, assets: &[String]) -> String {
     let mut commands = assets
         .iter()
         .map(|path| {
@@ -297,10 +343,8 @@ fn prepare_asset_verification(family: Family) -> String {
     commands.join("\n")
 }
 
-fn publish_asset_verification(family: Family) -> String {
-    family
-        .asset_paths()
-        .iter()
+fn publish_asset_verification(paths: &[String]) -> String {
+    paths.iter()
         .map(|path| {
             format!(
                 "family_gh release verify-asset \"$release_tag\" \"{path}\" --repo \"$release_repository\" >/dev/null\nfamily_gh attestation verify \"{path}\" --repo \"$release_repository\" --source-ref refs/heads/main --source-digest \"$release_source_sha\" --signer-workflow \"$release_repository/$release_workflow_path\" --signer-digest \"$release_authority_sha\" >/dev/null"
@@ -308,6 +352,13 @@ fn publish_asset_verification(family: Family) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn asset_names(paths: &[String]) -> Vec<String> {
+    paths
+        .iter()
+        .filter_map(|path| path.rsplit('/').next().map(str::to_owned))
+        .collect()
 }
 
 fn download_patterns(assets: &[String]) -> String {

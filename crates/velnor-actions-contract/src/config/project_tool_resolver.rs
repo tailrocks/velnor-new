@@ -13,7 +13,7 @@ use super::project_tool_refs::{
 };
 use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
-pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 14] = [
+pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 15] = [
     ("VELNOR_TOOL_RUST", &["rust", "core:rust"]),
     (
         "VELNOR_TOOL_MR_BOXINGTON",
@@ -60,6 +60,7 @@ pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 14] = [
         &["crane", "aqua:google/go-containerregistry"],
     ),
     ("VELNOR_TOOL_BUN", &["bun", "core:bun"]),
+    ("VELNOR_TOOL_COSIGN", &["cosign", "aqua:sigstore/cosign"]),
     ("VELNOR_TOOL_JAVA", &["java", "core:java"]),
     (
         "VELNOR_TOOL_DBT_FUSION",

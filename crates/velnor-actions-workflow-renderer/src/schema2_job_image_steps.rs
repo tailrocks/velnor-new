@@ -9,8 +9,6 @@ use super::native;
 use super::{ARCHIVE, ARTIFACT_NAME, PUBLICATION_EVIDENCE, RECORD};
 
 pub(super) fn gh_env() -> Yaml {
-    // `gh` also reads GITHUB_TOKEN; GH_TOKEN stays out of the rendered jobs so
-    // the data-only gates keep passing unchanged.
     Yaml::Map(vec![(
         "GITHUB_TOKEN".to_owned(),
         Yaml::str("${{ secrets.GITHUB_TOKEN }}"),
@@ -115,7 +113,10 @@ VELNOR_SOURCE_INPUTS_EOF"#;
                 ),
                 (
                     "VELNOR_SOURCE_OUTPUT".to_owned(),
-                    Yaml::str(authority::AUTHENTICATED_SOURCE_PATH),
+                    Yaml::str(format!(
+                        "${{{{ runner.temp }}}}/{}",
+                        authority::AUTHENTICATED_SOURCE_FILE
+                    )),
                 ),
             ]),
         ),

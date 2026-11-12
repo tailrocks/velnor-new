@@ -101,22 +101,27 @@ pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     let gh_function = generator_release::gh_function(pins)?;
     Ok(format!(
         "set -euo pipefail\n\n{gh_function}\n\n{}\n\nrelease_eligibility\nexit 0\n",
-        render_function(true)
+        render_function(true, WORKFLOW_PATH, "workflow_dispatch")
     ))
 }
 
 pub(super) fn publisher_definition() -> String {
-    render_function(true)
+    render_function(true, WORKFLOW_PATH, "workflow_dispatch")
 }
 
 pub(super) fn publisher_definition_source_free() -> String {
-    render_function(false)
+    render_function(false, WORKFLOW_PATH, "workflow_dispatch")
 }
 
-fn render_function(require_checkout: bool) -> String {
+pub(super) fn runner_publisher_definition() -> String {
+    render_function(true, ".github/workflows/product-release-images.yml", "push")
+}
+
+fn render_function(require_checkout: bool, workflow_path: &str, event: &str) -> String {
     ELIGIBILITY_FUNCTION
         .replace("@REPOSITORY@", REPOSITORY)
-        .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
+        .replace("@WORKFLOW_PATH@", workflow_path)
+        .replace("@EVENT@", event)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
@@ -152,7 +157,7 @@ is_sha() {
 [[ "${GITHUB_REF-}" == 'refs/heads/main' ]] || fail 'source ref is not main'
 [[ "${GITHUB_WORKFLOW_REF-}" == "$repository/@WORKFLOW_PATH@@refs/heads/main" ]] || fail 'unexpected workflow authority path or ref'
 case "${GITHUB_EVENT_NAME-}" in
-  workflow_dispatch) ;;
+  @EVENT@) ;;
   *) fail 'event is not eligible' ;;
 esac
 is_sha "$source_sha" || fail 'source SHA is malformed'

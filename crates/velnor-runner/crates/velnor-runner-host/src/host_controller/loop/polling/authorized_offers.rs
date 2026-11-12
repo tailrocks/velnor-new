@@ -79,6 +79,7 @@ async fn resume_offer(
         context.journal,
         context.config.resource_budget()?,
         context.release_read_secret,
+        context.selected_engine.endpoint(),
     )
     .await
     else {

@@ -37,18 +37,27 @@ with zipfile.ZipFile(archive_bytes, "w") as archive:
     archive.writestr(entry, PAYLOAD)
 ARCHIVE = archive_bytes.getvalue()
 ARCHIVE_SHA = hashlib.sha256(ARCHIVE).hexdigest()
+DARWIN_NAME = "velnor-actions-aarch64-apple-darwin"
+DARWIN_PAYLOAD = bytes.fromhex("cffaedfe0c0000010000000002000000") + bytes(16) + b"darwin bytes"
+darwin_archive = io.BytesIO()
+with zipfile.ZipFile(darwin_archive, "w") as archive:
+    entry = zipfile.ZipInfo(DARWIN_NAME)
+    entry.external_attr = (stat.S_IFREG | 0o500) << 16
+    archive.writestr(entry, DARWIN_PAYLOAD)
+DARWIN_ARCHIVE = darwin_archive.getvalue()
+DARWIN_SHA = hashlib.sha256(DARWIN_ARCHIVE).hexdigest()
 NAMES = {10: ["Required verdict"], 20: ["Source qualification ordinary harness",
     "Source qualification keep harness", "Source qualification generation and repository checks",
-    "Source qualification"], 90: ["Build source preview", "Qualify source preview"]}
+    "Source qualification"], 90: ["Build source preview Linux", "Build source preview Darwin", "Qualify source preview Linux", "Qualify source preview Darwin"]}
 REQUESTS = []
 
 
 class Response:
-    def __init__(self, status, body=b""):
-        self.status, self.body = status, io.BytesIO(body)
+    def __init__(self, status, body=b"", location="archive"):
+        self.status, self.body, self.location = status, io.BytesIO(body), location
 
     def getheader(self, name, default=None):
-        return "https://productionresultssa32.blob.core.windows.net/archive?signature=opaque" if name == "Location" else default
+        return "https://productionresultssa32.blob.core.windows.net/" + self.location + "?signature=opaque" if name == "Location" else default
 
     def read(self, size):
         return self.body.read(size)
@@ -56,13 +65,16 @@ class Response:
 
 class HTTPS:
     def __init__(self, host, **_kwargs):
-        self.host, self.sock = host, None
+        self.host, self.sock, self.path = host, None, ""
 
     def request(self, method, path, headers):
+        self.path = path
         REQUESTS.append((self.host, method, path, headers))
 
     def getresponse(self):
-        return Response(302) if self.host == "api.github.com" else Response(200, ARCHIVE)
+        if self.host == "api.github.com":
+            return Response(302, location="darwin" if "/701/" in self.path else "linux")
+        return Response(200, DARWIN_ARCHIVE if self.path.startswith("/darwin") else ARCHIVE)
 
     def close(self):
         pass
@@ -74,19 +86,20 @@ gate.http.client.HTTPSConnection = HTTPS
 def run_record(identity, path, event):
     return {"id": identity, "run_attempt": 2, "head_sha": SOURCE, "head_branch": "main",
         "event": event, "status": "completed", "conclusion": "success", "path": path,
-        "head_repository": {"full_name": gate.REPOSITORY}}
+        "head_repository": {"full_name": gate.REPOSITORY, "id": gate.REPOSITORY_ID}}
 
 
 def responses():
-    proof = {"schema": 1, "repository": gate.REPOSITORY, "artifact": "generator",
-        "source_sha": SOURCE, "version": "0.1.75", "producer_run_id": 90,
-        "producer_run_attempt": 2, "payload_artifact_id": 700,
-        "payload_archive_sha256": ARCHIVE_SHA,
+    proof = {"schema": 2, "repository": gate.REPOSITORY, "artifact": "generator",
+        "source_sha": SOURCE, "version": "0.1.75",
+        "targets": {"linux": {"producer_run_id": 90, "producer_run_attempt": 2, "payload_artifact_id": 700, "payload_archive_sha256": ARCHIVE_SHA, "qualification_job_id": 9002},
+                    "darwin": {"producer_run_id": 90, "producer_run_attempt": 2, "payload_artifact_id": 701, "payload_archive_sha256": DARWIN_SHA, "qualification_job_id": 9003}},
         "immutability": {"enabled": True, "checked_at": "2026-11-06T00:00:00Z"}}
-    data = {"/users/donbeave": {"login": "donbeave", "id": 139017},
+    data = {PREFIX: {"id": gate.REPOSITORY_ID, "full_name": gate.REPOSITORY, "default_branch": "main", "owner": {"id": gate.REPOSITORY_OWNER_ID}},
+        "/users/donbeave": {"login": "donbeave", "id": 139017},
         PREFIX + "/actions/runs/30": {"id": 30, "run_attempt": 1, "head_sha": SOURCE,
             "head_branch": TAG, "event": "push", "path": gate.WORKFLOW,
-            "head_repository": {"full_name": gate.REPOSITORY}, "created_at": "2026-11-06T00:00:10Z"},
+            "head_repository": {"full_name": gate.REPOSITORY, "id": gate.REPOSITORY_ID}, "created_at": "2026-11-06T00:00:10Z"},
         TAG_PATH: {"ref": "refs/tags/" + TAG, "object": {"type": "tag", "sha": TAG_SHA}},
         OBJECT_PATH: {"sha": TAG_SHA, "tag": TAG, "message": json.dumps(proof, sort_keys=True, separators=(",", ":")),
             "tagger": {"date": "2026-11-06T00:00:05Z"},
@@ -100,16 +113,18 @@ def responses():
             "conditions": {"ref_name": {"include": ["refs/tags/sdk-preview-*"], "exclude": []}}, "rules": [{"type": "creation"}]},
         PREFIX + "/rulesets/24397132": {"id": 24397132, "target": "tag", "enforcement": "active", "bypass_actors": [],
             "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}}, "rules": [{"type": "update"}, {"type": "deletion"}]},
-        PREFIX + "/actions/runs/90/artifacts?per_page=100": {"total_count": 1, "artifacts": [{"id": 700,
-            "name": "source-preview-payload-2", "expired": False, "digest": "sha256:" + ARCHIVE_SHA,
-            "size_in_bytes": len(ARCHIVE), "workflow_run": {"id": 90, "head_sha": SOURCE}}]},
+        PREFIX + "/actions/runs/90/artifacts?per_page=100": {"total_count": 2, "artifacts": [{"id": 700,
+            "name": "source-preview-payload-linux-2", "expired": False, "digest": "sha256:" + ARCHIVE_SHA,
+            "size_in_bytes": len(ARCHIVE), "workflow_run": {"id": 90, "head_sha": SOURCE}}, {"id": 701,
+            "name": "source-preview-payload-darwin-2", "expired": False, "digest": "sha256:" + DARWIN_SHA,
+            "size_in_bytes": len(DARWIN_ARCHIVE), "workflow_run": {"id": 90, "head_sha": SOURCE}}]},
     }
     for identity, path, event in [(10, CI, "push"), (20, QUAL, "workflow_dispatch"), (90, gate.WORKFLOW, "push")]:
         record = run_record(identity, path, event)
         data[PREFIX + "/actions/workflows/" + path.rsplit("/", 1)[1] + "/runs?head_sha=" + SOURCE + "&event=" + event + "&status=success&per_page=20"] = {"workflow_runs": [record]}
         data[PREFIX + "/actions/runs/" + str(identity)] = record
         data[PREFIX + "/actions/runs/" + str(identity) + "/attempts/2"] = record
-        jobs = [{"id": identity * 100 + index, "name": name, "run_id": identity, "head_sha": SOURCE,
+        jobs = [{"id": identity * 100 + index, "name": name, "run_id": identity, "run_attempt": 2, "head_sha": SOURCE,
             "status": "completed", "conclusion": "success"} for index, name in enumerate(NAMES[identity])]
         data[PREFIX + "/actions/runs/" + str(identity) + "/attempts/2/jobs?per_page=100"] = {"jobs": jobs, "total_count": len(jobs)}
     return data
@@ -146,6 +161,7 @@ def admitted(values, reject=False, moved=False, downloads=0):
         assert not reject, "unqualified SDK tag was admitted"
         assert value["tag"] == TAG and value["ci"]["run_id"] == 10
         assert (Path(temporary) / NAME).read_bytes() == PAYLOAD
+        assert (Path(temporary) / DARWIN_NAME).read_bytes() == DARWIN_PAYLOAD
         assert REQUESTS[0][3]["Authorization"] == "Bearer external-fixture-token"
         assert "Authorization" not in REQUESTS[1][3]
 
@@ -175,14 +191,28 @@ for key, bad in [("GITHUB_REF", "refs/heads/main"), ("GITHUB_EVENT_NAME", "workf
     os.environ[key] = bad
     admitted(responses(), reject=True)
     os.environ[key] = original
-for field, bad in [("source_sha", "f" * 40), ("version", "0.1.74"), ("payload_artifact_id", 701),
-    ("payload_archive_sha256", "0" * 64), ("immutability", {"enabled": False, "checked_at": "2026-11-06T00:00:00Z"}),
+for field, bad in [("source_sha", "f" * 40), ("version", "0.1.74"), ("immutability", {"enabled": False, "checked_at": "2026-11-06T00:00:00Z"}),
     ("immutability", {"enabled": True, "checked_at": "2026-11-05T00:00:00Z"}),
     ("immutability", {"enabled": True, "checked_at": "2026-11-06T00:01:00Z"})]:
     values = responses()
     proof = json.loads(values[OBJECT_PATH]["message"])
     proof[field] = bad
     values[OBJECT_PATH]["message"] = json.dumps(proof, sort_keys=True, separators=(",", ":"))
+    admitted(values, reject=True)
+for target in ("linux", "darwin"):
+    for field, bad in (("payload_artifact_id", 999), ("payload_archive_sha256", "0" * 64), ("qualification_job_id", 999)):
+        values = responses()
+        proof = json.loads(values[OBJECT_PATH]["message"])
+        proof["targets"][target][field] = bad
+        values[OBJECT_PATH]["message"] = json.dumps(proof, sort_keys=True, separators=(",", ":"))
+        admitted(values, reject=True)
+for field, bad in (("id", 1), ("owner", {"id": 1})):
+    values = responses()
+    values[PREFIX][field] = bad
+    admitted(values, reject=True)
+for path in (PREFIX + "/actions/runs/90/attempts/2", PREFIX + "/actions/runs/30"):
+    values = responses()
+    values[path]["head_repository"]["id"] = 1
     admitted(values, reject=True)
 for record_path, field, bad in [(TAG_PATH, "object", {"type": "commit", "sha": SOURCE}),
     (OBJECT_PATH, "object", {"type": "tag", "sha": TAG_SHA}),
@@ -197,9 +227,9 @@ for record_path, field, bad in [(TAG_PATH, "object", {"type": "commit", "sha": S
 values = responses()
 values[PREFIX + "/actions/runs/90"] = dict(values[PREFIX + "/actions/runs/90"], run_attempt=3)
 inventory = values[PREFIX + "/actions/runs/90/artifacts?per_page=100"]
-inventory["artifacts"].append(dict(inventory["artifacts"][0], id=701,
-    name="source-preview-payload-3", digest="sha256:" + "f" * 64))
-inventory["total_count"] = 2
+inventory["artifacts"].append(dict(inventory["artifacts"][0], id=702,
+    name="source-preview-payload-linux-3", digest="sha256:" + "f" * 64))
+inventory["total_count"] = 3
 admitted(values)
 values = responses()
 values[PREFIX + "/actions/runs/30"]["run_attempt"] = 2
@@ -227,16 +257,16 @@ def artifact_zip(name, contents):
 
 
 proof = json.loads(responses()[OBJECT_PATH]["message"])
-producer = {key: proof[key] for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256")}
+targets = {target: {"producer": {key: item[key] for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256")}, "qualification_job_id": item["qualification_job_id"]} for target, item in proof["targets"].items()}
 source_tuple = {"workflow_path": gate.WORKFLOW, "workflow_ref": gate.REPOSITORY + "/" + gate.WORKFLOW + "@refs/tags/" + TAG, "workflow_sha": SOURCE, "run_id": 30, "run_attempt": 1}
 def run_tuple(identity, path):
     return {"workflow_path": path, "workflow_ref": gate.REPOSITORY + "/" + path + "@refs/heads/main", "workflow_sha": SOURCE, "run_id": identity, "run_attempt": 2}
-original = {"schema": 2, "repository": gate.REPOSITORY, "version": "0.1.75", "source_sha": SOURCE, "tag": TAG,
-    "source": source_tuple, "producer": producer, "ci": run_tuple(10, CI), "qualification": run_tuple(20, QUAL)}
-candidate = {"source_artifact_id": 801, "payload_artifact_id": 802}
-archives = {801: artifact_zip("source-preview-metadata.json", publication.canonical(original)), 802: artifact_zip(NAME, PAYLOAD)}
+original = {"schema": 3, "repository": gate.REPOSITORY, "version": "0.1.75", "source_sha": SOURCE, "tag": TAG,
+    "source": source_tuple, "targets": targets, "ci": run_tuple(10, CI), "qualification": run_tuple(20, QUAL)}
+candidate = {"source_artifact_id": 801, "linux_payload_artifact_id": 802, "darwin_payload_artifact_id": 803}
+archives = {801: artifact_zip("source-preview-metadata.json", publication.canonical(original)), 802: artifact_zip(NAME, PAYLOAD), 803: artifact_zip(DARWIN_NAME, DARWIN_PAYLOAD)}
 artifacts = {identity: {"id": identity, "name": name, "size_in_bytes": len(archives[identity]), "digest": "sha256:" + hashlib.sha256(archives[identity]).hexdigest(),
-    "expired": False, "workflow_run": {"id": 30, "head_sha": SOURCE}} for identity, name in [(801, "source-preview-source-1"), (802, "source-preview-qualified-payload-1")]}
+    "expired": False, "workflow_run": {"id": 30, "head_sha": SOURCE}} for identity, name in [(801, "source-preview-source-1"), (802, "source-preview-qualified-payload-linux-1"), (803, "source-preview-qualified-payload-darwin-1")]}
 
 
 class RecoveryHTTP:
@@ -264,7 +294,7 @@ class RecoveryHTTP:
         if "/attempts/1/jobs?" in self.path:
             return Response(200, publication.canonical({"total_count": 1, "jobs": [{"id": 3001, "run_id": 30, "head_sha": SOURCE, "name": "Source preview publication / Admit source preview", "status": "completed", "conclusion": "success"}]}))
         if "/attempts/1" in self.path:
-            return Response(200, publication.canonical({"id": 30, "run_attempt": 1, "head_sha": SOURCE, "head_branch": TAG, "event": "push", "path": gate.WORKFLOW, "head_repository": {"full_name": gate.REPOSITORY}, "conclusion": "failure"}))
+            return Response(200, publication.canonical({"id": 30, "run_attempt": 1, "head_sha": SOURCE, "head_branch": TAG, "event": "push", "path": gate.WORKFLOW, "head_repository": {"full_name": gate.REPOSITORY, "id": gate.REPOSITORY_ID}, "conclusion": "failure"}))
         raise AssertionError(self.path)
     def close(self):
         pass
@@ -276,7 +306,7 @@ gate.http.client.HTTPSConnection = RecoveryHTTP
 values = responses()
 values[PREFIX + "/actions/runs/30"]["run_attempt"] = 2
 recovered, selected, recovered_payload = publication.load_candidate(publication.GitHub(), original, json.loads(RecoveryHTTP.release["body"].split(":", 1)[1]))
-assert recovered == original and selected == candidate and recovered_payload == PAYLOAD
+assert recovered == original and selected == candidate and recovered_payload == {"linux": PAYLOAD, "darwin": DARWIN_PAYLOAD}
 artifacts[801]["expired"] = True
 try:
     publication.load_candidate(publication.GitHub(), original, json.loads(RecoveryHTTP.release["body"].split(":", 1)[1]))
@@ -306,7 +336,7 @@ for path in [key for key in responses() if "/jobs?" in key]:
             entry["jobs"][0]["head_sha"] = "d" * 40
         entry["total_count"] = len(entry["jobs"]) + (100 if mode == "truncated" else 0)
         admitted(values, reject=True)
-admitted(responses(), reject=True, moved=True, downloads=2)
+admitted(responses(), reject=True, moved=True, downloads=4)
 values = responses()
 proof = json.loads(values[OBJECT_PATH]["message"])
 proof["immutability"]["checked_at"] = "2026-11-05T00:00:00Z"

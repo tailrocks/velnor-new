@@ -9,8 +9,11 @@ mod gc1_t17;
 mod gc1_t18;
 mod install_spec_subject;
 mod metadata_cwd;
+#[cfg(target_os = "macos")]
+mod permission_retry_darwin;
 mod rust_spec_kind;
 mod source_preview_lock;
+mod source_preview_runtime_command;
 
 #[test]
 fn job_build_command_binds_validated_source_revision() -> Result<(), Box<dyn std::error::Error>> {

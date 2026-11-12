@@ -171,7 +171,7 @@ async fn validate_table_sql(conn: &turso::Connection, extended: bool) -> Result<
     Ok(())
 }
 
-async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
+pub(in crate::journal) async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
     let mut rows = conn
         .query(
             "SELECT engine_id, docker_root_digest, daemon_architecture, source_sha, archive_sha256, index_digest, platform, manifest_digest, config_digest, image_index_digest, image_index_size, manifest_size, load_archive_sha256, load_archive_index_digest, image_reference, state, image_id, receipt FROM image_imports",

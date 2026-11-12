@@ -79,6 +79,8 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/local_action_annotation.rs"]
 mod local_action_annotation;
+#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
+mod mac_proof_cosign;
 #[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
 mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
@@ -165,6 +167,8 @@ mod source_qualification_sources;
 mod source_qualification_sources_keys;
 #[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
 mod source_qualification_sources_support;
+#[path = "workflow_configuration_public/stable_prepare_branch.rs"]
+mod stable_prepare_branch;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
@@ -273,3 +277,36 @@ mod source_qualification_routing_shape;
 
 #[path = "workflow_configuration_public/source_qualification_gather_routing.rs"]
 mod source_qualification_gather_routing;
+
+#[path = "workflow_configuration_public/producer_execution.rs"]
+mod producer_execution;
+
+#[path = "workflow_configuration_public/producer_execution_support.rs"]
+mod producer_execution_support;
+
+#[path = "workflow_configuration_public/producer_execution_fixture.rs"]
+mod producer_execution_fixture;
+
+#[path = "workflow_configuration_public/producer_execution_limits.rs"]
+mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/runner_family_sdk_baseline.rs"]
+mod runner_family_sdk_baseline;
+
+#[path = "workflow_configuration_public/runner_family_selection.rs"]
+mod runner_family_selection;
+
+#[path = "workflow_configuration_public/runner_family_guard.rs"]
+mod runner_family_guard;
+
+#[path = "workflow_configuration_public/runner_family_render.rs"]
+mod runner_family_render;
+
+#[path = "workflow_configuration_public/runner_family_source.rs"]
+mod runner_family_source;
+
+#[path = "workflow_configuration_public/runner_family_authority.rs"]
+mod runner_family_authority;
+
+#[path = "workflow_configuration_public/premerge_event_proof.rs"]
+mod premerge_event_proof;

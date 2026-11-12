@@ -55,12 +55,15 @@ pub(crate) async fn reconcile_claim(
     {
         return Err(HostError::Ownership);
     }
+    context
+        .journal
+        .ensure_image_imports_resolved(context.selected.engine_id())
+        .await?;
     let runtime = NativeCleanupRuntime::new(
         context.docker.clone(),
         context.journal.clone(),
         engine,
         context.selected.clone(),
-        context.images.clone(),
         std::sync::Arc::clone(context.release_secret),
     )?;
     local::ensure_local_absence(

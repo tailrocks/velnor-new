@@ -38,7 +38,6 @@ mod plist;
 mod readiness;
 mod readiness_scan;
 mod reconcile;
-pub(crate) mod resource_probe_record;
 pub mod resource_probe_release;
 mod scale_set;
 mod stage;
@@ -75,10 +74,11 @@ pub use journal::pr_source_transition::{
 pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch::{
-    BootstrapContainerRole, CompletionWorker, WorkerImage,
-    resume_deferred_offer_acquire_with_transport, runner_pair_environment,
-    verify_persisted_execution_source_role, verify_worker_attestation_manifest,
-    verify_worker_build_source, verify_worker_runtime_config,
+    AcquiredRegistryImage, BootstrapContainerRole, CompletionWorker, DaemonSelection,
+    ImageObservation, ImageReference, ImageSession, RegistryImageSpecification, RegistryProjection,
+    WorkerImage, acquire_registry_image, resume_deferred_offer_acquire_with_transport,
+    runner_pair_environment, verify_persisted_execution_source_role,
+    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use launch_blocking::ListenFault;
 pub use listen::queue_path;

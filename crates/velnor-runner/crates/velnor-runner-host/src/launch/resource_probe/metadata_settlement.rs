@@ -29,7 +29,7 @@ pub(in crate::launch) async fn settle_storage_metadata_after_cleanup(
     release_read_secret: &ReleaseReadSecret,
 ) -> Result<MetadataSettlementResult, HostError> {
     let token = release_read_secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token, journal)
+    let provider = ReleaseImageProvider::from_compiled_source(token, journal, selected.endpoint())
         .map_err(|_| HostError::Docker)?;
     settle_storage_metadata_after_cleanup_using(
         docker,

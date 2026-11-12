@@ -38,13 +38,6 @@ async fn run() -> Result<(), HostError> {
                 &PathBuf::from(output.as_os_str()),
             )
         }
-        (Some("write-runner-image-manifest"), [descriptors, runner_lock, output]) => {
-            resource_probe_release::write_runner_image_manifest(
-                &PathBuf::from(descriptors.as_os_str()),
-                &PathBuf::from(runner_lock.as_os_str()),
-                &PathBuf::from(output.as_os_str()),
-            )
-        }
         (Some("qualify-runner-images"), [root, source_sha, runner_id, dind_id, docker_socket]) => {
             let root = PathBuf::from(root);
             let source_sha = source_sha.to_str().ok_or(HostError::Identity)?;
@@ -60,6 +53,102 @@ async fn run() -> Result<(), HostError> {
             )
             .await
         }
+        (Some("qualify-runner-image-archives"), values) => qualify_archives(values).await,
+        (Some("check-runner-image-candidate"), values) => check_candidate(values).await,
         _ => Err(HostError::Identity),
     }
+}
+
+fn argument(value: &OsString) -> Result<&str, HostError> {
+    value.to_str().ok_or(HostError::Identity)
+}
+
+async fn check_candidate(values: &[OsString]) -> Result<(), HostError> {
+    let [
+        root,
+        source_sha,
+        runner,
+        dind,
+        probe,
+        runner_envelope,
+        dind_envelope,
+        probe_envelope,
+        contexts,
+        docker_socket,
+    ] = values
+    else {
+        return Err(HostError::Identity);
+    };
+    let request = resource_probe_release::RunnerCandidateCheck {
+        root: std::path::Path::new(root),
+        source_sha: argument(source_sha)?,
+        runner_archive: std::path::Path::new(runner),
+        dind_archive: std::path::Path::new(dind),
+        probe_archive: std::path::Path::new(probe),
+        runner_envelope: std::path::Path::new(runner_envelope),
+        dind_envelope: std::path::Path::new(dind_envelope),
+        probe_envelope: std::path::Path::new(probe_envelope),
+        contexts: std::path::Path::new(contexts),
+        docker_socket: argument(docker_socket)?,
+    };
+    resource_probe_release::check_runner_image_candidate(&request).await
+}
+
+async fn qualify_archives(values: &[OsString]) -> Result<(), HostError> {
+    let [
+        root,
+        source_sha,
+        runner_archive,
+        dind_archive,
+        probe_archive,
+        runner_envelope,
+        dind_envelope,
+        probe_envelope,
+        contexts,
+        runner_record,
+        dind_record,
+        probe_record,
+        producer_run_id,
+        producer_run_attempt,
+        qualifier_run_id,
+        qualifier_run_attempt,
+        qualifier_job_id,
+        docker_socket,
+        output,
+    ] = values
+    else {
+        return Err(HostError::Identity);
+    };
+    let request = resource_probe_release::RunnerArchiveQualification {
+        root: std::path::Path::new(root),
+        source_sha: argument(source_sha)?,
+        runner_archive: std::path::Path::new(runner_archive),
+        dind_archive: std::path::Path::new(dind_archive),
+        probe_archive: std::path::Path::new(probe_archive),
+        runner_envelope: std::path::Path::new(runner_envelope),
+        dind_envelope: std::path::Path::new(dind_envelope),
+        probe_envelope: std::path::Path::new(probe_envelope),
+        contexts: std::path::Path::new(contexts),
+        runner_record: std::path::Path::new(runner_record),
+        dind_record: std::path::Path::new(dind_record),
+        probe_record: std::path::Path::new(probe_record),
+        producer_run_id: argument(producer_run_id)?
+            .parse()
+            .map_err(|_| HostError::Identity)?,
+        producer_run_attempt: argument(producer_run_attempt)?
+            .parse()
+            .map_err(|_| HostError::Identity)?,
+        qualifier_run_id: argument(qualifier_run_id)?
+            .parse()
+            .map_err(|_| HostError::Identity)?,
+        qualifier_run_attempt: argument(qualifier_run_attempt)?
+            .parse()
+            .map_err(|_| HostError::Identity)?,
+        qualifier_job_id: argument(qualifier_job_id)?
+            .parse()
+            .map_err(|_| HostError::Identity)?,
+        docker_socket: argument(docker_socket)?,
+        output: std::path::Path::new(output),
+    };
+    resource_probe_release::qualify_runner_image_archives(&request).await
 }

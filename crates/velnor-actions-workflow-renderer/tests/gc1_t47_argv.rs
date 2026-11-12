@@ -183,6 +183,7 @@ pub(crate) fn pins() -> ProductReleasePins {
 
 pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        runner_image_family: None,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

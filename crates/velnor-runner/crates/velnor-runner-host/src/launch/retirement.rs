@@ -47,6 +47,12 @@ pub(crate) async fn reconcile_claim(
     if claim.reservation_id() <= 0 || claim.scale_set_id() <= 0 {
         return Err(HostError::Identity);
     }
+    if !selected.matches_images(images) {
+        return Err(HostError::Ownership);
+    }
+    journal
+        .ensure_image_imports_resolved(selected.engine_id())
+        .await?;
     let engine = EngineContext {
         engine_id: selected.engine_id().to_owned(),
         endpoint: selected.endpoint().to_owned(),
@@ -57,7 +63,6 @@ pub(crate) async fn reconcile_claim(
         journal.clone(),
         engine,
         selected.clone(),
-        images.clone(),
         std::sync::Arc::clone(release_secret),
     )?;
     Box::pin(reconcile_claim_effects(

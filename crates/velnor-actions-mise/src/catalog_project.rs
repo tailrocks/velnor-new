@@ -28,6 +28,7 @@ impl PinnedTool {
             Self::ReleasePlz => "VELNOR_TOOL_RELEASE_PLZ",
             Self::Crane => "VELNOR_TOOL_CRANE",
             Self::Bun => "VELNOR_TOOL_BUN",
+            Self::Cosign => "VELNOR_TOOL_COSIGN",
         }
     }
 
@@ -106,6 +107,7 @@ impl ToolCatalog {
             PinnedTool::ReleasePlz => &mut self.release_plz,
             PinnedTool::Crane => &mut self.crane,
             PinnedTool::Bun => &mut self.bun,
+            PinnedTool::Cosign => &mut self.cosign,
         }
     }
 }

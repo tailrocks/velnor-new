@@ -10,10 +10,23 @@ const BASH: &str = "/usr/bin/bash";
 const DOCKER: &str = "/usr/bin/docker";
 const OUTPUT_LIMIT: usize = 128 * 1024;
 
+#[path = "image_candidate_family.rs"]
+mod family;
+
 #[derive(Debug, Clone, Copy)]
 pub struct ImageCandidateCommand;
 
 impl ImageCandidateCommand {
+    pub fn build_family_oci(
+        root: &Path,
+        archive: &Path,
+        docker_config: &Path,
+        source_commit: &str,
+        role: &str,
+    ) -> Result<IsolatedCommand, MiseError> {
+        family::build(root, archive, docker_config, source_commit, role)
+    }
+
     pub fn download_buildx(url: &str, destination: &Path) -> Result<IsolatedCommand, MiseError> {
         if !url.starts_with("https://github.com/docker/buildx/releases/download/")
             || url.bytes().any(|byte| matches!(byte, b'\n' | b'\r' | 0))
@@ -127,6 +140,15 @@ impl ImageCandidateCommand {
         IsolatedCommand::repo_task(DOCKER, args, &[]).and_then(|command| {
             command.with_env(&[("DOCKER_CONFIG".into(), docker_config.as_os_str().to_owned())])
         })
+    }
+
+    pub fn run_build(
+        command: &IsolatedCommand,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        let (output, _drained) = command.run_quiescent_prefix_until(OUTPUT_LIMIT, deadline)?;
+        output.require_success(command.program().to_string_lossy().as_ref())?;
+        Ok(output)
     }
 
     pub fn run(

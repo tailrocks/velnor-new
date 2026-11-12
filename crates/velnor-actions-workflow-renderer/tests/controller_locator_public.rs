@@ -20,8 +20,8 @@ fn pinned(version: &str) -> ControllerLocator {
 
 fn preview() -> velnor_actions_contract::source_preview::SourcePreviewLock {
     use velnor_actions_contract::source_preview::{
-        SourcePreviewCandidate, SourcePreviewLock, SourcePreviewPayload, SourcePreviewProducer,
-        SourcePreviewReceipt, SourcePreviewRun,
+        SourcePreviewLock, SourcePreviewPayload, SourcePreviewProducer, SourcePreviewReceipt,
+        SourcePreviewRun, SourcePreviewTarget, SourcePreviewTargets,
     };
     let source = "a".repeat(40);
     let run = |path: &str, reference: &str, id| SourcePreviewRun {
@@ -31,9 +31,25 @@ fn preview() -> velnor_actions_contract::source_preview::SourcePreviewLock {
         run_id: id,
         run_attempt: 1,
     };
+    let target = |name: &str, producer_id, candidate_id, job_id| SourcePreviewTarget {
+        producer: SourcePreviewProducer {
+            producer_run_id: 4,
+            producer_run_attempt: 1,
+            payload_artifact_id: producer_id,
+            payload_archive_sha256: "e".repeat(64),
+        },
+        candidate_payload_artifact_id: candidate_id,
+        qualification_job_id: job_id,
+        payload: SourcePreviewPayload {
+            target: name.to_owned(),
+            name: format!("velnor-actions-{name}"),
+            size: 1,
+            sha256: "b".repeat(64),
+        },
+    };
     SourcePreviewLock {
         receipt: SourcePreviewReceipt {
-            schema: 2,
+            schema: 3,
             repository: "tailrocks/velnor-new".to_owned(),
             version: "0.1.75".to_owned(),
             source_sha: source.clone(),
@@ -60,21 +76,10 @@ fn preview() -> velnor_actions_contract::source_preview::SourcePreviewLock {
                 "refs/heads/main",
                 3,
             ),
-            producer: SourcePreviewProducer {
-                producer_run_id: 4,
-                producer_run_attempt: 1,
-                payload_artifact_id: 5,
-                payload_archive_sha256: "e".repeat(64),
-            },
-            candidate: SourcePreviewCandidate {
-                source_artifact_id: 6,
-                payload_artifact_id: 7,
-            },
-            payload: SourcePreviewPayload {
-                target: "x86_64-unknown-linux-gnu".to_owned(),
-                name: "velnor-actions-x86_64-unknown-linux-gnu".to_owned(),
-                size: 1,
-                sha256: "b".repeat(64),
+            candidate_source_artifact_id: 6,
+            targets: SourcePreviewTargets {
+                linux: target("x86_64-unknown-linux-gnu", 5, 7, 9),
+                darwin: target("aarch64-apple-darwin", 10, 11, 12),
             },
         },
         receipt_sha256: "c".repeat(64),

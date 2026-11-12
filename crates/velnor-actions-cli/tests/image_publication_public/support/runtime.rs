@@ -40,7 +40,10 @@ pub(super) fn publication_command(fixture: &Fixture) -> Result<Command, std::io:
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env(
             "GITHUB_WORKFLOW_REF",
-            "tailrocks/velnor-new/.github/workflows/publish.yml@refs/heads/main",
+            format!(
+                "tailrocks/velnor-new/{}@refs/heads/main",
+                fixture.profile.publication_workflow_path()
+            ),
         )
         .env("GITHUB_WORKFLOW_SHA", &fixture.source)
         .env("DOCKER_CONFIG", &fixture.docker_config)

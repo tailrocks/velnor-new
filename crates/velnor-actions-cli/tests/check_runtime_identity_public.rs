@@ -22,6 +22,13 @@ const JOB_ID: &str = "check-runtime-fixture";
 const RUN_KEY: &str = "r260001-a1";
 const UNQUALIFIED_MISE: &[u8] = b"unqualified-runtime\n";
 
+#[path = "check_runtime_identity_support.rs"]
+mod identity_support;
+use identity_support::{git, git_output};
+
+#[path = "check_runtime_identity_progress.rs"]
+mod progress;
+
 #[test]
 fn exported_execute_check_binds_current_runtime_and_rejects_stale_plan()
 -> Result<(), Box<dyn Error>> {
@@ -360,40 +367,4 @@ fn assert_cli_error(output: Output, marker: &str) -> Result<(), Box<dyn Error>> 
     let expected = format!("velnor-actions: internal request failed: internal: {marker}");
     assert_eq!(stderr.trim(), expected, "unexpected public CLI error");
     Ok(())
-}
-
-fn git(root: &Path, args: &[&str]) -> Result<(), Box<dyn Error>> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!(
-            "git {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-        .into())
-    }
-}
-
-fn git_output(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()?;
-    if output.status.success() {
-        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
-    } else {
-        Err(io::Error::other(format!(
-            "git {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-        .into())
-    }
 }

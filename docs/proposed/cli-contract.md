@@ -2,8 +2,8 @@
 
 **Status:** Implemented.
 
-This document defines the complete public command line for Velnor Actions V1.
-It has three commands. `plan` exposes a concise human summary from the same
+This document defines the Velnor Actions V1 product command line.
+`plan` exposes a concise human summary from the same
 analysis used by `generate`; detailed task selection, cache decisions, report
 aggregation, and workflow rendering remain internal.
 
@@ -13,8 +13,19 @@ The Cargo package MUST be named `velnor-actions-cli` and declare the executable
 name `velnor-actions`. The workflow generator binary is `velnor-actions`, while runner
 supervisor operations are provided by `velnor-host` in `crates/velnor-runner/crates/velnor-runner-cli`.
 
-The CLI MUST use Clap's derive API. Clap's built-in `--help` and `--version`
-options are the only global options. The exact user-facing command tree is:
+The repository release authority also provides
+`velnor-actions image-maintenance admit-mac-publication`. It takes `--source-commit`,
+`--release-run-id`, `--release-run-attempt`, `--assets-dir`, and
+`--runner-temp`. The two paths must be absolute. The command reads `GH_TOKEN`
+for public repository access and does not require a checkout or public workflow
+environment. On success, stdout contains one JSON object with positive integer
+`producer_run_id`, `producer_run_attempt`, `producer_artifact_id`, and
+`publisher_artifact_id`. On failure it emits no result object. The
+[Runner image release contract](runner-image-release.md) defines its artifact,
+source, and job checks.
+
+The CLI uses Clap's derive API. Global options are `--help`, `--version`, and
+`--toolchain-guard ABSOLUTE_EXECUTABLE`. The V1 product command tree is:
 
 ```text
 velnor-actions init
@@ -24,10 +35,10 @@ velnor-actions unmanaged
 ```
 
 `velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md). `velnor-actions playwright lock` pins the Playwright browser archives of Bun members; see the [Bun contract](bun-contract.md).
-No command may accept `--root`, a stack or profile selector, a format selector,
-an ignore flag, a base/head selector, `--check`, a task ID, a report path, or
-any other option not listed above. Unknown flags and extra positional arguments
-MUST fail with Clap's usage diagnostic.
+The V1 product commands above do not accept `--root`, a stack or profile
+selector, a format selector, an ignore flag, a base/head selector, `--check`,
+a task ID, a report path, or any other command-specific option not listed above.
+Unknown flags and extra positional arguments MUST fail with Clap's usage diagnostic.
 
 `crates/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed
 requests to `velnor-actions-orchestrator`. The CLI MUST NOT invoke Git, Cargo,
@@ -37,9 +48,8 @@ coordinates typed process requests. The Mise adapter owns process creation,
 argument validation, environment construction, and result capture for those
 requests; the orchestrator MUST NOT launch processes or construct shell text.
 
-Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
-operations use a bare invocation (no CLI arguments)
-with `VELNOR_INTERNAL_OP` naming a versioned typed operation
+Plan, task, and report workflow operations use a bare invocation with no CLI
+arguments. `VELNOR_INTERNAL_OP` names a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
 `write-task-report-v1`, or `resolve-qualification-v1`) plus its gate inputs.
 `resolve-qualification-v1` is restricted to a Velnor `workflow_dispatch`
@@ -105,8 +115,8 @@ executable.
 
 ## 2. Repository root
 
-All commands resolve the root by running `git rev-parse --show-toplevel` from
-the process current working directory and require `git rev-parse
+The V1 product commands resolve the root with `git rev-parse --show-toplevel`
+from the current working directory. They require `git rev-parse
 --is-inside-work-tree` to return `true`. This supports worktrees and nested
 invocation without mistaking a `.git` file for a missing repository. If no
 working-tree root exists, the command fails before reading configuration or
@@ -114,8 +124,8 @@ writing anything. There is no CLI root override.
 
 The resolved root is the only source-tree location Velnor may inspect. `init`
 always writes under that root. `plan` and `generate` always scan that root,
-even when an output directory is supplied. Running any command from a child
-directory never creates configuration or generated files in that child.
+even when an output directory is supplied. Running a product command from a
+child directory never creates configuration or generated files in that child.
 
 The root-discovery result MUST include the absolute root path and the original
 working directory in internal diagnostics. Symlinked paths MUST be normalized

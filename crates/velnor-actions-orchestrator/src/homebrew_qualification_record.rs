@@ -120,6 +120,8 @@ pub(super) struct Evidence {
     pub(super) signer_workflow: String,
 }
 
+pub(super) const PREVIEW_WORKFLOW_ID: u64 = 388_393_922;
+
 pub(super) fn admission(
     record: &HistoricalRecord,
     plan: &velnor_actions_contract::PackageReleasePlan,
@@ -154,5 +156,9 @@ pub(super) fn admission(
             "homebrew_qualification_admission_unexpected",
         ));
     }
-    Ok(admission)
+    admission.with_workflow_pin(
+        PREVIEW_WORKFLOW_ID,
+        &record.producer.workflow_path,
+        plan.channel.workflow_name(),
+    )
 }

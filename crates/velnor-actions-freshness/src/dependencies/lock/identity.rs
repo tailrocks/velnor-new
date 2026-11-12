@@ -20,19 +20,11 @@ pub(super) fn check_declared(
     by_name: &BTreeMap<String, Vec<Value>>,
     members: &BTreeSet<String>,
     owners: &MemberOwners,
-) -> BTreeSet<String> {
+) {
     let mut passed = 0;
     let mut failed = 0;
-    let mut path_packages = BTreeSet::new();
     for dependency in declared {
-        if check_requirement(
-            ctx,
-            dependency,
-            by_name,
-            members,
-            owners,
-            &mut path_packages,
-        ) {
+        if check_requirement(ctx, dependency, by_name, members, owners) {
             passed += 1;
         } else {
             failed += 1;
@@ -51,7 +43,6 @@ pub(super) fn check_declared(
             by_name.len()
         ),
     );
-    path_packages
 }
 
 fn check_requirement(
@@ -60,7 +51,6 @@ fn check_requirement(
     by_name: &BTreeMap<String, Vec<Value>>,
     members: &BTreeSet<String>,
     owners: &MemberOwners,
-    path_packages: &mut BTreeSet<String>,
 ) -> bool {
     let Some(want) = dependency.requirement.strip_prefix('=') else {
         ctx.fail_row(
@@ -103,14 +93,7 @@ fn check_requirement(
         );
         return false;
     }
-    if check_resolved_source(ctx, dependency, &matches, members) {
-        if dependency.path.is_some() {
-            path_packages.insert(dependency.name.clone());
-        }
-        true
-    } else {
-        false
-    }
+    check_resolved_source(ctx, dependency, &matches, members)
 }
 
 fn check_resolved_source(
@@ -363,7 +346,7 @@ fn validate_package_identity(
     Some(name.to_owned())
 }
 
-fn effective_package_version(
+pub(super) fn effective_package_version(
     package: &toml::map::Map<String, Value>,
     owner: &Value,
 ) -> Option<String> {

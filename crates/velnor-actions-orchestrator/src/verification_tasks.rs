@@ -197,7 +197,10 @@ fn requested_tool_version(
     }
     match mise_config.tools.get(key) {
         Some(selector) => {
-            if !selector.valid_shape || !selector.unsupported_options.is_empty() {
+            if !selector.valid_shape
+                || !selector.unsupported_options.is_empty()
+                || selector.workflow.is_some()
+            {
                 return Err(failure("verification_tool_selector"));
             }
             if selector.version.as_deref() != Some(requested_version.as_str()) {
@@ -309,7 +312,30 @@ fn resolve_tool(
     {
         return Err(failure("verification_tool_selector"));
     }
-    let artifact = if key == "rust" {
+    let artifact = resolve_tool_artifact(key, &backend, locked, lock_platform)?;
+    Ok(BuildTaskTool {
+        key: key.to_owned(),
+        version: version.to_owned(),
+        specifiers: locked
+            .specifiers
+            .clone()
+            .ok_or_else(|| failure("verification_tool_identity_or_lock"))?,
+        backend,
+        workflow: None,
+        os,
+        config_options,
+        lock_options: locked.options.clone(),
+        artifact,
+    })
+}
+
+fn resolve_tool_artifact(
+    key: &str,
+    backend: &str,
+    locked: &NativeLockedTool,
+    lock_platform: &str,
+) -> Result<Option<BuildTaskArtifact>, OrchestratorError> {
+    Ok(if key == "rust" {
         if backend != "core:rust"
             || !locked.platforms.is_empty()
             || !valid_rust_toolchain_options(&locked.options)
@@ -337,16 +363,15 @@ fn resolve_tool(
             url_api: locked_artifact.url_api.clone(),
             signer: locked_artifact.signer.clone(),
             provenance: locked_artifact.provenance.clone(),
+            repository_id: locked_artifact
+                .repository_ids
+                .as_ref()
+                .and_then(|ids| ids.repository.clone()),
+            owner_id: locked_artifact
+                .repository_ids
+                .as_ref()
+                .and_then(|ids| ids.owner.clone()),
         })
-    };
-    Ok(BuildTaskTool {
-        key: key.to_owned(),
-        version: version.to_owned(),
-        backend,
-        os,
-        config_options,
-        lock_options: locked.options.clone(),
-        artifact,
     })
 }
 
@@ -359,21 +384,9 @@ fn platform(runner: VerificationRunner) -> (&'static str, &'static str) {
     }
 }
 
-fn safe_version(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
-}
-
-fn exact_rust_version(version: &str) -> bool {
-    let parts = version.split('.').collect::<Vec<_>>();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-}
+#[path = "verification_tasks/identity.rs"]
+mod identity;
+use identity::{exact_rust_version, safe_version};
 
 fn failure(problem: &str) -> OrchestratorError {
     OrchestratorError::Contract {

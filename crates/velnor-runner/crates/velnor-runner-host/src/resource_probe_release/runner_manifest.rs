@@ -1,16 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-
 use crate::error::HostError;
 use sha2::{Digest, Sha256};
 
-pub(crate) mod model;
-
-use model::{
-    DescriptorDocument, ImageEntries, ImageEntry, ResourceProbeProfile, RunnerImageManifest,
-    TrustedSigningIdentity, Versions,
+use velnor_runner_image_manifest::{
+    ImageEntries, ImageEntry, ResourceProbeProfile, RunnerImageManifest, TrustedSigningIdentity,
+    Versions,
 };
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
@@ -41,71 +37,76 @@ struct RunnerLockVersions {
     node: String,
 }
 
-pub(super) fn write(
-    descriptors_path: &Path,
-    runner_lock_path: &Path,
-    output_path: &Path,
-) -> Result<(), HostError> {
-    let manifest = load_manifest(descriptors_path, runner_lock_path)?;
-    let mut bytes = serde_json::to_vec(&manifest).map_err(|_| HostError::Identity)?;
-    bytes.push(b'\n');
-    if bytes.len() > MANIFEST_LIMIT {
+pub(crate) fn parse_for_source(
+    bytes: &[u8],
+    source_commit: &str,
+    runner_lock: &[u8],
+) -> Result<RunnerImageManifest, HostError> {
+    if bytes.is_empty() || bytes.len() > MANIFEST_LIMIT || runner_lock.len() > MANIFEST_LIMIT {
         return Err(HostError::Frame);
     }
-    super::files::create_new_regular(output_path, &bytes)
-}
-
-fn load_manifest(
-    descriptors_path: &Path,
-    runner_lock_path: &Path,
-) -> Result<RunnerImageManifest, HostError> {
-    let descriptors_bytes = super::files::read_bounded_regular(descriptors_path, MANIFEST_LIMIT)?;
-    let descriptors_value = crate::artifact_admission::parse_release_json(&descriptors_bytes)?;
-    let descriptors: DescriptorDocument =
-        serde_json::from_value(descriptors_value).map_err(|_| HostError::Identity)?;
-    let source_commit = std::env::var("VELNOR_SOURCE_SHA").map_err(|_| HostError::Identity)?;
-    let authority_sha =
-        std::env::var("VELNOR_WORKFLOW_AUTHORITY_SHA").map_err(|_| HostError::Identity)?;
-    super::manifest::validate_workflow_identity(&source_commit, &authority_sha)?;
-    validate_descriptors(&descriptors, &source_commit)?;
-    validate_images(&descriptors.images, &source_commit)?;
-    let runner_lock = super::files::read_bounded_regular(runner_lock_path, MANIFEST_LIMIT)?;
-    if sha256_hex(&runner_lock) != descriptors.runner_lock_sha256 {
-        return Err(HostError::Identity);
-    }
-    let versions = read_versions(&runner_lock)?;
-    Ok(manifest(
-        descriptors.images,
-        source_commit,
-        authority_sha,
-        versions,
-    ))
-}
-
-fn validate_descriptors(
-    descriptors: &DescriptorDocument,
-    source_commit: &str,
-) -> Result<(), HostError> {
-    if descriptors.schema_version != 2
-        || descriptors.source_commit != source_commit
-        || descriptors.platform != PLATFORM
-        || !is_lower_sha256(&descriptors.runner_lock_sha256)
+    if source_commit.len() != 40
+        || !source_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {
         return Err(HostError::Identity);
     }
-    Ok(())
+    let value =
+        velnor_runner_image_manifest::strict_json::parse_strict_json_bytes(bytes, MANIFEST_LIMIT)
+            .map_err(|_| HostError::Identity)?;
+    let parsed: RunnerImageManifest =
+        serde_json::from_value(value).map_err(|_| HostError::Identity)?;
+    validate_images(&parsed.images, source_commit)?;
+    let actual = serde_json::to_value(&parsed).map_err(|_| HostError::Identity)?;
+    let expected = manifest(
+        parsed.images,
+        source_commit.to_owned(),
+        source_commit.to_owned(),
+        sha256_hex(runner_lock),
+        read_versions(runner_lock)?,
+    );
+    if actual != serde_json::to_value(&expected).map_err(|_| HostError::Identity)? {
+        return Err(HostError::Identity);
+    }
+    Ok(expected)
 }
 
 fn validate_images(images: &ImageEntries, source_commit: &str) -> Result<(), HostError> {
-    validate_image(&images.runner, RUNNER_REPOSITORY, source_commit)?;
-    validate_image(&images.dind, DIND_REPOSITORY, source_commit)?;
-    validate_image(&images.resource_probe, PROBE_REPOSITORY, source_commit)
+    validate_image(
+        &images.runner,
+        RUNNER_REPOSITORY,
+        source_commit,
+        "images/runner/ubuntu-26.04",
+        &[
+            "resource_probe",
+            "storage_init",
+            "job_start_hook",
+            "job_started_hook",
+        ],
+    )?;
+    validate_image(
+        &images.dind,
+        DIND_REPOSITORY,
+        source_commit,
+        "images/dind",
+        &["resource_probe"],
+    )?;
+    validate_image(
+        &images.resource_probe,
+        PROBE_REPOSITORY,
+        source_commit,
+        "images/resource-probe",
+        &["resource_probe"],
+    )
 }
 
 fn validate_image(
     image: &ImageEntry,
     repository: &str,
     source_commit: &str,
+    context: &str,
+    names: &[&str],
 ) -> Result<(), HostError> {
     if image.repository != repository
         || image.tag != format!("sha-{source_commit}")
@@ -113,6 +114,23 @@ fn validate_image(
         || !is_digest(&image.platform_manifest_digest)
         || !is_digest(&image.config_digest)
         || image.registry_digest != image.platform_manifest_digest
+        || image.config_digest == image.registry_digest
+        || !is_lower_sha256(&image.build_source.metadata_sha256)
+        || image.build_source.build_type
+            != "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+        || image.build_source.source_repository != "https://github.com/tailrocks/velnor-new"
+        || image.build_source.source_commit != source_commit
+        || image.build_source.context_path != context
+        || image.build_source.dockerfile_path != format!("{context}/Dockerfile")
+        || image.build_source.builder_platform != PLATFORM
+        || image.build_source.named_contexts.len() != names.len()
+        || !names.iter().all(|name| {
+            image
+                .build_source
+                .named_contexts
+                .get(*name)
+                .is_some_and(|digest| is_lower_sha256(digest))
+        })
     {
         return Err(HostError::Identity);
     }
@@ -147,6 +165,7 @@ fn manifest(
     images: ImageEntries,
     source_commit: String,
     authority_sha: String,
+    runner_lock_sha256: String,
     versions: Versions,
 ) -> RunnerImageManifest {
     RunnerImageManifest {
@@ -160,6 +179,7 @@ fn manifest(
             certificate_identity: SIGNING_IDENTITY.to_owned(),
         },
         source_commit,
+        runner_lock_sha256,
         workflow_authority_sha: authority_sha,
         platform: PLATFORM.to_owned(),
         versions,

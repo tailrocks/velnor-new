@@ -80,7 +80,7 @@ fn verify_lint_argv() -> Vec<String> {
     ])
 }
 
-fn pins() -> ProductReleasePins {
+pub(crate) fn pins() -> ProductReleasePins {
     let setup = mise_setup();
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
@@ -134,6 +134,7 @@ fn pins() -> ProductReleasePins {
 
 fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        runner_image_family: None,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -376,3 +377,9 @@ fn gc1_t42_rejects_invalid_state() -> Result<(), Box<dyn Error>> {
 }
 #[path = "source_preview_graph.rs"]
 mod source_preview_graph;
+
+#[path = "source_preview_env_yaml_public.rs"]
+mod source_preview_env_yaml_public;
+
+#[path = "stable_source_graph.rs"]
+mod stable_source_graph;

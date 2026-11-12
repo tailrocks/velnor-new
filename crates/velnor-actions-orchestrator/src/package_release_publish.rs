@@ -36,7 +36,7 @@ pub(crate) use published::verify_published_release;
 mod source;
 pub(crate) use source::{
     ProtectedSourceTreeIdentity, read_protected_adoption_seed_base_tree_identity,
-    read_protected_source_file, read_protected_source_tree_identity,
+    read_protected_source_file, read_protected_source_files, read_protected_source_tree_identity,
     try_read_protected_source_file, verify_preview_main_tip, verify_public_protected_main_lineage,
     verify_public_pull_request_lineage,
 };

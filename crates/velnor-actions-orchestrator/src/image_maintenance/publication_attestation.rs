@@ -14,7 +14,7 @@ use crate::{
     package_release_signer::{ImageAttestationIdentity, verify_image_file_attestation},
 };
 
-use super::{ImagePublicationProfile, PublishImageRequest, authority};
+use super::{PublishImageRequest, authority};
 
 pub(super) struct AttestationRun<'a> {
     pub caller_workflow_path: &'a str,
@@ -27,7 +27,7 @@ pub(super) struct AttestationRun<'a> {
     pub run_attempt: u32,
 }
 
-pub(super) fn verify(
+pub(super) fn verify_job_image(
     request: &PublishImageRequest,
     candidate: &authority::CandidateRecord,
     run: &AttestationRun<'_>,
@@ -40,23 +40,20 @@ pub(super) fn verify(
         (archive_name.to_owned(), candidate.archive.sha256.clone()),
         (record_name.to_owned(), candidate.record_sha256.clone()),
     ]);
-    if request.profile == ImagePublicationProfile::Job {
-        let closure = ImageCandidateSourceClosure::new(
-            candidate.source_commit.clone(),
-            source_files
-                .iter()
-                .map(|(path, bytes)| (path.clone(), super::authority::hex(&Sha256::digest(bytes))))
-                .collect(),
-        )
+    let closure = ImageCandidateSourceClosure::new(
+        candidate.source_commit.clone(),
+        source_files
+            .iter()
+            .map(|(path, bytes)| (path.clone(), super::authority::hex(&Sha256::digest(bytes))))
+            .collect(),
+    )
+    .map_err(|_| crate::internal::internal("image_publication_closure_invalid"))?;
+    let bytes = serialize_image_candidate_source_closure(&closure)
         .map_err(|_| crate::internal::internal("image_publication_closure_invalid"))?;
-        let bytes = serialize_image_candidate_source_closure(&closure)
-            .map_err(|_| crate::internal::internal("image_publication_closure_invalid"))?;
-        expected_subjects.insert(
-            "job-image-native-source-closure.json".to_owned(),
-            super::authority::hex(&Sha256::digest(bytes)),
-        );
-    }
-    let additional_subjects = additional_subject_names(request.profile, archive_name, record_name);
+    expected_subjects.insert(
+        "job-image-native-source-closure.json".to_owned(),
+        super::authority::hex(&Sha256::digest(bytes)),
+    );
     let identity = ImageAttestationIdentity {
         repository: authority::IMAGE_REPOSITORY,
         repository_id: authority::IMAGE_REPOSITORY_ID,
@@ -75,52 +72,14 @@ pub(super) fn verify(
         &request.archive_path,
         &identity,
         &expected_subjects,
-        &additional_subjects,
+        &[],
         deadline,
     )?;
     verify_image_file_attestation(
         &request.record_path,
         &identity,
         &expected_subjects,
-        &additional_subjects,
+        &[],
         deadline,
     )
-}
-
-fn additional_subject_names(
-    profile: ImagePublicationProfile,
-    archive_name: &str,
-    record_name: &str,
-) -> Vec<&'static str> {
-    let names: &[&str] = match profile {
-        ImagePublicationProfile::Job => &[],
-        ImagePublicationProfile::Runner
-        | ImagePublicationProfile::Dind
-        | ImagePublicationProfile::ResourceProbe => &[
-            "velnor-runner-linux-amd64.tar",
-            "velnor-dind-linux-amd64.tar",
-            "velnor-resource-probe-linux-amd64.tar",
-            "RESOURCE_PROBE_MANIFEST.json",
-            "LICENSE",
-            "NOTICE",
-            "SHA256SUMS",
-            "runner-image-publication.json",
-            "dind-image-publication.json",
-            "resource-probe-image-publication.json",
-        ],
-    };
-    let remaining = names
-        .iter()
-        .copied()
-        .filter(|name| *name != archive_name && *name != record_name)
-        .collect::<Vec<_>>();
-    if remaining
-        .iter()
-        .collect::<std::collections::BTreeSet<_>>()
-        .len()
-        != remaining.len()
-    {
-        return Vec::new();
-    }
-    remaining
 }

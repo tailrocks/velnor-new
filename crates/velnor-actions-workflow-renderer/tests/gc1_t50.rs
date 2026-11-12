@@ -87,7 +87,7 @@ fn verify_rust_argv() -> Vec<String> {
     ]
 }
 
-fn mbx_pins() -> MbxQualificationPins {
+pub(crate) fn mbx_pins() -> MbxQualificationPins {
     MbxQualificationPins {
         mise_setup: mise_setup(),
         candidate_action_uses: candidate_action_uses(),
@@ -97,7 +97,7 @@ fn mbx_pins() -> MbxQualificationPins {
     }
 }
 
-fn mise_pin_pins() -> MisePinQualificationPins {
+pub(crate) fn mise_pin_pins() -> MisePinQualificationPins {
     MisePinQualificationPins {
         linux_x86_64_setup: mise_setup(),
         macos_x86_64_setup: mise_setup(),
@@ -106,6 +106,7 @@ fn mise_pin_pins() -> MisePinQualificationPins {
 
 fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        runner_image_family: None,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

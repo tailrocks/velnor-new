@@ -56,8 +56,12 @@ mod release;
 pub mod release_eligibility;
 #[path = "schema2_resource_probe_image.rs"]
 mod resource_probe_image;
+#[path = "schema2_runner_image_qualification.rs"]
+mod runner_image_qualification;
 #[path = "schema2_generator_source_qualification.rs"]
 mod source_qualification;
+#[path = "schema2_stable_sources_qualification.rs"]
+mod stable_sources_qualification;
 pub use product_release_pins::ProductReleasePins;
 
 pub fn render_consumer_binary_release(
@@ -77,6 +81,7 @@ pub struct Schema2WorkflowRequest {
     pub mbx_qualification: Option<MbxQualificationPins>,
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
     pub product_release: Option<ProductReleasePins>,
+    pub runner_image_family: Option<velnor_actions_contract::config::MacRunnerQualificationConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +141,18 @@ pub(crate) fn render_schema2_workflows_bound(
     }
     if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
         files.push(job_image_candidate::render_candidate_workflow(request)?);
+        if request.runner_image_family.is_some() {
+            files.push(file(
+                runner_image_qualification::CALLER_PATH,
+                &request.version,
+                &runner_image_qualification::caller(request)?,
+            )?);
+            files.push(file(
+                runner_image_qualification::SIGNER_PATH,
+                &request.version,
+                &runner_image_qualification::signer(),
+            )?);
+        }
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
@@ -234,6 +251,15 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
         return Err(RenderError::InvalidWorkflow(
             "missing_mise_pin_qualification_pins".to_owned(),
         ));
+    }
+    if request
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+    {
+        let pins = request.product_release.as_ref().ok_or_else(|| {
+            RenderError::InvalidWorkflow("product_release_pins_missing".to_owned())
+        })?;
+        jobs.extend(stable_sources_qualification::jobs(pins)?);
     }
     Ok(document("Qualification", mode_trigger(), jobs))
 }

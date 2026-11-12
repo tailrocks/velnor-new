@@ -76,7 +76,15 @@ pub(super) struct ArtifactRun {
 #[derive(Debug, Deserialize)]
 pub(super) struct Job {
     pub(super) id: Option<u64>,
+    #[serde(default)]
+    pub(super) run_id: Option<u64>,
+    #[serde(default)]
+    pub(super) head_sha: Option<String>,
     pub(super) name: String,
+    #[serde(default)]
+    pub(super) run_attempt: Option<u32>,
+    #[serde(default)]
+    pub(super) check_run_url: Option<String>,
     pub(super) status: String,
     pub(super) conclusion: Option<String>,
 }
@@ -103,10 +111,4 @@ pub(super) struct WorkflowRun {
     pub(super) head_repository: Option<HeadRepository>,
     pub(super) status: String,
     pub(super) conclusion: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct ContentFile {
-    pub(super) encoding: String,
-    pub(super) content: String,
 }

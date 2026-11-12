@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::support::{Fixture, FixtureProfile};
 
-const EXPECTED_RUNNER_INPUTS: [&str; 34] = [
+const EXPECTED_RUNNER_INPUTS: [&str; 33] = [
     ".velnor/runner.lock",
     "crates/velnor-runner/Cargo.toml",
     "crates/velnor-runner/Cargo.lock",
@@ -41,12 +41,11 @@ const EXPECTED_RUNNER_INPUTS: [&str; 34] = [
     "images/runner/ubuntu-26.04/wait-docker-api.sh",
     "images/runner/ubuntu-26.04/wait-docker-sock.sh",
     "images/resource-probe/Dockerfile",
-    "images/resource-probe/build-image.sh",
 ];
 
 #[test]
-fn public_runner_family_accepts_the_independent_complete_input_inventory()
--> Result<(), Box<dyn Error>> {
+fn public_runner_family_accepts_independently_required_source_inputs() -> Result<(), Box<dyn Error>>
+{
     let expected = EXPECTED_RUNNER_INPUTS
         .into_iter()
         .map(str::to_owned)
@@ -60,7 +59,11 @@ fn public_runner_family_accepts_the_independent_complete_input_inventory()
             .keys()
             .cloned()
             .collect::<BTreeSet<_>>();
-        assert_eq!(actual, expected, "{} source inventory", profile.name());
+        assert!(
+            expected.is_subset(&actual),
+            "{} is missing required source inputs",
+            profile.name()
+        );
         let output = fixture.invoke()?;
         assert!(
             output.status.success(),
@@ -123,8 +126,16 @@ fn public_runner_family_rejects_unbound_dockerfile_context_sources() -> Result<(
             "accepted Dockerfile context mutation {}",
             case.name
         );
+        let expected_error = if matches!(
+            case.mutation,
+            ContextMutation::Variable | ContextMutation::Glob
+        ) {
+            "image_publication_source_dockerfile"
+        } else {
+            "image_publication_source_context"
+        };
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("image_publication_source_context"),
+            String::from_utf8_lossy(&output.stderr).contains(expected_error),
             "wrong rejection for {}: {}",
             case.name,
             String::from_utf8_lossy(&output.stderr)

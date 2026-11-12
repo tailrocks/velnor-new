@@ -52,6 +52,16 @@ RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
 echo "verify-local: log directory: $LOG_DIR"
 
+if [ "$(uname -s)" = Darwin ] && [ -z "${VELNOR_GROUP_PROBE_RECEIPT:-}" ]; then
+  PROBE_DIR="$LOG_DIR/group-signal-probe"
+  trap 'rm -rf -- "$PROBE_DIR"' EXIT
+  if ! bash scripts/provision-group-signal-interposer.sh "$PROBE_DIR"; then
+    echo "verify-local: FAIL: could not provision process-group fixture"
+    exit 1
+  fi
+  export VELNOR_GROUP_PROBE_RECEIPT="$PROBE_DIR/group_signal_zero_interpose.json"
+fi
+
 FAILURES=""
 
 fail() {
@@ -203,6 +213,47 @@ else
   echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
   fail "toolchain (pinned nextest missing)"
 fi
+GH_POLICY="$(toml_tool_pin .velnor/version-policy.toml gh 2>>"$TOOLCHAIN_LOG")"
+if [[ ! "$GH_POLICY" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "toolchain (missing exact GitHub CLI policy pin)"
+  exit 1
+fi
+if [ -z "${VELNOR_GH_BINARY:-}" ]; then
+  GH_SPEC="gh@$GH_POLICY"
+  if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "$GH_SPEC" >>"$TOOLCHAIN_LOG" 2>&1; then
+    fail "toolchain (GitHub CLI install failed; log: $TOOLCHAIN_LOG)"
+    exit 1
+  fi
+  GH_PREPARED="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which gh --tool "$GH_SPEC" 2>>"$TOOLCHAIN_LOG")"
+  if [[ "$GH_PREPARED" != /* || ! -f "$GH_PREPARED" || ! -x "$GH_PREPARED" ]]; then
+    fail "toolchain (pinned GitHub CLI executable unavailable)"
+    exit 1
+  fi
+  unset VELNOR_GH_BINARY
+elif [[ "$VELNOR_GH_BINARY" != /* || ! -f "$VELNOR_GH_BINARY" || ! -x "$VELNOR_GH_BINARY" ]]; then
+  fail "toolchain (explicit GitHub CLI executable unavailable)"
+  exit 1
+fi
+if [ "$(uname -s)" = Linux ]; then
+  COSIGN_POLICY="$(toml_tool_pin .velnor/version-policy.toml cosign 2>>"$TOOLCHAIN_LOG")"
+  if [[ ! "$COSIGN_POLICY" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    fail "toolchain (missing exact Cosign policy pin)"
+    exit 1
+  fi
+  if [ -z "${VELNOR_TEST_COSIGN:-}" ]; then
+    COSIGN_SPEC="aqua:sigstore/cosign@$COSIGN_POLICY"
+    if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "$COSIGN_SPEC" >>"$TOOLCHAIN_LOG" 2>&1; then
+      fail "toolchain (Cosign install failed; log: $TOOLCHAIN_LOG)"
+      exit 1
+    fi
+    VELNOR_TEST_COSIGN="$(MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which cosign --tool "$COSIGN_SPEC" 2>>"$TOOLCHAIN_LOG")"
+  fi
+  if [[ "$VELNOR_TEST_COSIGN" != /* || ! -f "$VELNOR_TEST_COSIGN" || ! -x "$VELNOR_TEST_COSIGN" ]]; then
+    fail "toolchain (pinned Cosign executable unavailable)"
+    exit 1
+  fi
+  export VELNOR_TEST_COSIGN
+fi
 pass "toolchain"
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
@@ -270,6 +321,28 @@ else
       DIAGNOSTICS_FIXTURE=""
     fi
     export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+    CLOCK_ARTIFACTS="$LOG_DIR/clock-driver-artifacts.jsonl"
+    CLOCK_DRIVER=""
+    if "${MISE_EXEC[@]}" cargo build --locked --message-format=json \
+      -p velnor-archive-guard --example golden_collector_clock \
+      >"$CLOCK_ARTIFACTS" 2>>"$GENERATED_BUILD_LOG"; then
+      CLOCK_DRIVER="$(env \
+        VELNOR_INTERNAL_OP=repo-policy-v1 \
+        VELNOR_REPO_POLICY_ACTION=artifact-executable \
+        VELNOR_REPO_POLICY_ROOT="$ROOT" \
+        VELNOR_REPO_POLICY_MESSAGES="$CLOCK_ARTIFACTS" \
+        VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
+        VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
+        VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+        "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+          --bin velnor-actions 2>>"$GENERATED_BUILD_LOG")" || CLOCK_DRIVER=""
+    fi
+    case "$CLOCK_DRIVER" in
+      /*) ;;
+      *) CLOCK_DRIVER="" ;;
+    esac
+    if [ ! -x "$CLOCK_DRIVER" ]; then CLOCK_DRIVER=""; fi
+    export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
     IMAGE_PUBLICATION_FIXTURE="$(env \
       VELNOR_INTERNAL_OP=repo-policy-v1 \
       VELNOR_REPO_POLICY_ACTION=artifact-executable \
@@ -290,7 +363,7 @@ else
     export VELNOR_IMAGE_PUBLICATION_FIXTURE="$IMAGE_PUBLICATION_FIXTURE"
     : >"$GENERATED_RUN_LOG"
     : >"$GENERATED_DIFF_LOG"
-    if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && \
+    if [ -n "$BIN" ] && [ -x "$BIN" ] && [ -n "$DIAGNOSTICS_FIXTURE" ] && [ -n "$CLOCK_DRIVER" ] && \
       [ -n "$IMAGE_PUBLICATION_FIXTURE" ] && \
       "$BIN" generate --output-dir "$GEN_DIR/tree" \
       >"$GENERATED_RUN_LOG" 2>&1 &&

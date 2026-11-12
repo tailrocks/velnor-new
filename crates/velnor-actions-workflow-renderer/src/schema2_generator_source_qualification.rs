@@ -125,7 +125,10 @@ fn producer_job(
     Ok(Yaml::Map(fields))
 }
 
-fn sources_restore_steps(job_id: &str, runner_label: &str) -> Result<Vec<Yaml>, RenderError> {
+pub(super) fn sources_restore_steps(
+    job_id: &str,
+    runner_label: &str,
+) -> Result<Vec<Yaml>, RenderError> {
     let roots = SOURCES_FETCH_ROOTS.map(str::to_owned);
     let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
         .map_err(sources_restore_error)?;

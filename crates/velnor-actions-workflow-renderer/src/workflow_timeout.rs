@@ -7,6 +7,9 @@ use velnor_actions_contract::JobTimeout;
 
 use crate::{RenderError, workflow_size, yaml::Yaml};
 
+#[path = "workflow_timeout/authority.rs"]
+mod authority;
+
 pub(super) struct HomebrewAdoptionCalleeScope {
     source_sha: String,
     transition_id: String,
@@ -146,7 +149,7 @@ pub(crate) fn validate(path: &str, document: &Yaml) -> Result<(), RenderError> {
     }
     for (id, job) in jobs(document, path)? {
         let fields = mapping(job, id)?;
-        if local_callee(fields, id)?.is_some() {
+        if callee(path, fields, id)?.is_some() {
             continue;
         }
         let minutes = fields
@@ -241,7 +244,7 @@ pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderErr
     }
     for (path, document) in documents {
         for (id, job) in jobs(document, path)? {
-            if let Some(callee) = local_callee(mapping(job, id)?, id)?
+            if let Some(Callee::Local(callee)) = callee(path, mapping(job, id)?, id)?
                 && !paths.contains(callee)
             {
                 return Err(invalid(id, "callee_missing_from_generated_inventory"));
@@ -251,10 +254,16 @@ pub(crate) fn validate_tree(documents: &[(&str, &Yaml)]) -> Result<(), RenderErr
     Ok(())
 }
 
-fn local_callee<'a>(
+enum Callee<'a> {
+    Local(&'a str),
+    ReviewedExternal,
+}
+
+fn callee<'a>(
+    path: &str,
     fields: &'a [(String, Yaml)],
     id: &str,
-) -> Result<Option<&'a str>, RenderError> {
+) -> Result<Option<Callee<'a>>, RenderError> {
     let Some((_, value)) = fields.iter().find(|(key, _)| key == "uses") else {
         return Ok(None);
     };
@@ -266,6 +275,9 @@ fn local_callee<'a>(
         .any(|(key, _)| matches!(key.as_str(), "runs-on" | "steps" | "timeout-minutes"))
     {
         return Err(invalid(id, "mixed_reusable_job"));
+    }
+    if authority::admits(path, id, value)? {
+        return Ok(Some(Callee::ReviewedExternal));
     }
     let filename = value
         .strip_prefix("./.github/workflows/")
@@ -281,7 +293,7 @@ fn local_callee<'a>(
     }) {
         return Err(invalid(id, "noncanonical_callee"));
     }
-    Ok(value.strip_prefix("./"))
+    Ok(value.strip_prefix("./").map(Callee::Local))
 }
 
 fn jobs<'a>(document: &'a Yaml, path: &str) -> Result<&'a [(String, Yaml)], RenderError> {

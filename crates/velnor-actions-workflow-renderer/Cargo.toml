@@ -24,18 +24,19 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 toml = { version = "=1.1.8" }
-rustix = { version = "=1.1.5", features = ["fs"] }
-velnor-actions-actionlint = { version = "=0.1.78", path = "../velnor-actions-actionlint" }
-velnor-actions-bun = { version = "=0.1.78", path = "../velnor-actions-bun" }
-velnor-actions-dbt = { version = "=0.1.78", path = "../velnor-actions-dbt" }
-velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
-velnor-actions-rust = { version = "=0.1.78", path = "../velnor-actions-rust" }
-velnor-actions-tofu = { version = "=0.1.78", path = "../velnor-actions-tofu" }
+rustix = { version = "=1.1.6", features = ["fs"] }
+velnor-actions-actionlint = { version = "=0.1.79", path = "../velnor-actions-actionlint" }
+velnor-actions-bun = { version = "=0.1.79", path = "../velnor-actions-bun" }
+velnor-actions-dbt = { version = "=0.1.79", path = "../velnor-actions-dbt" }
+velnor-actions-contract = { version = "=0.1.79", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.79", path = "../velnor-actions-mise" }
+velnor-actions-rust = { version = "=0.1.79", path = "../velnor-actions-rust" }
+velnor-actions-tofu = { version = "=0.1.79", path = "../velnor-actions-tofu" }
 
 [dev-dependencies]
+serde-saphyr = "=2.1.0"
 tempfile = { version = "=3.27.0" }
-velnor-actions-mise = { version = "=0.1.78", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.79", path = "../velnor-actions-mise" }
 
 [[test]]
 name = "velnor_workflow_renderer"
@@ -82,9 +83,20 @@ name = "source_preview_crypto_public"
 path = "tests/source_preview_crypto_public.rs"
 
 [[test]]
-name = "source_preview_exec_public"
-path = "tests/source_preview_exec_public.rs"
-
-[[test]]
 name = "source_preview_loader_public"
 path = "tests/source_preview_loader_public.rs"
+
+[[test]]
+name = "cargo_source_handoff_public"
+path = "tests/cargo_source_handoff_public.rs"
+
+[[test]]
+name = "premerge_event_proof_public"
+path = "tests/premerge_event_proof_public.rs"
+[[test]]
+name = "runner_draft_publication_public"
+path = "tests/runner_draft_publication_public.rs"
+
+[[test]]
+name = "source_preview_dsse_public"
+path = "tests/source_preview_dsse_public.rs"

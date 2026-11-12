@@ -81,6 +81,22 @@ cargo deny check
 The local script also runs `scripts/check-freshness.sh` and covers the nested
 runner workspace.
 
+On macOS, `scripts/verify-local.sh` provisions the process-group test fixture in
+a private temporary directory unless `VELNOR_GROUP_PROBE_RECEIPT` is nonempty.
+For a standalone Nextest run that includes `velnor-actions-mise`, provision the
+fixture before running tests:
+
+```bash
+set -euo pipefail
+probe_root="$(mktemp -d)"
+trap 'rm -rf "$probe_root"' EXIT
+bash scripts/provision-group-signal-interposer.sh "$probe_root/fixture"
+export VELNOR_GROUP_PROBE_RECEIPT="$probe_root/fixture/group_signal_zero_interpose.json"
+cargo nextest run --locked -p velnor-actions-mise --no-tests fail
+```
+
+The tests verify the receipt, fixture source, and library before use.
+
 ---
 
 ## Command Reference & Usage Details

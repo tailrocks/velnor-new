@@ -7,6 +7,67 @@ use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ImageMaintenanceCommand {
+    #[command(about = "Admit the selected public producer before Mac signing.")]
+    AdmitMacPublication {
+        #[arg(long)] source_commit: String,
+        #[arg(long)] release_run_id: u64,
+        #[arg(long)] release_run_attempt: u32,
+        #[arg(long)] assets_dir: PathBuf,
+        #[arg(long)] runner_temp: PathBuf,
+    },
+    #[command(about = "Verify the authenticated production Mac proof before attestation.")]
+    VerifyMacAttestation {
+        #[arg(long)]
+        producer_run_id: u64,
+        #[arg(long)]
+        producer_run_attempt: u32,
+        #[arg(long)]
+        producer_artifact_id: u64,
+        #[arg(long)]
+        publisher_artifact_id: u64,
+        #[arg(long)]
+        assets_dir: PathBuf,
+        #[arg(long)]
+        runner_temp: PathBuf,
+    },
+    #[command(about = "Assemble an unsigned structural Mac qualification envelope.")]
+    AssembleMacAttestation {
+        #[arg(long)]
+        context: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        runner_lock: PathBuf,
+        #[arg(long)]
+        generator_lock: PathBuf,
+        #[arg(long)]
+        sdk_evidence: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    #[command(about = "Qualify the exact published Runner family on the production Mac.")]
+    QualifyRunnerFamilyMac {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        runner_lock: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        run_id: u64,
+        #[arg(long)]
+        run_attempt: u32,
+        #[arg(long)]
+        publisher_artifact_id: u64,
+        #[arg(long)]
+        docker_socket: String,
+        #[arg(long)]
+        state_dir: PathBuf,
+        #[arg(long)]
+        receipt_output: PathBuf,
+    },
     /// Install the source-pinned Buildx plugin into a private runner directory.
     InstallBuildx {
         #[arg(long)]
@@ -66,6 +127,28 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         descriptors_output: PathBuf,
     },
+    #[command(about = "Build and project the runner family from held context snapshots.")]
+    BuildRunnerImages {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        source_commit: String,
+        #[arg(long)]
+        runner_temp: PathBuf,
+        #[arg(long)]
+        contexts_dir: PathBuf,
+        #[arg(long)]
+        publication_records: bool,
+        #[arg(
+            long,
+            help = "Fresh output directory under an existing private parent."
+        )]
+        output_dir: PathBuf,
+    },
+    #[command(about = "Publish a qualified runner family and write its manifest.")]
+    PublishRunnerImages(RunnerFamilyPublicationArgs),
+    #[command(about = "Recheck runner publication authority and registry identities.")]
+    VerifyRunnerPublication(RunnerFamilyPublicationArgs),
     /// Promote a verified source digest to its approved version tag.
     PromoteImage {
         #[arg(long)]
@@ -100,6 +183,26 @@ pub(crate) enum ImageMaintenanceCommand {
         #[arg(long)]
         receipt_output: PathBuf,
     },
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct RunnerFamilyPublicationArgs {
+    #[arg(long)]
+    pub(crate) source_commit: String,
+    #[arg(long)]
+    pub(crate) producer_run_id: u64,
+    #[arg(long)]
+    pub(crate) producer_run_attempt: u32,
+    #[arg(long)]
+    pub(crate) artifact_id: u64,
+    #[arg(long)]
+    pub(crate) assets_dir: PathBuf,
+    #[arg(long)]
+    pub(crate) qualification_proof: PathBuf,
+    #[arg(long)]
+    pub(crate) private_scratch: PathBuf,
+    #[arg(long)]
+    pub(crate) manifest_output: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

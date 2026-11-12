@@ -8,6 +8,8 @@ pub struct DockerfileFacts {
     pub external_images: BTreeSet<String>,
 
     pub context_sources: BTreeSet<String>,
+
+    pub named_contexts: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +27,8 @@ pub enum DockerfileProblem {
     EscapeDirective,
 
     SyntaxUnpinned(String),
+
+    UnsupportedRunnerSyntax(String),
 }
 
 impl DockerfileProblem {
@@ -38,9 +42,18 @@ impl DockerfileProblem {
             Self::ContextEscape(source) => format!("image_context_escape:{source}"),
             Self::EscapeDirective => "image_escape_directive".to_owned(),
             Self::SyntaxUnpinned(image) => format!("image_syntax_unpinned:{image}"),
+            Self::UnsupportedRunnerSyntax(value) => {
+                format!("runner_dockerfile_unsupported:{value}")
+            }
         }
     }
 }
+
+mod runner;
+mod syntax;
+
+pub use runner::analyze_runner_dockerfile;
+use syntax::{check_directives, instructions};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -55,8 +68,17 @@ pub fn is_digest_pinned(reference: &str) -> bool {
         })
 }
 
-pub fn analyze_dockerfile(text: &str) -> Result<DockerfileFacts, DockerfileProblem> {
-    let mut state = State::default();
+pub fn analyze_dockerfile(
+    text: &str,
+    known_contexts: &[&str],
+) -> Result<DockerfileFacts, DockerfileProblem> {
+    let mut state = State {
+        known_contexts: known_contexts
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect(),
+        ..State::default()
+    };
     check_directives(text)?;
     for (keyword, args) in instructions(text) {
         match keyword.as_str() {
@@ -77,6 +99,7 @@ struct State {
     args: BTreeMap<String, Option<String>>,
     stages: BTreeSet<String>,
     stage_count: usize,
+    known_contexts: BTreeSet<String>,
 }
 
 impl State {
@@ -169,7 +192,9 @@ impl State {
     fn check_from_source(&mut self, source: &str) -> Result<(), DockerfileProblem> {
         let is_stage = source.bytes().all(|b| b.is_ascii_digit())
             || self.stages.contains(&source.to_ascii_lowercase());
-        if !is_stage {
+        if self.known_contexts.contains(source) {
+            self.facts.named_contexts.insert(source.to_owned());
+        } else if !is_stage {
             require_pinned(source)?;
             self.facts.external_images.insert(source.to_owned());
         }
@@ -240,68 +265,5 @@ fn split_operands(args: &str) -> Vec<String> {
     trimmed
         .split_whitespace()
         .map(|item| unquote(item).to_owned())
-        .collect()
-}
-
-fn check_directives(text: &str) -> Result<(), DockerfileProblem> {
-    for line in text.lines() {
-        let Some(directive) = line.trim().strip_prefix('#') else {
-            break;
-        };
-        let Some((key, value)) = directive.split_once('=') else {
-            break;
-        };
-        match key.trim().to_ascii_lowercase().as_str() {
-            "escape" => return Err(DockerfileProblem::EscapeDirective),
-            "syntax" if !is_digest_pinned(value.trim()) => {
-                return Err(DockerfileProblem::SyntaxUnpinned(value.trim().to_owned()));
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-fn instructions(text: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let mut lines = text.lines();
-    while let Some(line) = lines.next() {
-        let mut logical = line.trim().to_owned();
-        if logical.is_empty() || logical.starts_with('#') {
-            continue;
-        }
-        while logical.ends_with('\\') {
-            logical.pop();
-            let Some(next) = lines.next() else { break };
-            if !next.trim().starts_with('#') {
-                logical.push(' ');
-                logical.push_str(next.trim());
-            }
-        }
-        for word in heredoc_words(&logical) {
-            for body in lines.by_ref() {
-                if body.trim() == word {
-                    break;
-                }
-            }
-        }
-        let (keyword, args) = logical
-            .split_once(char::is_whitespace)
-            .unwrap_or((logical.as_str(), ""));
-        out.push((keyword.to_ascii_uppercase(), args.trim().to_owned()));
-    }
-    out
-}
-
-fn heredoc_words(logical: &str) -> Vec<String> {
-    logical
-        .split_whitespace()
-        .filter_map(|token| token.strip_prefix("<<"))
-        .map(|word| {
-            word.trim_start_matches('-')
-                .trim_matches(['"', '\''])
-                .to_owned()
-        })
-        .filter(|word| !word.is_empty())
         .collect()
 }

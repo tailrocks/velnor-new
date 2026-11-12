@@ -7,7 +7,7 @@ use std::{
 };
 
 use sha2::{Digest, Sha256};
-use velnor_actions_contract::parse_runner_image_qualification;
+use velnor_actions_contract::{RUNNER_QUALIFICATION_SCHEMA, parse_runner_image_qualification};
 
 use super::super::validate;
 use super::{ImagePublicationProfile, PublishImageRequest, authority};
@@ -51,7 +51,7 @@ pub(super) fn load(
         .lock
         .as_ref()
         .ok_or_else(|| internal("image_qualification_proof_lock"))?;
-    if proof.schema != "velnor.runner-image-qualification.v1"
+    if proof.schema != RUNNER_QUALIFICATION_SCHEMA
         || proof.source_commit != candidate.source_commit
         || proof.source_ref != candidate.source_ref
         || proof.runner_lock_sha256 != lock.sha256
@@ -69,7 +69,11 @@ pub(super) fn load(
         ImagePublicationProfile::ResourceProbe => &proof.images.resource_probe,
         ImagePublicationProfile::Job => return Err(internal("image_qualification_proof_profile")),
     };
-    if image.archive != candidate.archive || image.oci != candidate.oci {
+    if image.archive != candidate.archive
+        || image.oci != candidate.oci
+        || image.record_sha256 != candidate.record_sha256
+        || candidate.provenance.as_ref() != Some(&image.provenance)
+    {
         return Err(internal("image_qualification_proof_candidate"));
     }
     Ok(Some(AdmittedProof {

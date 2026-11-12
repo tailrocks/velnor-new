@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, env};
 
-use base64::{Engine, engine::general_purpose::STANDARD};
 use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
@@ -16,8 +15,13 @@ use self::read::get_json;
 mod attestor;
 #[path = "publication_github/ci.rs"]
 pub(in crate::image_maintenance) mod ci;
+#[path = "publication_github/context.rs"]
+mod context;
+pub(in crate::image_maintenance) use context::{authenticate_publication_context_run, context_artifact_id};
+#[path = "publication_github/mac_jobs.rs"]
+mod mac_jobs;
 #[path = "publication_github/pagination.rs"]
-mod pagination;
+pub(in crate::image_maintenance) mod pagination;
 #[path = "publication_github/publisher.rs"]
 mod publisher;
 #[path = "publication_github/snapshot.rs"]
@@ -25,7 +29,7 @@ mod snapshot;
 
 #[path = "publication_github_models.rs"]
 mod models;
-use models::{Artifact, Comparison, ContentFile, Job, Run};
+use models::{Artifact, Comparison, Job, Run};
 
 use super::{ImagePublicationProfile, PublishImageRequest, authority};
 
@@ -85,7 +89,7 @@ pub(super) fn authenticate(
         super::qualification::unchanged(proof)?;
     } else {
         let job_run = attestor::job(request, &token, deadline)?;
-        super::attestation::verify(
+        super::attestation::verify_job_image(
             request,
             candidate,
             &super::attestation::AttestationRun {
@@ -271,36 +275,13 @@ fn source_files(
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
-    if request.profile == ImagePublicationProfile::Job {
-        return snapshot::source_files(
-            &request.source_commit,
-            authority::source_paths(request.profile),
-            token,
-            deadline,
-        );
-    }
-    authority::source_paths(request.profile)
-        .iter()
-        .map(|path| {
-            let route = format!(
-                "repos/tailrocks/velnor-new/contents/{path}?ref={}",
-                request.source_commit
-            );
-            let content: ContentFile = get_json(&route, token, deadline)?;
-            if content.encoding != "base64" {
-                return Err(internal("image_publication_source_encoding"));
-            }
-            let compact = content
-                .content
-                .bytes()
-                .filter(|byte| !byte.is_ascii_whitespace())
-                .collect::<Vec<_>>();
-            let bytes = STANDARD
-                .decode(compact)
-                .map_err(|_| internal("image_publication_source_base64"))?;
-            Ok(((*path).to_owned(), bytes))
-        })
-        .collect()
+    snapshot::source_files(
+        &request.source_commit,
+        authority::source_paths(request.profile)?,
+        request.profile,
+        token,
+        deadline,
+    )
 }
 
 fn is_sha1(value: &str) -> bool {
@@ -308,4 +289,93 @@ fn is_sha1(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+pub(in crate::image_maintenance) fn authenticate_runner_invocation(
+    source: &str,
+    producer_run_id: u64,
+    token: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    publisher::authenticate_invocation(
+        source,
+        producer_run_id,
+        ".github/workflows/product-release-images.yml",
+        token,
+        deadline,
+    )
+}
+
+pub(in crate::image_maintenance) fn authenticate_release_jobs(
+    source: &str,
+    run: u64,
+    attempt: u32,
+    token: &str,
+    deadline: CheckDeadline,
+    q_identity: Option<(&str, u64)>,
+) -> Result<(), OrchestratorError> {
+    let route = format!("repos/tailrocks/velnor-new/actions/runs/{run}/attempts/{attempt}/jobs");
+    let jobs: Vec<Job> = pagination::get_complete(
+        &pagination::Collection {
+            route: &route,
+            name: "jobs",
+            max_items: 1000,
+            error: "mac_release_job_inventory",
+            identity_error: "mac_release_job_identity",
+            id: |job: &Job| job.id,
+        },
+        token,
+        deadline,
+    )?;
+    let current: Option<Run> = if q_identity.is_some() {
+        let route = format!("repos/tailrocks/velnor-new/actions/runs/{run}/attempts/{attempt}");
+        Some(get_json(&route, token, deadline)?)
+    } else {
+        None
+    };
+    let identity = q_identity
+        .zip(current.as_ref())
+        .map(|((sha, check), current)| (sha, check, current));
+    mac_jobs::validate_release_jobs(source, run, attempt, &jobs, identity)
+}
+
+pub(in crate::image_maintenance) fn authenticate_runner_producer_artifact(
+    source: &str,
+    run: u64,
+    attempt: u32,
+    artifact_id: u64,
+    token: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let route = format!("repos/tailrocks/velnor-new/actions/runs/{run}/artifacts");
+    let artifacts: Vec<Artifact> = pagination::get_complete(
+        &pagination::Collection {
+            route: &route,
+            name: "artifacts",
+            max_items: 2000,
+            error: "image_publication_artifact_inventory",
+            identity_error: "image_publication_artifact_identity",
+            id: |artifact: &Artifact| Some(artifact.id),
+        },
+        token,
+        deadline,
+    )?;
+    let expected = artifact_name(ImagePublicationProfile::Runner, attempt);
+    let mut matches = artifacts
+        .iter()
+        .filter(|artifact| artifact.name == expected);
+    let artifact = matches
+        .next()
+        .ok_or_else(|| internal("image_publication_artifact_count"))?;
+    if matches.next().is_some()
+        || artifact.id != artifact_id
+        || artifact.expired
+        || artifact.size_in_bytes == 0
+        || artifact.workflow_run.id != run
+        || artifact.workflow_run.head_sha != source
+        || artifact.workflow_run.head_branch != "main"
+    {
+        return Err(internal("image_publication_artifact_identity"));
+    }
+    Ok(())
 }

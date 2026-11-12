@@ -99,9 +99,10 @@ pub(crate) async fn collect(
     docker: &Docker,
     journal: &Journal,
     secret: &ReleaseReadSecret,
+    endpoint: &str,
 ) -> Result<Option<ReadinessSample>, HostError> {
     let provider_token = secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(provider_token, journal)
+    let provider = ReleaseImageProvider::from_compiled_source(provider_token, journal, endpoint)
         .map_err(|_| HostError::Docker)?;
     Box::pin(collect_with_provider(docker, journal, &provider)).await
 }

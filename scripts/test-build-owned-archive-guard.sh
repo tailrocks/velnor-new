@@ -25,7 +25,8 @@ copy_checkout() {
     "$destination/crates/velnor-archive-guard/src" \
     "$destination/crates/velnor-archive-guard/build_support" \
     "$destination/crates/velnor-actions-contract/src" \
-    "$destination/crates/velnor-actions-mise/src"
+    "$destination/crates/velnor-actions-mise/src" \
+    "$destination/crates/velnor-runner/crates/velnor-runner-image-manifest/src"
   cp -- "$repository/Cargo.toml" "$repository/Cargo.lock" "$repository/.mise-version" \
     "$destination/"
   cp -- "$repository/.velnor/version-policy.toml" "$destination/.velnor/"
@@ -33,6 +34,14 @@ copy_checkout() {
     "$repository/scripts/archive-guard-build-namespace.sh" \
     "$repository/scripts/build-owned-archive-guard.sh" \
     "$repository/scripts/check-owned-archive-guard-sources.sh" "$destination/scripts/"
+  mkdir -p -- "$destination/scripts/generator-release"
+  cp -- "$repository/scripts/generator-release/cargo-source-handoff.sh" "$destination/scripts/generator-release/"
+  cp -- "$repository/scripts/generator-release/cargo-git-handoff.py" "$destination/scripts/generator-release/"
+  cp -- "$repository/crates/velnor-runner/Cargo.toml" "$destination/crates/velnor-runner/"
+  cp -- "$repository/crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml" \
+    "$destination/crates/velnor-runner/crates/velnor-runner-image-manifest/"
+  cp -R -- "$repository/crates/velnor-runner/crates/velnor-runner-image-manifest/src/." \
+    "$destination/crates/velnor-runner/crates/velnor-runner-image-manifest/src/"
   cp -- "$repository/crates/velnor-archive-guard/Cargo.toml" \
     "$repository/crates/velnor-archive-guard/build.rs" \
     "$destination/crates/velnor-archive-guard/"
@@ -148,6 +157,8 @@ case "$command_name" in
               printf 'velnor-actions-tofu v0.1.0 (%s/crates/velnor-actions-tofu)\n' \
                 "$checkout"
             fi
+            printf 'velnor-runner-image-manifest v0.1.0 (%s/crates/velnor-runner/crates/velnor-runner-image-manifest)\n' \
+              "$checkout"
             ;;
           build)
             target="${CARGO_TARGET_DIR:?}"

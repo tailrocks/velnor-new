@@ -12,7 +12,7 @@ use sha2::Digest;
 
 use super::{
     OciCandidateError, OciCandidateEvidence, OciMaterializeError, Result,
-    archive::{Blob, OciArchive, authenticate_archive, hex, load_archive},
+    archive::{Blob, OciArchive, authenticate_archive, hex, load_archive, load_archive_file},
     check_deadline,
     graph::inspect_graph_preserving_archive,
 };
@@ -32,6 +32,24 @@ pub(super) fn materialize_oci_candidate(
 ) -> MaterializeResult<OciCandidateEvidence> {
     check_deadline()?;
     let archive = load_archive(archive_path)?;
+    materialize_opened(archive, destination, expected)
+}
+
+pub(super) fn materialize_oci_candidate_file(
+    file: &File,
+    destination: &Path,
+    expected: &OciCandidateEvidence,
+) -> MaterializeResult<OciCandidateEvidence> {
+    check_deadline()?;
+    let archive = load_archive_file(file)?;
+    materialize_opened(archive, destination, expected)
+}
+
+fn materialize_opened(
+    archive: OciArchive,
+    destination: &Path,
+    expected: &OciCandidateEvidence,
+) -> MaterializeResult<OciCandidateEvidence> {
     let (evidence, mut archive) = inspect_graph_preserving_archive(archive)?;
     if &evidence != expected {
         return Err(OciCandidateError("oci_candidate_evidence_mismatch").into());

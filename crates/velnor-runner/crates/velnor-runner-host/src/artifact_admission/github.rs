@@ -3,14 +3,11 @@
 
 use std::collections::BTreeMap;
 use std::time::Duration;
-use std::{fs::OpenOptions, path::Path};
 
 use futures_util::StreamExt;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use reqwest::{Client, RequestBuilder, Response, StatusCode, Url};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt;
 
 use crate::error::HostError;
 
@@ -50,15 +47,55 @@ pub(super) fn valid_pat(pat: &str) -> bool {
     !pat.is_empty() && pat.len() <= 4096 && !pat.chars().any(char::is_control)
 }
 
-pub(super) async fn release(
+pub(super) async fn runner_release(
     client: &Client,
     pat: &str,
     source: &str,
 ) -> Result<BTreeMap<String, Asset>, HostError> {
-    let tag = format!("runner-{source}");
-    let path = format!("repos/{REPOSITORY}/releases/tags/{tag}");
+    let path = format!("repos/{REPOSITORY}/releases/tags/runner-{source}");
     let value = get_api_json(client, pat, &path, MAX_RELEASE_BYTES).await?;
-    response::parse_release(source, value)
+    let assets = response::parse_runner_release(source, value)?;
+    let reference = format!("repos/{REPOSITORY}/git/ref/tags/runner-{source}");
+    let value = get_api_json(client, pat, &reference, MAX_RELEASE_BYTES).await?;
+    let object = value
+        .get("object")
+        .and_then(Value::as_object)
+        .ok_or(HostError::Identity)?;
+    let kind = object
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or(HostError::Identity)?;
+    let sha = object
+        .get("sha")
+        .and_then(Value::as_str)
+        .ok_or(HostError::Identity)?;
+    let target = if kind == "tag" {
+        if !super::hash::is_lower_hex(sha, 40) {
+            return Err(HostError::Identity);
+        }
+        let path = format!("repos/{REPOSITORY}/git/tags/{sha}");
+        let tag = get_api_json(client, pat, &path, MAX_RELEASE_BYTES).await?;
+        let object = tag
+            .get("object")
+            .and_then(Value::as_object)
+            .ok_or(HostError::Identity)?;
+        if object.get("type").and_then(Value::as_str) != Some("commit") {
+            return Err(HostError::Identity);
+        }
+        object
+            .get("sha")
+            .and_then(Value::as_str)
+            .ok_or(HostError::Identity)?
+            .to_owned()
+    } else if kind == "commit" {
+        sha.to_owned()
+    } else {
+        return Err(HostError::Identity);
+    };
+    if target != source {
+        return Err(HostError::Identity);
+    }
+    Ok(assets)
 }
 
 pub(super) async fn download_asset(
@@ -69,71 +106,6 @@ pub(super) async fn download_asset(
 ) -> Result<Vec<u8>, HostError> {
     let response = asset_response(client, pat, asset).await?;
     read_limited(response, max_bytes).await
-}
-
-pub(super) async fn download_asset_to_path(
-    client: &Client,
-    pat: &str,
-    asset: &Asset,
-    destination: &Path,
-    max_bytes: u64,
-) -> Result<(), HostError> {
-    if asset.size == 0 || asset.size > max_bytes || !asset.digest.starts_with("sha256:") {
-        return Err(HostError::Identity);
-    }
-    let response = asset_response(client, pat, asset).await?;
-    write_verified_asset(response, asset.size, &asset.digest, destination, max_bytes).await
-}
-
-async fn write_verified_asset(
-    response: Response,
-    expected_size: u64,
-    expected_digest: &str,
-    destination: &Path,
-    max_bytes: u64,
-) -> Result<(), HostError> {
-    if response
-        .content_length()
-        .is_some_and(|size| size != expected_size)
-    {
-        return Err(HostError::Identity);
-    }
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let file = options.open(destination).map_err(|_| HostError::Path)?;
-    let mut file = tokio::fs::File::from_std(file);
-    let mut digest = Sha256::new();
-    let mut count = 0_u64;
-    let mut stream = response.bytes_stream();
-    let result = async {
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|_| HostError::Identity)?;
-            count = count
-                .checked_add(u64::try_from(chunk.len()).map_err(|_| HostError::Frame)?)
-                .filter(|size| *size <= max_bytes && *size <= expected_size)
-                .ok_or(HostError::Frame)?;
-            digest.update(&chunk);
-            file.write_all(&chunk).await.map_err(|_| HostError::Path)?;
-        }
-        file.flush().await.map_err(|_| HostError::Path)?;
-        if count != expected_size
-            || format!("sha256:{}", hex(&digest.finalize())) != expected_digest
-        {
-            return Err(HostError::Identity);
-        }
-        Ok(())
-    }
-    .await;
-    if result.is_err() {
-        drop(file);
-        std::fs::remove_file(destination).map_err(|_| HostError::Path)?;
-    }
-    result
 }
 
 async fn asset_response(client: &Client, pat: &str, asset: &Asset) -> Result<Response, HostError> {
@@ -167,16 +139,6 @@ async fn download_redirect(client: &Client, response: Response) -> Result<Respon
         return Err(HostError::Identity);
     }
     Ok(response)
-}
-
-fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
 }
 
 fn asset_redirect_request(client: &Client, url: Url) -> reqwest::RequestBuilder {
@@ -253,7 +215,7 @@ fn api_request(client: &Client, pat: &str, path: &str) -> Result<RequestBuilder,
     Ok(client.get(url).headers(headers).bearer_auth(pat))
 }
 
-async fn read_limited(response: Response, limit: usize) -> Result<Vec<u8>, HostError> {
+pub(super) async fn read_limited(response: Response, limit: usize) -> Result<Vec<u8>, HostError> {
     let content_limit = u64::try_from(limit).map_err(|_| HostError::Frame)?;
     if response
         .content_length()

@@ -293,3 +293,11 @@ use gc1_t48_sources::*;
 #[path = "gc1_t48_argv.rs"]
 mod gc1_t48_argv;
 pub(crate) use gc1_t48_argv::*;
+
+#[path = "gc1_t48_runner_family.rs"]
+mod gc1_t48_runner_family;
+#[path = "gc1_t48_runner_preview.rs"]
+mod gc1_t48_runner_preview;
+
+#[path = "gc1_t48_release_supersession.rs"]
+mod gc1_t48_release_supersession;

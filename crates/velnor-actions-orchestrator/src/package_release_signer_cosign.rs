@@ -17,7 +17,28 @@ use crate::{OrchestratorError, internal::internal};
 
 const MAX_COSIGN_BUNDLE_BYTES: u64 = 8 * 1024 * 1024;
 
-pub(super) fn acquire_cosign(runner_temp: &Path) -> Result<PinnedCosign, OrchestratorError> {
+#[cfg(test)]
+#[path = "package_release_signer_cosign_tests.rs"]
+mod tests;
+
+pub(crate) fn acquire_cosign(
+    runner_temp: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<PinnedCosign, OrchestratorError> {
+    acquire_cosign_with(runner_temp, deadline, PinnedCosign::download_command)
+}
+
+fn acquire_cosign_with(
+    runner_temp: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+    download: impl FnOnce() -> Result<
+        velnor_actions_mise::IsolatedCommand,
+        velnor_actions_mise::MiseError,
+    >,
+) -> Result<PinnedCosign, OrchestratorError> {
+    deadline
+        .remaining()
+        .map_err(|_| internal("cosign_download_deadline"))?;
     if !runner_temp.is_absolute() {
         return Err(internal("cosign_runner_temp_invalid"));
     }
@@ -28,14 +49,15 @@ pub(super) fn acquire_cosign(runner_temp: &Path) -> Result<PinnedCosign, Orchest
     let artifact = cosign_artifact().map_err(|_| internal("cosign_platform_unsupported"))?;
     let binary = tools.join(format!("cosign-{COSIGN_VERSION}"));
     if path_exists(&binary) {
-        verify_staged_binary(&binary)?;
-        return PinnedCosign::from_verified_path(&binary)
-            .map_err(|_| internal("cosign_binary_admission_failed"));
+        return admit_cosign(&binary, deadline);
     }
 
-    let output = PinnedCosign::download_command()
-        .map_err(|_| internal("cosign_download_command_invalid"))?
-        .run_bounded(artifact.bytes, COSIGN_COMMAND_TIMEOUT)
+    let command = download().map_err(|_| internal("cosign_download_command_invalid"))?;
+    let timeout = deadline
+        .remaining()
+        .map_err(|_| internal("cosign_download_deadline"))?;
+    let output = command
+        .run_bounded(artifact.bytes, timeout.min(COSIGN_COMMAND_TIMEOUT))
         .map_err(|_| internal("cosign_download_failed"))?;
     if !output.success || !valid_cosign_bytes(&output.stdout, artifact.sha256, artifact.bytes) {
         return Err(internal("cosign_download_digest_mismatch"));
@@ -47,9 +69,20 @@ pub(super) fn acquire_cosign(runner_temp: &Path) -> Result<PinnedCosign, Orchest
     set_executable_mode(&temporary)?;
     fs::hard_link(&temporary, &binary).map_err(|_| internal("cosign_install_conflict"))?;
     fs::remove_file(&temporary).map_err(|_| internal("cosign_download_cleanup"))?;
-    verify_staged_binary(&binary)?;
-    PinnedCosign::from_verified_path(&binary)
-        .map_err(|_| internal("cosign_binary_admission_failed"))
+    admit_cosign(&binary, deadline)
+}
+
+fn admit_cosign(
+    binary: &Path,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<PinnedCosign, OrchestratorError> {
+    verify_staged_binary(binary)?;
+    let cosign = PinnedCosign::from_verified_path(binary)
+        .map_err(|_| internal("cosign_binary_admission_failed"))?;
+    deadline
+        .remaining()
+        .map_err(|_| internal("cosign_download_deadline"))?;
+    Ok(cosign)
 }
 
 pub(super) fn sign_and_verify_blob(

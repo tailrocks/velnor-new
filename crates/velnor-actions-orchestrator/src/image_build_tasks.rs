@@ -56,8 +56,8 @@ fn resolve(
             RepoRead::Text(text) => text,
             RepoRead::Absent => return Err(failure(&image.id, "image_dockerfile_missing")),
         };
-        let facts =
-            analyze_dockerfile(&text).map_err(|problem| failure(&image.id, &problem.code()))?;
+        let facts = analyze_dockerfile(&text, &[])
+            .map_err(|problem| failure(&image.id, &problem.code()))?;
         require_stage_copied(image, &facts.context_sources)?;
         dockerfile_sha256.insert(*platform, crate::generator::sha256_hex(text.as_bytes()));
     }

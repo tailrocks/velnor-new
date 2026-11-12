@@ -215,7 +215,7 @@ async fn execute_started(
         ))
         .await??;
     let output = ops::stdout(docker, id, deadline).await?;
-    let record = ProbeRecord::parse(&output, memory_total).ok_or(HostError::Frame)?;
+    let record = super::record::parse(&output, memory_total).ok_or(HostError::Frame)?;
     if record.probe_host_pid != container_host_pid
         || record.probe_namespace_pid != container_host_pid
     {

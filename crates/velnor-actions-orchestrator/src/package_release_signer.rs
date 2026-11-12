@@ -31,15 +31,15 @@ use subjects::append_attestation_subject_paths;
 #[path = "package_release_signer_attestation.rs"]
 mod attestation;
 #[path = "package_release_signer_cosign.rs"]
-mod cosign;
+pub(crate) mod cosign;
 #[path = "package_release_signer_publication.rs"]
 mod publication;
 
 #[path = "package_release_signer_receipt.rs"]
 mod receipt;
 pub(crate) use attestation::{
-    ImageAttestationIdentity, SdkManifestAttestationExpectation,
-    verify_image_file_attestation, verify_published_manifest_attestation,
+    ImageAttestationIdentity, SdkManifestAttestationExpectation, verify_image_file_attestation,
+    verify_published_manifest_attestation,
 };
 
 pub(crate) use publication::verify_attested_signed_package_with_owned_tempdir;
@@ -263,7 +263,10 @@ pub(crate) fn sign_package_release(
     artifacts.extend(verified.write_checksum_assets()?);
 
     let runner_temp = absolute_env("RUNNER_TEMP")?;
-    let cosign = cosign::acquire_cosign(&runner_temp)?;
+    let deadline =
+        velnor_actions_mise::CheckDeadline::after(velnor_actions_mise::COSIGN_COMMAND_TIMEOUT)
+            .map_err(|_| internal("cosign_download_deadline"))?;
+    let cosign = cosign::acquire_cosign(&runner_temp, deadline)?;
     let mut signatures = Vec::new();
     let signed_subjects = artifacts
         .iter()

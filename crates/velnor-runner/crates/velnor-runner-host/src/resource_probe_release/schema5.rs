@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::error::HostError;
-use crate::resource_probe_record::{MAX_OUTPUT_BYTES, ProbeRecord};
+use velnor_runner_qualification::probe_record::{MAX_OUTPUT_BYTES, ProbeRecord};
 
 pub(super) fn validate(output: &Path, root: &Path) -> Result<(), HostError> {
     if !root.is_dir() {

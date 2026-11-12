@@ -12,7 +12,7 @@ use crate::{
         ConnectionJournal, EngineContext, Journal, MetadataSettlementResult,
         StorageCleanupIdentity, StorageCleanupObserverWitness,
     },
-    launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
+    launch::{ReleaseReadSecret, SelectedEngineContext},
 };
 use bollard::Docker;
 
@@ -25,20 +25,32 @@ pub(crate) struct NativeCleanupRuntime {
     journal: Journal,
     engine_context: EngineContext,
     selected: SelectedEngineContext,
-    images: VerifiedWorkerImages,
     release_secret: Arc<ReleaseReadSecret>,
 }
 
 impl NativeCleanupRuntime {
+    async fn verify_cleanup_engine(&self) -> Result<(), HostError> {
+        self.journal
+            .ensure_image_imports_resolved(self.selected.engine_id())
+            .await?;
+        let info = crate::docker_client::docker_deadline(self.docker.info())
+            .await?
+            .map_err(|_| HostError::Docker)?;
+        let observed = SelectedEngineContext::capture(&self.engine_context, &info)?;
+        if observed != self.selected {
+            return Err(HostError::Ownership);
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(
         docker: Docker,
         journal: Journal,
         engine_context: EngineContext,
         selected: SelectedEngineContext,
-        images: VerifiedWorkerImages,
         release_secret: Arc<ReleaseReadSecret>,
     ) -> Result<Self, HostError> {
-        if !selected.matches_images(&images) || !selected.matches_selection(&engine_context) {
+        if !selected.matches_selection(&engine_context) {
             return Err(HostError::Ownership);
         }
         Ok(Self {
@@ -46,7 +58,6 @@ impl NativeCleanupRuntime {
             journal,
             engine_context,
             selected,
-            images,
             release_secret,
         })
     }
@@ -56,9 +67,7 @@ impl NativeCleanupRuntime {
         scope: &ConnectionJournal,
         reservation_id: i64,
     ) -> Result<PendingStorageCleanupWitness, HostError> {
-        self.images
-            .verify_for_engine(&self.docker, &self.selected)
-            .await?;
+        self.verify_cleanup_engine().await?;
         let identity = scope
             .storage_cleanup_identity(reservation_id)
             .await?
@@ -83,9 +92,7 @@ impl NativeCleanupRuntime {
         pending: PendingStorageCleanupWitness,
     ) -> Result<super::VerifiedStorageCleanup, HostError> {
         let deadline = Instant::now() + CLEANUP_OBSERVER_TIMEOUT;
-        self.images
-            .verify_for_engine(&self.docker, &self.selected)
-            .await?;
+        self.verify_cleanup_engine().await?;
         let current = scope
             .storage_cleanup_identity(pending.identity.reservation_id())
             .await?
