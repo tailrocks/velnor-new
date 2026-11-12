@@ -167,6 +167,10 @@ impl HistoricalPackageReleaseAdmission {
         })
     }
 
+    pub(crate) fn workflow_pin(&self) -> Option<&HistoricalWorkflowPin> {
+        self.workflow_pin.as_ref()
+    }
+
     pub(crate) fn with_workflow_pin(
         mut self,
         id: u64,
@@ -257,13 +261,6 @@ impl PackageReleasePublicPolicy {
         }
         self.historical = admissions;
         Ok(self)
-    }
-
-    pub(crate) fn historical_workflow_pin(&self, tag: &str) -> Option<&HistoricalWorkflowPin> {
-        self.historical
-            .iter()
-            .find(|admission| admission.tag == tag)
-            .and_then(|admission| admission.workflow_pin.as_ref())
     }
 }
 
