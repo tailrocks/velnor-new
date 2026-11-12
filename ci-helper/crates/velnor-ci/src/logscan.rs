@@ -138,7 +138,10 @@ fn nextest_summary(line: &str) -> Option<NextestSummary> {
     let rest = line.strip_prefix("Summary [")?;
     let (seconds, rest) = rest.split_once("s]")?;
     let seconds = seconds.trim().parse().ok()?;
-    let (count, _) = rest.trim_start().split_once(" tests run")?;
+    let rest = rest.trim_start();
+    let (count, _) = rest
+        .split_once(" tests run")
+        .or_else(|| rest.split_once(" test run"))?;
     Some(NextestSummary {
         tests_run: count.parse().ok()?,
         seconds,

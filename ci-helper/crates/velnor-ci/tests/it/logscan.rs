@@ -86,3 +86,12 @@ fn saved_cache_reports_size_and_key() {
     assert_eq!(result.caches[0].size_bytes, Some(82_437_083));
     assert_eq!(result.caches[0].key.as_deref(), Some("sources-v1-abc"));
 }
+
+#[test]
+fn nextest_summary_with_one_test_is_counted() {
+    let log =
+        "2026-11-12T08:38:34.2205888Z      Summary [   0.002s] 1 test run: 1 passed, 0 skipped\n";
+    let result = scan(log);
+    assert_eq!(result.nextest.len(), 1);
+    assert_eq!(result.nextest[0].tests_run, 1);
+}
