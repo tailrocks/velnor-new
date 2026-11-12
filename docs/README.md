@@ -1,5 +1,7 @@
 # Velnor technical documentation
 
+Start with the [vision, promises and rules](goals.md). Every change and review is checked against them.
+
 This documentation separates work by delivery state:
 
 | State | Meaning | Document |

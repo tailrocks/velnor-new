@@ -5,6 +5,9 @@ production-grade CI/CD. These are acceptance targets, not claims about today's
 implementation. Every author and reviewer, including Codex, must apply this
 improvement rule and the four gates to every PR.
 
+The vision, promises and rules in [the goals](../goals.md) come first. Where this
+file disagrees with them, they win.
+
 Preserve the [hard decisions](../hard-decisions.md),
 [cache decisions](../proposed/cache-decisions.md) and
 [cache contract](../proposed/cache-contract.md); review guidance never overrides them.
@@ -24,7 +27,7 @@ Preserve the [hard decisions](../hard-decisions.md),
 - Require changed direct inputs or transitive dependencies for every workload job; a `required`/`global` label, broad directory match or warm cache never proves relevance.
 - Justify minimal planning/final-status work separately; reject setup or producer jobs whose consumers are all skipped.
 - Skip unrelated jobs at job level before runner allocation, checkout, setup or cache restore; skipping steps after starting a job is insufficient.
-- Preserve the adopted job topology and single planner: no second skip mechanism or GitHub `paths:` filters; default-branch pushes, merge groups and dispatches stay full.
+- Keep one planner: no second skip mechanism and no GitHub `paths:` filters. The job shape, and what a push to the default branch or a merge group runs, follow [the goals](../goals.md).
 - Keep genuinely unknown inputs fail-closed; reject routine non-input documentation/instruction/template changes left unclassified instead of fixing the input model.
 - Minimize time to `Required` and total runner time; reject duplicate triggers/setup, unnecessary matrix legs and capacity chains mistaken for data dependencies.
 - Require successful planning before payload work; reject non-input metadata before validation admission, revalidate base retargets, cancel superseded read-only validation, and preserve bounded finalization and trusted warming/publication progress.
@@ -47,7 +50,7 @@ Preserve the [hard decisions](../hard-decisions.md),
 ## 4. Preserve trustworthy verification
 
 - Missing, evicted, unavailable or rejected cache state must take a correct, bounded cold path; caches never become the sole transport for required outputs between jobs.
-- Preserve read-only PR/fork/merge-group caches, authorized writers and provenance; verify restored content, expected paths, types, modes, links and completeness before execution, without exposing secrets or private state.
+- A pull request writes a cache only into its own scope; fork pull requests and merge groups only read. Preserve authorized writers and provenance; verify restored content, expected paths, types, modes, links and completeness before execution, without exposing secrets or private state.
 - Require every planned check and its current-source evidence; reject stale outputs, hidden failures, weakened checks and a `Required` verdict that accepts missing, cancelled or unexpectedly skipped work.
 - Prove complete, nonempty required-suite coverage, including aggregate coverage across shards; green empty selections, echo-only qualification and unmeasured phases are not evidence.
 - Enforce equivalent invariants across every adapter and renderer; require regression coverage and protect acceptance policy from being weakened by the candidate it evaluates.
