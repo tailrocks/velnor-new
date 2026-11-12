@@ -13,7 +13,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 ## What we promise our users
 
 1. **Nothing to do means nothing runs.** A change is checked only for what it can affect. A change to files that no Rust build, test, lint or documentation step reads runs no Rust job.
-2. **Work is never done twice.** Within a run, a crate is compiled at most once for lint and documentation and at most once for tests. A later run does not download or compile what an earlier run on the default branch, or on the same pull request, already produced.
+2. **Work is never done twice.** Within a run, a crate is compiled at most once for lint and documentation and at most once for tests. A later run does not download or compile what an earlier run on the default branch, or on the same pull request, already produced and the cache still holds.
 3. **Fast never means checked less.** Every check still runs when something it reads changes, with the project's own compiler, features and settings. A faster workflow fails on every change the slower one failed on.
 
 ## What we never compromise
@@ -45,10 +45,10 @@ These are targets for a workflow written by the generator in `generator/`, on Gi
 ## Design rules
 
 1. **Analyse, then decide.** Velnor reads the project (workspaces, crates, dependencies, features, tests, tools) and chooses the best workflow from what it finds. A project that configures nothing still gets a fast workflow.
-2. **No Rust change, no Rust jobs.** A file that a crate's build, tests, lint or documentation reads selects that crate. Source files, manifests and build scripts always do. Any other file inside a crate's directory selects the crate unless Velnor can show that nothing reads it. The lock file, the toolchain file, cargo configuration and the workflow itself select everything. Documentation and licence files outside every crate select nothing. Velnor finds the other files each crate reads. Any file it cannot place selects everything until the project maps it.
+2. **No Rust change, no Rust jobs.** A file that a crate's build, tests, lint or documentation reads selects that crate. Source files, manifests and build scripts always do. Any other file inside a crate's directory selects the crate unless Velnor can show that nothing reads it. The lock file, the toolchain file, cargo configuration and the workflow itself select everything. Documentation and licence files outside every crate select nothing, unless a build, test, lint or documentation step reads them. Velnor finds the other files each crate reads. Any file it cannot place selects everything until the project maps it.
 3. **The cache proves itself.** Every run reports how many crates cargo compiled and how many the change should have needed. Compiling a crate the run expected to be fresh turns a check named `Cache` red. So does a cache that cannot be saved on the default branch. That check is visible on every pull request and does not block merging.
 4. **Compile at most twice.** In one run, and for one configuration, a crate is compiled at most once as metadata, for lint and documentation, and at most once in full, for tests. Test binaries are built on one machine and handed to every test group. A second identical configuration, test group or machine compiles nothing again.
-5. **The shape fits the project.** One job by default. A job is added only when it shortens the wait by more than its own start-up time. A large project builds once and runs its tests in groups. Velnor chooses from measured build and test times and writes the reason into the workflow.
+5. **The shape fits the project.** One job for each workspace, or group of workspaces, by default. A job is added only when it shortens the wait by more than its own start-up time. A large project builds once and runs its tests in groups. Velnor chooses from measured build and test times and writes the reason into the workflow.
 6. **Test groups carry their needs.** A group names the tests that run together, by crate, test binary or name. It can require Docker, limit how many tests run at once, and set its own time limit and machine.
 7. **No pointless steps, and no silent ones.** A step is left out only when Velnor can show it has nothing to check. Every run decides again and lists what it left out and why. The scheduled full run runs everything.
 8. **A pull request builds on its own last run.** Only that pull request reads its cache.
@@ -56,7 +56,7 @@ These are targets for a workflow written by the generator in `generator/`, on Gi
 10. **Configuration matches reality.** Velnor checks its configuration against the repository, such as the name of the default branch. A mismatch fails the run.
 11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
 12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof.
-13. **Projects stay current.** A project receives a new Velnor version automatically, after that version has passed on the lab project and with the project's own checks green.
+13. **Projects stay current.** Unless a project chooses otherwise, it receives a new Velnor version automatically, after that version has passed on the lab project and with the project's own checks green.
 
 ## What each project decides
 
@@ -64,7 +64,7 @@ Velnor provides the capability. The project chooses in its configuration.
 
 | Choice | Options | Default |
 |---|---|---|
-| What a merge to the default branch runs | Only what changed, or everything | Only what changed |
+| What a push to the default branch, or a merge queue run, checks | Only what changed, or everything | Only what changed |
 | A scheduled full run | Off, hourly, nightly, weekly, or a custom schedule | Nightly |
 | Test groups | Which tests run together, and what each group needs | One group, split automatically when its tests are long |
 | Workspaces that share a job | Any set of workspaces | Each workspace on its own |
