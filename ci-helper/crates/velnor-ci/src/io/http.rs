@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Read;
 use std::time::Duration;
 
 use crate::error::CiError;
@@ -38,12 +37,7 @@ impl GitHub for HttpGitHub {
             .header("User-Agent", "velnor-ci")
             .call()
             .map_err(|e| CiError::new(format!("GET {path}: {e}")))?;
-        let mut bytes = Vec::new();
-        response
-            .body_mut()
-            .as_reader()
-            .take(BODY_LIMIT)
-            .read_to_end(&mut bytes)
+        let bytes = super::read_limited(response.body_mut().as_reader(), BODY_LIMIT)
             .map_err(|e| CiError::new(format!("GET {path}: {e}")))?;
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }

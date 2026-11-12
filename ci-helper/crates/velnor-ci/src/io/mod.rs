@@ -4,6 +4,7 @@
 mod http;
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -49,6 +50,20 @@ fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
         write_metrics(path, &metrics)?;
     }
     Ok(metrics.summary())
+}
+
+pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {
+    let mut bytes = Vec::new();
+    reader
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| CiError::new(e.to_string()))?;
+    if bytes.len() as u64 > limit {
+        return Err(CiError::new(format!(
+            "response is larger than {limit} bytes"
+        )));
+    }
+    Ok(bytes)
 }
 
 pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {

@@ -3,5 +3,6 @@
 
 mod collect;
 mod compare;
+mod io;
 mod logscan;
 mod support;
