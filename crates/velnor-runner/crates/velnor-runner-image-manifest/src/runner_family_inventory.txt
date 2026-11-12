@@ -955,6 +955,7 @@ crates/velnor-actions-orchestrator/src/package_release_signer_request.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_subjects.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_verification.rs
 crates/velnor-actions-orchestrator/src/package_release_source_files.rs
+crates/velnor-actions-orchestrator/src/package_release_workflow_admission.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed_execution.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed_filesystem.rs
