@@ -41,10 +41,12 @@ impl fmt::Display for Repo {
 
 #[derive(Debug, Deserialize)]
 pub struct ApiRun {
+    pub status: String,
     pub run_attempt: u32,
     pub event: String,
     pub head_sha: String,
     pub created_at: String,
+    pub run_started_at: Option<String>,
     pub updated_at: String,
 }
 

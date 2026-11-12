@@ -46,19 +46,23 @@ fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     let github = http::HttpGitHub::new(token);
     let metrics = collect(&github, &repo, args.run_id, args.allow_rerun)?;
     if let Some(path) = &args.output {
-        let json = serde_json::to_string_pretty(&metrics)
-            .map_err(|e| CiError::new(format!("cannot encode metrics: {e}")))?;
-        fs::write(path, json + "\n")
-            .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
+        write_metrics(path, &metrics)?;
     }
     Ok(metrics.summary())
+}
+
+pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
+    let json = serde_json::to_string_pretty(metrics)
+        .map_err(|e| CiError::new(format!("cannot encode metrics: {e}")))?;
+    fs::write(path, json + "\n")
+        .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
     Ok(compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?))
 }
 
-fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {
+pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {
     let text = fs::read_to_string(path)
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
     serde_json::from_str(&text)

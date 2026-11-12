@@ -14,6 +14,12 @@ pub fn collect(
     allow_rerun: bool,
 ) -> Result<RunMetrics, CiError> {
     let run: ApiRun = parse(&github.get(&run_path(repo, run_id))?, "run")?;
+    if run.status != "completed" {
+        return Err(CiError::new(format!(
+            "run {run_id} is {}; measure a run only after it has completed",
+            run.status
+        )));
+    }
     if run.run_attempt > 1 && !allow_rerun {
         return Err(CiError::new(format!(
             "run {run_id} is attempt {}; pass --allow-rerun to measure a re-run",
@@ -35,7 +41,10 @@ pub fn collect(
         run_attempt: run.run_attempt,
         event: run.event,
         head_sha: run.head_sha,
-        wall_seconds: seconds_between(Some(&run.created_at), Some(&run.updated_at)),
+        wall_seconds: seconds_between(
+            Some(run.run_started_at.as_deref().unwrap_or(&run.created_at)),
+            Some(&run.updated_at),
+        ),
         runner_seconds,
         jobs,
     })

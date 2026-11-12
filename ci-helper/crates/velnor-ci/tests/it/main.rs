@@ -5,4 +5,3 @@ mod collect;
 mod compare;
 mod logscan;
 mod support;
-mod time;
