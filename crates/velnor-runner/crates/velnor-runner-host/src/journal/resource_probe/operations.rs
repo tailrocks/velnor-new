@@ -379,3 +379,6 @@ use owned_request::{
     cleanup_request_valid, container_id_valid, decode_work, encode_hex, hex_string,
     owned_request_valid,
 };
+
+#[cfg(test)]
+mod tests;

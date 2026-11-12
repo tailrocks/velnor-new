@@ -113,6 +113,36 @@ impl StorageProvisioningPlan {
     }
 }
 
+#[cfg(test)]
+impl StorageProvisioningPlan {
+    pub(crate) fn for_test(sizes: &[(StorageRole, u64)]) -> Self {
+        let roles = sizes
+            .iter()
+            .map(|(role, bytes)| StorageProvisioningRole {
+                role: *role,
+                pool_id: "test-pool".to_owned(),
+                medium: StorageMedium::Tmpfs,
+                filesystem_kind: StorageFilesystemKind::Tmpfs,
+                inode_policy: StorageInodePolicy::Finite,
+                planned_filesystem_instance_digest: None,
+                charge_bytes: *bytes,
+                charge_inodes: 1,
+                retained_memory_bytes: *bytes,
+            })
+            .collect();
+        Self {
+            reservation_id: 1,
+            operation_id: 1,
+            engine_id: "engine-test".to_owned(),
+            docker_root_digest: "0".repeat(64),
+            profile_generation_id: "profile-test".to_owned(),
+            profile_digest: "0".repeat(64),
+            sample_generation_id: "sample-test".to_owned(),
+            roles,
+        }
+    }
+}
+
 pub(super) async fn load(
     connection: &turso::Connection,
     reservation_id: i64,

@@ -354,3 +354,6 @@ fn host_config(
         ..Default::default()
     })
 }
+
+#[cfg(test)]
+mod tests;
