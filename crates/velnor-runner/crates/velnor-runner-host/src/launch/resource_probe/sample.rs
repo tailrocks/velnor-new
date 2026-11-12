@@ -7,6 +7,8 @@ mod production_profile;
 mod recovery;
 mod storage_admission;
 
+#[cfg(test)]
+mod tests;
 mod witness;
 pub(crate) use guest_capacity::checked_guest_capacity;
 pub(crate) use pressure::FreshPressureSample;
@@ -25,6 +27,14 @@ use super::ProbeStartupEvidence;
 use super::record::ProbeRecord;
 
 const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
+
+pub(super) fn required_memory_bytes(budget: &ResourceBudget) -> Option<u64> {
+    budget
+        .pair()
+        .memory_bytes
+        .checked_add(retained_tmpfs_bytes()?)?
+        .checked_add(budget.admission_reserve().memory_bytes)
+}
 
 pub(super) struct Observation {
     record: ProbeRecord,
@@ -165,12 +175,8 @@ impl Observation {
     pub(super) fn into_start_permit(self, budget: ResourceBudget) -> Option<StartPermit> {
         let pair = budget.pair();
         let reserve = budget.admission_reserve();
-        let retained_memory = retained_tmpfs_bytes()?;
         let required_cpu = pair.cpu_millicores.checked_add(reserve.cpu_millicores)?;
-        let required_memory = pair
-            .memory_bytes
-            .checked_add(retained_memory)?
-            .checked_add(reserve.memory_bytes)?;
+        let required_memory = required_memory_bytes(&budget)?;
         let recent = self.is_recent_at(Instant::now());
         (recent
             && self.record.docker_root_free_bytes >= 10 * 1024 * 1024 * 1024

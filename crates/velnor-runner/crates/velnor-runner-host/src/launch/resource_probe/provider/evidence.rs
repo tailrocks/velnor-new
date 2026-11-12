@@ -45,6 +45,22 @@ pub(in crate::launch) struct ProbeImagePreparationEvidence {
 }
 
 impl ProbeImagePreparationEvidence {
+    #[cfg(test)]
+    pub(in crate::launch) fn for_test(engine_id: &str, docker_root_digest: &str) -> Self {
+        Self {
+            runtime_id: format!("sha256:{}", "3".repeat(64)),
+            platform: "linux/amd64".to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
+            source_revision: "2".repeat(40),
+            binding_fingerprint: "4".repeat(64),
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+            origin: ProbeImageOrigin::Registry {
+                manifest_sha256: "5".repeat(64),
+            },
+        }
+    }
+
     fn from_candidate(candidate: &VerifiedCandidate) -> Option<Self> {
         if !digest_reference(&candidate.runtime_id)
             || !digest(&candidate.binding_fingerprint)

@@ -9,6 +9,8 @@ use crate::journal::{HostHelperRole, Journal, ProbePhase, ProbeRow, ProbeWork};
 use super::execute::ProbeCleanupEvidence;
 #[path = "recover/dispatch.rs"]
 mod dispatch;
+#[path = "recover/unattached.rs"]
+mod unattached;
 use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
@@ -52,6 +54,9 @@ pub(super) async fn active(
             .await??;
     }
     let projection = persisted_projection(&row, root)?;
+    if unattached::abort_if_never_created(docker, journal, &row, &projection, deadline).await? {
+        return Ok(());
+    }
     if let Err(error) = cleanup(docker, journal, &row, &projection, deadline).await {
         if matches!(
             error,
@@ -389,3 +394,6 @@ async fn quarantine<T>(
     }
     Err(HostError::Ownership)
 }
+
+#[cfg(test)]
+mod tests;

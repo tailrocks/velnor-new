@@ -101,3 +101,43 @@ async fn prepared_probe_without_a_container_is_not_bound() -> Result<(), HostErr
     assert_eq!(row.container_id, None);
     Ok(())
 }
+
+const ROOT_DIGEST: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+
+#[tokio::test]
+async fn aborting_an_unattached_probe_releases_its_lease_in_one_step() -> Result<(), HostError> {
+    let dir = tempfile::tempdir().map_err(|_| HostError::Path)?;
+    let journal = journal_with_probe(&dir).await?;
+    create_requested(&journal).await?;
+    journal
+        .abort_unattached_probe(OPERATION_ID, "engine-test", ROOT_DIGEST)
+        .await?;
+    assert!(journal.leased_probe().await?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn aborting_a_probe_with_a_container_or_another_engine_changes_nothing()
+-> Result<(), HostError> {
+    let dir = tempfile::tempdir().map_err(|_| HostError::Path)?;
+    let journal = journal_with_probe(&dir).await?;
+    create_requested(&journal).await?;
+    assert!(matches!(
+        journal
+            .abort_unattached_probe(OPERATION_ID, "another-engine", ROOT_DIGEST)
+            .await,
+        Err(HostError::Journal)
+    ));
+    journal
+        .bind_probe_container(OPERATION_ID, CONTAINER_ID)
+        .await?;
+    assert!(matches!(
+        journal
+            .abort_unattached_probe(OPERATION_ID, "engine-test", ROOT_DIGEST)
+            .await,
+        Err(HostError::Journal)
+    ));
+    let row = journal.leased_probe().await?.ok_or(HostError::Journal)?;
+    assert_eq!(row.phase, ProbePhase::ContainerCreated);
+    Ok(())
+}

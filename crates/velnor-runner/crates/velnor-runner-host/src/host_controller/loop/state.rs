@@ -8,6 +8,9 @@ use std::{
 
 use super::PendingAcquiredRecovery;
 use cursor::record_assigned_total;
+#[path = "state/admin_refresh.rs"]
+mod admin_refresh;
+pub(super) use admin_refresh::AdminRefreshSchedule;
 #[path = "state/cleanup.rs"]
 mod cleanup;
 #[path = "state/cursor.rs"]
@@ -60,6 +63,7 @@ pub(super) struct PreparedConnection {
     pub(super) unkeyed_authorization: Vec<PendingScopedExecution>,
     pub(super) pending_acquired_recovery: BTreeMap<i64, PendingAcquiredRecovery>,
     pub(super) unkeyed_acquired_recovery: Vec<PendingAcquiredRecovery>,
+    pub(super) admin_refresh: AdminRefreshSchedule,
 }
 
 pub(super) struct PreparedSetup {
@@ -313,6 +317,7 @@ impl PreparedConnection {
             }
         }
         self.collect_proven_pending_cleanup().await?;
+        cleanup::refresh_admin_while_cleanup_pending(self);
         Ok(())
     }
 

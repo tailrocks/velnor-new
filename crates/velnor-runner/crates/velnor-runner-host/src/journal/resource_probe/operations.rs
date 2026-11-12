@@ -373,6 +373,7 @@ pub(crate) fn capacity_request_sha256() -> String {
 mod cleanup_observer;
 mod owned_request;
 mod pre_jit_cleanup;
+mod unattached;
 pub(in crate::journal) use owned_request::cleanup_request_matches;
 pub(in crate::journal) use owned_request::seed_valid;
 use owned_request::{
