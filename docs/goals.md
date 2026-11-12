@@ -2,7 +2,7 @@
 
 This file says what Velnor is for, what it promises the people who use it, and which lines no change may cross. Every change and every review is checked against it.
 
-Where another document in this repository disagrees with this file, this file wins, and the other document is corrected in the same change.
+Where another document in this repository sets a different goal or rule for new work, this file wins, and that document is corrected in the same change.
 
 The work that gets the project there is tracked in the roadmap, issue [#574](https://github.com/tailrocks/velnor-new/issues/574).
 
@@ -27,7 +27,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 
 ## What "fast" means
 
-These are targets for a generated workflow on GitHub-hosted runners. Counts are exact. Times are medians of at least three ordinary runs, because the same build varies from run to run.
+These are targets for a workflow written by the generator in `generator/`, on GitHub-hosted runners. Counts are exact. Times are medians of at least three ordinary runs, because the same build varies from run to run.
 
 | Situation | Target |
 |---|---|
@@ -35,19 +35,19 @@ These are targets for a generated workflow on GitHub-hosted runners. Counts are 
 | A full run where no Rust input changed since the cache was saved | 0 crates compiled, 0 crates downloaded |
 | A change to one crate | Only that crate and what depends on it is compiled and tested |
 | A second push to the same pull request | Recompiles only the crates changed since the first push, and what depends on them |
-| An empty cache | No crate is compiled more than twice |
+| An empty cache | No crate is compiled more than twice for one configuration |
 | Time from job start to the first cargo command, cache restore included | At most 30 seconds |
-| Number of jobs | Does not grow with the number of crates |
+| Number of jobs | Does not grow with the number of crates in a workspace. It follows the workspaces, or groups of workspaces, and the test groups the project has |
 | Cache storage | At most 8 GB of GitHub's 10 GB, pull request layers included |
-| An ordinary pull request, compared with the previous Velnor version | Neither the wait for the required check nor the runner-minutes gets worse |
+| An ordinary pull request, compared with the previous Velnor version | Neither the wait for the required check nor the runner-minutes gets worse. The one exception is a check that correctness needs, with its cost measured and accepted by the owner |
 | The tests of the generator in `generator/` | Under 1 minute |
 
 ## Design rules
 
 1. **Analyse, then decide.** Velnor reads the project (workspaces, crates, dependencies, features, tests, tools) and chooses the best workflow from what it finds. A project that configures nothing still gets a fast workflow.
-2. **No Rust change, no Rust jobs.** A file inside a crate's directory selects that crate. The lock file, the toolchain file, cargo configuration and the workflow itself select everything. Documentation and licence files outside every crate select nothing. Velnor finds the other files each crate reads. Any file it cannot place selects everything until the project maps it.
+2. **No Rust change, no Rust jobs.** A file that a crate's build, tests, lint or documentation reads selects that crate. Source files, manifests and build scripts always do. Any other file inside a crate's directory selects the crate unless Velnor can show that nothing reads it. The lock file, the toolchain file, cargo configuration and the workflow itself select everything. Documentation and licence files outside every crate select nothing. Velnor finds the other files each crate reads. Any file it cannot place selects everything until the project maps it.
 3. **The cache proves itself.** Every run reports how many crates cargo compiled and how many the change should have needed. Compiling a crate the run expected to be fresh turns a check named `Cache` red. So does a cache that cannot be saved on the default branch. That check is visible on every pull request and does not block merging.
-4. **Compile at most twice.** In one run a crate is compiled at most once as metadata, for lint and documentation, and at most once in full, for tests. Test binaries are built on one machine and handed to every test group. A second identical configuration, test group or machine compiles nothing again.
+4. **Compile at most twice.** In one run, and for one configuration, a crate is compiled at most once as metadata, for lint and documentation, and at most once in full, for tests. Test binaries are built on one machine and handed to every test group. A second identical configuration, test group or machine compiles nothing again.
 5. **The shape fits the project.** One job by default. A job is added only when it shortens the wait by more than its own start-up time. A large project builds once and runs its tests in groups. Velnor chooses from measured build and test times and writes the reason into the workflow.
 6. **Test groups carry their needs.** A group names the tests that run together, by crate, test binary or name. It can require Docker, limit how many tests run at once, and set its own time limit and machine.
 7. **No pointless steps, and no silent ones.** A step is left out only when Velnor can show it has nothing to check. Every run decides again and lists what it left out and why. The scheduled full run runs everything.
@@ -81,6 +81,7 @@ Velnor provides the capability. The project chooses in its configuration.
 
 - [`hard-decisions.md`](hard-decisions.md) records what the workflows of the existing engine must satisfy today. New work follows this file. Decisions 1 and 3 there are rewritten when the new generator takes over this repository's Rust CI.
 - [`reviews/ci-performance.md`](reviews/ci-performance.md) is the detailed review procedure. It applies the rules in this file.
+- Documents under `proposed/` and `implemented/` describe the existing engine as it works today, including its cache families and their sizes. They are not contradictions of this file. Each is replaced together with the part it describes.
 
 ## How to review a change
 

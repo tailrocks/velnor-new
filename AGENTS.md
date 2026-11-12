@@ -26,7 +26,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 
 ## This project (velnor-new)
 
-- Vision and rules: read [`docs/goals.md`](docs/goals.md) first. Check every change and every review against it. Where another document disagrees with it, `docs/goals.md` wins and that document is corrected in the same change.
+- Vision and rules: read [`docs/goals.md`](docs/goals.md) first. Check every change and every review against it. Where another document sets a different goal or rule for new work, `docs/goals.md` wins and that document is corrected in the same change.
 - Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first. Never silently change a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
 - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
