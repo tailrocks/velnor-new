@@ -90,7 +90,7 @@ fn capture_rejects_candidate_created_destination() -> Result<(), Box<dyn Error>>
 fn rejects_a_candidate_that_forges_the_oracle_to_match_its_output() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let original_case = fs::read(source.join("cases/nested/preview/.github/CLAUDE.md"))?;
     let original_manifest = fs::read(source.join("MANIFEST.sha256"))?;
     let oracle = harness.directory.join("forged-oracle");
@@ -139,10 +139,7 @@ fn capture_rejects_changes_to_unmanaged_oracle_files() -> Result<(), Box<dyn Err
         let harness = Harness::new()?;
         let candidate = diagnostics_candidate()?;
         let oracle = harness.directory.join("oracle");
-        copy_oracle(
-            &harness.root.join("docs/proposed/opentofu-goldens"),
-            &oracle,
-        )?;
+        copy_oracle(&harness.root.join("fixtures/opentofu-goldens"), &oracle)?;
         fs::write(oracle.join("README.md"), b"original\n")?;
         let manifest = fs::read(oracle.join("MANIFEST.sha256"))?;
         let output = harness

@@ -130,7 +130,13 @@ pub(crate) fn restrict_checkout_yaml(mut step: Yaml, non_inputs: &NonInputs) -> 
     }
     let guard = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(NON_INPUT_GUARD_STEP)),
-        ("run".to_owned(), Yaml::str(guard_script(non_inputs))),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "sh -c {}",
+                crate::commands::quote_script_arg(&guard_script(non_inputs))
+            )),
+        ),
     ]);
     vec![step, guard]
 }

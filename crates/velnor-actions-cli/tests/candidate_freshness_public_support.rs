@@ -35,11 +35,11 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     assert!(!plan.contains("velnor-actions-0.1.72"));
     let required = workflow_job(&workflow, "required")?;
     assert!(
-        required.contains("/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu"),
-        "Required verdict does not acquire the authenticated SDK74 controller"
+        required.contains("/v0.1.78/velnor-actions-0.1.78-x86_64-unknown-linux-gnu"),
+        "Required verdict does not acquire the authenticated SDK78 controller"
     );
-    assert!(required.contains("db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f"));
-    assert!(required.contains("c622bfb187556afb8d3ff3ca917a719e4bb7f32a"));
+    assert!(required.contains("3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7"));
+    assert!(required.contains("ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905"));
     assert!(
         required.contains("gh@2.103.3"),
         "Required helper catalog changed"
@@ -144,25 +144,12 @@ fn assert_internal_operation(
 }
 
 fn workflow_job(workflow: &str, job_id: &str) -> Result<String, Box<dyn Error>> {
-    let heading = format!("  {job_id}:");
-    let mut found = false;
-    let mut job = String::new();
-    for line in workflow.lines() {
-        if found && line.starts_with("  ") && !line.starts_with("    ") {
-            break;
-        }
-        if line == heading {
-            found = true;
-        }
-        if found {
-            job.push_str(line);
-            job.push('\n');
-        }
-    }
-    if !found {
-        return Err(format!("generated workflow omitted job {job_id}").into());
-    }
-    Ok(job)
+    let parsed: serde_json::Value = serde_saphyr::from_str(workflow)?;
+    let job = parsed
+        .get("jobs")
+        .and_then(|jobs| jobs.get(job_id))
+        .ok_or_else(|| format!("generated workflow omitted job {job_id}"))?;
+    Ok(serde_json::to_string(job)?)
 }
 
 const MISE_TRANSPORT: &str = r#"#!/bin/sh

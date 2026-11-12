@@ -14,11 +14,8 @@ fn repository_golden_gate_accepts_matching_and_rejects_changed_oracle() -> Resul
     let root = harness.directory.join("source");
     copy_mutation_repository(&harness.root, &root)?;
     add_fixture_origin(&root)?;
-    let oracle = root.join("docs/proposed/opentofu-goldens");
-    copy_tree(
-        &harness.root.join("docs/proposed/opentofu-goldens"),
-        &oracle,
-    )?;
+    let oracle = root.join("fixtures/opentofu-goldens");
+    copy_tree(&harness.root.join("fixtures/opentofu-goldens"), &oracle)?;
     let target = harness.directory.join("target");
     fs::create_dir_all(target.join("release"))?;
     copy_executable(

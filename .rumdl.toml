@@ -13,5 +13,4 @@ exclude = [
   "**/AGENTS.md", # agent instruction files, not product documentation
   "**/CLAUDE.md",
   "fixtures/**", # deliberately foreign or broken test projects
-  "docs/proposed/opentofu-goldens/**", # generated golden trees
 ]

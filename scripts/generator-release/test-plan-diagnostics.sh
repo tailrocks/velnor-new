@@ -142,7 +142,7 @@ if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
   ORACLE="$oracle_parent/$oracle_name"
   case "$ORACLE" in "$ROOT"|"$ROOT"/*) echo 'FATAL: selected external oracle must remain outside the repository' >&2; exit 2 ;; esac
 else
-  ORACLE="$ROOT/docs/proposed/opentofu-goldens"
+  ORACLE="$ROOT/fixtures/opentofu-goldens"
 fi
 [[ -d "$ORACLE" && ! -L "$ORACLE" && -d "$ORACLE/cases" && ! -L "$ORACLE/cases" ]] \
   || { echo 'FATAL: selected golden oracle must be an existing regular directory tree' >&2; exit 2; }

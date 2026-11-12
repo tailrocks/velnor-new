@@ -72,9 +72,12 @@ pub(crate) fn emit_shared(
             "tool_seed_requires_tools_prelude".to_owned(),
         ));
     }
+    let source_qualification_plan = source_qualification_plan(&document, jobs, ctx)?;
     Ok(RenderedWorkflow {
         yaml: text,
         shared: shared_files,
+        schema2_files: Vec::new(),
+        source_qualification_plan,
     })
 }
 
@@ -96,4 +99,51 @@ fn emit_state_seal(
         path: STATE_SEAL_WORKFLOW_PATH.to_owned(),
         bytes,
     })
+}
+
+fn source_qualification_plan(
+    document: &crate::yaml::Yaml,
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+) -> Result<Option<crate::source_qualification_plan::SourceQualificationPlan>, RenderError> {
+    const CLI: &str = "rust-velnor-actions-cli";
+    let routes = match &ctx.lane_plan {
+        Some(plan) => match plan.output_ids(CLI) {
+            Ok(routes) => routes,
+            Err(_) => return Ok(None),
+        },
+        None if jobs.contains_key(CLI) => vec![CLI.to_owned()],
+        None => return Ok(None),
+    };
+    if routes.is_empty() || routes.iter().any(|id| !jobs.contains_key(id)) {
+        return Err(RenderError::InvalidWorkflow(
+            "source_qualification_cli_route".to_owned(),
+        ));
+    }
+    let crate::yaml::Yaml::Map(root) = document else {
+        return Err(RenderError::InvalidWorkflow(
+            "source_qualification_plan_document".to_owned(),
+        ));
+    };
+    let Some((_, crate::yaml::Yaml::Map(jobs))) = root.iter().find(|(key, _)| key == "jobs") else {
+        return Err(RenderError::InvalidWorkflow(
+            "source_qualification_plan_jobs".to_owned(),
+        ));
+    };
+    let job = jobs
+        .iter()
+        .find(|(id, _)| id == "plan")
+        .map(|(_, job)| job.clone())
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("source_qualification_plan_missing".to_owned())
+        })?;
+    Ok(Some(
+        crate::source_qualification_plan::SourceQualificationPlan {
+            job,
+            cli_routes: routes,
+            non_inputs: ctx.non_inputs.clone(),
+            controller_path: ctx.controller.path().to_owned(),
+            controller_version: ctx.controller.report_helper_version().to_owned(),
+        },
+    ))
 }
