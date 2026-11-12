@@ -14,8 +14,8 @@ editing the decision away.
 ## Scope
 
 These decisions bind the existing engine in `crates/`, its configuration in
-`.velnor/` and the workflows it generates. They do not bind the new Rust
-generator: [the goals](goals.md) are its rule book and state which code each
+`.velnor/`, the workflows it generates, and the scripts, images and fixtures
+that support it. They do not bind the new Rust generator: [the goals](goals.md) are its rule book and state which code each
 rule book governs.
 
 ## 1. One job per crate with parallel check steps

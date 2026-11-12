@@ -23,7 +23,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 
 - **Selects.** Design rule 2 defines which crates a run selects. Every statement below about what a run checks or compiles follows that rule.
 - **Configuration.** One combination of target platform, features and build profile.
-- **Warm cache.** A cache that still holds the work of an earlier run. A statement about reuse holds with a warm cache. A cache that is missing, evicted or rejected is covered by line 3 under "What we never compromise".
+- **Warm cache.** A cache that still holds, in a form the run can use, every crate that has not changed since an earlier run built it. A statement about reuse holds with a warm cache. A cache that is missing, evicted or rejected is covered by line 3 under "What we never compromise".
 
 ## What we promise our users
 
@@ -36,7 +36,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 1. **Correct before fast.** A check is skipped only when the change provably cannot affect it. When Velnor cannot tell what a file affects, it runs the checks.
 2. **Green means verified.** The required check passes only when everything that was selected ran and passed. A test step that should have run tests and ran none is not a pass.
 3. **A broken cache is slow, never wrong, and never silent.** A missing, rejected or stale cache takes a correct cold path. A cache that fails at its job is reported by a red check, as design rule 3 defines.
-4. **Secrets never reach the build.** Private dependencies are fetched with a short-lived token. The token is discarded, and cargo then runs offline. A pull request from this repository writes a cache only into its own scope. A pull request from a fork gets no token and only reads caches. Where a fork can read the caches, as in a public repository, nothing fetched from a private dependency or built from it is cached.
+4. **Secrets never reach the build.** Private dependencies are fetched with a short-lived token that can read only the repositories the project lists. The token is revoked before any code of the project or of its dependencies runs, and cargo then runs offline. A pull request from this repository writes a cache only into its own scope. A pull request from a fork gets no token and only reads caches. Where a fork can read the caches, as in a public repository, nothing fetched from a private dependency or built from it is cached.
 5. **Every speed claim has a measurement.** A change states its effect with numbers from real runs, before and after.
 6. **Inside GitHub's free limits.** The design fits in GitHub's 10 GB of cache and on standard hosted runners. It does not depend on paid storage or larger machines.
 
@@ -47,8 +47,8 @@ These are the numbers behind the promises, for a workflow the generator writes, 
 | Situation | Target |
 |---|---|
 | A run that selects no crate | Velnor's own jobs finish within 1 minute |
-| A run that selects everything, with a warm cache that holds every crate | 0 crates compiled, 0 crates downloaded |
-| A run that selects some crates, with a warm cache | Only those crates are compiled and tested |
+| A run that selects everything although no crate changed, with a warm cache | 0 crates compiled, 0 crates downloaded |
+| A run that selects some crates, with a warm cache | Only the selected crates are compiled and tested |
 | A second push to the same pull request, with a warm cache | Compiles only what the changes since the first push select |
 | Time from job start to the first cargo command, cache restore included | At most 30 seconds |
 | Number of jobs | Does not grow with the number of crates in a workspace |
@@ -69,8 +69,8 @@ These are the numbers behind the promises, for a workflow the generator writes, 
 9. **No logic in YAML.** Every generated `run:` step is one command. A generated workflow uses only actions from a fixed list, each pinned to a full commit SHA. Decisions and loops live in one small helper program, written in Rust and shipped prebuilt.
 10. **Configuration matches reality.** Velnor checks its configuration against the repository, such as the name of the default branch. A mismatch fails the run.
 11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
-12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof.
-13. **Projects stay current.** A new Velnor version reaches a project only after it has passed on the lab project, and it is merged only with the project's own checks green. Velnor's own programs are released only from a tag on a commit of the default branch whose required check passed.
+12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof. The plan and the required check of a run always come from a released version, never from the change under test.
+13. **Projects stay current.** A new Velnor version reaches a project only after it has passed on the lab project, and it is merged only with the project's own checks green. Velnor's own programs are released only from a tag on a commit of the default branch whose required check passed. The job that publishes checks out nothing and runs no code of the repository. It publishes files that a job without write permission built, after checking their digests.
 14. **Decided by experiment.** A choice between tools or designs is settled by an experiment on the lab project. The question, the measurements and the rule that picks the winner are written down before the first run. Whoever runs the experiment applies the rule and commits the result with its raw data. A choice that would change this file or a hard decision goes to the owner.
 
 ## What each project decides
