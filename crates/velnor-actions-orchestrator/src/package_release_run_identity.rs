@@ -22,9 +22,9 @@ mod active_role;
 pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
 
-#[cfg(test)]
-#[path = "package_release_run_identity_tests.rs"]
-mod tests;
+#[path = "package_release_workflow_admission.rs"]
+mod workflow_admission;
+use workflow_admission::admit_workflow;
 #[path = "package_release_run_inventory.rs"]
 mod inventory;
 pub(super) use inventory::sleep_for_retry;
@@ -68,7 +68,7 @@ impl GitHubApi {
             .ok_or_else(|| internal("package_workflow_path"))?;
         let workflow: WorkflowMetadata =
             self.get_json(&self.route(&format!("actions/workflows/{}", encode_segment(filename))))?;
-        validate_workflow_metadata(&workflow, path, name)?;
+        workflow_admission::validate_workflow_metadata(&workflow, path, name)?;
         self.run_identity_cache
             .borrow_mut()
             .admit_workflow(&workflow)?;
@@ -341,43 +341,6 @@ pub(super) fn ci_run_is_success(
     run_matches(run, workflow, id, attempt, source, "push")
         && run.status.as_deref() == Some("completed")
         && run.conclusion.as_deref() == Some("success")
-}
-
-fn admit_workflow(
-    workflow: &WorkflowMetadata,
-    path: &str,
-    name: &str,
-    pin: Option<&crate::package_release_public::HistoricalWorkflowPin>,
-) -> Result<(), OrchestratorError> {
-    let Some(pin) = pin else {
-        return validate_workflow_metadata(workflow, path, name);
-    };
-    let observed = crate::package_release_public::ObservedWorkflow {
-        id: workflow.id,
-        path: &workflow.path,
-        name: &workflow.name,
-        state: &workflow.state,
-    };
-    if pin.admits(&observed, path, name) {
-        Ok(())
-    } else {
-        Err(internal("package_workflow_identity_mismatch"))
-    }
-}
-
-fn validate_workflow_metadata(
-    workflow: &WorkflowMetadata,
-    path: &str,
-    name: &str,
-) -> Result<(), OrchestratorError> {
-    if workflow.id == 0
-        || workflow.path != path
-        || workflow.name != name
-        || workflow.state != "active"
-    {
-        return Err(internal("package_workflow_identity_mismatch"));
-    }
-    Ok(())
 }
 
 fn require_required_job(
