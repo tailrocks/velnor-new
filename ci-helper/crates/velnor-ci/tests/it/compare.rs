@@ -75,3 +75,21 @@ fn only_the_ten_largest_job_changes_are_listed() {
     assert!(!table.contains("| job-01 |"), "{table}");
     assert!(!table.contains("| job-00 |"), "{table}");
 }
+
+#[test]
+fn jobs_with_the_same_name_are_compared_one_to_one() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let mut twin = a.jobs[0].clone();
+    twin.duration_seconds = 100;
+    a.jobs.push(twin.clone());
+    twin.duration_seconds = 150;
+    b.jobs.push(twin);
+    let name = a.jobs[0].name.clone();
+    let table = compare(&a, &b);
+    assert!(
+        table.contains(&format!("| {name} #2 | 100 | 150 | +50 |")),
+        "{table}"
+    );
+    assert!(!table.contains(&format!("| {name} |")), "{table}");
+}

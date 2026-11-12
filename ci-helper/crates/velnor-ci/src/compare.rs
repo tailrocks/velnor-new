@@ -57,23 +57,40 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> String {
 }
 
 fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, Option<u64>, Option<u64>)> {
-    let mut by_name: BTreeMap<&str, (Option<u64>, Option<u64>)> = BTreeMap::new();
-    for job in &a.jobs {
-        by_name.entry(&job.name).or_default().0 = Some(job.duration_seconds);
+    let mut by_name: BTreeMap<String, (Option<u64>, Option<u64>)> = BTreeMap::new();
+    for (key, seconds) in occurrence_keys(a) {
+        by_name.entry(key).or_default().0 = Some(seconds);
     }
-    for job in &b.jobs {
-        by_name.entry(&job.name).or_default().1 = Some(job.duration_seconds);
+    for (key, seconds) in occurrence_keys(b) {
+        by_name.entry(key).or_default().1 = Some(seconds);
     }
     let mut changed: Vec<_> = by_name
         .into_iter()
         .filter(|(_, (left, right))| left.unwrap_or(0) != right.unwrap_or(0))
-        .map(|(name, (left, right))| (name.to_owned(), left, right))
+        .map(|(name, (left, right))| (name, left, right))
         .collect();
     changed.sort_by_key(|(_, left, right)| {
         std::cmp::Reverse(left.unwrap_or(0).abs_diff(right.unwrap_or(0)))
     });
     changed.truncate(CHANGED_JOBS_SHOWN);
     changed
+}
+
+fn occurrence_keys(run: &RunMetrics) -> Vec<(String, u64)> {
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    run.jobs
+        .iter()
+        .map(|job| {
+            let count = seen.entry(&job.name).or_default();
+            *count += 1;
+            let key = if *count == 1 {
+                job.name.clone()
+            } else {
+                format!("{} #{count}", job.name)
+            };
+            (key, job.duration_seconds)
+        })
+        .collect()
 }
 
 fn shown(value: Option<u64>) -> String {
