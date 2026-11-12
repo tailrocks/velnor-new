@@ -1,5 +1,18 @@
 # Release Publication Decisions
 
+**Deleted producer workflow for pinned historical admissions (2026-11-12).**
+Public release verification admits a producer workflow only while it is
+`active`. The two historical Homebrew qualification admissions A and D are
+immutable signed `jackin-project/jackin` previews whose producer,
+`.github/workflows/binary-preview.yml`, was later deleted in that repository.
+Each of those admissions now pins the workflow id, path and name, and a pinned
+admission accepts that exact workflow while it is `active` or `deleted`. Admission
+is by pinned release identity (release id, receipt asset id and digest, tag,
+source SHA and plan digest), never by pattern. Every other admission, including
+every current or new one, still requires an `active` workflow, and the
+exception bypasses the workflow identity cache. A follow-up change can tighten
+or remove the exception.
+
 **Runner image distribution through GHCR (2026-10-28).** The owner requires
 Runner, DinD, and resource-probe images at
 `ghcr.io/tailrocks/velnor-runner`, `ghcr.io/tailrocks/velnor-dind`, and

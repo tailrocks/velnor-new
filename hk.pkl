@@ -8,7 +8,7 @@ import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pk
 jobs = 2
 fail_fast = false
 
-local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
+local fixtureTrees = List("fixtures/**")
 
 steps {
   ["mise"] = Builtins.mise

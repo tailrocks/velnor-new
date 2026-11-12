@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
@@ -210,7 +213,7 @@ fn assert_package_inputs(root: &Path, package: &str, globs: &[&str]) -> TestResu
             "fixtures",
             "images",
             "scripts/archive-guard-inputs.txt",
-            "docs/proposed/opentofu-goldens/cases/dogfood/plan.txt",
+            "fixtures/opentofu-goldens/cases/dogfood/plan.txt",
             ".gitignore",
             ".mise-version",
             "Cargo.lock",
@@ -245,4 +248,40 @@ fn assert_metadata_path_matches(globs: &[&str], path: &str) {
             .any(|glob| velnor_actions_contract::matches_glob(glob, path)),
         "no complete metadata input rule matches {path}"
     );
+}
+
+pub(super) fn assert_documentation_checkout(
+    root: &Path,
+    path: &str,
+    glob: &str,
+    retained_source: &str,
+) -> TestResult {
+    use super::super::non_inputs_checkout_support::{
+        apply_exclusion, guard_run, rendered_patterns,
+    };
+    let patterns = rendered_patterns(glob)?;
+    apply_exclusion(root, &patterns)?;
+    assert!(
+        !root.join(path).exists(),
+        "excluded document remains checked out"
+    );
+    assert!(root.join(retained_source).is_file());
+    assert!(
+        root.join("fixtures/opentofu-goldens/cases/dogfood/plan.txt")
+            .is_file()
+    );
+    let runner_temp = tempfile::tempdir()?;
+    let accepted = guard_run(glob, root, runner_temp.path())?;
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+    super::super::scoped_workspace::put(root, path, "unexpected document in Rust checkout\n")?;
+    let rejected = guard_run(glob, root, runner_temp.path())?;
+    assert!(!rejected.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains(&format!("non_input_present:{path}"))
+    );
+    Ok(())
 }

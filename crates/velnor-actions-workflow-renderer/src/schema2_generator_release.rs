@@ -6,13 +6,14 @@ use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::yaml::Yaml;
 use velnor_actions_contract::ReleaseTarget;
-
 const MACOS_RUNS_ON: &str = "macos-15";
 const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
 #[path = "schema2_generator_release_archive.rs"]
 mod archive;
 #[path = "schema2_generator_release_assets.rs"]
 mod assets;
+#[path = "schema2_generator_release_build.rs"]
+mod build;
 #[path = "schema2_generator_release_candidate_manifest.rs"]
 mod candidate_manifest;
 #[path = "schema2_generator_release_jobs.rs"]
@@ -242,6 +243,7 @@ fn linux_jobs(
         "Verify ELF architecture",
         &assets::linux_verify(assets::LINUX.binary),
         pins,
+        true,
     )?;
     Ok(vec![
         jobs::build_job(
@@ -288,6 +290,7 @@ fn macos_arm64_jobs(
         "Verify Mach-O architecture",
         &assets::macos_verify(assets::MACOS_ARM64.binary, "arm64"),
         pins,
+        true,
     )?;
     Ok(vec![
         jobs::build_job(
@@ -336,6 +339,7 @@ fn macos_x86_64_jobs(
         "Verify Mach-O x86_64 architecture",
         &assets::macos_verify(assets::MACOS_X86_64.binary, "x86_64"),
         pins,
+        true,
     )?;
     Ok(vec![
         jobs::build_job(

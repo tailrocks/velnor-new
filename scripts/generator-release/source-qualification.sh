@@ -316,6 +316,15 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     echo 'FATAL: pull_request event lacks exact head/base commit SHAs' >&2
     exit 1
   fi
+  merge_parents="$(GIT_OPTIONAL_LOCKS=0 git cat-file -p HEAD | awk '
+    /^$/ { exit }
+    $1 == "parent" { parents = parents (parents ? " " : "") $2 }
+    END { print parents }
+  ')"
+  if [ "$merge_parents" != "$PR_BASE_SHA $PR_HEAD_SHA" ]; then
+    echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
+    exit 1
+  fi
   for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
       GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
@@ -471,6 +480,7 @@ locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
 final_status=0
 fetch_modes=()
 restored_sources_discarded=""
+artifact_admitted="${VELNOR_SOURCE_ARTIFACT_ADMITTED:-0}"
 clean_retry_attempted=0
 : >"$log"
 : >"$identity"
@@ -516,6 +526,7 @@ if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ]; then
       quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
       SOURCES_CACHE_MATCHED_KEY=''
       SOURCES_CACHE_HIT=''
+      artifact_admitted=0
       printf '::warning::unsafe restored Git source cache quarantined\n'
     else
       /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/python3 \
@@ -531,17 +542,19 @@ if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ]; then
       quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
       SOURCES_CACHE_MATCHED_KEY=''
       SOURCES_CACHE_HIT=''
+      artifact_admitted=0
       printf '::warning::unsafe restored Cargo source cache discarded\n'
       break
     fi
   done
 fi
-if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ] && [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ]; then
+if [ "${VELNOR_PREFETCH_RUST_ONLY:-}" = 1 ] && { [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] || [ "$artifact_admitted" = 1 ]; }; then
   if ! /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="$RUNNER_TEMP" \
     /bin/bash "$root/scripts/generator-release/cargo-source-handoff.sh" check "$CARGO_HOME"; then
     quarantine_sources || { printf 'FATAL: Cargo source quarantine failed\n' >&2; exit 1; }
     SOURCES_CACHE_MATCHED_KEY=''
     SOURCES_CACHE_HIT=''
+    artifact_admitted=0
     printf '::warning::unsafe restored Cargo source cache discarded\n'
   fi
 fi
@@ -553,7 +566,7 @@ record_lock_hashes() {
       printf 'invalid lockfile: %s\n' "$lock" >&2
       return 1
     fi
-    if ! digest="$(sha256sum -- "$root/$lock" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    if ! digest="$(shasum -a 256 -- "$root/$lock" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
       || [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
       printf 'could not calculate lockfile SHA-256: %s\n' "$lock" >&2
       return 1
@@ -603,12 +616,12 @@ discard_restored_sources() {
 }
 fetch_manifest() {
   local manifest="$1"
-  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ "$clean_retry_attempted" -eq 0 ]; then
+  if { [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] || [ "$artifact_admitted" = 1 ]; } && [ "$clean_retry_attempted" -eq 0 ]; then
     if run_fetch "$manifest" offline; then
       fetch_modes+=("$manifest:offline")
       return 0
     fi
-    if [ "${SOURCES_CACHE_HIT:-}" = true ] && ! discard_restored_sources "$manifest" offline; then
+    if { [ "${SOURCES_CACHE_HIT:-}" = true ] || [ "$artifact_admitted" = 1 ]; } && ! discard_restored_sources "$manifest" offline; then
       fetch_modes+=("$manifest:failed")
       return 1
     fi
@@ -617,7 +630,7 @@ fetch_manifest() {
     fetch_modes+=("$manifest:network")
     return 0
   fi
-  if [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] && [ "$clean_retry_attempted" -eq 0 ]; then
+  if { [ -n "${SOURCES_CACHE_MATCHED_KEY:-}" ] || [ "$artifact_admitted" = 1 ]; } && [ "$clean_retry_attempted" -eq 0 ]; then
     if discard_restored_sources "$manifest" network && run_fetch "$manifest" network; then
       fetch_modes+=("$manifest:network")
       return 0
@@ -664,6 +677,7 @@ fi
   printf 'target_filter=none\n'
   printf 'locked=true\n'
   printf 'cargo_home=%s\n' "$CARGO_HOME"
+  printf 'source_artifact_admitted=%s\n' "$artifact_admitted"
   printf 'sources_cache_hit=%s\n' "${SOURCES_CACHE_HIT:-}"
   printf 'sources_cache_matched_key=%s\n' "${SOURCES_CACHE_MATCHED_KEY:-}"
   printf 'fetch_mode=%s\n' ${fetch_modes[@]+"${fetch_modes[@]}"}

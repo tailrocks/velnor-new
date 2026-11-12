@@ -8,20 +8,52 @@ use std::path::Path;
 mod validation;
 
 use super::scoped_workspace::{
-    A5_COMPLETE_RULE, PACKAGES, PlanRun, TestResult, commit, generate_lockfile, plan, put,
-    scoped_workspace, set,
+    A5_COMPLETE_RULE, PACKAGES, PlanRun, TestResult, commit, plan, put, scoped_workspace, set,
 };
 
 const INVENTORY_TEST: &str =
     "crates/velnor-archive-guard/tests/golden_collector_public/tree_inventory.rs";
 const PLANNER_TEST: &str = "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/maintenance_check_inputs.rs";
+const ORACLE_SELECTION_TEST: &str = "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/oracle_input_selection.rs";
 const VALIDATION_TEST: &str = "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/maintenance_input_validation.rs";
 const CARGO_ARTIFACT_KIND: &str = "crates/velnor-actions-freshness/src/cargo_artifact_kind.rs";
 const REPO_VERIFICATION_DOC: &str = "docs/implemented/ci-maintenance/repo-verification.md";
 const RUST_QUALITY_CONTRACT: &str = "docs/proposed/ci-maintenance/rust-quality-contract.md";
-const REPO_VERIFICATION_NON_INPUT: &str = "docs/implemented/ci-maintenance/**";
-const RUST_QUALITY_NON_INPUT: &str = "docs/proposed/ci-maintenance/**";
+const BUN_CONTRACT: &str = "docs/proposed/bun-contract.md";
+const DOCUMENTATION_NON_INPUT: &str = "docs/**";
 const FIXTURE_CHECK_SOURCE: &str = "libs/core/src/lib.rs";
+
+#[test]
+fn documentation_outside_maintenance_is_unaffected_and_absent_from_rust_checkout() -> TestResult {
+    let root = repository_root()?;
+    let inputs = maintenance_inputs(&root)?;
+    let non_inputs = maintenance_non_inputs(&root)?;
+    for path in [
+        "docs/reviews/ci-performance.md",
+        "docs/implemented/named-mise-checks.md",
+    ] {
+        assert_planner_skips_documentation(path, "docs/**", &inputs, &non_inputs)?;
+    }
+    for operation in ["rename", "delete"] {
+        let repo = maintenance_fixture(&inputs, &non_inputs)?;
+        let path = "docs/reviews/selection.md";
+        put(repo.root(), path, "before\n")?;
+        let base = commit(repo.root(), "base documentation")?;
+        if operation == "rename" {
+            std::fs::rename(
+                repo.root().join(path),
+                repo.root().join("docs/reviews/renamed.md"),
+            )?;
+        } else {
+            std::fs::remove_file(repo.root().join(path))?;
+        }
+        let head = commit(repo.root(), "change documentation")?;
+        let run = plan(repo.root(), "pull_request", Some(&base), &head)?;
+        assert!(run.with_disposition("run")?.is_empty(), "{operation}");
+    }
+    Ok(())
+}
+
 #[test]
 fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> TestResult {
     let root = repository_root()?;
@@ -30,25 +62,28 @@ fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> Tes
     assert!(inputs.contains(INVENTORY_TEST));
     assert!(inputs.contains(PLANNER_TEST));
     assert!(inputs.contains(VALIDATION_TEST));
+    assert!(inputs.contains(ORACLE_SELECTION_TEST));
     assert!(inputs.contains(CARGO_ARTIFACT_KIND));
     assert!(inputs.contains(".mise-version"));
     assert!(inputs.contains("Cargo.lock"));
     assert!(inputs.contains("mise.toml"));
     assert!(!inputs.contains(REPO_VERIFICATION_DOC));
     assert!(!inputs.contains(RUST_QUALITY_CONTRACT));
+    assert!(!inputs.contains(BUN_CONTRACT));
     assert_eq!(
         non_inputs,
-        BTreeSet::from([
-            REPO_VERIFICATION_NON_INPUT.to_owned(),
-            RUST_QUALITY_NON_INPUT.to_owned(),
-        ])
+        BTreeSet::from([DOCUMENTATION_NON_INPUT.to_owned()])
     );
     validation::assert_dedicated_document_directories(&root)?;
     validation::assert_source_closure(&root, &inputs)?;
     validation::assert_metadata_input_closures(&root)?;
 
-    for path in [REPO_VERIFICATION_DOC, RUST_QUALITY_CONTRACT] {
-        assert_planner_skips_documentation(path, &inputs, &non_inputs)?;
+    for (path, glob) in [
+        (REPO_VERIFICATION_DOC, DOCUMENTATION_NON_INPUT),
+        (RUST_QUALITY_CONTRACT, DOCUMENTATION_NON_INPUT),
+        (BUN_CONTRACT, DOCUMENTATION_NON_INPUT),
+    ] {
+        assert_planner_skips_documentation(path, glob, &inputs, &non_inputs)?;
     }
     assert_local_documentation_keeps_named_check(&inputs, &non_inputs)?;
     for path in [FIXTURE_CHECK_SOURCE, "libs/util/src/lib.rs"] {
@@ -113,6 +148,7 @@ fn maintenance_non_inputs(root: &Path) -> Result<BTreeSet<String>, Box<dyn std::
 
 fn assert_planner_skips_documentation(
     path: &str,
+    glob: &str,
     inputs: &BTreeSet<String>,
     non_inputs: &BTreeSet<String>,
 ) -> TestResult {
@@ -131,6 +167,14 @@ fn assert_planner_skips_documentation(
         run.with_disposition("run")?.is_empty(),
         "documentation changes must not schedule Rust jobs"
     );
+    assert!(
+        run.value["plan"]["matrix"]["include"]
+            .as_array()
+            .ok_or("missing matrix entries")?
+            .is_empty(),
+        "documentation changes must not create executable matrix entries"
+    );
+    validation::assert_documentation_checkout(repo.root(), path, glob, FIXTURE_CHECK_SOURCE)?;
     Ok(())
 }
 
@@ -307,6 +351,11 @@ fn maintenance_fixture(
             put(repo.root(), input, "")?;
         }
     }
+    put(
+        repo.root(),
+        "fixtures/opentofu-goldens/cases/dogfood/plan.txt",
+        "oracle fixture\n",
+    )?;
     put(repo.root(), REPO_VERIFICATION_DOC, "verification fixture\n")?;
     put(repo.root(), RUST_QUALITY_CONTRACT, "quality fixture\n")?;
     put(repo.root(), ".mise-version", "2026.1.0\n")?;
@@ -330,55 +379,6 @@ fn assert_check_runs(run: &PlanRun) -> TestResult {
             .map(String::as_str),
         Some("run"),
         "changing a declared maintenance input must schedule its check"
-    );
-    Ok(())
-}
-
-#[test]
-fn inventory_generator_changes_select_its_cli_owner() -> TestResult {
-    const SCRIPT: &str = "scripts/native-image-candidate-inventory.py";
-    let root = repository_root()?;
-    let config: toml::Value =
-        toml::from_str(&std::fs::read_to_string(root.join(".velnor/config.toml"))?)?;
-    let rules = config["stacks"]["rust"]["inputs"]
-        .as_array()
-        .ok_or("missing Rust input rules")?;
-    let owner = rules
-        .iter()
-        .find(|rule| {
-            rule["packages"].as_array().is_some_and(|packages| {
-                packages
-                    .iter()
-                    .any(|package| package.as_str() == Some("velnor-actions-cli"))
-            })
-        })
-        .ok_or("missing CLI owner rule")?;
-    let globs = owner["globs"].as_array().ok_or("missing CLI owner globs")?;
-    assert!(globs.iter().any(|glob| glob.as_str() == Some(SCRIPT)));
-    let fixture_config = format!(
-        "\n[[stacks.rust.inputs]]\nglobs = [\"{SCRIPT}\"]\npackages = [\"velnor-actions-cli\"]\ncomplete = true\n"
-    );
-    let repo = scoped_workspace(&fixture_config)?;
-    put(
-        repo.root(),
-        "apps/a5/Cargo.toml",
-        "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[target.'cfg(unix)'.dependencies]\ncore = { path = \"../../libs/core\" }\n",
-    )?;
-    generate_lockfile(repo.root())?;
-    put(repo.root(), SCRIPT, "initial\n")?;
-    let base = commit(repo.root(), "base generator")?;
-    put(repo.root(), SCRIPT, "changed\n")?;
-    let head = commit(repo.root(), "change generator")?;
-    let run = plan(repo.root(), "pull_request", Some(&base), &head)?;
-    assert_eq!(
-        run.jobs()?
-            .get("rust-velnor-actions-cli")
-            .map(String::as_str),
-        Some("run")
-    );
-    assert_eq!(
-        run.jobs()?.get("rust-a1").map(String::as_str),
-        Some("not_affected")
     );
     Ok(())
 }

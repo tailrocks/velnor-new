@@ -629,3 +629,19 @@ accept `subject-digest` in `algorithm:hex_digest` form together with
 `subject-checksums`. Runner-family final attestation passes the four names and
 digests emitted by the authenticated native verifier, so later local file
 changes cannot select different attestation subjects.
+
+### Artifact download extraction
+
+The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
+records the download action's extraction and digest boundary. Verify artifact
+producer and identity before download; the digest check runs after extraction.
+
+### Hosted macOS source qualification
+
+The [runner image label table](https://github.com/actions/runner-images/blob/main/README.md)
+identifies `macos-15` as ARM64 and `macos-15-intel` as x64. The published
+[ARM64](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md)
+and [Intel](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+inventories do not list GNU coreutils as a guaranteed tool. Source qualification
+uses the platform `shasum -a 256` command for lock identities instead of relying
+on `sha256sum`.

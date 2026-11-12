@@ -50,7 +50,7 @@ pub use crate::rust_suites::{
 };
 pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
-    render_schema2_workflows,
+    render_schema2_product_release_workflows, render_schema2_workflows,
 };
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{

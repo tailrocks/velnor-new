@@ -40,7 +40,7 @@ case "$file_description" in
   *) printf 'resource probe is not a static ELF64 x86-64 executable: %s\n' "$file_description" >&2; exit 1 ;;
 esac
 
-docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --tag "$image" "$context"
+docker buildx build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --build-context "resource_probe=$context" --tag "$image" --load "$context"
 chmod 0755 "$smoke_root"
 docker run --rm --pull=never --platform linux/amd64 --cgroupns=host --pid=host --network none --read-only --cap-drop=ALL --security-opt no-new-privileges:true --user 65532:65532 --mount "type=bind,source=$smoke_root,target=/velnor/docker-root,readonly" "$image" > "$smoke_output" 2> "$smoke_error"
 test ! -s "$smoke_error"

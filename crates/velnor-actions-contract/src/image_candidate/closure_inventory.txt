@@ -956,6 +956,7 @@ crates/velnor-actions-orchestrator/src/package_release_signer_request.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_subjects.rs
 crates/velnor-actions-orchestrator/src/package_release_signer_verification.rs
 crates/velnor-actions-orchestrator/src/package_release_source_files.rs
+crates/velnor-actions-orchestrator/src/package_release_workflow_admission.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed_execution.rs
 crates/velnor-actions-orchestrator/src/parallel_target_seed_filesystem.rs
@@ -1516,6 +1517,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_features.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_archive.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_assets.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_release_build.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_candidate_manifest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_homebrew_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_jobs.rs
@@ -1535,6 +1537,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_sou
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_tag.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_jobs.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_routing.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_native.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_steps.rs
@@ -1562,8 +1565,10 @@ crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authori
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/context.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
+crates/velnor-actions-workflow-renderer/src/schema2_stable_sources_qualification.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
 crates/velnor-actions-workflow-renderer/src/setup.rs
+crates/velnor-actions-workflow-renderer/src/source_qualification_plan.rs
 crates/velnor-actions-workflow-renderer/src/sources_producer.rs
 crates/velnor-actions-workflow-renderer/src/stack_jobs.rs
 crates/velnor-actions-workflow-renderer/src/state_fragments.rs

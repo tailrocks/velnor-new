@@ -1,5 +1,8 @@
 # Required developer evidence
 
+This evidence is required for the changes that the
+[CI performance review](ci-performance.md) covers.
+
 Authors must publish this proof in the PR description, review discussion or a
 linked issue record. Keep change-specific evidence out of repository documentation.
 Reviewers must verify it against the final PR head; assertions and green cache

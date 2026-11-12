@@ -136,6 +136,12 @@ jobs:
       contents: read
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      sources_id: ${{ steps.build.outputs.sources_id }}
+      sources_digest: ${{ steps.build.outputs.sources_digest }}
+      sources_tree: ${{ steps.build.outputs.sources_tree }}
+      sources_root_lock: ${{ steps.build.outputs.sources_root_lock }}
+      sources_runner_lock: ${{ steps.build.outputs.sources_runner_lock }}
+      sources_attempt: ${{ steps.build.outputs.sources_attempt }}
     needs:
       - verify-release-caller
       - verify-release-source
@@ -152,6 +158,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
       - name: Build Linux velnor-actions
         uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
+        id: build
       - name: Upload Linux assets
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -163,7 +170,8 @@ jobs:
   qualify-linux:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
-    permissions: {}
+    permissions:
+      actions: read
     needs:
       - verify-release-caller
       - build-linux
@@ -180,6 +188,12 @@ jobs:
         uses: ./.github/actions/generator-release-qualify-linux # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
+          sources_id: ${{ needs.build-linux.outputs.sources_id }}
+          sources_digest: ${{ needs.build-linux.outputs.sources_digest }}
+          sources_tree: ${{ needs.build-linux.outputs.sources_tree }}
+          sources_root_lock: ${{ needs.build-linux.outputs.sources_root_lock }}
+          sources_runner_lock: ${{ needs.build-linux.outputs.sources_runner_lock }}
+          sources_attempt: ${{ needs.build-linux.outputs.sources_attempt }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-linux:
@@ -253,12 +267,18 @@ jobs:
           retention-days: 1
   build-macos:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: read
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      sources_id: ${{ steps.build.outputs.sources_id }}
+      sources_digest: ${{ steps.build.outputs.sources_digest }}
+      sources_tree: ${{ steps.build.outputs.sources_tree }}
+      sources_root_lock: ${{ steps.build.outputs.sources_root_lock }}
+      sources_runner_lock: ${{ steps.build.outputs.sources_runner_lock }}
+      sources_attempt: ${{ steps.build.outputs.sources_attempt }}
     needs:
       - verify-release-caller
       - verify-release-source
@@ -275,6 +295,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
       - name: Build macOS velnor-actions
         uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
+        id: build
       - name: Upload macOS assets
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -286,7 +307,8 @@ jobs:
   qualify-macos:
     runs-on: macos-15
     timeout-minutes: 20
-    permissions: {}
+    permissions:
+      actions: read
     needs:
       - verify-release-caller
       - build-macos
@@ -303,12 +325,19 @@ jobs:
         uses: ./.github/actions/generator-release-qualify-macos # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          sources_id: ${{ needs.build-macos.outputs.sources_id }}
+          sources_digest: ${{ needs.build-macos.outputs.sources_digest }}
+          sources_tree: ${{ needs.build-macos.outputs.sources_tree }}
+          sources_root_lock: ${{ needs.build-macos.outputs.sources_root_lock }}
+          sources_runner_lock: ${{ needs.build-macos.outputs.sources_runner_lock }}
+          sources_attempt: ${{ needs.build-macos.outputs.sources_attempt }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   qualify-homebrew-macos:
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
+      actions: read
       contents: read
       attestations: read
     needs:
@@ -332,6 +361,12 @@ jobs:
         uses: ./.github/actions/generator-release-qualify-homebrew # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          sources_id: ${{ needs.build-macos.outputs.sources_id }}
+          sources_digest: ${{ needs.build-macos.outputs.sources_digest }}
+          sources_tree: ${{ needs.build-macos.outputs.sources_tree }}
+          sources_root_lock: ${{ needs.build-macos.outputs.sources_root_lock }}
+          sources_runner_lock: ${{ needs.build-macos.outputs.sources_runner_lock }}
+          sources_attempt: ${{ needs.build-macos.outputs.sources_attempt }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos:
@@ -406,12 +441,18 @@ jobs:
           retention-days: 1
   build-macos-intel:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       actions: write
       contents: read
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      sources_id: ${{ steps.build.outputs.sources_id }}
+      sources_digest: ${{ steps.build.outputs.sources_digest }}
+      sources_tree: ${{ steps.build.outputs.sources_tree }}
+      sources_root_lock: ${{ steps.build.outputs.sources_root_lock }}
+      sources_runner_lock: ${{ steps.build.outputs.sources_runner_lock }}
+      sources_attempt: ${{ steps.build.outputs.sources_attempt }}
     needs:
       - verify-release-caller
       - verify-release-source
@@ -428,6 +469,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
       - name: Build macOS x86_64 velnor-actions
         uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
+        id: build
       - name: Upload macOS x86_64 assets
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -439,7 +481,8 @@ jobs:
   qualify-macos-intel:
     runs-on: macos-15-intel
     timeout-minutes: 20
-    permissions: {}
+    permissions:
+      actions: read
     needs:
       - verify-release-caller
       - build-macos-intel
@@ -456,6 +499,12 @@ jobs:
         uses: ./.github/actions/generator-release-qualify-macos-intel # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+          sources_id: ${{ needs.build-macos-intel.outputs.sources_id }}
+          sources_digest: ${{ needs.build-macos-intel.outputs.sources_digest }}
+          sources_tree: ${{ needs.build-macos-intel.outputs.sources_tree }}
+          sources_root_lock: ${{ needs.build-macos-intel.outputs.sources_root_lock }}
+          sources_runner_lock: ${{ needs.build-macos-intel.outputs.sources_runner_lock }}
+          sources_attempt: ${{ needs.build-macos-intel.outputs.sources_attempt }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos-intel:
@@ -1049,7 +1098,7 @@ jobs:
   source-preview-build-darwin:
     name: Build source preview Darwin
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main' && github.workflow_ref == 'tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main' }}
@@ -1204,7 +1253,7 @@ jobs:
           path: source-preview
       - name: Qualify exact source preview bytes
         shell: bash
-        run: "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest -f source-preview/velnor-actions-aarch64-apple-darwin\ntest ! -L source-preview/velnor-actions-aarch64-apple-darwin\nchmod 0500 source-preview/velnor-actions-aarch64-apple-darwin\ntest \"$(source-preview/velnor-actions-aarch64-apple-darwin --version)\" = 'velnor-actions 0.1.79'\nbash scripts/build-owned-archive-guard.sh\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-aarch64-apple-darwin\""
+        run: "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nCARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\"\nexport CARGO_HOME\ntest -d \"$CARGO_HOME\"\ntest ! -L \"$CARGO_HOME\"\ntest \"$(cd \"$CARGO_HOME\" && pwd -P)\" = \"$CARGO_HOME\"\nmkdir -p \"$RUNNER_TEMP/source-qualification-artifacts/logs\"\nexport VELNOR_RUST_VERSION=''\"${VELNOR_TOOL_RUST}\"'' VELNOR_PREFETCH_RUST_ONLY=1\nbash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces\nfor manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do\n  mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\"'' -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path \"$GITHUB_WORKSPACE/$manifest\" > /dev/null\ndone\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\ntest -f source-preview/velnor-actions-aarch64-apple-darwin\ntest ! -L source-preview/velnor-actions-aarch64-apple-darwin\nchmod 0500 source-preview/velnor-actions-aarch64-apple-darwin\ntest \"$(source-preview/velnor-actions-aarch64-apple-darwin --version)\" = 'velnor-actions 0.1.79'\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-aarch64-apple-darwin\""
   source-preview-publication:
     name: Source preview publication
     if: ${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}

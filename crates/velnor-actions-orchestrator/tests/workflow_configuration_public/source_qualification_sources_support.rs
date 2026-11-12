@@ -29,7 +29,7 @@ pub(super) struct Rendered {
 pub(super) fn sources_repo() -> Result<TempDir, Box<dyn Error>> {
     let repo = generator_repo(true)?;
     let root = repo.path();
-    write_root_cargo_lock(root, &["demo"])?;
+    write_root_cargo_lock(root, &["velnor-actions-cli"])?;
     add_independent_mbx_package(root, RUNNER_ROOT, "velnor-runner")?;
     write_nextest_task(root)?;
     write_nextest_task(&root.join(RUNNER_ROOT))?;
@@ -59,24 +59,19 @@ pub(super) fn steps_of<'a>(
         .ok_or_else(|| format!("job {job} has no steps").into())
 }
 
-pub(super) fn job_ids(workflow: &Value) -> Vec<String> {
-    workflow["jobs"]
-        .as_object()
-        .map(|jobs| jobs.keys().cloned().collect())
-        .unwrap_or_default()
-}
-
 pub(super) fn producer_ids(workflow: &Value) -> Vec<String> {
-    job_ids(workflow)
+    ["ordinary-harness", "keep-harness", "generation-checks"]
         .into_iter()
-        .filter(|id| workflow["jobs"][id.as_str()]["needs"].is_null())
+        .filter(|id| workflow["jobs"][*id].is_object())
+        .map(str::to_owned)
         .collect()
 }
 
 pub(super) fn gather_ids(workflow: &Value) -> Vec<String> {
-    job_ids(workflow)
+    ["source-qualification"]
         .into_iter()
-        .filter(|id| !workflow["jobs"][id.as_str()]["needs"].is_null())
+        .filter(|id| workflow["jobs"][*id].is_object())
+        .map(str::to_owned)
         .collect()
 }
 

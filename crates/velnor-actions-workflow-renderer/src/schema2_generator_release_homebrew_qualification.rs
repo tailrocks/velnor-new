@@ -29,6 +29,36 @@ pub(super) fn job(
                 "${{ needs.build-macos.outputs.artifact_id }}",
             ),
             (
+                "sources_id",
+                "Source artifact ID",
+                "${{ needs.build-macos.outputs.sources_id }}",
+            ),
+            (
+                "sources_digest",
+                "Source artifact digest",
+                "${{ needs.build-macos.outputs.sources_digest }}",
+            ),
+            (
+                "sources_tree",
+                "Source tree digest",
+                "${{ needs.build-macos.outputs.sources_tree }}",
+            ),
+            (
+                "sources_root_lock",
+                "Root lock digest",
+                "${{ needs.build-macos.outputs.sources_root_lock }}",
+            ),
+            (
+                "sources_runner_lock",
+                "Runner lock digest",
+                "${{ needs.build-macos.outputs.sources_runner_lock }}",
+            ),
+            (
+                "sources_attempt",
+                "Source producer attempt",
+                "${{ needs.build-macos.outputs.sources_attempt }}",
+            ),
+            (
                 "manifest_artifact_id",
                 "Artifact ID of the canonical same-run candidate manifest",
                 "${{ needs.candidate-manifest.outputs.artifact_id }}",
@@ -48,7 +78,11 @@ pub(super) fn job(
             Yaml::str(RUNS_ON),
             timeout,
         ),
-        workflow_steps::perm(&[("contents", "read"), ("attestations", "read")]),
+        workflow_steps::perm(&[
+            ("actions", "read"),
+            ("contents", "read"),
+            ("attestations", "read"),
+        ]),
     );
     fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &[product.build_job, "candidate-manifest"]);
@@ -74,6 +108,7 @@ fn candidate_steps(
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
         workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
+    steps.extend(super::source_steps(product, pins));
     steps.extend(assets::download_build_steps_for_id(
         product,
         "Download exact ARM candidate artifact",
