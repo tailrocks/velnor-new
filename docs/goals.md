@@ -57,6 +57,7 @@ These are targets for a workflow written by the generator in `generator/`, on Gi
 11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
 12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof.
 13. **Projects stay current.** Unless a project chooses otherwise, it receives a new Velnor version automatically, after that version has passed on the lab project and with the project's own checks green.
+14. **Decided by experiment.** A choice between tools or designs is settled by an experiment on the lab project. The question, the measurements and the rule that picks the winner are written down before the first run. Whoever runs the experiment applies the rule and commits the result with its raw data. A choice that would change a promise, a line under "What we never compromise" or a target in this file goes to the project's owner.
 
 ## What each project decides
 
@@ -98,3 +99,4 @@ Ask these questions. A "no" needs a reason in the pull request.
 9. Does it hold for one big crate, many workspaces, tests that need Docker, private dependencies and a large checkout?
 10. Was it verified locally, then on the lab project?
 11. Does it cross none of the six lines under "What we never compromise"?
+12. If it chooses between tools or designs, was the choice made by a lab experiment whose rule was written before the first run?
