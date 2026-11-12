@@ -26,6 +26,10 @@ mod record;
 
 use record::{HistoricalRecord, admission};
 
+#[cfg(test)]
+#[path = "homebrew_qualification_workflow_pin_tests.rs"]
+mod workflow_pin_tests;
+
 const REPOSITORY: &str = "jackin-project/jackin";
 const REPOSITORY_ID: u64 = 1_197_700_841;
 const PLAN: &[u8] = include_bytes!("../../../.velnor/qualification/homebrew/preview-plan.json");
