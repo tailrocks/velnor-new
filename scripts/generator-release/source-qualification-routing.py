@@ -70,7 +70,7 @@ def select():
     identities = (pull["head"]["repo"]["id"], pull["base"]["repo"]["id"], event["repository"]["id"])
     require(all(type(value) is int and 0 < value <= 18446744073709551615 for value in identities)
             and identities[1] == identities[2], "invalid repository identity")
-    run_id, attempt = os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"]
+    run_id, attempt = os.environ["GITHUB_RUN_ID"], os.environ.get("PLAN_ATTEMPT", "")
     require(re.fullmatch(r"[1-9][0-9]*", run_id) and re.fullmatch(r"[1-9][0-9]*", attempt),
             "invalid run identity")
     run_key = f"r{run_id}-a{attempt}"

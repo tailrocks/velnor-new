@@ -43,7 +43,7 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
         .ok_or("GeneratorRelease did not render its source qualification companion")?;
     assert!(generated.starts_with(MARKER_PREFIX));
     let rendered = generated;
-    assert!(rendered.contains("pull_request: {}"));
+    assert!(rendered.contains("pull_request:\n    types:\n      - opened\n      - edited\n"));
     assert!(rendered.contains("workflow_dispatch: {}"));
     assert!(!rendered.contains("push:"));
     assert!(!rendered.contains("schedule:"));

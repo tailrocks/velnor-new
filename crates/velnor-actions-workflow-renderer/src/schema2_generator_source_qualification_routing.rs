@@ -29,6 +29,10 @@ pub(super) fn plan_job(plan: &SourceQualificationPlan) -> Result<Yaml, RenderErr
         "source_binary_sha256".to_owned(),
         Yaml::str("${{ steps.source_plan_proof.outputs.binary_sha256 }}"),
     ));
+    outputs.push((
+        "plan_attempt".to_owned(),
+        Yaml::str("${{ github.run_attempt }}"),
+    ));
     let Some((_, Yaml::Seq(steps))) = fields.iter_mut().find(|(key, _)| key == "steps") else {
         return Err(invalid());
     };
@@ -88,6 +92,10 @@ pub(super) fn selection_job(
                     Yaml::str("${{ needs.plan.outputs.source_binary_sha256 }}"),
                 ),
                 (
+                    "PLAN_ATTEMPT".to_owned(),
+                    Yaml::str("${{ needs.plan.outputs.plan_attempt }}"),
+                ),
+                (
                     "CONTROLLER_VERSION".to_owned(),
                     Yaml::str(&plan.controller_version),
                 ),
@@ -137,7 +145,9 @@ fn download_plan_step() -> Yaml {
             Yaml::Map(vec![
                 (
                     "name".to_owned(),
-                    Yaml::str("velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}"),
+                    Yaml::str(
+                        "velnor-plan-r${{ github.run_id }}-a${{ needs.plan.outputs.plan_attempt }}",
+                    ),
                 ),
                 (
                     "path".to_owned(),

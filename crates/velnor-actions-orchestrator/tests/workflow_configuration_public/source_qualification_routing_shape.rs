@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 fn source_qualification_keeps_triggers_permissions_and_concurrency() -> Result<(), Box<dyn Error>> {
     let workflow = rendered_workflow()?;
     assert!(workflow.contains(
-        "\"on\":\n  pull_request: {}\n  workflow_dispatch: {}\npermissions:\n  contents: read\ncache-mode: read\nconcurrency:\n  group: source-qualification-${{ github.ref }}\n  cancel-in-progress: false\njobs:\n"
+        "\"on\":\n  pull_request:\n    types:\n      - opened\n      - edited\n      - synchronize\n      - reopened\n      - ready_for_review\n  workflow_dispatch: {}\npermissions:\n  contents: read\ncache-mode: read\nconcurrency:\n  group: source-qualification-${{ github.ref }}\n  cancel-in-progress: false\njobs:\n"
     ));
     let ids = job_ids(&workflow);
     assert_eq!(workflow.matches("concurrency:").count(), 1);
@@ -56,11 +56,12 @@ fn source_qualification_pr_work_uses_the_canonical_plan_and_dispatch_stays_full(
     let ci_plan = &ci["jobs"]["plan"];
     let plan = &qualification["jobs"]["plan"];
     let outputs = plan["outputs"].as_object().ok_or("plan outputs")?;
-    assert_eq!(outputs.len(), 3);
+    assert_eq!(outputs.len(), 4);
     for name in [
         "source_plan_sha256",
         "source_matrix_sha256",
         "source_binary_sha256",
+        "plan_attempt",
     ] {
         assert!(outputs.contains_key(name), "missing custody output {name}");
     }

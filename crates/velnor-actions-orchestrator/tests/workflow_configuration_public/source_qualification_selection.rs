@@ -203,10 +203,8 @@ pub(super) fn run_selector(
         .env("GITHUB_EVENT_NAME", "pull_request")
         .env("GITHUB_EVENT_PATH", event)
         .env("GITHUB_RUN_ID", "190001")
-        .env(
-            "GITHUB_RUN_ATTEMPT",
-            if mutation == "stale" { "2" } else { "1" },
-        )
+        .env("GITHUB_RUN_ATTEMPT", "2")
+        .env("PLAN_ATTEMPT", if mutation == "stale" { "2" } else { "1" })
         .env(
             "PLAN_RESULT",
             if mutation == "failed" {

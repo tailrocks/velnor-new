@@ -109,15 +109,28 @@ impl Schema2WorkflowRequest {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SourceQualificationInput<'a> {
+    Omitted,
+    Bound(Option<&'a crate::source_qualification_plan::SourceQualificationPlan>),
+}
+
 pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
-    render_schema2_workflows_bound(request, None)
+    render_schema2_files(request, SourceQualificationInput::Omitted)
 }
 
 pub(crate) fn render_schema2_workflows_bound(
     request: &Schema2WorkflowRequest,
     source_plan: Option<&crate::source_qualification_plan::SourceQualificationPlan>,
+) -> Result<Vec<RenderedFile>, RenderError> {
+    render_schema2_files(request, SourceQualificationInput::Bound(source_plan))
+}
+
+fn render_schema2_files(
+    request: &Schema2WorkflowRequest,
+    source_qualification: SourceQualificationInput<'_>,
 ) -> Result<Vec<RenderedFile>, RenderError> {
     RunnerSpec::hosted(&request.hosted_label)?;
     let mut files = Vec::new();
@@ -129,9 +142,10 @@ pub(crate) fn render_schema2_workflows_bound(
         )?);
     }
     files.extend(render_schema2_product_release_workflows(request)?);
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
+    if let SourceQualificationInput::Bound(source_plan) = source_qualification
+        && request
+            .workflows
+            .contains(&RoutingWorkflow::GeneratorRelease)
     {
         files.push(file(
             source_qualification::WORKFLOW_PATH,

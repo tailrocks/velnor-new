@@ -66,7 +66,18 @@ pub(super) fn render(
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                ("pull_request".to_owned(), Yaml::Map(Vec::new())),
+                (
+                    "pull_request".to_owned(),
+                    Yaml::Map(vec![(
+                        "types".to_owned(),
+                        Yaml::Seq(
+                            crate::render::EXPECTED_PR_TYPES
+                                .iter()
+                                .map(|kind| Yaml::str(*kind))
+                                .collect(),
+                        ),
+                    )]),
+                ),
                 ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
             ]),
         ),
