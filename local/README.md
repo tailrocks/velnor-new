@@ -1,6 +1,6 @@
 # velnor-local
 
-The local GitHub environment, a development tool that is not shipped. Today it runs GitHub's official runner, unmodified, against `runner.server` on an Apple Silicon Mac, in OrbStack containers. The results per workflow feature are in [#628](https://github.com/tailrocks/velnor-new/issues/628).
+The local GitHub environment, a development tool that is not shipped. It runs GitHub's official runner, unmodified, against `runner.server` on an Apple Silicon Mac, in OrbStack containers.
 
 | Part | Pin |
 |---|---|
