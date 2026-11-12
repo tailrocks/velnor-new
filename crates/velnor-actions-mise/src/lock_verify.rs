@@ -10,15 +10,15 @@ use super::{
     lock::{LockError, mismatch},
 };
 
-const PUBLISHED_VERDICT_VERSION: &str = "0.1.74";
+const PUBLISHED_VERDICT_VERSION: &str = "0.1.78";
 const PUBLISHED_VERDICT_GH_VERSION: &str = "2.103.3";
-const PUBLISHED_VERDICT_COMMIT: &str = "c622bfb187556afb8d3ff3ca917a719e4bb7f32a";
+const PUBLISHED_VERDICT_COMMIT: &str = "ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905";
 const PUBLISHED_VERDICT_LINUX_X64_SHA256: &str =
-    "db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f";
+    "3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7";
 const PUBLISHED_VERDICT_MACOS_ARM64_SHA256: &str =
-    "0a97e53bdd5faada42c0e8bedce2c54f710ada669cdd58cc918aaac80df68772";
+    "c0435f5b4978ae3ecdb030b4870d2a172ea91fecd7ed23e583ecdd1bcd047ef8";
 const PUBLISHED_VERDICT_MACOS_X64_SHA256: &str =
-    "41d55fe769f40df114ace812a19566d5c188d99143f0a631299dc10ebed4c09c";
+    "bd4099027b21685442d537d6af926336840d917536e4855bfa0d94cbaa735f02";
 
 #[must_use]
 pub fn published_verdict_manifest() -> ReleaseManifest {

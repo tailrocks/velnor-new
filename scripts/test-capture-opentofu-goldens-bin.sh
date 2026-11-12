@@ -39,7 +39,7 @@ case "$KEEP_WORK" in
   0|1) ;;
   *) echo 'FATAL: VELNOR_GOLDEN_KEEP_WORK must be 0 or 1' >&2; exit 2 ;;
 esac
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+GOLDEN_DIR="$ROOT/fixtures/opentofu-goldens"
 ARCHIVE_GUARD_INPUT_PATH=""
 ARCHIVE_GUARD_INPUT_SHA256=""
 SEEN_ARCHIVE_GUARD=0
@@ -185,7 +185,7 @@ if [ -n "${VELNOR_GOLDEN_DIR:-}" ]; then
   export VELNOR_GOLDEN_DIR
   GOLDEN_DIR="$VELNOR_GOLDEN_DIR"
 else
-  GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+  GOLDEN_DIR="$ROOT/fixtures/opentofu-goldens"
 fi
 case "$CLI_ARG" in
   /*) CLI_BIN="$CLI_ARG" ;;

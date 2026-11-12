@@ -37,10 +37,7 @@ ignore = []
 [stacks.rust]
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
-non_inputs = [
-  "docs/implemented/ci-maintenance/**",
-  "docs/proposed/ci-maintenance/**",
-]
+non_inputs = ["docs/**"]
 
 [[stacks.rust.inputs]]
 globs = [
@@ -114,7 +111,6 @@ globs = [
   "fixtures/**",
   "images/**",
   "scripts/**",
-  "docs/proposed/opentofu-goldens/**",
   ".cargo/config",
   ".cargo/config.toml",
   ".gitignore",
@@ -808,6 +804,7 @@ inputs = [
   "crates/velnor-actions-orchestrator/src/image_maintenance/promotion.rs",
   "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/maintenance_check_inputs.rs",
   "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/maintenance_input_validation.rs",
+  "crates/velnor-actions-orchestrator/tests/workflow_configuration_public/oracle_input_selection.rs",
   "crates/velnor-actions-workflow-renderer/src/job_image_authority_identity.py",
   "crates/velnor-actions-workflow-renderer/src/job_image_authority_oci.py",
   "crates/velnor-actions-workflow-renderer/src/job_image_authority_publish.py",

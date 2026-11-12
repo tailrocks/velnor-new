@@ -101,6 +101,7 @@ pub mod rust_suites;
 pub mod schema2;
 mod selected_mise_verifier;
 pub mod setup;
+mod source_qualification_plan;
 mod sources_producer;
 mod state_fragments;
 mod state_script;
