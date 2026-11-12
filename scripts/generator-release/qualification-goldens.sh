@@ -991,7 +991,7 @@ capture_release_dogfood() {
       && fixture_git commit -qm "golden"
   ) >"$git_log" 2>&1 || { cat "$git_log" >&2; echo "FATAL: dogfood git setup failed"; exit 2; }
   rm -f "$git_log"
-  for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
+  for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml" "$repo/ci-helper/Cargo.toml"; do
     if ! (
       cd "$(dirname "$manifest")" || exit 2
       if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
