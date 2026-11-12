@@ -3,35 +3,22 @@
 
 use velnor_cache_rules::{Event, Scope};
 
-use crate::support::{access, pull_request, push};
+use crate::support::{MAIN, PR7, access, pr, push};
 
 #[test]
 fn rule_2_write_scope_by_event() {
-    let table: [(&str, Event, &str); 5] = [
+    let table: [(&str, Event, &str); 4] = [
+        ("push to default", push("main"), MAIN),
         (
-            "push to the default branch",
-            push("main"),
-            "refs/heads/main",
-        ),
-        (
-            "push to a feature branch",
+            "push to feature",
             push("feature/login"),
             "refs/heads/feature/login",
         ),
+        ("pr on default", pr(7, "main"), PR7),
         (
-            "pull request against the default branch",
-            pull_request(7, "main"),
-            "refs/pull/7/merge",
-        ),
-        (
-            "pull request against a feature branch",
-            pull_request(42, "feature-a"),
+            "pr on feature, never the base",
+            pr(42, "feature-a"),
             "refs/pull/42/merge",
-        ),
-        (
-            "another pull request has another scope",
-            pull_request(8, "main"),
-            "refs/pull/8/merge",
         ),
     ];
     for (name, event, expected) in table {

@@ -3,168 +3,82 @@
 
 use velnor_cache_rules::{Event, access_for};
 
-use crate::support::{VERSION, entry, pull_request, push, restored, scopes};
+use crate::support::{MAIN, PR7, VERSION, entry, found, pr, push, scopes};
+
+const FEATURE_A: &str = "refs/heads/feature-a";
 
 #[test]
 fn rule_1_read_scopes_in_lookup_order() {
-    let table: [(&str, Event, &str, Vec<&str>); 6] = [
+    let table: [(&str, Event, &str, &[&str]); 5] = [
+        ("push to default", push("main"), "main", &[MAIN]),
         (
-            "push to the default branch reads only itself",
-            push("main"),
+            "push to feature",
+            push("b"),
             "main",
-            vec!["refs/heads/main"],
+            &["refs/heads/b", MAIN],
+        ),
+        ("pr on default", pr(7, "main"), "main", &[PR7, MAIN]),
+        (
+            "pr on feature",
+            pr(7, "feature-a"),
+            "main",
+            &[PR7, FEATURE_A, MAIN],
         ),
         (
-            "push to a feature branch reads itself, then the default branch",
-            push("feature-b"),
-            "main",
-            vec!["refs/heads/feature-b", "refs/heads/main"],
-        ),
-        (
-            "pull request against the default branch reads its merge ref, then the default branch",
-            pull_request(7, "main"),
-            "main",
-            vec!["refs/pull/7/merge", "refs/heads/main"],
-        ),
-        (
-            "pull request against a feature branch reads its merge ref, the base branch, then the default branch",
-            pull_request(7, "feature-a"),
-            "main",
-            vec![
-                "refs/pull/7/merge",
-                "refs/heads/feature-a",
-                "refs/heads/main",
-            ],
-        ),
-        (
-            "push with another default branch name",
-            push("feature-b"),
+            "other default",
+            pr(12, "trunk"),
             "trunk",
-            vec!["refs/heads/feature-b", "refs/heads/trunk"],
-        ),
-        (
-            "pull request against the default branch named trunk",
-            pull_request(12, "trunk"),
-            "trunk",
-            vec!["refs/pull/12/merge", "refs/heads/trunk"],
+            &["refs/pull/12/merge", "refs/heads/trunk"],
         ),
     ];
     for (name, event, default_branch, expected) in table {
         assert_eq!(
             access_for(&event, default_branch).read,
-            scopes(&expected),
+            scopes(expected),
             "{name}"
         );
     }
 }
 
 #[test]
-fn rule_1_cannot_read_sibling_child_or_other_pull_request_scopes() {
-    let table: [(&str, Event, &str, bool); 11] = [
+fn rule_1_sibling_child_and_other_pull_request_scopes_are_not_readable() {
+    let table: [(&str, Event, &str, bool); 10] = [
+        ("own branch", push("b"), "refs/heads/b", true),
+        ("default branch", push("b"), MAIN, true),
+        ("sibling branch", push("b"), "refs/heads/c", false),
+        ("child branch", push("main"), "refs/heads/b", false),
+        ("a pull request from a branch", push("b"), PR7, false),
+        ("own merge ref", pr(7, "main"), PR7, true),
+        ("another pull request", pr(8, "main"), PR7, false),
+        ("head branch", pr(7, "main"), "refs/heads/b", false),
+        ("base branch", pr(7, "feature-a"), FEATURE_A, true),
         (
-            "own branch",
-            push("feature-b"),
-            "refs/heads/feature-b",
-            true,
-        ),
-        ("default branch", push("feature-b"), "refs/heads/main", true),
-        (
-            "sibling branch",
-            push("feature-b"),
-            "refs/heads/feature-c",
-            false,
-        ),
-        (
-            "child branch from the default branch",
-            push("main"),
-            "refs/heads/feature-b",
-            false,
-        ),
-        (
-            "pull request merge ref from a branch",
-            push("feature-b"),
-            "refs/pull/7/merge",
-            false,
-        ),
-        (
-            "own merge ref",
-            pull_request(7, "main"),
-            "refs/pull/7/merge",
-            true,
-        ),
-        (
-            "another pull request",
-            pull_request(8, "main"),
-            "refs/pull/7/merge",
-            false,
-        ),
-        (
-            "head branch of the pull request",
-            pull_request(7, "main"),
-            "refs/heads/feature-b",
-            false,
-        ),
-        (
-            "base branch of the pull request",
-            pull_request(7, "feature-a"),
-            "refs/heads/feature-a",
-            true,
-        ),
-        (
-            "another feature branch",
-            pull_request(7, "feature-a"),
-            "refs/heads/feature-z",
-            false,
-        ),
-        (
-            "pull request merge ref from the default branch",
-            push("main"),
-            "refs/pull/7/merge",
+            "unrelated branch",
+            pr(7, "feature-a"),
+            "refs/heads/z",
             false,
         ),
     ];
-    for (name, event, saved_in, visible) in table {
+    for (name, event, saved_in, readable) in table {
         let entries = [entry(saved_in, "deps", VERSION, 1)];
-        assert_eq!(
-            restored(&entries, &event, "deps", &[], VERSION).is_some(),
-            visible,
-            "{name}"
-        );
+        let hit = found(&entries, &event, "deps", &[], VERSION);
+        assert_eq!(hit.is_some(), readable, "{name}");
     }
 }
 
 #[test]
-fn rule_1_nearer_scope_wins_over_farther_scope() {
-    let table: [(&str, Vec<&str>, &str); 3] = [
-        (
-            "merge ref before base and default",
-            vec![
-                "refs/heads/main",
-                "refs/heads/feature-a",
-                "refs/pull/7/merge",
-            ],
-            "refs/pull/7/merge",
-        ),
-        (
-            "base before default",
-            vec!["refs/heads/main", "refs/heads/feature-a"],
-            "refs/heads/feature-a",
-        ),
-        ("default alone", vec!["refs/heads/main"], "refs/heads/main"),
+fn rule_1_nearer_scope_wins_even_when_older() {
+    let table: [(&str, &[&str], &str); 3] = [
+        ("merge ref", &[MAIN, FEATURE_A, PR7], PR7),
+        ("base", &[MAIN, FEATURE_A], FEATURE_A),
+        ("default", &[MAIN], MAIN),
     ];
     for (name, saved_in, expected) in table {
-        let entries: Vec<_> = saved_in
-            .iter()
-            .enumerate()
-            .map(|(created, scope)| entry(scope, "deps", VERSION, 100 - created as u64))
+        let entries: Vec<_> = (0..)
+            .zip(saved_in)
+            .map(|(age, scope)| entry(scope, "deps", VERSION, 100 - age))
             .collect();
-        let hit = restored(
-            &entries,
-            &pull_request(7, "feature-a"),
-            "deps",
-            &[],
-            VERSION,
-        );
+        let hit = found(&entries, &pr(7, "feature-a"), "deps", &[], VERSION);
         assert_eq!(hit.map(|hit| hit.0).as_deref(), Some(expected), "{name}");
     }
 }

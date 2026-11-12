@@ -3,18 +3,18 @@
 
 use velnor_cache_rules::AlreadyExists;
 
-use crate::support::{Repository, id, pull_request, push};
+use crate::support::{Repository, id, pr, push};
 
 fn hit(scope: &str, key: &str) -> (String, String) {
     (scope.to_owned(), key.to_owned())
 }
 
 #[test]
-fn story_push_saves_pull_request_restores_saves_and_restores_again() {
+fn story_push_saves_pr_restores_saves_and_restores_again() {
     let mut repository = Repository::new();
     let main = push("main");
-    let first = pull_request(7, "main");
-    let second = pull_request(8, "main");
+    let first = pr(7, "main");
+    let second = pr(8, "main");
 
     assert_eq!(repository.restore(&main, "deps-main-1", &["deps-"]), None);
     assert_eq!(repository.save(&main, "deps-main-1"), Ok(()));
