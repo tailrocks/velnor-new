@@ -36,7 +36,7 @@ Velnor reads a Rust project and writes the GitHub Actions workflows that check i
 1. **Correct before fast.** A check is skipped only when the change provably cannot affect it. When Velnor cannot tell what a file affects, it runs the checks.
 2. **Green means verified.** The required check passes only when everything that was selected ran and passed. A test step that should have run tests and ran none is not a pass.
 3. **A broken cache is slow, never wrong, and never silent.** A missing, rejected or stale cache takes a correct cold path. A cache that fails at its job is reported by a red check, as design rule 3 defines.
-4. **Secrets never reach the build.** Private dependencies are fetched with a short-lived token. The token is discarded, and cargo then runs offline. A pull request from this repository writes a cache only into its own scope. A pull request from a fork gets no token and only reads caches.
+4. **Secrets never reach the build.** Private dependencies are fetched with a short-lived token. The token is discarded, and cargo then runs offline. A pull request from this repository writes a cache only into its own scope. A pull request from a fork gets no token and only reads caches. Where a fork can read the caches, as in a public repository, nothing fetched from a private dependency or built from it is cached.
 5. **Every speed claim has a measurement.** A change states its effect with numbers from real runs, before and after.
 6. **Inside GitHub's free limits.** The design fits in GitHub's 10 GB of cache and on standard hosted runners. It does not depend on paid storage or larger machines.
 
@@ -66,7 +66,7 @@ These are the numbers behind the promises, for a workflow the generator writes, 
 6. **Test groups carry their needs.** A group names the tests that run together, by crate, test binary or name. It can require Docker, limit how many tests run at once, and set its own time limit and machine.
 7. **No pointless steps, and no silent ones.** A step is left out only when Velnor can show it has nothing to check. Every run decides again and lists what it left out and why.
 8. **A pull request builds on its own last run.** A pull request from this repository saves what it built, and only that pull request reads it.
-9. **No logic in YAML.** Every generated `run:` step is one command. Decisions and loops live in one small helper program, written in Rust and shipped prebuilt.
+9. **No logic in YAML.** Every generated `run:` step is one command. A generated workflow uses only actions from a fixed list, each pinned to a full commit SHA. Decisions and loops live in one small helper program, written in Rust and shipped prebuilt.
 10. **Configuration matches reality.** Velnor checks its configuration against the repository, such as the name of the default branch. A mismatch fails the run.
 11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
 12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof.

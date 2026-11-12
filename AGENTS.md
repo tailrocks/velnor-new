@@ -27,7 +27,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 ## This project (velnor-new)
 
 - Read [`docs/goals.md`](docs/goals.md) first. It names the rule book for each part of the code, and it is the rule book for new work (`generator/`, `ci-helper/`, `local/`): vision, promises, targets and design rules.
-- The existing engine (`crates/`, `.velnor/` and the workflows it generates) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
+- The existing engine (`crates/`, `.velnor/`, the workflows it generates and what supports it) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
 - Never silently change `docs/goals.md` or a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
 - Quality: enforced by CI and compiler gates; see `docs/proposed/ci-maintenance/rust-quality-contract.md`.
@@ -39,5 +39,5 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 ### Review guidelines
 
 - Review a change to new work with the section "How to review a change" of [`docs/goals.md`](docs/goals.md).
-- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR that changes the existing engine or a workflow it generates. Enforce the target, not today's baseline: improve touched behavior, fix its inherited violations in the same PR, and reject regressions or missing proof. An issue or follow-up promise never substitutes for a required fix.
+- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR that changes anything `docs/goals.md` assigns to the existing engine. Enforce the target, not today's baseline: improve touched behavior, fix its inherited violations in the same PR, and reject regressions or missing proof. An issue or follow-up promise never substitutes for a required fix.
 - Keep repository documentation evergreen: describe current contracts and procedures, without verification-date logs or specific PR/branch references. Keep change-specific evidence in PR descriptions, review discussions or issues; use git history for chronology.

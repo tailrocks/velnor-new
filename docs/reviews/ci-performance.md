@@ -1,8 +1,9 @@
 # CI performance review
 
-This procedure reviews a change to the existing engine in `crates/` or to a
-workflow it generates. A change to the new Rust generator is reviewed with
-[the goals](../goals.md).
+This procedure reviews a change to anything that [the goals](../goals.md)
+assign to the existing engine: `crates/`, `.velnor/`, the workflows it
+generates, and the scripts, images and fixtures that support it. A change to
+the new Rust generator is reviewed with the goals.
 
 Velnor Actions must generate exceptionally fast, efficient, reliable, secure,
 production-grade CI/CD. These are acceptance targets, not claims about today's
