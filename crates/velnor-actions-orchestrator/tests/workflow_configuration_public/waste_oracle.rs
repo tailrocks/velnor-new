@@ -9,6 +9,7 @@ use std::path::Path;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use super::support::rendered_job_block;
+use super::waste_aliases::expand_aliases;
 
 pub(super) type Files = BTreeMap<String, String>;
 
@@ -39,7 +40,7 @@ pub(super) fn files_of(tree: &RenderedTree) -> Result<Files, Box<dyn Error>> {
         .into_iter()
         .map(|path| {
             let bytes = tree.get(&path).ok_or("rendered file vanished")?.to_owned();
-            Ok((path, expand_run_aliases(&bytes)))
+            Ok((path, expand_aliases(&bytes)))
         })
         .collect()
 }
@@ -54,7 +55,7 @@ pub(super) fn files_of_repo(root: &Path) -> Result<Files, Box<dyn Error>> {
         {
             files.insert(
                 format!(".github/workflows/{name}"),
-                expand_run_aliases(&fs::read_to_string(&path)?),
+                expand_aliases(&fs::read_to_string(&path)?),
             );
         }
     }
@@ -72,96 +73,6 @@ pub(super) fn files_of_repo(root: &Path) -> Result<Files, Box<dyn Error>> {
         }
     }
     Ok(files)
-}
-
-fn leading_spaces(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-fn step_block<'a>(lines: &[&'a str], at: usize) -> Vec<&'a str> {
-    let dash = leading_spaces(lines[at]);
-    lines[at + 1..]
-        .iter()
-        .take_while(|line| line.trim().is_empty() || leading_spaces(line) > dash)
-        .copied()
-        .collect()
-}
-
-fn expand_step_aliases(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    let mut blocks = BTreeMap::new();
-    for (at, line) in lines.iter().enumerate() {
-        if let Some(name) = line.trim().strip_prefix("- &s") {
-            blocks.insert(
-                name.to_owned(),
-                (leading_spaces(line), step_block(&lines, at)),
-            );
-        }
-    }
-    let mut out = String::with_capacity(text.len());
-    let mut at = 0;
-    while at < lines.len() {
-        let line = lines[at];
-        let trimmed = line.trim();
-        let name = trimmed
-            .strip_prefix("- &s")
-            .or_else(|| trimmed.strip_prefix("- *s"));
-        let Some((origin, block)) = name.and_then(|name| blocks.get(name)) else {
-            out.push_str(line);
-            out.push('\n');
-            at += 1;
-            continue;
-        };
-        let dash = leading_spaces(line);
-        for (index, body) in block.iter().enumerate() {
-            if index == 0 {
-                out.extend([
-                    " ".repeat(dash),
-                    "- ".to_owned(),
-                    body.trim_start().to_owned(),
-                ]);
-            } else if dash >= *origin {
-                out.extend([" ".repeat(dash - origin), (*body).to_owned()]);
-            } else {
-                out.push_str(&body[(origin - dash).min(body.len())..]);
-            }
-            out.push('\n');
-        }
-        at += 1;
-        if trimmed.starts_with("- &s") {
-            at += block.len();
-        }
-    }
-    out
-}
-
-pub(super) fn expand_run_aliases(text: &str) -> String {
-    let text = expand_step_aliases(text);
-    let text = text.as_str();
-    let mut anchors = BTreeMap::new();
-    for line in text.lines() {
-        if let Some(rest) = line.trim().strip_prefix("run: &")
-            && let Some((name, value)) = rest.split_once(' ')
-        {
-            anchors.insert(name.to_owned(), value.to_owned());
-        }
-    }
-    let mut out = String::with_capacity(text.len());
-    for line in text.lines() {
-        let alias = line
-            .trim()
-            .strip_prefix("run: *")
-            .and_then(|name| anchors.get(name));
-        match alias {
-            Some(value) => {
-                let indent = &line[..line.len() - line.trim_start().len()];
-                out.extend([indent, "run: ", value]);
-            }
-            None => out.push_str(line),
-        }
-        out.push('\n');
-    }
-    out
 }
 
 pub(super) fn children(text: &str) -> Vec<(String, String)> {
