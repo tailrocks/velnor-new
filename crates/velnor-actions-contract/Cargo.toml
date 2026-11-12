@@ -27,7 +27,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 blake3 = { version = "=1.8.7" }
-rustix = { version = "=1.1.5", features = ["fs"] }
+rustix = { version = "=1.1.6", features = ["fs"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
