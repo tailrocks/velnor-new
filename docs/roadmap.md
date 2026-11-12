@@ -25,10 +25,10 @@ Work through the roadmap:
 Finish one issue (replace the number):
 
 ```text
-/goal Finish issue #583 of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
+/goal Finish issue #583 of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here, or when the issue is marked `blocked` with its evidence and that evidence is printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
 ```
 
-A session can end before the roadmap does. Start a new one and paste the same text: the state is in GitHub, so it continues where the last one stopped.
+A session can end before the roadmap does. Start a new one and paste the same text: the state is in GitHub, so it continues where the last one stopped. The first thing a new session does is resume each open issue with the label `in-progress`, because the session that claimed it has ended: find its branch `fast/<issue number>-*` and its pull request, and continue from the step of "One issue" that comes next.
 
 A goal is judged from what is printed in the session, so print the proof. Do not only say that it passed.
 
@@ -46,6 +46,7 @@ The state of the roadmap is in GitHub. There is no progress file.
 | What could not be finished? | The open issues with the label `blocked`. The evidence is in their last comment |
 | Is somebody working on it? | The label `in-progress` |
 | What did an experiment decide? | The table in issue [#586](https://github.com/tailrocks/velnor-new/issues/586) |
+| Where does the owner watch it? | The project [Velnor fast Rust CI](https://github.com/orgs/tailrocks/projects/2) and the [milestones](https://github.com/tailrocks/velnor-new/milestones) |
 
 This query prints every issue that can start: open, not a parent, nothing open blocks it, nobody is working on it, and it is not marked `blocked`.
 
@@ -63,7 +64,7 @@ gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"t
 
 ## One issue
 
-1. **Read and claim.** Read the issue in full, the issues it depends on, and the rules for pull requests in the root issue #574. Add the label `in-progress` to the issue.
+1. **Read and claim.** Read the issue in full, the issues it depends on, and the rules for pull requests in the root issue #574. Add the label `in-progress` to the issue. Set its card on the project board to "In Progress", as "The project board" below describes.
 2. **Delegate.** Start one subagent as the executor, with the model and effort from the issue's labels, in its own git worktree on a branch named `fast/<issue number>-<short name>`. Give it the issue number and this file. Ask it for a short report: what it changed, the proof for each "Done when" box, and anything it could not do.
 3. **Build and prove.** The executor makes the change and runs every "Done when" check. A check that names `velnor-lab` follows rule 4 of the root issue. If a check cannot be met, follow "An issue that cannot be finished" below. The executor does not widen the task to make the check pass.
 4. **Open the pull request.** One issue is one pull request. The description starts with why, states the measured before and after (the words "no timing effect expected" with the reason are allowed only for a change that touches no executable behavior), shows the command and output for each "Done when" box, and ends with `Closes #<number>`. It ends with `Refs #<number>` instead when a box needs a real run on `velnor-lab` after the merge.
@@ -73,6 +74,20 @@ gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"t
 8. **Record.** An experiment writes its decision into issue #586. A changed plan is written into the issues it affects, in the present tense.
 
 The subagent models are `haiku`, `sonnet` and `opus`. Use the model the issue names. Use a stronger one only after a failure, and say so in the pull request.
+
+## The project board
+
+The project [Velnor fast Rust CI](https://github.com/orgs/tailrocks/projects/2) shows the roadmap to the owner. Its lists follow the labels and the "blocked by" links, so they need no upkeep. GitHub adds a new child issue of #574 to the project, moves a card to "In Progress" when a pull request that closes its issue opens, and moves it to "Done" when the issue closes.
+
+One thing is set by hand. When you claim an issue, move its card to "In Progress", so the board shows the work before a pull request exists. Replace `<number>` with the issue number:
+
+```sh
+gh project item-edit --project-id PVT_kwDOBLJ97c4BrWyl --field-id PVTSSF_lADOBLJ97c4BrWylzhpp4QY --single-select-option-id 47fc9ee4 --id "$(gh project item-list 2 --owner tailrocks --limit 500 --format json --jq '.items[]|select(.content.number==<number>)|.id')"
+```
+
+When you mark an issue `blocked`, move its card back with the same command and the option id `f75ad846` ("Todo").
+
+The board is a display, not the state. If a project command fails, go on.
 
 ## Never stop to ask
 
