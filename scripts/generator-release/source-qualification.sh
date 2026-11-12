@@ -477,6 +477,10 @@ after="$evidence/cargo-fetch-locks.after.txt"
 identity="$evidence/cargo-fetch-lock-identity.txt"
 manifests=(Cargo.toml crates/velnor-runner/Cargo.toml)
 locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
+if [ -f "$root/local/Cargo.toml" ]; then
+  manifests+=(local/Cargo.toml)
+  locks+=(local/Cargo.lock)
+fi
 final_status=0
 fetch_modes=()
 restored_sources_discarded=""

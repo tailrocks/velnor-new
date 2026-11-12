@@ -41,3 +41,13 @@ docker run --rm --network velnor-local -v "$REPO:/repo" -v "$STATE/events:/event
 ## Test data
 
 `testdata/cache-client/` holds the calls of `@actions/cache` 6.1.0 (`actions/cache` commit `55cc8345863c7cc4c66a329aec7e433d2d1c52a9`) on a miss with save, then on a hit. Requests come from the real client. Responses come from `runner.server`, not from GitHub. Bearer tokens and URL signatures are replaced with `REDACTED`, and binary bodies with their size.
+
+## Cache rules
+
+`crates/velnor-cache-rules/` answers "what would GitHub's cache do?" for any sequence of events: which scopes a run reads and writes, which entry a restore finds, whether a save is refused, and which entries GitHub evicts. It takes data and returns data. `crates/velnor-cache-rules/RULES.md` lists each rule with its source in GitHub's documentation, or marks it as modelled or probed.
+
+Run its tests from `local/`:
+
+```sh
+cargo nextest run
+```

@@ -17,7 +17,14 @@ pub(super) fn copy_mutation_repository(
 ) -> Result<(), Box<dyn Error>> {
     copy_fingerprint_inputs(source, destination)?;
     for directory in [
-        ".config", ".github", ".velnor", "crates", "fixtures", "images", "scripts",
+        ".config",
+        ".github",
+        ".velnor",
+        "local",
+        "crates",
+        "fixtures",
+        "images",
+        "scripts",
     ] {
         copy_tree(&source.join(directory), &destination.join(directory))?;
     }

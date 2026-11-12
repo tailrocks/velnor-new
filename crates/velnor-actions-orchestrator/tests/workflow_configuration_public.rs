@@ -235,6 +235,8 @@ mod tools_producers_scope;
 mod topology_e797385c74;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/waste_aliases.rs"]
+mod waste_aliases;
 #[path = "workflow_configuration_public/waste_graph.rs"]
 mod waste_graph;
 #[path = "workflow_configuration_public/waste_lint.rs"]

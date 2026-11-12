@@ -61,6 +61,11 @@ packages = ["velnor-runner-host"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = ["local/**"]
+packages = ["velnor-cache-rules", "velnor-local"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = ["crates/velnor-actions-contract/**"]
 packages = ["velnor-actions-contract"]
 complete = true
@@ -224,7 +229,7 @@ release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
 
 [discovery]
-exclude = ["fixtures/**", "crates/**/tests/fixtures/**", "local/**"]
+exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
 
 [actions.overrides]
 
