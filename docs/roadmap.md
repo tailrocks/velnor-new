@@ -19,7 +19,7 @@ Then paste one of these.
 Work through the roadmap:
 
 ```text
-/goal Work through the roadmap of this repository by following docs/roadmap.md until it is finished, without asking anyone. It is finished when the ready-issue query in that file prints nothing. After each issue, print the output of the query and one line for the issue: its number, its pull request, whether it merged, and the command and output that prove each "Done when" box. At the end, print every open issue under #574 that is an [OWNER] follow-up or carries the label blocked. Never merge with a failing or missing required check. Never use --admin or a force push. Change docs/goals.md or docs/hard-decisions.md only where an issue says so. Never spend money.
+/goal Work through the roadmap of this repository by following docs/roadmap.md until it is finished, without asking anyone. It is finished when the ready-issue query in that file prints nothing. After each issue, print the output of the query and one line for the issue: its number, its pull request, whether it merged, and the command and output that prove each "Done when" box. At the end, print every open issue under #574 that is an [OWNER] follow-up or carries the label blocked. Never merge with a failing or missing required check. Never use --admin or a force push. Never change docs/goals.md. Change docs/hard-decisions.md only where an issue records the owner's approval. Never spend money.
 ```
 
 Finish one issue (replace the number):
@@ -111,7 +111,8 @@ Some steps need what only the owner has, such as creating a GitHub App, applying
 
 ### What is never done
 
-- A change to [the goals](goals.md) or to [the hard decisions](hard-decisions.md) that no issue asks for.
+- A change to [the goals](goals.md). Only the owner changes them.
+- A change to [the hard decisions](hard-decisions.md), unless the issue records the owner's approval of that change. Do not write such an approval into an issue yourself.
 - Anything that costs money, such as paid storage or larger runners.
 - A merge with a failing or missing required check, `--admin`, or a force push.
 - A deletion that cannot be undone. Before deleting a branch, save it as a hidden ref `refs/keep/<branch name>`, so it can be restored. Tags, releases, and caches outside `velnor-lab` are never deleted.
