@@ -25,7 +25,7 @@ Work through the roadmap:
 Finish one issue (replace the number):
 
 ```text
-/goal Finish issue #583 of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here, or when the issue is marked `blocked` with its evidence and that evidence is printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
+/goal Finish issue #583 of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here. A box that only the owner can prove counts as done when the link to its [OWNER] follow-up issue is printed here. It also ends when the issue is marked `blocked` and its evidence is printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
 ```
 
 A session can end before the roadmap does. Start a new one and paste the same text: the state is in GitHub, so it continues where the last one stopped. The first thing a new session does is resume each open issue with the label `in-progress`, because the session that claimed it has ended: find its branch `fast/<issue number>-*` and its pull request, and continue from the step of "One issue" that comes next.
@@ -104,7 +104,7 @@ Some steps need what only the owner has, such as creating a GitHub App, applying
 
 ### An issue that cannot be finished
 
-1. Retry once with the next stronger model.
+1. Retry once with the next stronger model. An issue that already runs on Opus is retried once on Opus at high effort.
 2. If it still fails, post the evidence as a comment: what was tried, the command and its output, and a recommendation. A target in [the goals](goals.md) that no option meets is such a case.
 3. Add the label `blocked` and remove the label `in-progress`. Leave the issue open.
 4. Go on with the issues that do not depend on it.
