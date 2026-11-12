@@ -22,6 +22,9 @@ mod active_role;
 pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
 
+#[cfg(test)]
+#[path = "package_release_run_identity_tests.rs"]
+mod tests;
 #[path = "package_release_run_inventory.rs"]
 mod inventory;
 pub(super) use inventory::sleep_for_retry;
@@ -69,6 +72,33 @@ impl GitHubApi {
         self.run_identity_cache
             .borrow_mut()
             .admit_workflow(&workflow)?;
+        Ok(workflow)
+    }
+
+    pub(super) fn admitted_workflow_with_historical_pin(
+        &self,
+        path: &str,
+        name: &str,
+        pin: Option<&crate::package_release_public::HistoricalWorkflowPin>,
+    ) -> Result<WorkflowMetadata, OrchestratorError> {
+        let Some(pin) = pin else {
+            return self.admitted_workflow(path, name);
+        };
+        let filename = path
+            .rsplit('/')
+            .next()
+            .ok_or_else(|| internal("package_workflow_path"))?;
+        let workflow: WorkflowMetadata =
+            self.get_json(&self.route(&format!("actions/workflows/{}", encode_segment(filename))))?;
+        let observed = crate::package_release_public::ObservedWorkflow {
+            id: workflow.id,
+            path: &workflow.path,
+            name: &workflow.name,
+            state: &workflow.state,
+        };
+        if !pin.admits(&observed, path, name) {
+            return Err(internal("package_workflow_identity_mismatch"));
+        }
         Ok(workflow)
     }
 

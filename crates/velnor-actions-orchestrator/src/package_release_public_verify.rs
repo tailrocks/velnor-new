@@ -230,12 +230,11 @@ fn verify_public_runs(
 ) -> Result<(), OrchestratorError> {
     if let Some(recovery) = recovery {
         crate::package_release_publish::verify_public_historical_release_recovery(
-            &policy.plan.repository,
-            policy.repository_id,
-            &policy.plan.default_branch,
-            signed.receipt(),
             &policy.plan,
+            policy.repository_id,
+            signed.receipt(),
             recovery,
+            policy.historical_workflow_pin(&receipt.tag),
             deadline,
         )
     } else {
@@ -244,6 +243,7 @@ fn verify_public_runs(
             policy.repository_id,
             &policy.plan.default_branch,
             receipt,
+            policy.historical_workflow_pin(&receipt.tag),
             deadline,
         )
     }

@@ -24,6 +24,39 @@ pub(crate) struct HistoricalPackageReleaseAdmission {
     receipt_sha256: String,
     plan_sha256: String,
     recovery: Option<HistoricalPackageReleaseRecovery>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workflow_pin: Option<HistoricalWorkflowPin>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct HistoricalWorkflowPin {
+    id: u64,
+    path: String,
+    name: String,
+}
+
+pub(crate) struct ObservedWorkflow<'a> {
+    pub(crate) id: u64,
+    pub(crate) path: &'a str,
+    pub(crate) name: &'a str,
+    pub(crate) state: &'a str,
+}
+
+impl HistoricalWorkflowPin {
+    pub(crate) fn admits(
+        &self,
+        observed: &ObservedWorkflow<'_>,
+        expected_path: &str,
+        expected_name: &str,
+    ) -> bool {
+        observed.id != 0
+            && observed.id == self.id
+            && observed.path == self.path
+            && observed.name == self.name
+            && observed.path == expected_path
+            && observed.name == expected_name
+            && matches!(observed.state, "active" | "deleted")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -130,7 +163,25 @@ impl HistoricalPackageReleaseAdmission {
             receipt_sha256,
             plan_sha256,
             recovery: None,
+            workflow_pin: None,
         })
+    }
+
+    pub(crate) fn with_workflow_pin(
+        mut self,
+        id: u64,
+        path: &str,
+        name: &str,
+    ) -> Result<Self, OrchestratorError> {
+        if self.workflow_pin.is_some() || id == 0 || path.is_empty() || name.is_empty() {
+            return Err(internal("package_public_historical_workflow_pin_invalid"));
+        }
+        self.workflow_pin = Some(HistoricalWorkflowPin {
+            id,
+            path: path.to_owned(),
+            name: name.to_owned(),
+        });
+        Ok(self)
     }
 
     pub(crate) fn with_recovery_admission(
@@ -206,6 +257,13 @@ impl PackageReleasePublicPolicy {
         }
         self.historical = admissions;
         Ok(self)
+    }
+
+    pub(crate) fn historical_workflow_pin(&self, tag: &str) -> Option<&HistoricalWorkflowPin> {
+        self.historical
+            .iter()
+            .find(|admission| admission.tag == tag)
+            .and_then(|admission| admission.workflow_pin.as_ref())
     }
 }
 
