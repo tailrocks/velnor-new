@@ -54,7 +54,7 @@ Every run checks the files `hk`'s `Builtins.jactionlint` checks:
 ```
 
 A bare repository run is never used: it would also lint composite actions
-in golden trees such as `docs/proposed/opentofu-goldens/**`. Every run passes:
+in golden trees such as `fixtures/opentofu-goldens/**`. Every run passes:
 
 | Flag | Why |
 |---|---|

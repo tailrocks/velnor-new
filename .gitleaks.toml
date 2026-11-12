@@ -12,7 +12,7 @@ condition = "AND"
 targetRules = ["generic-api-key"]
 paths = [
   '''^\.github/velnor/task-execution-manifest-v1\.json$''',
-  '''^docs/proposed/opentofu-goldens/cases/(?:dogfood|mbx-nextest|minimal-cargo|nested)/preview/\.github/velnor/task-execution-manifest-v1\.json$''',
+  '''^fixtures/opentofu-goldens/cases/(?:dogfood|mbx-nextest|minimal-cargo|nested)/preview/\.github/velnor/task-execution-manifest-v1\.json$''',
   '''^fixtures/parity/(?:minimal-cargo|multi-crate)/expected/plan-v1\.json$''',
 ]
 regexTarget = "match"

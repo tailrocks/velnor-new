@@ -12,7 +12,7 @@ const GOLDEN_TREE_LIMIT: u64 = 64 * 1024 * 1024;
 fn bounds_a_single_golden_file_before_reading_it() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let oracle = harness.directory.join("single-file-limit-oracle");
     copy_oracle(&source, &oracle)?;
     let oversized = oracle.join("cases/nested/oversized.bin");
@@ -38,7 +38,7 @@ fn bounds_a_single_golden_file_before_reading_it() -> Result<(), Box<dyn Error>>
 fn bounds_the_combined_golden_tree_size() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let oracle = harness.directory.join("tree-limit-oracle");
     copy_oracle(&source, &oracle)?;
     for name in ["first.bin", "second.bin"] {
@@ -64,7 +64,7 @@ fn bounds_the_combined_golden_tree_size() -> Result<(), Box<dyn Error>> {
 fn rejects_a_golden_file_whose_executable_mode_changed() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let oracle = harness.directory.join("mode-change-oracle");
     copy_oracle(&source, &oracle)?;
     let changed = oracle.join("cases/nested/plan.txt");
@@ -111,7 +111,7 @@ fn rejects_an_invalid_manifest_before_capture_without_changing_cases() -> Result
 {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let oracle = harness.directory.join("failed-publication-oracle");
     copy_oracle(&source, &oracle)?;
     let retained = oracle.join("retained-executable");
@@ -181,10 +181,7 @@ fn rejects_an_invalid_manifest_before_capture_without_changing_cases() -> Result
 fn rejects_excessive_oracle_nesting_before_candidate_execution() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let oracle = harness.directory.join("deep-oracle");
-    copy_oracle(
-        &harness.root.join("docs/proposed/opentofu-goldens"),
-        &oracle,
-    )?;
+    copy_oracle(&harness.root.join("fixtures/opentofu-goldens"), &oracle)?;
     let mut path = oracle.join("extra");
     fs::create_dir(&path)?;
     for _ in 0..127 {
@@ -250,10 +247,7 @@ fn accepts_exact_oracle_entry_and_path_byte_limits_and_rejects_one_over()
     for long_names in [false, true] {
         let harness = Harness::new()?;
         let oracle = harness.directory.join("large-oracle");
-        copy_oracle(
-            &harness.root.join("docs/proposed/opentofu-goldens"),
-            &oracle,
-        )?;
+        copy_oracle(&harness.root.join("fixtures/opentofu-goldens"), &oracle)?;
         let extra = oracle.join("extra");
         fs::create_dir(&extra)?;
         let (baseline_count, baseline_bytes) = tree_usage(&oracle)?;

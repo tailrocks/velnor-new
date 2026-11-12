@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, LanePlan, Step, StepKind, StepRole};
 
-use crate::RenderError;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
+use crate::{RenderError, source_qualification_plan::SourceQualificationPlan};
 
 #[path = "lane_share_runtime.rs"]
 mod runtime;
@@ -17,6 +17,8 @@ mod runtime;
 pub struct RenderedWorkflow {
     pub yaml: String,
     pub shared: Vec<RenderedFile>,
+    pub schema2_files: Vec<RenderedFile>,
+    pub(crate) source_qualification_plan: Option<SourceQualificationPlan>,
 }
 
 #[derive(Debug)]
