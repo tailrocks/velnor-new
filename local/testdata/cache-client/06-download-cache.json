@@ -1,0 +1,51 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "http://github.localhost/twirp/github.actions.results.api.v1.CacheService/DownloadCache?id=1&sig=REDACTED",
+    "headers": [
+      {
+        "name": "user-agent",
+        "value": "actions/cache"
+      },
+      {
+        "name": "Host",
+        "value": "github.localhost"
+      },
+      {
+        "name": "Connection",
+        "value": "keep-alive"
+      }
+    ],
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      {
+        "name": "Content-Length",
+        "value": "300390"
+      },
+      {
+        "name": "Content-Type",
+        "value": "application/octet-stream"
+      },
+      {
+        "name": "Date",
+        "value": "Thu, 12 Nov 2026 20:26:15 GMT"
+      },
+      {
+        "name": "Server",
+        "value": "Kestrel"
+      },
+      {
+        "name": "Accept-Ranges",
+        "value": "bytes"
+      }
+    ],
+    "body": {
+      "bytes": 300390,
+      "content_type": "application/octet-stream",
+      "format": "zstd-compressed tar, first bytes 28 b5 2f fd"
+    }
+  }
+}
