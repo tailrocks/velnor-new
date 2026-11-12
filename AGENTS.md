@@ -26,16 +26,18 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 
 ## This project (velnor-new)
 
-- Vision and rules: read [`docs/goals.md`](docs/goals.md) first. Check every change and every review against it. Where another document sets a different goal or rule for new work, `docs/goals.md` wins and that document is corrected in the same change.
-- Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first. Never silently change a hard decision; changing one requires the human owner's explicit approval.
+- Read [`docs/goals.md`](docs/goals.md) first. It names the rule book for each part of the code, and it is the rule book for new work (`generator/`, `ci-helper/`, `local/`): vision, promises, targets and design rules.
+- The existing engine (`crates/`, `.velnor/` and the workflows it generates) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
+- Never silently change `docs/goals.md` or a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
-- Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
-- Cache: read `docs/proposed/cache-decisions.md` and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
 - Quality: enforced by CI and compiler gates; see `docs/proposed/ci-maintenance/rust-quality-contract.md`.
 - Verification gates: exact commands, purposes, and usage: `docs/implemented/ci-maintenance/repo-verification.md`.
-- Affected-only CI: generated workflows never run a build, test or lint job that the change does not affect; a docs-only pull request runs no Rust job. The one planner plans every job. GitHub `paths:` filters are never used. A path leaves a stack only through the typed `[stacks.rust] non_inputs` class, which config validation (`non_input_overlaps_claim`) and the checkout guard (`non_input_present`) enforce by keeping the path absent from the checkout. In the existing engine, pushes to the default branch, merge groups and dispatches stay full; the target is in [`docs/goals.md`](docs/goals.md). The planner tests under `crates/velnor-actions-orchestrator/tests/workflow_configuration_public/` prove it. A waste-lint rule for unscoped jobs is planned. See hard decision 3.
+- Read these only when you change the existing engine:
+  - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
+  - Cache: read `docs/proposed/cache-decisions.md` and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
 
 ### Review guidelines
 
-- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR. Enforce the target, not today's baseline: improve touched behavior, fix its inherited violations in the same PR, and reject regressions or missing proof. An issue or follow-up promise never substitutes for a required fix.
+- Review a change to new work with the section "How to review a change" of [`docs/goals.md`](docs/goals.md).
+- Authors and reviewers, including Codex, must read and enforce [CI performance review](docs/reviews/ci-performance.md) and [required developer evidence](docs/reviews/ci-performance-evidence.md) on every PR that changes the existing engine or a workflow it generates. Enforce the target, not today's baseline: improve touched behavior, fix its inherited violations in the same PR, and reject regressions or missing proof. An issue or follow-up promise never substitutes for a required fix.
 - Keep repository documentation evergreen: describe current contracts and procedures, without verification-date logs or specific PR/branch references. Keep change-specific evidence in PR descriptions, review discussions or issues; use git history for chronology.
