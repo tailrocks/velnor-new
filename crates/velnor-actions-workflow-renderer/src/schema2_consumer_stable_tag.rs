@@ -22,6 +22,7 @@ pub(super) fn prepare(
     let mut steps = bootstrap(spec, "stable-prepare")?;
     steps.push(configuration(stable)?);
     steps.push(metadata_checkout(spec));
+    steps.push(source_branch(spec));
     steps.push(prepare_plz(stable)?);
     Ok(finish("stable-prepare", fields, steps))
 }
@@ -117,6 +118,20 @@ fn configuration(stable: &ConsumerStableReleaseSpec) -> Result<Yaml, RenderError
 }
 fn metadata_checkout(spec: &ConsumerReleaseSpec) -> Yaml {
     steps::checkout(spec, "${{ needs.stable-eligibility.outputs.source_sha }}")
+}
+fn source_branch(spec: &ConsumerReleaseSpec) -> Yaml {
+    steps::script(
+        "Put the exact source on the default branch",
+        "source-branch",
+        "set -euo pipefail\ngit switch -C \"$VELNOR_DEFAULT_BRANCH\" \"$VELNOR_SOURCE_SHA\"\ntest \"$(git symbolic-ref --short HEAD)\" = \"$VELNOR_DEFAULT_BRANCH\"\ntest \"$(git rev-parse HEAD)\" = \"$VELNOR_SOURCE_SHA\"\n",
+        &[
+            ("VELNOR_DEFAULT_BRANCH", &spec.policy.default_branch),
+            (
+                "VELNOR_SOURCE_SHA",
+                "${{ needs.stable-eligibility.outputs.source_sha }}",
+            ),
+        ],
+    )
 }
 fn prepare_plz(stable: &ConsumerStableReleaseSpec) -> Result<Yaml, RenderError> {
     let prefix = join_argv_for_run(&stable.release_plz_argv)?;
