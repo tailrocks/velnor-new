@@ -27,6 +27,7 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 ## This project (velnor-new)
 
 - Read [`docs/goals.md`](docs/goals.md) first. It names the rule book for each part of the code, and it is the rule book for new work (`generator/`, `ci-helper/`, `local/`): vision, promises, targets and design rules.
+- Roadmap work (the issues under #574): follow [`docs/roadmap.md`](docs/roadmap.md). It says where to start, how one issue is done and when to ask the owner.
 - The existing engine (`crates/`, `.velnor/`, the workflows it generates and what supports it) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
 - Never silently change `docs/goals.md` or a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
