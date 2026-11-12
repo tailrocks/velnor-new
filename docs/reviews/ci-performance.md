@@ -68,3 +68,4 @@ an avoidable regression, an unapproved budget regression or missing proof; appro
 only after the final head proves the required improvement. A deferred issue cannot
 turn a failed gate into a pass.
 
+This line is a documentation-only probe and is never merged.
