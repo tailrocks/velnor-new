@@ -104,13 +104,6 @@ rules:
     level: error
     message: "AGENTS.md exceeds 16 KiB; move detailed guidance into docs"
 
-  # First-party Rust sources live ONLY in canonical crate dirs (ARCH-1.10,
-  # strict placement). Allowed: crates/<crate>/{src,tests,benches,examples,
-  # fixtures,testdata}/**, build.rs, build_support/**, the shared
-  # crates/test_support/** (#[path]-included helpers), and the same canonical
-  # layout one level deeper for the nested velnor-runner workspace. Everything
-  # else (crate roots, docs/, scripts/, snapshots) is forbidden. fixtures/**
-  # test inputs stay covered by the global ignore above.
   - id: crates-only
     kind: file_absent
     paths:
@@ -130,6 +123,8 @@ rules:
         - "crates/velnor-runner/crates/*/benches/**"
         - "crates/velnor-runner/crates/*/examples/**"
         - "crates/velnor-runner/crates/*/build.rs"
+        - "local/crates/*/src/**"
+        - "local/crates/*/tests/**"
     level: error
     message: "Rust sources MUST live in canonical crate dirs (ARCH-1.10 strict placement)"
 
@@ -143,9 +138,6 @@ rules:
     level: error
     message: "Snapshot .source duplicates are forbidden; merge into the live file"
 
-  # The bundled nested-lock rules are excepted above. These replacements
-  # still forbid stray locks, and name the two locks the bundles cannot see:
-  # the nested runner workspace, and the npm lock that `npm ci` requires.
   - id: velnor-no-stray-cargo-lock
     kind: file_absent
     paths:
@@ -153,8 +145,9 @@ rules:
       exclude:
         - Cargo.lock
         - crates/velnor-runner/Cargo.lock
+        - local/Cargo.lock
     level: error
-    message: "Stray Cargo.lock. Only the root lock and crates/velnor-runner/Cargo.lock are resolved."
+    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock and local/Cargo.lock are resolved."
 
   - id: velnor-no-stray-npm-lock
     kind: file_absent

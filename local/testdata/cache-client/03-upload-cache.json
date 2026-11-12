@@ -1,0 +1,71 @@
+{
+  "request": {
+    "method": "PUT",
+    "url": "http://github.localhost/twirp/github.actions.results.api.v1.CacheService/UploadCache?id=1&sig=REDACTED",
+    "headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/octet-stream"
+      },
+      {
+        "name": "x-ms-version",
+        "value": "2026-04-06"
+      },
+      {
+        "name": "Content-Length",
+        "value": "300390"
+      },
+      {
+        "name": "Accept",
+        "value": "application/xml"
+      },
+      {
+        "name": "x-ms-blob-type",
+        "value": "BlockBlob"
+      },
+      {
+        "name": "User-Agent",
+        "value": "azsdk-js-azure-storage-blob/12.32.0 core-rest-pipeline/1.24.0 Node/24.21.0 (Linux 7.2.12-orbstack-00394-gbecdd6130068; arm64)"
+      },
+      {
+        "name": "x-ms-client-request-id",
+        "value": "ea51aede-fc4a-47c3-ae56-919f828c1448"
+      },
+      {
+        "name": "Host",
+        "value": "github.localhost"
+      },
+      {
+        "name": "Connection",
+        "value": "keep-alive"
+      }
+    ],
+    "body": {
+      "bytes": 300390,
+      "content_type": "application/octet-stream",
+      "format": "zstd-compressed tar, first bytes 28 b5 2f fd"
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": [
+      {
+        "name": "Content-Length",
+        "value": "0"
+      },
+      {
+        "name": "Date",
+        "value": "Thu, 12 Nov 2026 20:25:34 GMT"
+      },
+      {
+        "name": "Server",
+        "value": "Kestrel"
+      },
+      {
+        "name": "Location",
+        "value": "http://github.localhost/twirp/github.actions.results.api.v1.CacheService/UploadCache?id=1&sig=REDACTED"
+      }
+    ],
+    "body": null
+  }
+}
