@@ -143,11 +143,14 @@ impl ExpectedMacSource {
 }
 
 pub(super) fn verify_workflow(config: &VelnorConfig, version: &str, workflow: &[u8]) -> Result<(), OrchestratorError> {
-        let files = crate::routing::extra_files(
+        let request = crate::routing::workflow_request_for(
             config,
             &velnor_actions_mise::ToolCatalog::pinned(),
             version,
-        )?;
+        )?
+        .ok_or_else(|| internal("mac_authority_workflow_missing"))?;
+        let files = velnor_actions_workflow_renderer::render_schema2_product_release_workflows(&request)
+            .map_err(|err| OrchestratorError::Render { problem: err.to_string() })?;
         let mut matches = files
             .iter()
             .filter(|file| file.path == ".github/workflows/product-release-images.yml");

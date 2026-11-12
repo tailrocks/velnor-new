@@ -6,35 +6,29 @@ use std::{error::Error, io};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::{BASE_APPROVALS, BASE_LOCK, fixture};
+use super::fixture;
 
-fn job_block<'a>(workflow: &'a str, job: &str) -> Result<&'a str, Box<dyn Error>> {
-    let header = format!("\n  {job}:\n");
-    let start = workflow
-        .find(&header)
-        .ok_or_else(|| io::Error::other(format!("job {job} is not rendered")))?
-        + 1;
-    let body = &workflow[start..];
-    let length = body
-        .split_inclusive('\n')
-        .enumerate()
-        .skip(1)
-        .find(|(_, line)| !line.trim().is_empty() && !line.starts_with("    "))
-        .map_or(body.len(), |(index, _)| {
-            body.split_inclusive('\n').take(index).map(str::len).sum()
-        });
-    Ok(&body[..length])
+const ACTIVE_APPROVALS: &str = include_str!("../../../../.velnor/controller-approvals.json");
+const ACTIVE_LOCK: &str = include_str!("../../../../.velnor/generator.lock");
+
+fn job_block(workflow: &str, job: &str) -> Result<String, Box<dyn Error>> {
+    let parsed: serde_json::Value = serde_saphyr::from_str(workflow)?;
+    let block = parsed
+        .get("jobs")
+        .and_then(|jobs| jobs.get(job))
+        .ok_or_else(|| io::Error::other(format!("job {job} is not rendered")))?;
+    Ok(serde_json::to_string_pretty(block)?)
 }
 
 #[test]
 fn required_verdict_controller_is_the_active_approved_release() -> Result<(), Box<dyn Error>> {
-    let temp = fixture(Some(BASE_APPROVALS), BASE_LOCK)?;
+    let temp = fixture(Some(ACTIVE_APPROVALS), ACTIVE_LOCK)?;
     let tree = render_staged_tree(&prepare(temp.path())?)?;
     let workflow = tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| io::Error::other("ci workflow is not rendered"))?;
     let required = job_block(workflow, "required")?;
-    let approvals: serde_json::Value = serde_json::from_str(BASE_APPROVALS)?;
+    let approvals: serde_json::Value = serde_json::from_str(ACTIVE_APPROVALS)?;
     let active = &approvals["active"];
     let version = active["version"]
         .as_str()
@@ -54,8 +48,8 @@ fn required_verdict_controller_is_the_active_approved_release() -> Result<(), Bo
         .as_str()
         .ok_or_else(|| io::Error::other("active sha256 is missing"))?;
     assert!(
-        required.contains(&format!("VELNOR_ASSET_URL: {artifact}"))
-            && required.contains(&format!("VELNOR_ASSET_SHA256: {sha256}")),
+        required.contains(&format!("\"VELNOR_ASSET_URL\": \"{artifact}\""))
+            && required.contains(&format!("\"VELNOR_ASSET_SHA256\": \"{sha256}\"")),
         "Required verdict job does not acquire the active approved release {version}:\n{required}"
     );
     Ok(())

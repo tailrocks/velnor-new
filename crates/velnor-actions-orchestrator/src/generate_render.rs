@@ -43,20 +43,23 @@ pub(super) fn render_all(
         &ir,
         render_context.scale_set_selector.as_ref(),
     );
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+    let schema_request = crate::routing::workflow_request_for(&prep.config, &prep.emission_catalog(), version)?;
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_bundle(
         &ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &render_context,
         &mise,
+        schema_request.as_ref(),
     )?;
-    let workflow = rendered.yaml;
+    let workflow = rendered.yaml.clone();
     let verifier_actions = crate::workflow::verifier_actions::VerifierActionSet::build(
         &prep.emission_catalog(),
         version,
     )?;
     let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
-    let mut extra = crate::release_emit::release_files(prep, &mise)?;
+    let mut extra = rendered.schema2_files.clone();
+    extra.extend(crate::release_emit::release_files(prep, &mise)?);
     extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
     extra.extend(crate::premerge_event_proof_emit::files(prep)?);
     extra.extend(crate::binary_release_emit::files(prep)?);
@@ -67,11 +70,7 @@ pub(super) fn render_all(
     extra.extend(crate::owned_tool_publication::files(prep)?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
     extra.extend(crate::review_completion_workflow_emit::files(prep)?);
-    extra.extend(crate::routing::extra_files(
-        &prep.config,
-        &prep.emission_catalog(),
-        version,
-    )?);
+    extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
     extra.extend(mise_task_suites_emit::suite_workflow_files(prep)?);
     extra.extend(verifier_actions.files());

@@ -14,7 +14,8 @@ use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::setup::{MISE_BINARY_SHA256_LINUX_X64, MiseSetup};
 use velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude;
 use velnor_actions_workflow_renderer::{
-    ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH, render_schema2_workflows,
+    ProductReleasePins, RenderedFile, Schema2WorkflowRequest, VERIFY_PATH,
+    render_schema2_product_release_workflows,
 };
 
 fn fail(message: &str) -> Box<dyn Error> {
@@ -146,13 +147,13 @@ fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
 
 fn rendered() -> Result<Vec<RenderedFile>, Box<dyn Error>> {
     let request = request()?;
-    Ok(render_schema2_workflows(&request)?)
+    Ok(render_schema2_product_release_workflows(&request)?)
 }
 
 fn rendered_with(pins: ProductReleasePins) -> Result<Vec<RenderedFile>, Box<dyn Error>> {
     let mut request = request()?;
     request.product_release = Some(pins);
-    Ok(render_schema2_workflows(&request)?)
+    Ok(render_schema2_product_release_workflows(&request)?)
 }
 
 fn find_file<'a>(files: &'a [RenderedFile], path: &str) -> Result<&'a str, Box<dyn Error>> {
@@ -337,7 +338,7 @@ fn expect_render_error(pins: ProductReleasePins, needle: &str) -> Result<(), Box
 fn check_rejects_missing_pins() -> Result<(), Box<dyn Error>> {
     let mut request = request()?;
     request.product_release = None;
-    match render_schema2_workflows(&request) {
+    match render_schema2_product_release_workflows(&request) {
         Ok(_) => Err(fail("missing release pins accepted")),
         Err(err) => require(
             &err.to_string(),

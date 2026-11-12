@@ -10,7 +10,7 @@ use super::support::{Harness, diagnostics_candidate};
 fn rejects_unexpected_empty_top_level_golden_directories() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
-    let source = harness.root.join("docs/proposed/opentofu-goldens");
+    let source = harness.root.join("fixtures/opentofu-goldens");
     let oracle = harness.directory.join("unexpected-empty-case-oracle");
     copy_oracle(&source, &oracle)?;
     let manifest_before = fs::read(oracle.join("MANIFEST.sha256"))?;
