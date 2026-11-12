@@ -6,7 +6,7 @@ The local GitHub environment, a development tool that is not shipped. Today it r
 |---|---|
 | Stand-in | `ChristopherHX/runner.server` commit `992ccbbbf9afcde477c38c316e053b1af457ad40`, built by `docker/runner-server/Dockerfile`. One change: `DownloadArtifact` answers `Content-Type: application/zip`, without which `actions/download-artifact` saves the zip as a raw file |
 | Runner | `actions/runner` 2.338.0, `actions-runner-linux-arm64-2.338.0.tar.gz`, sha256 `628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b`, built by `docker/runner/Dockerfile` |
-| Recorder | `mitmproxy/mitmproxy:12.1.2`, a reverse proxy that plays `github.localhost` and records every runner call |
+| Recorder | `mitmproxy/mitmproxy:12.1.2@sha256:0d7b2a14b4a71a908cd6f31b8f50e29bbc5c8720fe6caa706acf782da558e5c7`, a reverse proxy that plays `github.localhost` and records every runner call |
 
 ## Start
 
@@ -17,7 +17,7 @@ docker build -t velnor-local/runner-server local/docker/runner-server
 docker build -t velnor-local/runner local/docker/runner
 docker network create velnor-local
 docker run -d --name velnor-runner-server --network velnor-local --network-alias runner-server -e Runner.Server__GitServerUrl=http://github.localhost velnor-local/runner-server
-docker run -d --name velnor-proxy --network velnor-local --network-alias github.localhost -v "$STATE/rec:/rec" mitmproxy/mitmproxy:12.1.2 mitmdump --mode reverse:http://runner-server:80 --listen-port 80 --set keep_host_header=true -w /rec/flows.mitm
+docker run -d --name velnor-proxy --network velnor-local --network-alias github.localhost -v "$STATE/rec:/rec" mitmproxy/mitmproxy:12.1.2@sha256:0d7b2a14b4a71a908cd6f31b8f50e29bbc5c8720fe6caa706acf782da558e5c7 mitmdump --mode reverse:http://runner-server:80 --listen-port 80 --set keep_host_header=true -w /rec/flows.mitm
 docker run -d --name velnor-runner-1 --network velnor-local -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache -v "$STATE/action-archive-cache:/opt/action-archive-cache:ro" velnor-local/runner sh -c './config.sh --unattended --url http://github.localhost/runner/server --token anything --name arm-1 --labels ubuntu-24.04-arm && exec ./run.sh'
 docker run -d --name velnor-runner-2 --network velnor-local -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache -v "$STATE/action-archive-cache:/opt/action-archive-cache:ro" velnor-local/runner sh -c './config.sh --unattended --url http://github.localhost/runner/server --token anything --name arm-2 --labels ubuntu-24.04-arm && exec ./run.sh'
 ```
