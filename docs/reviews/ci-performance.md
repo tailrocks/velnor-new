@@ -67,3 +67,4 @@ evidence, required fix and acceptance check. Request changes for a touched viola
 an avoidable regression, an unapproved budget regression or missing proof; approve
 only after the final head proves the required improvement. A deferred issue cannot
 turn a failed gate into a pass.
+
