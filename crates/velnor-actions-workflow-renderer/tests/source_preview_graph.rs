@@ -268,7 +268,8 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
     assert!(mac_positions.windows(2).all(|pair| pair[0] < pair[1]));
     assert!(mac_script.contains("shasum -a 256"));
     assert!(!mac_script.contains("sha256sum"));
-    assert!(mac.contains("id: sources-restore"));
+    assert!(!mac.contains("id: sources-restore"));
+    assert!(!mac.contains("sha256sum"));
     Ok(())
 }
 

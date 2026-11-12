@@ -280,9 +280,11 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
             "set -eu\ncase \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac\nmkdir -p \"$RUNNER_TEMP/velnor\"\nrm -rf -- \"$RUNNER_TEMP/velnor/cargo\"\nmkdir -m 700 \"$RUNNER_TEMP/velnor/cargo\"",
         ),
     ];
-    action_steps.extend(super::super::source_qualification::sources_restore_steps(
-        qualify_id, runner,
-    )?);
+    if !darwin {
+        action_steps.extend(super::super::source_qualification::sources_restore_steps(
+            qualify_id, runner,
+        )?);
+    }
     action_steps.extend(vec![
         steps::mise_step(pins.setup_for(target))?,
         steps::command_step(
@@ -298,16 +300,20 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
         steps::bash_step_with_env(
             "Qualify exact source preview bytes",
             &qualification_script(pins, payload, darwin),
-            vec![
-                (
-                    "SOURCES_CACHE_HIT",
-                    "${{ steps.sources-restore.outputs.cache-hit }}",
-                ),
-                (
-                    "SOURCES_CACHE_MATCHED_KEY",
-                    "${{ steps.sources-restore.outputs.cache-matched-key }}",
-                ),
-            ],
+            if darwin {
+                vec![]
+            } else {
+                vec![
+                    (
+                        "SOURCES_CACHE_HIT",
+                        "${{ steps.sources-restore.outputs.cache-hit }}",
+                    ),
+                    (
+                        "SOURCES_CACHE_MATCHED_KEY",
+                        "${{ steps.sources-restore.outputs.cache-matched-key }}",
+                    ),
+                ]
+            },
         ),
     ]);
     let mut job_fields = fields(
