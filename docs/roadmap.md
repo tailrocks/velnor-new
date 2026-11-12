@@ -36,13 +36,13 @@ The state of the roadmap is in GitHub. There is no progress file.
 This query prints every issue that can start: open, not a parent, nothing open blocks it, and nobody is working on it.
 
 ```sh
-gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"tailrocks",name:"velnor-new"){issues(first:100,after:$endCursor,states:OPEN,labels:["fast-ci"]){pageInfo{hasNextPage endCursor} nodes{number title labels(first:20){nodes{name}} subIssuesSummary{total} blockedBy(first:50){nodes{state}}}}}}' --jq '.data.repository.issues.nodes[] | select(.subIssuesSummary.total==0) | select([.blockedBy.nodes[]|select(.state=="OPEN")]|length==0) | select([.labels.nodes[].name]|index("in-progress")|not) | "#\(.number) \([.labels.nodes[].name|select(test("^(exec|effort):|^needs-owner$"))]|join(" ")) \(.title)"'
+gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"tailrocks",name:"velnor-new"){issues(first:100,after:$endCursor,states:OPEN,labels:["fast-ci"]){pageInfo{hasNextPage endCursor} nodes{number title blocking(first:1){totalCount} labels(first:20){nodes{name}} subIssuesSummary{total} blockedBy(first:50){nodes{state}}}}}}' --jq '[.data.repository.issues.nodes[] | select(.subIssuesSummary.total==0) | select([.blockedBy.nodes[]|select(.state=="OPEN")]|length==0) | select([.labels.nodes[].name]|index("in-progress")|not) ] | sort_by(-.blocking.totalCount)[] | "#\(.number) blocks:\(.blocking.totalCount) \([.labels.nodes[].name|select(test("^(exec|effort):|^needs-owner$"))]|join(" ")) \(.title)"'
 ```
 
 ## The loop
 
 1. Read [the goals](goals.md) and this file.
-2. Run the query. From the issues it prints, pick first the one that blocks the most other issues.
+2. Run the query. The query prints the issues in order of how many issues they block, most first. Pick the first one.
 3. Run at most three issues at the same time. Two issues run together only when they change different top-level folders (`generator/`, `ci-helper/`, `local/`, `crates/`) or different repositories.
 4. For each issue, follow "One issue" below.
 5. Run the query again and continue. Stop when it prints nothing that can be worked on without the owner, and say which issues wait for the owner and for what.
@@ -51,8 +51,8 @@ gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"t
 
 1. **Read and claim.** Read the issue in full, the issues it depends on, and the rules for pull requests in the root issue #574. Add the label `in-progress` to the issue.
 2. **Delegate.** Start one subagent as the executor, with the model and effort from the issue's labels, in its own git worktree on a branch named `fast/<issue number>-<short name>`. Give it the issue number and this file. Ask it for a short report: what it changed, the proof for each "Done when" box, and anything it could not do.
-3. **Build and prove.** The executor makes the change and runs every "Done when" check. A check that names `velnor-lab` follows rule 4 of the root issue. If a check cannot be met, the executor stops and posts the evidence as a comment on the issue. It does not widen the task to make the check pass.
-4. **Open the pull request.** One issue is one pull request. The description starts with why, states the measured before and after or "no timing effect expected" with the reason, shows the command and output for each "Done when" box, and ends with `Closes #<number>`. It ends with `Refs #<number>` instead when a box needs a real run on `velnor-lab` after the merge.
+3. **Build and prove.** The executor makes the change and runs every "Done when" check. A check that names `velnor-lab` follows rule 4 of the root issue. If a check cannot be met, the executor stops, posts the evidence as a comment on the issue, and removes the label `in-progress`. It does not widen the task to make the check pass.
+4. **Open the pull request.** One issue is one pull request. The description starts with why, states the measured before and after (the words "no timing effect expected" with the reason are allowed only for a change that touches no executable behavior), shows the command and output for each "Done when" box, and ends with `Closes #<number>`. It ends with `Refs #<number>` instead when a box needs a real run on `velnor-lab` after the merge.
 5. **Review.** Start a second subagent as the reviewer, with the model and effort named at the end of the issue. Give it the issue and the diff, not the executor's report. It checks the diff against the issue, against [the goals](goals.md) section "How to review a change", and reruns the "Done when" checks it can.
 6. **Answer every comment.** Reviewer findings and review bot comments are fixed, or rejected with a reason, before merging. `AGENTS.md` has the full rule.
 7. **Merge and finish.** Squash-merge when the required check is green and no review thread is open. When a box needs a real run on `velnor-lab`, do it as rule 4 of the root issue describes and post the numbers on the issue. Close the issue when every box is proven, and remove the label `in-progress`.
