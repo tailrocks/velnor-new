@@ -130,6 +130,8 @@ rules:
         - "crates/velnor-runner/crates/*/benches/**"
         - "crates/velnor-runner/crates/*/examples/**"
         - "crates/velnor-runner/crates/*/build.rs"
+        - "ci-helper/crates/*/src/**"
+        - "ci-helper/crates/*/tests/**"
     level: error
     message: "Rust sources MUST live in canonical crate dirs (ARCH-1.10 strict placement)"
 
@@ -153,8 +155,9 @@ rules:
       exclude:
         - Cargo.lock
         - crates/velnor-runner/Cargo.lock
+        - ci-helper/Cargo.lock
     level: error
-    message: "Stray Cargo.lock. Only the root lock and crates/velnor-runner/Cargo.lock are resolved."
+    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock and ci-helper/Cargo.lock are resolved."
 
   - id: velnor-no-stray-npm-lock
     kind: file_absent
