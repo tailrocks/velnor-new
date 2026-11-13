@@ -15,6 +15,11 @@ pub(super) enum GuestImageIdentity {
         manifest_digest: String,
         config_digest: String,
     },
+    Developer {
+        origin: &'static str,
+        image_id: String,
+        descriptor_digest: String,
+    },
 }
 
 pub(super) struct RegistryInput<'a> {
@@ -48,6 +53,17 @@ pub(super) fn registry(input: &RegistryInput<'_>) -> Option<GuestImageIdentity> 
         registry_digest: input.registry_digest.to_owned(),
         manifest_digest: input.manifest_digest.to_owned(),
         config_digest: input.config_digest.to_owned(),
+    })
+}
+
+pub(super) fn developer(image_id: &str, descriptor_digest: &str) -> Option<GuestImageIdentity> {
+    if !sha256_digest(image_id) || !sha256_digest(descriptor_digest) {
+        return None;
+    }
+    Some(GuestImageIdentity::Developer {
+        origin: "developer",
+        image_id: image_id.to_owned(),
+        descriptor_digest: descriptor_digest.to_owned(),
     })
 }
 

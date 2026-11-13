@@ -84,11 +84,8 @@ pub(crate) async fn recover_pre_jit_reservation(
     reservation_id: i64,
     image_authority: &crate::launch::ImageAuthority,
 ) -> Result<bool, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(
-        image_authority,
-        journal,
-        engine.endpoint(),
-    )?;
+    let provider =
+        crate::launch::resource_probe::image_provider(image_authority, journal, engine.endpoint())?;
     Box::pin(remove_bootstrap_after_terminal_failure(
         docker,
         scope,

@@ -10,12 +10,14 @@ use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
 mod connection;
+mod developer_images;
 mod job_authority;
 mod platform;
 mod release_read;
 mod source_policy;
 
 pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
+pub use developer_images::DeveloperImages;
 pub(crate) use job_authority::{
     ApprovedJobAuthorityEntry, ApprovedWorkflowSource, JobAuthorityLookup,
 };
@@ -38,6 +40,9 @@ pub struct HostConfig {
 
     #[serde(default)]
     release_read: Option<ReleaseReadConfig>,
+
+    #[serde(default)]
+    developer_images: Option<DeveloperImages>,
 
     pub host: HostLimits,
 
@@ -167,7 +172,17 @@ impl HostConfig {
                 .iter()
                 .map(|connection| &connection.credential_ref),
         )?;
+        developer_images::validate_developer_images(
+            self.developer_images.as_ref(),
+            self.release_read.is_some(),
+            crate::compile_identity::compiled_release_identity().is_some(),
+        )?;
         validate_docker(&self.docker, &self.connections)
+    }
+
+    #[must_use]
+    pub fn developer_images(&self) -> Option<&DeveloperImages> {
+        self.developer_images.as_ref()
     }
 
     pub fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
@@ -249,6 +264,7 @@ impl HostConfig {
             connections: &self.connections,
             job_authority_policies: &self.job_authority_policies,
             release_read: self.release_read.as_ref(),
+            developer_images: self.developer_images.as_ref(),
             host: HostTomlLimits {
                 max_jobs: self.host.max_jobs,
                 resources: HostTomlResources {
@@ -275,6 +291,8 @@ struct HostToml<'a> {
     job_authority_policies: &'a [ApprovedJobAuthorityPolicy],
     #[serde(skip_serializing_if = "Option::is_none")]
     release_read: Option<&'a ReleaseReadConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    developer_images: Option<&'a DeveloperImages>,
     host: HostTomlLimits,
     docker: &'a DockerConfig,
 }

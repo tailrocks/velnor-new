@@ -92,7 +92,7 @@ fn verify_selected(
 ) -> Result<(), HostError> {
     if selected.engine_id() == engine_id
         && selected.docker_root_digest() == root.digest()
-        && selected.platform() == "linux/amd64"
+        && crate::config::RunnerPlatform::parse(selected.platform()).is_some()
     {
         Ok(())
     } else {

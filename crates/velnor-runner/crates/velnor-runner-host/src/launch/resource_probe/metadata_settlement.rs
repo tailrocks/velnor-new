@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::ImageAuthority;
-use super::provider::{ImageProvider, ReleaseImageProvider};
+use super::provider::ImageProvider;
 
 mod claim;
 mod pre_jit_capacity;
@@ -28,9 +28,7 @@ pub(in crate::launch) async fn settle_storage_metadata_after_cleanup(
     selected: &SelectedEngineContext,
     image_authority: &ImageAuthority,
 ) -> Result<MetadataSettlementResult, HostError> {
-    let token = image_authority.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token, journal, selected.endpoint())
-        .map_err(|_| HostError::Docker)?;
+    let provider = super::image_provider(image_authority, journal, selected.endpoint())?;
     settle_storage_metadata_after_cleanup_using(
         docker,
         journal,

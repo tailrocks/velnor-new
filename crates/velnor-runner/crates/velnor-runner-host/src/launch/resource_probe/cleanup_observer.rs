@@ -17,7 +17,6 @@ mod execute;
 mod record;
 
 use super::lifecycle::{Deadline, bind_info, info, same_guest};
-use super::provider::ReleaseImageProvider;
 use super::{ImageAuthority, recover};
 
 #[derive(Clone, Copy)]
@@ -65,13 +64,11 @@ pub(in crate::launch) async fn observe_cleanup_binding(
     binding: &CleanupObserverBinding,
     deadline: Instant,
 ) -> Result<VerifiedCleanupObserverRecord, HostError> {
-    let token = context.image_authority.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(
-        token,
+    let provider = super::image_provider(
+        context.image_authority,
         context.journal,
         context.selected.endpoint(),
-    )
-    .map_err(|_| HostError::Docker)?;
+    )?;
     observe_cleanup_binding_using(context, reservation_id, binding, deadline, &provider).await
 }
 
@@ -313,7 +310,7 @@ fn verify_selected(
 ) -> Result<(), HostError> {
     if selected.engine_id() == engine_id
         && selected.docker_root_digest() == root.digest()
-        && selected.platform() == "linux/amd64"
+        && crate::config::RunnerPlatform::parse(selected.platform()).is_some()
     {
         Ok(())
     } else {

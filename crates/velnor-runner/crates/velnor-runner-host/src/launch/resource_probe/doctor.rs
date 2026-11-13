@@ -10,7 +10,6 @@ use crate::journal::{
 };
 
 use super::ImageAuthority;
-use super::provider::ReleaseImageProvider;
 
 pub(super) async fn run(
     docker: &Docker,
@@ -38,9 +37,7 @@ pub(super) async fn run(
         return Ok(None);
     }
     let result = async {
-        let token = secret.as_provider_token()?;
-        let provider = ReleaseImageProvider::from_compiled_source(token, journal, endpoint)
-            .map_err(|_| HostError::Docker)?;
+        let provider = super::image_provider(secret, journal, endpoint)?;
         Box::pin(super::lifecycle::collect_for_doctor(
             docker, journal, &provider, ticket,
         ))

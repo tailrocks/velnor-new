@@ -23,7 +23,7 @@ pub(crate) fn prepare_and_bind_scoped<'a>(
     images: &'a VerifiedWorkerImages,
 ) -> ScopedPrepareFuture<'a> {
     Box::pin(async move {
-        let provider = crate::launch::resource_probe::release_image_provider(
+        let provider = crate::launch::resource_probe::image_provider(
             image_authority,
             host,
             engine.endpoint(),

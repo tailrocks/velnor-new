@@ -349,9 +349,16 @@ fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjec
         return Err(HostError::Ownership);
     };
     let mut matched = None;
-    for daemon_architecture in ["x86_64", "aarch64"] {
+    for (platform, daemon_architecture) in [
+        crate::config::RunnerPlatform::LinuxAmd64,
+        crate::config::RunnerPlatform::LinuxArm64,
+    ]
+    .into_iter()
+    .flat_map(|platform| ["x86_64", "aarch64"].map(|architecture| (platform, architecture)))
+    {
         let image = VerifiedProbeImage::from_journal(
             row.runtime_image_id.clone(),
+            platform,
             daemon_architecture.to_owned(),
             row.source_revision.clone(),
             row.image_binding_digest.clone(),

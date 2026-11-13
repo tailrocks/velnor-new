@@ -191,12 +191,15 @@ impl<'a> StartupImagePreparationReceipt<'a> {
 
 fn complete_worker_image(image: &crate::launch::VerifiedImageIdentity) -> bool {
     digest_reference(image.runtime_id())
-        && digest_reference(image.manifest_digest())
-        && image.manifest_size() > 0
-        && digest_reference(image.config_digest())
         && match image.origin() {
             WorkerImageOrigin::Registry(registry) => {
-                registry.observation.validate(&registry.identity).is_ok()
+                digest_reference(&registry.identity.registry_digest)
+                    && registry.observation.manifest_size() > 0
+                    && digest_reference(&registry.identity.config_digest)
+                    && registry.observation.validate(&registry.identity).is_ok()
+            }
+            WorkerImageOrigin::Developer(developer) => {
+                digest_reference(&developer.descriptor_digest) && developer.descriptor_size > 0
             }
         }
 }
@@ -211,6 +214,8 @@ fn matching_origins(probe: &ProbeImageOrigin, workers: &WorkerImagesOrigin) -> b
                 manifest_sha256: worker,
             },
         ) => digest(probe) && probe == worker,
+        (ProbeImageOrigin::Developer, WorkerImagesOrigin::Developer) => true,
+        _ => false,
     }
 }
 
@@ -329,6 +334,9 @@ fn profile_generation(
             update(&mut digest, b"verified-runner-image-registry-v1");
             update(&mut digest, manifest_sha256.as_bytes());
         }
+        WorkerImagesOrigin::Developer => {
+            update(&mut digest, b"developer-runner-image-v1");
+        }
     }
     update_worker_image(&mut digest, worker_images.runner());
     update_worker_image(&mut digest, worker_images.dind());
@@ -360,11 +368,15 @@ fn update_worker_image(digest: &mut Sha256, image: &crate::launch::VerifiedImage
         WorkerImageOrigin::Registry(registry) => {
             update(digest, registry.identity.reference().as_bytes());
             update(digest, registry.identity.release_manifest_sha256.as_bytes());
+            update(digest, registry.identity.registry_digest.as_bytes());
+            digest.update(registry.observation.manifest_size().to_be_bytes());
+            update(digest, registry.identity.config_digest.as_bytes());
+        }
+        WorkerImageOrigin::Developer(developer) => {
+            update(digest, developer.descriptor_digest.as_bytes());
+            digest.update(developer.descriptor_size.to_be_bytes());
         }
     }
-    update(digest, image.manifest_digest().as_bytes());
-    digest.update(image.manifest_size().to_be_bytes());
-    update(digest, image.config_digest().as_bytes());
 }
 
 fn update(digest: &mut Sha256, field: &[u8]) {

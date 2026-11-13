@@ -16,6 +16,8 @@ pub use archive::worker::{
     WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
     verify_worker_runtime_config,
 };
+mod developer;
+pub(super) use developer::DeveloperImageProvider;
 mod evidence;
 mod failure;
 mod identity;
@@ -57,9 +59,17 @@ pub(super) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,
     expected: &crate::launch::SelectedEngineContext,
-    image_authority: &str,
+    token: &str,
 ) -> Result<crate::launch::VerifiedWorkerImages, HostError> {
-    worker_prepare::prepare_worker_images(docker, journal, expected, image_authority).await
+    worker_prepare::prepare_worker_images(docker, journal, expected, token).await
+}
+
+pub(super) async fn prepare_developer_worker_images(
+    docker: &Docker,
+    expected: &crate::launch::SelectedEngineContext,
+    images: &crate::config::DeveloperImages,
+) -> Result<crate::launch::VerifiedWorkerImages, HostError> {
+    developer::prepare_worker_images(docker, expected, images).await
 }
 
 pub(super) async fn verify_worker_images_for_engine(

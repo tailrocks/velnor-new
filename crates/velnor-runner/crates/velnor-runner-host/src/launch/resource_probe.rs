@@ -84,7 +84,7 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_un
     image_authority: &ImageAuthority,
     deadline: std::time::Instant,
 ) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(image_authority, journal, selected.endpoint())?;
+    let provider = image_provider(image_authority, journal, selected.endpoint())?;
     verify_publication_probe_image_until_with_provider(
         docker, journal, selected, &provider, deadline,
     )
@@ -191,6 +191,9 @@ pub(crate) async fn prepare_worker_images(
     expected: &SelectedEngineContext,
     image_authority: &ImageAuthority,
 ) -> Result<VerifiedWorkerImages, crate::error::HostError> {
+    if let Some(images) = image_authority.developer_images() {
+        return provider::prepare_developer_worker_images(docker, expected, images).await;
+    }
     let token = image_authority.as_provider_token()?;
     provider::prepare_worker_images(docker, journal, expected, token).await
 }
@@ -212,14 +215,53 @@ pub(crate) async fn run_doctor_probe(
     .await
 }
 
-pub(in crate::launch) fn release_image_provider<'a>(
-    secret: &'a ImageAuthority,
+pub(in crate::launch) struct AuthorityProvider<'a>(AuthorityKind<'a>);
+
+enum AuthorityKind<'a> {
+    Release(ReleaseImageProvider<'a>),
+    Developer(provider::DeveloperImageProvider),
+}
+
+impl ImageProvider for AuthorityProvider<'_> {
+    async fn verified_candidate(
+        &self,
+        docker: &Docker,
+        journal: &Journal,
+        engine_id: &str,
+        info: &SystemInfo,
+    ) -> Result<Option<provider::VerifiedCandidate>, crate::error::HostError> {
+        match &self.0 {
+            AuthorityKind::Release(provider) => {
+                provider
+                    .verified_candidate(docker, journal, engine_id, info)
+                    .await
+            }
+            AuthorityKind::Developer(provider) => {
+                provider
+                    .verified_candidate(docker, journal, engine_id, info)
+                    .await
+            }
+        }
+    }
+}
+
+pub(in crate::launch) fn image_provider<'a>(
+    authority: &'a ImageAuthority,
     journal: &'a Journal,
     endpoint: &str,
-) -> Result<impl ImageProvider + 'a, crate::error::HostError> {
-    let token = secret.as_provider_token()?;
+) -> Result<AuthorityProvider<'a>, crate::error::HostError> {
+    if let Some(images) = authority.developer_images() {
+        return Ok(AuthorityProvider(AuthorityKind::Developer(
+            provider::DeveloperImageProvider::new(images),
+        )));
+    }
+    let token = authority.as_provider_token()?;
     ReleaseImageProvider::from_compiled_source(token, journal, endpoint)
-        .map_err(|_| crate::error::HostError::Docker)
+        .map(|provider| AuthorityProvider(AuthorityKind::Release(provider)))
+        .map_err(|error| {
+            eprintln!("resource_probe=unavailable reason={}", error.code());
+            crate::error::HostError::Docker
+        })
 }
 
 pub(in crate::launch) async fn observe_owned_cgroups_with_provider<P: ImageProvider>(
@@ -240,14 +282,7 @@ pub(crate) async fn start_permit(
     image_authority: &ImageAuthority,
     endpoint: &str,
 ) -> Option<StartPermit> {
-    let token = image_authority.as_provider_token().ok()?;
-    let provider = match ReleaseImageProvider::from_compiled_source(token, journal, endpoint) {
-        Ok(provider) => provider,
-        Err(error) => {
-            eprintln!("resource_probe=unavailable reason={}", error.code());
-            return None;
-        }
-    };
+    let provider = image_provider(image_authority, journal, endpoint).ok()?;
     match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
         Ok(Some(sample)) => sample.into_start_permit(budget),
         Ok(None) | Err(_) => None,
@@ -262,9 +297,7 @@ pub(crate) async fn recovery_observation(
     engine: &SelectedEngineContext,
     image_authority: &ImageAuthority,
 ) -> Option<RecoveryObservation> {
-    let token = image_authority.as_provider_token().ok()?;
-    let provider =
-        ReleaseImageProvider::from_compiled_source(token, journal, engine.endpoint()).ok()?;
+    let provider = image_provider(image_authority, journal, engine.endpoint()).ok()?;
     let sample = Box::pin(lifecycle::collect(docker, journal, &provider))
         .await
         .ok()??;

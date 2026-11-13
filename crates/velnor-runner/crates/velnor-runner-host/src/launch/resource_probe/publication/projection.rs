@@ -18,7 +18,6 @@ use super::request::PublicationRequest;
 mod recovery;
 pub(super) use recovery::PublicationRecoveryProjection;
 
-const PLATFORM: &str = "linux/amd64";
 const PUBLISHER_PATH: &str = "/velnor/resource-probe";
 const METADATA_TARGET: &str = "/opt/velnor";
 const CPU_PERIOD: i64 = 100_000;
@@ -77,13 +76,12 @@ impl PublicationProjection {
             return Err(HostError::Identity);
         }
         let root = DockerRoot::parse(root_path)?;
-        if image.platform() != PLATFORM {
-            return Err(HostError::Identity);
-        }
+        let platform =
+            crate::config::RunnerPlatform::parse(image.platform()).ok_or(HostError::Identity)?;
         let name = format!("velnor-execution-publication-{operation_id}");
         let options = CreateContainerOptions {
             name: Some(name.clone()),
-            platform: PLATFORM.to_owned(),
+            platform: platform.as_str().to_owned(),
         };
         let publisher_mode = request.mode().to_owned();
         let config = container_config(

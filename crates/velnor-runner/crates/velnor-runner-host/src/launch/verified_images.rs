@@ -22,6 +22,7 @@ pub(crate) struct VerifiedWorkerImages {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::launch) enum WorkerImagesOrigin {
     Registry { manifest_sha256: String },
+    Developer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +34,20 @@ pub(crate) struct RegistryWorkerImage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WorkerImageOrigin {
-    Registry(RegistryWorkerImage),
+    Registry(Box<RegistryWorkerImage>),
+    Developer(DeveloperWorkerImage),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeveloperWorkerImage {
+    pub(crate) descriptor_digest: String,
+    pub(crate) descriptor_size: u64,
+}
+
+pub(in crate::launch) struct DeveloperWorkerImages {
+    pub(in crate::launch) source_sha: String,
+    pub(in crate::launch) runner: (String, DeveloperWorkerImage),
+    pub(in crate::launch) dind: (String, DeveloperWorkerImage),
 }
 
 impl VerifiedWorkerImages {
@@ -76,6 +90,27 @@ impl VerifiedWorkerImages {
             },
             runner: VerifiedImageIdentity::from_registry(runner)?,
             dind: VerifiedImageIdentity::from_registry(dind)?,
+        })
+    }
+
+    pub(in crate::launch) fn from_developer(
+        expected: &SelectedEngineContext,
+        images: DeveloperWorkerImages,
+    ) -> Result<Self, HostError> {
+        if crate::config::RunnerPlatform::parse(expected.platform()).is_none()
+            || !lower_hex(&images.source_sha, 40)
+        {
+            return Err(HostError::Identity);
+        }
+        Ok(Self {
+            engine_id: expected.engine_id().to_owned(),
+            docker_root_digest: expected.docker_root_digest().to_owned(),
+            daemon_architecture: expected.daemon_architecture().to_owned(),
+            source_sha: images.source_sha,
+            platform: expected.platform().to_owned(),
+            origin: WorkerImagesOrigin::Developer,
+            runner: VerifiedImageIdentity::from_developer(images.runner)?,
+            dind: VerifiedImageIdentity::from_developer(images.dind)?,
         })
     }
 
@@ -125,9 +160,10 @@ impl VerifiedWorkerImages {
         &self.origin
     }
 
-    pub(crate) fn registry_manifest_sha256(&self) -> &str {
+    pub(crate) fn registry_manifest_sha256(&self) -> Option<&str> {
         match &self.origin {
-            WorkerImagesOrigin::Registry { manifest_sha256 } => manifest_sha256,
+            WorkerImagesOrigin::Registry { manifest_sha256 } => Some(manifest_sha256),
+            WorkerImagesOrigin::Developer => None,
         }
     }
 }
@@ -136,9 +172,6 @@ impl VerifiedWorkerImages {
 pub(crate) struct VerifiedImageIdentity {
     runtime_id: String,
     origin: WorkerImageOrigin,
-    manifest_digest: String,
-    manifest_size: u64,
-    config_digest: String,
 }
 
 impl VerifiedImageIdentity {
@@ -146,10 +179,22 @@ impl VerifiedImageIdentity {
         image.observation.validate(&image.identity)?;
         Ok(Self {
             runtime_id: image.observation.runtime_id().to_owned(),
-            manifest_digest: image.identity.registry_digest.clone(),
-            manifest_size: image.observation.manifest_size(),
-            config_digest: image.identity.config_digest.clone(),
-            origin: WorkerImageOrigin::Registry(image),
+            origin: WorkerImageOrigin::Registry(Box::new(image)),
+        })
+    }
+
+    fn from_developer(
+        (runtime_id, image): (String, DeveloperWorkerImage),
+    ) -> Result<Self, HostError> {
+        if !sha256_digest(&runtime_id)
+            || !sha256_digest(&image.descriptor_digest)
+            || image.descriptor_size == 0
+        {
+            return Err(HostError::Identity);
+        }
+        Ok(Self {
+            runtime_id,
+            origin: WorkerImageOrigin::Developer(image),
         })
     }
     pub(crate) fn runtime_id(&self) -> &str {
@@ -159,18 +204,12 @@ impl VerifiedImageIdentity {
     pub(crate) fn origin(&self) -> &WorkerImageOrigin {
         &self.origin
     }
+}
 
-    pub(crate) fn manifest_digest(&self) -> &str {
-        &self.manifest_digest
-    }
-
-    pub(crate) fn manifest_size(&self) -> u64 {
-        self.manifest_size
-    }
-
-    pub(crate) fn config_digest(&self) -> &str {
-        &self.config_digest
-    }
+fn sha256_digest(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|digest| lower_hex(digest, 64))
 }
 
 fn registry_matches(

@@ -16,9 +16,9 @@ pub(super) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,
     expected: &SelectedEngineContext,
-    image_authority: &str,
+    token: &str,
 ) -> Result<VerifiedWorkerImages, HostError> {
-    let (provider, selected) = setup(journal, expected, image_authority)?;
+    let (provider, selected) = setup(journal, expected, token)?;
     let native = provider.native.as_ref().ok_or(HostError::Identity)?;
     let release = native.verified_runner_release().await?;
     verify_selected_daemon(docker, &selected)

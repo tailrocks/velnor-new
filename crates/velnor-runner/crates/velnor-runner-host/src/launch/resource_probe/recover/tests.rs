@@ -106,6 +106,7 @@ fn projection_and_seed(
     let binding = "4".repeat(64);
     let image = VerifiedProbeImage::from_journal(
         format!("sha256:{}", "3".repeat(64)),
+        crate::config::RunnerPlatform::LinuxAmd64,
         "x86_64".to_owned(),
         "2".repeat(40),
         binding.clone(),

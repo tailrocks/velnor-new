@@ -4,7 +4,7 @@
 #[path = "../src/worker/guest_image/identity.rs"]
 mod identity;
 
-use identity::{RegistryInput, registry};
+use identity::{RegistryInput, developer, registry};
 use velnor_runner_image_manifest::ImageKind;
 
 #[test]
@@ -39,5 +39,28 @@ fn registry_identity_binds_role_source_and_release_without_archive_fields()
     input.expected_release_manifest_sha256 =
         "0000000000000000000000000000000000000000000000000000000000000000";
     assert!(registry(&input).is_none(), "wrong release accepted");
+    Ok(())
+}
+
+#[test]
+fn developer_identity_names_the_local_image_and_its_descriptor()
+-> Result<(), Box<dyn std::error::Error>> {
+    let image = format!("sha256:{}", "e".repeat(64));
+    let descriptor = format!("sha256:{}", "f".repeat(64));
+    let value = serde_json::to_value(
+        developer(&image, &descriptor).ok_or("valid developer identity rejected")?,
+    )?;
+    assert_eq!(
+        value,
+        serde_json::json!({"origin":"developer", "image_id":image, "descriptor_digest":descriptor})
+    );
+    assert!(
+        developer("e", &descriptor).is_none(),
+        "short image id accepted"
+    );
+    assert!(
+        developer(&image, "sha256:F").is_none(),
+        "malformed descriptor accepted"
+    );
     Ok(())
 }
