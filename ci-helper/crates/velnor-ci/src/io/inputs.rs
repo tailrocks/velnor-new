@@ -100,11 +100,7 @@ fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
 #[cfg(unix)]
 fn worktree_mode(metadata: &fs::Metadata, _index_mode: &str) -> String {
     use std::os::unix::fs::PermissionsExt;
-    if metadata.permissions().mode() & 0o100 == 0 {
-        "100644".to_owned()
-    } else {
-        "100755".to_owned()
-    }
+    format!("{:o}", 0o100_000 | (metadata.permissions().mode() & 0o7777))
 }
 
 #[cfg(not(unix))]

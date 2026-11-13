@@ -223,28 +223,30 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     let repo = Repo::new("chmod");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     repo.write("tools/run.sh", "echo run\n");
+    repo.write("keys/key.txt", "key\n");
+    let paths = [".gitignore", "src/lib.rs", "tools/run.sh", "keys/key.txt"];
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
-    for path in [".gitignore", "src/lib.rs", "tools/run.sh"] {
+    for path in paths {
         repo.set_mtime(path, built);
     }
     save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
 
-    fs::set_permissions(
-        repo.root().join("tools/run.sh"),
-        Permissions::from_mode(0o755),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
+    for (path, mode) in [("tools/run.sh", 0o755), ("keys/key.txt", 0o600)] {
+        fs::set_permissions(repo.root().join(path), Permissions::from_mode(mode))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
-    for path in [".gitignore", "src/lib.rs", "tools/run.sh"] {
+    for path in paths {
         repo.set_mtime(path, checkout);
     }
     let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("tools/run.sh"), checkout);
+    assert_eq!(repo.mtime("keys/key.txt"), checkout);
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(
         report,
-        "restored the modification time of 2 unchanged files; 1 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
+        "restored the modification time of 2 unchanged files; 2 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
     );
 }
 
