@@ -39,7 +39,8 @@ fn rule_5_an_entry_not_accessed_for_over_seven_days_expires() {
 #[test]
 fn rule_5_the_repository_limit_is_ten_gigabytes() {
     let table = [
-        ("at", TEN_GB - 2 * FOUR_GB, vec![]),
+        ("below", TEN_GB - 2 * FOUR_GB - 1, vec![]),
+        ("at", TEN_GB - 2 * FOUR_GB, vec!["a"]),
         ("over", FOUR_GB, vec!["a"]),
     ];
     for (name, last_size, expected) in table {
@@ -82,7 +83,7 @@ fn rule_5_least_recently_used_entries_go_first_until_the_total_fits() {
         (
             "every scope in one pool",
             vec![entry(PR7, "pr", "v1", NOW - 50), sized("main", 1, NOW - 10)],
-            1,
+            2,
             vec!["pr"],
         ),
         (

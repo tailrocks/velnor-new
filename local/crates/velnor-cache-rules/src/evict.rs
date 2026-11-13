@@ -18,7 +18,7 @@ pub fn evict(entries: &[Entry], now: Timestamp, limit_bytes: u64) -> Vec<EntryId
         .into_iter()
         .take_while(|entry| {
             let expired = now.0.saturating_sub(entry.last_access.0) > ENTRY_LIFETIME_SECONDS;
-            let evicted = expired || kept_bytes > limit_bytes;
+            let evicted = expired || kept_bytes >= limit_bytes;
             if evicted {
                 kept_bytes = kept_bytes.saturating_sub(entry.size_bytes);
             }
