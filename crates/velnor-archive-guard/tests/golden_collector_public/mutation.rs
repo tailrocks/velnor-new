@@ -23,6 +23,7 @@ pub(super) fn copy_mutation_repository(
         "ci-helper",
         "crates",
         "fixtures",
+        "generator",
         "images",
         "local",
         "scripts",

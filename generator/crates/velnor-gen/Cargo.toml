@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "velnor-gen"
+version = "0.1.79"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+autotests = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+[dependencies]
+velnor-model.workspace = true
+velnor-rust.workspace = true
+velnor-render.workspace = true

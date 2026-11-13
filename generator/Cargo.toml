@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+members = [
+    "crates/velnor-model",
+    "crates/velnor-rust",
+    "crates/velnor-render",
+    "crates/velnor-gen",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+version = "0.0.0"
+license = "Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+velnor-model = { version = "=0.0.0", path = "crates/velnor-model" }
+velnor-rust = { version = "=0.0.0", path = "crates/velnor-rust" }
+velnor-render = { version = "=0.0.0", path = "crates/velnor-render" }
+serde = { version = "=1.0.229", features = ["derive"] }
+toml = { version = "=1.1.8" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unexpected_cfgs = "deny"
+unfulfilled_lint_expectations = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+let_underscore_must_use = "deny"
+missing_errors_doc = "allow"
+allow_attributes_without_reason = "deny"
+allow_attributes = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"

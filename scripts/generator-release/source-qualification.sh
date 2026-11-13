@@ -483,6 +483,11 @@ if [ -f "$root/ci-helper/Cargo.toml" ]; then
   locks+=(ci-helper/Cargo.lock)
   fetch_scope="$fetch_scope-and-ci-helper"
 fi
+if [ -f "$root/generator/Cargo.toml" ]; then
+  manifests+=(generator/Cargo.toml)
+  locks+=(generator/Cargo.lock)
+  fetch_scope="$fetch_scope-and-generator"
+fi
 if [ -f "$root/local/Cargo.toml" ]; then
   manifests+=(local/Cargo.toml)
   locks+=(local/Cargo.lock)
