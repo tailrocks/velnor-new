@@ -30,17 +30,12 @@ fn lookup_in_scope<'a>(
             .iter()
             .filter(move |entry| &entry.scope == scope && entry.version == version)
     };
-    let newest_with_prefix = |prefix: &str| {
-        candidates()
-            .filter(|entry| entry.key.starts_with(prefix))
-            .max_by_key(|entry| entry.created)
-    };
-    candidates()
-        .find(|entry| entry.key == key)
-        .or_else(|| newest_with_prefix(key))
-        .or_else(|| {
-            restore_keys
-                .iter()
-                .find_map(|prefix| newest_with_prefix(prefix))
+    let best = |prefix: &str| {
+        candidates().find(|entry| entry.key == prefix).or_else(|| {
+            candidates()
+                .filter(|entry| entry.key.starts_with(prefix))
+                .max_by_key(|entry| entry.created)
         })
+    };
+    best(key).or_else(|| restore_keys.iter().find_map(|prefix| best(prefix)))
 }

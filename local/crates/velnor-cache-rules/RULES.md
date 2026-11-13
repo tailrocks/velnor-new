@@ -15,7 +15,7 @@ Each test below is in `tests/it/` and is named after its rule.
 | 2b | A push writes to `refs/heads/<branch>` | Documentation | Restrictions for accessing a cache ("current branch") | `write_scope` |
 | 3a | The exact `key` with an equal `version` is tried first | Documentation | Cache key matching | `matching` |
 | 3b | Then keys that start with `key` | Documentation | Cache key matching | `matching` |
-| 3c | Then each restore key in order, as a prefix | Documentation | Cache key matching | `matching` |
+| 3c | Then each restore key in order. An entry whose key equals the restore key wins. Otherwise the newest entry that starts with it | Documentation ("When a key doesn't match directly, the action searches for keys prefixed with the restore key") | Cache key matching | `matching` |
 | 3d | Among several matches of one prefix, the entry with the latest `created` wins | Documentation for restore keys ("the most recently created cache"). Modelled for the key as prefix | Cache key matching | `matching` |
 | 3e | `version` must be equal. A different version never matches | Documentation | Cache key matching ("Cache version") | `matching` |
 | 4 | An entry with the same key and version in the same scope cannot be created again. The same key and version in another scope can | Documentation | `cache` action usage ("You cannot change the contents of an existing cache") | `immutability` |

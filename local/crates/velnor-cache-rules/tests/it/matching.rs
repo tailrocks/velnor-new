@@ -76,6 +76,13 @@ fn rule_3_restore_keys_in_order_and_newest_wins() {
             Some("n-c"),
         ),
         (
+            "an exact restore key beats a newer longer key",
+            &[("n-b", 1), ("n-b-x", 9)],
+            "zzz",
+            &["n-b"],
+            Some("n-b"),
+        ),
+        (
             "only the start of a key",
             &[("linux-n-1", 1)],
             "zzz",
