@@ -125,6 +125,9 @@ rules:
         - "crates/velnor-runner/crates/*/build.rs"
         - "ci-helper/crates/*/src/**"
         - "ci-helper/crates/*/tests/**"
+        - "generator/crates/*/src/**"
+        - "generator/crates/*/tests/**"
+        - "generator/samples/**"
         - "local/crates/*/src/**"
         - "local/crates/*/tests/**"
     level: error
@@ -148,9 +151,10 @@ rules:
         - Cargo.lock
         - crates/velnor-runner/Cargo.lock
         - ci-helper/Cargo.lock
+        - generator/Cargo.lock
         - local/Cargo.lock
     level: error
-    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock and local/Cargo.lock are resolved."
+    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock, generator/Cargo.lock and local/Cargo.lock are resolved."
 
   - id: velnor-no-stray-npm-lock
     kind: file_absent
@@ -175,6 +179,10 @@ rules:
         - "crates/velnor-archive-guard/**/*.rs"
         - "crates/velnor-runner/crates/*/src/**/*.rs"
         - "crates/velnor-runner/crates/*/tests/**/*.rs"
+        - "generator/crates/*/src/**/*.rs"
+        - "generator/crates/*/tests/**/*.rs"
+        - "local/crates/*/src/**/*.rs"
+        - "local/crates/*/tests/**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"
@@ -192,6 +200,12 @@ rules:
         - "crates/velnor-archive-guard/src/main.rs"
         - "crates/velnor-runner/crates/*/src/lib.rs"
         - "crates/velnor-runner/crates/*/src/main.rs"
+        - "ci-helper/crates/*/src/lib.rs"
+        - "ci-helper/crates/*/src/main.rs"
+        - "generator/crates/*/src/lib.rs"
+        - "generator/crates/*/src/main.rs"
+        - "local/crates/*/src/lib.rs"
+        - "local/crates/*/src/main.rs"
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
@@ -199,7 +213,11 @@ rules:
   - id: no-doctests
     kind: file_content_forbidden
     paths:
-      include: ["crates/**/src/**/*.rs"]
+      include:
+        - "crates/**/src/**/*.rs"
+        - "ci-helper/crates/*/src/**/*.rs"
+        - "generator/crates/*/src/**/*.rs"
+        - "local/crates/*/src/**/*.rs"
     pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
     level: error
     message: "Doctests are off by decision (Cargo `doctest = false`, velnor-fast-ci decision X76). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."

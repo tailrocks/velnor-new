@@ -1,5 +1,6 @@
 .firecrawl/
 /target/
+/generator/target/
 /local/target/
 /.velnor/archive-guard/
 .DS_Store

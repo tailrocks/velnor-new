@@ -20,10 +20,10 @@
 - a1f34a6ec282ce59cb6e486afeb7e52804122b2561f24dddb732ca4ddfeb209b  ./.github/dco.yml
 - 0dcdd17f5231d2d49424b284f27724c050ef5cac2bd0d9bf3a2b6f35c73490df  ./.github/jactionlint.yaml
 - 0ff23db1b6dbac55f3582dadbd7f03992ab3964bf83e7035d272ef4ce3ad271f  ./.github/scripts/velnor-tools-cache-identity.sh
-- 4e9879954509c4287aef3f75829e217b4995ccfc98c6f62d52e44c3c8357b8cb  ./.github/velnor/producer-executions-v1.json
-- 61e74f554869eaf402c0ba60b3bdd0b88dae0f81c7971dfd15e2e1748aa3774c  ./.github/velnor/task-execution-manifest-v1.json
+- 7ee1a24b203d7ac8867e01b2a73d18c6ac24f4710e8f43de82e706de3fb0f82f  ./.github/velnor/producer-executions-v1.json
+- a6b808a4de2c33bf35ae5a6c05ef5fb8fca7e953b3e912be1da352dc9856725a  ./.github/velnor/task-execution-manifest-v1.json
 - a43569760a8aad89b8284eca3f25f1ca1b1ef6962c58a0976a822ca2e9aba159  ./.github/workflows/cache-prune.yml
-- 88be8d4c58f49c786f3a480fe168419df66752fd8c7d7af88a77117508a1642f  ./.github/workflows/ci.yml
+- 864595c3559ee8762239cbc5ace2bf603d554649544036aa7aa5b5f5cdf9c0c5  ./.github/workflows/ci.yml
 - f02a6206e168f96d43c0cec207f3ae1534d2a448e369418767472a0a43eccc93  ./.github/workflows/freshness.yml
 - e4ffb8f05e2864ebc50ce200cebdb6b09545f80ef667ad28317bf98d34f91301  ./.github/workflows/homebrew-adoption.yml
 - 5f9aa42ec052ecfbbac4d6a32b005fd9ddeb0c817bcfaa6b21aba07d1a34e092  ./.github/workflows/job-image-candidate.yml
@@ -35,5 +35,5 @@
 - 84ed15941aff122fbd6e5bd1e2f403bdcb9c29b3b4c4c23c5c77505f91472b37  ./.github/workflows/source-preview-mac-proof.yml
 - eef9a62b4b3d660e8530466737b368770c3dbfd9fbd4968063af20d156781fa9  ./.github/workflows/source-preview-publication.yml
 - aa432a430629f0ee40e68dc419358a8ed1db993a48cffe3ef92bc0bf9d75f2fa  ./.github/workflows/source-preview-runtime.yml
-- 20703d7fe65ac999191d875fefa8e23062dda44eed6532f5a810bd5c27d7bb2c  ./.github/workflows/source-qualification.yml
-- 72e19ea9a3747e8c43420dbdee157e0f784d8ef0b406d48ea5862eedf4f18014  ./.github/workflows/state-seal.yml
+- 4a6396948efba27f31eeacb163a4fd865cbe5484265a61ae470368e18283152b  ./.github/workflows/source-qualification.yml
+- ae8367fb7948e7bb346ed6f5e1c2de92bde1213f50dbc492faceda76c553b8f0  ./.github/workflows/state-seal.yml
