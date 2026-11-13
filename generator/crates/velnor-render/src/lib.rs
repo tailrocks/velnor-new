@@ -1,15 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod rules;
 mod yaml;
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use velnor_model::{
-    Access, CargoCommand, Job, PermissionScope, Permissions, RepoPath, Step, StepKind, Triggers,
-    WorkflowPlan,
+    Access, CargoCommand, HelperBinary, HelperCommand, HelperRelease, Job, PermissionScope,
+    Permissions, RepoPath, Step, StepKind, Triggers, WorkflowPlan,
 };
 
+pub use crate::rules::{
+    ALLOWED_ACTIONS, FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+};
 use crate::yaml::{Yaml, emit};
 
 pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rust-ci.yml");
@@ -19,8 +25,11 @@ pub const GENERATED_HEADER: &str =
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
-#[must_use]
-pub fn render(plan: &WorkflowPlan) -> BTreeMap<RepoPath, String> {
+pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
+    let rendered = RenderedWorkflow {
+        jobs: plan.jobs.iter().map(rendered_job).collect(),
+    };
+    check_rules(&rendered)?;
     let workflow = [
         entry("name", text(&plan.name)),
         entry("on", triggers(&plan.triggers)),
@@ -38,17 +47,18 @@ pub fn render(plan: &WorkflowPlan) -> BTreeMap<RepoPath, String> {
         entry(
             "jobs",
             Yaml::Map(
-                plan.jobs
+                rendered
+                    .jobs
                     .iter()
-                    .map(|job| (job.id.to_string(), render_job(job)))
+                    .map(|job| (job.id.clone(), yaml_job(job)))
                     .collect(),
             ),
         ),
     ];
-    BTreeMap::from([(
+    Ok(BTreeMap::from([(
         WORKFLOW_PATH,
         format!("{GENERATED_HEADER}{}", emit(&workflow)),
-    )])
+    )]))
 }
 
 fn triggers(triggers: &Triggers) -> Yaml {
@@ -84,39 +94,136 @@ fn permissions(permissions: &Permissions) -> Yaml {
     )
 }
 
-fn render_job(job: &Job) -> Yaml {
+fn rendered_job(job: &Job) -> RenderedJob {
+    RenderedJob {
+        id: job.id.to_string(),
+        runs_on: job.runs_on.as_str().to_owned(),
+        timeout_minutes: job.timeout_minutes,
+        steps: job.steps.iter().map(rendered_step).collect(),
+    }
+}
+
+fn rendered_step(step: &Step) -> RenderedStep {
+    match &step.kind {
+        StepKind::Checkout { depth } => RenderedStep {
+            name: "Check out".to_owned(),
+            uses: Some(CHECKOUT.to_owned()),
+            with: vec![
+                ("fetch-depth".to_owned(), Value::Int(u64::from(*depth))),
+                ("persist-credentials".to_owned(), Value::Bool(false)),
+            ],
+            ..RenderedStep::default()
+        },
+        StepKind::Cargo(CargoCommand::FmtCheck { manifest }) => RenderedStep {
+            name: format!("Format {manifest}"),
+            working_directory: manifest.parent().map(|directory| directory.to_string()),
+            run: Some("cargo-fmt --all --check".to_owned()),
+            ..RenderedStep::default()
+        },
+        StepKind::Helper(command) => {
+            let arguments = helper_arguments(*command);
+            RenderedStep {
+                name: format!("velnor-ci {arguments}"),
+                run: Some(format!("velnor-ci {arguments}")),
+                ..RenderedStep::default()
+            }
+        }
+        StepKind::GeneratorCheck => RenderedStep {
+            name: "Check the generated workflow".to_owned(),
+            run: Some("velnor-gen check".to_owned()),
+            ..RenderedStep::default()
+        },
+        StepKind::FetchHelper(release) => RenderedStep {
+            name: format!("Fetch velnor-ci {}", release.version),
+            env: vec![
+                (
+                    "SHA".to_owned(),
+                    by_platform(release, |binary| &binary.sha256),
+                ),
+                ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
+            ],
+            run: Some(FETCH_HELPER_RUN.to_owned()),
+            ..RenderedStep::default()
+        },
+    }
+}
+
+fn helper_arguments(command: HelperCommand) -> &'static str {
+    match command {
+        HelperCommand::InputsSave => "inputs save",
+        HelperCommand::InputsRestore => "inputs restore",
+    }
+}
+
+fn by_platform<T: fmt::Display>(
+    release: &HelperRelease,
+    field: impl Fn(&HelperBinary) -> &T,
+) -> Value {
+    let table = release
+        .binaries
+        .iter()
+        .map(|(platform, binary)| format!("\"{}\":\"{}\"", platform.runner_key(), field(binary)))
+        .collect::<Vec<_>>()
+        .join(",");
+    Value::Expr(format!(
+        "${{{{ fromJSON('{{{table}}}')[format('{{0}}-{{1}}', runner.os, runner.arch)] }}}}"
+    ))
+}
+
+fn yaml_job(job: &RenderedJob) -> Yaml {
     Yaml::Map(vec![
-        entry("runs-on", text(job.runs_on.as_str())),
+        entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
         entry(
             "steps",
-            Yaml::Seq(job.steps.iter().map(render_step).collect()),
+            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
         ),
     ])
 }
 
-fn render_step(step: &Step) -> Yaml {
-    match &step.kind {
-        StepKind::Checkout { depth } => Yaml::Map(vec![
-            entry("name", text("Check out")),
-            entry("uses", text(CHECKOUT)),
-            entry(
-                "with",
-                Yaml::Map(vec![
-                    entry("fetch-depth", Yaml::Int(u64::from(*depth))),
-                    entry("persist-credentials", Yaml::Bool(false)),
-                ]),
-            ),
-        ]),
-        StepKind::Cargo(CargoCommand::FmtCheck { manifest }) => {
-            let mut items = vec![entry("name", Yaml::Str(format!("Format {manifest}")))];
-            if let Some(directory) = manifest.parent() {
-                items.push(entry("working-directory", text(directory.as_str())));
-            }
-            items.push(entry("run", text("cargo-fmt --all --check")));
-            Yaml::Map(items)
-        }
+fn yaml_step(step: &RenderedStep) -> Yaml {
+    let mut items = vec![entry("name", text(&step.name))];
+    if let Some(uses) = &step.uses {
+        items.push(entry("uses", text(uses)));
     }
+    if !step.with.is_empty() {
+        items.push(entry("with", values(&step.with)));
+    }
+    if let Some(directory) = &step.working_directory {
+        items.push(entry("working-directory", text(directory)));
+    }
+    if !step.env.is_empty() {
+        items.push(entry("env", values(&step.env)));
+    }
+    if let Some(shell) = &step.shell {
+        items.push(entry("shell", text(shell)));
+    }
+    if let Some(run) = &step.run {
+        let value = if run.contains('\n') {
+            Yaml::Block(run.clone())
+        } else {
+            text(run)
+        };
+        items.push(entry("run", value));
+    }
+    Yaml::Map(items)
+}
+
+fn values(items: &[(String, Value)]) -> Yaml {
+    Yaml::Map(
+        items
+            .iter()
+            .map(|(key, value)| {
+                let yaml = match value {
+                    Value::Text(text) => Yaml::Str(text.clone()),
+                    Value::Expr(text) => Yaml::Expr(text.clone()),
+                    Value::Int(number) => Yaml::Int(*number),
+                    Value::Bool(flag) => Yaml::Bool(*flag),
+                };
+                entry(key, yaml)
+            })
+            .collect(),
+    )
 }
 
 fn entry(key: &str, value: Yaml) -> (String, Yaml) {
