@@ -35,6 +35,22 @@ producer job. The public `WorkflowConfig` field has the same name; default value
 are omitted from serialized configuration. Rust struct literals must supply
 the new field.
 
+The `maintenance-helpers` custom check in `.velnor/config.toml` has a
+fifteen-minute budget. Its task builds the generator CLI, the qualification
+diagnostics fixture and the collector clock driver cold (about five minutes on
+a hosted runner), then runs the archive-guard suites. Most of the suite time is
+golden collector tests, each running the debug diagnostics CLI through the five
+golden cases; every Cargo root adds its share to the dogfood case of each such
+pass. With four roots the check reached the fifteen-minute limit on both
+attempts of [run 43347131912](https://github.com/tailrocks/velnor-new/actions/runs/43347131912)
+while thirteen full five-case passes ran. The collector now stops at the first
+candidate command that changes the oracle or the dogfood source workflows, and
+the suite runs each distinct full pass once, so the same four roots completed
+in 8 minutes 50 seconds in
+[run 43358863465](https://github.com/tailrocks/velnor-new/actions/runs/43358863465).
+A change that adds a full five-case pass or a Cargo root is measured against
+this budget; the budget is not raised to absorb it.
+
 Jackin main runs [39809903680](https://github.com/jackin-project/jackin/actions/runs/39809903680),
 [39801216166](https://github.com/jackin-project/jackin/actions/runs/39801216166)
 and [39797125851](https://github.com/jackin-project/jackin/actions/runs/39797125851)

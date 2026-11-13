@@ -45,10 +45,12 @@ fn repository_golden_gate_accepts_matching_and_rejects_changed_oracle() -> Resul
     let success = invoke(&harness.root)?;
     if !success.status.success() {
         let difference =
-            dogfood_plan_difference(&evidence.join("repository-oracle-stage"), &harness.root)?;
+            dogfood_plan_difference(&evidence.join("repository-oracle-stage"), &harness.root)
+                .unwrap_or_else(|error| format!("is unavailable ({error})"));
         return Err(format!(
-            "repository golden gate failed: {}; dogfood plan {difference}",
-            fs::read_to_string(&log)?
+            "repository golden gate failed: {}{}; dogfood plan {difference}",
+            String::from_utf8_lossy(&success.stderr),
+            fs::read_to_string(&log).unwrap_or_default()
         )
         .into());
     }
