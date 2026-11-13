@@ -4,21 +4,24 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use http_body_util::{BodyExt, Empty};
 use hyper::header::HOST;
 use hyper::{Request, Response};
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::fs;
 use tokio::sync::Mutex;
 
 use super::git::Git;
-use super::reply::{Reply, response};
+use super::proxy::Proxy;
+use super::reply::{Reply, response, text_response};
 use super::{
     Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
 };
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
-    TreeEntry,
+    TreeEntry, runs,
 };
 
 const SYMLINK_TARGET_LIMIT: u64 = 4096;
@@ -30,12 +33,14 @@ pub struct ApiStubConfig {
     pub cache_dir: PathBuf,
     pub default_branch: String,
     pub diff_limit_bytes: usize,
+    pub standin: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct ApiStub {
     config: ApiStubConfig,
     git: Git,
+    standin: Option<Proxy>,
 }
 
 struct Call<'a> {
@@ -54,6 +59,7 @@ impl ApiStub {
                 diff_limit_bytes: config.diff_limit_bytes,
                 last_diff: Mutex::new(None),
             },
+            standin: config.standin.as_deref().map(Proxy::new),
             config,
         }
     }
@@ -77,17 +83,98 @@ impl ApiStub {
                 repository: &repository,
             },
         };
-        let reply = match rest::route(&method, &path) {
+        let route = rest::route(&method, &path);
+        if let Api::JobLog { id } = route {
+            let log = self.job_log(id).await;
+            eprintln!("{method} {path} {}", if log.is_some() { 200 } else { 404 });
+            return log.map_or_else(|| response(Reply::missing()), text_response);
+        }
+        let reply = match route {
             Api::PullFiles { number } => self.pull_files(&call, number).await,
             Api::PullList => self.pull_list(&call).await,
             Api::Compare { base, head } => self.compare(&call, &base, &head).await,
             Api::Contents { path } => self.contents(&call, &path).await,
             Api::CacheList => self.cache_list(&call).await,
             Api::CacheDelete { id } => self.cache_delete(&call, id).await,
-            Api::NotImplemented => Reply::with(501, rest::not_implemented(&method, &path), None),
+            Api::Run { id } => self.run(id).await,
+            Api::RunJobs { id, attempt } => self.run_jobs(&call, id, attempt).await,
+            Api::JobLog { .. } | Api::NotImplemented => {
+                Reply::with(501, rest::not_implemented(&method, &path), None)
+            }
         };
         eprintln!("{method} {path} {}", reply.status);
         response(reply)
+    }
+
+    async fn standin_bytes(&self, path: &str) -> Option<bytes::Bytes> {
+        let request = Request::get(path)
+            .body(Empty::new().map_err(|never| match never {}).boxed_unsync())
+            .ok()?;
+        let response = self.standin.as_ref()?.forward(request).await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        Some(response.into_body().collect().await.ok()?.to_bytes())
+    }
+
+    async fn standin<T: DeserializeOwned>(&self, path: &str) -> Option<T> {
+        serde_json::from_slice(&self.standin_bytes(path).await?).ok()
+    }
+
+    async fn records(&self, job: &runs::StandInJob) -> Option<Vec<runs::Record>> {
+        match &job.time_line_id {
+            Some(id) => self.standin(&format!("/_apis/v1/Timeline/{id}")).await,
+            None => Some(Vec::new()),
+        }
+    }
+
+    async fn attempt_jobs(&self, id: u64, attempt: u32) -> Option<Vec<Value>> {
+        let jobs: Vec<runs::StandInJob> = self
+            .standin(&format!("/_apis/v1/Message?runid={id}"))
+            .await?;
+        let mut listed = Vec::new();
+        for job in jobs.iter().filter(|job| job.attempt == attempt) {
+            listed.push(runs::job(job, &self.records(job).await?));
+        }
+        Some(listed)
+    }
+
+    async fn run(&self, id: u64) -> Reply {
+        let listed: Option<Vec<runs::StandInRun>> =
+            self.standin("/_apis/v1/Message/workflow/runs").await;
+        let Some(run) = listed.and_then(|listed| listed.into_iter().find(|run| run.id == id))
+        else {
+            return Reply::missing();
+        };
+        match self.attempt_jobs(id, 1).await {
+            Some(jobs) => Reply::ok(runs::run(&run, &jobs)),
+            None => Reply::missing(),
+        }
+    }
+
+    async fn run_jobs(&self, call: &Call<'_>, id: u64, attempt: u32) -> Reply {
+        let Some(jobs) = self.attempt_jobs(id, attempt).await else {
+            return Reply::missing();
+        };
+        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE, MAX_PER_PAGE);
+        Reply::with(
+            200,
+            json!({"total_count": jobs.len(), "jobs": page.slice(&jobs)}),
+            page.link(jobs.len(), call.host, call.path, &call.params),
+        )
+    }
+
+    async fn job_log(&self, id: u64) -> Option<String> {
+        let jobs: Vec<runs::StandInJob> = self.standin("/_apis/v1/Message").await?;
+        let job = jobs.into_iter().find(|job| job.request_id == id)?;
+        let mut log = String::new();
+        for log_id in runs::log_ids(&self.records(&job).await?) {
+            let bytes = self
+                .standin_bytes(&format!("/_apis/v1/Logfiles/{log_id}"))
+                .await?;
+            log.push_str(&String::from_utf8_lossy(&bytes));
+        }
+        Some(log)
     }
 
     async fn pulls(&self) -> Option<Vec<Value>> {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 
@@ -40,12 +41,13 @@ pub struct Outcome {
     pub event: String,
     pub conclusion: &'static str,
     pub started: Option<u64>,
+    pub metrics: Result<PathBuf, String>,
 }
 
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success"
+        self.conclusion == "success" && self.metrics.is_ok()
     }
 
     #[must_use]

@@ -46,7 +46,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     let env = Environment::at(&args.environment.dir).await?;
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo).await?;
-    for directory in ["cache", "api", "events", "logs"] {
+    for directory in ["cache", "api", "events", "logs", "metrics"] {
         let _ = fs::remove_dir_all(env.dir.join(directory)).await;
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
@@ -239,12 +239,30 @@ impl Driver<'_> {
             .await?;
         for run in self.get::<Vec<standin::Run>>(runs).await? {
             if known.iter().all(|old| old.id != run.id) {
-                let outcome = self.outcome(run).await?;
+                let mut outcome = self.outcome(run).await?;
+                outcome.metrics = self.collect(outcome.id).await;
                 println!("velnor-local: {}", outcome.line());
                 self.outcomes.push(outcome);
             }
         }
         Ok(())
+    }
+
+    async fn collect(&self, id: u64) -> Result<PathBuf, String> {
+        let metrics = self.env.dir.join(format!("metrics/{id}.json"));
+        let collect = format!("bench collect {id} --repo {} -o", self.args.repository);
+        let collected = Command::new(&self.args.velnor_ci)
+            .args(words(&collect))
+            .arg(&metrics)
+            .env("GITHUB_API_URL", &self.addresses.stub_url)
+            .env("GITHUB_TOKEN", "velnor-local")
+            .output()
+            .await
+            .map_err(|error| format!("{}: {error}", self.args.velnor_ci.display()))?;
+        if collected.status.success() {
+            return Ok(metrics);
+        }
+        Err(String::from_utf8_lossy(&collected.stderr).trim().to_owned())
     }
 
     async fn outcome(&self, run: standin::Run) -> io::Result<Outcome> {
@@ -268,6 +286,7 @@ impl Driver<'_> {
             event: run.event_name.unwrap_or_default(),
             conclusion: standin::conclusion(run.result.as_deref()),
             started,
+            metrics: Err("not collected".to_owned()),
         })
     }
 }

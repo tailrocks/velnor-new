@@ -159,7 +159,7 @@ impl Environment {
              -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=* \
              -v {repo}:/repo:ro -v {dir}/api:/api -v {dir}/cache:/data \
              {LOCAL_IMAGE} api-stub --listen 0.0.0.0:80 --repo /repo --dir /api \
-             --cache-dir /data --default-branch {}",
+             --cache-dir /data --standin runner-server:80 --default-branch {}",
             args.default_branch
         )))
         .await?;

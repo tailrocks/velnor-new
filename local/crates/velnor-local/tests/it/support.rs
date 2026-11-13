@@ -182,6 +182,7 @@ impl Stub {
                 cache_dir: cache_dir.to_owned(),
                 default_branch: "main".to_owned(),
                 diff_limit_bytes: 1 << 20,
+                standin: None,
             }),
         }
     }
