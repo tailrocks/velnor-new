@@ -231,7 +231,6 @@ artifact_response = _read_limited_json(artifact_response_path, 2097152, "Candida
 identity_module.validate_artifact_record(artifact_response, identity)
 ci_runs = _read_limited_json(ci_runs_path, 2097152, "Canonical CI run response")
 ci = identity_module.select_ci_run(ci_runs, identity["source"])
-verified = oci_module.verify_oci_archive(archive_path)
 hasher = hashlib.sha256()
 archive_size = 0
 with archive_path.open("rb") as archive_stream:
@@ -256,6 +255,7 @@ for label, attestation_path in (
 ):
     attestation = _read_limited_json(attestation_path, 1048576, f"{label} attestation")
     identity_module.validate_attestation_output(attestation, identity, subjects)
+verified = oci_module.verify_oci_archive(archive_path)
 publish_module.check_record_binding(
     record,
     archive_digest,

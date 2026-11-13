@@ -349,6 +349,7 @@ fn gc1_t51_evidence_rejects_attestation_from_another_run_or_for_other_files()
         ("7/attempts/1", "another attempt"),
     ] {
         let mut inputs = evidence_inputs();
+        inputs.archive = b"not an OCI archive".to_vec();
         inputs.attestation = attestation_json(
             run,
             &inputs.archive,
