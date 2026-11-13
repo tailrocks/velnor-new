@@ -29,6 +29,7 @@ pub struct Tracked {
     pub absent: Vec<String>,
     pub unsupported: usize,
     pub unverifiable_links: usize,
+    pub submodules: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -39,6 +40,7 @@ pub struct RestorePlan {
     pub deleted: usize,
     pub absent: usize,
     pub unsupported: usize,
+    pub submodules: usize,
     pub links_changed: usize,
 }
 
@@ -47,6 +49,7 @@ enum Entry {
     Link(TrackedFile),
     Unsupported,
     UnverifiableLink,
+    Submodule,
     Skipped,
 }
 
@@ -59,6 +62,7 @@ pub fn parse_ls_files(staged: &[u8]) -> Tracked {
             Entry::Link(link) => tracked.links.push(link),
             Entry::Unsupported => tracked.unsupported += 1,
             Entry::UnverifiableLink => tracked.unverifiable_links += 1,
+            Entry::Submodule => tracked.submodules += 1,
             Entry::Skipped => {}
         }
     }
@@ -81,6 +85,9 @@ fn parse_ls_files_record(record: &[u8]) -> Entry {
     let (Some(mode), Some(blob), Some("0")) = (fields.next(), fields.next(), fields.next()) else {
         return Entry::Skipped;
     };
+    if mode == "160000" {
+        return Entry::Submodule;
+    }
     let link = mode == SYMLINK_MODE;
     if !link && mode != "100644" && mode != "100755" {
         return Entry::Skipped;
@@ -214,6 +221,7 @@ pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
             .count(),
         absent: tracked.absent.len(),
         unsupported: tracked.unsupported,
+        submodules: tracked.submodules,
         ..RestorePlan::default()
     };
     for file in &tracked.files {

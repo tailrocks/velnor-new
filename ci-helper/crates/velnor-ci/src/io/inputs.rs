@@ -3,7 +3,7 @@
 
 use std::fs::{self, File, FileTimes};
 use std::io::{ErrorKind, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -14,19 +14,35 @@ use crate::inputs::{
 };
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
-    let tracked = worktree_files(root)?;
-    let mut saved = Vec::with_capacity(tracked.files.len());
+    let (top, tracked) = worktree_files(root)?;
+    let path = root.join(INPUTS_FILE);
+    if tracked.unverifiable_links > 0 {
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(CiError::new(format!(
+                    "cannot remove {}: {e}",
+                    path.display()
+                )));
+            }
+        }
+        return Ok(format!(
+            "saved nothing: {} tracked symlinks have a path or target the file cannot hold, so restore finds no saved inputs\n",
+            tracked.unverifiable_links
+        ));
+    }
+    let mut saved = Vec::with_capacity(tracked.files.len() + tracked.links.len());
     for file in &tracked.files {
         saved.push(SavedInput {
             file: file.clone(),
-            mtime_ns: modified_ns(&root.join(&file.path))?,
+            mtime_ns: modified_ns(&top.join(&file.path))?,
         });
     }
     saved.extend(tracked.links.iter().map(|link| SavedInput {
         file: link.clone(),
         mtime_ns: 0,
     }));
-    let path = root.join(INPUTS_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
@@ -34,12 +50,12 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} symlinks the file cannot hold\n",
+        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules\n",
         tracked.files.len(),
         tracked.links.len(),
         tracked.absent.len(),
         tracked.unsupported,
-        tracked.unverifiable_links
+        tracked.submodules
     ))
 }
 
@@ -52,7 +68,9 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let plan = plan_restore(&parse_inputs(&text)?, &worktree_files(root)?);
+    let saved = parse_inputs(&text)?;
+    let (top, tracked) = worktree_files(root)?;
+    let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
         return Ok(format!(
             "restored nothing: {} tracked symlinks are new, changed or deleted since the save\n",
@@ -60,20 +78,32 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         ));
     }
     for input in &plan.restore {
-        set_modified_ns(&root.join(&input.file.path), input.mtime_ns)?;
+        set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
     Ok(format!(
-        "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold\n",
+        "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules\n",
         plan.restore.len(),
         plan.changed,
         plan.new,
         plan.deleted,
         plan.absent,
-        plan.unsupported
+        plan.unsupported,
+        plan.submodules
     ))
 }
 
-fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
+fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
+    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
+    let top = PathBuf::from(
+        String::from_utf8(top)
+            .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
+            .trim_end_matches(['\n', '\r']),
+    );
+    let tracked = top_level_files(&top)?;
+    Ok((top, tracked))
+}
+
+fn top_level_files(root: &Path) -> Result<Tracked, CiError> {
     let index = parse_ls_files(&git(root, &["ls-files", "-s", "-z"], None)?);
     let mut present = Vec::with_capacity(index.files.len());
     let mut absent = Vec::new();
@@ -122,6 +152,7 @@ fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
         absent,
         unsupported: index.unsupported,
         unverifiable_links,
+        submodules: index.submodules,
     })
 }
 

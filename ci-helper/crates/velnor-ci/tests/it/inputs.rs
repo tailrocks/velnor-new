@@ -34,6 +34,7 @@ fn regular_files_and_symlinks_at_stage_zero_with_a_writable_path_are_tracked() {
             absent: vec![],
             unsupported: 2,
             unverifiable_links: 1,
+            submodules: 1,
         }
     );
 }
