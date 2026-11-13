@@ -356,6 +356,7 @@ fn an_exclude_glob_matches_a_path_or_anything_below_it() -> TestResult {
             "crates/a/tests/other/Cargo.toml",
             false,
         ),
+        ("crates/**/tests", "crates/tests/Cargo.toml", true),
         ("crates/*/tests", "crates/a/tests/x/Cargo.toml", true),
         ("crates/*/tests", "crates/a/b/tests/Cargo.toml", false),
         ("crates/velnor-*", "crates/velnor-runner/Cargo.toml", true),
