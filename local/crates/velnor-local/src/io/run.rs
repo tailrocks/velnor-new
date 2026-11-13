@@ -59,6 +59,7 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         repo: args.repo,
         dir: args.dir,
         cache_dir: args.cache_dir,
+        default_branch: args.default_branch,
     }));
     serve("api-stub", args.listen, move |request| {
         let stub = Arc::clone(&stub);

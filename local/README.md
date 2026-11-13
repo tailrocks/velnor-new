@@ -78,7 +78,9 @@ cargo nextest run --locked
 | `GET /repos/{owner}/{repo}/actions/caches`, `DELETE .../caches/{id}` | `index.json` in `--cache-dir`, the cache server's directory |
 
 ```sh
-velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache"
+velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache" --default-branch main
 ```
+
+`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500.
 
 The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.

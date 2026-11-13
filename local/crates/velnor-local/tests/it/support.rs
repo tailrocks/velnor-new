@@ -180,6 +180,7 @@ impl Stub {
                 repo: repo.to_owned(),
                 dir: dir.to_owned(),
                 cache_dir: cache_dir.to_owned(),
+                default_branch: "main".to_owned(),
             }),
         }
     }

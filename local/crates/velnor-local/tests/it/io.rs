@@ -320,7 +320,7 @@ async fn compare_reports_commits_status_and_files_between_two_refs() {
     assert_eq!(paged.json()["files"], json!([]));
 }
 
-fn decoded(entry: &Value) -> String {
+pub(crate) fn decoded(entry: &Value) -> String {
     let content: String = entry["content"]
         .as_str()
         .unwrap_or_default()

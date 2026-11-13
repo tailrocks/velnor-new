@@ -42,6 +42,12 @@ pub struct ApiStubArgs {
         help = "The cache server's directory, which holds index.json and archives/"
     )]
     pub cache_dir: PathBuf,
+    #[arg(
+        long,
+        default_value = "main",
+        help = "Branch that a contents request without ref reads"
+    )]
+    pub default_branch: String,
 }
 
 #[derive(Debug, Args)]

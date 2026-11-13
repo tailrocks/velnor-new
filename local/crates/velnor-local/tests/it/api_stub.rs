@@ -270,6 +270,26 @@ async fn an_unreadable_index_is_an_error_not_a_stale_answer() {
     assert_eq!(reply.json()["code"], "internal");
 }
 
+#[tokio::test]
+async fn pull_request_state_that_cannot_be_read_is_a_server_error() {
+    let harness = Harness::new("api-nopulls", LIMIT).await;
+    let state = temp_dir("api-nopulls-state");
+    let stub = Stub::new(&temp_dir("api-nopulls-repo"), &state, harness.dir());
+    let path = "/repos/tailrocks/velnor-lab/pulls";
+
+    let missing = stub.get(path).await;
+    std::fs::write(state.join("pulls.json"), "{\"number\": 1")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let malformed = stub.get(path).await;
+    let files = stub.get(&format!("{path}/1/files")).await;
+
+    assert_eq!(
+        (missing.status, malformed.status, files.status),
+        (500, 500, 500)
+    );
+    assert_eq!(missing.json()["message"], "pulls.json is unreadable");
+}
+
 #[test]
 fn timestamps_are_written_as_utc_rfc3339() {
     assert_eq!(rfc3339(0), "1970-01-01T00:00:00Z");

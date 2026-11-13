@@ -10,12 +10,12 @@ use hyper::header::{CONTENT_TYPE, HOST, HeaderValue, LINK};
 use hyper::{Request, Response, StatusCode};
 use serde_json::{Value, json};
 use tokio::fs;
-use tokio::process::Command;
 
+use super::git::Git;
 use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
 use crate::rest::{
-    self, Api, COMMIT_FORMAT, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES,
-    Commit, Comparison, DEFAULT_PER_PAGE, FileDiff, PULL_FILES_CAP, Page, Site, TreeEntry,
+    self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Comparison,
+    DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site, TreeEntry,
 };
 
 #[derive(Debug)]
@@ -23,11 +23,13 @@ pub struct ApiStubConfig {
     pub repo: PathBuf,
     pub dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub default_branch: String,
 }
 
 #[derive(Debug)]
 pub struct ApiStub {
     config: ApiStubConfig,
+    git: Git,
 }
 
 #[derive(Debug)]
@@ -50,6 +52,10 @@ impl Reply {
         }
     }
 
+    fn unreadable_pulls() -> Self {
+        Self::with(500, json!({"message": "pulls.json is unreadable"}), None)
+    }
+
     fn missing() -> Self {
         Self::with(404, rest::not_found(), None)
     }
@@ -65,7 +71,12 @@ struct Call<'a> {
 impl ApiStub {
     #[must_use]
     pub fn new(config: ApiStubConfig) -> Self {
-        Self { config }
+        Self {
+            git: Git {
+                repo: config.repo.clone(),
+            },
+            config,
+        }
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
@@ -100,91 +111,17 @@ impl ApiStub {
         response(reply)
     }
 
-    async fn git(&self, args: &[&str]) -> Option<Vec<u8>> {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(&self.config.repo)
-            .args(["-c", "core.quotepath=false"])
-            .args(args)
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .output()
-            .await
-            .ok()?;
-        output.status.success().then_some(output.stdout)
-    }
-
-    async fn git_text(&self, args: &[&str]) -> Option<String> {
-        self.git(args)
-            .await
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-    }
-
-    async fn resolve(&self, reference: &str) -> Option<String> {
-        if reference.is_empty() || reference.starts_with('-') {
-            return None;
-        }
-        let spec = format!("{reference}^{{commit}}");
-        let sha = self
-            .git_text(&[
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                "--end-of-options",
-                &spec,
-            ])
-            .await?;
-        Some(sha.trim().to_owned())
-    }
-
-    async fn diff(&self, base: &str, head: &str) -> Option<Vec<FileDiff>> {
-        let range = format!("{base}...{head}");
-        let text = self
-            .git_text(&[
-                "diff",
-                "-M",
-                "--full-index",
-                "--no-color",
-                "--no-ext-diff",
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-                "--end-of-options",
-                &range,
-            ])
-            .await?;
-        let mut files = rest::parse_diff(&text);
-        for file in &mut files {
-            if file.sha.is_none() && file.status != "removed" {
-                let spec = format!("{head}:{}", file.filename);
-                file.sha = self
-                    .git_text(&["rev-parse", "--verify", "--end-of-options", &spec])
-                    .await
-                    .map(|sha| sha.trim().to_owned());
-            }
-        }
-        Some(files)
-    }
-
-    async fn commits(&self, options: &[&str], revisions: &str) -> Option<Vec<Commit>> {
-        let format = format!("--format={COMMIT_FORMAT}");
-        let mut full = vec!["log", "--no-color", &format];
-        full.extend_from_slice(options);
-        full.extend_from_slice(&["--end-of-options", revisions]);
-        let text = self.git_text(&full).await?;
-        Some(rest::parse_commits(&text))
-    }
-
-    async fn pulls(&self) -> Vec<Value> {
-        match fs::read(self.config.dir.join("pulls.json")).await {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
-            Err(_) => Vec::new(),
-        }
+    async fn pulls(&self) -> Option<Vec<Value>> {
+        let bytes = fs::read(self.config.dir.join("pulls.json")).await.ok()?;
+        serde_json::from_slice(&bytes).ok()
     }
 
     async fn pull_list(&self, call: &Call<'_>) -> Reply {
         let wanted = call.params.get("state").map_or("open", String::as_str);
-        let pulls: Vec<Value> = self
-            .pulls()
-            .await
+        let Some(pulls) = self.pulls().await else {
+            return Reply::unreadable_pulls();
+        };
+        let pulls: Vec<Value> = pulls
             .into_iter()
             .filter(|pull| wanted == "all" || pull["state"].as_str().unwrap_or("open") == wanted)
             .collect();
@@ -192,7 +129,9 @@ impl ApiStub {
     }
 
     async fn pull_files(&self, call: &Call<'_>, number: u64) -> Reply {
-        let pulls = self.pulls().await;
+        let Some(pulls) = self.pulls().await else {
+            return Reply::unreadable_pulls();
+        };
         let Some(pull) = pulls.iter().find(|pull| pull["number"] == number) else {
             return Reply::missing();
         };
@@ -200,10 +139,11 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        let (Some(base), Some(head)) = (self.resolve(base).await, self.resolve(head).await) else {
+        let (Some(base), Some(head)) = (self.git.resolve(base).await, self.git.resolve(head).await)
+        else {
             return Reply::missing();
         };
-        let Some(files) = self.diff(&base, &head).await else {
+        let Some(files) = self.git.diff(&base, &head).await else {
             return Reply::missing();
         };
         let files: Vec<Value> = files
@@ -215,11 +155,13 @@ impl ApiStub {
     }
 
     async fn compare(&self, call: &Call<'_>, base: &str, head: &str) -> Reply {
-        let (Some(base), Some(head)) = (self.resolve(base).await, self.resolve(head).await) else {
+        let (Some(base), Some(head)) = (self.git.resolve(base).await, self.git.resolve(head).await)
+        else {
             return Reply::missing();
         };
         let Some(merge_base) = self
-            .git_text(&["merge-base", "--end-of-options", &base, &head])
+            .git
+            .text(&["merge-base", "--end-of-options", &base, &head])
             .await
             .map(|sha| sha.trim().to_owned())
         else {
@@ -228,12 +170,13 @@ impl ApiStub {
         let range = format!("{base}..{head}");
         let behind = format!("{head}..{base}");
         let (Some(commits), Some(base_commit), Some(merge_commit), Some(behind), Some(files)) = (
-            self.commits(&["--reverse"], &range).await,
-            self.commits(&["-1"], &base).await,
-            self.commits(&["-1"], &merge_base).await,
-            self.git_text(&["rev-list", "--count", "--end-of-options", &behind])
+            self.git.commits(&["--reverse"], &range).await,
+            self.git.commits(&["-1"], &base).await,
+            self.git.commits(&["-1"], &merge_base).await,
+            self.git
+                .text(&["rev-list", "--count", "--end-of-options", &behind])
                 .await,
-            self.diff(&base, &head).await,
+            self.git.diff(&base, &head).await,
         ) else {
             return Reply::missing();
         };
@@ -246,7 +189,7 @@ impl ApiStub {
         } else {
             COMPARE_COMMITS_DEFAULT
         };
-        let page = Page::from_query(&call.params, default);
+        let page = Page::from_query(&call.params, default, COMPARE_COMMITS_DEFAULT);
         let comparison = Comparison {
             base: base_commit,
             head: &head,
@@ -261,27 +204,36 @@ impl ApiStub {
     }
 
     async fn contents(&self, call: &Call<'_>, path: &str) -> Reply {
-        let reference = call.params.get("ref").map_or("HEAD", String::as_str);
-        let Some(commit) = self.resolve(reference).await else {
+        let reference = call
+            .params
+            .get("ref")
+            .map_or(self.config.default_branch.as_str(), String::as_str);
+        let Some(commit) = self.git.resolve(reference).await else {
             return Reply::missing();
         };
         let path = path.trim_end_matches('/');
-        let Some(entries) = self.tree(&commit, path).await else {
+        let Some(entries) = self.git.tree(&commit, path).await else {
             return Reply::missing();
         };
-        let Some(entry) = entries.iter().find(|entry| entry.path == path) else {
+        let Some(mut entry) = entries.iter().find(|entry| entry.path == path) else {
             return Reply::missing();
         };
+        let followed = self.link_target(&commit, entry).await;
+        if let Some(target) = &followed {
+            entry = target;
+        }
         let site = &call.site;
         match entry.kind() {
             "dir" => {
                 let listing = self
+                    .git
                     .tree(&commit, &format!("{path}/"))
                     .await
                     .unwrap_or_default();
                 Reply::ok(Value::Array(
                     listing
                         .iter()
+                        .take(DIRECTORY_LIMIT)
                         .map(|child| site.listing_entry(child, reference))
                         .collect(),
                 ))
@@ -290,26 +242,23 @@ impl ApiStub {
             _ if entry.size > CONTENTS_LIMIT_BYTES => {
                 Reply::with(403, rest::forbidden_too_large(), None)
             }
-            _ => match self.git(&["cat-file", "blob", &entry.sha]).await {
+            _ => match self.git.run(&["cat-file", "blob", &entry.sha]).await {
                 Some(bytes) => Reply::ok(site.content_file(entry, reference, &bytes)),
                 None => Reply::missing(),
             },
         }
     }
 
-    async fn tree(&self, commit: &str, path: &str) -> Option<Vec<TreeEntry>> {
-        let text = self
-            .git_text(&[
-                "ls-tree",
-                "-z",
-                "-l",
-                "--end-of-options",
-                commit,
-                "--",
-                path,
-            ])
-            .await?;
-        Some(rest::parse_tree(&text))
+    async fn link_target(&self, commit: &str, entry: &TreeEntry) -> Option<TreeEntry> {
+        if entry.kind() != "symlink" {
+            return None;
+        }
+        let bytes = self.git.run(&["cat-file", "blob", &entry.sha]).await?;
+        let target = rest::link_target(&entry.path, &String::from_utf8_lossy(&bytes))?;
+        let found = self.git.tree(commit, &target).await?;
+        found
+            .into_iter()
+            .find(|candidate| candidate.path == target && candidate.kind() == "file")
     }
 
     async fn cache_list(&self, call: &Call<'_>) -> Reply {
@@ -318,7 +267,7 @@ impl ApiStub {
         };
         let listed = index.listed(call.site.repository, now());
         let entries = rest::cache_list(&listed, &call.params);
-        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE);
+        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE, MAX_PER_PAGE);
         Reply::with(
             200,
             json!({"total_count": entries.len(), "actions_caches": page.slice(&entries)}),
@@ -360,7 +309,7 @@ impl ApiStub {
 }
 
 fn paged(call: &Call<'_>, default_per_page: usize, items: &[Value]) -> Reply {
-    let page = Page::from_query(&call.params, default_per_page);
+    let page = Page::from_query(&call.params, default_per_page, MAX_PER_PAGE);
     Reply::with(
         200,
         Value::Array(page.slice(items).to_vec()),

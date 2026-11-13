@@ -19,6 +19,7 @@ pub const COMPARE_FILES_CAP: usize = 300;
 pub const COMPARE_COMMITS_DEFAULT: usize = 250;
 pub const DEFAULT_PER_PAGE: usize = 30;
 pub const MAX_PER_PAGE: usize = 100;
+pub const DIRECTORY_LIMIT: usize = 1000;
 pub const CONTENTS_LIMIT_BYTES: u64 = 1 << 20;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,7 +116,11 @@ pub struct Page {
 
 impl Page {
     #[must_use]
-    pub fn from_query(params: &BTreeMap<String, String>, default_per_page: usize) -> Self {
+    pub fn from_query(
+        params: &BTreeMap<String, String>,
+        default_per_page: usize,
+        max_per_page: usize,
+    ) -> Self {
         let number = |name: &str| {
             params
                 .get(name)
@@ -125,7 +130,7 @@ impl Page {
             page: number("page").filter(|page| *page >= 1).unwrap_or(1),
             per_page: number("per_page")
                 .filter(|per_page| *per_page >= 1)
-                .map_or(default_per_page, |per_page| per_page.min(MAX_PER_PAGE)),
+                .map_or(default_per_page, |per_page| per_page.min(max_per_page)),
         }
     }
 
@@ -181,4 +186,23 @@ impl Page {
                 .join(", "),
         )
     }
+}
+
+#[must_use]
+pub fn link_target(path: &str, target: &str) -> Option<String> {
+    if target.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = path.split('/').collect();
+    parts.pop();
+    for segment in target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            name => parts.push(name),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
 }
