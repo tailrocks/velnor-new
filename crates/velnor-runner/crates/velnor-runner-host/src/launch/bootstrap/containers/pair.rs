@@ -8,7 +8,6 @@ use velnor_runner_github::EncodedJit;
 
 use crate::error::HostError;
 
-const PLATFORM: &str = "linux/amd64";
 const RUNNER_PIDS: i64 = 1_024;
 const DIND_PIDS: i64 = 2_048;
 const LOG_MAX_SIZE: &str = "10m";

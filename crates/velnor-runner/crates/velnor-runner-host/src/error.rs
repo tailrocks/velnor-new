@@ -33,6 +33,9 @@ pub enum HostError {
     #[error("invalid config")]
     Config,
 
+    #[error("scale set selector does not match the runner platform")]
+    PlatformSelector,
+
     #[error("bad path")]
     Path,
 
@@ -111,6 +114,7 @@ impl HostError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
+            Self::PlatformSelector => "platform_selector",
             Self::Path => "path",
             Self::Lock => "lock",
             Self::Journal => "journal",

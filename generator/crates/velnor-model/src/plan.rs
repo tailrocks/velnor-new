@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ids::{JobId, RepoPath, RunnerLabel};
+use crate::ids::{DownloadUrl, HelperVersion, InvalidId, JobId, RepoPath, RunnerLabel, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -59,6 +59,70 @@ pub struct Step {
 pub enum StepKind {
     Checkout { depth: u32 },
     Cargo(CargoCommand),
+    Helper(HelperCommand),
+    GeneratorCheck,
+    FetchHelper(HelperRelease),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HelperCommand {
+    InputsSave,
+    InputsRestore,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelperRelease {
+    version: HelperVersion,
+    binaries: BTreeMap<Platform, HelperBinary>,
+}
+
+impl HelperRelease {
+    pub fn new(
+        version: HelperVersion,
+        binaries: BTreeMap<Platform, HelperBinary>,
+    ) -> Result<Self, InvalidId> {
+        if binaries.is_empty() {
+            return Err(InvalidId {
+                kind: "HelperRelease",
+                value: version.to_string(),
+            });
+        }
+        Ok(Self { version, binaries })
+    }
+
+    #[must_use]
+    pub fn version(&self) -> &HelperVersion {
+        &self.version
+    }
+
+    #[must_use]
+    pub fn binaries(&self) -> &BTreeMap<Platform, HelperBinary> {
+        &self.binaries
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelperBinary {
+    pub url: DownloadUrl,
+    pub sha256: Sha256,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Platform {
+    LinuxX64,
+    LinuxArm64,
+    MacosArm64,
+}
+
+impl Platform {
+    #[must_use]
+    pub const fn runner_key(self) -> &'static str {
+        match self {
+            Self::LinuxX64 => "Linux-X64",
+            Self::LinuxArm64 => "Linux-ARM64",
+            Self::MacosArm64 => "macOS-ARM64",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

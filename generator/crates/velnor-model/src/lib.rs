@@ -5,10 +5,13 @@ mod ids;
 mod plan;
 mod repo;
 
-pub use ids::{InvalidId, JobId, PackageName, RepoPath, RunnerLabel, TargetName};
+pub use ids::{
+    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    TargetName,
+};
 pub use plan::{
-    Access, CargoCommand, Concurrency, Job, PermissionScope, Permissions, Step, StepKind, Triggers,
-    WorkflowPlan,
+    Access, CargoCommand, Concurrency, HelperBinary, HelperCommand, HelperRelease, Job,
+    PermissionScope, Permissions, Platform, Step, StepKind, Triggers, WorkflowPlan,
 };
 pub use repo::{
     DependencyKind, PackageDependency, RepoFacts, RepoView, RustCiConfig, RustMetadata,

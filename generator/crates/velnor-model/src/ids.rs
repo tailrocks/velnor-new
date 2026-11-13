@@ -61,6 +61,9 @@ id!(PackageName, text);
 id!(TargetName, text);
 id!(RunnerLabel, text);
 id!(JobId, identifier);
+id!(HelperVersion, version);
+id!(DownloadUrl, download_url);
+id!(Sha256, sha256);
 
 impl RepoPath {
     #[must_use]
@@ -123,6 +126,63 @@ const fn repo_path(value: &[u8]) -> bool {
             }
             start = index + 1;
         } else if value[index] == b'\\' {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn version(value: &[u8]) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    let mut index = 0;
+    while index < value.len() {
+        let byte = value[index];
+        if !(byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-' || byte == b'+') {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn download_url(value: &[u8]) -> bool {
+    let prefix = b"https://";
+    if value.len() <= prefix.len() {
+        return false;
+    }
+    if !value[prefix.len()].is_ascii_alphanumeric() {
+        return false;
+    }
+    let mut index = 0;
+    while index < value.len() {
+        let byte = value[index];
+        if index < prefix.len() && byte != prefix[index] {
+            return false;
+        }
+        if !(byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'.' | b'_' | b'~' | b':' | b'/' | b'%' | b'+' | b'@' | b'=' | b'&' | b'?' | b'-'
+            ))
+        {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn sha256(value: &[u8]) -> bool {
+    if value.len() != 64 {
+        return false;
+    }
+    let mut index = 0;
+    while index < value.len() {
+        let byte = value[index];
+        if !(byte.is_ascii_digit() || (byte >= b'a' && byte <= b'f')) {
             return false;
         }
         index += 1;
