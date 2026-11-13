@@ -79,7 +79,7 @@ fn key_text(key: &str) -> String {
 }
 
 fn scalar(text: &str) -> String {
-    if text.chars().any(char::is_control) {
+    if !text.chars().all(printable) {
         return double_quoted(text);
     }
     if plain(text) {
@@ -101,6 +101,10 @@ fn plain(text: &str) -> bool {
         && !RESERVED.contains(&text.to_ascii_lowercase().as_str())
 }
 
+fn printable(c: char) -> bool {
+    matches!(c, '\t' | '\n' | '\r' | ' '..='~' | '\u{85}' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..)
+}
+
 fn double_quoted(text: &str) -> String {
     let mut out = String::from("\"");
     for c in text.chars() {
@@ -109,7 +113,7 @@ fn double_quoted(text: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
-            c if c.is_control() => {
+            c if !printable(c) => {
                 out.push_str("\\u");
                 for shift in [12, 8, 4, 0] {
                     out.extend(char::from_digit((u32::from(c) >> shift) & 0xf, 16));

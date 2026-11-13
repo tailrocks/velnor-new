@@ -108,7 +108,7 @@ fn render_step(step: &Step) -> Yaml {
             if let Some(directory) = manifest.parent() {
                 items.push(entry("working-directory", text(directory.as_str())));
             }
-            items.push(entry("run", text("cargo fmt --all --check")));
+            items.push(entry("run", text("cargo-fmt --all --check")));
             Yaml::Map(items)
         }
     }
