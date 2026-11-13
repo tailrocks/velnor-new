@@ -230,6 +230,10 @@ impl CacheServer {
             }
             Upload::BlockList => {
                 let xml = read_small_body(request.into_body()).await?;
+                let assembled = fs::try_exists(self.archive(blob)).await.unwrap_or(false);
+                if assembled && !fs::try_exists(&blocks).await.unwrap_or(true) {
+                    return Ok(created());
+                }
                 let mut archive = File::create(self.archive(blob))
                     .await
                     .map_err(Error::internal)?;
@@ -245,9 +249,7 @@ impl CacheServer {
                 fs::remove_dir_all(&blocks).await.map_err(Error::internal)?;
             }
         }
-        let mut response = Response::new(empty());
-        *response.status_mut() = StatusCode::CREATED;
-        Ok(response)
+        Ok(created())
     }
 
     async fn download(&self, blob: &str) -> Result<Response<Body>, Error> {
@@ -336,10 +338,14 @@ fn now() -> u64 {
         .map_or(0, |elapsed| elapsed.as_secs())
 }
 
-fn empty() -> Body {
-    Full::new(Bytes::new())
-        .map_err(|never| match never {})
-        .boxed_unsync()
+fn created() -> Response<Body> {
+    let mut response = Response::new(
+        Full::new(Bytes::new())
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    *response.status_mut() = StatusCode::CREATED;
+    response
 }
 
 fn json_response(status: u16, body: &Value) -> Response<Body> {

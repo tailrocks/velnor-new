@@ -24,7 +24,7 @@ pub enum Command {
 
 #[derive(Debug, Args)]
 pub struct CacheServerArgs {
-    #[arg(long, default_value = "0.0.0.0:80", help = "Address to listen on")]
+    #[arg(long, default_value = "127.0.0.1:80", help = "Address to listen on")]
     pub listen: SocketAddr,
     #[arg(
         long,

@@ -152,6 +152,10 @@ async fn a_block_upload_is_committed_in_block_list_order() {
         (put_second.status, put_first.status, committed.status),
         (201, 201, 201)
     );
+    let retried = harness
+        .put(&format!("{url}?comp=blocklist"), list.as_bytes())
+        .await;
+    assert_eq!(retried.status, 201);
 
     let finalize = json!({"key": "large", "version": "v", "size_bytes": "8"});
     assert_eq!(
@@ -226,6 +230,25 @@ async fn a_pull_request_reads_the_default_branch_but_not_another_pull_request() 
         (&json!(true), &json!("main-entry"))
     );
     assert_eq!(harness.restore(PULL_1, "pr-entry").await["ok"], true);
+}
+
+#[tokio::test]
+async fn an_expired_token_or_one_without_a_claim_is_refused_in_json() {
+    let harness = Harness::new("claims", LIMIT).await;
+    for name in ["expired", "missing-default-ref"] {
+        let refused = harness
+            .twirp(
+                name,
+                "CreateCacheEntry",
+                &json!({"key": "tools", "version": "v"}),
+            )
+            .await;
+        assert_eq!(
+            (refused.status, refused.json()["code"].clone()),
+            (401, json!("unauthenticated")),
+            "{name}"
+        );
+    }
 }
 
 #[tokio::test]

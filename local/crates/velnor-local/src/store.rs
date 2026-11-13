@@ -8,6 +8,8 @@ use velnor_cache_rules::{
     Access, AlreadyExists, Entry, EntryId, Scope, Timestamp, evict, lookup, reserve,
 };
 
+pub const RESERVATION_SECONDS: u64 = 60 * 60;
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Index {
     pub next_id: u64,
@@ -57,12 +59,25 @@ impl Record {
     }
 }
 
+impl Lookup<'_> {
+    fn id(&self) -> EntryId {
+        EntryId {
+            scope: self.access.write.clone(),
+            key: self.key.to_owned(),
+            version: self.version.to_owned(),
+        }
+    }
+}
+
 impl Index {
-    fn entries(&self, repository: &str, committed_only: bool) -> Vec<Entry> {
+    fn entries(&self, repository: &str, committed_only: bool, now: u64) -> Vec<Entry> {
+        let reserving = |record: &Record| {
+            !committed_only && now.saturating_sub(record.created) <= RESERVATION_SECONDS
+        };
         self.records
             .iter()
             .filter(|record| {
-                record.repository == repository && (record.committed || !committed_only)
+                record.repository == repository && (record.committed || reserving(record))
             })
             .map(Record::entry)
             .collect()
@@ -74,7 +89,9 @@ impl Index {
         restore_keys: &[String],
         now: u64,
     ) -> Option<Record> {
-        let entries = self.entries(at.repository, true);
+        let mut entries = self.entries(at.repository, true, now);
+        let expired = evict(&entries, Timestamp(now), u64::MAX);
+        entries.retain(|entry| !expired.contains(&entry.id()));
         let found = lookup(&entries, at.access, at.key, restore_keys, at.version)?.id();
         let record = self
             .records
@@ -91,11 +108,21 @@ impl Index {
         now: u64,
     ) -> Result<Record, AlreadyExists> {
         reserve(
-            &self.entries(at.repository, false),
+            &self.entries(at.repository, false, now),
             at.access,
             at.key,
             at.version,
         )?;
+        let id = at.id();
+        if let Some(stale) = self
+            .records
+            .iter_mut()
+            .find(|record| !record.committed && record.is(at.repository, &id))
+        {
+            stale.created = now;
+            stale.last_access = now;
+            return Ok(stale.clone());
+        }
         self.next_id += 1;
         let record = Record {
             id: self.next_id,
@@ -115,11 +142,7 @@ impl Index {
 
     #[must_use]
     pub fn pending(&self, at: &Lookup<'_>) -> Option<&Record> {
-        let id = EntryId {
-            scope: at.access.write.clone(),
-            key: at.key.to_owned(),
-            version: at.version.to_owned(),
-        };
+        let id = at.id();
         self.records
             .iter()
             .find(|record| !record.committed && record.is(at.repository, &id))
@@ -141,7 +164,7 @@ impl Index {
         record.last_access = now;
         let repository = record.repository.clone();
         let evicted = evict(
-            &self.entries(&repository, false),
+            &self.entries(&repository, false, now),
             Timestamp(now),
             limit_bytes,
         );
