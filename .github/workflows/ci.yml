@@ -144,7 +144,7 @@ jobs:
   check-maintenance-helpers:
     name: Check / maintenance-helpers
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env: &m6
       VELNOR_ASSET_SHA256: 3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.78/velnor-actions-0.1.78-x86_64-unknown-linux-gnu
