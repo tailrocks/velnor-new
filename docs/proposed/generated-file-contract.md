@@ -263,11 +263,13 @@ the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
-successful generation no longer emits them. The workflows namespace is fully
-generator-owned; manually maintained workflows placed there are retired, and
-no configuration key exempts one. Every workflow is generator output, so the
-`Check generated files` diff covers the whole namespace and no hand-owned
-workflow can hide from it.
+successful generation no longer emits them. The workflows namespace is
+generator-owned with one exception, `.github/workflows/release-rust-ci-tools.yml`,
+the hand-written workflow that releases the Rust CI tools, which generation
+preserves like any unmanaged entry. Every other manually maintained workflow
+placed there is retired, and no configuration key exempts one. Every other
+workflow is generator output, so the `Check generated files` diff covers the
+rest of the namespace and no other hand-owned workflow can hide from it.
 
 All other entries under `.github` are unmanaged repository content. Successful
 generation MUST preserve their file bytes, hidden names, symbolic links and

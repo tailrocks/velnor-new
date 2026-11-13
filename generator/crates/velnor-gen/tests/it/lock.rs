@@ -94,10 +94,18 @@ fn a_locked_helper_is_fetched_right_after_the_checkout_and_nowhere_else() -> Tes
 fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestResult {
     let good = pin_lock("0.1.79", SUMS)?;
     let ci = "10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e";
+    let generator = "61ec20debeae57cce969660e66c72315c59ce3cee84659540aee1942aad52628";
     let cases = [
         good.replace("linux-x64 = ", "linux-x86 = "),
         good.replacen(ci, &ci[..63], 1),
         good.replacen(ci, &ci.to_uppercase(), 1),
+        good.replacen(generator, &generator[..63], 1),
+        good.replacen(&format!("linux-x64 = \"{generator}\"\n"), "", 1),
+        format!("{good}windows-x64 = \"{generator}\"\n"),
+        good.replace(
+            "[velnor-gen]",
+            &format!("windows-x64 = \"{ci}\"\n\n[velnor-gen]"),
+        ),
         good.replace("version = \"0.1.79\"", "version = \"0.1\""),
         good.replace("version = \"0.1.79\"\n", ""),
         format!("{good}extra = 1\n"),

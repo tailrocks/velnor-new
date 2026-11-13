@@ -7,5 +7,6 @@ mod inputs;
 mod io;
 mod lock;
 mod pipeline;
+mod release_workflow;
 mod rules;
 mod version;
