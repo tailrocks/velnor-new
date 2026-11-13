@@ -19,8 +19,10 @@ use crate::cli::{Cli, Command};
 use crate::{Drift, drift, expected_files};
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     File(PathBuf, std::io::Error),
+    NotRegular(RepoPath),
+    Foreign(RepoPath),
     Program(String, String),
     Repository(String),
     Metadata(MetadataError),
@@ -31,6 +33,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::File(path, error) => write!(f, "{}: {error}", path.display()),
+            Self::NotRegular(path) => write!(
+                f,
+                "{path} goes through a symbolic link or is not a regular file"
+            ),
+            Self::Foreign(path) => Drift::Foreign(path.clone()).fmt(f),
             Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
             Self::Repository(message) => f.write_str(message),
             Self::Metadata(error) => error.fmt(f),
@@ -38,6 +45,8 @@ impl fmt::Display for Error {
         }
     }
 }
+
+impl std::error::Error for Error {}
 
 #[must_use]
 pub fn main() -> Exit {
@@ -58,6 +67,7 @@ pub fn main() -> Exit {
                 match drift {
                     Drift::Changed(path) | Drift::Missing(path) => println!("wrote {path}"),
                     Drift::Stale(path) => println!("removed {path}"),
+                    Drift::Foreign(path) => println!("kept {path}"),
                 }
             }
             Exit::SUCCESS
@@ -73,20 +83,39 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
     let expected = expected_files(&read_view(&root)?).map_err(Error::Detect)?;
     let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
+    if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
+        return Err(Error::Foreign(path.clone()));
+    }
     if cli.command == Command::Generate {
-        for change in &drifts {
-            let file = root.join(change.path().as_str());
-            if let Some(content) = expected.get(change.path()) {
+        apply(&root, &expected, &drifts)?;
+    }
+    Ok(drifts)
+}
+
+pub fn apply(
+    root: &Path,
+    expected: &BTreeMap<RepoPath, String>,
+    drifts: &[Drift],
+) -> Result<(), Error> {
+    for change in drifts {
+        let path = change.path();
+        let existing = regular_file(root, path)?;
+        match (change, expected.get(path), existing) {
+            (Drift::Foreign(_), _, _) => return Err(Error::Foreign(path.clone())),
+            (_, Some(content), _) => {
+                let file = root.join(path.as_str());
                 if let Some(parent) = file.parent() {
                     fs::create_dir_all(parent).map_err(|e| Error::File(parent.into(), e))?;
                 }
                 fs::write(&file, content).map_err(|e| Error::File(file.clone(), e))?;
-            } else {
+            }
+            (_, None, Some(file)) => {
                 fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?;
             }
+            (_, None, None) => {}
         }
     }
-    Ok(drifts)
+    Ok(())
 }
 
 fn toplevel(path: &Path) -> Result<PathBuf, Error> {
@@ -148,19 +177,33 @@ fn read_view(root: &Path) -> Result<RepoView, Error> {
     Ok(view)
 }
 
-fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {
+pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {
     let mut files = BTreeMap::new();
     for path in paths {
-        let file = root.join(path.as_str());
-        match fs::read(&file) {
-            Ok(bytes) => {
-                files.insert(path.clone(), bytes);
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(Error::File(file, error)),
+        if let Some(file) = regular_file(root, path)? {
+            let bytes = fs::read(&file).map_err(|e| Error::File(file, e))?;
+            files.insert(path.clone(), bytes);
         }
     }
     Ok(files)
+}
+
+fn regular_file(root: &Path, path: &RepoPath) -> Result<Option<PathBuf>, Error> {
+    let parts: Vec<&str> = path.as_str().split('/').collect();
+    let mut current = root.to_path_buf();
+    for (index, part) in parts.iter().enumerate() {
+        current.push(part);
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(Error::File(current, error)),
+        };
+        let last = index + 1 == parts.len();
+        if (last && !metadata.is_file()) || (!last && !metadata.is_dir()) {
+            return Err(Error::NotRegular(path.clone()));
+        }
+    }
+    Ok(Some(current))
 }
 
 fn program(directory: &Path, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {
