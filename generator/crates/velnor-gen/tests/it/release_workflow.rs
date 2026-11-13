@@ -56,6 +56,27 @@ fn values<'a>(lines: &[&'a str], key: &str) -> Vec<&'a str> {
         .collect()
 }
 
+fn literal_blocks(text: &str) -> Vec<Vec<&str>> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut blocks = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        if !line.trim_end().ends_with("run: |") {
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        blocks.push(
+            lines[index + 1..]
+                .iter()
+                .take_while(|next| {
+                    next.trim().is_empty() || next.len() - next.trim_start().len() > indent
+                })
+                .map(|next| next.trim_start())
+                .collect(),
+        );
+    }
+    blocks
+}
+
 fn steps(lines: &[&str]) -> Vec<RenderedStep> {
     let uses = values(lines, "uses")
         .into_iter()
@@ -94,15 +115,11 @@ fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
     };
     assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
     assert_eq!(check_rules(&rendered), Ok(()));
-    let fetch = format!(
-        "run: |\n{}\n",
-        FETCH_HELPER_RUN
-            .lines()
-            .map(|line| format!("          {line}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-    assert_eq!(text.matches("run: |").count(), text.matches(&fetch).count());
+    let blocks = literal_blocks(&text);
+    assert_eq!(blocks.len(), 1);
+    for block in blocks {
+        assert_eq!(block, FETCH_HELPER_RUN.lines().collect::<Vec<_>>());
+    }
     assert!(!text.contains("run: >"));
     Ok(())
 }
