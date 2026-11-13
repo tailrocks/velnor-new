@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use velnor_cache_rules::{
@@ -51,6 +51,14 @@ impl Record {
             size_bytes: self.size_bytes,
             created: Timestamp(self.created),
             last_access: Timestamp(self.last_access),
+        }
+    }
+
+    fn entry_id(&self) -> EntryId {
+        EntryId {
+            scope: Scope(self.scope.clone()),
+            key: self.key.clone(),
+            version: self.version.clone(),
         }
     }
 
@@ -177,5 +185,32 @@ impl Index {
             .partition(|record| evicted.iter().any(|id| record.is(&repository, id)));
         self.records = kept;
         gone
+    }
+}
+
+impl Index {
+    #[must_use]
+    pub fn listed(&self, repository: &str, now: u64) -> Vec<Record> {
+        let live: HashSet<EntryId> = self
+            .live(repository, true, now)
+            .iter()
+            .map(Entry::id)
+            .collect();
+        self.records
+            .iter()
+            .filter(|record| {
+                record.committed
+                    && record.repository == repository
+                    && live.contains(&record.entry_id())
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn delete(&mut self, repository: &str, id: u64) -> Option<Record> {
+        let at = self.records.iter().position(|record| {
+            record.id == id && record.committed && record.repository == repository
+        })?;
+        Some(self.records.remove(at))
     }
 }

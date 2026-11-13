@@ -291,6 +291,25 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 
 Service matching and scope rules rely on official documentation, not public service implementation. Require live qualification for same-PR cross-push reuse, service-specific size limits and warning behavior before making acceptance claims. Upgrading an action or toolkit version requires rechecking cache-mode handling, archive flags and failure outcomes; newer-client behavior does not qualify the pinned client.
 
+### 6. REST calls answered by `velnor-local api-stub`
+
+Each fact comes from the GitHub REST documentation: [pull request files](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files), [compare two commits](https://docs.github.com/en/rest/commits/commits#compare-two-commits), [repository content](https://docs.github.com/en/rest/repos/contents#get-repository-content), [Actions caches](https://docs.github.com/en/rest/actions/cache) and [pagination](https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api).
+
+- Pagination: `per_page` defaults to 30 and is at most 100. The `Link` header lists `prev`, `next`, `last` and `first` as `<URL>; rel="..."`, comma separated. A response that is not paginated has no `Link` header.
+- Pull request files: at most 3,000 files. Each entry has `sha`, `filename`, `status` (`added`, `removed`, `modified`, `renamed`, `copied`, `changed`, `unchanged`), `additions`, `deletions`, `changes`, `blob_url`, `raw_url`, `contents_url`, and optionally `patch` and `previous_filename`.
+- Compare: the file list holds at most 300 files and appears only on the first page. Without `per_page` or `page` the commit list holds at most 250 commits. `status` is `diverged`, `ahead`, `behind` or `identical`. Top-level fields: `url`, `html_url`, `permalink_url`, `diff_url`, `patch_url`, `base_commit`, `merge_base_commit`, `status`, `ahead_by`, `behind_by`, `total_commits`, `commits`, `files`.
+- Contents: `ref` is a commit, branch or tag and defaults to the default branch. A file has `type`, `encoding`, `size`, `name`, `path`, `content`, `sha`, `url`, `git_url`, `html_url`, `download_url` and `_links`. A directory is an array of such items. A symlink has `type: "symlink"` and `target`. A submodule has `type: "submodule"`. A blob over 1 MB cannot be fetched with the default media type.
+- Cache list: parameters `per_page`, `page`, `ref`, `key` (prefix), `sort` (`created_at`, `last_accessed_at` by default, `size_in_bytes`) and `direction` (`desc` by default). The body is `{total_count, actions_caches: [{id, ref, key, version, last_accessed_at, created_at, size_in_bytes}]}`. Deleting by id answers 204.
+- Compare, as recorded in the captured responses under `docs/implemented/evidence`: `url`, `html_url`, `diff_url` and `patch_url` keep the refs as requested, `permalink_url` pins `owner:sha...owner:sha`, and `commit.message` has no trailing newline.
+- Contents: a directory lists at most 1,000 entries. A symlink whose target is a normal file in the repository returns that file's object; any other symlink returns `type: "symlink"` with `target`. An omitted `ref` reads the default branch, which the stub takes from `--default-branch`.
+- Compare commits are chronological. Without `per_page` or `page` the list holds the newest 250 commits, so its last commit is the most recent of the comparison, and the stub sends no `Link` header. With either parameter the pages are chronological slices of 30 by default and at most 100.
+- A submodule inside a directory listing has `type: "file"`; asked for directly it has `type: "submodule"`. The stub does the same.
+- Modelled: a submodule entry carries the gitlink sha and no `submodule_git_url`; the stub does not read `.gitmodules`.
+- A removed file's `blob_url`, `raw_url` and `contents_url` use the base sha, and the file name is one percent-encoded segment (`src%2Findex.ts`), as in the captured responses.
+- Not served: `contents/` with no path is the repository root listing on GitHub. The stub answers it with 501 because the helper does not call it; the issue that makes the helper list the root adds it.
+- Modelled, not documented: a diff over the stub's size limit answers 422 with `{"message": "Validation Failed", "errors": [{"resource": "Diff", "code": "too_large"}]}`.
+- Modelled, not documented: the stub answers 404 with `{"message": "Not Found", "documentation_url", "status"}` for a missing resource and 403 with a `too_large` error for a blob over 1 MB. The stub's commit objects carry `sha`, `url`, `html_url`, `commit` (`author`, `committer`, `message`, `tree`) and `parents`, a subset of GitHub's.
+
 ## Native preview publication API boundaries
 
 The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)

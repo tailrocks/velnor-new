@@ -4,5 +4,6 @@
 pub mod cli;
 pub mod io;
 pub mod protocol;
+pub mod rest;
 pub mod store;
 pub mod token;

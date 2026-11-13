@@ -1,37 +1,34 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod api_stub;
+mod git;
+mod index_file;
 mod proxy;
+mod reply;
+mod run;
 
-use std::convert::Infallible;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bytes::Bytes;
-use clap::Parser;
 use futures_util::TryStreamExt;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full, Limited, StreamBody};
-use hyper::body::{Frame, Incoming};
+use hyper::body::Frame;
 use hyper::header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, HOST, HeaderName};
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
-use hyper_util::rt::TokioIo;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde_json::{Value, json};
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
-use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use tokio_util::io::ReaderStream;
 use velnor_cache_rules::AlreadyExists;
 
-use crate::cli::{CacheServerArgs, Cli, Command};
 use crate::protocol::{
     CacheRequest, Error, PullRequestBase, Route, Upload, archive_url, block_list, parse, route,
     upload_kind,
@@ -58,59 +55,14 @@ pub struct CacheServer {
     index: Mutex<Index>,
 }
 
-#[must_use]
-pub fn main() -> ExitCode {
-    let Cli {
-        command: Command::CacheServer(args),
-    } = Cli::parse();
-    match tokio::runtime::Runtime::new().and_then(|runtime| runtime.block_on(run(args))) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("velnor-local: {error}");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-async fn run(args: CacheServerArgs) -> std::io::Result<()> {
-    let config = Config {
-        token_key: fs::read(&args.token_key).await?,
-        dir: args.dir,
-        upstream: args.upstream,
-        limit_bytes: args.limit_bytes,
-    };
-    let server = CacheServer::open(config).await?;
-    let listener = TcpListener::bind(args.listen).await?;
-    eprintln!("velnor-local cache-server listening on {}", args.listen);
-    loop {
-        let (stream, _) = listener.accept().await?;
-        let server = Arc::clone(&server);
-        let service = service_fn(move |request: Request<Incoming>| {
-            let server = Arc::clone(&server);
-            async move {
-                let request =
-                    request.map(|body| body.map_err(std::io::Error::other).boxed_unsync());
-                Ok::<_, Infallible>(server.handle(request).await)
-            }
-        });
-        tokio::spawn(async move {
-            let connection = http1::Builder::new().serve_connection(TokioIo::new(stream), service);
-            if let Err(error) = connection.with_upgrades().await {
-                eprintln!("connection: {error}");
-            }
-        });
-    }
-}
-
 impl CacheServer {
     pub async fn open(config: Config) -> std::io::Result<Arc<Self>> {
         fs::create_dir_all(config.dir.join("archives")).await?;
         fs::create_dir_all(config.dir.join("blocks")).await?;
-        let index = match fs::read(config.dir.join("index.json")).await {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(std::io::Error::other)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Index::default(),
-            Err(error) => return Err(error),
-        };
+        let lock = lock_index(&config.dir).await?;
+        let index = read_index(&config.dir).await?;
+        recover_tombstones(&config.dir, &index).await;
+        drop(lock);
         Ok(Arc::new(Self {
             proxy: proxy::Proxy::new(&config.upstream),
             config,
@@ -143,7 +95,7 @@ impl CacheServer {
         })?;
         let body: CacheRequest = parse(&read_small_body(request.into_body()).await?)?;
         let now = now();
-        let mut index = self.index.lock().await;
+        let mut index = self.index().await?;
         let before = index.clone();
         let claims =
             token::verify(token, &self.config.token_key, now).map_err(Error::unauthenticated)?;
@@ -223,7 +175,7 @@ impl CacheServer {
     }
 
     async fn upload(&self, blob: &str, request: Request<Body>) -> Result<Response<Body>, Error> {
-        if self.index.lock().await.blob(blob, false).is_none() {
+        if self.index().await?.blob(blob, false).is_none() {
             return Err(Error::not_found("no reservation for this upload"));
         }
         let blocks = self.config.dir.join("blocks").join(blob);
@@ -262,7 +214,7 @@ impl CacheServer {
     }
 
     async fn download(&self, blob: &str) -> Result<Response<Body>, Error> {
-        if self.index.lock().await.blob(blob, true).is_none() {
+        if self.index().await?.blob(blob, true).is_none() {
             return Err(Error::not_found("no cache entry at this address"));
         }
         let file = File::open(self.archive(blob))
@@ -286,7 +238,7 @@ impl CacheServer {
             .parse()
             .map_err(|_| Error::invalid(format!("{number} is not a pull request number")))?;
         let base: PullRequestBase = parse(&read_small_body(request.into_body()).await?)?;
-        let mut index = self.index.lock().await;
+        let mut index = self.index().await?;
         let registered = index
             .pull_request_bases
             .entry(number)
@@ -305,12 +257,40 @@ impl CacheServer {
     }
 
     async fn save(&self, index: &Index) -> Result<(), Error> {
-        let bytes = serde_json::to_vec_pretty(index).map_err(Error::internal)?;
-        let staged = self.config.dir.join("index.json.tmp");
-        fs::write(&staged, bytes).await.map_err(Error::internal)?;
-        fs::rename(&staged, self.config.dir.join("index.json"))
+        write_index(&self.config.dir, index)
             .await
             .map_err(Error::internal)
+    }
+
+    async fn index(&self) -> Result<LockedIndex<'_>, Error> {
+        let mut index = self.index.lock().await;
+        let lock = lock_index(&self.config.dir)
+            .await
+            .map_err(Error::internal)?;
+        *index = read_index(&self.config.dir)
+            .await
+            .map_err(Error::internal)?;
+        Ok(LockedIndex { index, _lock: lock })
+    }
+}
+
+#[derive(Debug)]
+struct LockedIndex<'a> {
+    index: MutexGuard<'a, Index>,
+    _lock: IndexLock,
+}
+
+impl std::ops::Deref for LockedIndex<'_> {
+    type Target = Index;
+
+    fn deref(&self) -> &Index {
+        &self.index
+    }
+}
+
+impl std::ops::DerefMut for LockedIndex<'_> {
+    fn deref_mut(&mut self) -> &mut Index {
+        &mut self.index
     }
 }
 
@@ -379,3 +359,7 @@ fn json_response(status: u16, body: &Value) -> Response<Body> {
     );
     response
 }
+
+pub use index_file::{IndexLock, lock_index};
+use index_file::{read_index, recover_tombstones, remove_if_present, write_index};
+pub use run::main;
