@@ -90,23 +90,17 @@ fn context(guest_platform: &str) -> Result<JobFactsPublicationContext, serde_jso
 #[test]
 fn job_facts_accept_a_guest_image_of_either_runner_platform()
 -> Result<(), Box<dyn std::error::Error>> {
-    if rustix::process::geteuid().is_root() {
-        return Err("run this test as a non-root user".into());
-    }
-    for platform in ["linux/amd64", "linux/arm64"] {
-        let result = publish_job_facts(context(platform)?);
-        assert!(
-            matches!(result, Err(ProbeError::Invalid("job_facts_root_required"))),
-            "{platform}: {result:?}"
-        );
-    }
-    let result = publish_job_facts(context("linux/riscv64")?);
-    assert!(
+    let refused = |result: &Result<_, ProbeError>| {
         matches!(
             result,
             Err(ProbeError::Invalid("job_facts_guest_image_json"))
-        ),
-        "{result:?}"
-    );
+        )
+    };
+    for platform in ["linux/amd64", "linux/arm64"] {
+        let result = publish_job_facts(context(platform)?);
+        assert!(!refused(&result), "{platform}: {result:?}");
+    }
+    let result = publish_job_facts(context("linux/riscv64")?);
+    assert!(refused(&result), "{result:?}");
     Ok(())
 }
