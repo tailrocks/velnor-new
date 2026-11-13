@@ -23,10 +23,17 @@ pub struct Cli {
     pub command: Command,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Subcommand)]
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum Command {
     #[command(about = "Write the generated files and remove the ones no longer generated")]
     Generate,
     #[command(about = "Exit 1 when a generated file differs from what generate would write")]
     Check,
+    #[command(about = "Record a golden-test sample from a real checkout into generator/samples")]
+    RecordSample {
+        #[arg(help = "A path inside the checkout to record")]
+        checkout: PathBuf,
+        #[arg(help = "The sample name: lowercase letters, digits and dashes")]
+        name: String,
+    },
 }

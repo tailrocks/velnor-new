@@ -40,7 +40,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
 
 pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
     let config = config(view)?;
-    let mut manifests: Vec<RepoPath> = tracked_manifests(view)
+    let mut manifests: Vec<RepoPath> = tracked_manifests(&view.tracked_paths)
         .filter(|manifest| !excluded(&config, manifest))
         .cloned()
         .collect();
@@ -85,7 +85,7 @@ fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
         .files
         .get(&CONFIG_PATH)
         .map_or_else(|| Ok(RustCiConfig::default()), |bytes| parse(bytes))?;
-    let manifests: Vec<&RepoPath> = tracked_manifests(view).collect();
+    let manifests: Vec<&RepoPath> = tracked_manifests(&view.tracked_paths).collect();
     match config
         .exclude
         .iter()
@@ -105,8 +105,13 @@ fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
         .any(|excluded| manifest.is_within(excluded))
 }
 
-fn tracked_manifests(view: &RepoView) -> impl Iterator<Item = &RepoPath> {
-    view.tracked_paths
+#[must_use]
+pub fn manifests(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
+    tracked_manifests(tracked).cloned().collect()
+}
+
+fn tracked_manifests(tracked: &BTreeSet<RepoPath>) -> impl Iterator<Item = &RepoPath> {
+    tracked
         .iter()
         .filter(|path| path.as_str() == "Cargo.toml" || path.as_str().ends_with("/Cargo.toml"))
 }
