@@ -300,7 +300,7 @@ async fn compare_reports_commits_status_and_files_between_two_refs() {
     assert_eq!(body["base_commit"]["sha"], c.base);
     assert_eq!(body["merge_base_commit"]["sha"], c.base);
     assert_eq!(body["commits"][0]["sha"], c.head);
-    assert_eq!(body["commits"][0]["commit"]["message"], "head\n");
+    assert_eq!(body["commits"][0]["commit"]["message"], "head");
     assert_eq!(body["commits"][0]["commit"]["author"]["name"], "Test");
     assert_eq!(body["commits"][0]["parents"][0]["sha"], c.base);
     assert_eq!(file(&body["files"], "a.txt")["status"], "modified");
@@ -315,6 +315,21 @@ async fn compare_reports_commits_status_and_files_between_two_refs() {
     assert_eq!(behind["behind_by"], 1);
     assert_eq!(by_name["status"], "diverged");
     assert_eq!(by_name["commits"][0]["sha"], side);
+    assert_eq!(
+        by_name["url"],
+        format!("http://api.localhost{REPO}/compare/main...side")
+    );
+    assert_eq!(
+        by_name["diff_url"],
+        "http://api.localhost/tailrocks/velnor-lab/compare/main...side.diff"
+    );
+    assert_eq!(
+        by_name["permalink_url"],
+        format!(
+            "http://api.localhost/tailrocks/velnor-lab/compare/tailrocks:{}...tailrocks:{side}",
+            c.head
+        )
+    );
     assert_eq!(unknown.status, 404);
     assert_eq!(paged.json()["commits"], json!([]));
     assert_eq!(paged.json()["files"], json!([]));

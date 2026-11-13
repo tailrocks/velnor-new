@@ -176,6 +176,7 @@ impl ApiStub {
     }
 
     async fn compare(&self, call: &Call<'_>, base: &str, head: &str) -> Reply {
+        let requested = format!("{base}...{head}");
         let (Some(base), Some(head)) = (self.git.resolve(base).await, self.git.resolve(head).await)
         else {
             return Reply::missing();
@@ -190,10 +191,6 @@ impl ApiStub {
         };
         let range = format!("{base}..{head}");
         let behind = format!("{head}..{base}");
-        let files = match self.git.diff(&base, &head).await {
-            Ok(files) => files,
-            Err(failure) => return Reply::from(failure),
-        };
         let (Some(ahead), Some(behind)) =
             (self.git.count(&range).await, self.git.count(&behind).await)
         else {
@@ -206,6 +203,14 @@ impl ApiStub {
         };
         let page = Page::from_query(&call.params, default, COMPARE_COMMITS_DEFAULT);
         let (skip, take) = page.newest_first(ahead);
+        let files = if page.page == 1 {
+            match self.git.diff(&base, &head).await {
+                Ok(files) => files,
+                Err(failure) => return Reply::from(failure),
+            }
+        } else {
+            Vec::new()
+        };
         let (Some(commits), Some(base_commit), Some(merge_commit)) = (
             self.git
                 .commits(
@@ -226,6 +231,7 @@ impl ApiStub {
         let comparison = Comparison {
             base: base_commit,
             head: &head,
+            requested: &requested,
             merge_base: merge_commit,
             ahead_by: ahead,
             behind_by: behind,

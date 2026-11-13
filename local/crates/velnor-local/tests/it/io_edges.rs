@@ -135,7 +135,7 @@ async fn refs_and_messages_with_special_characters_survive_in_urls_and_commits()
     assert_eq!(compare["total_commits"], 1);
     assert_eq!(
         compare["commits"][0]["commit"]["message"],
-        "one\u{1}two\n\nbody\n"
+        "one\u{1}two\n\nbody"
     );
 }
 
@@ -145,13 +145,21 @@ async fn a_diff_larger_than_the_limit_is_a_422_not_a_buffered_answer() {
     repo.write("a.txt", b"one\n");
     let base = repo.commit("base");
     repo.write("big.txt", "line of text\n".repeat(120_000).as_bytes());
-    let head = repo.commit("head");
+    repo.commit("head");
+    repo.git(&["commit", "--quiet", "--allow-empty", "--message", "later"]);
+    let head = repo.git(&["rev-parse", "HEAD"]);
     let stub = repo.stub("io-big", &json!([pull(1, &base, &head)]));
 
     let pull_files = stub.get(&format!("{REPO}/pulls/1/files")).await;
     let compare = stub.get(&format!("{REPO}/compare/{base}...{head}")).await;
 
+    let later_page = stub
+        .get(&format!("{REPO}/compare/{base}...{head}?per_page=1&page=2"))
+        .await;
+
     assert_eq!((pull_files.status, compare.status), (422, 422));
+    assert_eq!(later_page.status, 200);
+    assert_eq!(later_page.json()["files"], json!([]));
     assert_eq!(pull_files.json()["errors"][0]["code"], "too_large");
 }
 

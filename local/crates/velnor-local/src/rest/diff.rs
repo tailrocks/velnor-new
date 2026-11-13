@@ -157,7 +157,7 @@ pub fn parse_commits(text: &str) -> Vec<Commit> {
                 parents: parents.split_whitespace().map(str::to_owned).collect(),
                 author: person(an, ae, ad),
                 committer: person(cn, ce, cd),
-                message: (*message).to_owned(),
+                message: message.strip_suffix('\n').unwrap_or(message).to_owned(),
             })
         })
         .collect()

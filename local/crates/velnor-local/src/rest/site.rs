@@ -98,7 +98,9 @@ impl Site<'_> {
 
     #[must_use]
     pub fn compare(&self, compare: &Comparison<'_>, page: Page, commits: &[Commit]) -> Value {
-        let spec = format!("{}...{}", compare.base.sha, compare.head);
+        let spec = encode_path(compare.requested);
+        let owner = self.repository.split('/').next().unwrap_or_default();
+        let pinned = format!("{owner}:{}...{owner}:{}", compare.base.sha, compare.head);
         let web = format!("http://{}/{}/compare", self.host, self.repository);
         let ahead = compare.ahead_by;
         let status = match (ahead, compare.behind_by) {
@@ -120,7 +122,7 @@ impl Site<'_> {
         json!({
             "url": format!("http://{}/repos/{}/compare/{spec}", self.host, self.repository),
             "html_url": format!("{web}/{spec}"),
-            "permalink_url": format!("{web}/{spec}"),
+            "permalink_url": format!("{web}/{pinned}"),
             "diff_url": format!("{web}/{spec}.diff"),
             "patch_url": format!("{web}/{spec}.patch"),
             "base_commit": self.commit(compare.base),
@@ -191,6 +193,7 @@ impl Site<'_> {
 pub struct Comparison<'a> {
     pub base: &'a Commit,
     pub head: &'a str,
+    pub requested: &'a str,
     pub merge_base: &'a Commit,
     pub ahead_by: usize,
     pub behind_by: usize,
