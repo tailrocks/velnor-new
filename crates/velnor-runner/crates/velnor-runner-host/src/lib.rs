@@ -49,8 +49,9 @@ pub use assign::{Offer, offer};
 pub use completion_admin::{CompletionAdminClient, CompletionAdminSession};
 pub use config::{
     ApprovedJobAuthorityPolicy, ConnectionId, DockerConfig, HostConfig, HostLimits,
-    JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection, ScaleSetSelector,
-    SourcePolicy, SourcePolicyMode, WorkflowEvent, build_job_authority_policy_json,
+    JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection, RunnerPlatform,
+    ScaleSetSelector, SourcePolicy, SourcePolicyMode, WorkflowEvent,
+    build_job_authority_policy_json,
 };
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use controller_ipc::{

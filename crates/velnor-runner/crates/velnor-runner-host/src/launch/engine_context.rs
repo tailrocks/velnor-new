@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::RunnerPlatform;
 use crate::error::HostError;
 use crate::journal::EngineContext;
 use bollard::models::SystemInfo;
@@ -27,6 +28,7 @@ impl SelectedEngineContext {
         let daemon_architecture =
             super::resource_probe::daemon_architecture(info).ok_or(HostError::Ownership)?;
         if !super::resource_probe::daemon_platform_matches(info)
+            || !runs_on(&selected.platform, daemon_architecture)
             || selected.engine_id != engine_id
             || selected.endpoint.is_empty()
         {
@@ -76,3 +78,14 @@ impl SelectedEngineContext {
         &self.daemon_architecture
     }
 }
+
+fn runs_on(platform: &str, daemon_architecture: &str) -> bool {
+    match RunnerPlatform::parse(platform) {
+        Some(RunnerPlatform::LinuxAmd64) => true,
+        Some(platform) => platform.daemon_architecture() == daemon_architecture,
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests;

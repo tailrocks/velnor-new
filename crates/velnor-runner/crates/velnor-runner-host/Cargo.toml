@@ -45,6 +45,10 @@ path = "tests/runner_manifest_admission_public.rs"
 name = "scaleset_installation_public"
 path = "tests/scaleset_installation_public.rs"
 
+[[test]]
+name = "runner_platform_public"
+path = "tests/runner_platform_public.rs"
+
 [[bin]]
 name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"
