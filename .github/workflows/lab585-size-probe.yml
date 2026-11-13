@@ -1,0 +1,45 @@
+name: lab585 size probe
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+env:
+  CARGO_LOG: cargo::compiler::fingerprint=info
+jobs:
+  probe:
+    if: github.head_ref == 'fast/585-size-probe'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    steps:
+      - run: df -B1 --output=used /
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          install_args: rust mr-boxington aqua:nextest-rs/nextest/cargo-nextest
+      - uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de # v1.7.3
+        with:
+          save-on-pull-request: true
+          cache-generation: probe585
+      - run: du -sb target
+        continue-on-error: true
+      - run: mbx clippy --workspace --all-targets --locked
+      - run: mbx nextest archive --workspace --locked --archive-file "$RUNNER_TEMP/nextest-archive.tar.zst"
+      - run: ls -l "$RUNNER_TEMP/nextest-archive.tar.zst"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-archive
+          path: ${{ runner.temp }}/nextest-archive.tar.zst
+          retention-days: 1
+      - run: du -sb target
+      - run: df -B1 --output=used /
+      - run: cat /sys/fs/cgroup/system.slice/hosted-compute-agent.service/memory.peak
+      - run: mbx stats --json > "$RUNNER_TEMP/mbx-stats.json"
+      - run: mbx analyze > "$RUNNER_TEMP/mbx-analyze.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mbx-report
+          path: ${{ runner.temp }}/mbx-*.*
+          retention-days: 30
