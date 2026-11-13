@@ -11,7 +11,7 @@ use hyper::{Request, Response, StatusCode};
 use serde_json::{Value, json};
 use tokio::fs;
 
-use super::git::Git;
+use super::git::{Failure, Git};
 use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Comparison,
@@ -24,6 +24,7 @@ pub struct ApiStubConfig {
     pub dir: PathBuf,
     pub cache_dir: PathBuf,
     pub default_branch: String,
+    pub diff_limit_bytes: usize,
 }
 
 #[derive(Debug)]
@@ -39,6 +40,15 @@ struct Reply {
     link: Option<String>,
 }
 
+impl From<Failure> for Reply {
+    fn from(failure: Failure) -> Self {
+        match failure {
+            Failure::Missing => Self::missing(),
+            Failure::TooLarge => Self::too_large(),
+        }
+    }
+}
+
 impl Reply {
     fn ok(body: Value) -> Self {
         Self::with(200, body, None)
@@ -50,6 +60,14 @@ impl Reply {
             body: Some(body),
             link,
         }
+    }
+
+    fn too_large() -> Self {
+        Self::with(
+            422,
+            json!({"message": "Validation Failed", "errors": [{"resource": "Diff", "code": "too_large"}], "status": "422"}),
+            None,
+        )
     }
 
     fn unreadable_pulls() -> Self {
@@ -74,6 +92,7 @@ impl ApiStub {
         Self {
             git: Git {
                 repo: config.repo.clone(),
+                diff_limit_bytes: config.diff_limit_bytes,
             },
             config,
         }
@@ -143,8 +162,9 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        let Some(files) = self.git.diff(&base, &head).await else {
-            return Reply::missing();
+        let files = match self.git.diff(&base, &head).await {
+            Ok(files) => files,
+            Err(failure) => return Reply::from(failure),
         };
         let files: Vec<Value> = files
             .iter()
@@ -169,14 +189,17 @@ impl ApiStub {
         };
         let range = format!("{base}..{head}");
         let behind = format!("{head}..{base}");
-        let (Some(commits), Some(base_commit), Some(merge_commit), Some(behind), Some(files)) = (
+        let files = match self.git.diff(&base, &head).await {
+            Ok(files) => files,
+            Err(failure) => return Reply::from(failure),
+        };
+        let (Some(commits), Some(base_commit), Some(merge_commit), Some(behind)) = (
             self.git.commits(&["--reverse"], &range).await,
             self.git.commits(&["-1"], &base).await,
             self.git.commits(&["-1"], &merge_base).await,
             self.git
                 .text(&["rev-list", "--count", "--end-of-options", &behind])
                 .await,
-            self.git.diff(&base, &head).await,
         ) else {
             return Reply::missing();
         };

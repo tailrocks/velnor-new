@@ -3,6 +3,9 @@
 
 use std::path::PathBuf;
 
+use std::process::Stdio;
+
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 use crate::rest::{self, COMMIT_FORMAT, Commit, FileDiff, TreeEntry};
@@ -10,21 +13,46 @@ use crate::rest::{self, COMMIT_FORMAT, Commit, FileDiff, TreeEntry};
 #[derive(Debug)]
 pub(super) struct Git {
     pub(super) repo: PathBuf,
+    pub(super) diff_limit_bytes: usize,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Failure {
+    Missing,
+    TooLarge,
 }
 
 impl Git {
     pub(super) async fn run(&self, args: &[&str]) -> Option<Vec<u8>> {
-        let output = Command::new("git")
+        self.capped(args, usize::MAX).await.ok()
+    }
+
+    async fn capped(&self, args: &[&str], limit: usize) -> Result<Vec<u8>, Failure> {
+        let mut child = Command::new("git")
             .arg("-C")
             .arg(&self.repo)
             .arg("--literal-pathspecs")
             .args(["-c", "core.quotepath=false"])
             .args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|_| Failure::Missing)?;
+        let mut bytes = Vec::new();
+        let stdout = child.stdout.take().ok_or(Failure::Missing)?;
+        let cap = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
+        stdout
+            .take(cap)
+            .read_to_end(&mut bytes)
             .await
-            .ok()?;
-        output.status.success().then_some(output.stdout)
+            .map_err(|_| Failure::Missing)?;
+        if bytes.len() > limit {
+            return Err(Failure::TooLarge);
+        }
+        let status = child.wait().await.map_err(|_| Failure::Missing)?;
+        status.success().then_some(bytes).ok_or(Failure::Missing)
     }
 
     pub(super) async fn text(&self, args: &[&str]) -> Option<String> {
@@ -50,22 +78,25 @@ impl Git {
         Some(sha.trim().to_owned())
     }
 
-    pub(super) async fn diff(&self, base: &str, head: &str) -> Option<Vec<FileDiff>> {
+    pub(super) async fn diff(&self, base: &str, head: &str) -> Result<Vec<FileDiff>, Failure> {
         let range = format!("{base}...{head}");
-        let text = self
-            .text(&[
-                "diff",
-                "-M",
-                "--full-index",
-                "--no-color",
-                "--no-ext-diff",
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-                "--end-of-options",
-                &range,
-            ])
+        let bytes = self
+            .capped(
+                &[
+                    "diff",
+                    "-M",
+                    "--full-index",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "--src-prefix=a/",
+                    "--dst-prefix=b/",
+                    "--end-of-options",
+                    &range,
+                ],
+                self.diff_limit_bytes,
+            )
             .await?;
-        let mut files = rest::parse_diff(&text);
+        let mut files = rest::parse_diff(&String::from_utf8_lossy(&bytes));
         for file in &mut files {
             if file.sha.is_none() && file.status != "removed" {
                 let spec = format!("{head}:{}", file.filename);
@@ -75,12 +106,12 @@ impl Git {
                     .map(|sha| sha.trim().to_owned());
             }
         }
-        Some(files)
+        Ok(files)
     }
 
     pub(super) async fn commits(&self, options: &[&str], revisions: &str) -> Option<Vec<Commit>> {
         let format = format!("--format={COMMIT_FORMAT}");
-        let mut full = vec!["log", "--no-color", &format];
+        let mut full = vec!["log", "-z", "--no-color", &format];
         full.extend_from_slice(options);
         full.extend_from_slice(&["--end-of-options", revisions]);
         let text = self.text(&full).await?;

@@ -110,6 +110,52 @@ async fn paths_are_literal_and_symlinks_to_files_in_the_repository_are_followed(
 }
 
 #[tokio::test]
+async fn refs_and_messages_with_special_characters_survive_in_urls_and_commits() {
+    let c = changed("io-special");
+    c.repo.git(&["checkout", "--quiet", "-b", "feature#1+x&y"]);
+    c.repo.write("a.txt", b"special\n");
+    c.repo.git(&["add", "--all"]);
+    c.repo
+        .git(&["commit", "--quiet", "--message", "one\u{1}two\n\nbody"]);
+    let stub = c.repo.stub("io-special", &json!([]));
+
+    let contents = stub
+        .get(&format!("{REPO}/contents/a.txt?ref=feature%231%2Bx%26y"))
+        .await
+        .json();
+    let compare = stub
+        .get(&format!("{REPO}/compare/{}...feature%231%2Bx%26y", c.head))
+        .await
+        .json();
+
+    assert_eq!(
+        contents["url"],
+        format!("http://api.localhost{REPO}/contents/a.txt?ref=feature%231%2Bx%26y")
+    );
+    assert_eq!(compare["total_commits"], 1);
+    assert_eq!(
+        compare["commits"][0]["commit"]["message"],
+        "one\u{1}two\n\nbody\n"
+    );
+}
+
+#[tokio::test]
+async fn a_diff_larger_than_the_limit_is_a_422_not_a_buffered_answer() {
+    let repo = TempRepo::new("io-big");
+    repo.write("a.txt", b"one\n");
+    let base = repo.commit("base");
+    repo.write("big.txt", "line of text\n".repeat(120_000).as_bytes());
+    let head = repo.commit("head");
+    let stub = repo.stub("io-big", &json!([pull(1, &base, &head)]));
+
+    let pull_files = stub.get(&format!("{REPO}/pulls/1/files")).await;
+    let compare = stub.get(&format!("{REPO}/compare/{base}...{head}")).await;
+
+    assert_eq!((pull_files.status, compare.status), (422, 422));
+    assert_eq!(pull_files.json()["errors"][0]["code"], "too_large");
+}
+
+#[tokio::test]
 async fn a_directory_listing_stops_at_1000_entries() {
     let repo = TempRepo::new("io-1000");
     for number in 0..1001 {

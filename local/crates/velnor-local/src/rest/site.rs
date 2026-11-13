@@ -6,6 +6,12 @@ use serde_json::{Value, json};
 
 use super::{COMPARE_FILES_CAP, Commit, FileDiff, Page, TreeEntry};
 
+const QUERY_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
 const PATH_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'/')
     .remove(b'-')
@@ -27,19 +33,21 @@ pub struct Site<'a> {
 impl Site<'_> {
     fn blob_url(&self, kind: &str, sha: &str, path: &str) -> String {
         format!(
-            "http://{}/{}/{kind}/{sha}/{}",
+            "http://{}/{}/{kind}/{}/{}",
             self.host,
             self.repository,
+            encode_path(sha),
             encode_path(path)
         )
     }
 
     fn contents_url(&self, sha: &str, path: &str) -> String {
         format!(
-            "http://{}/repos/{}/contents/{}?ref={sha}",
+            "http://{}/repos/{}/contents/{}?ref={}",
             self.host,
             self.repository,
-            encode_path(path)
+            encode_path(path),
+            utf8_percent_encode(sha, QUERY_SET)
         )
     }
 

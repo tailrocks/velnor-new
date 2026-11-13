@@ -48,6 +48,12 @@ pub struct ApiStubArgs {
         help = "Branch that a contents request without ref reads"
     )]
     pub default_branch: String,
+    #[arg(
+        long,
+        default_value_t = 256 << 20,
+        help = "Largest diff in bytes that pull request files and compare read; a larger one is a 422"
+    )]
+    pub diff_limit_bytes: usize,
 }
 
 #[derive(Debug, Args)]

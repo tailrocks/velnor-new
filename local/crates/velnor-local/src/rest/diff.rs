@@ -137,17 +137,15 @@ pub struct Commit {
     pub message: String,
 }
 
-pub const COMMIT_FORMAT: &str =
-    "%H%x00%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B%x01";
+pub const COMMIT_FORMAT: &str = "%H%x00%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B";
 
 #[must_use]
 pub fn parse_commits(text: &str) -> Vec<Commit> {
-    text.split('\u{1}')
-        .map(|record| record.trim_start_matches('\n'))
-        .filter(|record| !record.is_empty())
+    let fields: Vec<&str> = text.split('\0').collect();
+    fields
+        .chunks(10)
         .filter_map(|record| {
-            let fields: Vec<&str> = record.splitn(10, '\0').collect();
-            let [sha, tree, parents, an, ae, ad, cn, ce, cd, message] = fields.as_slice() else {
+            let [sha, tree, parents, an, ae, ad, cn, ce, cd, message] = record else {
                 return None;
             };
             let person = |name: &str, email: &str, date: &str| {

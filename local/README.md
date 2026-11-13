@@ -81,6 +81,6 @@ cargo nextest run --locked
 velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache" --default-branch main
 ```
 
-`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500.
+`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub has no authentication, like the cache server's pull request registration: it serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
 
 The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.
