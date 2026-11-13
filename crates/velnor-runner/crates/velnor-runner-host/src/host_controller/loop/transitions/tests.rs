@@ -1,9 +1,47 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::validate_transition;
-use crate::config::HostConfig;
+use super::{TransitionEffects, apply_config_transition};
+use crate::config::{HostConfig, RepositoryConnection};
 use crate::error::HostError;
+
+#[derive(Default)]
+struct RecordingEffects {
+    budgets: usize,
+    bound: usize,
+    published: Vec<HostConfig>,
+}
+
+impl TransitionEffects for RecordingEffects {
+    fn configure_shared_budget(
+        &mut self,
+        _config: &HostConfig,
+    ) -> impl Future<Output = Result<(), HostError>> {
+        self.budgets += 1;
+        std::future::ready(Ok(()))
+    }
+
+    fn bind_connection(
+        &mut self,
+        _binding: &RepositoryConnection,
+        _config: &HostConfig,
+    ) -> impl Future<Output = Result<(), HostError>> {
+        self.bound += 1;
+        std::future::ready(Ok(()))
+    }
+
+    fn publish_config(&mut self, config: &HostConfig) -> Result<(), HostError> {
+        self.published.push(config.clone());
+        Ok(())
+    }
+
+    fn retire_removed(
+        &mut self,
+        _binding: &RepositoryConnection,
+    ) -> impl Future<Output = Result<bool, HostError>> {
+        std::future::ready(Ok(true))
+    }
+}
 
 fn config(developer_images: &str) -> Result<HostConfig, HostError> {
     HostConfig::parse(&format!(
@@ -47,12 +85,27 @@ fn images(runner: char) -> String {
     )
 }
 
-#[test]
-fn developer_images_change_only_on_restart() -> Result<(), HostError> {
+#[tokio::test]
+async fn developer_images_change_only_on_restart() -> Result<(), HostError> {
     let current = config(&images('a'))?;
-    assert_eq!(validate_transition(&current, &current.clone()), Ok(()));
+    let mut same = RecordingEffects::default();
+    assert!(
+        apply_config_transition(&current, &current.clone(), &mut same)
+            .await
+            .is_ok()
+    );
+    assert_eq!(same.published, vec![current.clone()]);
     for next in [config(&images('d'))?, config("")?] {
-        assert_eq!(validate_transition(&current, &next), Err(HostError::Config));
+        let mut effects = RecordingEffects::default();
+        assert_eq!(
+            apply_config_transition(&current, &next, &mut effects).await,
+            Err(HostError::Config)
+        );
+        assert_eq!(
+            (effects.budgets, effects.bound, effects.published.len()),
+            (0, 0, 0),
+            "a refused reload had effects"
+        );
     }
     Ok(())
 }

@@ -166,3 +166,6 @@ fn source_label(inspect: &ImageInspect) -> Result<String, HostError> {
         Err(HostError::Identity)
     }
 }
+
+#[cfg(test)]
+mod tests;
