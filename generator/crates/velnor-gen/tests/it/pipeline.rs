@@ -108,6 +108,22 @@ fn values_yaml_or_the_shell_would_misread_are_quoted() -> TestResult {
 }
 
 #[test]
+fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> TestResult {
+    let root = "a${{ github.event.pull_request.title }}/Cargo.toml";
+    let config = b"runner = \"${{ secrets.TOKEN }}\"\n";
+    let text = workflow(&view(&[root], Some(config))?)?;
+    assert!(text.contains("    runs-on: '${{ ''${{'' }} secrets.TOKEN }}'\n"));
+    assert!(text.contains(
+        "      - name: 'Format a${{ ''${{'' }} github.event.pull_request.title }}/Cargo.toml'\n"
+    ));
+    assert!(text.contains(
+        "        run: 'cargo fmt --all --check --manifest-path ''a${{ ''${{'' }} github.event.pull_request.title }}/Cargo.toml'''\n"
+    ));
+    assert!(text.contains("  group: '${{ github.workflow }}-${{ github.ref }}'\n"));
+    Ok(())
+}
+
+#[test]
 fn an_invalid_config_is_rejected() -> TestResult {
     let cases: [&[u8]; 6] = [
         b"runnr = \"ubuntu-latest\"\n",

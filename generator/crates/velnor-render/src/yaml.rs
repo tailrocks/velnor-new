@@ -3,6 +3,7 @@
 
 pub(crate) enum Yaml {
     Str(String),
+    Expr(String),
     Int(u64),
     Bool(bool),
     Seq(Vec<Yaml>),
@@ -56,7 +57,8 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 
 fn inline(value: &Yaml) -> String {
     match value {
-        Yaml::Str(text) => scalar(text),
+        Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
+        Yaml::Expr(text) => scalar(text),
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),

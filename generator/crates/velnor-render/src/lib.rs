@@ -26,7 +26,10 @@ pub fn render(plan: &WorkflowPlan) -> BTreeMap<RepoPath, String> {
         entry(
             "concurrency",
             Yaml::Map(vec![
-                entry("group", text("${{ github.workflow }}-${{ github.ref }}")),
+                entry(
+                    "group",
+                    Yaml::Expr("${{ github.workflow }}-${{ github.ref }}".to_owned()),
+                ),
                 entry(
                     "cancel-in-progress",
                     Yaml::Bool(plan.concurrency.cancel_in_progress),
