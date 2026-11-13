@@ -284,6 +284,7 @@ async fn the_index_survives_a_restart() {
 
     let harness = harness.reopen().await;
     let hit = harness.restore(MAIN, "tools").await;
+    assert_eq!(hit["ok"], true);
     let downloaded = harness
         .get(hit["signed_download_url"].as_str().unwrap_or_default())
         .await;
