@@ -20,6 +20,28 @@ pub enum Command {
         about = "Serve GitHub's cache protocol from local disk under GitHub's cache rules, and forward every other request to runner.server"
     )]
     CacheServer(CacheServerArgs),
+    #[command(
+        about = "Answer the GitHub API calls velnor-ci makes from a local git repository, a file of open pull requests and the cache server's index"
+    )]
+    ApiStub(ApiStubArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ApiStubArgs {
+    #[arg(long, default_value = "127.0.0.1:80", help = "Address to listen on")]
+    pub listen: SocketAddr,
+    #[arg(long, help = "Local git repository that answers every repository path")]
+    pub repo: PathBuf,
+    #[arg(
+        long,
+        help = "State directory that holds pulls.json, the open pull requests"
+    )]
+    pub dir: PathBuf,
+    #[arg(
+        long,
+        help = "The cache server's directory, which holds index.json and archives/"
+    )]
+    pub cache_dir: PathBuf,
 }
 
 #[derive(Debug, Args)]

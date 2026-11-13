@@ -11,6 +11,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::header::HeaderMap;
 use hyper::{Request, Uri};
 use serde_json::{Value, json};
+use velnor_local::io::api_stub::{ApiStub, ApiStubConfig};
 use velnor_local::io::{Body, CacheServer, Config};
 
 pub(crate) const MAIN: &str = "refs/heads/main";
@@ -165,6 +166,71 @@ impl Harness {
             .await
             .json()
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct Stub {
+    stub: ApiStub,
+}
+
+impl Stub {
+    pub(crate) fn new(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
+        Self {
+            stub: ApiStub::new(ApiStubConfig {
+                repo: repo.to_owned(),
+                dir: dir.to_owned(),
+                cache_dir: cache_dir.to_owned(),
+            }),
+        }
+    }
+
+    pub(crate) async fn call(&self, method: &str, path_and_query: &str) -> Reply {
+        let request = Request::builder()
+            .method(method)
+            .uri(path_and_query)
+            .header("host", "api.localhost")
+            .body(
+                Full::new(Bytes::new())
+                    .map_err(|never| match never {})
+                    .boxed_unsync(),
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let response = self.stub.handle(request).await;
+        let status = response.status().as_u16();
+        let headers = response.headers().clone();
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .to_bytes();
+        Reply {
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub(crate) async fn get(&self, path_and_query: &str) -> Reply {
+        self.call("GET", path_and_query).await
+    }
+}
+
+impl Reply {
+    pub(crate) fn link(&self) -> String {
+        self.headers
+            .get("link")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_owned()
+    }
+}
+
+pub(crate) fn temp_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("velnor-local-it-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    dir
 }
 
 fn fixture() -> Value {

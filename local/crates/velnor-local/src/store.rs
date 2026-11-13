@@ -179,3 +179,26 @@ impl Index {
         gone
     }
 }
+
+impl Index {
+    #[must_use]
+    pub fn listed(&self, repository: &str, now: u64) -> Vec<Record> {
+        let live = self.live(repository, true, now);
+        self.records
+            .iter()
+            .filter(|record| {
+                record.committed
+                    && record.repository == repository
+                    && live.iter().any(|entry| record.is(repository, &entry.id()))
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn delete(&mut self, repository: &str, id: u64) -> Option<Record> {
+        let at = self.records.iter().position(|record| {
+            record.id == id && record.committed && record.repository == repository
+        })?;
+        Some(self.records.remove(at))
+    }
+}
