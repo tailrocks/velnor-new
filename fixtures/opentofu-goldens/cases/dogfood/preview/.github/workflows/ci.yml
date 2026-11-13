@@ -121,7 +121,7 @@ jobs:
           mise-sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Run cargo-deny
-        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/ci-helper/Cargo.toml\" --config \"$GITHUB_WORKSPACE/ci-helper/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
+        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/ci-helper/Cargo.toml\" --config \"$GITHUB_WORKSPACE/ci-helper/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/local/Cargo.toml\" --config \"$GITHUB_WORKSPACE/local/deny.toml\" check'"
   cargo-machete:
     name: Cargo Machete
     runs-on: ubuntu-26.04
@@ -346,9 +346,11 @@ jobs:
       sources_restore_keys: ${{ steps.cache-keys.outputs.sources_restore_keys }}
       state_ci_helper_snapshot: ${{ steps.cache-keys.outputs.state_ci_helper_snapshot }}
       state_crates_velnor_runner_snapshot: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_snapshot }}
+      state_local_snapshot: ${{ steps.cache-keys.outputs.state_local_snapshot }}
       state_root_snapshot: ${{ steps.cache-keys.outputs.state_root_snapshot }}
       state_union_ci_helper_attested: ${{ steps.state-select.outputs.state_union_ci_helper_attested }}
       state_union_crates_velnor_runner_attested: ${{ steps.state-select.outputs.state_union_crates_velnor_runner_attested }}
+      state_union_local_attested: ${{ steps.state-select.outputs.state_union_local_attested }}
       state_union_root_attested: ${{ steps.state-select.outputs.state_union_root_attested }}
     steps:
       - name: Checkout
@@ -397,20 +399,22 @@ jobs:
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
           VELNOR_MBX_BUNDLE_VERSION: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"ci-helper\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob).cargo/config'\\'' '\\'':(glob).cargo/config.toml'\\'' '\\'':(glob).cargo/mutants.toml'\\'' '\\'':(glob).config/**'\\'' '\\'':(glob).github/**'\\'' '\\'':(glob).github/workflows/**'\\'' '\\'':(glob).gitignore'\\'' '\\'':(glob).mise-version'\\'' '\\'':(glob).velnor/**'\\'' '\\'':(glob).velnor/config.toml'\\'' '\\'':(glob).velnor/controller-approvals.json'\\'' '\\'':(glob).velnor/freshness-inventory.json'\\'' '\\'':(glob).velnor/generator.lock'\\'' '\\'':(glob).velnor/qualification/**'\\'' '\\'':(glob).velnor/version-policy.toml'\\'' '\\'':(glob)Cargo.lock'\\'' '\\'':(glob)Cargo.toml'\\'' '\\'':(glob)LICENSE'\\'' '\\'':(glob)NOTICE'\\'' '\\'':(glob)crates/**'\\'' '\\'':(glob)crates/**/Cargo.lock'\\'' '\\'':(glob)crates/**/Cargo.toml'\\'' '\\'':(glob)crates/**/benches/*.rs'\\'' '\\'':(glob)crates/**/benches/*/main.rs'\\'' '\\'':(glob)crates/**/build.rs'\\'' '\\'':(glob)crates/**/deny.toml'\\'' '\\'':(glob)crates/**/examples/*.rs'\\'' '\\'':(glob)crates/**/examples/*/main.rs'\\'' '\\'':(glob)crates/**/src/bin/*.rs'\\'' '\\'':(glob)crates/**/src/bin/*/main.rs'\\'' '\\'':(glob)crates/**/src/lib.rs'\\'' '\\'':(glob)crates/**/src/main.rs'\\'' '\\'':(glob)crates/**/tests/*.rs'\\'' '\\'':(glob)crates/**/tests/*/main.rs'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-actions-contract/**'\\'' '\\'':(glob)crates/velnor-actions-freshness/**'\\'' '\\'':(glob)crates/velnor-actions-mise/**'\\'' '\\'':(glob)crates/velnor-actions-orchestrator/**'\\'' '\\'':(glob)crates/velnor-actions-rust/**'\\'' '\\'':(glob)crates/velnor-actions-workflow-renderer/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)deny.toml'\\'' '\\'':(glob)fixtures/**'\\'' '\\'':(glob)fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh'\\'' '\\'':(glob)fixtures/bun-workspace-suites/input/.velnor/config.toml'\\'' '\\'':(glob)images/**'\\'' '\\'':(glob)images/dind/Dockerfile'\\'' '\\'':(glob)images/resource-probe/Dockerfile'\\'' '\\'':(glob)images/runner/ubuntu-26.04/Dockerfile'\\'' '\\'':(glob)mise.lock'\\'' '\\'':(glob)mise.toml'\\'' '\\'':(glob)rust-toolchain'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\'':(glob)rust-toolchain.toml'\\'' '\\'':(glob)scripts/**'\\'' '\\'':(glob)scripts/check-runner-image-candidate.sh'\\'' '\\'':(glob)scripts/derive-rust-tree-digest'\\'' '\\'':(glob)scripts/generator-release/cargo-git-handoff.py'\\'' '\\'':(glob)scripts/generator-release/cargo-source-handoff.sh'\\'' '\\'':(glob)scripts/generator-release/create-release-manifest.sh'\\'' '\\'':(glob)scripts/generator-release/preflight-release-tag.sh'\\'' '\\'':(glob)scripts/generator-release/source-qualification-validator-recipes.json'\\'' '\\'':(glob)scripts/generator-release/source-qualification.sh'\\'' '\\'':(glob)scripts/native-image-candidate-inventory.py'\\'' '\\'':(glob)scripts/resolve-runner-family-producer.sh'\\'' '\\'':(glob)scripts/resolve-runner-family-publication.sh'\\'' '\\'':(glob)scripts/runner-family-discovery.sh'\\'' '\\'':(glob)scripts/upgrades/bump-gradle-catalog.py'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30\" \"producer_recipe=s256-649ab66ee8bb4f84e2515102649e909840701e4f6a500526b18c1795c1aa8ebd\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)ci-helper/**'\\'' '\\'':(glob)ci-helper/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''ci-helper/.cargo'\\'' '\\''ci-helper/Cargo.toml'\\'' '\\''ci-helper/crates/velnor-ci'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-f4c6fdb4458c5d217cc68ef530efd3d43a72c887786668e51a67f3c0aba85f16\" \"producer_recipe=s256-2392a07cef66cd12040157aae510cc40b04f767add694d0cd8ed84c60a80093d\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_ci_helper_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root ci-helper'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=ci-helper\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_ci_helper_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob).velnor/runner.lock'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/Cargo.lock'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/velnor-runner-attestation/**'\\'' '\\'':(glob)crates/velnor-runner/crates/velnor-runner-host/**'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'' '\\''crates/velnor-runner/crates/velnor-runner-image-manifest'\\'' '\\''crates/velnor-runner/crates/velnor-runner-qualification'\\'') > \"$d/rust-inputs-2\" 2>/dev/null; then s256 \"$d/rust-inputs-2\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-65f517d42f1d15d71a44dfcd75167aaab5448f5ce72fe6cacb46be6b748822fd\" \"producer_recipe=s256-ade1e12bac2b294f1bc7e6437c031e0af197b1566efe11fa839312bb44612594\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"ci-helper\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"crates/velnor-runner\" \"$h\" >> \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/local/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \"local\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; key=\"$trusted$snap\"; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob).cargo/config'\\'' '\\'':(glob).cargo/config.toml'\\'' '\\'':(glob).cargo/mutants.toml'\\'' '\\'':(glob).config/**'\\'' '\\'':(glob).github/**'\\'' '\\'':(glob).github/workflows/**'\\'' '\\'':(glob).gitignore'\\'' '\\'':(glob).mise-version'\\'' '\\'':(glob).velnor/**'\\'' '\\'':(glob).velnor/config.toml'\\'' '\\'':(glob).velnor/controller-approvals.json'\\'' '\\'':(glob).velnor/freshness-inventory.json'\\'' '\\'':(glob).velnor/generator.lock'\\'' '\\'':(glob).velnor/qualification/**'\\'' '\\'':(glob).velnor/version-policy.toml'\\'' '\\'':(glob)Cargo.lock'\\'' '\\'':(glob)Cargo.toml'\\'' '\\'':(glob)LICENSE'\\'' '\\'':(glob)NOTICE'\\'' '\\'':(glob)crates/**'\\'' '\\'':(glob)crates/**/Cargo.lock'\\'' '\\'':(glob)crates/**/Cargo.toml'\\'' '\\'':(glob)crates/**/benches/*.rs'\\'' '\\'':(glob)crates/**/benches/*/main.rs'\\'' '\\'':(glob)crates/**/build.rs'\\'' '\\'':(glob)crates/**/deny.toml'\\'' '\\'':(glob)crates/**/examples/*.rs'\\'' '\\'':(glob)crates/**/examples/*/main.rs'\\'' '\\'':(glob)crates/**/src/bin/*.rs'\\'' '\\'':(glob)crates/**/src/bin/*/main.rs'\\'' '\\'':(glob)crates/**/src/lib.rs'\\'' '\\'':(glob)crates/**/src/main.rs'\\'' '\\'':(glob)crates/**/tests/*.rs'\\'' '\\'':(glob)crates/**/tests/*/main.rs'\\'' '\\'':(glob)crates/velnor-actions-*/**'\\'' '\\'':(glob)crates/velnor-actions-contract/**'\\'' '\\'':(glob)crates/velnor-actions-freshness/**'\\'' '\\'':(glob)crates/velnor-actions-mise/**'\\'' '\\'':(glob)crates/velnor-actions-orchestrator/**'\\'' '\\'':(glob)crates/velnor-actions-rust/**'\\'' '\\'':(glob)crates/velnor-actions-workflow-renderer/**'\\'' '\\'':(glob)crates/velnor-archive-guard/**'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/*/**'\\'' '\\'':(glob)deny.toml'\\'' '\\'':(glob)fixtures/**'\\'' '\\'':(glob)fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh'\\'' '\\'':(glob)fixtures/bun-workspace-suites/input/.velnor/config.toml'\\'' '\\'':(glob)images/**'\\'' '\\'':(glob)images/dind/Dockerfile'\\'' '\\'':(glob)images/resource-probe/Dockerfile'\\'' '\\'':(glob)images/runner/ubuntu-26.04/Dockerfile'\\'' '\\'':(glob)mise.lock'\\'' '\\'':(glob)mise.toml'\\'' '\\'':(glob)rust-toolchain'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\'':(glob)rust-toolchain.toml'\\'' '\\'':(glob)scripts/**'\\'' '\\'':(glob)scripts/check-runner-image-candidate.sh'\\'' '\\'':(glob)scripts/derive-rust-tree-digest'\\'' '\\'':(glob)scripts/generator-release/cargo-git-handoff.py'\\'' '\\'':(glob)scripts/generator-release/cargo-source-handoff.sh'\\'' '\\'':(glob)scripts/generator-release/create-release-manifest.sh'\\'' '\\'':(glob)scripts/generator-release/preflight-release-tag.sh'\\'' '\\'':(glob)scripts/generator-release/source-qualification-validator-recipes.json'\\'' '\\'':(glob)scripts/generator-release/source-qualification.sh'\\'' '\\'':(glob)scripts/native-image-candidate-inventory.py'\\'' '\\'':(glob)scripts/resolve-runner-family-producer.sh'\\'' '\\'':(glob)scripts/resolve-runner-family-publication.sh'\\'' '\\'':(glob)scripts/runner-family-discovery.sh'\\'' '\\'':(glob)scripts/upgrades/bump-gradle-catalog.py'\\'' '\\''Cargo.toml'\\'' '\\''crates/velnor-actions-actionlint'\\'' '\\''crates/velnor-actions-ansible'\\'' '\\''crates/velnor-actions-bun'\\'' '\\''crates/velnor-actions-cli'\\'' '\\''crates/velnor-actions-contract'\\'' '\\''crates/velnor-actions-dbt'\\'' '\\''crates/velnor-actions-freshness'\\'' '\\''crates/velnor-actions-gradle'\\'' '\\''crates/velnor-actions-mise'\\'' '\\''crates/velnor-actions-orchestrator'\\'' '\\''crates/velnor-actions-rust'\\'' '\\''crates/velnor-actions-tofu'\\'' '\\''crates/velnor-actions-workflow-renderer'\\'' '\\''crates/velnor-archive-guard'\\'') > \"$d/rust-inputs-0\" 2>/dev/null; then s256 \"$d/rust-inputs-0\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-72d71456e7875d08eab731ac8fac1f652852127ce0d7f34cbe8c2cbb601e6c30\" \"producer_recipe=s256-649ab66ee8bb4f84e2515102649e909840701e4f6a500526b18c1795c1aa8ebd\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_root_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root root'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=.\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_root_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/ci-helper/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)ci-helper/**'\\'' '\\'':(glob)ci-helper/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''ci-helper/.cargo'\\'' '\\''ci-helper/Cargo.toml'\\'' '\\''ci-helper/crates/velnor-ci'\\'') > \"$d/rust-inputs-1\" 2>/dev/null; then s256 \"$d/rust-inputs-1\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-f4c6fdb4458c5d217cc68ef530efd3d43a72c887786668e51a67f3c0aba85f16\" \"producer_recipe=s256-2392a07cef66cd12040157aae510cc40b04f767add694d0cd8ed84c60a80093d\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_ci_helper_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root ci-helper'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=ci-helper\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_ci_helper_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob).velnor/runner.lock'\\'' '\\'':(glob)crates/rust-toolchain*'\\'' '\\'':(glob)crates/velnor-runner/Cargo.lock'\\'' '\\'':(glob)crates/velnor-runner/Cargo.toml'\\'' '\\'':(glob)crates/velnor-runner/crates/velnor-runner-attestation/**'\\'' '\\'':(glob)crates/velnor-runner/crates/velnor-runner-host/**'\\'' '\\'':(glob)crates/velnor-runner/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''crates/.cargo'\\'' '\\''crates/velnor-runner/.cargo'\\'' '\\''crates/velnor-runner/Cargo.toml'\\'' '\\''crates/velnor-runner/crates/velnor-resource-probe'\\'' '\\''crates/velnor-runner/crates/velnor-runner-attestation'\\'' '\\''crates/velnor-runner/crates/velnor-runner-cli'\\'' '\\''crates/velnor-runner/crates/velnor-runner-core'\\'' '\\''crates/velnor-runner/crates/velnor-runner-github'\\'' '\\''crates/velnor-runner/crates/velnor-runner-host'\\'' '\\''crates/velnor-runner/crates/velnor-runner-image-manifest'\\'' '\\''crates/velnor-runner/crates/velnor-runner-qualification'\\'') > \"$d/rust-inputs-2\" 2>/dev/null; then s256 \"$d/rust-inputs-2\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-65f517d42f1d15d71a44dfcd75167aaab5448f5ce72fe6cacb46be6b748822fd\" \"producer_recipe=s256-ade1e12bac2b294f1bc7e6437c031e0af197b1566efe11fa839312bb44612594\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root crates-velnor-runner'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=crates/velnor-runner\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_crates_velnor_runner_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; lock_h=; if [ -f \"$GITHUB_WORKSPACE/local/Cargo.lock\" ] && [ ! -L \"$GITHUB_WORKSPACE/local/Cargo.lock\" ]; then s256 \"$GITHUB_WORKSPACE/local/Cargo.lock\"; lock_h=\"s256-$h\"; fi; if [ -z \"$lock_h\" ]; then printf '\\''%s\\n'\\'' absent > \"$d/absent\"; s256 \"$d/absent\"; lock_h=\"s256-$h\"; fi; if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- '\\''.cargo'\\'' '\\'':(glob)local/**'\\'' '\\'':(glob)local/rust-toolchain*'\\'' '\\'':(glob)rust-toolchain*'\\'' '\\''local/.cargo'\\'' '\\''local/Cargo.toml'\\'' '\\''local/crates/velnor-cache-rules'\\'' '\\''local/crates/velnor-local'\\'') > \"$d/rust-inputs-3\" 2>/dev/null; then s256 \"$d/rust-inputs-3\"; ri_h=\"s256-$h\"; printf '\\''%s\\n'\\'' \"lock=$lock_h\" \"rust_inputs=$ri_h\" \"task_set=s256-bb62a028f3dd688d14ce7d7ecccd1fe56a817177a43eb5bec992ab61f50b01ac\" \"producer_recipe=s256-788bd59cee8705d6e069f946a0984e717685701c9d1a6438679a3676f28c5369\" > \"$d/snapshot\"; s256 \"$d/snapshot\"; snap=\"s256-$h\"; printf '\\''%s\\n'\\'' \"state_local_snapshot=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '\\''%s\\n'\\'' '\\''::warning::state snapshot unavailable for root local'\\''; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=local\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; printf '\\''%s\\n'\\'' \"state_local_compat=s256-$h\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
       - name: Select attested state
         id: state-select
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_STATE_COMPAT_R0: ${{ steps.cache-keys.outputs.state_root_compat }}
-          VELNOR_STATE_COMPAT_R1: ${{ steps.cache-keys.outputs.state_ci_helper_compat }}
-          VELNOR_STATE_COMPAT_R2: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_compat }}
+          VELNOR_STATE_COMPAT_R1: ${{ steps.cache-keys.outputs.state_local_compat }}
+          VELNOR_STATE_COMPAT_R2: ${{ steps.cache-keys.outputs.state_ci_helper_compat }}
+          VELNOR_STATE_COMPAT_R3: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_compat }}
           VELNOR_STATE_GH_TIMEOUT: "60"
           VELNOR_STATE_SNAPSHOT_R0: ${{ steps.cache-keys.outputs.state_root_snapshot }}
-          VELNOR_STATE_SNAPSHOT_R1: ${{ steps.cache-keys.outputs.state_ci_helper_snapshot }}
-          VELNOR_STATE_SNAPSHOT_R2: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_snapshot }}
-        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-select\"; rm -rf \"$d\"; mkdir -p \"$d\"; ref=\"${VELNOR_DEFAULT_REF:-}\"; repo=\"${GITHUB_REPOSITORY:-}\"; signer=\"$repo/.github/workflows/state-seal.yml\"; limit=\"${VELNOR_STATE_GH_TIMEOUT:-60}\"; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout \"$limit\" gh \"$@\"; else gh \"$@\"; fi; }; attested() { out=\"$d/$2\"; : > \"$out\"; [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R \"$repo\" --key \"$1\" --ref \"$ref\" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\\''.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/list\" 2>/dev/null || return 0; LC_ALL=C sort -r \"$d/list\" > \"$d/sorted\" || return 0; n=; v=; while IFS='\\''\t'\\'' read -r created key id size; do [ \"${#v}\" -lt 3 ] && [ \"${#n}\" -lt 100 ] || break; case \"$key\" in *[[:space:]]*) continue ;; esac; case \"$id\" in '\\'''\\''|*[!0-9]*) continue ;; esac; case \"$size\" in '\\'''\\''|*[!0-9]*) continue ;; esac; [ \"$size\" -le 1616920640 ] || continue; case \"$key\" in \"$1\"?*) ;; *) continue ;; esac; printf '\\''%s\\n'\\'' \"${key#\"$1\"}\" | grep -Eq \"$shape\" || continue; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; n=\"${n}x\"; if run_gh attestation verify \"$d/subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' >/dev/null 2>&1; then printf '\\''%s\\n'\\'' \"$key\" >> \"$out\"; v=\"${v}x\"; fi; done < \"$d/sorted\"; }; emit() { { printf '\\''%s\\n'\\'' \"$1<<VELNOR_STATE_ATTESTED_EOF\"; cat \"$d/$2\"; printf '\\''%s\\n'\\'' VELNOR_STATE_ATTESTED_EOF; } >> \"$GITHUB_OUTPUT\"; }; decide() { want=false; if [ -n \"$4\" ] && [ -n \"$5\" ]; then want=true; prefix=\"$3$4-$5-\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$prefix\"?*) want=false ;; esac; done < \"$d/$2\"; fi; printf '\\''%s\\n'\\'' \"$1=$want\" >> \"$GITHUB_OUTPUT\"; }; attested '\\''velnor-v4-state-trusted-union-root-'\\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\\''velnor-v4-state-trusted-union-root-'\\'' \"${VELNOR_STATE_COMPAT_R0-}\" \"${VELNOR_STATE_SNAPSHOT_R0-}\"; attested '\\''velnor-v4-state-trusted-union-ci-helper-'\\'' r1; emit state_union_ci_helper_attested r1; decide state_union_ci_helper_produce r1 '\\''velnor-v4-state-trusted-union-ci-helper-'\\'' \"${VELNOR_STATE_COMPAT_R1-}\" \"${VELNOR_STATE_SNAPSHOT_R1-}\"; attested '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' r2; emit state_union_crates_velnor_runner_attested r2; decide state_union_crates_velnor_runner_produce r2 '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' \"${VELNOR_STATE_COMPAT_R2-}\" \"${VELNOR_STATE_SNAPSHOT_R2-}\"'"
+          VELNOR_STATE_SNAPSHOT_R1: ${{ steps.cache-keys.outputs.state_local_snapshot }}
+          VELNOR_STATE_SNAPSHOT_R2: ${{ steps.cache-keys.outputs.state_ci_helper_snapshot }}
+          VELNOR_STATE_SNAPSHOT_R3: ${{ steps.cache-keys.outputs.state_crates_velnor_runner_snapshot }}
+        run: "sh -c 'set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-select\"; rm -rf \"$d\"; mkdir -p \"$d\"; ref=\"${VELNOR_DEFAULT_REF:-}\"; repo=\"${GITHUB_REPOSITORY:-}\"; signer=\"$repo/.github/workflows/state-seal.yml\"; limit=\"${VELNOR_STATE_GH_TIMEOUT:-60}\"; shape='\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; run_gh() { if command -v timeout >/dev/null 2>&1; then timeout \"$limit\" gh \"$@\"; else gh \"$@\"; fi; }; attested() { out=\"$d/$2\"; : > \"$out\"; [ -n \"$ref\" ] && [ -n \"$repo\" ] && [ -n \"$signer\" ] || return 0; command -v gh >/dev/null 2>&1 || return 0; run_gh cache list -R \"$repo\" --key \"$1\" --ref \"$ref\" --sort created_at --order desc --limit 100 --json key,createdAt,id,sizeInBytes --jq '\\''.[] | [.createdAt, .key, (.id | tostring), (.sizeInBytes | tostring)] | @tsv'\\'' > \"$d/list\" 2>/dev/null || return 0; LC_ALL=C sort -r \"$d/list\" > \"$d/sorted\" || return 0; n=; v=; while IFS='\\''\t'\\'' read -r created key id size; do [ \"${#v}\" -lt 3 ] && [ \"${#n}\" -lt 100 ] || break; case \"$key\" in *[[:space:]]*) continue ;; esac; case \"$id\" in '\\'''\\''|*[!0-9]*) continue ;; esac; case \"$size\" in '\\'''\\''|*[!0-9]*) continue ;; esac; [ \"$size\" -le 1616920640 ] || continue; case \"$key\" in \"$1\"?*) ;; *) continue ;; esac; printf '\\''%s\\n'\\'' \"${key#\"$1\"}\" | grep -Eq \"$shape\" || continue; printf '\\''%s %s %s\\n'\\'' \"$key\" \"$id\" \"$size\" > \"$d/subject\"; n=\"${n}x\"; if run_gh attestation verify \"$d/subject\" -R \"$repo\" --signer-workflow \"$signer\" --source-ref \"$ref\" --predicate-type '\\''https://velnor.dev/attestation/state-seal/v1'\\'' >/dev/null 2>&1; then printf '\\''%s\\n'\\'' \"$key\" >> \"$out\"; v=\"${v}x\"; fi; done < \"$d/sorted\"; }; emit() { { printf '\\''%s\\n'\\'' \"$1<<VELNOR_STATE_ATTESTED_EOF\"; cat \"$d/$2\"; printf '\\''%s\\n'\\'' VELNOR_STATE_ATTESTED_EOF; } >> \"$GITHUB_OUTPUT\"; }; decide() { want=false; if [ -n \"$4\" ] && [ -n \"$5\" ]; then want=true; prefix=\"$3$4-$5-\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$prefix\"?*) want=false ;; esac; done < \"$d/$2\"; fi; printf '\\''%s\\n'\\'' \"$1=$want\" >> \"$GITHUB_OUTPUT\"; }; attested '\\''velnor-v4-state-trusted-union-root-'\\'' r0; emit state_union_root_attested r0; decide state_union_root_produce r0 '\\''velnor-v4-state-trusted-union-root-'\\'' \"${VELNOR_STATE_COMPAT_R0-}\" \"${VELNOR_STATE_SNAPSHOT_R0-}\"; attested '\\''velnor-v4-state-trusted-union-local-'\\'' r1; emit state_union_local_attested r1; decide state_union_local_produce r1 '\\''velnor-v4-state-trusted-union-local-'\\'' \"${VELNOR_STATE_COMPAT_R1-}\" \"${VELNOR_STATE_SNAPSHOT_R1-}\"; attested '\\''velnor-v4-state-trusted-union-ci-helper-'\\'' r2; emit state_union_ci_helper_attested r2; decide state_union_ci_helper_produce r2 '\\''velnor-v4-state-trusted-union-ci-helper-'\\'' \"${VELNOR_STATE_COMPAT_R2-}\" \"${VELNOR_STATE_SNAPSHOT_R2-}\"; attested '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' r3; emit state_union_crates_velnor_runner_attested r3; decide state_union_crates_velnor_runner_produce r3 '\\''velnor-v4-state-trusted-union-crates-velnor-runner-'\\'' \"${VELNOR_STATE_COMPAT_R3-}\" \"${VELNOR_STATE_SNAPSHOT_R3-}\"'"
       - *s15
       - *s16
       - &s17
@@ -421,19 +425,23 @@ jobs:
         name: Fetch Cargo sources (crates/velnor-runner/Cargo.toml)
         env: *m11
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
+      - &s19
+        name: Fetch Cargo sources (local/Cargo.toml)
+        env: *m11
+        run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/local/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/local/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
-        run: &r8 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.78'"
+        run: &r9 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.78'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: resolve-qualification-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-        run: *r8
+        run: *r9
       - name: Plan
         id: plan
         env:
@@ -444,7 +452,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: *r8
+        run: *r9
       - name: Publish plan
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -476,7 +484,9 @@ jobs:
       - rust-velnor-actions-rust
       - rust-velnor-actions-tofu
       - rust-velnor-actions-workflow-renderer
+      - rust-velnor-cache-rules
       - rust-velnor-ci
+      - rust-velnor-local
       - rust-velnor-resource-probe
       - rust-velnor-runner-attestation
       - rust-velnor-runner-cli
@@ -499,7 +509,7 @@ jobs:
       - *s4
       - *s6
       - name: Prepare pinned tools
-        run: &r9 mise --no-config --no-env --no-hooks install gh@2.103.3
+        run: &r10 mise --no-config --no-env --no-hooks install gh@2.103.3
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -509,26 +519,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: *r8
+        run: *r9
       - name: Assemble group ledgers
         env:
           VELNOR_INTERNAL_OP: assemble-group-ledgers-v1
-        run: *r8
+        run: *r9
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-ci\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\",\"rust-velnor-runner-image-manifest\",\"rust-velnor-runner-qualification\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-cache-rules\",\"rust-velnor-ci\",\"rust-velnor-local\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\",\"rust-velnor-runner-image-manifest\",\"rust-velnor-runner-qualification\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r8
+        run: *r9
       - name: Merge reports
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-ci\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\",\"rust-velnor-runner-image-manifest\",\"rust-velnor-runner-qualification\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"alint\",\"cargo-deny\",\"cargo-machete\",\"check-maintenance-helpers\",\"jactionlint\",\"plan\",\"rust-velnor-actions-actionlint\",\"rust-velnor-actions-ansible\",\"rust-velnor-actions-bun\",\"rust-velnor-actions-cli\",\"rust-velnor-actions-contract\",\"rust-velnor-actions-dbt\",\"rust-velnor-actions-gradle\",\"rust-velnor-actions-mise\",\"rust-velnor-actions-orchestrator\",\"rust-velnor-actions-rust\",\"rust-velnor-actions-tofu\",\"rust-velnor-actions-workflow-renderer\",\"rust-velnor-cache-rules\",\"rust-velnor-ci\",\"rust-velnor-local\",\"rust-velnor-resource-probe\",\"rust-velnor-runner-attestation\",\"rust-velnor-runner-cli\",\"rust-velnor-runner-core\",\"rust-velnor-runner-github\",\"rust-velnor-runner-host\",\"rust-velnor-runner-image-manifest\",\"rust-velnor-runner-qualification\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: *r8
+        run: *r9
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -584,7 +594,7 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - &s19
+      - &s20
         name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -592,7 +602,7 @@ jobs:
           key: ${{needs.plan.outputs.sources_key}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: ${{needs.plan.outputs.sources_restore_keys}}
-      - &s20
+      - &s21
         name: Verify Rust before MBX action
         env: &m16
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -601,7 +611,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must exist'\\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP path contains a symlink'\\'' >&2; exit 1; }; mbx_cache_dir=\"$RUNNER_TEMP/velnor/mbx\"; [ \"${MBX_CACHE_DIR:-}\" = \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR must use the stable runner-temp path'\\'' >&2; exit 1; }; [ ! -L \"$RUNNER_TEMP/velnor\" ] || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must not be a symlink'\\'' >&2; exit 1; }; if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi; [ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must be a real directory'\\'' >&2; exit 1; }; [ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store root already exists in this private runner namespace'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '\\''%s\\n'\\'' '\\''could not reserve the MBX store root'\\'' >&2; exit 1; }; [ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; }; check_no_symlink \"$GITHUB_ENV\" || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV path contains a symlink'\\'' >&2; exit 1; }; printf '\\''MBX_CACHE_DIR=%s\\n'\\'' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''preflight scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve preflight scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/rust-root\" \"$probe_dir/rustc-output\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\\''rust@'\"${VELNOR_TOOL_RUST}\"''\\'' > \"$probe_dir/rust-root\"; exec 3< \"$probe_dir/rust-root\"; IFS= read -r rust_root <&3 || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''Mise returned multiple Rust install paths'\\'' >&2; exit 1; fi; exec 3<&-; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Rust install path must be absolute'\\'' >&2; exit 1 ;; esac; rustc_bin=\"$rust_root/rustc\"; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; \"$rustc_bin\" '\\''+'\"${VELNOR_TOOL_RUST}\"''\\'' -vV > \"$probe_dir/rustc-output\"; grep -Fqx '\\''release: '\"${VELNOR_TOOL_RUST}\"''\\'' \"$probe_dir/rustc-output\" || { printf '\\''Rustup did not report exact toolchain '\"${VELNOR_TOOL_RUST}\"'\\n'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' \"$rust_root\" >> \"$GITHUB_PATH\"; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample before-action-restore'"
-      - &s21
+      - &s22
         name: Set up MBX
         uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
         with:
@@ -609,12 +619,12 @@ jobs:
           toolchain: ${{ env.VELNOR_TOOL_RUST }}
           version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
         env: *m16
-      - &s22
+      - &s23
         name: Verify native MBX version
         id: mbx-ready
         env: *m16
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx '\"${VELNOR_TOOL_MR_BOXINGTON}\"''\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- rustup which --toolchain '\\'''\"${VELNOR_TOOL_RUST}\"''\\'' rustc > \"$probe_dir/rustc-path\"; exec 3< \"$probe_dir/rustc-path\"; IFS= read -r rustc_path <&3 || { printf '\\''%s\\n'\\'' '\\''rustup returned no rustc path'\\'' >&2; exit 1; }; exec 3<&-; case \"$rustc_path\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''rustc path must be absolute'\\'' >&2; exit 1 ;; esac; \"$rustc_path\" -vV > \"$probe_dir/rustc-vv\"; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$probe_dir/mbx-rustc\" \"$rustc_path\" -vV > \"$probe_dir/mbx-rustc-vv\"; cmp -s \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" || { printf '\\''%s\\n'\\'' '\\''mbx-rustc -vV differs from rustc -vV'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
-      - &s23
+      - &s24
         name: Compute state snapshot key
         id: mbx-bundle-key
         env:
@@ -626,7 +636,7 @@ jobs:
           VELNOR_STATE_ATTESTED: ${{needs.plan.outputs.state_union_root_attested}}
           VELNOR_STATE_SNAPSHOT: ${{needs.plan.outputs.state_root_snapshot}}
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; if [ -z \"${ImageOS-}\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=image_os_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=image_os_missing'\\''; exit 0; fi; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; snap=\"${VELNOR_STATE_SNAPSHOT-}\"; case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac; case \"${snap#s256-}\" in *[!0-9a-f]*) snap= ;; esac; if [ -z \"$snap\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=snapshot_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=snapshot_missing'\\''; exit 0; fi; restore_prefix=\"velnor-v4-state-trusted-union-root-$compat-\"; snapshot_prefix=\"$restore_prefix$snap-\"; key=\"$snapshot_prefix\"; [ \"${#key}\" -le 443 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; restore_key=; restore_digest=; exact=false; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_ATTESTED-}\" > \"$d/attested\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$restore_prefix\"?*) ;; *) continue ;; esac; if printf '\\''%s\\n'\\'' \"${cand#\"$restore_prefix\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; then restore_key=$cand; break; fi; done < \"$d/attested\"; if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit=union\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
-      - &s24
+      - &s25
         name: Restore state snapshot
         id: mbx-bundle-restore
         if: (steps.mbx-bundle-key.outputs.restore == 'true' && steps.mbx-bundle-key.outputs.restore_key != '') && github.event_name != 'workflow_dispatch'
@@ -634,7 +644,7 @@ jobs:
         with:
           key: ${{steps.mbx-bundle-key.outputs.restore_key}}
           path: ${{ runner.temp }}/velnor-gc1/transport/state/payload.tar.zst
-      - &s25
+      - &s26
         name: Recover state snapshot
         id: mbx-bundle-import
         if: steps.mbx-bundle-restore.outputs.cache-matched-key != ''
@@ -671,15 +681,15 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-actionlint
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: &r14 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
-      - &s26
+        run: &r15 "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; job=\"${VELNOR_MBX_STATS_JOB-}\"; members=\"${VELNOR_MBX_STATS_WORKSPACE-}\"; out=\"${RUNNER_TEMP:?}/velnor-mbx-stats.line\"; set -- \"${MBX_CACHE_DIR-}\"/actions/sessions/v1/*.jsonl; if [ -z \"${MBX_CACHE_DIR-}\" ] || [ ! -f \"$1\" ]; then printf '\\''mbx-stats job=%s sessions=0\\n'\\'' \"$job\" > \"$out\"; else jq -r -n -R --arg job \"$job\" --arg members \"$members\" '\\''[inputs | fromjson? | select(type == \"object\" and .type == \"action\")] as $a | ($members | split(\" \") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $m | def benign: .outcome.kind == \"bypass\" and (.outcome.reason == \"compiler-query\" or .outcome.reason == \"standard-input\"); def n($c; $k): [$a[] | select((benign | not) and .outcome.kind == $k and ((if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end) == $c))] | length; def group($c): \"\\($c) hit=\\(n($c; \"hit\")) miss=\\(n($c; \"miss\")) not_looked_up=\\(n($c; \"unconsulted\")) bypassed=\\(n($c; \"bypass\"))\"; def named: (.crate_name // \"unnamed\") | gsub(\" \"; \"_\"); def class: if $m[.crate_name // \"\"] then \"workspace\" else \"registry\" end; def outcome: if .outcome.kind == \"unconsulted\" then \"not_looked_up\" else .outcome.kind end; def bounded: unique | if length == 0 then \"none\" elif length > 40 then (.[:40] + [\"+\\(length - 40)\"]) | join(\",\") else join(\",\") end; [$a[] | select(benign | not)] as $c | \"mbx-stats job=\\($job) \\(group(\"registry\")) \\(group(\"workspace\")) bypassed_benign=\\([$a[] | select(benign)] | length) nonhit=\\([$c[] | select(.outcome.kind != \"hit\") | \"\\(class):\\(outcome):\\(named)\"] | bounded) bypass=\\([$c[] | select(.outcome.kind == \"bypass\") | \"\\(.outcome.reason // \"unrecorded\"):\\(named)\"] | bounded)\"'\\'' \"$@\" > \"$out\"; fi; read -r line < \"$out\"; printf '\\''%s\\n'\\'' \"$line\"; if [ -n \"${GITHUB_STEP_SUMMARY-}\" ]; then printf '\\''%s\\n'\\'' \"$line\" >> \"$GITHUB_STEP_SUMMARY\"; fi'"
+      - &s27
         name: Download ledger CLI
         if: always()
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: ${{ needs.ledger-cli.outputs.artifact_name }}
           path: ${{ runner.temp }}/velnor/ledger-cli
-      - &s27
+      - &s28
         name: Verify ledger CLI
         id: verify-ledger-cli
         if: always()
@@ -688,7 +698,7 @@ jobs:
           VELNOR_LEDGER_CLI_SOURCE_SHA: ${{ needs.ledger-cli.outputs.source_sha }}
         shell: /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\"; export PATH; f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; [ -f \"$f\" ] && [ ! -L \"$f\" ]; if command -v sha256sum >/dev/null 2>&1; then sha256sum \"$f\"; else shasum -a 256 \"$f\"; fi | { read -r actual _; [ -n \"$VELNOR_LEDGER_CLI_SHA256\" ] && [ \"$actual\" = \"$VELNOR_LEDGER_CLI_SHA256\" ]; }; git rev-parse HEAD | { read -r head; [ -n \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ] && [ \"$head\" = \"$VELNOR_LEDGER_CLI_SOURCE_SHA\" ]; }; chmod +x \"$f\""
-      - &s28
+      - &s29
         name: Emit group ledger
         if: always() && steps.verify-ledger-cli.outcome == 'success'
         env:
@@ -704,7 +714,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - &s29
+      - &s30
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m16
@@ -732,13 +742,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -763,10 +773,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-ansible
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -776,7 +786,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-bun:
     name: Rust / velnor-actions-bun
     runs-on: ubuntu-26.04
@@ -800,13 +810,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -831,10 +841,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-bun
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -844,7 +854,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -868,16 +878,17 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - *s17
       - *s18
+      - *s19
       - name: Prepare image publication fixture
         env: *m11
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; cd \"${GITHUB_WORKSPACE:?}\"; trap '\\''rm -f \"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\" \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"'\\'' EXIT; mise --no-config --no-env --no-hooks exec '\\''rust@'\\''\"'\"${VELNOR_TOOL_RUST}\"'\" -- mbx build --locked -p velnor-actions-cli --example image-publication-fixture --message-format=json > \"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\"; VELNOR_INTERNAL_OP=repo-policy-v1 VELNOR_REPO_POLICY_ACTION=artifact-executable VELNOR_REPO_POLICY_ROOT=\"$GITHUB_WORKSPACE\" VELNOR_REPO_POLICY_MESSAGES=\"$RUNNER_TEMP/velnor-image-publication-fixture-artifacts.json\" VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml VELNOR_REPO_POLICY_TARGET=image-publication-fixture VELNOR_REPO_POLICY_ARTIFACT_KIND=example mise --no-config --no-env --no-hooks exec '\\''rust@'\\''\"'\"${VELNOR_TOOL_RUST}\"'\" -- mbx run --quiet --locked -p velnor-actions-cli --bin velnor-actions > \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"; IFS= read -r fixture < \"$RUNNER_TEMP/velnor-image-publication-fixture-path.txt\"; case \"$fixture\" in /*) test -x \"$fixture\"; printf '\\''VELNOR_IMAGE_PUBLICATION_FIXTURE=%s\\n'\\'' \"$fixture\" >> \"$GITHUB_ENV\" ;; *) printf '\\''%s\\n'\\'' '\\''Cargo did not select an absolute image publication fixture'\\'' >&2; exit 1 ;; esac'"
@@ -908,10 +919,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-cli
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -921,7 +932,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -945,13 +956,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -980,10 +991,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-contract
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -993,7 +1004,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-dbt:
     name: Rust / velnor-actions-dbt
     runs-on: ubuntu-26.04
@@ -1017,13 +1028,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1048,10 +1059,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-dbt
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1061,7 +1072,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-gradle:
     name: Rust / velnor-actions-gradle
     runs-on: ubuntu-26.04
@@ -1085,13 +1096,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1116,10 +1127,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-gradle
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1129,7 +1140,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -1153,13 +1164,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1188,10 +1199,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-mise
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1201,7 +1212,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1227,16 +1238,17 @@ jobs:
         run: mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - *s17
       - *s18
+      - *s19
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-55ee36c36f2de281f77bb259ba42888fc1ac9085555f074f2614d09d55a155d0"}
@@ -1264,10 +1276,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-orchestrator
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1277,7 +1289,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -1301,13 +1313,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1336,10 +1348,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-rust
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1349,7 +1361,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -1373,13 +1385,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1404,10 +1416,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-tofu
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1417,7 +1429,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s29
+      - *s30
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -1440,16 +1452,16 @@ jobs:
       - *s12
       - *s8
       - name: Prepare pinned attestation verifier
-        run: *r9
+        run: *r10
       - *s13
       - *s14
-      - *s19
       - *s20
       - *s21
       - *s22
       - *s23
       - *s24
       - *s25
+      - *s26
       - *s16
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1478,10 +1490,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-actions-workflow-renderer
           VELNOR_MBX_STATS_WORKSPACE: api2026_pull_context_public attested_projection_public build_script_build bun_assets_handoff_public bun_private_repository_public candidate_freshness_public cargo_source_handoff_public check_job_source_public check_runtime_identity_public controller_approval_public crate_bootstrap_version_public crate_release_semver_public crate_release_version_public generator_release_prepare_public golden_collector_clock golden_collector_public held_file_public homebrew_adoption_seed_public image_publication_fixture image_publication_public lane_execution_both ledger_helper_public mac_proof_crypto_public mac_signer_early_public mbx_stats native_image_candidate_inventory_public oci_candidate_configuration_public pin_mirror_public premerge_event_proof_public preview_cross_job_identity_public preview_source_selection_public product_release_binary_public provenance_envelope_public prune_state prune_tools qualification_diagnostics registry_graph_public release_workspace_cargo reusable_attestation_binding_public review_completion_public runner_draft_publication_public runner_family_inputs runner_image_admission_public runner_image_build_public rust_tree_digest_pin source_preview_bootstrap_public source_preview_crypto_public source_preview_dsse_public source_preview_loader_public source_preview_pair_public task_report_public tracked_manifest_public velnor_actions velnor_actions_actionlint velnor_actions_ansible velnor_actions_bun velnor_actions_cli velnor_actions_contract velnor_actions_dbt velnor_actions_freshness velnor_actions_gradle velnor_actions_mise velnor_actions_orchestrator velnor_actions_rust velnor_actions_tofu velnor_actions_workflow_renderer velnor_archive_guard velnor_cli velnor_contract velnor_golden_collector velnor_mise velnor_orchestrator velnor_rust velnor_workflow_renderer workflow_configuration_public
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1491,7 +1503,102 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
+      - *s30
+  rust-velnor-cache-rules:
+    name: Rust / velnor-cache-rules
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env: *m14
+    needs:
+      - ledger-cli
+      - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-cache-rules,')"
+    steps:
+      - *s2
+      - *s3
+      - *s4
+      - *s9
+      - *s10
+      - *s5
+      - *s6
+      - *s7
+      - *s11
+      - *s12
+      - *s8
+      - *s13
+      - *s14
+      - *s20
+      - *s21
+      - &s31
+        name: Set up MBX
+        uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
+        with:
+          backend: local
+          toolchain: ${{ env.VELNOR_TOOL_RUST }}
+          version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
+          working-directory: local
+        env: *m16
+      - *s23
+      - &s32
+        name: Compute state snapshot key
+        id: mbx-bundle-key
+        env:
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+          VELNOR_MBX_BUNDLE_ROOT: local
+          VELNOR_MBX_BUNDLE_TOOLCHAIN: ${{ env.VELNOR_TOOL_RUST }}
+          VELNOR_MBX_BUNDLE_VERSION: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
+          VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          VELNOR_STATE_ATTESTED: ${{needs.plan.outputs.state_union_local_attested}}
+          VELNOR_STATE_SNAPSHOT: ${{needs.plan.outputs.state_local_snapshot}}
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; if [ -z \"${ImageOS-}\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=image_os_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=image_os_missing'\\''; exit 0; fi; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; snap=\"${VELNOR_STATE_SNAPSHOT-}\"; case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac; case \"${snap#s256-}\" in *[!0-9a-f]*) snap= ;; esac; if [ -z \"$snap\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=snapshot_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=snapshot_missing'\\''; exit 0; fi; restore_prefix=\"velnor-v4-state-trusted-union-local-$compat-\"; snapshot_prefix=\"$restore_prefix$snap-\"; key=\"$snapshot_prefix\"; [ \"${#key}\" -le 443 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; restore_key=; restore_digest=; exact=false; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_ATTESTED-}\" > \"$d/attested\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$restore_prefix\"?*) ;; *) continue ;; esac; if printf '\\''%s\\n'\\'' \"${cand#\"$restore_prefix\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; then restore_key=$cand; break; fi; done < \"$d/attested\"; if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit=union\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
+      - *s25
+      - *s26
+      - *s19
+      - name: Build test executables
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-07dd3db9442901c1fd0cbc5f3bdc3766d1fe4ea1cdf5c698dcafee44633e946e"}
+      - name: Format
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1dfa9f41f18431fa4d2fd385cfed5ba87697fc417637c02e008b186a4b7d7fe7"}
+      - name: Clippy
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1deb4c214f12f8a84061add6dc81b9ef167512a728dcb96683a64d36ce1b3882"}
+      - name: Unit and integration tests
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-e911f7e92b73787b4355da58995ee72343782b8a63070a110e2bad909daf534f"}
+      - name: Documentation
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-aa8daf5401a5912d2b7555225cc2016d1f52f1918817d38a7734847e57a0c095"}
+      - name: Wait for parallel checks
+        wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-cache-rules
+          VELNOR_MBX_STATS_WORKSPACE: it velnor_cache_rules velnor_local
+        run: *r15
+      - *s27
+      - *s28
       - *s29
+      - name: Upload crate reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-cache-rules
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          retention-days: "30"
+      - &s33
+        name: Clean MBX workspace outputs
+        if: always() && steps.mbx-ready.outcome == 'success'
+        env: *m16
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"local/target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" clean; then clean_status=0; else clean_status=$?; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
   rust-velnor-ci:
     name: Rust / velnor-ci
     runs-on: ubuntu-26.04
@@ -1515,8 +1622,8 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
+      - *s21
       - name: Set up MBX
         uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
         with:
@@ -1525,7 +1632,7 @@ jobs:
           version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
           working-directory: ci-helper
         env: *m16
-      - *s22
+      - *s23
       - name: Compute state snapshot key
         id: mbx-bundle-key
         env:
@@ -1537,8 +1644,8 @@ jobs:
           VELNOR_STATE_ATTESTED: ${{needs.plan.outputs.state_union_ci_helper_attested}}
           VELNOR_STATE_SNAPSHOT: ${{needs.plan.outputs.state_ci_helper_snapshot}}
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; if [ -z \"${ImageOS-}\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=image_os_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=image_os_missing'\\''; exit 0; fi; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; snap=\"${VELNOR_STATE_SNAPSHOT-}\"; case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac; case \"${snap#s256-}\" in *[!0-9a-f]*) snap= ;; esac; if [ -z \"$snap\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=snapshot_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=snapshot_missing'\\''; exit 0; fi; restore_prefix=\"velnor-v4-state-trusted-union-ci-helper-$compat-\"; snapshot_prefix=\"$restore_prefix$snap-\"; key=\"$snapshot_prefix\"; [ \"${#key}\" -le 443 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; restore_key=; restore_digest=; exact=false; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_ATTESTED-}\" > \"$d/attested\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$restore_prefix\"?*) ;; *) continue ;; esac; if printf '\\''%s\\n'\\'' \"${cand#\"$restore_prefix\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; then restore_key=$cand; break; fi; done < \"$d/attested\"; if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit=union\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
-      - *s24
       - *s25
+      - *s26
       - *s17
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1567,10 +1674,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-ci
           VELNOR_MBX_STATS_WORKSPACE: it velnor_ci
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1584,6 +1691,74 @@ jobs:
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m16
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"ci-helper/target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- \"$mbx_bin\" clean; then clean_status=0; else clean_status=$?; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
+  rust-velnor-local:
+    name: Rust / velnor-local
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    env: *m14
+    needs:
+      - ledger-cli
+      - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-local,')"
+    steps:
+      - *s2
+      - *s3
+      - *s4
+      - *s9
+      - *s10
+      - *s5
+      - *s6
+      - *s7
+      - *s11
+      - *s12
+      - *s8
+      - *s13
+      - *s14
+      - *s20
+      - *s21
+      - *s31
+      - *s23
+      - *s32
+      - *s25
+      - *s26
+      - *s19
+      - name: Build test executables
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-24f890c14aa63935917bada53360bb3d580fa291cae4ffbd6c698c57e5d317a2"}
+      - name: Format
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-487fa7843a257c75c0a5ea900cde5c1707fc69796fe539975b29e81ca7ec31f8"}
+      - name: Clippy
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-580bb58682854fa83fc6d1a109ff4accf87502e70b98180a1f31fbc6f652d315"}
+      - name: Documentation
+        background: true
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-b2acfa12453cabcfec1c152de4cfd2487e8ee4301024dcf0ec7af735f0e10b63"}
+      - name: Wait for parallel checks
+        wait-all:
+      - name: MBX stats
+        if: always()
+        continue-on-error: true
+        env:
+          VELNOR_MBX_STATS_JOB: rust-velnor-local
+          VELNOR_MBX_STATS_WORKSPACE: it velnor_cache_rules velnor_local
+        run: *r15
+      - *s27
+      - *s28
+      - *s29
+      - name: Upload crate reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-local
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          retention-days: "30"
+      - *s33
   rust-velnor-resource-probe:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -1607,9 +1782,9 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - &s30
+      - *s21
+      - &s34
         name: Set up MBX
         uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
         with:
@@ -1618,8 +1793,8 @@ jobs:
           version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
           working-directory: crates/velnor-runner
         env: *m16
-      - *s22
-      - &s31
+      - *s23
+      - &s35
         name: Compute state snapshot key
         id: mbx-bundle-key
         env:
@@ -1631,8 +1806,8 @@ jobs:
           VELNOR_STATE_ATTESTED: ${{needs.plan.outputs.state_union_crates_velnor_runner_attested}}
           VELNOR_STATE_SNAPSHOT: ${{needs.plan.outputs.state_crates_velnor_runner_snapshot}}
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/state-snapshot-key\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; if [ -z \"${ImageOS-}\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=image_os_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=image_os_missing'\\''; exit 0; fi; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; uname -s > \"$d/uname_s\" || :; uname_s=; read -r uname_s < \"$d/uname_s\" || :; uname -m > \"$d/uname_m\" || :; uname_m=; read -r uname_m < \"$d/uname_m\" || :; printf '\\''%s\\n'\\'' \"family=state\" \"schema=4\" '\\''$RUNNER_TEMP/velnor-gc1/state'\\'' \"unit=union\" \"mbx=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" \"MBX_SHARE_OUT_DIR=1\" \"MBX_CC=0\" \"SOURCE_DATE_EPOCH=0\" \"MBX_BUILD_SCRIPT_EXECUTION=hybrid\" \"uname_s=$uname_s\" \"uname_m=$uname_m\" \"ImageOS=${ImageOS-}\" \"store=$RUNNER_TEMP/velnor/mbx\" \"checkout=$GITHUB_WORKSPACE\" > \"$d/compat\"; s256 \"$d/compat\"; compat=\"s256-$h\"; snap=\"${VELNOR_STATE_SNAPSHOT-}\"; case \"$snap\" in s256-*) [ \"${#snap}\" -eq 69 ] || snap= ;; *) snap= ;; esac; case \"${snap#s256-}\" in *[!0-9a-f]*) snap= ;; esac; if [ -z \"$snap\" ]; then rm -f \"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' '\\''reason=snapshot_missing'\\'' '\\''save=false'\\'' '\\''restore=false'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' '\\''velnor: state snapshot disabled reason=snapshot_missing'\\''; exit 0; fi; restore_prefix=\"velnor-v4-state-trusted-union-crates-velnor-runner-$compat-\"; snapshot_prefix=\"$restore_prefix$snap-\"; key=\"$snapshot_prefix\"; [ \"${#key}\" -le 443 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; save=false; [ \"$trust\" != trusted ] || save=true; if [ \"$trust\" = trusted ]; then provenance=trusted; decision=admitted; else case \"${GITHUB_EVENT_NAME:-}\" in pull_request) provenance=untrusted ;; *) provenance=ambiguous ;; esac; decision=restore-only; fi; restore_key=; restore_digest=; exact=false; printf '\\''%s\\n'\\'' \"${VELNOR_STATE_ATTESTED-}\" > \"$d/attested\"; while IFS= read -r cand || [ -n \"$cand\" ]; do case \"$cand\" in \"$restore_prefix\"?*) ;; *) continue ;; esac; if printf '\\''%s\\n'\\'' \"${cand#\"$restore_prefix\"}\" | grep -Eq '\\''^s256-[0-9a-f]{64}-s256-[0-9a-f]{64}$'\\''; then restore_key=$cand; break; fi; done < \"$d/attested\"; if [ -n \"$restore_key\" ]; then restore_digest=\"s256-${restore_key##*-s256-}\"; case \"$restore_key\" in \"$snapshot_prefix\"?*) exact=true ;; esac; fi; printf '\\''%s\\n'\\'' \"key=$key\" \"save=$save\" \"restore=true\" \"provenance=$provenance\" \"decision=$decision\" \"restore_key=$restore_key\" \"restore_digest=$restore_digest\" \"exact=$exact\" >> \"$GITHUB_OUTPUT\"; record=\"$RUNNER_TEMP/velnor/state-discovery.record\"; printf '\\''%s\\n'\\'' \"key=$key\" \"snapshot_prefix=$snapshot_prefix\" \"restore_prefix=$restore_prefix\" \"compat=$compat\" \"provenance=$provenance\" \"decision=$decision\" \"save=$save\" \"unit=union\" \"mbx_version=${VELNOR_MBX_BUNDLE_VERSION}\" \"toolchain=${VELNOR_MBX_BUNDLE_TOOLCHAIN}\" \"root=${VELNOR_MBX_BUNDLE_ROOT}\" > \"$record\"; printf '\\''velnor: state snapshot trust=%s key=%s save=%s provenance=%s decision=%s\\n'\\'' \"$trust\" \"$key\" \"$save\" \"$provenance\" \"$decision\"'"
-      - *s24
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1661,10 +1836,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-resource-probe
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1674,7 +1849,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - &s32
+      - &s36
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m16
@@ -1702,13 +1877,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1733,10 +1908,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-attestation
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1746,7 +1921,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -1770,13 +1945,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1801,10 +1976,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-cli
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1814,7 +1989,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -1838,13 +2013,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1869,10 +2044,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-core
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1882,7 +2057,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -1906,13 +2081,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -1941,10 +2116,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-github
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1954,7 +2129,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -1978,13 +2153,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2013,10 +2188,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-host
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2026,7 +2201,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-image-manifest:
     name: Rust / velnor-runner-image-manifest
     runs-on: ubuntu-26.04
@@ -2050,13 +2225,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2085,10 +2260,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-image-manifest
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2098,7 +2273,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36
   rust-velnor-runner-qualification:
     name: Rust / velnor-runner-qualification
     runs-on: ubuntu-26.04
@@ -2122,13 +2297,13 @@ jobs:
       - *s8
       - *s13
       - *s14
-      - *s19
       - *s20
-      - *s30
-      - *s22
-      - *s31
-      - *s24
+      - *s21
+      - *s34
+      - *s23
+      - *s35
       - *s25
+      - *s26
       - *s18
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -2157,10 +2332,10 @@ jobs:
         env:
           VELNOR_MBX_STATS_JOB: rust-velnor-runner-qualification
           VELNOR_MBX_STATS_WORKSPACE: build_script_build census_once ensure_set guest_image_identity_pure image_session_public job_hook_public mac_qualification_facade_public mac_qualification_public poll_statistics probe_once process_death registry_acquisition_public registry_journal_public registry_projection_cache_pure resource_probe_release_public runner_image_qualification_public runner_manifest_admission_public scaleset_installation_public velnor_host velnor_job_start_hook velnor_resource_probe velnor_resource_probe_release velnor_runner_attestation velnor_runner_attestation_helper velnor_runner_cli velnor_runner_core velnor_runner_github velnor_runner_host velnor_runner_image_manifest velnor_runner_qualification velnor_storage_init
-        run: *r14
-      - *s26
+        run: *r15
       - *s27
       - *s28
+      - *s29
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2170,4 +2345,4 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s32
+      - *s36

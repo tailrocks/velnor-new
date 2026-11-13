@@ -4,10 +4,13 @@
 use std::{error::Error, fs};
 
 use super::bounded::copy_oracle;
-use super::support::{Harness, diagnostics_candidate};
+use super::support::{
+    Harness, assert_checked_in_goldens, diagnostics_candidate, retained_workspace,
+};
 
 #[test]
-fn capture_creates_absent_oracle_and_check_accepts_it() -> Result<(), Box<dyn Error>> {
+fn capture_creates_an_absent_oracle_identical_to_the_checked_in_goldens()
+-> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;
     let candidate = diagnostics_candidate()?;
     let oracle = harness.directory.join("new-oracle");
@@ -35,21 +38,7 @@ fn capture_creates_absent_oracle_and_check_accepts_it() -> Result<(), Box<dyn Er
         "{}",
         String::from_utf8_lossy(&capture.stderr)
     );
-    let check = harness.run(
-        "check",
-        &harness.root,
-        &candidate,
-        &harness.archive_guard,
-        &harness.guard_sha256,
-        Some(&oracle),
-    )?;
-    assert!(
-        check.status.success(),
-        "{}",
-        String::from_utf8_lossy(&check.stderr)
-    );
-    assert!(String::from_utf8_lossy(&check.stdout).contains("ALL GOLDENS MATCH"));
-    Ok(())
+    assert_checked_in_goldens(&harness, &oracle)
 }
 
 #[test]
@@ -83,6 +72,8 @@ fn capture_rejects_candidate_created_destination() -> Result<(), Box<dyn Error>>
     assert_eq!(fs::read(oracle.join("sentinel"))?, b"candidate-created\n");
     assert!(!oracle.join("cases").exists());
     assert!(!oracle.join("MANIFEST.sha256").exists());
+    let workspace = retained_workspace(&output).ok_or("failed workspace was not retained")?;
+    assert!(!workspace.join("raw/nested/generate.status").exists());
     Ok(())
 }
 
@@ -130,6 +121,9 @@ fn rejects_a_candidate_that_forges_the_oracle_to_match_its_output() -> Result<()
     );
     assert_eq!(fs::read(source.join("MANIFEST.sha256"))?, original_manifest);
     assert!(!String::from_utf8_lossy(&output.stdout).contains("ALL GOLDENS MATCH"));
+    let workspace = retained_workspace(&output).ok_or("failed workspace was not retained")?;
+    assert!(workspace.join("raw/nested/generate.status").is_file());
+    assert!(!workspace.join("raw/mbx-nextest").exists());
     Ok(())
 }
 
@@ -166,6 +160,8 @@ fn capture_rejects_changes_to_unmanaged_oracle_files() -> Result<(), Box<dyn Err
                 .contains("golden oracle changed during candidate execution")
         );
         assert_eq!(fs::read(oracle.join("MANIFEST.sha256"))?, manifest);
+        let workspace = retained_workspace(&output).ok_or("failed workspace was not retained")?;
+        assert!(!workspace.join("raw/nested/generate.status").exists());
     }
     Ok(())
 }

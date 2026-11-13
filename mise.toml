@@ -114,6 +114,10 @@ cargo fetch --locked
   cd "$ROOT/ci-helper"
   cargo fetch --locked
 )
+(
+  cd "$ROOT/local"
+  cargo fetch --locked
+)
 for package in velnor-actions-freshness velnor-archive-guard; do
   printf "maintenance-phase: %s\n" "$package"
   case " $TEST_MEMBERS " in
