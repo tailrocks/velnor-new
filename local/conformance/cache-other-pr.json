@@ -1,5 +1,11 @@
 {
   "legs": {
+    "first_pull_request": {
+      "restore_of_its_own_save": {
+        "hit": "true",
+        "matched": "lab-probe-other-<tag>-a"
+      }
+    },
     "second_pull_request": {
       "exact_key_of_the_first": {
         "hit": "",

@@ -55,7 +55,7 @@ docker run --rm --network velnor-local -v "$REPO:/repo" -v "$STATE/events:/event
 
 ## Conformance
 
-`conformance/<probe>.json` holds how real GitHub behaved, measured by the probes of [tailrocks/velnor-lab](https://github.com/tailrocks/velnor-lab) (`lab probes`) and checked there every week. One file per probe, one entry per leg, with tags, run ids and pull request numbers replaced by placeholders. `token`, `cache-save-existing`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are replayed through `velnor-cache-rules` by `tests/it/conformance.rs`. `needs-result` and `event-payload` are not read by any crate yet; the driver (`velnor-local run`) reproduces them. Copy new files from the lab's `conformance/` when `lab probes` changes them.
+`conformance/<probe>.json` holds how real GitHub behaved, measured by the probes of [tailrocks/velnor-lab](https://github.com/tailrocks/velnor-lab) (`lab probes`) and checked there every week. One file per probe, one entry per leg, with tags, run ids and pull request numbers replaced by placeholders. `token`, `cache-save-existing`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are replayed through `velnor-cache-rules` by `tests/it/conformance.rs`. `needs-result` and `event-payload` have no reader yet; the last box of the driver issue (#632) checks the local environment against them. Copy new files from the lab's `conformance/` when `lab probes` changes them.
 
 ## Cache rules and cache server
 

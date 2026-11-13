@@ -50,6 +50,19 @@ fn matched(entries: &[Entry], event: &Event, key: &str, restore_keys: &[&str]) -
         .map_or_else(String::new, |found| found.key.clone())
 }
 
+fn hit(found: &str, key: &str) -> &'static str {
+    match found {
+        "" => "",
+        _ if found == key => "true",
+        _ => "false",
+    }
+}
+
+fn assert_restore(recorded: &Value, found: &str, key: &str, name: &str) {
+    assert_eq!(found, text(&recorded["matched"]), "{name}");
+    assert_eq!(hit(found, key), text(&recorded["hit"]), "{name}");
+}
+
 #[test]
 fn token_scopes_match_the_access_of_each_recorded_event() {
     let document = observation("token");
@@ -108,7 +121,7 @@ fn restore_keys_pick_what_github_picked() {
     ];
     for (name, key, restore_keys) in cases {
         let found = matched(&entries, &event, key, &restore_keys);
-        assert_eq!(found, text(&leg[name]["matched"]), "{name}");
+        assert_restore(&leg[name], &found, key, name);
     }
 }
 
@@ -135,24 +148,25 @@ fn a_pull_request_reads_default_and_base_branches_but_not_its_head_branch() {
         ("head_branch", "lab-probe-reads-<tag>-head"),
     ] {
         let found = matched(&entries, &event, key, &[]);
-        assert_eq!(found, text(&leg[name]["matched"]), "{name}");
+        assert_restore(&leg[name], &found, key, name);
     }
 }
 
 #[test]
 fn a_pull_request_cannot_read_what_another_pull_request_saved() {
-    let leg = observation("cache-other-pr")["legs"]["second_pull_request"].clone();
-    let entries = [entry(Scope::pull_merge(1), "lab-probe-other-<tag>-a", 1)];
+    let document = observation("cache-other-pr");
+    let key = "lab-probe-other-<tag>-a";
+    let entries = [entry(Scope::pull_merge(1), key, 1)];
+    let own = matched(&entries, &pull(1, "main"), key, &[]);
+    let control = &document["legs"]["first_pull_request"]["restore_of_its_own_save"];
+    assert_restore(control, &own, key, "control");
+    let leg = &document["legs"]["second_pull_request"];
     let event = pull(2, "main");
-    let exact = matched(&entries, &event, "lab-probe-other-<tag>-a", &[]);
-    assert_eq!(exact, text(&leg["exact_key_of_the_first"]["matched"]));
-    let prefix = matched(
-        &entries,
-        &event,
-        "lab-probe-other-<tag>-none",
-        &["lab-probe-other-<tag>-"],
-    );
-    assert_eq!(prefix, text(&leg["restore_key_prefix"]["matched"]));
+    let exact = matched(&entries, &event, key, &[]);
+    assert_restore(&leg["exact_key_of_the_first"], &exact, key, "exact");
+    let none = "lab-probe-other-<tag>-none";
+    let prefix = matched(&entries, &event, none, &["lab-probe-other-<tag>-"]);
+    assert_restore(&leg["restore_key_prefix"], &prefix, none, "prefix");
 }
 
 #[test]
@@ -169,7 +183,7 @@ fn a_second_run_of_a_pull_request_restores_what_its_first_run_saved() {
         if saved {
             entries.push(entry(access.write.clone(), key, 1));
         }
-        assert_eq!(found, text(&leg["restore"]["matched"]), "{name}");
+        assert_restore(&leg["restore"], &found, key, name);
         assert_eq!(Some(saved), leg["saved"].as_bool(), "{name}");
     }
 }
@@ -180,10 +194,10 @@ fn saving_an_existing_key_is_refused_and_the_step_goes_on() {
     let main = Scope::branch("main");
     let key = "lab-probe-existing-<tag>";
     let access = access_for(&push("main"), "main");
-    assert!(reserve(&[], &access, key, "v1").is_ok());
-    assert!(reserve(&[entry(main, key, 1)], &access, key, "v1").is_err());
+    let first = reserve(&[], &access, key, "v1").is_ok();
+    let second = reserve(&[entry(main, key, 1)], &access, key, "v1").is_ok();
     let outputs = &leg["step_output"];
-    assert!(text(&outputs[0][0]).starts_with("Cache saved with key"));
-    assert!(text(&outputs[1][0]).starts_with("Failed to save: Unable to reserve cache"));
+    assert_eq!(first, text(&outputs[0][0]).starts_with("Cache saved"));
+    assert_eq!(!second, text(&outputs[1][0]).starts_with("Failed to save"));
     assert_eq!(text(&leg["second_save_conclusion"]), "success");
 }
