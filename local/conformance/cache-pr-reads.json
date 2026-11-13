@@ -12,6 +12,11 @@
       "head_branch": {
         "hit": "",
         "matched": ""
+      },
+      "same_key_in_base_and_default": {
+        "content": "base",
+        "hit": "true",
+        "matched": "lab-probe-reads-<tag>-collide"
       }
     }
   },
