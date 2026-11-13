@@ -19,7 +19,7 @@ use velnor_rust::{DetectError, MetadataError, metadata_roots, reduce_metadata, w
 mod sample;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, drift, expected_files};
+use crate::{Drift, GenerateError, drift, expected_files};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -33,6 +33,7 @@ pub enum Error {
     Repository(String),
     Metadata(MetadataError),
     Detect(DetectError),
+    Generate(GenerateError),
 }
 
 impl fmt::Display for Error {
@@ -48,6 +49,7 @@ impl fmt::Display for Error {
             Self::Repository(message) => f.write_str(message),
             Self::Metadata(error) => error.fmt(f),
             Self::Detect(error) => error.fmt(f),
+            Self::Generate(error) => error.fmt(f),
         }
     }
 }
@@ -99,7 +101,7 @@ pub fn main() -> Exit {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Detect)?;
+    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
     let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));

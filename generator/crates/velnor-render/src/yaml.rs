@@ -4,6 +4,7 @@
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
+    Block(String),
     Int(u64),
     Bool(bool),
     Seq(Vec<Yaml>),
@@ -47,6 +48,14 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
                 }
             }
         }
+        Yaml::Block(text) => {
+            out.push_str(" |\n");
+            for line in text.replace("${{", "${{ '${{' }}").lines() {
+                out.push_str(&" ".repeat(indent));
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
         _ => {
             out.push(' ');
             out.push_str(&inline(value));
@@ -58,7 +67,7 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 fn inline(value: &Yaml) -> String {
     match value {
         Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
-        Yaml::Expr(text) => scalar(text),
+        Yaml::Expr(text) | Yaml::Block(text) => scalar(text),
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),
@@ -124,4 +133,12 @@ fn double_quoted(text: &str) -> String {
     }
     out.push('"');
     out
+}
+
+pub(crate) fn entry(key: &str, value: Yaml) -> (String, Yaml) {
+    (key.to_owned(), value)
+}
+
+pub(crate) fn text(value: &str) -> Yaml {
+    Yaml::Str(value.to_owned())
 }
