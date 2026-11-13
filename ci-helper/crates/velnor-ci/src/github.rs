@@ -41,7 +41,9 @@ impl fmt::Display for Repo {
 
 #[derive(Debug, Deserialize)]
 pub struct ApiRun {
+    pub name: String,
     pub status: String,
+    pub conclusion: Option<String>,
     pub run_attempt: u32,
     pub event: String,
     pub head_sha: String,

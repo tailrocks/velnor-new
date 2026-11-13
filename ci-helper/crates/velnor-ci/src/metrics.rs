@@ -10,6 +10,7 @@ pub struct RunMetrics {
     pub repo: String,
     pub run_id: u64,
     pub run_attempt: u32,
+    pub workflow: String,
     pub event: String,
     pub head_sha: String,
     pub wall_seconds: u64,

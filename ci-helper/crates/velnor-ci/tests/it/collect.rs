@@ -44,6 +44,40 @@ fn the_file_collect_writes_is_the_file_compare_reads() {
 }
 
 #[test]
+fn a_run_that_did_not_succeed_is_refused() {
+    for conclusion in ["failure", "cancelled", "timed_out"] {
+        let mut fake = FakeGitHub::recorded();
+        let failed = RUN.replace(
+            "\"conclusion\": \"success\"",
+            &format!("\"conclusion\": \"{conclusion}\""),
+        );
+        assert_ne!(failed, RUN);
+        fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), &failed);
+        let message = error_text(collect(&fake, &repo(), RUN_ID, true));
+        assert!(message.contains(conclusion), "{message}");
+    }
+}
+
+#[test]
+fn a_job_carried_over_from_an_earlier_attempt_is_not_a_job_run() {
+    let mut fake = FakeGitHub::recorded();
+    let rerun = RUN
+        .replace("\"run_attempt\": 1", "\"run_attempt\": 2")
+        .replace(
+            "\"run_started_at\": \"2026-11-12T08:36:32Z\"",
+            "\"run_started_at\": \"2026-11-12T08:37:00Z\"",
+        );
+    assert_ne!(rerun, RUN);
+    fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), &rerun);
+    fake.respond(jobs_path(&repo(), RUN_ID, 2, 1), JOBS);
+
+    let metrics = collect(&fake, &repo(), RUN_ID, true).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(metrics.jobs.len(), 3);
+    assert_eq!(metrics.jobs_run(), 2);
+    assert_eq!(metrics.runner_seconds, 854 + 70);
+}
+
+#[test]
 fn a_run_that_has_not_completed_is_refused() {
     let mut fake = FakeGitHub::recorded();
     let running = RUN.replace("\"status\": \"completed\"", "\"status\": \"in_progress\"");

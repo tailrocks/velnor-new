@@ -5,7 +5,7 @@ use crate::error::CiError;
 use crate::github::{ApiJob, ApiJobs, ApiRun, GitHub, Repo, job_log_path, jobs_path, run_path};
 use crate::logscan;
 use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
-use crate::time::seconds_between;
+use crate::time::{parse_utc, seconds_between};
 
 pub fn collect(
     github: &dyn GitHub,
@@ -20,15 +20,25 @@ pub fn collect(
             run.status
         )));
     }
+    if run.conclusion.as_deref() != Some("success") {
+        return Err(CiError::new(format!(
+            "run {run_id} concluded {}; only successful runs are measured",
+            run.conclusion.as_deref().unwrap_or("without a conclusion")
+        )));
+    }
     if run.run_attempt > 1 && !allow_rerun {
         return Err(CiError::new(format!(
             "run {run_id} is attempt {}; pass --allow-rerun to measure a re-run",
             run.run_attempt
         )));
     }
+    let attempt_start = run
+        .run_started_at
+        .clone()
+        .unwrap_or_else(|| run.created_at.clone());
     let mut jobs = Vec::new();
     for api_job in fetch_jobs(github, repo, run_id, run.run_attempt)? {
-        jobs.push(job_metrics(github, repo, &api_job)?);
+        jobs.push(job_metrics(github, repo, &api_job, &attempt_start)?);
     }
     let runner_seconds = jobs
         .iter()
@@ -39,6 +49,7 @@ pub fn collect(
         repo: repo.to_string(),
         run_id,
         run_attempt: run.run_attempt,
+        workflow: run.name,
         event: run.event,
         head_sha: run.head_sha,
         wall_seconds: seconds_between(
@@ -70,12 +81,28 @@ fn fetch_jobs(
     }
 }
 
-fn job_metrics(github: &dyn GitHub, repo: &Repo, job: &ApiJob) -> Result<JobMetrics, CiError> {
+fn predates(at: &str, attempt_start: &str) -> bool {
+    matches!(
+        (parse_utc(at), parse_utc(attempt_start)),
+        (Some(at), Some(start)) if at < start
+    )
+}
+
+fn job_metrics(
+    github: &dyn GitHub,
+    repo: &Repo,
+    job: &ApiJob,
+    attempt_start: &str,
+) -> Result<JobMetrics, CiError> {
     let conclusion = job
         .conclusion
         .clone()
         .unwrap_or_else(|| "unknown".to_owned());
-    let ran = conclusion != "skipped" && job.started_at.is_some();
+    let started = job
+        .started_at
+        .as_deref()
+        .is_some_and(|at| !predates(at, attempt_start));
+    let ran = conclusion != "skipped" && started;
     let log = if ran {
         let text = github
             .get(&job_log_path(repo, job.id))
@@ -107,7 +134,7 @@ fn job_metrics(github: &dyn GitHub, repo: &Repo, job: &ApiJob) -> Result<JobMetr
     Ok(JobMetrics {
         name: job.name.clone(),
         conclusion,
-        started: job.started_at.is_some(),
+        started,
         queue_seconds,
         duration_seconds,
         steps,
