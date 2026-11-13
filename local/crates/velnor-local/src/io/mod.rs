@@ -144,6 +144,7 @@ impl CacheServer {
         let body: CacheRequest = parse(&read_small_body(request.into_body()).await?)?;
         let now = now();
         let mut index = self.index.lock().await;
+        let before = index.clone();
         let claims =
             token::verify(token, &self.config.token_key, now).map_err(Error::unauthenticated)?;
         let access =
@@ -186,7 +187,10 @@ impl CacheServer {
             }
             _ => return Err(Error::not_found(format!("{call} is not served"))),
         };
-        self.save(&index).await?;
+        if let Err(error) = self.save(&index).await {
+            *index = before;
+            return Err(error);
+        }
         for record in gone {
             let _ = fs::remove_file(self.archive(&record.blob)).await;
             let _ = fs::remove_dir_all(self.config.dir.join("blocks").join(&record.blob)).await;

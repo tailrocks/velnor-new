@@ -310,6 +310,21 @@ async fn a_save_over_the_limit_evicts_and_deletes_the_archive() {
 }
 
 #[tokio::test]
+async fn a_reservation_that_could_not_be_saved_can_be_retried() {
+    let harness = Harness::new("unsaved", LIMIT).await;
+    let blocker = harness.dir().join("index.json.tmp");
+    std::fs::create_dir(&blocker).unwrap_or_else(|e| unreachable!("{e}"));
+    let entry = json!({"key": "tools", "version": "v"});
+
+    let failed = harness.twirp(MAIN, "CreateCacheEntry", &entry).await;
+    std::fs::remove_dir(&blocker).unwrap_or_else(|e| unreachable!("{e}"));
+    let retried = harness.twirp(MAIN, "CreateCacheEntry", &entry).await;
+
+    assert_eq!(failed.status, 500);
+    assert_eq!(retried.json()["ok"], true);
+}
+
+#[tokio::test]
 async fn the_index_survives_a_restart() {
     let harness = Harness::new("restart", LIMIT).await;
     assert_eq!(
