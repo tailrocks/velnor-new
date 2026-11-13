@@ -157,6 +157,16 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
     );
     assert_eq!(gate.join("\n"), expected);
     assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
+    for (id, lines) in &jobs {
+        for line in lines {
+            let key = line.trim_start().trim_start_matches("- ");
+            assert!(
+                !key.starts_with("if:") || key.contains("runner.os"),
+                "{id}: {line}"
+            );
+            assert!(!key.starts_with("continue-on-error:"), "{id}: {line}");
+        }
+    }
     Ok(())
 }
 
