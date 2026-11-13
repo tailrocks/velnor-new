@@ -17,6 +17,10 @@ fn observation(probe: &str) -> Value {
 }
 
 fn text(value: &Value) -> &str {
+    assert!(
+        value.is_string(),
+        "observation field is not a string: {value}"
+    );
     value.as_str().unwrap_or_default()
 }
 
