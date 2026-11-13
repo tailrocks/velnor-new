@@ -1,18 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::{future::Future, time::Instant};
 
 use bollard::query_parameters::{
     AttachContainerOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
 };
 use tokio::io::AsyncWriteExt;
 
-use super::super::request::PublicationRecord;
+use super::super::request::{PublicationRecord, PublicationRequest};
 use super::{
     PublicationProjection, PublisherExecution, VerifiedExecutionPublicationCleanup, fresh_engine,
     inspect::{matches_created, matches_exited},
-    transport::{bounded, inspect, inspect_optional, read_stdout, wait_success},
+    transport::{
+        bounded, drain_empty_output, inspect, inspect_optional, read_attached_line, read_stdout,
+        wait_success,
+    },
     valid_container_id,
 };
 use crate::{
@@ -20,11 +23,16 @@ use crate::{
     journal::{Journal, ProbePhase},
 };
 
-pub(super) async fn run_claimed(
+pub(super) async fn run_claimed<T, F, Fut>(
     execution: PublisherExecution<'_>,
     projection: PublicationProjection,
     context: crate::journal::ExecutionPublicationContext,
-) -> Result<PublicationRecord, HostError> {
+    persist: F,
+) -> Result<T, HostError>
+where
+    F: FnOnce(PublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
     let PublisherExecution {
         journal, deadline, ..
     } = execution;
@@ -37,16 +45,16 @@ pub(super) async fn run_claimed(
         ProbePhase::CreateRequested,
     )
     .await?;
-    let id = start_and_send(execution, &projection).await?;
-    let record = wait_and_read(execution, &projection, &id).await?;
+    let (id, attached) = start_and_send(execution, &projection).await?;
+    let output = wait_and_read(execution, &projection, &id, attached, persist).await?;
     remove_and_retire(execution, &projection, &id).await?;
-    Ok(record)
+    Ok(output)
 }
 
 async fn start_and_send(
     execution: PublisherExecution<'_>,
     projection: &PublicationProjection,
-) -> Result<String, HostError> {
+) -> Result<(String, bollard::container::AttachContainerResults), HostError> {
     let PublisherExecution {
         docker,
         journal,
@@ -73,8 +81,8 @@ async fn start_and_send(
     .await??;
     let attach_options = AttachContainerOptionsBuilder::new()
         .stdin(true)
-        .stdout(false)
-        .stderr(false)
+        .stdout(true)
+        .stderr(true)
         .stream(true)
         .logs(false)
         .build();
@@ -111,24 +119,68 @@ async fn start_and_send(
         ProbePhase::Started,
     )
     .await?;
+    let request_line = encode_publication_request(projection)?;
+    bounded(deadline, attached.input.write_all(&request_line))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    bounded(deadline, attached.input.flush())
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    Ok((created.id, attached))
+}
+
+fn encode_publication_request(projection: &PublicationProjection) -> Result<Vec<u8>, HostError> {
     let request = projection.request.as_ref().ok_or(HostError::Identity)?;
     let mut request_line = request.encode()?;
     request_line.push(b'\n');
-    bounded(deadline, attached.input.write_all(&request_line))
+    Ok(request_line)
+}
+
+fn encode_publication_acknowledgment(operation_id: &str) -> Result<Vec<u8>, HostError> {
+    let mut line = serde_json::to_vec(&velnor_resource_probe::worker_binding::AcknowledgeRequest {
+        operation_id: operation_id.to_owned(),
+    })
+    .map_err(|_| HostError::Frame)?;
+    line.push(b'\n');
+    Ok(line)
+}
+
+pub(super) async fn complete_attached_publication<T, F, Fut>(
+    operation_id: &str,
+    request: &PublicationRequest,
+    attached: &mut bollard::container::AttachContainerResults,
+    deadline: Instant,
+    persist: F,
+) -> Result<(Vec<u8>, T), HostError>
+where
+    F: FnOnce(PublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
+    let attached_line = read_attached_line(&mut attached.output, deadline).await?;
+    let validated = request.decode_record(&attached_line)?;
+    let output = bounded(deadline, persist(validated)).await??;
+    let ack_line = encode_publication_acknowledgment(operation_id)?;
+    bounded(deadline, attached.input.write_all(&ack_line))
         .await?
         .map_err(|_| HostError::Docker)?;
     bounded(deadline, attached.input.shutdown())
         .await?
         .map_err(|_| HostError::Docker)?;
-    drop(attached.output);
-    Ok(created.id)
+    drain_empty_output(&mut attached.output, deadline).await?;
+    Ok((attached_line, output))
 }
 
-async fn wait_and_read(
+async fn wait_and_read<T, F, Fut>(
     execution: PublisherExecution<'_>,
     projection: &PublicationProjection,
     id: &str,
-) -> Result<PublicationRecord, HostError> {
+    mut attached: bollard::container::AttachContainerResults,
+    persist: F,
+) -> Result<T, HostError>
+where
+    F: FnOnce(PublicationRecord) -> Fut,
+    Fut: Future<Output = Result<T, HostError>>,
+{
     let PublisherExecution {
         docker,
         journal,
@@ -144,6 +196,15 @@ async fn wait_and_read(
         &projection.operation_id,
         ProbePhase::Started,
         ProbePhase::WaitRequested,
+    )
+    .await?;
+    let request = projection.request.as_ref().ok_or(HostError::Identity)?;
+    let (attached_line, output) = complete_attached_publication(
+        &projection.operation_id,
+        request,
+        &mut attached,
+        deadline,
+        persist,
     )
     .await?;
     wait_success(docker, id, deadline).await?;
@@ -169,8 +230,10 @@ async fn wait_and_read(
     .await?;
     fresh_engine(docker, selected, images, deadline).await?;
     let stdout = read_stdout(docker, id, deadline).await?;
-    let request = projection.request.as_ref().ok_or(HostError::Identity)?;
-    let record = request.decode_record(&stdout)?;
+    if stdout != attached_line {
+        return Err(HostError::Frame);
+    }
+    let _record = request.decode_record(&stdout)?;
     transition(
         journal,
         deadline,
@@ -187,7 +250,7 @@ async fn wait_and_read(
         ProbePhase::RemoveRequested,
     )
     .await?;
-    Ok(record)
+    Ok(output)
 }
 
 async fn remove_and_retire(

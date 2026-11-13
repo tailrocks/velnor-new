@@ -7,7 +7,7 @@ use super::{
     profile_retained_memory, sql_i64,
 };
 
-pub(super) async fn insert_launch_intent(
+pub(crate) async fn insert_launch_intent(
     connection: &turso::Connection,
     journal: &ConnectionJournal,
     request: ReservationRequest<'_>,
@@ -24,7 +24,7 @@ pub(super) async fn insert_launch_intent(
     Ok(connection.last_insert_rowid())
 }
 
-pub(super) async fn insert_capacity_reservation(
+pub(crate) async fn insert_capacity_reservation(
     connection: &turso::Connection,
     journal: &ConnectionJournal,
     request: ReservationRequest<'_>,
@@ -40,7 +40,7 @@ pub(super) async fn insert_capacity_reservation(
     Ok(connection.last_insert_rowid())
 }
 
-pub(super) async fn insert_provisioning_rows(
+pub(crate) async fn insert_provisioning_rows(
     connection: &turso::Connection,
     reservation_id: i64,
     operation_id: i64,
@@ -230,7 +230,7 @@ async fn insert_container_rows(
     Ok(())
 }
 
-pub(in crate::journal::connection::reservation::provisioning) fn container_role(
+pub(crate) fn container_role(
     role: crate::launch::bootstrap::BootstrapContainerRole,
 ) -> &'static str {
     match role {

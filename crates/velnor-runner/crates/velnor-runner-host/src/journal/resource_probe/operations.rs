@@ -166,7 +166,7 @@ impl Journal {
         in_transaction(self, async |connection| {
             let changed = connection
                 .execute(
-                    "UPDATE resource_probe_operations SET container_id = ?1, phase = 'container_created' WHERE operation_id = ?2 AND helper_role = 'resource-probe' AND operation_name = 'velnor-resource-probe-' || operation_id AND phase = 'create_requested' AND container_id IS NULL",
+                    "UPDATE resource_probe_operations SET container_id = ?1, phase = 'container_created' WHERE operation_id = ?2 AND helper_role = 'resource-probe' AND operation_name = 'velnor-resource-probe-' || operation_id AND phase IN ('create_requested', 'quarantined') AND container_id IS NULL",
                     (container_id.to_owned(), operation_id.to_owned()),
                 )
                 .await
@@ -373,9 +373,13 @@ pub(crate) fn capacity_request_sha256() -> String {
 mod cleanup_observer;
 mod owned_request;
 mod pre_jit_cleanup;
+mod unattached;
 pub(in crate::journal) use owned_request::cleanup_request_matches;
 pub(in crate::journal) use owned_request::seed_valid;
 use owned_request::{
     cleanup_request_valid, container_id_valid, decode_work, encode_hex, hex_string,
     owned_request_valid,
 };
+
+#[cfg(test)]
+mod tests;

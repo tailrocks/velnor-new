@@ -62,6 +62,50 @@ pub(super) async fn wait_success(
     bounded(deadline, result).await?
 }
 
+pub(super) async fn read_attached_line<S>(
+    output: &mut std::pin::Pin<Box<S>>,
+    deadline: Instant,
+) -> Result<Vec<u8>, HostError>
+where
+    S: futures_util::Stream<Item = Result<LogOutput, DockerError>> + Send + ?Sized,
+{
+    let mut bytes = Vec::with_capacity(4096);
+    while let Some(frame) = bounded(deadline, output.next()).await? {
+        let LogOutput::StdOut { message } = frame.map_err(|_| HostError::Docker)? else {
+            return Err(HostError::Frame);
+        };
+        if let Some(newline) = message.iter().position(|byte| *byte == b'\n') {
+            if newline + 1 != message.len()
+                || bytes.len().saturating_add(message.len()) > OUTPUT_LIMIT
+            {
+                return Err(HostError::Frame);
+            }
+            bytes.extend_from_slice(&message);
+            return Ok(bytes);
+        }
+        if bytes.len().saturating_add(message.len()) > OUTPUT_LIMIT {
+            return Err(HostError::Frame);
+        }
+        bytes.extend_from_slice(&message);
+    }
+    Err(HostError::Frame)
+}
+
+pub(super) async fn drain_empty_output<S>(
+    output: &mut std::pin::Pin<Box<S>>,
+    deadline: Instant,
+) -> Result<(), HostError>
+where
+    S: futures_util::Stream<Item = Result<LogOutput, DockerError>> + Send + ?Sized,
+{
+    while let Some(frame) = bounded(deadline, output.next()).await? {
+        if !frame.map_err(|_| HostError::Docker)?.as_ref().is_empty() {
+            return Err(HostError::Frame);
+        }
+    }
+    Ok(())
+}
+
 pub(super) async fn read_stdout(
     docker: &Docker,
     id: &str,

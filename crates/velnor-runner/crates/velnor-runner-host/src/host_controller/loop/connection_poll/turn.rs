@@ -279,10 +279,8 @@ async fn reconcile_poll(
         ))
         .await?;
     }
-    if outcome.wake_cleanup
-        && let Some(completion) = prepared.completion.as_ref()
-    {
-        completion.notify();
+    if outcome.wake_cleanup {
+        prepared.wake_completion_with_fresh_admin()?;
     }
     Ok(())
 }
