@@ -296,6 +296,19 @@ async fn an_archive_left_as_a_tombstone_by_an_interrupted_delete_comes_back_on_r
 }
 
 #[tokio::test]
+async fn a_cache_server_start_waits_for_the_index_lock() {
+    let harness = Harness::new("api-open", LIMIT).await;
+    let lock = lock_index(harness.dir())
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    let blocked = tokio::time::timeout(Duration::from_millis(300), harness.reopen()).await;
+    drop(lock);
+
+    assert!(blocked.is_err());
+}
+
+#[tokio::test]
 async fn a_tombstone_of_an_entry_that_is_gone_is_removed_by_the_next_delete() {
     let harness = Harness::new("api-orphan", LIMIT).await;
     harness.save(MAIN, "tools", b"1234").await;

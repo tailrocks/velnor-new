@@ -59,8 +59,10 @@ impl CacheServer {
     pub async fn open(config: Config) -> std::io::Result<Arc<Self>> {
         fs::create_dir_all(config.dir.join("archives")).await?;
         fs::create_dir_all(config.dir.join("blocks")).await?;
+        let lock = lock_index(&config.dir).await?;
         let index = read_index(&config.dir).await?;
         recover_tombstones(&config.dir, &index).await;
+        drop(lock);
         Ok(Arc::new(Self {
             proxy: proxy::Proxy::new(&config.upstream),
             config,
