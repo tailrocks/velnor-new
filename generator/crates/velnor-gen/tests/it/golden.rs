@@ -178,7 +178,7 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
     let mut present = BTreeSet::new();
     for sample in fs::read_dir(samples())? {
         let sample = sample?.path();
-        for path in files_under(&sample.join("expected"))?.keys() {
+        for path in expected_files(&load(&sample)?)?.keys() {
             if matches!(
                 Path::new(path.as_str())
                     .extension()

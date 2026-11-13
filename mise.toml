@@ -50,9 +50,9 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-set -- generator/samples/*/expected/.github/workflows/*.yml
-test -e "$1"
-jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes= "$@"
+FILES="$(find generator/samples -path '*/expected/*' \( -name '*.yml' -o -name '*.yaml' \) | sort)"
+test -n "$FILES"
+echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=
 '''
 
 [tasks.test-maintenance-helpers]

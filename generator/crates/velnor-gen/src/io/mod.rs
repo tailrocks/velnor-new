@@ -139,17 +139,32 @@ pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error>
         .ok_or_else(|| Error::Repository("the checkout path is not UTF-8".to_owned()))?;
     let mut value: serde_json::Value = serde_json::from_slice(json)
         .map_err(|e| Error::Metadata(MetadataError::Invalid(e.to_string())))?;
-    relocate(&mut value, from);
+    let encoded = percent_encode(from);
+    relocate(&mut value, &[from, &encoded]);
     let mut bytes = serde_json::to_vec_pretty(&value)
         .map_err(|e| Error::Metadata(MetadataError::Invalid(e.to_string())))?;
     bytes.push(b'\n');
     Ok(bytes)
 }
 
-fn relocate(value: &mut serde_json::Value, from: &str) {
+fn percent_encode(text: &str) -> String {
+    text.bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+                char::from(byte).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
+}
+
+fn relocate(value: &mut serde_json::Value, from: &[&str]) {
     match value {
-        serde_json::Value::String(text) if text.contains(from) => {
-            *text = text.replace(from, SAMPLE_REPOSITORY);
+        serde_json::Value::String(text) => {
+            for prefix in from {
+                *text = text.replace(prefix, SAMPLE_REPOSITORY);
+            }
         }
         serde_json::Value::Array(items) => items.iter_mut().for_each(|v| relocate(v, from)),
         serde_json::Value::Object(map) => map.values_mut().for_each(|v| relocate(v, from)),
