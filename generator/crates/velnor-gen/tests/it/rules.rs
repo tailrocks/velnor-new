@@ -111,6 +111,7 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
             run("case x in x) echo x;; esac"),
             Rule::ForbiddenSyntax("case"),
         ),
+        (run("coproc cargo test"), Rule::ForbiddenSyntax("coproc")),
         (run("cargo test & echo done"), Rule::ForbiddenSyntax("&")),
         (run("echo a | cat"), Rule::ForbiddenSyntax("|")),
         (run("true && echo x"), Rule::ForbiddenSyntax("&&")),

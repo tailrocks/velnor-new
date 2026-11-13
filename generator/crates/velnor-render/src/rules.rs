@@ -21,7 +21,7 @@ pub const ALLOWED_ACTIONS: [&str; 6] = [
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 
-const FORBIDDEN_WORDS: [&str; 4] = ["if", "for", "while", "case"];
+const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
