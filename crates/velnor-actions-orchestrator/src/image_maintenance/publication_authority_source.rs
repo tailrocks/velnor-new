@@ -168,6 +168,7 @@ fn verify_architecture_arms(
         let variable = format!("${{{}}}", version_key.to_ascii_uppercase());
         Ok(get(key)?.replace(get(version_key)?, &variable))
     };
+    verify_arm64_urls(lock)?;
     let base = get("base_image_arm64_digest")?;
     let sums = [
         "runner_arm64_sha256",
@@ -222,6 +223,46 @@ fn verify_architecture_arms(
         || dind_arms.iter().any(|arm| arm_count(dind, arm) != 1)
     {
         return Err(internal("image_publication_lock_architecture"));
+    }
+    Ok(())
+}
+
+fn verify_arm64_urls(lock: &toml::Value) -> Result<(), OrchestratorError> {
+    let get = |key: &str| {
+        lock.get(key)
+            .and_then(toml::Value::as_str)
+            .ok_or_else(|| internal("image_publication_lock_architecture"))
+    };
+    for (key, template, version_key) in [
+        (
+            "runner_arm64_asset_url",
+            "https://github.com/actions/runner/releases/download/v{v}/actions-runner-linux-arm64-{v}.tar.gz",
+            "runner_version",
+        ),
+        (
+            "docker_arm64_archive_url",
+            "https://download.docker.com/linux/static/stable/aarch64/docker-{v}.tgz",
+            "docker_version",
+        ),
+        (
+            "buildx_arm64_asset_url",
+            "https://github.com/docker/buildx/releases/download/v{v}/buildx-v{v}.linux-arm64",
+            "buildx_version",
+        ),
+        (
+            "compose_arm64_asset_url",
+            "https://github.com/docker/compose/releases/download/v{v}/docker-compose-linux-aarch64",
+            "compose_version",
+        ),
+        (
+            "node_arm64_archive_url",
+            "https://nodejs.org/dist/v{v}/node-v{v}-linux-arm64.tar.gz",
+            "node_version",
+        ),
+    ] {
+        if get(key)? != template.replace("{v}", get(version_key)?) {
+            return Err(internal("image_publication_lock_architecture"));
+        }
     }
     Ok(())
 }
