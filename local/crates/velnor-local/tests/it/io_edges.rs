@@ -108,6 +108,36 @@ async fn contents_without_ref_read_the_default_branch_not_the_checkout() {
 }
 
 #[tokio::test]
+async fn paths_with_url_characters_are_percent_encoded_in_content_links() {
+    let repo = TempRepo::new("io-url");
+    repo.write("a b#c.txt", b"x\n");
+    repo.commit("base");
+    let stub = repo.stub("io-url", &json!([]));
+
+    let entry = stub
+        .get(&format!("{REPO}/contents/a%20b%23c.txt"))
+        .await
+        .json();
+
+    assert_eq!(entry["name"], "a b#c.txt");
+    assert!(
+        entry["html_url"]
+            .as_str()
+            .is_some_and(|url| url.ends_with("/a%20b%23c.txt"))
+    );
+    assert!(
+        entry["_links"]["html"]
+            .as_str()
+            .is_some_and(|url| url.ends_with("/a%20b%23c.txt"))
+    );
+    assert!(
+        entry["url"]
+            .as_str()
+            .is_some_and(|url| url.contains("/contents/a%20b%23c.txt?"))
+    );
+}
+
+#[tokio::test]
 async fn a_tag_named_like_the_default_branch_does_not_shadow_the_branch() {
     let c = changed("io-tag");
     c.repo.git(&["tag", "main", &c.base]);

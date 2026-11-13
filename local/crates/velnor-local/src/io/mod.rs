@@ -60,6 +60,7 @@ impl CacheServer {
         fs::create_dir_all(config.dir.join("archives")).await?;
         fs::create_dir_all(config.dir.join("blocks")).await?;
         let index = read_index(&config.dir).await?;
+        recover_tombstones(&config.dir, &index).await;
         Ok(Arc::new(Self {
             proxy: proxy::Proxy::new(&config.upstream),
             config,
@@ -358,5 +359,5 @@ fn json_response(status: u16, body: &Value) -> Response<Body> {
 }
 
 pub use index_file::{IndexLock, lock_index};
-use index_file::{read_index, remove_if_present, write_index};
+use index_file::{read_index, recover_tombstones, remove_if_present, write_index};
 pub use run::main;

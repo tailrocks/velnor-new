@@ -267,6 +267,49 @@ async fn a_delete_whose_index_write_fails_puts_the_archive_back() {
     failed_delete_keeps_the_entry_and_its_archive("api-keep-index", ".").await;
 }
 
+fn archives(harness: &Harness) -> Vec<std::path::PathBuf> {
+    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(harness.dir().join("archives"))
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect();
+    paths.sort();
+    paths
+}
+
+#[tokio::test]
+async fn an_archive_left_as_a_tombstone_by_an_interrupted_delete_comes_back_on_restart() {
+    let harness = Harness::new("api-tomb", LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    let archive = archives(&harness).remove(0);
+    let tombstone = archive.with_extension("deleted");
+    std::fs::rename(&archive, &tombstone).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let harness = harness.reopen().await;
+
+    assert_eq!(archives(&harness), [archive]);
+    let url = harness.restore(MAIN, "tools").await["signed_download_url"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert_eq!(harness.get(&url).await.body.as_ref(), b"1234");
+}
+
+#[tokio::test]
+async fn a_tombstone_of_an_entry_that_is_gone_is_removed_by_the_next_delete() {
+    let harness = Harness::new("api-orphan", LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    let stub = stub_over(&harness, "api-orphan");
+    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
+    std::fs::write(harness.dir().join("archives/gone.deleted"), "x")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    let deleted = stub.call("DELETE", &format!("{CACHES}/{id}")).await;
+
+    assert_eq!(deleted.status, 204);
+    assert_eq!(archives(&harness), Vec::<std::path::PathBuf>::new());
+}
+
 #[tokio::test]
 async fn an_unreadable_index_is_an_error_not_a_stale_answer() {
     let harness = Harness::new("api-stale", LIMIT).await;

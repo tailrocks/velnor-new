@@ -144,7 +144,7 @@ impl Site<'_> {
         let html = self.blob_url(
             if kind == "dir" { "tree" } else { "blob" },
             reference,
-            &entry.path,
+            &encode_path(&entry.path),
         );
         let git = format!(
             "http://{}/repos/{}/git/{}/{}",

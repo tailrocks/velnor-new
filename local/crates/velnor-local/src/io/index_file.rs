@@ -56,3 +56,21 @@ pub(super) fn remove_if_present(result: std::io::Result<()>) -> std::io::Result<
         _ => Ok(()),
     }
 }
+
+pub(super) async fn recover_tombstones(dir: &Path, index: &Index) {
+    let archives = dir.join("archives");
+    let Ok(mut entries) = fs::read_dir(&archives).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(blob) = name.strip_suffix(".deleted") else {
+            continue;
+        };
+        let _ = if index.blob(blob, true).is_some() {
+            fs::rename(entry.path(), archives.join(blob)).await
+        } else {
+            fs::remove_file(entry.path()).await
+        };
+    }
+}

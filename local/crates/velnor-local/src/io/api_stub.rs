@@ -12,7 +12,9 @@ use tokio::sync::Mutex;
 
 use super::git::Git;
 use super::reply::{Reply, response};
-use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
+use super::{
+    Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
+};
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
@@ -288,6 +290,7 @@ impl ApiStub {
         let Ok(mut index) = read_index(dir).await else {
             return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
         };
+        recover_tombstones(dir, &index).await;
         let Some(record) = index.delete(call.site.repository, id) else {
             return Reply::missing();
         };
