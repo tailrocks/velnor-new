@@ -11,6 +11,7 @@ use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
 mod connection;
 mod job_authority;
+mod platform;
 mod release_read;
 mod source_policy;
 
@@ -21,6 +22,7 @@ pub(crate) use job_authority::{
 pub use job_authority::{
     ApprovedJobAuthorityPolicy, JobAuthorityRole, build_job_authority_policy_json,
 };
+pub use platform::RunnerPlatform;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
 
@@ -165,7 +167,7 @@ impl HostConfig {
                 .iter()
                 .map(|connection| &connection.credential_ref),
         )?;
-        validate_docker(&self.docker)
+        validate_docker(&self.docker, &self.connections)
     }
 
     pub fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
@@ -292,9 +294,15 @@ struct HostTomlResources {
     operational_memory_reserve_bytes: u64,
 }
 
-fn validate_docker(docker: &DockerConfig) -> Result<(), HostError> {
-    if docker.platform == "linux/amd64"
-        && !docker.context.is_empty()
+fn validate_docker(
+    docker: &DockerConfig,
+    connections: &[RepositoryConnection],
+) -> Result<(), HostError> {
+    if RunnerPlatform::parse(&docker.platform).is_some_and(|platform| {
+        connections
+            .iter()
+            .all(|connection| platform.routes(&connection.scale_set))
+    }) && !docker.context.is_empty()
         && unix_endpoint(&docker.endpoint)
     {
         Ok(())

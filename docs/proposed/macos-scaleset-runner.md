@@ -24,8 +24,13 @@ plus workflow-job polling. The selector is routing, not authorization.
 Host architecture, Docker VM architecture, container platform, and emulation are
 separate facts. The primary profile is `linux/amd64`. On Apple Silicon the VM
 may be `aarch64` and the container may run under emulation. Never record ARM64
-as the x64 baseline. A later ARM profile needs its own selector, such as
-`ubuntu-26.04-arm-scale-set`.
+as the x64 baseline. The ARM profile is `[docker] platform = "linux/arm64"`.
+It needs its own selector: every scale set name ends in `-arm-scale-set`, such
+as `ubuntu-26.04-arm-scale-set`, and no label is a non-ARM `*-scale-set`
+selector. A `linux/amd64` host takes no `-arm-scale-set` name or label. An
+ARM host selects only a native `aarch64` engine. Worker images are published
+only for `linux/amd64`, so an ARM host does not start jobs from published
+images.
 
 Velnor does not implement an Actions interpreter and does not ship a Go sidecar.
 The official runner handles actions, steps, logs, credentials, post steps,
