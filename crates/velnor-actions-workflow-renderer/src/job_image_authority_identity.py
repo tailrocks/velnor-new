@@ -268,10 +268,10 @@ def _attestation_mismatch(item, identity, expected_subjects):
 def validate_attestation_output(value, identity, expected_subjects):
     if not isinstance(value, list) or not value:
         raise AuthorityError("Attestation verification output has no records.")
-    if len(value) >= ATTESTATION_LIMIT:
-        raise AuthorityError("Attestation verification output may be truncated.")
     reasons = [_attestation_mismatch(item, identity, expected_subjects) for item in value]
     matches = reasons.count(None)
+    if not matches and len(value) >= ATTESTATION_LIMIT:
+        raise AuthorityError("Attestation verification output may be truncated.")
     if not matches:
         raise AuthorityError(
             "No attestation matches this run and its files: "
