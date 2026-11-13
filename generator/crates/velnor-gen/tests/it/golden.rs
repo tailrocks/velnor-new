@@ -217,7 +217,10 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
             }
         }
     }
-    assert_eq!(present, listed);
+    assert_eq!(
+        present, listed,
+        "add or remove the workflow path in the inputs of the generator-samples check in .velnor/config.toml"
+    );
     Ok(())
 }
 
