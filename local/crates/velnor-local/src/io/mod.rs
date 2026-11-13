@@ -36,7 +36,7 @@ use crate::protocol::{
     CacheRequest, Error, PullRequestBase, Route, Upload, archive_url, block_list, parse, route,
     upload_kind,
 };
-use crate::store::{Index, Lookup};
+use crate::store::{Index, Lookup, Record};
 use crate::token;
 
 pub type Body = UnsyncBoxBody<Bytes, std::io::Error>;
@@ -154,23 +154,30 @@ impl CacheServer {
             key: &body.key,
             version: &body.version,
         };
-        let reply = match call {
+        let (reply, gone) = match call {
             "GetCacheEntryDownloadURL" => match index.restore(&at, &body.restore_keys, now) {
-                Some(record) => json!({
-                    "ok": true,
-                    "signed_download_url": archive_url(&host, &record.blob),
-                    "matched_key": record.key,
-                }),
-                None => json!({"ok": false}),
+                Some(record) => (
+                    json!({
+                        "ok": true,
+                        "signed_download_url": archive_url(&host, &record.blob),
+                        "matched_key": record.key,
+                    }),
+                    Vec::new(),
+                ),
+                None => (json!({"ok": false}), Vec::new()),
             },
             "CreateCacheEntry" => match index.create(&at, random_blob()?, now) {
-                Ok(record) => {
-                    json!({"ok": true, "signed_upload_url": archive_url(&host, &record.blob)})
-                }
-                Err(AlreadyExists(existing)) => json!({
-                    "ok": false,
-                    "message": format!("the entry {} already exists in {}", existing.key, existing.scope.0),
-                }),
+                Ok((record, replaced)) => (
+                    json!({"ok": true, "signed_upload_url": archive_url(&host, &record.blob)}),
+                    replaced,
+                ),
+                Err(AlreadyExists(existing)) => (
+                    json!({
+                        "ok": false,
+                        "message": format!("the entry {} already exists in {}", existing.key, existing.scope.0),
+                    }),
+                    Vec::new(),
+                ),
             },
             "FinalizeCacheEntryUpload" => {
                 self.finalize(&mut index, &at, &body.size_bytes, now)
@@ -179,6 +186,10 @@ impl CacheServer {
             _ => return Err(Error::not_found(format!("{call} is not served"))),
         };
         self.save(&index).await?;
+        for record in gone {
+            let _ = fs::remove_file(self.archive(&record.blob)).await;
+            let _ = fs::remove_dir_all(self.config.dir.join("blocks").join(&record.blob)).await;
+        }
         Ok(json_response(200, &reply))
     }
 
@@ -188,7 +199,7 @@ impl CacheServer {
         at: &Lookup<'_>,
         size_bytes: &str,
         now: u64,
-    ) -> Result<Value, Error> {
+    ) -> Result<(Value, Vec<Record>), Error> {
         let record = index
             .pending(at)
             .cloned()
@@ -202,15 +213,8 @@ impl CacheServer {
                 "{size} bytes were uploaded, not {size_bytes}"
             )));
         }
-        for gone in index.commit(record.id, size, now, self.config.limit_bytes) {
-            match fs::remove_file(self.archive(&gone.blob)).await {
-                Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                    return Err(Error::internal(error));
-                }
-                _ => {}
-            }
-        }
-        Ok(json!({"ok": true, "entry_id": record.id.to_string()}))
+        let gone = index.commit(record.id, size, now, self.config.limit_bytes);
+        Ok((json!({"ok": true, "entry_id": record.id.to_string()}), gone))
     }
 
     async fn upload(&self, blob: &str, request: Request<Body>) -> Result<Response<Body>, Error> {
@@ -278,7 +282,15 @@ impl CacheServer {
             .map_err(|_| Error::invalid(format!("{number} is not a pull request number")))?;
         let base: PullRequestBase = parse(&read_small_body(request.into_body()).await?)?;
         let mut index = self.index.lock().await;
-        index.pull_request_bases.insert(number, base.base_branch);
+        let registered = index
+            .pull_request_bases
+            .entry(number)
+            .or_insert(base.base_branch.clone());
+        if *registered != base.base_branch {
+            return Err(Error::precondition(format!(
+                "pull request {number} is registered with base {registered}"
+            )));
+        }
         self.save(&index).await?;
         Ok(json_response(200, &json!({})))
     }

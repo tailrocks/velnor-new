@@ -83,15 +83,20 @@ impl Index {
             .collect()
     }
 
+    fn live(&self, repository: &str, committed_only: bool, now: u64) -> Vec<Entry> {
+        let mut entries = self.entries(repository, committed_only, now);
+        let expired = evict(&entries, Timestamp(now), u64::MAX);
+        entries.retain(|entry| !expired.contains(&entry.id()));
+        entries
+    }
+
     pub fn restore(
         &mut self,
         at: &Lookup<'_>,
         restore_keys: &[String],
         now: u64,
     ) -> Option<Record> {
-        let mut entries = self.entries(at.repository, true, now);
-        let expired = evict(&entries, Timestamp(now), u64::MAX);
-        entries.retain(|entry| !expired.contains(&entry.id()));
+        let entries = self.live(at.repository, true, now);
         let found = lookup(&entries, at.access, at.key, restore_keys, at.version)?.id();
         let record = self
             .records
@@ -106,23 +111,18 @@ impl Index {
         at: &Lookup<'_>,
         blob: String,
         now: u64,
-    ) -> Result<Record, AlreadyExists> {
+    ) -> Result<(Record, Vec<Record>), AlreadyExists> {
         reserve(
-            &self.entries(at.repository, false, now),
+            &self.live(at.repository, false, now),
             at.access,
             at.key,
             at.version,
         )?;
         let id = at.id();
-        if let Some(stale) = self
-            .records
-            .iter_mut()
-            .find(|record| !record.committed && record.is(at.repository, &id))
-        {
-            stale.created = now;
-            stale.last_access = now;
-            return Ok(stale.clone());
-        }
+        let (replaced, kept) = std::mem::take(&mut self.records)
+            .into_iter()
+            .partition(|record| record.is(at.repository, &id));
+        self.records = kept;
         self.next_id += 1;
         let record = Record {
             id: self.next_id,
@@ -137,7 +137,7 @@ impl Index {
             committed: false,
         };
         self.records.push(record.clone());
-        Ok(record)
+        Ok((record, replaced))
     }
 
     #[must_use]
@@ -164,13 +164,15 @@ impl Index {
         record.last_access = now;
         let repository = record.repository.clone();
         let evicted = evict(
-            &self.entries(&repository, false, now),
+            &self.entries(&repository, true, now),
             Timestamp(now),
             limit_bytes,
         );
         let (gone, kept) = std::mem::take(&mut self.records)
             .into_iter()
-            .partition(|record| evicted.iter().any(|id| record.is(&repository, id)));
+            .partition(|record| {
+                record.committed && evicted.iter().any(|id| record.is(&repository, id))
+            });
         self.records = kept;
         gone
     }

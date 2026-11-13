@@ -214,6 +214,18 @@ async fn a_pull_request_reads_the_default_branch_but_not_another_pull_request() 
 
     harness.register(1).await;
     harness.register(2).await;
+    let rebased = harness
+        .send(
+            "PUT",
+            "http://github.localhost/_velnor/pull-requests/2",
+            &[],
+            Bytes::from(r#"{"base_branch":"release"}"#),
+        )
+        .await;
+    assert_eq!(
+        (rebased.status, rebased.json()["code"].clone()),
+        (412, json!("failed_precondition"))
+    );
     assert_eq!(harness.save(MAIN, "main-entry", b"main").await["ok"], true);
     assert_eq!(
         harness.save(PULL_1, "pr-entry", b"pull request 1").await["ok"],
