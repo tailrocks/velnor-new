@@ -118,6 +118,16 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
         (run("echo a; echo b"), Rule::ForbiddenSyntax(";")),
         (run("echo $(date)"), Rule::ForbiddenSyntax("$(")),
         (run("echo `date`"), Rule::ForbiddenSyntax("`")),
+        (run("cat <(echo a)"), Rule::ForbiddenSyntax("<(")),
+        (run("tee >(cat)"), Rule::ForbiddenSyntax(">(")),
+        (RenderedStep::default(), Rule::NotExactlyOneOfRunAndUses),
+        (
+            RenderedStep {
+                run: Some("echo a".to_owned()),
+                ..uses(PINNED)
+            },
+            Rule::NotExactlyOneOfRunAndUses,
+        ),
         (run(&long), Rule::RunTooLong),
         (run("echo ${{ github.ref_name }}"), Rule::ExpressionInRun),
         (shell, Rule::ShellKey),

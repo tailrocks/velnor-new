@@ -22,7 +22,7 @@ pub const ALLOWED_ACTIONS: [&str; 6] = [
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 
 const FORBIDDEN_WORDS: [&str; 4] = ["if", "for", "while", "case"];
-const FORBIDDEN_SYMBOLS: [&str; 7] = ["|", "&", "&&", "||", ";", "$(", "`"];
+const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
@@ -63,6 +63,7 @@ pub enum Rule {
     RunTooLong,
     ExpressionInRun,
     ShellKey,
+    NotExactlyOneOfRunAndUses,
     ActionNotAllowed(String),
     ActionNotPinned(String),
 }
@@ -86,6 +87,9 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::ExpressionInRun => {
                 f.write_str("a run value contains an expression; pass it through env")
+            }
+            Rule::NotExactlyOneOfRunAndUses => {
+                f.write_str("a step needs exactly one of run and uses")
             }
             Rule::ShellKey => f.write_str("a step sets shell"),
             Rule::ActionNotAllowed(action) => {
@@ -123,6 +127,9 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     let mut rules = Vec::new();
     if let Some(run) = step.run.as_deref().filter(|run| *run != FETCH_HELPER_RUN) {
         run_rules(run, &mut rules);
+    }
+    if step.run.is_some() == step.uses.is_some() {
+        rules.push(Rule::NotExactlyOneOfRunAndUses);
     }
     if step.shell.is_some() {
         rules.push(Rule::ShellKey);
