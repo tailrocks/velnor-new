@@ -143,30 +143,34 @@ async fn local_images_that_do_not_match_the_host_are_refused() -> TestResult<()>
     let other = "fedcba9876543210fedcba9876543210fedcba98";
     let mut changed_config = image('a', "runner", "arm64", SOURCE);
     changed_config.1["Config"]["Cmd"] = json!(["sh"]);
-    for (case, runner, dind) in [
+    for (case, runner, dind, expected) in [
         (
             "amd64 image on an arm64 host",
             image('a', "runner", "amd64", SOURCE),
             image('b', "dind", "amd64", SOURCE),
+            HostError::Identity,
         ),
         (
             "runner and DinD from different sources",
             image('a', "runner", "arm64", SOURCE),
             image('b', "dind", "arm64", other),
+            HostError::Identity,
         ),
         (
             "runner image with another runtime config",
             changed_config.clone(),
             image('b', "dind", "arm64", SOURCE),
+            HostError::Docker,
         ),
         (
-            "DinD image under the runner ID",
-            (id('a'), image('b', "dind", "arm64", SOURCE).1),
+            "valid runner image with another ID",
+            (id('a'), image('e', "runner", "arm64", SOURCE).1),
             image('b', "dind", "arm64", SOURCE),
+            HostError::Identity,
         ),
     ] {
         let result = prepare("linux/arm64", vec![runner, dind]).await?;
-        assert!(result.is_err(), "{case} accepted: {result:?}");
+        assert_eq!(result, Err(expected), "{case}");
     }
     Ok(())
 }

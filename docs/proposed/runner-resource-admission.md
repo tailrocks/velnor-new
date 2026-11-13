@@ -247,7 +247,7 @@ fail closed. The no-quota storage limitation remains explicit in all evidence.
 | Runtime budget propagation and Docker create projections | `crates/velnor-runner/crates/velnor-runner-cli/src/daemon_run.rs`; `crates/velnor-runner/crates/velnor-runner-host/src/{stage.rs,worker.rs,worker/mounts.rs}` |
 | Probe binary and immutable image | a new nested runner probe crate and a separate minimal image source; never the workflow runner image |
 | Image asset publication and source binding | `crates/velnor-actions-workflow-renderer/src/schema2_product_release_family.rs`, the source-owned official release workflow and manifest/attestation producer, generated-output capture owner, and `crates/velnor-actions-orchestrator/tests/snapshots/` |
-| Probe operation journal, recovery, and cleanup | `crates/velnor-runner/crates/velnor-runner-host/src/{journal.rs,journal/launch.rs,launch/recovery.rs,launch/completion/container.rs}` plus a distinct typed probe projection |
+| Probe operation journal, recovery, and cleanup | `crates/velnor-runner/crates/velnor-runner-host/src/{journal.rs,journal/launch.rs,launch/resource_probe/recover.rs,launch/completion/container.rs}` plus a distinct typed probe projection |
 | Behavioral evidence | nested runner host tests for configuration, admission, exact Docker projections, journal recovery, cleanup, and probe execution; an isolated integration check against the offline-loaded verified image |
 
 This map is for design review only. Generated workflows and snapshots must be
