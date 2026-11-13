@@ -5,6 +5,7 @@ pub mod api_stub;
 mod git;
 mod index_file;
 mod proxy;
+mod reply;
 mod run;
 
 use std::path::{Path, PathBuf};

@@ -7,6 +7,7 @@ use std::process::Stdio;
 
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+use tokio::sync::Mutex;
 
 use crate::rest::{self, COMMIT_FORMAT, Commit, FileDiff, TreeEntry};
 
@@ -14,7 +15,10 @@ use crate::rest::{self, COMMIT_FORMAT, Commit, FileDiff, TreeEntry};
 pub(super) struct Git {
     pub(super) repo: PathBuf,
     pub(super) diff_limit_bytes: usize,
+    pub(super) last_diff: Mutex<Option<CachedDiff>>,
 }
+
+pub(super) type CachedDiff = ((String, String, usize), Vec<FileDiff>);
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Failure {
@@ -84,6 +88,13 @@ impl Git {
         head: &str,
         cap: usize,
     ) -> Result<Vec<FileDiff>, Failure> {
+        let key = (base.to_owned(), head.to_owned(), cap);
+        let mut last = self.last_diff.lock().await;
+        if let Some((cached, files)) = last.as_ref()
+            && *cached == key
+        {
+            return Ok(files.clone());
+        }
         let range = format!("{base}...{head}");
         let bytes = self
             .capped(
@@ -112,6 +123,7 @@ impl Git {
                     .map(|sha| sha.trim().to_owned());
             }
         }
+        *last = Some((key, files.clone()));
         Ok(files)
     }
 

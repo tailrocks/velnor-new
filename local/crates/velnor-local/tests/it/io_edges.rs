@@ -42,7 +42,7 @@ fn fast_import_commits(repo: &TempRepo, count: usize) -> String {
 }
 
 #[tokio::test]
-async fn a_compare_of_more_than_250_commits_continues_on_the_page_its_link_names() {
+async fn a_long_compare_returns_the_newest_250_unpaged_and_chronological_pages_when_paged() {
     let repo = TempRepo::new("io-long");
     repo.write("a.txt", b"one\n");
     let base = repo.commit("base");
@@ -50,16 +50,9 @@ async fn a_compare_of_more_than_250_commits_continues_on_the_page_its_link_names
     let stub = repo.stub("io-long", &json!([]));
     let path = format!("{REPO}/compare/{base}...{head}");
 
-    let first = stub.get(&path).await;
-    let next = first
-        .link()
-        .split(", ")
-        .find(|link| link.ends_with("rel=\"next\""))
-        .and_then(|link| link.strip_prefix("<http://api.localhost"))
-        .and_then(|link| link.split_once('>'))
-        .map(|(url, _)| url.to_owned())
-        .unwrap_or_default();
-    let second = stub.get(&next).await;
+    let unpaged = stub.get(&path).await;
+    let first = stub.get(&format!("{path}?per_page=100&page=1")).await;
+    let last = stub.get(&format!("{path}?per_page=100&page=3")).await;
 
     let shas = |reply: &crate::support::Reply| -> Vec<String> {
         reply.json()["commits"]
@@ -69,10 +62,37 @@ async fn a_compare_of_more_than_250_commits_continues_on_the_page_its_link_names
             .map(|commit| commit["sha"].as_str().unwrap_or_default().to_owned())
             .collect()
     };
-    let (first_shas, second_shas) = (shas(&first), shas(&second));
-    assert_eq!((first_shas.len(), second_shas.len()), (250, 5));
-    assert!(!first_shas.iter().any(|sha| second_shas.contains(sha)));
-    assert_eq!(second_shas.last(), Some(&head));
+    let (unpaged_shas, first_shas, last_shas) = (shas(&unpaged), shas(&first), shas(&last));
+    assert_eq!(unpaged_shas.len(), 250);
+    assert_eq!(unpaged_shas.last(), Some(&head));
+    assert_eq!(unpaged.link(), "");
+    assert_eq!(unpaged.json()["total_commits"], 255);
+    assert_eq!((first_shas.len(), last_shas.len()), (100, 55));
+    assert_eq!(first_shas.get(5), unpaged_shas.first());
+    assert_eq!(last_shas.last(), Some(&head));
+    assert!(first.link().contains("rel=\"next\""));
+}
+
+#[tokio::test]
+async fn nested_file_names_are_one_encoded_segment_in_file_links() {
+    let repo = TempRepo::new("io-nested");
+    repo.write("a.txt", b"one\n");
+    let base = repo.commit("base");
+    repo.write("src/deep/index.ts", b"x\n");
+    let head = repo.commit("head");
+    let stub = repo.stub("io-nested", &json!([pull(1, &base, &head)]));
+
+    let files = stub.get(&format!("{REPO}/pulls/1/files")).await.json();
+
+    let nested = file(&files, "src/deep/index.ts");
+    assert_eq!(
+        nested["raw_url"],
+        format!("http://api.localhost/tailrocks/velnor-lab/raw/{head}/src%2Fdeep%2Findex.ts")
+    );
+    assert_eq!(
+        nested["contents_url"],
+        format!("http://api.localhost{REPO}/contents/src%2Fdeep%2Findex.ts?ref={head}")
+    );
 }
 
 #[tokio::test]

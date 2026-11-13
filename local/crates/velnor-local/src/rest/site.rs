@@ -33,20 +33,18 @@ pub struct Site<'a> {
 impl Site<'_> {
     fn blob_url(&self, kind: &str, sha: &str, path: &str) -> String {
         format!(
-            "http://{}/{}/{kind}/{}/{}",
+            "http://{}/{}/{kind}/{}/{path}",
             self.host,
             self.repository,
             encode_path(sha),
-            encode_path(path)
         )
     }
 
     fn contents_url(&self, sha: &str, path: &str) -> String {
         format!(
-            "http://{}/repos/{}/contents/{}?ref={}",
+            "http://{}/repos/{}/contents/{path}?ref={}",
             self.host,
             self.repository,
-            encode_path(path),
             utf8_percent_encode(sha, QUERY_SET)
         )
     }
@@ -54,6 +52,7 @@ impl Site<'_> {
     #[must_use]
     pub fn file(&self, file: &FileDiff, base: &str, head: &str) -> Value {
         let at = if file.status == "removed" { base } else { head };
+        let name = utf8_percent_encode(&file.filename, QUERY_SET).to_string();
         let mut value = json!({
             "sha": file.sha,
             "filename": file.filename,
@@ -61,9 +60,9 @@ impl Site<'_> {
             "additions": file.additions,
             "deletions": file.deletions,
             "changes": file.additions + file.deletions,
-            "blob_url": self.blob_url("blob", at, &file.filename),
-            "raw_url": self.blob_url("raw", at, &file.filename),
-            "contents_url": self.contents_url(at, &file.filename),
+            "blob_url": self.blob_url("blob", at, &name),
+            "raw_url": self.blob_url("raw", at, &name),
+            "contents_url": self.contents_url(at, &name),
         });
         if let Some(patch) = &file.patch {
             value["patch"] = json!(patch);
@@ -139,7 +138,7 @@ impl Site<'_> {
 
     #[must_use]
     pub fn content_entry(&self, entry: &TreeEntry, reference: &str) -> Value {
-        let url = self.contents_url(reference, &entry.path);
+        let url = self.contents_url(reference, &encode_path(&entry.path));
         let name = entry.path.rsplit('/').next().unwrap_or_default();
         let kind = entry.kind();
         let html = self.blob_url(
@@ -163,7 +162,7 @@ impl Site<'_> {
             "url": url,
             "git_url": git,
             "html_url": html,
-            "download_url": (kind == "file").then(|| self.blob_url("raw", reference, &entry.path)),
+            "download_url": (kind == "file").then(|| self.blob_url("raw", reference, &encode_path(&entry.path))),
             "_links": {"self": url, "git": git, "html": html},
         })
     }

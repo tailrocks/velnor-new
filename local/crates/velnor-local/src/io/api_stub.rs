@@ -4,14 +4,14 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
-use hyper::header::{CONTENT_TYPE, HOST, HeaderValue, LINK};
-use hyper::{Request, Response, StatusCode};
+use hyper::header::HOST;
+use hyper::{Request, Response};
 use serde_json::{Value, json};
 use tokio::fs;
+use tokio::sync::Mutex;
 
-use super::git::{Failure, Git};
+use super::git::Git;
+use super::reply::{Reply, response};
 use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
@@ -36,52 +36,6 @@ pub struct ApiStub {
     git: Git,
 }
 
-#[derive(Debug)]
-struct Reply {
-    status: u16,
-    body: Option<Value>,
-    link: Option<String>,
-}
-
-impl From<Failure> for Reply {
-    fn from(failure: Failure) -> Self {
-        match failure {
-            Failure::Missing => Self::missing(),
-            Failure::TooLarge => Self::too_large(),
-        }
-    }
-}
-
-impl Reply {
-    fn ok(body: Value) -> Self {
-        Self::with(200, body, None)
-    }
-
-    fn with(status: u16, body: Value, link: Option<String>) -> Self {
-        Self {
-            status,
-            body: Some(body),
-            link,
-        }
-    }
-
-    fn too_large() -> Self {
-        Self::with(
-            422,
-            json!({"message": "Validation Failed", "errors": [{"resource": "Diff", "code": "too_large"}], "status": "422"}),
-            None,
-        )
-    }
-
-    fn unreadable_pulls() -> Self {
-        Self::with(500, json!({"message": "pulls.json is unreadable"}), None)
-    }
-
-    fn missing() -> Self {
-        Self::with(404, rest::not_found(), None)
-    }
-}
-
 struct Call<'a> {
     host: &'a str,
     path: &'a str,
@@ -96,6 +50,7 @@ impl ApiStub {
             git: Git {
                 repo: config.repo.clone(),
                 diff_limit_bytes: config.diff_limit_bytes,
+                last_diff: Mutex::new(None),
             },
             config,
         }
@@ -198,13 +153,13 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        let default = if call.params.contains_key("page") || call.params.contains_key("per_page") {
-            DEFAULT_PER_PAGE
+        let unpaged = !call.params.contains_key("page") && !call.params.contains_key("per_page");
+        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE, MAX_PER_PAGE);
+        let (skip, take) = if unpaged {
+            (0, ahead.min(COMPARE_COMMITS_DEFAULT))
         } else {
-            COMPARE_COMMITS_DEFAULT
+            page.newest_first(ahead)
         };
-        let page = Page::from_query(&call.params, default, COMPARE_COMMITS_DEFAULT);
-        let (skip, take) = page.newest_first(ahead);
         let files = if page.page == 1 {
             match self.git.diff(&base, &head, COMPARE_FILES_CAP).await {
                 Ok(files) => files,
@@ -240,7 +195,11 @@ impl ApiStub {
             files: &files[..files.len().min(COMPARE_FILES_CAP)],
         };
         let body = call.site.compare(&comparison, page, &commits);
-        let link = page.link(ahead, call.host, call.path, &call.params);
+        let link = if unpaged {
+            None
+        } else {
+            page.link(ahead, call.host, call.path, &call.params)
+        };
         Reply::with(200, body, link)
     }
 
@@ -364,31 +323,4 @@ fn paged(call: &Call<'_>, default_per_page: usize, items: &[Value]) -> Reply {
         Value::Array(page.slice(items).to_vec()),
         page.link(items.len(), call.host, call.path, &call.params),
     )
-}
-
-fn response(reply: Reply) -> Response<Body> {
-    let bytes = reply
-        .body
-        .map_or_else(Bytes::new, |body| Bytes::from(body.to_string()));
-    let has_body = !bytes.is_empty();
-    let mut response = Response::new(
-        Full::new(bytes)
-            .map_err(|never| match never {})
-            .boxed_unsync(),
-    );
-    *response.status_mut() =
-        StatusCode::from_u16(reply.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    if has_body {
-        response.headers_mut().insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json; charset=utf-8"),
-        );
-    }
-    if let Some(link) = reply
-        .link
-        .and_then(|link| HeaderValue::from_str(&link).ok())
-    {
-        response.headers_mut().insert(LINK, link);
-    }
-    response
 }
