@@ -5,7 +5,7 @@
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-- bccf092981341d3e22f2b961e17176ef7ecac2e81593e47136f608e8ffb7b6d9  ./dogfood/plan.txt
+- b8c51d0ca5e17df0f2e28bf2534f5ce6fa2593801c1d2b67e955b9ed80d4df9d  ./dogfood/plan.txt
 - 7af52f54b6eee7d97773818d5ad2a3e1f6ed27631483a183c15697c80748588b  ./dogfood/preview/.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 - 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md

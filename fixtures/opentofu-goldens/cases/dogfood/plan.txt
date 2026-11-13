@@ -23,7 +23,7 @@ Detected stacks
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, example, lib, test; depends on velnor-actions-mise]
     - velnor-cache-rules (local/crates/velnor-cache-rules/Cargo.toml) [lib, test]
     - velnor-ci (ci-helper/crates/velnor-ci/Cargo.toml) [bin, lib, test]
-    - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [lib, test; depends on velnor-model, velnor-render, velnor-rust]
+    - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-render, velnor-rust]
     - velnor-local (local/crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
     - velnor-model (generator/crates/velnor-model/Cargo.toml) [lib]
     - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model]
