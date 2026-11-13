@@ -135,23 +135,24 @@ fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
 fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
     let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
     let empty = BTreeMap::from([(path.clone(), String::new())]);
-    assert!(!mismatches("s", &empty, &BTreeMap::new()).is_empty());
-    assert!(
-        !mismatches(
+    assert_eq!(mismatches("s", &empty, &BTreeMap::new()).len(), 1);
+    assert_eq!(
+        mismatches(
             "s",
             &BTreeMap::new(),
             &BTreeMap::from([(path.clone(), vec![])])
         )
-        .is_empty()
+        .len(),
+        1
     );
     let text = BTreeMap::from([(path.clone(), "\u{fffd}".to_owned())]);
     let invalid = BTreeMap::from([(path.clone(), vec![0xff])]);
-    assert!(!mismatches("s", &text, &invalid).is_empty());
+    assert_eq!(mismatches("s", &text, &invalid).len(), 1);
     let same = BTreeMap::from([(path, b"a\n".to_vec())]);
     let generated = BTreeMap::from([(
         RepoPath::new(".github/workflows/rust-ci.yml")?,
         "a\n".to_owned(),
     )]);
-    assert!(mismatches("s", &generated, &same).is_empty());
+    assert_eq!(mismatches("s", &generated, &same).len(), 0);
     Ok(())
 }
