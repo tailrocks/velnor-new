@@ -12,7 +12,7 @@ use velnor_model::{
 };
 use velnor_render::{
     FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value, WORKFLOW_PATH, check_rules, render,
+    RuleViolation, Value, WORKFLOW_PATH, check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -166,6 +166,23 @@ fn a_helper_release_that_could_not_work_is_refused_before_rendering() -> TestRes
         assert!(Sha256::new(digest).is_err(), "{digest}");
     }
     assert!(HelperRelease::new(HelperVersion::new("1.2.3")?, BTreeMap::new()).is_err());
+    Ok(())
+}
+
+#[test]
+fn emitting_a_workflow_refuses_a_violating_rendered_step_and_writes_nothing() -> TestResult {
+    let plan = plan(Vec::new())?;
+    let accepted = workflow(run("cargo-fmt --all --check"));
+    assert!(render_workflow(&plan, &accepted).is_ok());
+    let refused = render_workflow(&plan, &workflow(run("echo a; echo b")));
+    assert_eq!(
+        refused,
+        Err(vec![RuleViolation {
+            job: "format".to_owned(),
+            step: 0,
+            rule: Rule::ForbiddenSyntax(";"),
+        }])
+    );
     Ok(())
 }
 

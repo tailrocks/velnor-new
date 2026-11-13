@@ -27,7 +27,14 @@ pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<Rul
     let rendered = RenderedWorkflow {
         jobs: plan.jobs.iter().map(rendered_job).collect(),
     };
-    check_rules(&rendered)?;
+    render_workflow(plan, &rendered)
+}
+
+pub fn render_workflow(
+    plan: &WorkflowPlan,
+    rendered: &RenderedWorkflow,
+) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
+    check_rules(rendered)?;
     let workflow = [
         entry("name", text(&plan.name)),
         entry("on", triggers(&plan.triggers)),
