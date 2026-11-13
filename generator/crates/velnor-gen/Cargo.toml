@@ -18,6 +18,11 @@ path = "src/lib.rs"
 test = false
 doctest = false
 
+[[bin]]
+name = "velnor-gen"
+path = "src/main.rs"
+test = false
+
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
@@ -26,3 +31,4 @@ path = "tests/it/main.rs"
 velnor-model.workspace = true
 velnor-rust.workspace = true
 velnor-render.workspace = true
+clap.workspace = true
