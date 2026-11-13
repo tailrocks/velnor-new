@@ -131,8 +131,9 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
 
 #[test]
 fn an_invalid_config_is_rejected() -> TestResult {
-    let cases: [&[u8]; 6] = [
+    let cases: [&[u8]; 7] = [
         b"runnr = \"ubuntu-latest\"\n",
+        b"exclude = [\"lba\"]\n",
         b"runner = \n",
         b"runner = \"\xff\"\n",
         b"timeout_minutes = 0\n",

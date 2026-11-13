@@ -62,9 +62,25 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
 }
 
 fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
-    view.files
+    let config = view
+        .files
         .get(&CONFIG_PATH)
-        .map_or_else(|| Ok(RustCiConfig::default()), |bytes| parse(bytes))
+        .map_or_else(|| Ok(RustCiConfig::default()), |bytes| parse(bytes))?;
+    let manifests: Vec<&RepoPath> = view
+        .tracked_paths
+        .iter()
+        .filter(|path| path.as_str() == "Cargo.toml" || path.as_str().ends_with("/Cargo.toml"))
+        .collect();
+    match config
+        .exclude
+        .iter()
+        .find(|entry| !manifests.iter().any(|manifest| manifest.is_within(entry)))
+    {
+        Some(entry) => Err(DetectError::Config(format!(
+            "exclude entry {entry} matches no tracked Cargo.toml"
+        ))),
+        None => Ok(config),
+    }
 }
 
 fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
