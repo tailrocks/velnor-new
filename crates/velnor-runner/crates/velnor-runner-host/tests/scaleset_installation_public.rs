@@ -7,6 +7,8 @@ mod attestation_and_logs;
 mod cgroup_observation;
 #[path = "scaleset_installation_public/completion_admin.rs"]
 mod completion_admin;
+#[path = "scaleset_installation_public/credential.rs"]
+mod credential;
 #[path = "scaleset_installation_public/curl_config.rs"]
 mod curl_config;
 #[path = "scaleset_installation_public/probe_record.rs"]

@@ -34,11 +34,10 @@ pub(super) fn import_release_read_with<R, Store, Persist>(
 ) -> Result<(), ConnectError>
 where
     R: Read,
-    Store: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+    Store: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
     Persist: FnOnce(&Path, &str) -> Result<(), ConnectError>,
 {
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    std::str::from_utf8(&secret).map_err(|_| ConnectError::Secret(HostError::Keychain))?;
     let _config_lock = config_lock(state).map_err(|_| ConnectError::Lock)?;
     let mut config = read_host(state)?.ok_or(ConnectError::Config)?;
     let (reference, update) = if let Some(reference) = config.release_read_credential_ref() {
