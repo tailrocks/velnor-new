@@ -75,6 +75,15 @@ impl Repo {
         ]);
     }
 
+    fn link(&self, target: &str, path: &str) {
+        let target = Path::new(target)
+            .file_name()
+            .unwrap_or_else(|| unreachable!());
+        std::os::unix::fs::symlink(target, self.0.join(path))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        self.git(&["add", "--all"]);
+    }
+
     fn make_executable(&self, path: &str) {
         fs::set_permissions(self.0.join(path), Permissions::from_mode(0o755))
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -269,9 +278,65 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     assert_eq!(
         (saved.as_str(), report.as_str()),
         (
-            "saved 1 tracked files to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold\n",
+            "saved 1 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 symlinks the file cannot hold\n",
             "restored the modification time of 1 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
         )
+    );
+}
+
+#[test]
+fn a_retargeted_symlink_restores_nothing() {
+    let repo = Repo::new("symlink");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("data/a.txt", "a\n");
+    repo.write("data/b.txt", "b\n");
+    repo.link("data/a.txt", "data/link.txt");
+    let paths = [".gitignore", "src/lib.rs", "data/a.txt", "data/b.txt"];
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, built);
+    }
+    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    fs::remove_file(repo.root().join("data/link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.link("data/b.txt", "data/link.txt");
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("data/a.txt"), checkout);
+    assert_eq!(repo.mtime("data/b.txt"), checkout);
+    assert_eq!(repo.mtime("src/lib.rs"), checkout);
+    assert_eq!(
+        report,
+        "restored nothing: 1 tracked symlinks are new, changed or deleted since the save\n"
+    );
+}
+
+#[test]
+fn an_unchanged_symlink_does_not_block_restore() {
+    let repo = Repo::new("symlink-same");
+    repo.write("data/a.txt", "a\n");
+    repo.link("data/a.txt", "data/link.txt");
+    let paths = [".gitignore", "data/a.txt"];
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, built);
+    }
+    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("data/a.txt"), built);
+    assert_eq!(
+        report,
+        "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
     );
 }
 

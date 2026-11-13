@@ -9,8 +9,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, parse_inputs, parse_ls_files,
-    plan_restore, with_worktree_blobs,
+    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
+    parse_ls_files, plan_restore, with_worktree_blobs,
 };
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
@@ -22,6 +22,10 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
             mtime_ns: modified_ns(&root.join(&file.path))?,
         });
     }
+    saved.extend(tracked.links.iter().map(|link| SavedInput {
+        file: link.clone(),
+        mtime_ns: 0,
+    }));
     let path = root.join(INPUTS_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -30,10 +34,12 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold\n",
-        saved.len(),
+        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} symlinks the file cannot hold\n",
+        tracked.files.len(),
+        tracked.links.len(),
         tracked.absent.len(),
-        tracked.unsupported
+        tracked.unsupported,
+        tracked.unverifiable_links
     ))
 }
 
@@ -47,6 +53,12 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
     let plan = plan_restore(&parse_inputs(&text)?, &worktree_files(root)?);
+    if plan.links_changed > 0 {
+        return Ok(format!(
+            "restored nothing: {} tracked symlinks are new, changed or deleted since the save\n",
+            plan.links_changed
+        ));
+    }
     for input in &plan.restore {
         set_modified_ns(&root.join(&input.file.path), input.mtime_ns)?;
     }
@@ -90,10 +102,26 @@ fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
     )?;
     let hashes = String::from_utf8(hashes)
         .map_err(|e| CiError::new(format!("git hash-object printed non-UTF-8: {e}")))?;
+    let mut links = Vec::with_capacity(index.links.len());
+    let mut unverifiable_links = index.unverifiable_links;
+    for link in index.links {
+        let Ok(target) = fs::read_link(root.join(&link.path)) else {
+            continue;
+        };
+        match target.to_str() {
+            Some(text) if is_representable(text) => links.push(TrackedFile {
+                blob: text.to_owned(),
+                ..link
+            }),
+            _ => unverifiable_links += 1,
+        }
+    }
     Ok(Tracked {
         files: with_worktree_blobs(present, &hashes)?,
+        links,
         absent,
         unsupported: index.unsupported,
+        unverifiable_links,
     })
 }
 

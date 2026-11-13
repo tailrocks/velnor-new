@@ -7,7 +7,7 @@ use crate::error::CiError;
 
 pub const INPUTS_FILE: &str = "target/.velnor/inputs.tsv";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TrackedFile {
     pub path: String,
     pub blob: String,
@@ -20,11 +20,15 @@ pub struct SavedInput {
     pub mtime_ns: u64,
 }
 
+pub const SYMLINK_MODE: &str = "120000";
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Tracked {
     pub files: Vec<TrackedFile>,
+    pub links: Vec<TrackedFile>,
     pub absent: Vec<String>,
     pub unsupported: usize,
+    pub unverifiable_links: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -35,11 +39,14 @@ pub struct RestorePlan {
     pub deleted: usize,
     pub absent: usize,
     pub unsupported: usize,
+    pub links_changed: usize,
 }
 
 enum Entry {
     File(TrackedFile),
+    Link(TrackedFile),
     Unsupported,
+    UnverifiableLink,
     Skipped,
 }
 
@@ -49,11 +56,18 @@ pub fn parse_ls_files(staged: &[u8]) -> Tracked {
     for record in staged.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
         match parse_ls_files_record(record) {
             Entry::File(file) => tracked.files.push(file),
+            Entry::Link(link) => tracked.links.push(link),
             Entry::Unsupported => tracked.unsupported += 1,
+            Entry::UnverifiableLink => tracked.unverifiable_links += 1,
             Entry::Skipped => {}
         }
     }
     tracked
+}
+
+#[must_use]
+pub fn is_representable(text: &str) -> bool {
+    !text.is_empty() && !text.contains(['\t', '\n', '\r'])
 }
 
 fn parse_ls_files_record(record: &[u8]) -> Entry {
@@ -67,21 +81,26 @@ fn parse_ls_files_record(record: &[u8]) -> Entry {
     let (Some(mode), Some(blob), Some("0")) = (fields.next(), fields.next(), fields.next()) else {
         return Entry::Skipped;
     };
-    if mode != "100644" && mode != "100755" {
+    let link = mode == SYMLINK_MODE;
+    if !link && mode != "100644" && mode != "100755" {
         return Entry::Skipped;
     }
     match std::str::from_utf8(&record[tab + 1..]) {
-        Ok(path) if representable(path) => Entry::File(TrackedFile {
-            path: path.to_owned(),
-            blob: blob.to_owned(),
-            mode: mode.to_owned(),
-        }),
+        Ok(path) if is_representable(path) => {
+            let entry = TrackedFile {
+                path: path.to_owned(),
+                blob: blob.to_owned(),
+                mode: mode.to_owned(),
+            };
+            if link {
+                Entry::Link(entry)
+            } else {
+                Entry::File(entry)
+            }
+        }
+        _ if link => Entry::UnverifiableLink,
         _ => Entry::Unsupported,
     }
-}
-
-fn representable(path: &str) -> bool {
-    !path.is_empty() && !path.contains(['\t', '\n', '\r'])
 }
 
 pub fn with_worktree_blobs(
@@ -161,8 +180,25 @@ fn parse_inputs_line(line: &str) -> Option<SavedInput> {
 
 #[must_use]
 pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
-    let saved_by_path: BTreeMap<&str, &SavedInput> = saved
+    let (saved_links, saved_files): (Vec<&SavedInput>, Vec<&SavedInput>) = saved
         .iter()
+        .partition(|input| input.file.mode == SYMLINK_MODE);
+    let saved_links: BTreeSet<&TrackedFile> = saved_links.iter().map(|input| &input.file).collect();
+    let current_links: BTreeSet<&TrackedFile> = tracked.links.iter().collect();
+    let links_changed = saved_links
+        .symmetric_difference(&current_links)
+        .map(|link| link.path.as_str())
+        .collect::<BTreeSet<_>>()
+        .len()
+        + tracked.unverifiable_links;
+    if links_changed > 0 {
+        return RestorePlan {
+            links_changed,
+            ..RestorePlan::default()
+        };
+    }
+    let saved_by_path: BTreeMap<&str, &SavedInput> = saved_files
+        .into_iter()
         .map(|input| (input.file.path.as_str(), input))
         .collect();
     let current: BTreeSet<&str> = tracked
