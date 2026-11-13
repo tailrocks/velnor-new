@@ -82,8 +82,8 @@ pub fn run_path(repo: &Repo, run_id: u64) -> String {
 }
 
 #[must_use]
-pub fn jobs_path(repo: &Repo, run_id: u64, page: u32) -> String {
-    format!("/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}")
+pub fn jobs_path(repo: &Repo, run_id: u64, attempt: u32, page: u32) -> String {
+    format!("/repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100&page={page}")
 }
 
 #[must_use]

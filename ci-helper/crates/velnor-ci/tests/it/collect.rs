@@ -72,6 +72,7 @@ fn rerun_is_refused_unless_allowed() {
     let rerun = RUN.replace("\"run_attempt\": 1", "\"run_attempt\": 2");
     assert_ne!(rerun, RUN);
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), &rerun);
+    fake.respond(jobs_path(&repo(), RUN_ID, 2, 1), JOBS);
 
     let refused = collect(&fake, &repo(), RUN_ID, false);
     let message = error_text(refused);
@@ -94,7 +95,7 @@ fn skipped_jobs_cost_nothing_and_have_no_log_fetched() {
     assert_ne!(skipped, JOBS);
     let mut fake = FakeGitHub::default();
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), RUN);
-    fake.respond(jobs_path(&repo(), RUN_ID, 1), &skipped);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &skipped);
     fake.respond(job_log_path(&repo(), CLI_ID), CLI_LOG);
     fake.respond(job_log_path(&repo(), CORE_ID), CORE_LOG);
 
@@ -105,14 +106,42 @@ fn skipped_jobs_cost_nothing_and_have_no_log_fetched() {
 }
 
 #[test]
+fn a_job_cancelled_before_it_started_is_not_a_job_run() {
+    let cancelled = JOBS
+        .replacen(
+            "\"conclusion\": \"success\"",
+            "\"conclusion\": \"cancelled\"",
+            1,
+        )
+        .replacen(
+            "\"started_at\": \"2026-11-12T08:36:36Z\"",
+            "\"started_at\": null",
+            1,
+        );
+    assert_ne!(cancelled, JOBS);
+    let mut fake = FakeGitHub::default();
+    fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), RUN);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &cancelled);
+    fake.respond(job_log_path(&repo(), CLI_ID), CLI_LOG);
+    fake.respond(job_log_path(&repo(), CORE_ID), CORE_LOG);
+
+    let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(metrics.jobs.len(), 3);
+    assert_eq!(metrics.jobs_run(), 2);
+    assert_eq!(metrics.jobs_skipped(), 1);
+    assert_eq!(metrics.jobs[0].queue_seconds, 0);
+    assert_eq!(metrics.runner_seconds, 854 + 70);
+}
+
+#[test]
 fn jobs_on_later_pages_are_collected() {
     let first = JOBS.replace("\"total_count\": 3", "\"total_count\": 4");
     let second = r#"{"total_count": 4, "jobs": [{"id": 7, "name": "Late", "status": "completed",
         "conclusion": "success", "created_at": "2026-11-12T08:50:00Z",
         "started_at": "2026-11-12T08:50:10Z", "completed_at": "2026-11-12T08:50:40Z", "steps": []}]}"#;
     let mut fake = FakeGitHub::recorded();
-    fake.respond(jobs_path(&repo(), RUN_ID, 1), &first);
-    fake.respond(jobs_path(&repo(), RUN_ID, 2), second);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &first);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 2), second);
     fake.respond(job_log_path(&repo(), 7), "");
 
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
@@ -126,7 +155,7 @@ fn jobs_on_later_pages_are_collected() {
 fn a_missing_job_log_fails_the_collection_and_names_the_job() {
     let mut fake = FakeGitHub::default();
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), RUN);
-    fake.respond(jobs_path(&repo(), RUN_ID, 1), JOBS);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), JOBS);
     let message = error_text(collect(&fake, &repo(), RUN_ID, false));
     assert!(message.contains("Cargo Machete"), "{message}");
 }

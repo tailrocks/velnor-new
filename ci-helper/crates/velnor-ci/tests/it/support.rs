@@ -29,7 +29,7 @@ impl FakeGitHub {
         let repo = repo();
         let mut fake = Self::default();
         fake.respond(run_path(&repo, RUN_ID), RUN);
-        fake.respond(jobs_path(&repo, RUN_ID, 1), JOBS);
+        fake.respond(jobs_path(&repo, RUN_ID, 1, 1), JOBS);
         fake.respond(job_log_path(&repo, MACHETE_ID), MACHETE_LOG);
         fake.respond(job_log_path(&repo, CLI_ID), CLI_LOG);
         fake.respond(job_log_path(&repo, CORE_ID), CORE_LOG);

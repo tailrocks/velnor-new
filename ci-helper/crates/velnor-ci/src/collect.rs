@@ -27,12 +27,12 @@ pub fn collect(
         )));
     }
     let mut jobs = Vec::new();
-    for api_job in fetch_jobs(github, repo, run_id)? {
+    for api_job in fetch_jobs(github, repo, run_id, run.run_attempt)? {
         jobs.push(job_metrics(github, repo, &api_job)?);
     }
     let runner_seconds = jobs
         .iter()
-        .filter(|job| !job.skipped())
+        .filter(|job| job.ran())
         .map(|job| job.duration_seconds)
         .sum();
     Ok(RunMetrics {
@@ -50,11 +50,16 @@ pub fn collect(
     })
 }
 
-fn fetch_jobs(github: &dyn GitHub, repo: &Repo, run_id: u64) -> Result<Vec<ApiJob>, CiError> {
+fn fetch_jobs(
+    github: &dyn GitHub,
+    repo: &Repo,
+    run_id: u64,
+    attempt: u32,
+) -> Result<Vec<ApiJob>, CiError> {
     let mut all = Vec::new();
     let mut page = 1;
     loop {
-        let body = github.get(&jobs_path(repo, run_id, page))?;
+        let body = github.get(&jobs_path(repo, run_id, attempt, page))?;
         let ApiJobs { total_count, jobs } = parse(&body, "jobs")?;
         let empty = jobs.is_empty();
         all.extend(jobs);
@@ -102,6 +107,7 @@ fn job_metrics(github: &dyn GitHub, repo: &Repo, job: &ApiJob) -> Result<JobMetr
     Ok(JobMetrics {
         name: job.name.clone(),
         conclusion,
+        started: job.started_at.is_some(),
         queue_seconds,
         duration_seconds,
         steps,

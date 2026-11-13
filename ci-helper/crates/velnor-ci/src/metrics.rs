@@ -21,6 +21,7 @@ pub struct RunMetrics {
 pub struct JobMetrics {
     pub name: String,
     pub conclusion: String,
+    pub started: bool,
     pub queue_seconds: u64,
     pub duration_seconds: u64,
     pub steps: Vec<StepMetrics>,
@@ -35,15 +36,15 @@ pub struct StepMetrics {
 
 impl JobMetrics {
     #[must_use]
-    pub fn skipped(&self) -> bool {
-        self.conclusion == "skipped"
+    pub fn ran(&self) -> bool {
+        self.started && self.conclusion != "skipped"
     }
 }
 
 impl RunMetrics {
     #[must_use]
     pub fn jobs_run(&self) -> usize {
-        self.jobs.iter().filter(|job| !job.skipped()).count()
+        self.jobs.iter().filter(|job| job.ran()).count()
     }
 
     #[must_use]
