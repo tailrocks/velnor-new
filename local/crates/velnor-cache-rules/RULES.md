@@ -1,0 +1,19 @@
+# GitHub's cache rules
+
+Source column: Documentation means the heading of [Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) named in the row (`Restrictions` is "Restrictions for accessing a cache", `Matching` is "Cache key matching", `Limits` is "Usage limits and eviction policy"). Modelled means the documentation is silent or contradicts itself, so the module follows the nearest stated rule; each Modelled row is a probe case for #633, and a recorded observation in `local/conformance/` that contradicts a row replaces it. Tests are in `tests/it/rules.rs` and `story.rs`, named `rule_<n>_*`.
+
+| Rule | Behaviour | Source |
+|---|---|---|
+| 1 | Read order: own scope, then the base branch (`pull_request` only), then the default branch, each once. No sibling, child, other tag or other pull request. A scope is searched completely before the next | Documentation: Restrictions; Matching (the `npm-feature-` example) |
+| 1d | The head branch of a pull request is not readable. The Matching example lists the `feature` branch first, which contradicts Restrictions | Modelled |
+| 2 | A `pull_request` run writes `refs/pull/<n>/merge`, a push writes its branch | Documentation: Restrictions |
+| 3 | Per scope: the exact key, then keys starting with the key (newest first), then each restore key in order (an entry equal to it, else the newest starting with it). `version` must be equal | Documentation: Matching ("When a key doesn't match directly, the action searches for keys prefixed with the restore key") |
+| 3b | Newest wins among several matches of the key as prefix | Modelled (stated for restore keys only) |
+| 4 | The same scope, key and version cannot be created again. Another scope or version can | Documentation: `cache` action usage ("You cannot change the contents of an existing cache") |
+| 5a | Not accessed for more than 7 days (the default retention): evicted. Exactly 7 days is kept | Documentation: Limits |
+| 5b | Until the total is less than the limit, evict the least recently accessed, all scopes in one pool. A total equal to the limit evicts | Documentation: Limits ("until the total size is less than the repository limit") |
+| 5c | The limit is 10 000 000 000 bytes ("10 GB" has no unit; the smaller reading only evicts early) | Modelled |
+| 5d | Equal last access: earlier `created` first, then scope, key, version | Modelled |
+| 6a | A tag reads its own tag then the default branch, and writes `refs/tags/<name>`. It cannot read another tag | Documentation: Restrictions ("different tag names") |
+| 6b | A `merge_group` run reads and writes its queue branch (`refs/heads/gh-readonly-queue/...`) and reads the default branch. The page does not mention merge queues. "Cache access for low-trust workflow triggers" lists the only triggers that may write the default branch's scope (`push`, `workflow_dispatch`, `repository_dispatch`, `delete`, `registry_package`, `page_build`, `schedule`); it does not apply, because `merge_group` resolves to its queue branch | Modelled from 1 and 2 |
+| 6c | A fork pull request has the access of any pull request (Restrictions names forks only for reading the base branch). Velnor's read-only policy for forks is not a GitHub rule and is not here | Documentation for reading, Modelled for writing |

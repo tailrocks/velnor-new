@@ -35,6 +35,17 @@ producer job. The public `WorkflowConfig` field has the same name; default value
 are omitted from serialized configuration. Rust struct literals must supply
 the new field.
 
+The `maintenance-helpers` custom check in `.velnor/config.toml` has a
+fifteen-minute budget. Its task builds the generator CLI, the qualification
+diagnostics fixture and the collector clock driver cold, then runs the
+archive-guard suites. Most of the suite time is golden collector tests that run
+the debug diagnostics CLI through all five golden cases, and every Cargo root
+adds to the dogfood case of each such pass. The collector stops at the first
+candidate command that changes the oracle or the dogfood source workflows, so
+rejection tests do not pay for a full pass, and each distinct full pass runs
+once in the suite. A change that adds a full five-case pass or a Cargo root is
+measured against this budget; the budget is not raised to absorb it.
+
 Jackin main runs [39809903680](https://github.com/jackin-project/jackin/actions/runs/39809903680),
 [39801216166](https://github.com/jackin-project/jackin/actions/runs/39801216166)
 and [39797125851](https://github.com/jackin-project/jackin/actions/runs/39797125851)

@@ -12,8 +12,7 @@ use std::{
 
 use super::mutation::{copy_mutation_repository, private_directory};
 use super::support::{
-    Harness, copy_executable, copy_tree, diagnostics_candidate, dogfood_plan_difference,
-    retained_workspace, sha256,
+    Harness, copy_executable, copy_tree, diagnostics_candidate, retained_workspace, sha256,
 };
 
 const OUTPUT_CAP: usize = 1_048_576;
@@ -49,44 +48,6 @@ fn rejects_zero_and_over_limit_execution_controls() -> Result<(), Box<dyn Error>
         );
         assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
     }
-    Ok(())
-}
-
-#[test]
-fn checks_the_real_five_case_collector_and_manifest() -> Result<(), Box<dyn Error>> {
-    let harness = Harness::new()?;
-    let candidate = diagnostics_candidate()?;
-    let output = harness.run(
-        "check",
-        &harness.root,
-        &candidate,
-        &harness.archive_guard,
-        &harness.guard_sha256,
-        None,
-    )?;
-
-    if output.status.code() != Some(0) {
-        let difference = dogfood_plan_difference(&output, &harness.root)?;
-        return Err(format!(
-            "collector check failed: {}; dogfood plan {difference}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-    let stdout = String::from_utf8(output.stdout)?;
-    for case in [
-        "nested",
-        "mbx-nextest",
-        "empty-suite",
-        "minimal-cargo",
-        "dogfood",
-    ] {
-        assert!(
-            stdout.contains(&format!("match: {case}")),
-            "missing match for {case}"
-        );
-    }
-    assert!(stdout.contains("ALL GOLDENS MATCH"));
     Ok(())
 }
 

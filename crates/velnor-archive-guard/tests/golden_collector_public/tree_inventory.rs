@@ -4,7 +4,9 @@
 use std::{error::Error, fs, os::unix::fs::PermissionsExt};
 
 use super::bounded::copy_oracle;
-use super::support::{Harness, diagnostics_candidate, retained_workspace};
+use super::support::{
+    Harness, assert_checked_in_goldens, diagnostics_candidate, retained_workspace,
+};
 
 const GOLDEN_TREE_LIMIT: u64 = 64 * 1024 * 1024;
 
@@ -134,19 +136,7 @@ fn rejects_an_invalid_manifest_before_capture_without_changing_cases() -> Result
     );
     assert_eq!(fs::read(&retained)?, b"retained\n");
     assert_ne!(fs::metadata(&retained)?.permissions().mode() & 0o111, 0);
-    let checked = harness.run(
-        "check",
-        &harness.root,
-        &candidate,
-        &harness.archive_guard,
-        &harness.guard_sha256,
-        Some(&oracle),
-    )?;
-    assert!(
-        checked.status.success(),
-        "captured oracle failed check: {}",
-        String::from_utf8_lossy(&checked.stderr)
-    );
+    assert_checked_in_goldens(&harness, &oracle)?;
     let original_plan = fs::read(oracle.join("cases/nested/plan.stderr.txt"))?;
     fs::remove_file(oracle.join("MANIFEST.sha256"))?;
     fs::create_dir(oracle.join("MANIFEST.sha256"))?;

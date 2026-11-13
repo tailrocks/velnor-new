@@ -19,6 +19,7 @@ pub(super) fn capture(context: &Context<'_>, out: &Path) -> Result<bool, Collect
     let head = root_head(context)?;
     let expected = filesystem::read_tree(&context.root.join(".github"))?;
     let plan = run_candidate(context, "plan", None, &raw, out, "plan")?;
+    require_unchanged_source(context, &expected)?;
     require_success("dogfood plan", &plan)?;
     let root_bytes = context.root.as_os_str().as_bytes();
     let work_bytes = context.workspace.as_os_str().as_bytes();
@@ -56,12 +57,7 @@ pub(super) fn capture(context: &Context<'_>, out: &Path) -> Result<bool, Collect
     require_success("dogfood generate", &generate)?;
     let generated = preview.join(".github");
     require_real_directory(&generated)?;
-    let current = filesystem::read_tree(&context.root.join(".github"))?;
-    if expected != current {
-        return Err(CollectorError::operational(
-            "candidate changed dogfood source workflows",
-        ));
-    }
+    require_unchanged_source(context, &expected)?;
     let actual = filesystem::read_tree(&generated)?;
     let differences = filesystem::compare(&expected, &actual);
     let identical = differences.is_empty()
@@ -84,6 +80,19 @@ pub(super) fn capture(context: &Context<'_>, out: &Path) -> Result<bool, Collect
     fs::write(out.join("tree.sha256"), filesystem::tree_hash(&tree))
         .map_err(CollectorError::operational)?;
     Ok(identical)
+}
+
+fn require_unchanged_source(
+    context: &Context<'_>,
+    expected: &filesystem::Tree,
+) -> Result<(), CollectorError> {
+    if *expected == filesystem::read_tree(&context.root.join(".github"))? {
+        Ok(())
+    } else {
+        Err(CollectorError::operational(
+            "candidate changed dogfood source workflows",
+        ))
+    }
 }
 
 fn root_head(context: &Context<'_>) -> Result<String, CollectorError> {
@@ -117,11 +126,9 @@ fn run_candidate(
             command.arg(output);
         }
     }
-    context
-        .cli
-        .run_candidate(context.guard, context.root, &mut command, |result| {
-            output::persist_result(raw, name, out, result)
-        })
+    context.run_candidate(&mut command, |result| {
+        output::persist_result(raw, name, out, result)
+    })
 }
 
 fn require_success(operation: &str, output: &BoundedCommandOutput) -> Result<(), CollectorError> {
