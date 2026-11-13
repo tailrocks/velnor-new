@@ -74,7 +74,7 @@ pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
-    Ok(compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?))
+    compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?)
 }
 
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {

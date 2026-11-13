@@ -5,6 +5,30 @@ use velnor_ci::compare::compare;
 
 use crate::support::recorded_metrics;
 
+fn rendered(a: &velnor_ci::metrics::RunMetrics, b: &velnor_ci::metrics::RunMetrics) -> String {
+    compare(a, b).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn runs_of_different_workloads_are_not_compared() {
+    let a = recorded_metrics();
+    for change in 0..3 {
+        let mut b = recorded_metrics();
+        match change {
+            0 => b.repo = "tailrocks/other".to_owned(),
+            1 => b.workflow = "Release".to_owned(),
+            _ => b.event = "pull_request".to_owned(),
+        }
+        let message = compare(&a, &b).map(|_| ()).map_err(|e| e.to_string());
+        assert!(
+            message
+                .as_ref()
+                .is_err_and(|m| m.contains("cannot compare")),
+            "{message:?}"
+        );
+    }
+}
+
 #[test]
 fn faster_second_run_shows_negative_changes_and_the_changed_job() {
     let a = recorded_metrics();
@@ -15,7 +39,7 @@ fn faster_second_run_shows_negative_changes_and_the_changed_job() {
     b.jobs[1].log.compiling = 0;
     b.jobs.remove(2);
 
-    let table = compare(&a, &b);
+    let table = rendered(&a, &b);
     assert!(
         table.contains("| Wall seconds | 963 | 600 | -363 |"),
         "{table}"
@@ -46,7 +70,7 @@ fn faster_second_run_shows_negative_changes_and_the_changed_job() {
 #[test]
 fn identical_runs_list_no_changed_jobs() {
     let a = recorded_metrics();
-    let table = compare(&a, &a);
+    let table = rendered(&a, &a);
     assert!(
         table.contains("| Wall seconds | 963 | 963 | +0 |"),
         "{table}"
@@ -69,7 +93,7 @@ fn only_the_ten_largest_job_changes_are_listed() {
         a.jobs.push(left);
         b.jobs.push(right);
     }
-    let table = compare(&a, &b);
+    let table = rendered(&a, &b);
     assert!(table.contains("| job-11 | 100 | 112 | +12 |"), "{table}");
     assert!(table.contains("| job-02 | 100 | 103 | +3 |"), "{table}");
     assert!(!table.contains("| job-01 |"), "{table}");
@@ -86,7 +110,7 @@ fn jobs_with_the_same_name_are_compared_one_to_one() {
     twin.duration_seconds = 150;
     b.jobs.push(twin);
     let name = a.jobs[0].name.clone();
-    let table = compare(&a, &b);
+    let table = rendered(&a, &b);
     assert!(
         table.contains(&format!("| {name} (occurrence 2) | 100 | 150 | +50 |")),
         "{table}"
@@ -111,7 +135,7 @@ fn a_job_literally_named_like_a_duplicate_does_not_collide() {
     let mut second = build.clone();
     second.duration_seconds = 10;
     b.jobs.extend([build, second, literal]);
-    let table = compare(&a, &b);
+    let table = rendered(&a, &b);
     assert!(table.contains("| build | 10 | 11 | +1 |"), "{table}");
     assert!(table.contains("| build #2 | 20 | 25 | +5 |"), "{table}");
     assert!(!table.contains("occurrence 2"), "{table}");
@@ -123,6 +147,6 @@ fn a_pipe_in_a_job_name_does_not_add_a_table_column() {
     let mut b = recorded_metrics();
     b.jobs[0].name = "test | linux".to_owned();
     b.jobs[0].duration_seconds += 5;
-    let table = compare(&a, &b);
+    let table = rendered(&a, &b);
     assert!(table.contains("| test \\| linux | - | "), "{table}");
 }

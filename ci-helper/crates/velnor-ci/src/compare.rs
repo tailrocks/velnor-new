@@ -3,12 +3,23 @@
 
 use std::collections::BTreeMap;
 
+use crate::error::CiError;
 use crate::metrics::RunMetrics;
 
 const CHANGED_JOBS_SHOWN: usize = 10;
 
-#[must_use]
-pub fn compare(a: &RunMetrics, b: &RunMetrics) -> String {
+pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
+    for (what, left, right) in [
+        ("repository", &a.repo, &b.repo),
+        ("workflow", &a.workflow, &b.workflow),
+        ("event", &a.event, &b.event),
+    ] {
+        if left != right {
+            return Err(CiError::new(format!(
+                "cannot compare runs of different {what}s: {left} and {right}"
+            )));
+        }
+    }
     let rows: [(&str, u64, u64); 6] = [
         ("Wall seconds", a.wall_seconds, b.wall_seconds),
         ("Runner seconds", a.runner_seconds, b.runner_seconds),
@@ -50,10 +61,10 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> String {
             job_lines.join("\n")
         )
     };
-    format!(
+    Ok(format!(
         "| Metric | A | B | Change |\n|---|---:|---:|---:|\n{}\n{jobs_table}",
         metric_lines.join("\n")
-    )
+    ))
 }
 
 fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, Option<u64>, Option<u64>)> {
