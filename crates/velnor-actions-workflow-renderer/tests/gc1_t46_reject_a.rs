@@ -240,7 +240,9 @@ pub(crate) fn check_rejects_ci_and_attestation(fixture: &Fixture) -> Result<(), 
     expect_rejection(
         fixture,
         "attestation",
-        &format!("{{\"output\":[],\"source\":\"{SOURCE_SHA}\"}}"),
+        &format!(
+            "{{\"output\":[],\"source\":\"{SOURCE_SHA}\",\"run_id\":7,\"run_attempt\":1,\"subjects\":{{}}}}"
+        ),
         "attestation-empty",
         "ATTESTATION-REJECTED",
         Some("Attestation verification output has no records."),
