@@ -10,7 +10,7 @@ use crate::{
     controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
+    launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages},
 };
 
 use super::{
@@ -55,7 +55,7 @@ pub(super) async fn apply_config(
     next: HostConfig,
     effects: &mut JournalEffects<'_>,
 ) -> bool {
-    if let Err(error) = ReleaseReadSecret::load(&next) {
+    if let Err(error) = ImageAuthority::load(&next) {
         eprintln!("host controller release-reader reload held: {error}");
         return false;
     }
@@ -104,7 +104,7 @@ pub(super) struct JournalEffects<'a> {
     pub(super) control_state: &'a ControlState,
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
-    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) docker: &'a Docker,
     pub(super) connection_sessions: &'a mut Vec<PreparedConnection>,
 }
@@ -146,7 +146,7 @@ impl TransitionEffects for JournalEffects<'_> {
             worker_images: self.worker_images,
             docker: self.docker,
             options: setup::ConnectionLaunchOptions {
-                release_read_secret: self.release_read_secret,
+                image_authority: self.image_authority,
                 requested_header_capacity: target,
             },
         })

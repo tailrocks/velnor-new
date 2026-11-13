@@ -38,7 +38,7 @@ pub(crate) mod publication;
 mod readiness;
 pub(crate) use readiness::collect as collect_readiness_sample;
 
-mod release_secret;
+mod image_authority;
 
 mod record;
 
@@ -57,8 +57,8 @@ pub(in crate::launch) use metadata_settlement::{
     PreJitCapacityObservation, measure_pre_jit_capacity,
 };
 
+pub(crate) use image_authority::ImageAuthority;
 pub(crate) use owned_cgroups::{OwnedCgroupSubjects, OwnedContainerSubjects, VerifiedOwnedCgroups};
-pub(crate) use release_secret::ReleaseReadSecret;
 
 pub(in crate::launch::resource_probe) struct VerifiedPublicationProbeImage {
     image: projection::VerifiedProbeImage,
@@ -81,10 +81,10 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_un
     docker: &Docker,
     journal: &Journal,
     selected: &SelectedEngineContext,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
     deadline: std::time::Instant,
 ) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(release_read_secret, journal, selected.endpoint())?;
+    let provider = release_image_provider(image_authority, journal, selected.endpoint())?;
     verify_publication_probe_image_until_with_provider(
         docker, journal, selected, &provider, deadline,
     )
@@ -189,23 +189,23 @@ pub(crate) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,
     expected: &SelectedEngineContext,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
 ) -> Result<VerifiedWorkerImages, crate::error::HostError> {
-    let token = release_read_secret.as_provider_token()?;
+    let token = image_authority.as_provider_token()?;
     provider::prepare_worker_images(docker, journal, expected, token).await
 }
 
 pub(crate) async fn run_doctor_probe(
     docker: &Docker,
     journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
     ticket: &crate::journal::DoctorProbeTicket,
     endpoint: &str,
 ) -> Result<Option<serde_json::Value>, crate::error::HostError> {
     Box::pin(doctor::run(
         docker,
         journal,
-        release_read_secret,
+        image_authority,
         ticket,
         endpoint,
     ))
@@ -213,7 +213,7 @@ pub(crate) async fn run_doctor_probe(
 }
 
 pub(in crate::launch) fn release_image_provider<'a>(
-    secret: &'a ReleaseReadSecret,
+    secret: &'a ImageAuthority,
     journal: &'a Journal,
     endpoint: &str,
 ) -> Result<impl ImageProvider + 'a, crate::error::HostError> {
@@ -237,10 +237,10 @@ pub(crate) async fn start_permit(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
     endpoint: &str,
 ) -> Option<StartPermit> {
-    let token = release_read_secret.as_provider_token().ok()?;
+    let token = image_authority.as_provider_token().ok()?;
     let provider = match ReleaseImageProvider::from_compiled_source(token, journal, endpoint) {
         Ok(provider) => provider,
         Err(error) => {
@@ -260,9 +260,9 @@ pub(crate) async fn recovery_observation(
     budget: ResourceBudget,
     charge: (u64, u64),
     engine: &SelectedEngineContext,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
 ) -> Option<RecoveryObservation> {
-    let token = release_read_secret.as_provider_token().ok()?;
+    let token = image_authority.as_provider_token().ok()?;
     let provider =
         ReleaseImageProvider::from_compiled_source(token, journal, engine.endpoint()).ok()?;
     let sample = Box::pin(lifecycle::collect(docker, journal, &provider))

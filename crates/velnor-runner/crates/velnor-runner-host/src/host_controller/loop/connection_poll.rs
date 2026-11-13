@@ -10,7 +10,7 @@ use crate::{
     controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
+    launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages},
 };
 
 use super::state::PreparedConnection;
@@ -29,7 +29,7 @@ pub(super) struct ConnectionPollContext<'a> {
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
     pub(super) state: &'a Path,
-    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) admission_ready: bool,
     pub(super) control_state: &'a ControlState,
 }

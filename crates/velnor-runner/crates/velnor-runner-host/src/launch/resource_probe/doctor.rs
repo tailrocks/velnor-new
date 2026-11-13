@@ -9,13 +9,13 @@ use crate::journal::{
     DoctorProbeOutcome, DoctorProbeState, DoctorProbeTicket, Journal, ProbePhase,
 };
 
-use super::ReleaseReadSecret;
+use super::ImageAuthority;
 use super::provider::ReleaseImageProvider;
 
 pub(super) async fn run(
     docker: &Docker,
     journal: &Journal,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
     ticket: &DoctorProbeTicket,
     endpoint: &str,
 ) -> Result<Option<Value>, HostError> {

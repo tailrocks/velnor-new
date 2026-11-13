@@ -57,9 +57,9 @@ pub(super) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,
     expected: &crate::launch::SelectedEngineContext,
-    release_read_secret: &str,
+    image_authority: &str,
 ) -> Result<crate::launch::VerifiedWorkerImages, HostError> {
-    worker_prepare::prepare_worker_images(docker, journal, expected, release_read_secret).await
+    worker_prepare::prepare_worker_images(docker, journal, expected, image_authority).await
 }
 
 pub(super) async fn verify_worker_images_for_engine(

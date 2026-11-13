@@ -12,7 +12,7 @@ use crate::journal::{ConnectionJournal, Journal};
 use crate::listen::Link;
 use zeroize::Zeroize;
 
-use super::{HostLane, ReleaseReadSecret, SelectedEngineContext};
+use super::{HostLane, ImageAuthority, SelectedEngineContext};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
@@ -148,7 +148,7 @@ pub(crate) struct ScopedAdmissionInput<'a> {
     pub(crate) pat: &'a str,
     pub(crate) host_journal: &'a Journal,
     pub(crate) scoped_journal: &'a ConnectionJournal,
-    pub(crate) release_read_secret: &'a ReleaseReadSecret,
+    pub(crate) image_authority: &'a ImageAuthority,
     pub(crate) selected_engine: &'a SelectedEngineContext,
     pub(crate) resource_budget: ResourceBudget,
     pub(crate) allocated_header: u32,
@@ -214,7 +214,7 @@ async fn acquire_scoped_offer_inner(
         input.docker,
         input.host_journal,
         input.resource_budget,
-        input.release_read_secret,
+        input.image_authority,
         input.selected_engine.endpoint(),
     )
     .await

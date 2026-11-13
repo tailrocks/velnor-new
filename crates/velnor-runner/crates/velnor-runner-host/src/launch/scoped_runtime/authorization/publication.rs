@@ -154,7 +154,7 @@ where
             connection_journal: context.scoped,
             selected: context.engine,
             images: context.images,
-            release_secret: context.secret,
+            image_authority: context.secret,
             metadata: ready.bound().metadata(),
             channel,
             guest_boot_id: ready.bound().guest_boot_id(),

@@ -9,9 +9,9 @@ use crate::config::{HostConfig, KeychainReference};
 use crate::error::HostError;
 use crate::keychain::load_secret;
 
-pub(crate) struct ReleaseReadSecret(Zeroizing<Vec<u8>>);
+pub(crate) struct ImageAuthority(Zeroizing<Vec<u8>>);
 
-impl ReleaseReadSecret {
+impl ImageAuthority {
     pub(crate) fn load(config: &HostConfig) -> Result<Self, HostError> {
         let reference = validated_reference(config)?;
         let bytes = load_secret(reference.service(), reference.account())?;

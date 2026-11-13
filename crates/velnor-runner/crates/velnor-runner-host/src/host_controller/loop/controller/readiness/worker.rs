@@ -16,7 +16,7 @@ use crate::{
     controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext},
+    launch::{ImageAuthority, SelectedEngineContext},
 };
 
 use super::refresh;
@@ -35,7 +35,7 @@ impl ReadinessWorker {
         journal: Journal,
         selected: SelectedEngineContext,
         control: ControlState,
-        secret: Arc<ReleaseReadSecret>,
+        secret: Arc<ImageAuthority>,
     ) -> Result<Self, HostError> {
         spawn_refresh_worker(move || {
             let state = state.clone();

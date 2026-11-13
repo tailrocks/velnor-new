@@ -8,7 +8,7 @@ use bollard::Docker;
 use crate::{
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext},
+    launch::{ImageAuthority, SelectedEngineContext},
 };
 
 use super::{
@@ -98,7 +98,7 @@ impl From<Observation> for ReadinessSample {
 pub(crate) async fn collect(
     docker: &Docker,
     journal: &Journal,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
     endpoint: &str,
 ) -> Result<Option<ReadinessSample>, HostError> {
     let provider_token = secret.as_provider_token()?;
