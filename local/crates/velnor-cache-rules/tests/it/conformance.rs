@@ -166,7 +166,9 @@ fn the_base_branch_is_searched_before_the_default_branch_for_the_same_key() {
         entry(Scope::branch("main"), key, 2),
     ];
     let access = access_for(&pull(5, "probe-<tag>-base"), "main");
-    let found = lookup(&entries, &access, key, &[], "v1").map(|hit| hit.scope.clone());
+    let hit = lookup(&entries, &access, key, &[], "v1");
+    let found = hit.map(|entry| entry.scope.clone());
+    let found_key = hit.map_or_else(String::new, |entry| entry.key.clone());
     let recorded = match text(&leg["content"]) {
         "base" => Some(Scope::branch("probe-<tag>-base")),
         "default" => Some(Scope::branch("main")),
@@ -174,7 +176,7 @@ fn the_base_branch_is_searched_before_the_default_branch_for_the_same_key() {
     };
     assert!(recorded.is_some());
     assert_eq!(found, recorded);
-    assert_restore(&leg, text(&leg["matched"]), key, "collision");
+    assert_restore(&leg, &found_key, key, "collision");
 }
 
 #[test]
