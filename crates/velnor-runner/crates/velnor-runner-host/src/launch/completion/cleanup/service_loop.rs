@@ -22,7 +22,6 @@ pub(in crate::launch::completion) fn run(
     let Resources {
         journal,
         docker,
-        mut transport,
         admin,
         diagnostics,
         native_cleanup,
@@ -31,7 +30,6 @@ pub(in crate::launch::completion) fn run(
     let mut context = Context {
         journal: &journal,
         docker: &docker,
-        transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
         native_cleanup: Some(&native_cleanup),

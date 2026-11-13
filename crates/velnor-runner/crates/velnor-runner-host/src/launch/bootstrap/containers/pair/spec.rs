@@ -12,6 +12,7 @@ use crate::worker::{ResourceBudget, WorkerIdentityNames};
 
 use super::create_body;
 
+#[derive(Debug)]
 pub(crate) struct PairCreate {
     pub(crate) options: CreateContainerOptions,
     pub(crate) config: ContainerCreateBody,

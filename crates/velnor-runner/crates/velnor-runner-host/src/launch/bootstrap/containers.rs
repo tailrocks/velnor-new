@@ -18,9 +18,8 @@ pub use pair::runner_pair_environment;
 pub(crate) use pair::{
     BootstrapPairInput, PendingBootstrapPair, StartedBootstrapPair, start_bootstrap_pair,
 };
-pub(in crate::launch::bootstrap) use pair::{
-    PairCreate, PairSpecContext, create_spec, create_spec_sha256, verify_pre_jit_created,
-};
+pub(crate) use pair::{PairCreate, verify_pre_jit_created};
+pub(in crate::launch::bootstrap) use pair::{PairSpecContext, create_spec, create_spec_sha256};
 pub(in crate::launch::bootstrap) use storage_object::verify_pre_jit_volume;
 pub(crate) use storage_object::{create_metadata_storage_object, create_storage_object};
 

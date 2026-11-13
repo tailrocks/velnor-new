@@ -35,4 +35,5 @@ pub(crate) use publication::job_facts_publication;
 pub(in crate::launch) use storage::StorageObservationContext;
 pub(crate) use storage::VerifiedStorageResourceBinding;
 pub(in crate::launch) use storage::observe_storage_resources_with_provider;
-pub(crate) use storage::{ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole};
+pub use storage::{ObservedContainerCgroup, observed_cgroups};
+pub(crate) use storage::{ObservedStorageAttachment, ObservedStorageRole};

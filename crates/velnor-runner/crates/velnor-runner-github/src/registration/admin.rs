@@ -90,12 +90,14 @@ where
     decode_admin(&exchange.body)
 }
 
+pub const ADMIN_TOKEN_FRESH_MARGIN_SECS: u64 = 60;
+
 #[must_use]
 pub const fn admin_token_is_fresh(now_unix: i64, expires_at_unix: i64) -> bool {
     if expires_at_unix == 0 {
         return false;
     }
-    match now_unix.checked_add(60) {
+    match now_unix.checked_add(ADMIN_TOKEN_FRESH_MARGIN_SECS.cast_signed()) {
         Some(limit) => expires_at_unix > limit,
         None => false,
     }

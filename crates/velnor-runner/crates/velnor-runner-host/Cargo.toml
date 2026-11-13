@@ -52,7 +52,7 @@ test = false
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [lints]
 workspace = true

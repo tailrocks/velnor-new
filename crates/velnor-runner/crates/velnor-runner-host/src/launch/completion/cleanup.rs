@@ -19,12 +19,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use bollard::Docker;
 
+use crate::completion_admin::CompletionAdminClient;
 use crate::error::HostError;
-use crate::https::HttpsTransport;
 use crate::journal::{CleanupClaim, CompletedLaunch};
 use crate::launch::SelectedEngineContext;
 use crate::launch::bootstrap::NativeCleanupRuntime;
-use crate::listen::Secret;
 
 use super::journal_ref::CompletionJournal;
 
@@ -44,8 +43,7 @@ type HostResult<T> = Result<T, HostError>;
 pub(super) struct Context<'a> {
     pub(super) journal: &'a CompletionJournal,
     pub(super) docker: &'a Docker,
-    pub(super) transport: &'a mut HttpsTransport,
-    pub(super) admin: &'a Secret,
+    pub(super) admin: &'a CompletionAdminClient,
     pub(super) diagnostics: &'a super::diagnostics::DiagnosticsRoot,
     pub(super) native_cleanup: Option<&'a NativeCleanupRuntime>,
     pub(super) selected_engine: Option<&'a SelectedEngineContext>,

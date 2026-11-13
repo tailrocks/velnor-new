@@ -29,6 +29,21 @@ pub(in crate::launch) struct ProbeCleanupEvidence {
 }
 
 impl ProbeCleanupEvidence {
+    #[cfg(test)]
+    pub(in crate::launch) fn for_test(
+        operation_id: &str,
+        engine_id: &str,
+        docker_root_digest: &str,
+    ) -> Self {
+        Self {
+            operation_id: operation_id.to_owned(),
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+            operation_name: format!("velnor-resource-probe-{operation_id}"),
+            container_id: "a".repeat(64),
+        }
+    }
+
     pub(in crate::launch) fn after_journal_retirement(
         proof: &super::VerifiedProbeCleanup,
     ) -> Result<Self, HostError> {
@@ -100,7 +115,9 @@ pub(super) async fn run(
     deadline: &Deadline,
 ) -> Result<ObservedProbeRecord, HostError> {
     let result = execute(docker, journal, projection, memory_total, deadline, image).await;
-    if result.is_err() {
+    if let Err(error) = &result
+        && !matches!(error, HostError::DockerTimeout)
+    {
         recover_current(docker, journal, projection, deadline).await;
     }
     result

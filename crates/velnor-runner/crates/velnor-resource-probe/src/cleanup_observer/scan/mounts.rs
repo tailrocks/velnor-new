@@ -184,11 +184,13 @@ fn root_stat(root: &rustix::fd::OwnedFd) -> Result<([u32; 2], u64), MountObserva
 pub(super) fn check_tmpfs_mounts(
     pid: u32,
     input: &[u8],
-    devices: &HashSet<u64>,
+    is_observer_task: bool,
+    devices: (&HashSet<u64>, &HashSet<u64>),
     namespace_ids: &[([u32; 2], u64); 2],
     references: &mut u32,
     issues: &mut Vec<String>,
 ) {
+    let (owned_devices, observer_devices) = devices;
     let Ok(text) = std::str::from_utf8(input) else {
         add_issue(issues, "mountinfo_invalid");
         return;
@@ -222,7 +224,13 @@ pub(super) fn check_tmpfs_mounts(
             add_issue(issues, "mountinfo_device_invalid");
             continue;
         };
-        if devices.contains(&device) {
+        if crate::cleanup_observer_wire::mountinfo_line_has_owned_tmpfs(
+            &fields,
+            device,
+            is_observer_task,
+            owned_devices,
+            observer_devices,
+        ) {
             *references = references.saturating_add(1);
         }
     }

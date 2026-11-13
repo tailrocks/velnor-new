@@ -111,10 +111,7 @@ impl VerifiedStorageInitializerAbortRemoval {
 }
 
 impl StorageInitializerCreateResponse {
-    pub(in crate::worker::storage_initialization) fn after_create_response(
-        claim: &StorageInitializationClaim,
-        id: &str,
-    ) -> Self {
+    pub(crate) fn after_create_response(claim: &StorageInitializationClaim, id: &str) -> Self {
         Self {
             reservation_id: claim.reservation_id(),
             operation_id: claim.operation_id(),
@@ -129,10 +126,7 @@ impl StorageInitializerCreateResponse {
 }
 
 impl VerifiedStorageInitializerCreated {
-    pub(in crate::worker::storage_initialization) fn from_inspection(
-        claim: &StorageInitializationClaim,
-        id: &str,
-    ) -> Self {
+    pub(crate) fn from_inspection(claim: &StorageInitializationClaim, id: &str) -> Self {
         Self {
             reservation_id: claim.reservation_id(),
             operation_id: claim.operation_id(),
@@ -147,10 +141,7 @@ impl VerifiedStorageInitializerCreated {
 }
 
 impl VerifiedStorageInitializerStarted {
-    pub(in crate::worker::storage_initialization) fn from_inspection(
-        claim: &StorageInitializationClaim,
-        id: &str,
-    ) -> Self {
+    pub(crate) fn from_inspection(claim: &StorageInitializationClaim, id: &str) -> Self {
         Self {
             reservation_id: claim.reservation_id(),
             operation_id: claim.operation_id(),
