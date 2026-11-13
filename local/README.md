@@ -49,5 +49,5 @@ docker run --rm --network velnor-local -v "$REPO:/repo" -v "$STATE/events:/event
 Run its tests from `local/`:
 
 ```sh
-cargo nextest run
+cargo nextest run --locked
 ```

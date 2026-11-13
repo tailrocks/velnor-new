@@ -1,6 +1,6 @@
 # GitHub's cache rules
 
-Source column: Documentation means the heading of [Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) named in the row (`Restrictions` is "Restrictions for accessing a cache", `Matching` is "Cache key matching", `Limits` is "Usage limits and eviction policy"). Modelled means the documentation is silent or contradicts itself, so the module follows the nearest stated rule; each Modelled row is a probe case for #633 (`local/conformance/` holds no probe yet, so no rule rests on one). Tests are in `tests/it/rules.rs` and `story.rs`, named `rule_<n>_*`.
+Source column: Documentation means the heading of [Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) named in the row (`Restrictions` is "Restrictions for accessing a cache", `Matching` is "Cache key matching", `Limits` is "Usage limits and eviction policy"). Modelled means the documentation is silent or contradicts itself, so the module follows the nearest stated rule; each Modelled row is a probe case for #633, and a recorded observation in `local/conformance/` that contradicts a row replaces it. Tests are in `tests/it/rules.rs` and `story.rs`, named `rule_<n>_*`.
 
 | Rule | Behaviour | Source |
 |---|---|---|

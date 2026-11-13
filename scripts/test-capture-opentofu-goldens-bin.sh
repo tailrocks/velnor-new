@@ -347,6 +347,7 @@ verify_guard_receipt() {
             root_path = path
           } else if (ends_with(path, "/dogfood-repo/local")) {
             helper_count++
+            helper_path = path
           } else if (ends_with(path, "/dogfood-repo/crates/velnor-runner")) {
             nested_count++
             nested_path = path
@@ -355,7 +356,8 @@ verify_guard_receipt() {
           }
         }
         if (fetches != 3 || root_count != 1 || nested_count != 1 || helper_count != 1 || unexpected \
-          || nested_path != root_path "/crates/velnor-runner") exit 1
+          || nested_path != root_path "/crates/velnor-runner" \
+          || helper_path != root_path "/local") exit 1
       }
     ' "$receipt"; then
     cat "$receipt" >&2
