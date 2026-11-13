@@ -104,6 +104,7 @@ where
             missing_credential = true;
         }
         Some(_) => {}
+        None if config.developer_images().is_some() => {}
         None => {
             eprintln!("readiness=waiting_for_credentials reason=release_read_reference_missing");
             missing_credential = true;
@@ -112,7 +113,9 @@ where
     if missing_credential {
         return Readiness::WaitingForCredentials;
     }
-    if let Err(reason) = crate::launch::build_pin_status() {
+    if config.developer_images().is_none()
+        && let Err(reason) = crate::launch::build_pin_status()
+    {
         eprintln!("readiness=degraded reason=source_pin detail={reason}");
         return Readiness::Degraded;
     }

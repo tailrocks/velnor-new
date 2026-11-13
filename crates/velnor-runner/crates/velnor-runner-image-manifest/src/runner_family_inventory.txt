@@ -773,6 +773,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/mac_expected.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_inbox.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_preview_sdk.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_proof.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/mac_publication_context.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/mac_signer.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/promotion.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication.rs
@@ -787,6 +788,7 @@ crates/velnor-actions-orchestrator/src/image_maintenance/publication_family.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/attestor.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/ci.rs
+crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/context.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/mac_jobs.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/pagination.rs
 crates/velnor-actions-orchestrator/src/image_maintenance/publication_github/publisher.rs
@@ -1516,6 +1518,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_features.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_archive.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_assets.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_release_build.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_candidate_manifest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_homebrew_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_jobs.rs
@@ -1535,6 +1538,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_sou
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_tag.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_jobs.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_qualification_routing.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_candidate.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_native.rs
 crates/velnor-actions-workflow-renderer/src/schema2_job_image_steps.rs
@@ -1559,10 +1563,13 @@ crates/velnor-actions-workflow-renderer/src/schema2_runner_image_qualification.r
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/attest.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authority.rs
+crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/context.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
+crates/velnor-actions-workflow-renderer/src/schema2_stable_sources_qualification.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
 crates/velnor-actions-workflow-renderer/src/setup.rs
+crates/velnor-actions-workflow-renderer/src/source_qualification_plan.rs
 crates/velnor-actions-workflow-renderer/src/sources_producer.rs
 crates/velnor-actions-workflow-renderer/src/stack_jobs.rs
 crates/velnor-actions-workflow-renderer/src/state_fragments.rs
@@ -1628,6 +1635,7 @@ crates/velnor-actions-workflow-renderer/src/workflow_policy.rs
 crates/velnor-actions-workflow-renderer/src/workflow_size.rs
 crates/velnor-actions-workflow-renderer/src/workflow_task_jobs.rs
 crates/velnor-actions-workflow-renderer/src/workflow_timeout.rs
+crates/velnor-actions-workflow-renderer/src/workflow_timeout/authority.rs
 crates/velnor-actions-workflow-renderer/src/yaml.rs
 crates/velnor-actions-workflow-renderer/src/yaml_emit.rs
 crates/velnor-actions-workflow-renderer/src/yaml_share.rs
@@ -1698,6 +1706,7 @@ crates/velnor-runner/crates/velnor-resource-probe/src/cleanup_observer/scan/moun
 crates/velnor-runner/crates/velnor-resource-probe/src/cleanup_observer/scan/output.rs
 crates/velnor-runner/crates/velnor-resource-probe/src/cleanup_observer_wire.rs
 crates/velnor-runner/crates/velnor-resource-probe/src/cleanup_observer_wire/request_validation.rs
+crates/velnor-runner/crates/velnor-resource-probe/src/cleanup_observer_wire/tmpfs_reference.rs
 crates/velnor-runner/crates/velnor-resource-probe/src/error.rs
 crates/velnor-runner/crates/velnor-resource-probe/src/execution_channel.rs
 crates/velnor-runner/crates/velnor-resource-probe/src/execution_channel/identity.rs
@@ -1820,14 +1829,17 @@ crates/velnor-runner/crates/velnor-runner-host/src/artifact_admission/strict_jso
 crates/velnor-runner/crates/velnor-runner-host/src/assign.rs
 crates/velnor-runner/crates/velnor-runner-host/src/bin/velnor_resource_probe_release.rs
 crates/velnor-runner/crates/velnor-runner-host/src/compile_identity.rs
+crates/velnor-runner/crates/velnor-runner-host/src/completion_admin.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/connection.rs
+crates/velnor-runner/crates/velnor-runner-host/src/config/developer_images.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority/host_config.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority/inventory_bridge.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority/validate.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority/validate/closure.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/job_authority/validate/rules.rs
+crates/velnor-runner/crates/velnor-runner-host/src/config/platform.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/release_read.rs
 crates/velnor-runner/crates/velnor-runner-host/src/config/source_policy.rs
 crates/velnor-runner/crates/velnor-runner-host/src/connect.rs
@@ -1849,6 +1861,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/controller_ipc/server/state/s
 crates/velnor-runner/crates/velnor-runner-host/src/controller_ipc/server/state/setup_receipt.rs
 crates/velnor-runner/crates/velnor-runner-host/src/controller_ipc/server/transport.rs
 crates/velnor-runner/crates/velnor-runner-host/src/controller_ipc/wire.rs
+crates/velnor-runner/crates/velnor-runner-host/src/curl_config.rs
 crates/velnor-runner/crates/velnor-runner-host/src/daemon_lock.rs
 crates/velnor-runner/crates/velnor-runner-host/src/daemon_lock/controller_run.rs
 crates/velnor-runner/crates/velnor-runner-host/src/daemon_lock_filesystem.rs
@@ -1895,6 +1908,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/setup.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/setup/connection.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/setup/credential.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/state.rs
+crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/state/admin_refresh.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/state/cleanup.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/state/cursor.rs
 crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/supervision.rs
@@ -2136,6 +2150,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operat
 crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operations/cleanup_observer.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operations/owned_request.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operations/pre_jit_cleanup.rs
+crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operations/unattached.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/operations/validation.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/phase.rs
 crates/velnor-runner/crates/velnor-runner-host/src/journal/scale_set_create.rs
@@ -2301,6 +2316,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/obse
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/aggregate.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/backing.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/capacity.rs
+crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/capacity/cgroups.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/cleanup_witness.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/cleanup_witness/volume_identity.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/storage/observation/cleanup_witness/volumes.rs
@@ -2365,6 +2381,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/cleanup
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/doctor.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/execute.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/execute/owned_cgroups.rs
+crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/image_authority.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/inspect.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/lifecycle.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/lifecycle/publication_image.rs
@@ -2392,6 +2409,7 @@ crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provide
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/archive/worker/provenance.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/archive/worker/runtime.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/archive/worker/source.rs
+crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/developer.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/evidence.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/failure.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/provider/identity.rs
@@ -2421,7 +2439,8 @@ crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/readine
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/record.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/recover.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/recover/dispatch.rs
-crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/release_secret.rs
+crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/recover/persisted.rs
+crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/recover/unattached.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/sample.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/sample/guest_capacity.rs
 crates/velnor-runner/crates/velnor-runner-host/src/launch/resource_probe/sample/pressure.rs

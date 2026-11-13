@@ -52,7 +52,7 @@ async fn measure_acquired(
         docker: context.docker,
         host: context.journal,
         scoped: &prepared.scope,
-        secret: context.release_read_secret,
+        secret: context.image_authority,
         engine: context.selected_engine,
         images: context.worker_images,
     };
@@ -83,7 +83,7 @@ async fn retain_scoped_channel(
                 docker: context.docker,
                 host: context.journal,
                 scoped: &prepared.scope,
-                secret: context.release_read_secret,
+                secret: context.image_authority,
                 engine: context.selected_engine,
                 images: context.worker_images,
             };

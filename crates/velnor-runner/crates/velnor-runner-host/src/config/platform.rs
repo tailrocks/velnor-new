@@ -40,6 +40,15 @@ impl RunnerPlatform {
     }
 
     #[must_use]
+    pub fn from_image_architecture(value: &str) -> Option<Self> {
+        match value {
+            "amd64" => Some(Self::LinuxAmd64),
+            "arm64" => Some(Self::LinuxArm64),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub const fn image_architecture(self) -> &'static str {
         match self {
             Self::LinuxAmd64 => "amd64",

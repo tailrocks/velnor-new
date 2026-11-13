@@ -5,33 +5,49 @@ use std::str;
 
 use zeroize::Zeroizing;
 
-use crate::config::{HostConfig, KeychainReference};
+use crate::config::{DeveloperImages, HostConfig, KeychainReference};
 use crate::error::HostError;
 use crate::keychain::load_secret;
 
-pub(crate) struct ReleaseReadSecret(Zeroizing<Vec<u8>>);
+pub(crate) enum ImageAuthority {
+    Release(Zeroizing<Vec<u8>>),
+    Developer(DeveloperImages),
+}
 
-impl ReleaseReadSecret {
+impl ImageAuthority {
     pub(crate) fn load(config: &HostConfig) -> Result<Self, HostError> {
+        config.validate()?;
+        if let Some(images) = config.developer_images() {
+            return Ok(Self::Developer(images.clone()));
+        }
         let reference = validated_reference(config)?;
         let bytes = load_secret(reference.service(), reference.account())?;
         token_text(&bytes)?;
-        Ok(Self(bytes))
+        Ok(Self::Release(bytes))
     }
 
     pub(crate) fn parse(token: &str) -> Result<Self, HostError> {
         let bytes = Zeroizing::new(token.as_bytes().to_vec());
         token_text(&bytes)?;
-        Ok(Self(bytes))
+        Ok(Self::Release(bytes))
+    }
+
+    pub(crate) const fn developer_images(&self) -> Option<&DeveloperImages> {
+        match self {
+            Self::Release(_) => None,
+            Self::Developer(images) => Some(images),
+        }
     }
 
     pub(in crate::launch::resource_probe) fn as_provider_token(&self) -> Result<&str, HostError> {
-        token_text(&self.0)
+        match self {
+            Self::Release(bytes) => token_text(bytes),
+            Self::Developer(_) => Err(HostError::Identity),
+        }
     }
 }
 
 fn validated_reference(config: &HostConfig) -> Result<&KeychainReference, HostError> {
-    config.validate()?;
     config
         .release_read_credential_ref()
         .ok_or(HostError::Keychain)

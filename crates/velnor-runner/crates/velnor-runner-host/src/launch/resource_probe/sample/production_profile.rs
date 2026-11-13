@@ -12,12 +12,14 @@ use crate::journal::{
 use crate::launch::VerifiedWorkerImages;
 use crate::worker::ResourceBudget;
 
-use super::super::provider::{ProbeImageOrigin, ProbeImagePreparationEvidence};
+use super::super::provider::ProbeImagePreparationEvidence;
 use super::{Observation, ProbeStartupEvidence, checked_guest_capacity};
 use crate::launch::verified_images::{WorkerImageOrigin, WorkerImagesOrigin};
 
 mod validation;
-use validation::{digest, digest_reference, source_revision};
+use validation::{
+    complete_worker_image, digest, digest_reference, matching_origins, source_revision,
+};
 
 const POLICY_DOMAIN: &[u8] = b"velnor-storage-policy-one-job-v1\0";
 const PROFILE_DOMAIN: &[u8] = b"velnor-storage-startup-profile-v1\0";
@@ -189,31 +191,6 @@ impl<'a> StartupImagePreparationReceipt<'a> {
     }
 }
 
-fn complete_worker_image(image: &crate::launch::VerifiedImageIdentity) -> bool {
-    digest_reference(image.runtime_id())
-        && digest_reference(image.manifest_digest())
-        && image.manifest_size() > 0
-        && digest_reference(image.config_digest())
-        && match image.origin() {
-            WorkerImageOrigin::Registry(registry) => {
-                registry.observation.validate(&registry.identity).is_ok()
-            }
-        }
-}
-
-fn matching_origins(probe: &ProbeImageOrigin, workers: &WorkerImagesOrigin) -> bool {
-    match (probe, workers) {
-        (
-            ProbeImageOrigin::Registry {
-                manifest_sha256: probe,
-            },
-            WorkerImagesOrigin::Registry {
-                manifest_sha256: worker,
-            },
-        ) => digest(probe) && probe == worker,
-    }
-}
-
 pub(crate) fn make_profile(
     generation_id: &str,
     disk_pool_id: &str,
@@ -329,6 +306,9 @@ fn profile_generation(
             update(&mut digest, b"verified-runner-image-registry-v1");
             update(&mut digest, manifest_sha256.as_bytes());
         }
+        WorkerImagesOrigin::Developer => {
+            update(&mut digest, b"developer-runner-image-v1");
+        }
     }
     update_worker_image(&mut digest, worker_images.runner());
     update_worker_image(&mut digest, worker_images.dind());
@@ -360,11 +340,12 @@ fn update_worker_image(digest: &mut Sha256, image: &crate::launch::VerifiedImage
         WorkerImageOrigin::Registry(registry) => {
             update(digest, registry.identity.reference().as_bytes());
             update(digest, registry.identity.release_manifest_sha256.as_bytes());
+            update(digest, registry.identity.registry_digest.as_bytes());
+            digest.update(registry.observation.manifest_size().to_be_bytes());
+            update(digest, registry.identity.config_digest.as_bytes());
         }
+        WorkerImageOrigin::Developer => update(digest, b"developer-worker-image-v1"),
     }
-    update(digest, image.manifest_digest().as_bytes());
-    digest.update(image.manifest_size().to_be_bytes());
-    update(digest, image.config_digest().as_bytes());
 }
 
 fn update(digest: &mut Sha256, field: &[u8]) {

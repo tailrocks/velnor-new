@@ -86,7 +86,7 @@ pub(super) fn verify_startup_evidence(
         || cleanup.docker_root_digest() != docker_root_digest
         || image.engine_id() != engine_id
         || image.docker_root_digest() != docker_root_digest
-        || image.platform() != "linux/amd64"
+        || crate::config::RunnerPlatform::parse(image.platform()).is_none()
     {
         return Err(HostError::Identity);
     }

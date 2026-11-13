@@ -3,8 +3,8 @@
 
 use bollard::Docker;
 
-use crate::launch::verified_images::WorkerImageOrigin;
-use crate::launch::{SelectedEngineContext, VerifiedImageIdentity, VerifiedWorkerImages};
+use crate::launch::verified_images::{RegistryWorkerImage, WorkerImageOrigin};
+use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 
 use super::identity::{SelectedDaemon, selected_daemon_info};
 use super::{ProviderFailure, valid_hex, valid_sha};
@@ -14,8 +14,9 @@ pub(super) async fn verify_worker_images_for_engine(
     expected: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<(), ProviderFailure> {
+    let registry = images.registry_manifest_sha256().is_some();
     if !expected.matches_images(images)
-        || images.platform() != "linux/amd64"
+        || (registry && images.platform() != "linux/amd64")
         || !valid_sha(images.source_sha())
         || !valid_hex(images.docker_root_digest(), 64)
     {
@@ -33,8 +34,19 @@ pub(super) async fn verify_worker_images_for_engine(
     {
         return Err(ProviderFailure::ImageIdentity);
     }
-    verify_image(expected.endpoint(), &selected, images.runner()).await?;
-    verify_image(expected.endpoint(), &selected, images.dind()).await?;
+    for (identity, role) in [
+        (images.runner(), super::WorkerImage::Runner),
+        (images.dind(), super::WorkerImage::Dind),
+    ] {
+        match identity.origin() {
+            WorkerImageOrigin::Registry(image) => {
+                verify_image(expected.endpoint(), &selected, image).await?;
+            }
+            WorkerImageOrigin::Developer => {
+                super::developer::verify_worker_image(docker, images, identity, role).await?;
+            }
+        }
+    }
     let observed = selected_daemon_info(docker, &selected).await?;
     if observed.engine_id != images.engine_id()
         || observed.docker_root_digest != images.docker_root_digest()
@@ -48,9 +60,8 @@ pub(super) async fn verify_worker_images_for_engine(
 async fn verify_image(
     endpoint: &str,
     selected: &SelectedDaemon,
-    identity: &VerifiedImageIdentity,
+    image: &RegistryWorkerImage,
 ) -> Result<(), ProviderFailure> {
-    let WorkerImageOrigin::Registry(image) = identity.origin();
     let observed = super::registry_import::reinspect_bound(
         endpoint,
         selected,

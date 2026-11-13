@@ -35,7 +35,7 @@ pub(crate) struct ControlPublicationInput<'a> {
     pub(crate) connection_journal: &'a crate::journal::ConnectionJournal,
     pub(crate) selected: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
-    pub(crate) release_secret: &'a super::ReleaseReadSecret,
+    pub(crate) image_authority: &'a super::ImageAuthority,
     pub(crate) metadata: &'a VerifiedMetadataInitialization,
     pub(crate) channel: &'a VerifiedProofChannelBinding,
     pub(crate) guest_boot_id: &'a str,

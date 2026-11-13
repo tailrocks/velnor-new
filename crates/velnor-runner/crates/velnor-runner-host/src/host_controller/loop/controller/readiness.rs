@@ -8,7 +8,7 @@ use crate::{
     docker_client::docker_deadline,
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext},
+    launch::{ImageAuthority, SelectedEngineContext},
 };
 use bollard::Docker;
 #[path = "readiness/audit.rs"]
@@ -25,7 +25,7 @@ async fn refresh(
     journal: &Journal,
     selected: &SelectedEngineContext,
     control: &ControlState,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
 ) -> Result<(), HostError> {
     Box::pin(refresh_with_dependencies(
         state,
@@ -45,7 +45,7 @@ async fn refresh_with_dependencies(
     journal: &Journal,
     selected: &SelectedEngineContext,
     control: &ControlState,
-    secret: Option<&ReleaseReadSecret>,
+    secret: Option<&ImageAuthority>,
     remote_audit: &audit::RemoteRunnerAudit,
 ) -> Result<(), HostError> {
     if !control.admission_ready() {
@@ -170,7 +170,7 @@ async fn sample_for_refresh(
     journal: &Journal,
     selected: &SelectedEngineContext,
     control: &ControlState,
-    secret: Option<&ReleaseReadSecret>,
+    secret: Option<&ImageAuthority>,
 ) -> Result<Option<crate::launch::ReadinessSample>, HostError> {
     if let Some(sample) = control.readiness_sample(selected, Instant::now())? {
         return Ok(Some(sample));

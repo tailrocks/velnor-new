@@ -253,7 +253,7 @@ async fn publish_decision(
             connection_journal: context.scoped,
             selected: context.engine,
             images: context.images,
-            release_secret: context.secret,
+            image_authority: context.secret,
             metadata: runner.bound().metadata(),
             channel: runner.channel(),
             guest_boot_id: runner.bound().guest_boot_id(),
