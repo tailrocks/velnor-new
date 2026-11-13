@@ -24,7 +24,7 @@ Detected stacks
     - velnor-cache-rules (local/crates/velnor-cache-rules/Cargo.toml) [lib, test]
     - velnor-ci (ci-helper/crates/velnor-ci/Cargo.toml) [bin, lib, test]
     - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [lib, test; depends on velnor-model, velnor-render, velnor-rust]
-    - velnor-local (local/crates/velnor-local/Cargo.toml) [bin]
+    - velnor-local (local/crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
     - velnor-model (generator/crates/velnor-model/Cargo.toml) [lib]
     - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
@@ -104,7 +104,7 @@ Workflow to generate
     - rust-velnor-cache-rules (31 steps)
     - rust-velnor-ci (31 steps)
     - rust-velnor-gen (31 steps)
-    - rust-velnor-local (30 steps)
+    - rust-velnor-local (31 steps)
     - rust-velnor-model (30 steps)
     - rust-velnor-render (30 steps)
     - rust-velnor-resource-probe (31 steps)
@@ -285,6 +285,7 @@ Workflow to generate
         - stack/rust/local/crates/velnor-local/clippy/default
         - stack/rust/local/crates/velnor-local/doc/default
         - stack/rust/local/crates/velnor-local/fmt/default
+        - stack/rust/local/crates/velnor-local/nextest/default
   Parallel: 27 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
@@ -339,7 +340,6 @@ Workflow to generate
   Ineligible: stack/rust/generator/crates/velnor-rust/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/local/crates/velnor-cache-rules/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/local/crates/velnor-local/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/local/crates/velnor-local/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
