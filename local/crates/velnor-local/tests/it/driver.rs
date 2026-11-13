@@ -100,13 +100,15 @@ fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
 }
 
 #[test]
-fn the_warm_scenario_parses_and_unknown_steps_and_option_like_values_are_refused() {
-    let warm =
-        Scenario::parse(&read("scenarios/warm.json")).unwrap_or_else(|e| unreachable!("{e}"));
+fn the_warm_scenario_follows_the_default_branch_and_unknown_steps_option_values_and_escaping_paths_are_refused()
+ {
+    let warm = Scenario::parse(&read("scenarios/warm.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("trunk");
     assert_eq!(
         warm.steps,
         [
-            Step::Push("main".to_owned()),
+            Step::Push("trunk".to_owned()),
             Step::Commit {
                 branch: "warm".to_owned(),
                 append: "rust-toolchain.toml".to_owned(),
@@ -114,7 +116,7 @@ fn the_warm_scenario_parses_and_unknown_steps_and_option_like_values_are_refused
             },
             Step::OpenPullRequest {
                 head: "warm".to_owned(),
-                base: "main".to_owned(),
+                base: "trunk".to_owned(),
             },
         ]
     );
@@ -128,6 +130,9 @@ fn the_warm_scenario_parses_and_unknown_steps_and_option_like_values_are_refused
     let option = br#"{"description": "x", "steps": [{"push": "--upload-pack=x"}]}"#;
     let option = Scenario::parse(option).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(option.refuse_options(["main"]).is_err());
+    let escape = br#"{"description": "x", "steps": [{"commit": {"branch": "b", "append": "../outside", "line": "x"}}]}"#;
+    let escape = Scenario::parse(escape).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(escape.refuse_options(["main"]).is_err());
 }
 
 #[test]

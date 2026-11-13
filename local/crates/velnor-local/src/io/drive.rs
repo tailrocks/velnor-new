@@ -42,16 +42,21 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     } else {
         args.scenarios.join(format!("{}.json", args.scenario))
     };
-    let scenario = Scenario::parse(&fs::read(&path).await?).map_err(io::Error::other)?;
+    let scenario = Scenario::parse(&fs::read(&path).await?)
+        .map_err(io::Error::other)?
+        .on_default_branch(&args.environment.default_branch);
     let values = [args.repository.as_str(), &args.environment.default_branch];
     scenario
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
     let env = Environment::at(&args.environment.dir, DockerCli).await?;
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo).await?;
+    copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
     for directory in ["cache", "api", "events", "logs"] {
-        let _ = fs::remove_dir_all(env.dir.join(directory)).await;
+        match fs::remove_dir_all(env.dir.join(directory)).await {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
     let session = tokio::select! {
@@ -101,7 +106,7 @@ async fn git(repo: &Path, args: &[&str], input: Option<&[u8]>) -> io::Result<Vec
     program("git", &[&head[..], args].concat(), input).await
 }
 
-async fn copy_checkout(checkout: &Path, copy: &Path) -> io::Result<()> {
+async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Result<()> {
     if fs::metadata(copy).await.is_ok() {
         fs::remove_dir_all(copy).await?;
     }
@@ -116,6 +121,7 @@ async fn copy_checkout(checkout: &Path, copy: &Path) -> io::Result<()> {
         git(copy, &["apply", "--index"], Some(&changes)).await?;
         git(copy, &["commit", "-q", "-m", "Uncommitted changes"], None).await?;
     }
+    git(copy, &["checkout", "-q", "-B", default], None).await?;
     Ok(())
 }
 
@@ -153,6 +159,10 @@ impl Driver<'_> {
             self.git(&["switch", "-q", "-c", branch, base]).await?;
         }
         let file = self.repo.join(append);
+        let parent = fs::canonicalize(file.parent().unwrap_or(&self.repo)).await?;
+        if !parent.starts_with(fs::canonicalize(&self.repo).await?) {
+            return Err(io::Error::other(format!("{append} leaves the repository")));
+        }
         let text = fs::read_to_string(&file).await.unwrap_or_default();
         fs::write(&file, format!("{text}{line}\n")).await?;
         let message = format!("Append to {append}");
@@ -269,7 +279,7 @@ impl Driver<'_> {
             client.extend(["-W", workflow]);
         }
         let log = std::fs::File::create(format!("{dir}/logs/{name}.log"))?;
-        Command::new("docker")
+        let status = Command::new("docker")
             .args(&client)
             .kill_on_drop(true)
             .stdin(Stdio::null())
@@ -277,12 +287,18 @@ impl Driver<'_> {
             .stderr(log)
             .status()
             .await?;
+        let before = self.outcomes.len();
         for run in self.get::<Vec<standin::Run>>(runs).await? {
             if known.iter().all(|old| old.id != run.id) {
                 let outcome = self.outcome(run).await?;
                 println!("velnor-local: {}", outcome.line());
                 self.outcomes.push(outcome);
             }
+        }
+        if !status.success() && self.outcomes.len() == before {
+            return Err(io::Error::other(format!(
+                "Runner.Client failed; see logs/{name}.log"
+            )));
         }
         Ok(())
     }
