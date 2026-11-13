@@ -158,6 +158,29 @@ fn a_pull_request_reads_default_and_base_branches_but_not_its_head_branch() {
 }
 
 #[test]
+fn the_base_branch_is_searched_before_the_default_branch_for_the_same_key() {
+    let leg = observation("cache-pr-reads")["legs"]["pull_request"]["same_key_in_base_and_default"]
+        .clone();
+    let key = "lab-probe-reads-<tag>-collide";
+    let entries = [
+        entry(Scope::branch("probe-<tag>-base"), key, 1),
+        entry(Scope::branch("main"), key, 2),
+    ];
+    let access = access_for(&pull(5, "probe-<tag>-base"), "main");
+    let hit = lookup(&entries, &access, key, &[], "v1");
+    let found = hit.map(|entry| entry.scope.clone());
+    let found_key = hit.map_or_else(String::new, |entry| entry.key.clone());
+    let recorded = match text(&leg["content"]) {
+        "base" => Some(Scope::branch("probe-<tag>-base")),
+        "default" => Some(Scope::branch("main")),
+        _ => None,
+    };
+    assert!(recorded.is_some());
+    assert_eq!(found, recorded);
+    assert_restore(&leg, &found_key, key, "collision");
+}
+
+#[test]
 fn a_pull_request_cannot_read_what_another_pull_request_saved() {
     let document = observation("cache-other-pr");
     let key = "lab-probe-other-<tag>-a";
