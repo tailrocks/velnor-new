@@ -134,3 +134,11 @@ fn double_quoted(text: &str) -> String {
     out.push('"');
     out
 }
+
+pub(crate) fn entry(key: &str, value: Yaml) -> (String, Yaml) {
+    (key.to_owned(), value)
+}
+
+pub(crate) fn text(value: &str) -> Yaml {
+    Yaml::Str(value.to_owned())
+}
