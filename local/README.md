@@ -64,3 +64,23 @@ Run the tests from `local/`:
 ```sh
 cargo nextest run --locked
 ```
+
+## API stub
+
+`velnor-local api-stub` answers the GitHub API calls `velnor-ci` makes, and nothing else. Any other path gets 501 with a JSON body that names it. An issue that makes the helper call a new endpoint adds it to the stub in the same change.
+
+| Endpoint | Source |
+|---|---|
+| `GET /repos/{owner}/{repo}/pulls/{n}/files` | `git diff base...head` in `--repo`, the shas from `pulls.json`; at most 3,000 files |
+| `GET /repos/{owner}/{repo}/compare/{base}...{head}` | `--repo`; at most 300 files, on the first page |
+| `GET /repos/{owner}/{repo}/contents/{path}?ref=` | `--repo` |
+| `GET /repos/{owner}/{repo}/pulls?state=open` | `pulls.json` in `--dir`, a JSON array of pull request objects with `number`, `state`, `base.sha` and `head.sha` |
+| `GET /repos/{owner}/{repo}/actions/caches`, `DELETE .../caches/{id}` | `index.json` in `--cache-dir`, the cache server's directory |
+
+```sh
+velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache" --default-branch main
+```
+
+`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub has no authentication, like the cache server's pull request registration: it serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
+
+The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.
