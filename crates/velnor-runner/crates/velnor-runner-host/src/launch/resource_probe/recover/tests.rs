@@ -26,13 +26,14 @@ const SECOND_OPERATION: &str = "fedcba9876543210fedcba9876543210";
 
 struct FakeDaemon {
     engine_id: &'static str,
+    architecture: &'static str,
     name_visible_after: usize,
     name_inspections: Arc<AtomicUsize>,
 }
 
-fn info_body(engine_id: &str) -> String {
+fn info_body(engine_id: &str, architecture: &str) -> String {
     format!(
-        r#"{{"ID":"{engine_id}","DockerRootDir":"{ROOT_PATH}","OSType":"linux","Architecture":"x86_64","NCPU":4,"MemTotal":8589934592}}"#
+        r#"{{"ID":"{engine_id}","DockerRootDir":"{ROOT_PATH}","OSType":"linux","Architecture":"{architecture}","NCPU":4,"MemTotal":8589934592}}"#
     )
 }
 
@@ -60,7 +61,12 @@ async fn serve_one(mut stream: UnixStream, daemon: &FakeDaemon) -> TestResult<()
     let text = String::from_utf8_lossy(&request);
     let path = text.split_whitespace().nth(1).unwrap_or_default();
     if path.ends_with("/info") {
-        return respond(&mut stream, "200 OK", &info_body(daemon.engine_id)).await;
+        return respond(
+            &mut stream,
+            "200 OK",
+            &info_body(daemon.engine_id, daemon.architecture),
+        )
+        .await;
     }
     if path.contains("/containers/velnor-resource-probe-") {
         let seen = daemon.name_inspections.fetch_add(1, Ordering::SeqCst);
@@ -80,10 +86,20 @@ fn start_daemon(
     engine_id: &'static str,
     name_visible_after: usize,
 ) -> TestResult<Arc<AtomicUsize>> {
+    start_daemon_on(socket, engine_id, name_visible_after, "x86_64")
+}
+
+fn start_daemon_on(
+    socket: &Path,
+    engine_id: &'static str,
+    name_visible_after: usize,
+    architecture: &'static str,
+) -> TestResult<Arc<AtomicUsize>> {
     let listener = UnixListener::bind(socket)?;
     let name_inspections = Arc::new(AtomicUsize::new(0));
     let daemon = Arc::new(FakeDaemon {
         engine_id,
+        architecture,
         name_visible_after,
         name_inspections: Arc::clone(&name_inspections),
     });
@@ -98,16 +114,22 @@ fn start_daemon(
     Ok(name_inspections)
 }
 
+type Target = (crate::config::RunnerPlatform, &'static str);
+
+const AMD64: Target = (crate::config::RunnerPlatform::LinuxAmd64, "x86_64");
+const ARM64: Target = (crate::config::RunnerPlatform::LinuxArm64, "aarch64");
+
 fn projection_and_seed(
     journal_instance: &str,
     operation_id: &str,
+    (platform, architecture): Target,
 ) -> TestResult<(ProbeProjection, ProbeSeed, DockerRoot)> {
     let root = DockerRoot::parse(ROOT_PATH)?;
     let binding = "4".repeat(64);
     let image = VerifiedProbeImage::from_journal(
         format!("sha256:{}", "3".repeat(64)),
-        crate::config::RunnerPlatform::LinuxAmd64,
-        "x86_64".to_owned(),
+        platform,
+        architecture.to_owned(),
         "2".repeat(40),
         binding.clone(),
     )?;
@@ -138,6 +160,14 @@ async fn journal_with_create_requested(
     dir: &Path,
     quarantined: bool,
 ) -> TestResult<(Journal, DockerRoot)> {
+    journal_with_create_requested_on(dir, quarantined, AMD64).await
+}
+
+async fn journal_with_create_requested_on(
+    dir: &Path,
+    quarantined: bool,
+    target: Target,
+) -> TestResult<(Journal, DockerRoot)> {
     let journal = Journal::open(&dir.join("journal.db")).await?;
     journal.bind_engine(ENGINE_ID).await?;
     journal
@@ -154,7 +184,7 @@ async fn journal_with_create_requested(
         )
         .await?;
     let instance = journal.instance_id().await?;
-    let (_, seed, root) = projection_and_seed(&instance, FIRST_OPERATION)?;
+    let (_, seed, root) = projection_and_seed(&instance, FIRST_OPERATION, target)?;
     journal.prepare_probe(seed).await?;
     journal
         .transition_probe(
@@ -184,7 +214,7 @@ async fn recover_first(
 async fn assert_next_probe_is_not_blocked(journal: &Journal) -> TestResult<()> {
     assert!(journal.leased_probe().await?.is_none());
     let instance = journal.instance_id().await?;
-    let (_, seed, _) = projection_and_seed(&instance, SECOND_OPERATION)?;
+    let (_, seed, _) = projection_and_seed(&instance, SECOND_OPERATION, AMD64)?;
     journal.prepare_probe(seed).await?;
     Ok(())
 }
@@ -251,4 +281,15 @@ async fn absence_without_time_to_settle_leaves_the_row_untouched() -> TestResult
     let row = journal.leased_probe().await?.ok_or(HostError::Journal)?;
     assert_eq!(row.phase, ProbePhase::CreateRequested);
     Ok(())
+}
+
+#[tokio::test]
+async fn arm64_create_requested_row_is_recovered_from_the_journal() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let socket = dir.path().join("docker.sock");
+    start_daemon_on(&socket, ENGINE_ID, usize::MAX, "aarch64")?;
+    let (journal, root) = journal_with_create_requested_on(dir.path(), false, ARM64).await?;
+    let outcome = Box::pin(recover_first(&journal, &root, &socket, &Deadline::new())).await?;
+    assert_eq!(outcome, Ok(()));
+    assert_next_probe_is_not_blocked(&journal).await
 }
