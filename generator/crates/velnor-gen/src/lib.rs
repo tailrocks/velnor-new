@@ -8,11 +8,40 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use velnor_model::{RepoPath, RepoView};
-use velnor_render::{GENERATED_HEADER, OWNED_PATHS, render};
+use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
 use velnor_rust::{DetectError, detect, plan};
 
-pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, DetectError> {
-    Ok(render(&plan(&detect(view)?)))
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GenerateError {
+    Detect(DetectError),
+    Rules(Vec<RuleViolation>),
+}
+
+impl fmt::Display for GenerateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Detect(error) => error.fmt(f),
+            Self::Rules(violations) => {
+                f.write_str("the generated workflow breaks the YAML rules:")?;
+                for violation in violations {
+                    write!(f, "\n  {violation}")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl std::error::Error for GenerateError {}
+
+impl From<DetectError> for GenerateError {
+    fn from(error: DetectError) -> Self {
+        Self::Detect(error)
+    }
+}
+
+pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+    render(&plan(&detect(view)?)).map_err(GenerateError::Rules)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

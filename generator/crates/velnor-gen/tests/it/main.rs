@@ -6,3 +6,4 @@ mod golden;
 mod inputs;
 mod io;
 mod pipeline;
+mod rules;

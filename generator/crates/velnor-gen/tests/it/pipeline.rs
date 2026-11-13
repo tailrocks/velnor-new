@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use velnor_gen::expected_files;
+use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{PackageName, RepoPath, RepoView, RustMetadata, RustPackage};
 use velnor_rust::DetectError;
 
@@ -151,7 +151,7 @@ fn an_invalid_config_is_rejected() -> TestResult {
     for config in cases {
         let result = expected_files(&view(&["Cargo.toml"], Some(config))?);
         assert!(
-            matches!(result, Err(DetectError::Config(_))),
+            matches!(result, Err(GenerateError::Detect(DetectError::Config(_)))),
             "{:?} gave {result:?}",
             String::from_utf8_lossy(config)
         );
@@ -171,9 +171,18 @@ fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
     for metadata in memberless.rust_metadata.values_mut() {
         metadata.members.clear();
     }
-    assert_eq!(empty, Err(DetectError::NoRustRoot));
-    assert_eq!(excluded, Err(DetectError::NoRustRoot));
-    assert_eq!(root_excluded, Err(DetectError::NoRustRoot));
-    assert_eq!(expected_files(&memberless), Err(DetectError::NoRustRoot));
+    assert_eq!(empty, Err(GenerateError::Detect(DetectError::NoRustRoot)));
+    assert_eq!(
+        excluded,
+        Err(GenerateError::Detect(DetectError::NoRustRoot))
+    );
+    assert_eq!(
+        root_excluded,
+        Err(GenerateError::Detect(DetectError::NoRustRoot))
+    );
+    assert_eq!(
+        expected_files(&memberless),
+        Err(GenerateError::Detect(DetectError::NoRustRoot))
+    );
     Ok(())
 }

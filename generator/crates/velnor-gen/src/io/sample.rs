@@ -21,7 +21,7 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
-    expected_files(&view).map_err(Error::Detect)?;
+    expected_files(&view).map_err(Error::Generate)?;
     let recording = Recording {
         view: view.files,
         manifests: manifests(&view.tracked_paths),
