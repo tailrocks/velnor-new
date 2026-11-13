@@ -124,9 +124,12 @@ impl InitializerCleanup<'_> {
         )
         .await?
         .map_err(|_| HostError::Docker)?;
+        let architecture = crate::config::RunnerPlatform::parse(self.engine.platform())
+            .ok_or(HostError::Ownership)?
+            .image_architecture();
         if image.id.as_deref() != Some(identity.image_runtime_id())
             || image.os.as_deref() != Some("linux")
-            || image.architecture.as_deref() != Some("amd64")
+            || image.architecture.as_deref() != Some(architecture)
         {
             return Err(HostError::Ownership);
         }

@@ -69,3 +69,40 @@ fn sum_beyond_i64_is_rejected() {
         Err(HostError::Identity)
     ));
 }
+
+#[test]
+fn pair_containers_are_created_for_the_images_platform() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::config::RunnerPlatform;
+    let physical: Vec<_> = StorageRole::PHYSICAL
+        .iter()
+        .map(|role| (*role, 1 << 20))
+        .collect();
+    let plan = StorageProvisioningPlan::for_test(&physical);
+    let names = crate::worker::WorkerIdentityNames::from_nonce(&"a".repeat(32))?;
+    let budget = crate::worker::ResourceBudgetConfig {
+        runner_cpu_millicores: 2_000,
+        runner_memory_bytes: 4 << 30,
+        dind_cpu_millicores: 1_000,
+        dind_memory_bytes: 2 << 30,
+        operational_memory_reserve_bytes: 1 << 30,
+    }
+    .validate()?;
+    let context = super::super::spec::PairSpecContext {
+        plan: &plan,
+        names: &names,
+        connection_id: "lab",
+        budget,
+    };
+    for platform in [RunnerPlatform::LinuxAmd64, RunnerPlatform::LinuxArm64] {
+        let body = super::create_body(
+            names.private_volume().to_owned(),
+            format!("sha256:{}", "b".repeat(64)),
+            BootstrapContainerRole::Runner,
+            format!("container:{}", "c".repeat(64)),
+            platform,
+            &context,
+        )?;
+        assert_eq!(body.options.platform, platform.as_str());
+    }
+    Ok(())
+}

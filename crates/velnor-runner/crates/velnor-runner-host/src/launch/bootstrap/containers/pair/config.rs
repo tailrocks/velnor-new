@@ -4,6 +4,7 @@
 use super::super::BootstrapContainerRole;
 use super::PairCreate;
 use super::spec::PairSpecContext;
+use crate::config::RunnerPlatform;
 use crate::error::HostError;
 use crate::journal::{StorageProvisioningPlan, StorageRole};
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
@@ -195,6 +196,7 @@ pub(in crate::launch::bootstrap::containers) fn create_body(
     image: String,
     role: BootstrapContainerRole,
     network_mode: String,
+    platform: RunnerPlatform,
     context: &PairSpecContext<'_>,
 ) -> Result<PairCreate, HostError> {
     let plan = context.plan;
@@ -227,7 +229,7 @@ pub(in crate::launch::bootstrap::containers) fn create_body(
     Ok(PairCreate {
         options: CreateContainerOptions {
             name: Some(name),
-            platform: super::PLATFORM.to_owned(),
+            platform: platform.as_str().to_owned(),
         },
         config,
     })
