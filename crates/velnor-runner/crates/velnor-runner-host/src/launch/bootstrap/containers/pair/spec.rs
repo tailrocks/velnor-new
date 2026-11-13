@@ -46,9 +46,7 @@ pub(crate) fn create_spec(
         platform,
         context,
     )?;
-    if body.options.name.as_deref() != Some(container_name)
-        || body.options.platform != images.platform()
-    {
+    if body.options.name.as_deref() != Some(container_name) {
         return Err(HostError::Identity);
     }
     Ok(body)
