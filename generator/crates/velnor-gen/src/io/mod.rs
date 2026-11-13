@@ -76,14 +76,13 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     if cli.command == Command::Generate {
         for change in &drifts {
             let file = root.join(change.path().as_str());
-            match (change, expected.get(change.path())) {
-                (Drift::Changed(_) | Drift::Missing(_), Some(content)) => {
-                    if let Some(parent) = file.parent() {
-                        fs::create_dir_all(parent).map_err(|e| Error::File(parent.into(), e))?;
-                    }
-                    fs::write(&file, content).map_err(|e| Error::File(file.clone(), e))?;
+            if let Some(content) = expected.get(change.path()) {
+                if let Some(parent) = file.parent() {
+                    fs::create_dir_all(parent).map_err(|e| Error::File(parent.into(), e))?;
                 }
-                _ => fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?,
+                fs::write(&file, content).map_err(|e| Error::File(file.clone(), e))?;
+            } else {
+                fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?;
             }
         }
     }
