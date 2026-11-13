@@ -179,7 +179,12 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
     for sample in fs::read_dir(samples())? {
         let sample = sample?.path();
         for path in files_under(&sample.join("expected"))?.keys() {
-            if path.as_str().ends_with(".yml") || path.as_str().ends_with(".yaml") {
+            if matches!(
+                Path::new(path.as_str())
+                    .extension()
+                    .and_then(|e| e.to_str()),
+                Some("yml" | "yaml")
+            ) {
                 let name = sample.file_name().unwrap_or_default().to_string_lossy();
                 present.insert(format!("generator/samples/{name}/expected/{path}"));
             }
