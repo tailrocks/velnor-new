@@ -9,6 +9,7 @@ use std::path::Path;
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use super::support::rendered_job_block;
+use super::waste_aliases::expand_aliases;
 
 pub(super) type Files = BTreeMap<String, String>;
 
@@ -39,7 +40,7 @@ pub(super) fn files_of(tree: &RenderedTree) -> Result<Files, Box<dyn Error>> {
         .into_iter()
         .map(|path| {
             let bytes = tree.get(&path).ok_or("rendered file vanished")?.to_owned();
-            Ok((path, bytes))
+            Ok((path, expand_aliases(&bytes)))
         })
         .collect()
 }
@@ -54,7 +55,7 @@ pub(super) fn files_of_repo(root: &Path) -> Result<Files, Box<dyn Error>> {
         {
             files.insert(
                 format!(".github/workflows/{name}"),
-                fs::read_to_string(&path)?,
+                expand_aliases(&fs::read_to_string(&path)?),
             );
         }
     }
