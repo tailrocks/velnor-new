@@ -71,6 +71,11 @@ packages = ["velnor-actions-rust"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = ["ci-helper/**"]
+packages = ["velnor-ci"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = [
   "crates/velnor-runner/crates/velnor-runner-attestation/**",
   "crates/velnor-runner/Cargo.toml",
