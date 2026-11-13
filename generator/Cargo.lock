@@ -314,6 +314,7 @@ dependencies = [
  "clap",
  "serde_json",
  "similar",
+ "toml",
  "velnor-model",
  "velnor-render",
  "velnor-rust",

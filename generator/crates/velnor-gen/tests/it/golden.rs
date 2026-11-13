@@ -156,3 +156,35 @@ fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
     assert_eq!(mismatches("s", &generated, &same).len(), 0);
     Ok(())
 }
+
+#[test]
+fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestResult {
+    let config: toml::Table = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.velnor/config.toml"),
+    )?
+    .parse()?;
+    let listed: BTreeSet<String> = config
+        .get("checks")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|check| check.get("id").and_then(toml::Value::as_str) == Some("generator-samples"))
+        .filter_map(|check| check.get("inputs").and_then(toml::Value::as_array))
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .filter(|input| input.starts_with("generator/samples/"))
+        .map(str::to_owned)
+        .collect();
+    let mut present = BTreeSet::new();
+    for sample in fs::read_dir(samples())? {
+        let sample = sample?.path();
+        for path in files_under(&sample.join("expected"))?.keys() {
+            if path.as_str().ends_with(".yml") || path.as_str().ends_with(".yaml") {
+                let name = sample.file_name().unwrap_or_default().to_string_lossy();
+                present.insert(format!("generator/samples/{name}/expected/{path}"));
+            }
+        }
+    }
+    assert_eq!(present, listed);
+    Ok(())
+}
