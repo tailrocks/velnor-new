@@ -20,6 +20,23 @@ pub struct Cli {
 pub enum Command {
     #[command(subcommand, about = "Collect and compare run metrics")]
     Bench(BenchCommand),
+    #[command(
+        subcommand,
+        about = "Keep tracked files' modification times with a cached target directory"
+    )]
+    Inputs(InputsCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum InputsCommand {
+    #[command(
+        about = "Write target/.velnor/inputs.tsv: path, blob id and modification time in nanoseconds of every tracked file"
+    )]
+    Save,
+    #[command(
+        about = "Set the modification time of every tracked file whose blob id is unchanged to the saved value"
+    )]
+    Restore,
 }
 
 #[derive(Debug, Subcommand)]
