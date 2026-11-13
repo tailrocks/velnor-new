@@ -130,29 +130,32 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
     let jobs = jobs(&text);
     let (id, gate) = &jobs[0];
     assert_eq!(id, "gate");
-    assert_eq!(
-        values(gate, "run"),
-        [
-            "|",
-            "velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
-        ]
-    );
     let (version, digest) = PINNED;
-    assert_eq!(values(gate, "SHA"), [digest]);
-    assert_eq!(
-        values(gate, "URL"),
-        [format!(
-            "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v{version}/velnor-ci-linux-x64"
-        )]
+    let fetch = FETCH_HELPER_RUN
+        .lines()
+        .map(|line| format!("          {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let expected = format!(
+        "    name: Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Fetch velnor-ci {version}
+        env:
+          SHA: {digest}
+          URL: https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v{version}/velnor-ci-linux-x64
+        run: |
+{fetch}
+      - name: Check that the tagged commit is on the default branch and passed Required
+        env:
+          GITHUB_TOKEN: ${{{{ github.token }}}}
+        run: velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
     );
-    assert_eq!(
-        values(gate, "name")[1],
-        format!("Fetch velnor-ci {version}")
-    );
-    assert_eq!(values(gate, "uses"), Vec::<&str>::new());
-    assert_eq!(values(gate, "contents"), ["read"]);
-    assert_eq!(values(gate, "checks"), ["read"]);
-    assert_eq!(values(gate, "GITHUB_TOKEN"), ["${{ github.token }}"]);
+    assert_eq!(gate.join("\n"), expected);
     assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
     Ok(())
 }
