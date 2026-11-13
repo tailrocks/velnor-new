@@ -57,17 +57,17 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> String {
 }
 
 fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, Option<u64>, Option<u64>)> {
-    let mut by_name: BTreeMap<String, (Option<u64>, Option<u64>)> = BTreeMap::new();
+    let mut by_key: BTreeMap<(String, usize), (Option<u64>, Option<u64>)> = BTreeMap::new();
     for (key, seconds) in occurrence_keys(a) {
-        by_name.entry(key).or_default().0 = Some(seconds);
+        by_key.entry(key).or_default().0 = Some(seconds);
     }
     for (key, seconds) in occurrence_keys(b) {
-        by_name.entry(key).or_default().1 = Some(seconds);
+        by_key.entry(key).or_default().1 = Some(seconds);
     }
-    let mut changed: Vec<_> = by_name
+    let mut changed: Vec<_> = by_key
         .into_iter()
         .filter(|(_, (left, right))| left.unwrap_or(0) != right.unwrap_or(0))
-        .map(|(name, (left, right))| (name, left, right))
+        .map(|((name, occurrence), (left, right))| (job_label(&name, occurrence), left, right))
         .collect();
     changed.sort_by_key(|(_, left, right)| {
         std::cmp::Reverse(left.unwrap_or(0).abs_diff(right.unwrap_or(0)))
@@ -76,21 +76,25 @@ fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, Option<u64>, Opt
     changed
 }
 
-fn occurrence_keys(run: &RunMetrics) -> Vec<(String, u64)> {
+fn occurrence_keys(run: &RunMetrics) -> Vec<((String, usize), u64)> {
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     run.jobs
         .iter()
         .map(|job| {
             let count = seen.entry(&job.name).or_default();
             *count += 1;
-            let key = if *count == 1 {
-                job.name.clone()
-            } else {
-                format!("{} #{count}", job.name)
-            };
-            (key, job.duration_seconds)
+            ((job.name.clone(), *count), job.duration_seconds)
         })
         .collect()
+}
+
+fn job_label(name: &str, occurrence: usize) -> String {
+    let name = name.replace('|', "\\|");
+    if occurrence == 1 {
+        name
+    } else {
+        format!("{name} (occurrence {occurrence})")
+    }
 }
 
 fn shown(value: Option<u64>) -> String {

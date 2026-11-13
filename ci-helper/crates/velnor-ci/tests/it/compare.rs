@@ -88,8 +88,41 @@ fn jobs_with_the_same_name_are_compared_one_to_one() {
     let name = a.jobs[0].name.clone();
     let table = compare(&a, &b);
     assert!(
-        table.contains(&format!("| {name} #2 | 100 | 150 | +50 |")),
+        table.contains(&format!("| {name} (occurrence 2) | 100 | 150 | +50 |")),
         "{table}"
     );
     assert!(!table.contains(&format!("| {name} |")), "{table}");
+}
+
+#[test]
+fn a_job_literally_named_like_a_duplicate_does_not_collide() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let mut build = a.jobs[0].clone();
+    build.name = "build".to_owned();
+    build.duration_seconds = 10;
+    let mut literal = build.clone();
+    literal.name = "build #2".to_owned();
+    literal.duration_seconds = 20;
+    a.jobs
+        .extend([build.clone(), build.clone(), literal.clone()]);
+    build.duration_seconds = 11;
+    literal.duration_seconds = 25;
+    let mut second = build.clone();
+    second.duration_seconds = 10;
+    b.jobs.extend([build, second, literal]);
+    let table = compare(&a, &b);
+    assert!(table.contains("| build | 10 | 11 | +1 |"), "{table}");
+    assert!(table.contains("| build #2 | 20 | 25 | +5 |"), "{table}");
+    assert!(!table.contains("occurrence 2"), "{table}");
+}
+
+#[test]
+fn a_pipe_in_a_job_name_does_not_add_a_table_column() {
+    let a = recorded_metrics();
+    let mut b = recorded_metrics();
+    b.jobs[0].name = "test | linux".to_owned();
+    b.jobs[0].duration_seconds += 5;
+    let table = compare(&a, &b);
+    assert!(table.contains("| test \\| linux | - | "), "{table}");
 }
