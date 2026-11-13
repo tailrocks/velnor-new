@@ -179,8 +179,6 @@ rules:
         - "crates/velnor-archive-guard/**/*.rs"
         - "crates/velnor-runner/crates/*/src/**/*.rs"
         - "crates/velnor-runner/crates/*/tests/**/*.rs"
-        - "ci-helper/crates/*/src/**/*.rs"
-        - "ci-helper/crates/*/tests/**/*.rs"
         - "generator/crates/*/src/**/*.rs"
         - "generator/crates/*/tests/**/*.rs"
         - "local/crates/*/src/**/*.rs"
