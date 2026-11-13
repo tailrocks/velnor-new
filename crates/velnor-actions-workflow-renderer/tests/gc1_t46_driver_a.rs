@@ -91,7 +91,8 @@ def run_ci(case):
 
 def run_attestation(case):
     try:
-        count = identity_module.validate_attestation_output(case["output"], case["source"])
+        identity = {"source": case["source"], "event": case.get("event", "workflow_dispatch"), "run_id": case["run_id"], "run_attempt": case["run_attempt"]}
+        count = identity_module.validate_attestation_output(case["output"], identity, case["subjects"])
     except ERRORS as error:
         report("ATTESTATION-REJECTED", error)
         return
