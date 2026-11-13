@@ -65,7 +65,7 @@ pub(super) async fn admit_positive_offer(
                 pat: input.pat,
                 host_journal: input.context.journal,
                 scoped_journal: input.scoped,
-                release_read_secret: input.context.release_read_secret,
+                image_authority: input.context.image_authority,
                 selected_engine: input.context.selected_engine,
                 resource_budget: input.budget,
                 allocated_header: input.allocated_header,

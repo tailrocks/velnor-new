@@ -54,8 +54,8 @@ pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
 
+pub(crate) use resource_probe::{ImageAuthority, RecoveryObservation};
 pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
-pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
@@ -101,7 +101,7 @@ pub(crate) async fn startup_storage_profile(
     journal: &Journal,
     budget: ResourceBudget,
     max_jobs: u32,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
     images: &VerifiedWorkerImages,
     endpoint: &str,
 ) -> Option<crate::journal::StorageProfile> {

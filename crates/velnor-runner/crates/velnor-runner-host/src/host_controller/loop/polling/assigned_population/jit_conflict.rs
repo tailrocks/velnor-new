@@ -66,7 +66,7 @@ pub(super) async fn reconcile(
                     github_pat: &credentials.github_pat,
                     selected: context.selected_engine,
                     images: context.worker_images,
-                    release_secret: context.release_read_secret,
+                    image_authority: context.image_authority,
                 },
                 &claim,
             )

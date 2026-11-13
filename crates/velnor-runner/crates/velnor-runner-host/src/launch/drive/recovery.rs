@@ -9,7 +9,7 @@ use crate::{
     config::{ApprovedJobAuthorityPolicy, RepositoryConnection},
     journal::{AssignmentIdentity, ConnectionJournal, Journal},
     launch::{
-        ReleaseReadSecret, SelectedEngineContext,
+        ImageAuthority, SelectedEngineContext,
         resource_probe::recovery_observation,
         steps::{CheckedAcquiredRecovery, ScopedProvisioningOutcome},
     },
@@ -32,11 +32,11 @@ pub(crate) async fn recover_acquired_scoped_offer(
     host: &Journal,
     budget: ResourceBudget,
     docker: &Docker,
-    release_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
     let engine = context.engine;
     recover_acquired_scoped_offer_with_observation(context, |charge| {
-        recovery_observation(docker, host, budget, charge, engine, release_secret)
+        recovery_observation(docker, host, budget, charge, engine, image_authority)
     })
     .await
 }

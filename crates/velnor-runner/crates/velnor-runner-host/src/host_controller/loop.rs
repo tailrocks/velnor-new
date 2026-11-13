@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::config::HostConfig;
 use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
-use crate::launch::ReleaseReadSecret;
+use crate::launch::ImageAuthority;
 use crate::launch_blocking::ListenFault;
 
 #[path = "loop/connection_poll.rs"]
@@ -42,7 +42,7 @@ pub fn run_host_blocking(
     if !daemon_lock.matches_path(&state_root.join("daemon.lock")) {
         return Err(HostError::Lock.into());
     }
-    let release_read_secret = ReleaseReadSecret::load(config)?;
+    let image_authority = ImageAuthority::load(config)?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -51,7 +51,7 @@ pub fn run_host_blocking(
         config.clone(),
         state,
         daemon_lock,
-        release_read_secret,
+        image_authority,
     ))
 }
 

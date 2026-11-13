@@ -31,7 +31,7 @@ pub(super) async fn reconcile(
             context.selected_engine,
             context.worker_images,
             reservation.reservation_id,
-            context.release_read_secret,
+            context.image_authority,
         ))
         .await
         {

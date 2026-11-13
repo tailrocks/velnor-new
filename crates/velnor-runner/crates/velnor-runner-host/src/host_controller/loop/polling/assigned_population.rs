@@ -227,7 +227,7 @@ async fn recover_candidate(
         context.journal,
         context.config.resource_budget()?,
         context.docker,
-        context.release_read_secret,
+        context.image_authority,
     )
     .await;
     match outcome {

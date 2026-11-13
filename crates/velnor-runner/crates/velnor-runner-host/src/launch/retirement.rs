@@ -27,7 +27,7 @@ pub(crate) struct RetirementContext<'a> {
     pub(crate) binding: &'a RepositoryConnection,
     pub(crate) selected: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
-    pub(crate) release_secret: &'a std::sync::Arc<crate::launch::ReleaseReadSecret>,
+    pub(crate) image_authority: &'a std::sync::Arc<crate::launch::ImageAuthority>,
     pub(crate) claim: &'a PostJitRetirementClaim,
 }
 
@@ -41,7 +41,7 @@ pub(crate) async fn reconcile_claim(
         binding,
         selected,
         images,
-        release_secret,
+        image_authority,
         claim,
     } = context;
     if claim.reservation_id() <= 0 || claim.scale_set_id() <= 0 {
@@ -63,7 +63,7 @@ pub(crate) async fn reconcile_claim(
         journal.clone(),
         engine,
         selected.clone(),
-        std::sync::Arc::clone(release_secret),
+        std::sync::Arc::clone(image_authority),
     )?;
     Box::pin(reconcile_claim_effects(
         &runtime, docker, scope, binding, selected, claim,

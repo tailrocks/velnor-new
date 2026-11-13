@@ -62,7 +62,7 @@ async fn reconcile_candidate(
             binding,
             selected,
             images: context.worker_images,
-            release_secret: context.release_read_secret,
+            image_authority: context.image_authority,
             claim: &claim,
         },
     ))

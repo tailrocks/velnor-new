@@ -185,7 +185,7 @@ where
         docker,
         host,
         scoped,
-        secret: release_secret,
+        secret: image_authority,
         engine,
         images,
     } = *context;
@@ -194,7 +194,7 @@ where
         docker,
         scoped,
         host,
-        release_secret,
+        image_authority,
         engine,
         images,
     )

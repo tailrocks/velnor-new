@@ -92,7 +92,7 @@ fn valid_guest_image_shape(document: &serde_json::Value) -> bool {
         && object
             .get("guest_platform")
             .and_then(serde_json::Value::as_str)
-            == Some("linux/amd64")
+            .is_some_and(|platform| matches!(platform, "linux/amd64" | "linux/arm64"))
         && object
             .get("scale_set")
             .and_then(serde_json::Value::as_object)

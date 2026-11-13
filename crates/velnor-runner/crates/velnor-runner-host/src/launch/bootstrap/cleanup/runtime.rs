@@ -12,7 +12,7 @@ use crate::{
         ConnectionJournal, EngineContext, Journal, MetadataSettlementResult,
         StorageCleanupIdentity, StorageCleanupObserverWitness,
     },
-    launch::{ReleaseReadSecret, SelectedEngineContext},
+    launch::{ImageAuthority, SelectedEngineContext},
 };
 use bollard::Docker;
 
@@ -25,7 +25,7 @@ pub(crate) struct NativeCleanupRuntime {
     journal: Journal,
     engine_context: EngineContext,
     selected: SelectedEngineContext,
-    release_secret: Arc<ReleaseReadSecret>,
+    image_authority: Arc<ImageAuthority>,
 }
 
 impl NativeCleanupRuntime {
@@ -48,7 +48,7 @@ impl NativeCleanupRuntime {
         journal: Journal,
         engine_context: EngineContext,
         selected: SelectedEngineContext,
-        release_secret: Arc<ReleaseReadSecret>,
+        image_authority: Arc<ImageAuthority>,
     ) -> Result<Self, HostError> {
         if !selected.matches_selection(&engine_context) {
             return Err(HostError::Ownership);
@@ -58,7 +58,7 @@ impl NativeCleanupRuntime {
             journal,
             engine_context,
             selected,
-            release_secret,
+            image_authority,
         })
     }
 
@@ -123,7 +123,7 @@ impl NativeCleanupRuntime {
             journal: &self.journal,
             scope,
             selected: &self.selected,
-            release_read_secret: self.release_secret.as_ref(),
+            image_authority: self.image_authority.as_ref(),
         };
 
         let guest = crate::launch::resource_probe::observe_cleanup_binding(
@@ -170,7 +170,7 @@ impl NativeCleanupRuntime {
             scope,
             reservation_id,
             &self.selected,
-            self.release_secret.as_ref(),
+            self.image_authority.as_ref(),
         )
         .await
     }

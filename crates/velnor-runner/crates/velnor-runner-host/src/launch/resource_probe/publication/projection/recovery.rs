@@ -90,7 +90,7 @@ impl PublicationRecoveryProjection {
             engine_id: projection.engine_id.clone(),
             docker_root_digest: projection.root.digest().to_owned(),
             operation_name: projection.name.clone(),
-            platform: "linux/amd64".to_owned(),
+            platform: projection.options.platform.clone(),
             source_revision: projection.source_revision.clone(),
             runtime_image_id: image_id.to_owned(),
             image_binding_digest: projection.image_binding_digest.clone(),
@@ -254,7 +254,7 @@ impl PublicationRecoveryProjection {
             || !lower_hex_id(&self.operation_id)
             || !lower_hex_id(&self.instance_id)
             || self.operation_name != expected_name
-            || self.platform != "linux/amd64"
+            || crate::config::RunnerPlatform::parse(&self.platform).is_none()
             || self.source_revision.len() != 40
             || !self
                 .source_revision
