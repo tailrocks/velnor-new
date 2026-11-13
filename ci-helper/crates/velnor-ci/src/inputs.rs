@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CiError;
 
@@ -21,19 +21,40 @@ pub struct SavedInput {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Tracked {
+    pub files: Vec<TrackedFile>,
+    pub modified: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RestorePlan {
     pub restore: Vec<SavedInput>,
     pub changed: usize,
     pub new: usize,
+    pub modified: usize,
 }
 
 #[must_use]
-pub fn parse_ls_files(output: &[u8]) -> Vec<TrackedFile> {
-    output
-        .split(|byte| *byte == 0)
+pub fn parse_ls_files(staged: &[u8], modified: &[u8]) -> Tracked {
+    let modified: BTreeSet<&[u8]> = nul_records(modified).collect();
+    let mut tracked = Tracked::default();
+    for file in nul_records(staged)
         .filter_map(|record| std::str::from_utf8(record).ok())
         .filter_map(parse_ls_files_record)
-        .collect()
+    {
+        if modified.contains(file.path.as_bytes()) {
+            tracked.modified += 1;
+        } else {
+            tracked.files.push(file);
+        }
+    }
+    tracked
+}
+
+fn nul_records(output: &[u8]) -> impl Iterator<Item = &[u8]> {
+    output
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
 }
 
 fn parse_ls_files_record(record: &str) -> Option<TrackedFile> {
@@ -93,13 +114,16 @@ fn parse_inputs_line(line: &str) -> Option<SavedInput> {
 }
 
 #[must_use]
-pub fn plan_restore(saved: &[SavedInput], tracked: &[TrackedFile]) -> RestorePlan {
+pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
     let saved: BTreeMap<&str, &SavedInput> = saved
         .iter()
         .map(|input| (input.path.as_str(), input))
         .collect();
-    let mut plan = RestorePlan::default();
-    for file in tracked {
+    let mut plan = RestorePlan {
+        modified: tracked.modified,
+        ..RestorePlan::default()
+    };
+    for file in &tracked.files {
         match saved.get(file.path.as_str()) {
             Some(input) if input.blob == file.blob => plan.restore.push(SavedInput {
                 path: file.path.clone(),

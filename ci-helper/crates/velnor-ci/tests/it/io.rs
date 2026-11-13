@@ -88,12 +88,14 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     repo.write("src/lib.rs", "pub fn one() {}\n");
     repo.write("src/main.rs", "fn main() {}\n");
     repo.write("data/greeting.txt", "hello\n");
+    repo.write("src/edited.rs", "pub fn three() {}\n");
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
     let before = [
         ".gitignore",
         "src/lib.rs",
         "src/main.rs",
         "data/greeting.txt",
+        "src/edited.rs",
     ];
     for path in before {
         repo.set_mtime(path, built);
@@ -102,7 +104,9 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.write("src/main.rs", "fn main() { println!(\"changed\"); }\n");
-    repo.write("src/new.rs", "pub fn two() {}\n");
+    repo.write("src/new.rs", "pub fn three() { todo() }\n");
+    fs::write(repo.root().join("src/edited.rs"), "pub fn three() { 3 }\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
     for path in before.iter().chain(&["src/new.rs"]) {
         repo.set_mtime(path, checkout);
     }
@@ -112,9 +116,10 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     assert_eq!(repo.mtime("data/greeting.txt"), built);
     assert_eq!(repo.mtime("src/main.rs"), checkout);
     assert_eq!(repo.mtime("src/new.rs"), checkout);
+    assert_eq!(repo.mtime("src/edited.rs"), checkout);
     assert_eq!(
         report,
-        "restored the modification time of 3 unchanged files; 1 changed, 1 new\n"
+        "restored the modification time of 3 unchanged files; 1 changed, 1 new, 1 modified in the worktree\n"
     );
 }
 

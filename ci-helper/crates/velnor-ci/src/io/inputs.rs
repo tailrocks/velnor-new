@@ -9,13 +9,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, TrackedFile, format_inputs, parse_inputs, parse_ls_files, plan_restore,
+    INPUTS_FILE, SavedInput, Tracked, format_inputs, parse_inputs, parse_ls_files, plan_restore,
 };
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     let tracked = tracked_files(root)?;
-    let mut saved = Vec::with_capacity(tracked.len());
-    for file in &tracked {
+    let mut saved = Vec::with_capacity(tracked.files.len());
+    for file in &tracked.files {
         if let Some(mtime_ns) = modified_ns(&root.join(&file.path))? {
             saved.push(SavedInput {
                 path: file.path.clone(),
@@ -32,8 +32,9 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files to {INPUTS_FILE}\n",
-        saved.len()
+        "saved {} tracked files to {INPUTS_FILE}; {} modified in the worktree left out\n",
+        saved.len(),
+        tracked.modified
     ))
 }
 
@@ -51,18 +52,26 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         set_modified_ns(&root.join(&input.path), input.mtime_ns)?;
     }
     Ok(format!(
-        "restored the modification time of {} unchanged files; {} changed, {} new\n",
+        "restored the modification time of {} unchanged files; {} changed, {} new, {} modified in the worktree\n",
         plan.restore.len(),
         plan.changed,
-        plan.new
+        plan.new,
+        plan.modified
     ))
 }
 
-fn tracked_files(root: &Path) -> Result<Vec<TrackedFile>, CiError> {
+fn tracked_files(root: &Path) -> Result<Tracked, CiError> {
+    let staged = git_ls_files(root, &["-s", "-z"])?;
+    let modified = git_ls_files(root, &["-m", "-z"])?;
+    Ok(parse_ls_files(&staged, &modified))
+}
+
+fn git_ls_files(root: &Path, args: &[&str]) -> Result<Vec<u8>, CiError> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["ls-files", "-s", "-z"])
+        .arg("ls-files")
+        .args(args)
         .output()
         .map_err(|e| CiError::new(format!("cannot run git ls-files: {e}")))?;
     if !output.status.success() {
@@ -71,7 +80,7 @@ fn tracked_files(root: &Path) -> Result<Vec<TrackedFile>, CiError> {
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    Ok(parse_ls_files(&output.stdout))
+    Ok(output.stdout)
 }
 
 fn modified_ns(path: &Path) -> Result<Option<u64>, CiError> {
