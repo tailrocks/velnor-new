@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+const SELECTED_IGNORE: &str = "# jactionlint ignore=obfuscation";
+
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
+    Selected(String),
     Block(String),
     Int(u64),
     Bool(bool),
@@ -19,6 +22,11 @@ pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
 
 fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
     for (key, value) in items {
+        if matches!(value, Yaml::Selected(_)) {
+            out.push_str(&" ".repeat(indent));
+            out.push_str(SELECTED_IGNORE);
+            out.push('\n');
+        }
         out.push_str(&" ".repeat(indent));
         out.push_str(&key_text(key));
         out.push(':');
@@ -67,7 +75,7 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 fn inline(value: &Yaml) -> String {
     match value {
         Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
-        Yaml::Expr(text) | Yaml::Block(text) => scalar(text),
+        Yaml::Expr(text) | Yaml::Selected(text) | Yaml::Block(text) => scalar(text),
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),

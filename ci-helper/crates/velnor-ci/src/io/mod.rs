@@ -9,21 +9,52 @@ use std::io::Read;
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 
 pub use self::inputs::{restore_inputs, save_inputs};
-use crate::cli::{BenchCommand, Cli, CollectArgs, Command, CompareArgs, InputsCommand};
+use crate::cli::{
+    BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
+    ReleaseGateArgs,
+};
 use crate::collect::collect;
 use crate::compare::compare;
 use crate::error::CiError;
+use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
+const API_VARIABLE: &str = "GITHUB_API_URL";
+const DEFAULT_API: &str = "https://api.github.com";
+const UNKNOWN_COMMIT: &str = "unknown";
+
+#[must_use]
+pub fn version_text() -> String {
+    format!(
+        "{} ({})",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("VELNOR_COMMIT").unwrap_or(UNKNOWN_COMMIT)
+    )
+}
+
+pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    let matches = Cli::command()
+        .version(version_text())
+        .try_get_matches_from(args)?;
+    Cli::from_arg_matches(&matches)
+}
 
 #[must_use]
 pub fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    let cli = match parse_cli(std::env::args_os()) {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
+    };
+    match run(cli) {
         Ok(output) => {
             print!("{output}");
             ExitCode::SUCCESS
@@ -41,6 +72,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
         Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
+        Command::ReleaseGate(args) => run_release_gate(&args),
+        Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
     }
 }
 
@@ -53,12 +86,23 @@ fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     let token = std::env::var(TOKEN_VARIABLE)
         .map_err(|_| CiError::new(format!("set {TOKEN_VARIABLE} to a GitHub token")))?;
     let repo = Repo::parse(&args.repo)?;
-    let github = http::HttpGitHub::new(token);
+    let github = http::HttpGitHub::new(api_url(), token);
     let metrics = collect(&github, &repo, args.run_id, args.allow_rerun)?;
     if let Some(path) = &args.output {
         write_metrics(path, &metrics)?;
     }
     Ok(metrics.summary())
+}
+
+fn api_url() -> String {
+    std::env::var(API_VARIABLE).unwrap_or_else(|_| DEFAULT_API.to_owned())
+}
+
+fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
+    let token = std::env::var(TOKEN_VARIABLE)
+        .map_err(|_| CiError::new(format!("set {TOKEN_VARIABLE} to a GitHub token")))?;
+    let repo = Repo::parse(&args.repo)?;
+    release_gate(&http::HttpGitHub::new(api_url(), token), &repo, &args.sha)
 }
 
 pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {

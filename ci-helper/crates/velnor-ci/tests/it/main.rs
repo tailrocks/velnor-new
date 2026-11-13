@@ -3,8 +3,10 @@
 
 mod collect;
 mod compare;
+mod gate;
 mod inputs;
 mod io;
 mod logscan;
 mod support;
 mod time;
+mod version;

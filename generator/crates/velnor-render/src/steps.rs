@@ -80,7 +80,7 @@ fn by_platform<T: fmt::Display>(
         .map(|(platform, binary)| format!("\"{}\":\"{}\"", platform.runner_key(), field(binary)))
         .collect::<Vec<_>>()
         .join(",");
-    Value::Expr(format!(
+    Value::Selected(format!(
         "${{{{ fromJSON('{{{table}}}')[format('{{0}}-{{1}}', runner.os, runner.arch)] }}}}"
     ))
 }

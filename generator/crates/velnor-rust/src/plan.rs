@@ -13,6 +13,12 @@ const FORMAT_JOB: JobId = JobId::from_static("format");
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::FetchHelper(release.clone()))),
+    );
     steps.extend(facts.rust_roots.iter().map(|root| {
         step(StepKind::Cargo(CargoCommand::FmtCheck {
             manifest: root.manifest.clone(),
