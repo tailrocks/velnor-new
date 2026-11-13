@@ -212,6 +212,9 @@ fn recording_a_sample_never_writes_or_removes_through_a_symbolic_link() -> TestR
     assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     assert!(directory_link.outside().join("keep.txt").exists());
     assert!(!directory_link.outside().join("mise.toml").exists());
+    let result = write_sample(&directory_link.repo(), "demo", &Recording::default());
+    assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    assert!(directory_link.outside().join("keep.txt").exists());
 
     let samples_link = Scratch::new("record-samples-link")?;
     samples_link.link("generator/samples", &samples_link.outside())?;
