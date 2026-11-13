@@ -10,7 +10,7 @@ Source column: Documentation means the heading of [Dependency caching reference]
 | 3 | Per scope: the exact key, then keys starting with the key (newest first), then each restore key in order (an entry equal to it, else the newest starting with it). `version` must be equal | Documentation: Matching ("When a key doesn't match directly, the action searches for keys prefixed with the restore key") |
 | 3b | Newest wins among several matches of the key as prefix | Modelled (stated for restore keys only) |
 | 4 | The same scope, key and version cannot be created again. Another scope or version can | Documentation: `cache` action usage ("You cannot change the contents of an existing cache") |
-| 5a | Not accessed for more than 7 days: evicted. Exactly 7 days is kept | Documentation: Limits |
+| 5a | Not accessed for more than 7 days (the default retention): evicted. Exactly 7 days is kept | Documentation: Limits |
 | 5b | Until the total is less than the limit, evict the least recently accessed, all scopes in one pool. A total equal to the limit evicts | Documentation: Limits ("until the total size is less than the repository limit") |
 | 5c | The limit is 10 000 000 000 bytes ("10 GB" has no unit; the smaller reading only evicts early) | Modelled |
 | 5d | Equal last access: earlier `created` first, then scope, key, version | Modelled |
