@@ -100,7 +100,7 @@ impl Site<'_> {
     pub fn compare(&self, compare: &Comparison<'_>, page: Page, commits: &[Commit]) -> Value {
         let spec = format!("{}...{}", compare.base.sha, compare.head);
         let web = format!("http://{}/{}/compare", self.host, self.repository);
-        let ahead = compare.commits.len();
+        let ahead = compare.ahead_by;
         let status = match (ahead, compare.behind_by) {
             (0, 0) => "identical",
             (_, 0) => "ahead",
@@ -192,7 +192,7 @@ pub struct Comparison<'a> {
     pub base: &'a Commit,
     pub head: &'a str,
     pub merge_base: &'a Commit,
-    pub commits: &'a [Commit],
+    pub ahead_by: usize,
     pub behind_by: usize,
     pub files: &'a [FileDiff],
 }

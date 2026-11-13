@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -230,25 +231,40 @@ async fn saves_and_stub_deletes_running_together_lose_no_update() {
     assert_eq!(harness.restore(MAIN, "new-3").await["ok"], true);
 }
 
-#[tokio::test]
-async fn a_delete_that_cannot_remove_the_archive_fails_and_keeps_the_entry() {
-    let harness = Harness::new("api-keep", LIMIT).await;
-    harness.save(MAIN, "tools", b"1234").await;
-    let stub = stub_over(&harness, "api-keep");
-    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
-    let archive = std::fs::read_dir(harness.dir().join("archives"))
-        .ok()
-        .and_then(|mut entries| entries.next())
-        .and_then(Result::ok)
-        .map(|entry| entry.path())
-        .unwrap_or_default();
-    std::fs::remove_file(&archive).unwrap_or_else(|e| unreachable!("{e}"));
-    std::fs::create_dir_all(archive.join("stuck")).unwrap_or_else(|e| unreachable!("{e}"));
+fn mode(path: &std::path::Path, mode: u32) {
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
 
+async fn failed_delete_keeps_the_entry_and_its_archive(name: &str, locked: &str) {
+    let harness = Harness::new(name, LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    let stub = stub_over(&harness, name);
+    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
+    let blocked = harness.dir().join(locked);
+
+    mode(&blocked, 0o555);
     let failed = stub.call("DELETE", &format!("{CACHES}/{id}")).await;
+    mode(&blocked, 0o755);
 
     assert_eq!(failed.status, 500);
     assert_eq!(keys(&stub.get(CACHES).await.json()), ["tools"]);
+    assert_eq!(harness.restore(MAIN, "tools").await["ok"], true);
+    let blob = harness.restore(MAIN, "tools").await["signed_download_url"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert_eq!(harness.get(&blob).await.body.as_ref(), b"1234");
+}
+
+#[tokio::test]
+async fn a_delete_that_cannot_remove_the_archive_fails_and_keeps_the_entry() {
+    failed_delete_keeps_the_entry_and_its_archive("api-keep-archive", "archives").await;
+}
+
+#[tokio::test]
+async fn a_delete_whose_index_write_fails_puts_the_archive_back() {
+    failed_delete_keeps_the_entry_and_its_archive("api-keep-index", ".").await;
 }
 
 #[tokio::test]

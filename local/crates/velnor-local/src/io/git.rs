@@ -109,6 +109,14 @@ impl Git {
         Ok(files)
     }
 
+    pub(super) async fn count(&self, range: &str) -> Option<usize> {
+        self.text(&["rev-list", "--count", "--end-of-options", range])
+            .await?
+            .trim()
+            .parse()
+            .ok()
+    }
+
     pub(super) async fn commits(&self, options: &[&str], revisions: &str) -> Option<Vec<Commit>> {
         let format = format!("--format={COMMIT_FORMAT}");
         let mut full = vec!["log", "-z", "--no-color", &format];

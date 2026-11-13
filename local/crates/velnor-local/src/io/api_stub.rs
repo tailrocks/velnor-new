@@ -14,8 +14,9 @@ use tokio::fs;
 use super::git::{Failure, Git};
 use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
 use crate::rest::{
-    self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Comparison,
-    DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site, TreeEntry,
+    self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
+    Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
+    TreeEntry,
 };
 
 #[derive(Debug)]
@@ -193,17 +194,8 @@ impl ApiStub {
             Ok(files) => files,
             Err(failure) => return Reply::from(failure),
         };
-        let (Some(commits), Some(base_commit), Some(merge_commit), Some(behind)) = (
-            self.git.commits(&["--reverse"], &range).await,
-            self.git.commits(&["-1"], &base).await,
-            self.git.commits(&["-1"], &merge_base).await,
-            self.git
-                .text(&["rev-list", "--count", "--end-of-options", &behind])
-                .await,
-        ) else {
-            return Reply::missing();
-        };
-        let (Some(base_commit), Some(merge_commit)) = (base_commit.first(), merge_commit.first())
+        let (Some(ahead), Some(behind)) =
+            (self.git.count(&range).await, self.git.count(&behind).await)
         else {
             return Reply::missing();
         };
@@ -213,16 +205,34 @@ impl ApiStub {
             COMPARE_COMMITS_DEFAULT
         };
         let page = Page::from_query(&call.params, default, COMPARE_COMMITS_DEFAULT);
+        let (skip, take) = page.newest_first(ahead);
+        let (Some(commits), Some(base_commit), Some(merge_commit)) = (
+            self.git
+                .commits(
+                    &[&format!("--skip={skip}"), &format!("--max-count={take}")],
+                    &range,
+                )
+                .await,
+            self.git.commits(&["-1"], &base).await,
+            self.git.commits(&["-1"], &merge_base).await,
+        ) else {
+            return Reply::missing();
+        };
+        let commits: Vec<Commit> = commits.into_iter().rev().collect();
+        let (Some(base_commit), Some(merge_commit)) = (base_commit.first(), merge_commit.first())
+        else {
+            return Reply::missing();
+        };
         let comparison = Comparison {
             base: base_commit,
             head: &head,
             merge_base: merge_commit,
-            commits: &commits,
-            behind_by: behind.trim().parse().unwrap_or(0),
+            ahead_by: ahead,
+            behind_by: behind,
             files: &files[..files.len().min(COMPARE_FILES_CAP)],
         };
-        let body = call.site.compare(&comparison, page, page.slice(&commits));
-        let link = page.link(commits.len(), call.host, call.path, &call.params);
+        let body = call.site.compare(&comparison, page, &commits);
+        let link = page.link(ahead, call.host, call.path, &call.params);
         Reply::with(200, body, link)
     }
 
@@ -309,11 +319,11 @@ impl ApiStub {
         let Some(record) = index.delete(call.site.repository, id) else {
             return Reply::missing();
         };
-        let removed =
-            remove_if_present(fs::remove_file(dir.join("archives").join(&record.blob)).await).and(
-                remove_if_present(fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await),
-            );
-        if removed.is_err() {
+        let archive = dir.join("archives").join(&record.blob);
+        let tombstone = dir
+            .join("archives")
+            .join(format!("{}.deleted", record.blob));
+        if remove_if_present(fs::rename(&archive, &tombstone).await).is_err() {
             return Reply::with(
                 500,
                 json!({"message": "cache archive could not be removed"}),
@@ -321,8 +331,11 @@ impl ApiStub {
             );
         }
         if write_index(dir, &index).await.is_err() {
+            let _ = fs::rename(&tombstone, &archive).await;
             return Reply::with(500, json!({"message": "cache index is not writable"}), None);
         }
+        let _ = fs::remove_file(&tombstone).await;
+        let _ = fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await;
         Reply {
             status: 204,
             body: None,

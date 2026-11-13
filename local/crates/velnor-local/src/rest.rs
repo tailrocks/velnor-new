@@ -142,6 +142,13 @@ impl Page {
         &items[start..(start + self.per_page).min(items.len())]
     }
 
+    #[must_use]
+    pub fn newest_first(&self, total: usize) -> (usize, usize) {
+        let start = (self.page - 1).saturating_mul(self.per_page).min(total);
+        let end = start.saturating_add(self.per_page).min(total);
+        (total - end, end - start)
+    }
+
     fn last(&self, total: usize) -> usize {
         total.div_ceil(self.per_page).max(1)
     }
