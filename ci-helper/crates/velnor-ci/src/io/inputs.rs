@@ -18,8 +18,7 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     for file in &tracked.files {
         if let Some(mtime_ns) = modified_ns(&root.join(&file.path))? {
             saved.push(SavedInput {
-                path: file.path.clone(),
-                blob: file.blob.clone(),
+                file: file.clone(),
                 mtime_ns,
             });
         }
@@ -32,9 +31,10 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files to {INPUTS_FILE}; {} modified in the worktree left out\n",
+        "saved {} tracked files to {INPUTS_FILE}; left out: {} modified in the worktree, {} with a path the file cannot hold\n",
         saved.len(),
-        tracked.modified
+        tracked.modified,
+        tracked.unsupported
     ))
 }
 
@@ -49,14 +49,15 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     };
     let plan = plan_restore(&parse_inputs(&text)?, &tracked_files(root)?);
     for input in &plan.restore {
-        set_modified_ns(&root.join(&input.path), input.mtime_ns)?;
+        set_modified_ns(&root.join(&input.file.path), input.mtime_ns)?;
     }
     Ok(format!(
-        "restored the modification time of {} unchanged files; {} changed, {} new, {} modified in the worktree\n",
+        "restored the modification time of {} unchanged files; {} changed, {} new, {} modified in the worktree, {} with a path the file cannot hold\n",
         plan.restore.len(),
         plan.changed,
         plan.new,
-        plan.modified
+        plan.modified,
+        plan.unsupported
     ))
 }
 

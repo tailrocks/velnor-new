@@ -18,27 +18,33 @@ fn only_unmodified_regular_files_at_stage_zero_with_a_writable_path_are_tracked(
     ];
     let staged = records.join("\0") + "\0";
     let tracked = parse_ls_files(staged.as_bytes(), b"src/edited.rs\0");
-    let file = |path: &str| TrackedFile {
+    let file = |path: &str, mode: &str| TrackedFile {
         path: path.to_owned(),
         blob: blob.to_owned(),
+        mode: mode.to_owned(),
     };
     assert_eq!(
         tracked,
         Tracked {
-            files: vec![file("src/lib.rs"), file("scripts/run me")],
+            files: vec![
+                file("src/lib.rs", "100644"),
+                file("scripts/run me", "100755")
+            ],
             modified: 1,
+            unsupported: 2,
         }
     );
 }
 
 #[test]
 fn a_corrupt_inputs_file_is_an_error_that_names_the_line() {
-    let text = "src/lib.rs\tabc\t1700000000000000000\nsrc/main.rs\tdef\tyesterday\n";
+    let text =
+        "src/lib.rs\tabc\t1700000000000000000\t100644\nsrc/main.rs\tdef\tyesterday\t100644\n";
     let error = parse_inputs(text).map(|inputs| inputs.len());
     assert_eq!(
         error.map_err(|e| e.to_string()),
         Err(
-            "target/.velnor/inputs.tsv line 2 is not `path<TAB>blob<TAB>mtime_ns`: `src/main.rs\tdef\tyesterday`"
+            "target/.velnor/inputs.tsv line 2 is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `src/main.rs\tdef\tyesterday\t100644`"
                 .to_owned()
         )
     );

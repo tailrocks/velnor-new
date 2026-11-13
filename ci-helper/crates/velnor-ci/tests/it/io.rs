@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{self, File, FileTimes};
+use std::fs::{self, File, FileTimes, Permissions};
 use std::io::Cursor;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -59,6 +60,12 @@ impl Repo {
         self.git(&["add", "--all"]);
     }
 
+    fn make_executable(&self, path: &str) {
+        fs::set_permissions(self.0.join(path), Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        self.git(&["add", "--all"]);
+    }
+
     fn set_mtime(&self, path: &str, time: SystemTime) {
         File::open(self.0.join(path))
             .and_then(|file| file.set_times(FileTimes::new().set_modified(time)))
@@ -89,6 +96,7 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     repo.write("src/main.rs", "fn main() {}\n");
     repo.write("data/greeting.txt", "hello\n");
     repo.write("src/edited.rs", "pub fn three() {}\n");
+    repo.write("tools/gen.sh", "echo gen\n");
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
     let before = [
         ".gitignore",
@@ -96,6 +104,7 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
         "src/main.rs",
         "data/greeting.txt",
         "src/edited.rs",
+        "tools/gen.sh",
     ];
     for path in before {
         repo.set_mtime(path, built);
@@ -105,6 +114,7 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.write("src/main.rs", "fn main() { println!(\"changed\"); }\n");
     repo.write("src/new.rs", "pub fn three() { todo() }\n");
+    repo.make_executable("tools/gen.sh");
     fs::write(repo.root().join("src/edited.rs"), "pub fn three() { 3 }\n")
         .unwrap_or_else(|e| unreachable!("{e}"));
     for path in before.iter().chain(&["src/new.rs"]) {
@@ -117,9 +127,10 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     assert_eq!(repo.mtime("src/main.rs"), checkout);
     assert_eq!(repo.mtime("src/new.rs"), checkout);
     assert_eq!(repo.mtime("src/edited.rs"), checkout);
+    assert_eq!(repo.mtime("tools/gen.sh"), checkout);
     assert_eq!(
         report,
-        "restored the modification time of 3 unchanged files; 1 changed, 1 new, 1 modified in the worktree\n"
+        "restored the modification time of 3 unchanged files; 2 changed, 1 new, 1 modified in the worktree, 0 with a path the file cannot hold\n"
     );
 }
 

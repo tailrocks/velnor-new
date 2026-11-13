@@ -11,12 +11,12 @@ pub const INPUTS_FILE: &str = "target/.velnor/inputs.tsv";
 pub struct TrackedFile {
     pub path: String,
     pub blob: String,
+    pub mode: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedInput {
-    pub path: String,
-    pub blob: String,
+    pub file: TrackedFile,
     pub mtime_ns: u64,
 }
 
@@ -24,6 +24,7 @@ pub struct SavedInput {
 pub struct Tracked {
     pub files: Vec<TrackedFile>,
     pub modified: usize,
+    pub unsupported: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -32,20 +33,25 @@ pub struct RestorePlan {
     pub changed: usize,
     pub new: usize,
     pub modified: usize,
+    pub unsupported: usize,
+}
+
+enum Entry {
+    File(TrackedFile),
+    Unsupported,
+    Skipped,
 }
 
 #[must_use]
 pub fn parse_ls_files(staged: &[u8], modified: &[u8]) -> Tracked {
     let modified: BTreeSet<&[u8]> = nul_records(modified).collect();
     let mut tracked = Tracked::default();
-    for file in nul_records(staged)
-        .filter_map(|record| std::str::from_utf8(record).ok())
-        .filter_map(parse_ls_files_record)
-    {
-        if modified.contains(file.path.as_bytes()) {
-            tracked.modified += 1;
-        } else {
-            tracked.files.push(file);
+    for record in nul_records(staged) {
+        match parse_ls_files_record(record) {
+            Entry::File(file) if modified.contains(file.path.as_bytes()) => tracked.modified += 1,
+            Entry::File(file) => tracked.files.push(file),
+            Entry::Unsupported => tracked.unsupported += 1,
+            Entry::Skipped => {}
         }
     }
     tracked
@@ -57,15 +63,28 @@ fn nul_records(output: &[u8]) -> impl Iterator<Item = &[u8]> {
         .filter(|record| !record.is_empty())
 }
 
-fn parse_ls_files_record(record: &str) -> Option<TrackedFile> {
-    let (meta, path) = record.split_once('\t')?;
+fn parse_ls_files_record(record: &[u8]) -> Entry {
+    let Some(tab) = record.iter().position(|byte| *byte == b'\t') else {
+        return Entry::Skipped;
+    };
+    let Ok(meta) = std::str::from_utf8(&record[..tab]) else {
+        return Entry::Skipped;
+    };
     let mut fields = meta.split(' ');
-    let (mode, blob, stage) = (fields.next()?, fields.next()?, fields.next()?);
-    let regular_file = mode == "100644" || mode == "100755";
-    (regular_file && stage == "0" && representable(path)).then(|| TrackedFile {
-        path: path.to_owned(),
-        blob: blob.to_owned(),
-    })
+    let (Some(mode), Some(blob), Some("0")) = (fields.next(), fields.next(), fields.next()) else {
+        return Entry::Skipped;
+    };
+    if mode != "100644" && mode != "100755" {
+        return Entry::Skipped;
+    }
+    match std::str::from_utf8(&record[tab + 1..]) {
+        Ok(path) if representable(path) => Entry::File(TrackedFile {
+            path: path.to_owned(),
+            blob: blob.to_owned(),
+            mode: mode.to_owned(),
+        }),
+        _ => Entry::Unsupported,
+    }
 }
 
 fn representable(path: &str) -> bool {
@@ -76,11 +95,15 @@ fn representable(path: &str) -> bool {
 pub fn format_inputs(inputs: &[SavedInput]) -> String {
     let mut text = String::new();
     for input in inputs {
-        text.push_str(&input.path);
-        text.push('\t');
-        text.push_str(&input.blob);
-        text.push('\t');
-        text.push_str(&input.mtime_ns.to_string());
+        for field in [
+            input.file.path.as_str(),
+            input.file.blob.as_str(),
+            &input.mtime_ns.to_string(),
+        ] {
+            text.push_str(field);
+            text.push('\t');
+        }
+        text.push_str(&input.file.mode);
         text.push('\n');
     }
     text
@@ -92,7 +115,7 @@ pub fn parse_inputs(text: &str) -> Result<Vec<SavedInput>, CiError> {
         .map(|(index, line)| {
             parse_inputs_line(line).ok_or_else(|| {
                 CiError::new(format!(
-                    "{INPUTS_FILE} line {} is not `path<TAB>blob<TAB>mtime_ns`: `{line}`",
+                    "{INPUTS_FILE} line {} is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `{line}`",
                     index + 1
                 ))
             })
@@ -102,13 +125,21 @@ pub fn parse_inputs(text: &str) -> Result<Vec<SavedInput>, CiError> {
 
 fn parse_inputs_line(line: &str) -> Option<SavedInput> {
     let mut fields = line.split('\t');
-    let (path, blob, mtime) = (fields.next()?, fields.next()?, fields.next()?);
-    if fields.next().is_some() || path.is_empty() || blob.is_empty() {
+    let (path, blob, mtime, mode) = (
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+    );
+    if fields.next().is_some() || path.is_empty() || blob.is_empty() || mode.is_empty() {
         return None;
     }
     Some(SavedInput {
-        path: path.to_owned(),
-        blob: blob.to_owned(),
+        file: TrackedFile {
+            path: path.to_owned(),
+            blob: blob.to_owned(),
+            mode: mode.to_owned(),
+        },
         mtime_ns: mtime.parse().ok()?,
     })
 }
@@ -117,17 +148,17 @@ fn parse_inputs_line(line: &str) -> Option<SavedInput> {
 pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
     let saved: BTreeMap<&str, &SavedInput> = saved
         .iter()
-        .map(|input| (input.path.as_str(), input))
+        .map(|input| (input.file.path.as_str(), input))
         .collect();
     let mut plan = RestorePlan {
         modified: tracked.modified,
+        unsupported: tracked.unsupported,
         ..RestorePlan::default()
     };
     for file in &tracked.files {
         match saved.get(file.path.as_str()) {
-            Some(input) if input.blob == file.blob => plan.restore.push(SavedInput {
-                path: file.path.clone(),
-                blob: file.blob.clone(),
+            Some(input) if input.file == *file => plan.restore.push(SavedInput {
+                file: file.clone(),
                 mtime_ns: input.mtime_ns,
             }),
             Some(_) => plan.changed += 1,
