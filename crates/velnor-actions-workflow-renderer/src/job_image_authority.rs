@@ -253,7 +253,7 @@ for label, attestation_path in (
     ("Candidate archive", archive_attestation_path),
     ("Candidate record", record_attestation_path),
 ):
-    attestation = _read_limited_json(attestation_path, 1048576, f"{label} attestation")
+    attestation = _read_limited_json(attestation_path, identity_module.MAX_ATTESTATION_BYTES, f"{label} attestation")
     identity_module.validate_attestation_output(attestation, identity, subjects)
 verified = oci_module.verify_oci_archive(archive_path)
 publish_module.check_record_binding(
@@ -301,6 +301,7 @@ pub(super) const CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-ci-runs.json";
 pub(super) const AUTHENTICATED_SOURCE_FILE: &str = "velnor-authenticated-source.json";
 pub(super) const ARTIFACT_RESPONSE_PATH: &str = "$RUNNER_TEMP/velnor-candidate-artifact.json";
 pub(super) const ARCHIVE_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-archive-attestation.json";
+pub(super) const ATTESTATION_LIMIT: u16 = 1000;
 pub(super) const RECORD_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-record-attestation.json";
 
 pub(super) fn assemble_evidence_step(

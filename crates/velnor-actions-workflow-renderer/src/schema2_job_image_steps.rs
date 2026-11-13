@@ -135,9 +135,10 @@ pub(super) fn verify_attestations_step(archive: &str, record: &str) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "set -euo pipefail\nrepo=\"$GITHUB_REPOSITORY\"\nsha=\"$GITHUB_SHA\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --format json > \"{}\"",
+                "set -euo pipefail\nrepo=\"$GITHUB_REPOSITORY\"\nsha=\"$GITHUB_SHA\"\nworkflow=\"$repo/.github/workflows/job-image-candidate.yml\"\ngh attestation verify \"{archive}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --limit {limit} --format json > \"{}\"\ngh attestation verify \"{record}\" --repo \"$repo\" --source-ref \"refs/heads/main\" --source-digest \"$sha\" --signer-workflow \"$workflow\" --signer-digest \"$sha\" --limit {limit} --format json > \"{}\"",
                 authority::ARCHIVE_ATTESTATION_PATH,
-                authority::RECORD_ATTESTATION_PATH
+                authority::RECORD_ATTESTATION_PATH,
+                limit = authority::ATTESTATION_LIMIT,
             )),
         ),
     ])

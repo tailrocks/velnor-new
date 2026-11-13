@@ -18,6 +18,8 @@ REPOSITORY_ID = 1390620900
 WORKFLOW = "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml"
 ARTIFACT_PREFIX = "velnor-job-image-candidate-"
 MAX_JSON_BYTES = 2 * 1024 * 1024
+ATTESTATION_LIMIT = 1000
+MAX_ATTESTATION_BYTES = 32 * 1024 * 1024
 IDENTITY_KEYS = {
     "repository", "repository_id", "event", "workflow_ref", "ref",
     "authority_commit", "run_id", "run_attempt", "source", "artifact_id",
@@ -218,52 +220,64 @@ def select_ci_run(value, source):
     return {"run_id": latest["id"], "run_attempt": latest["run_attempt"]}
 
 
+def _attestation_mismatch(item, identity, expected_subjects):
+    try:
+        certificate = item["verificationResult"]["signature"]["certificate"]
+        identifier = certificate["sourceRepositoryIdentifier"]
+    except (KeyError, TypeError):
+        return "Attestation certificate has no repository identifier."
+    if not (
+        (type(identifier) is int and identifier == REPOSITORY_ID)
+        or (type(identifier) is str and identifier == str(REPOSITORY_ID))
+    ):
+        return "Attestation certificate repository ID is incorrect."
+    if (
+        certificate.get("githubWorkflowRepository") != REPOSITORY
+        or certificate.get("githubWorkflowSHA") != identity["source"]
+        or certificate.get("githubWorkflowRef") != "refs/heads/main"
+        or certificate.get("githubWorkflowTrigger") != identity["event"]
+        or certificate.get("sourceRepositoryRef") != "refs/heads/main"
+        or certificate.get("sourceRepositoryDigest") != identity["source"]
+    ):
+        return "Attestation certificate source or workflow identity is incorrect."
+    invocation = (
+        f"https://github.com/{REPOSITORY}/actions/runs/"
+        f"{identity['run_id']}/attempts/{identity['run_attempt']}"
+    )
+    if certificate.get("runInvocationURI") != invocation:
+        return "Attestation certificate run identity is incorrect."
+    try:
+        subjects = item["verificationResult"]["statement"]["subject"]
+    except (KeyError, TypeError):
+        return "Attestation subjects are incorrect."
+    if not isinstance(subjects, list) or len(subjects) != len(expected_subjects):
+        return "Attestation subjects are incorrect."
+    actual = {}
+    for subject in subjects:
+        if not isinstance(subject, dict) or set(subject) != {"name", "digest"}:
+            return "Attestation subjects are incorrect."
+        name, digest = subject["name"], subject["digest"]
+        if not isinstance(name, str) or name in actual or not isinstance(digest, dict) or set(digest) != {"sha256"}:
+            return "Attestation subjects are incorrect."
+        actual[name] = digest["sha256"]
+    if actual != expected_subjects:
+        return "Attestation subjects are incorrect."
+    return None
+
+
 def validate_attestation_output(value, identity, expected_subjects):
     if not isinstance(value, list) or not value:
         raise AuthorityError("Attestation verification output has no records.")
-    for item in value:
-        try:
-            certificate = item["verificationResult"]["signature"]["certificate"]
-            identifier = certificate["sourceRepositoryIdentifier"]
-        except (KeyError, TypeError) as error:
-            raise AuthorityError("Attestation certificate has no repository identifier.") from error
-        if not (
-            (type(identifier) is int and identifier == REPOSITORY_ID)
-            or (type(identifier) is str and identifier == str(REPOSITORY_ID))
-        ):
-            raise AuthorityError("Attestation certificate repository ID is incorrect.")
-        if (
-            certificate.get("githubWorkflowRepository") != REPOSITORY
-            or certificate.get("githubWorkflowSHA") != identity["source"]
-            or certificate.get("githubWorkflowRef") != "refs/heads/main"
-            or certificate.get("githubWorkflowTrigger") != identity["event"]
-            or certificate.get("sourceRepositoryRef") != "refs/heads/main"
-            or certificate.get("sourceRepositoryDigest") != identity["source"]
-        ):
-            raise AuthorityError("Attestation certificate source or workflow identity is incorrect.")
-        invocation = (
-            f"https://github.com/{REPOSITORY}/actions/runs/"
-            f"{identity['run_id']}/attempts/{identity['run_attempt']}"
+    if len(value) >= ATTESTATION_LIMIT:
+        raise AuthorityError("Attestation verification output may be truncated.")
+    reasons = [_attestation_mismatch(item, identity, expected_subjects) for item in value]
+    matches = reasons.count(None)
+    if not matches:
+        raise AuthorityError(
+            "No attestation matches this run and its files: "
+            + " ".join(sorted(set(reasons)))
         )
-        if certificate.get("runInvocationURI") != invocation:
-            raise AuthorityError("Attestation certificate run identity is incorrect.")
-        try:
-            subjects = item["verificationResult"]["statement"]["subject"]
-        except (KeyError, TypeError) as error:
-            raise AuthorityError("Attestation subjects are incorrect.") from error
-        if not isinstance(subjects, list) or len(subjects) != len(expected_subjects):
-            raise AuthorityError("Attestation subjects are incorrect.")
-        actual = {}
-        for subject in subjects:
-            if not isinstance(subject, dict) or set(subject) != {"name", "digest"}:
-                raise AuthorityError("Attestation subjects are incorrect.")
-            name, digest = subject["name"], subject["digest"]
-            if not isinstance(name, str) or name in actual or not isinstance(digest, dict) or set(digest) != {"sha256"}:
-                raise AuthorityError("Attestation subjects are incorrect.")
-            actual[name] = digest["sha256"]
-        if actual != expected_subjects:
-            raise AuthorityError("Attestation subjects are incorrect.")
-    return len(value)
+    return matches
 
 
 def validate_source_inputs(record_source, authenticated_source):
