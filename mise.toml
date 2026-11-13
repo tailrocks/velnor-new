@@ -111,6 +111,10 @@ cargo fetch --locked
   cargo fetch --locked
 )
 (
+  cd "$ROOT/ci-helper"
+  cargo fetch --locked
+)
+(
   cd "$ROOT/local"
   cargo fetch --locked
 )

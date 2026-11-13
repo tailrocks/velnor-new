@@ -20,10 +20,11 @@ pub(super) fn copy_mutation_repository(
         ".config",
         ".github",
         ".velnor",
-        "local",
+        "ci-helper",
         "crates",
         "fixtures",
         "images",
+        "local",
         "scripts",
     ] {
         copy_tree(&source.join(directory), &destination.join(directory))?;
