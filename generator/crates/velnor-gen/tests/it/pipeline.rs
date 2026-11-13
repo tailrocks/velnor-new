@@ -60,7 +60,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: '${{ github.workflow }}-${{ github.ref }}'
+  group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
   format:
@@ -73,9 +73,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Format Cargo.toml
-        run: cargo fmt --all --check --manifest-path Cargo.toml
+        run: cargo fmt --all --check
       - name: Format lab/Cargo.toml
-        run: cargo fmt --all --check --manifest-path lab/Cargo.toml
+        working-directory: lab
+        run: cargo fmt --all --check
 ";
     assert_eq!(
         files,
@@ -89,21 +90,26 @@ fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     let config = b"runner = \"self-hosted\"\ntimeout_minutes = 12\nexclude = [\"lab/\"]\n";
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(config))?)?;
     assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
-    assert!(text.contains("run: cargo fmt --all --check --manifest-path Cargo.toml\n"));
-    assert!(!text.contains("lab/Cargo.toml"));
+    assert!(
+        text.contains("      - name: Format Cargo.toml\n        run: cargo fmt --all --check\n")
+    );
+    assert!(!text.contains("lab"));
     Ok(())
 }
 
 #[test]
-fn values_yaml_or_the_shell_would_misread_are_quoted() -> TestResult {
-    let text = workflow(&view(
-        &["it's crates/Cargo.toml"],
-        Some(b"runner = \"on\"\n"),
-    )?)?;
+fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> TestResult {
+    let roots = ["-bad/Cargo.toml", "it's crates/Cargo.toml"];
+    let text = workflow(&view(&roots, Some(b"runner = \"on\"\n"))?)?;
     assert!(text.contains("    runs-on: 'on'\n"));
+    assert!(
+        text.contains("        working-directory: '-bad'\n        run: cargo fmt --all --check\n")
+    );
     assert!(text.contains(
-        "        run: 'cargo fmt --all --check --manifest-path ''it''\\''''s crates/Cargo.toml'''\n"
+        "        working-directory: 'it''s crates'\n        run: cargo fmt --all --check\n"
     ));
+    assert_eq!(text.matches("run: ").count(), 2);
+    assert_eq!(text.matches("run: cargo fmt --all --check\n").count(), 2);
     Ok(())
 }
 
@@ -117,9 +123,9 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
         "      - name: 'Format a${{ ''${{'' }} github.event.pull_request.title }}/Cargo.toml'\n"
     ));
     assert!(text.contains(
-        "        run: 'cargo fmt --all --check --manifest-path ''a${{ ''${{'' }} github.event.pull_request.title }}/Cargo.toml'''\n"
+        "        working-directory: 'a${{ ''${{'' }} github.event.pull_request.title }}'\n"
     ));
-    assert!(text.contains("  group: '${{ github.workflow }}-${{ github.ref }}'\n"));
+    assert!(text.contains("  group: '${{ github.workflow_ref }}'\n"));
     Ok(())
 }
 
@@ -145,10 +151,20 @@ fn an_invalid_config_is_rejected() -> TestResult {
 }
 
 #[test]
-fn a_repository_without_a_cargo_root_is_rejected() -> TestResult {
+fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
     let empty = expected_files(&view(&[], None)?);
     let excluded = expected_files(&view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?);
+    let root_excluded = expected_files(&view(
+        &["Cargo.toml"],
+        Some(b"exclude = [\"Cargo.toml\"]\n"),
+    )?);
+    let mut memberless = view(&["Cargo.toml"], None)?;
+    for metadata in memberless.rust_metadata.values_mut() {
+        metadata.members.clear();
+    }
     assert_eq!(empty, Err(DetectError::NoRustRoot));
     assert_eq!(excluded, Err(DetectError::NoRustRoot));
+    assert_eq!(root_excluded, Err(DetectError::NoRustRoot));
+    assert_eq!(expected_files(&memberless), Err(DetectError::NoRustRoot));
     Ok(())
 }

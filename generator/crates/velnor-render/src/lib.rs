@@ -26,10 +26,7 @@ pub fn render(plan: &WorkflowPlan) -> BTreeMap<RepoPath, String> {
         entry(
             "concurrency",
             Yaml::Map(vec![
-                entry(
-                    "group",
-                    Yaml::Expr("${{ github.workflow }}-${{ github.ref }}".to_owned()),
-                ),
+                entry("group", Yaml::Expr("${{ github.workflow_ref }}".to_owned())),
                 entry(
                     "cancel-in-progress",
                     Yaml::Bool(plan.concurrency.cancel_in_progress),
@@ -106,27 +103,14 @@ fn render_step(step: &Step) -> Yaml {
                 ]),
             ),
         ]),
-        StepKind::Cargo(CargoCommand::FmtCheck { manifest }) => Yaml::Map(vec![
-            entry("name", Yaml::Str(format!("Format {manifest}"))),
-            entry(
-                "run",
-                Yaml::Str(format!(
-                    "cargo fmt --all --check --manifest-path {}",
-                    shell_word(manifest.as_str())
-                )),
-            ),
-        ]),
-    }
-}
-
-fn shell_word(word: &str) -> String {
-    if word
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
-    {
-        word.to_owned()
-    } else {
-        format!("'{}'", word.replace('\'', r"'\''"))
+        StepKind::Cargo(CargoCommand::FmtCheck { manifest }) => {
+            let mut items = vec![entry("name", Yaml::Str(format!("Format {manifest}")))];
+            if let Some(directory) = manifest.parent() {
+                items.push(entry("working-directory", text(directory.as_str())));
+            }
+            items.push(entry("run", text("cargo fmt --all --check")));
+            Yaml::Map(items)
+        }
     }
 }
 

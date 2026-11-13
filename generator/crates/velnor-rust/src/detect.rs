@@ -34,7 +34,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let rust_roots: Vec<RustRoot> = view
         .rust_metadata
         .iter()
-        .filter(|(manifest, _)| !excluded(&config, manifest))
+        .filter(|(manifest, metadata)| !metadata.members.is_empty() && !excluded(&config, manifest))
         .map(|(manifest, metadata)| {
             let mut packages: Vec<_> = metadata
                 .members
@@ -68,10 +68,8 @@ fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
 }
 
 fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
-    manifest.parent().is_some_and(|directory| {
-        config
-            .exclude
-            .iter()
-            .any(|excluded| directory.is_within(excluded))
-    })
+    config
+        .exclude
+        .iter()
+        .any(|excluded| manifest.is_within(excluded))
 }
