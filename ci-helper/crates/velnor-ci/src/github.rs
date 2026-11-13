@@ -78,6 +78,70 @@ pub struct ApiStep {
     pub completed_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ApiRepo {
+    pub default_branch: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCompare {
+    pub status: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCheckRuns {
+    pub total_count: usize,
+    pub check_runs: Vec<ApiCheckRun>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCheckRun {
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub app: Option<ApiApp>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiApp {
+    pub slug: String,
+}
+
+pub fn parse<T: serde::de::DeserializeOwned>(body: &str, what: &str) -> Result<T, CiError> {
+    serde_json::from_str(body)
+        .map_err(|e| CiError::new(format!("cannot read GitHub {what} response: {e}")))
+}
+
+#[must_use]
+pub fn repo_path(repo: &Repo) -> String {
+    format!("/repos/{repo}")
+}
+
+#[must_use]
+pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
+    format!("/repos/{repo}/compare/{}...{head}?per_page=1", encode(base))
+}
+
+#[must_use]
+pub fn check_runs_path(repo: &Repo, sha: &str, check: &str) -> String {
+    format!(
+        "/repos/{repo}/commits/{sha}/check-runs?check_name={}&filter=latest&per_page=100",
+        encode(check)
+    )
+}
+
+fn encode(text: &str) -> String {
+    text.bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+                char::from(byte).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
+}
+
 #[must_use]
 pub fn run_path(repo: &Repo, run_id: u64) -> String {
     format!("/repos/{repo}/actions/runs/{run_id}")

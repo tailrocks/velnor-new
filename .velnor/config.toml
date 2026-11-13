@@ -81,7 +81,7 @@ packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["generator/**"]
+globs = ["generator/**", ".github/workflows/release-rust-ci-tools.yml"]
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen"]
 complete = true
 
@@ -936,6 +936,7 @@ executor = "hosted"
 id = "generator-samples"
 task = "lint-generator-samples"
 inputs = [
+  "generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml",
   "generator/samples/lab-150/expected/.github/workflows/rust-ci.yml",
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",

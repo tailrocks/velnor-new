@@ -8,7 +8,6 @@ use clap::{Args, Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-ci",
-    version,
     about = "Measures CI runs and compares the measurements"
 )]
 pub struct Cli {
@@ -25,6 +24,26 @@ pub enum Command {
         about = "Keep tracked files' modification times with a cached target directory"
     )]
     Inputs(InputsCommand),
+    #[command(
+        about = "Exit 1 unless the commit is on the default branch and its check Required passed; reads GITHUB_TOKEN"
+    )]
+    ReleaseGate(ReleaseGateArgs),
+    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    CheckTag(CheckTagArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckTagArgs {
+    #[arg(help = "The release tag")]
+    pub tag: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ReleaseGateArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(long, help = "Full SHA of the commit that is about to be released")]
+    pub sha: String,
 }
 
 #[derive(Debug, Subcommand)]

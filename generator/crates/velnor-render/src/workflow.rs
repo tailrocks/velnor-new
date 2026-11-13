@@ -51,6 +51,7 @@ fn values(items: &[(String, Value)]) -> Yaml {
                 let yaml = match value {
                     Value::Text(text) => Yaml::Str(text.clone()),
                     Value::Expr(text) => Yaml::Expr(text.clone()),
+                    Value::Selected(text) => Yaml::Selected(text.clone()),
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };

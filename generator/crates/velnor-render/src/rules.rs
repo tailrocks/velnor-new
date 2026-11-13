@@ -28,6 +28,7 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
+    Selected(String),
     Int(u64),
     Bool(bool),
 }

@@ -1,4 +1,4 @@
-- 7af52f54b6eee7d97773818d5ad2a3e1f6ed27631483a183c15697c80748588b  ./.github/AGENTS.md
+- b3e2a627f0e9d560ea0cb5d65a5abf689df39889859ac98b9dff01fa8914fe50  ./.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 - 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
 - 41aa4f53c35088542b7edf2f706a0f4603fecca2680c988497ec273524eabae8  ./.github/actions/declared-task-0/action.yml
@@ -23,7 +23,7 @@
 - 9c5437edce37c26a62e728c4d855853b04187aee199cae413dd6b87c382176c0  ./.github/velnor/producer-executions-v1.json
 - 3dac4545b028e6029d372f4fbdde40c679f5f4fa623eaf426615ec0597a1dc39  ./.github/velnor/task-execution-manifest-v1.json
 - a43569760a8aad89b8284eca3f25f1ca1b1ef6962c58a0976a822ca2e9aba159  ./.github/workflows/cache-prune.yml
-- 5cdf17dcd912bdceb2ceed4dfb0429bdaf0515a0d4c66c1ba0ed08cb35dafb51  ./.github/workflows/ci.yml
+- 169296c8ad53a33d757410c60fcd57a98a8079457612086ad5db668f642140b0  ./.github/workflows/ci.yml
 - f02a6206e168f96d43c0cec207f3ae1534d2a448e369418767472a0a43eccc93  ./.github/workflows/freshness.yml
 - e4ffb8f05e2864ebc50ce200cebdb6b09545f80ef667ad28317bf98d34f91301  ./.github/workflows/homebrew-adoption.yml
 - 5f9aa42ec052ecfbbac4d6a32b005fd9ddeb0c817bcfaa6b21aba07d1a34e092  ./.github/workflows/job-image-candidate.yml
@@ -32,8 +32,9 @@
 - e1c5da24aab03a9438b78a33f5a11b73dadad1830a358d99ce516c392223ac7a  ./.github/workflows/product-release-images.yml
 - a2417cc91b81bc96149e01d5b6aebe467356c4e2ede710979407ff7631c58359  ./.github/workflows/product-release.yml
 - 18d56df47044ad8400c8d825af1cdd30ac8e92a1aed4a69b6930e075ea9ad000  ./.github/workflows/qualification.yml
+- e19b7d24a8d7f346bb6e4d729bc9a9eaacf75ae98605d30aa8eaadb7a6cde62b  ./.github/workflows/release-rust-ci-tools.yml
 - 84ed15941aff122fbd6e5bd1e2f403bdcb9c29b3b4c4c23c5c77505f91472b37  ./.github/workflows/source-preview-mac-proof.yml
 - eef9a62b4b3d660e8530466737b368770c3dbfd9fbd4968063af20d156781fa9  ./.github/workflows/source-preview-publication.yml
 - aa432a430629f0ee40e68dc419358a8ed1db993a48cffe3ef92bc0bf9d75f2fa  ./.github/workflows/source-preview-runtime.yml
-- bf1b9fe7ec0e68807c932742b2f5346c50602e705ce5e052d65af94a9e762e14  ./.github/workflows/source-qualification.yml
-- 7b3f03b281b93268c7a9cb6f0a9c154f901644c672699c70cb18780d724ce4ff  ./.github/workflows/state-seal.yml
+- 3eb1570883309739ae4086ac2b50448e0001aea9415034501e6fcc9a7144aefc  ./.github/workflows/source-qualification.yml
+- cadeec2bd923b3ab517edfb0d2e077344e52c0fe4de574eda46a319c6c63113b  ./.github/workflows/state-seal.yml

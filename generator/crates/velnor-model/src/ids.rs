@@ -83,6 +83,14 @@ impl RepoPath {
     }
 }
 
+impl HelperVersion {
+    #[must_use]
+    pub fn series(&self) -> Option<(u64, u64)> {
+        let mut parts = self.0.split('.');
+        Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+    }
+}
+
 const fn text(value: &[u8]) -> bool {
     let mut index = 0;
     while index < value.len() {

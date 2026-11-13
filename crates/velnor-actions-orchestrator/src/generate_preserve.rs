@@ -155,9 +155,14 @@ fn copy_repository_content(
     Ok(directories)
 }
 
+const HAND_WRITTEN_WORKFLOWS: [&str; 1] = ["workflows/release-rust-ci-tools.yml"];
+
 pub(super) fn generator_owned(relative: &Path) -> bool {
     if relative.starts_with("workflows") {
-        return true;
+        return relative != Path::new("workflows")
+            && !HAND_WRITTEN_WORKFLOWS
+                .iter()
+                .any(|path| relative == Path::new(path));
     }
     DECLARED_GITHUB_FORMATS
         .iter()
@@ -343,4 +348,27 @@ where
 
 fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::generator_owned;
+
+    #[test]
+    fn the_workflows_namespace_is_generator_owned_except_the_release_workflow_of_the_rust_tools() {
+        let cases = [
+            ("workflows", false),
+            ("workflows/ci.yml", true),
+            ("workflows/manual.yml", true),
+            ("workflows/release-rust-ci-tools.yml", false),
+            ("workflows/release-rust-ci-tools.yml.bak", true),
+            ("workflows/nested/release-rust-ci-tools.yml", true),
+            ("release-rust-ci-tools.yml", false),
+        ];
+        for (path, owned) in cases {
+            assert_eq!(generator_owned(Path::new(path)), owned, "{path}");
+        }
+    }
 }

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use velnor_gen::Drift;
 use velnor_gen::io::{
     Error as IoError, Recording, SAMPLE_REPOSITORY, apply, manifest_file, read_files,
-    relocate_metadata, write_sample,
+    relocate_metadata, write_lock, write_sample,
 };
 use velnor_model::RepoPath;
 
@@ -343,5 +343,32 @@ fn cargo_metadata_is_run_only_on_a_real_manifest_inside_the_repository() -> Test
         let result = manifest_file(&scratch.repo(), &manifest);
         assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic_link() -> TestResult
+{
+    let plain = Scratch::new("lock-plain")?;
+    write_lock(&plain.repo(), "version = \"0.1.79\"\n")?;
+    write_lock(&plain.repo(), "version = \"0.1.80\"\n")?;
+    assert_eq!(
+        fs::read_to_string(plain.repo().join(".velnor/rust-ci.lock"))?,
+        "version = \"0.1.80\"\n"
+    );
+
+    let directory_link = Scratch::new("lock-directory-link")?;
+    directory_link.link(".velnor", &directory_link.outside())?;
+    let result = write_lock(&directory_link.repo(), "pinned\n");
+    assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    assert!(!directory_link.outside().join("rust-ci.lock").exists());
+
+    let file_link = Scratch::new("lock-file-link")?;
+    let target = file_link.outside().join("victim.lock");
+    write(&target, "theirs\n")?;
+    file_link.link(".velnor/rust-ci.lock", &target)?;
+    let result = write_lock(&file_link.repo(), "pinned\n");
+    assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    assert_eq!(fs::read_to_string(&target)?, "theirs\n");
     Ok(())
 }

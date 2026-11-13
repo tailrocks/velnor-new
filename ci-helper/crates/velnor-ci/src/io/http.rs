@@ -6,28 +6,28 @@ use std::time::Duration;
 use crate::error::CiError;
 use crate::github::GitHub;
 
-const API: &str = "https://api.github.com";
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug)]
 pub(super) struct HttpGitHub {
     agent: ureq::Agent,
+    api: String,
     token: String,
 }
 
 impl HttpGitHub {
-    pub(super) fn new(token: String) -> Self {
+    pub(super) fn new(api: String, token: String) -> Self {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(300)))
             .build()
             .into();
-        Self { agent, token }
+        Self { agent, api, token }
     }
 }
 
 impl GitHub for HttpGitHub {
     fn get(&self, path: &str) -> Result<String, CiError> {
-        let url = format!("{API}{path}");
+        let url = format!("{}{path}", self.api);
         let mut response = self
             .agent
             .get(&url)

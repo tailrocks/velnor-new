@@ -250,7 +250,9 @@ fn fetch_helper_renders_the_constant_and_a_platform_table() -> TestResult {
     steps:
       - name: Fetch velnor-ci 1.2.3
         env:
+          # jactionlint ignore=obfuscation
           SHA: '${{ fromJSON(''{\"Linux-X64\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"macOS-ARM64\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+          # jactionlint ignore=obfuscation
           URL: '${{ fromJSON(''{\"Linux-X64\":\"https://example.com/rust-ci-v1.2.3/velnor-ci-linux-x64\",\"macOS-ARM64\":\"https://example.com/rust-ci-v1.2.3/velnor-ci-macos-arm64\"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
         run: |
           curl -fsSL --create-dirs -o \"$RUNNER_TEMP/vbin/velnor-ci\" \"$URL\"
