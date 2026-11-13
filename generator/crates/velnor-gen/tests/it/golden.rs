@@ -4,13 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use similar::TextDiff;
 use velnor_gen::expected_files;
 use velnor_gen::io::SAMPLE_REPOSITORY;
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{reduce_metadata, wanted_files};
+use velnor_rust::{metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -33,22 +34,31 @@ fn sample_dirs() -> Result<Vec<PathBuf>, Box<dyn Error>> {
 
 fn files_under(directory: &Path) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dyn Error>> {
     let mut files = BTreeMap::new();
+    match fs::symlink_metadata(directory) {
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(files),
+        Err(error) => return Err(error.into()),
+        Ok(metadata) if !metadata.is_dir() => {
+            return Err(format!("{} is not a real directory", directory.display()).into());
+        }
+        Ok(_) => {}
+    }
     let mut pending = vec![directory.to_path_buf()];
     while let Some(current) = pending.pop() {
-        let Ok(entries) = fs::read_dir(&current) else {
-            continue;
-        };
-        for entry in entries {
-            let path = entry?.path();
-            if path.is_dir() {
+        for entry in fs::read_dir(&current)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            let path = entry.path();
+            if kind.is_dir() {
                 pending.push(path);
-            } else {
+            } else if kind.is_file() {
                 let relative = path
                     .strip_prefix(directory)?
                     .to_str()
                     .ok_or("a sample path is not UTF-8")?
                     .to_owned();
                 files.insert(RepoPath::new(relative)?, fs::read(&path)?);
+            } else {
+                return Err(format!("{} is not a regular file", path.display()).into());
             }
         }
     }
@@ -70,11 +80,20 @@ fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         let (workspace, metadata) = reduce_metadata(Path::new(SAMPLE_REPOSITORY), json)?;
         rust_metadata.insert(workspace, metadata);
     }
-    Ok(RepoView {
+    let view = RepoView {
         files,
         tracked_paths,
         rust_metadata,
-    })
+    };
+    for manifest in metadata_roots(&view)? {
+        let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
+            *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
+        });
+        if !known {
+            return Err(format!("{manifest} has no recorded cargo metadata").into());
+        }
+    }
+    Ok(view)
 }
 
 fn rewrite(expected_dir: &Path, generated: &BTreeMap<RepoPath, String>) -> TestResult {
@@ -199,5 +218,22 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
         }
     }
     assert_eq!(present, listed);
+    Ok(())
+}
+
+#[test]
+fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
+    let sample = std::env::temp_dir().join(format!("velnor-gen-golden-{}", std::process::id()));
+    fs::create_dir_all(&sample)?;
+    fs::write(
+        sample.join("manifests.txt"),
+        "Cargo.toml\nxtask/Cargo.toml\n",
+    )?;
+    let workspace = br#"{"workspace_root":"/repo","packages":[{"name":"a","manifest_path":"/repo/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    fs::create_dir_all(sample.join("cargo-metadata"))?;
+    fs::write(sample.join("cargo-metadata/Cargo.toml.json"), workspace)?;
+    let result = load(&sample);
+    fs::remove_dir_all(&sample)?;
+    assert!(result.is_err());
     Ok(())
 }
