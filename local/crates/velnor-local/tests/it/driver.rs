@@ -100,7 +100,7 @@ fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
 }
 
 #[test]
-fn the_warm_scenario_is_a_default_branch_run_then_a_pull_request_and_unknown_steps_are_refused() {
+fn the_warm_scenario_parses_and_unknown_steps_and_option_like_values_are_refused() {
     let warm =
         Scenario::parse(&read("scenarios/warm.json")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
@@ -120,6 +120,14 @@ fn the_warm_scenario_is_a_default_branch_run_then_a_pull_request_and_unknown_ste
     );
     let unknown = br#"{"description": "x", "steps": [{"rebase": "main"}]}"#;
     assert!(Scenario::parse(unknown).is_err());
+    assert!(
+        warm.refuse_options(["tailrocks/velnor-lab", "main"])
+            .is_ok()
+    );
+    assert!(warm.refuse_options(["--default-branch=x"]).is_err());
+    let option = br#"{"description": "x", "steps": [{"push": "--upload-pack=x"}]}"#;
+    let option = Scenario::parse(option).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(option.refuse_options(["main"]).is_err());
 }
 
 #[test]

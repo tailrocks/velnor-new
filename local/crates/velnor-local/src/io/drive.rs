@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use tokio::fs;
 use tokio::process::Command;
 
-use super::env::{Addresses, Environment, STANDIN_IMAGE, program, request, words};
+use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, program, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, PullRequest, Push, Repository};
 use crate::scenario::{Outcome, Scenario, Step, verdict};
@@ -24,7 +24,7 @@ const GIT_CONFIG: &str =
 #[derive(Debug)]
 struct Driver<'a> {
     args: &'a RunArgs,
-    env: &'a Environment,
+    env: &'a Environment<DockerCli>,
     addresses: Addresses,
     repo: PathBuf,
     pushed: BTreeMap<String, String>,
@@ -43,13 +43,37 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
         args.scenarios.join(format!("{}.json", args.scenario))
     };
     let scenario = Scenario::parse(&fs::read(&path).await?).map_err(io::Error::other)?;
-    let env = Environment::at(&args.environment.dir).await?;
+    let values = [args.repository.as_str(), &args.environment.default_branch];
+    scenario
+        .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
+        .map_err(io::Error::other)?;
+    let env = Environment::at(&args.environment.dir, DockerCli).await?;
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo).await?;
     for directory in ["cache", "api", "events", "logs"] {
         let _ = fs::remove_dir_all(env.dir.join(directory)).await;
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
+    let session = tokio::select! {
+        session = session(&args, &env, repo, &scenario) => session,
+        _ = tokio::signal::ctrl_c() => Err(io::Error::other("interrupted")),
+    };
+    let stopped = env.down().await;
+    let (outcomes, up_at, up_seconds) = session?;
+    stopped?;
+    print!("{}", verdict(&args.scenario, &outcomes, up_at, up_seconds));
+    if outcomes.is_empty() || !outcomes.iter().all(Outcome::passed) {
+        return Err(io::Error::other("a run did not succeed"));
+    }
+    Ok(())
+}
+
+async fn session(
+    args: &RunArgs,
+    env: &Environment<DockerCli>,
+    repo: PathBuf,
+    scenario: &Scenario,
+) -> io::Result<(Vec<Outcome>, u64, f64)> {
     let up_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
@@ -58,8 +82,8 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     let up_seconds = clock.elapsed().as_secs_f64();
     println!("velnor-local: {} is up in {up_seconds:.1} s", env.name);
     let mut driver = Driver {
-        args: &args,
-        env: &env,
+        args,
+        env,
         addresses,
         repo,
         pushed: BTreeMap::new(),
@@ -67,16 +91,8 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
         events: 0,
         outcomes: Vec::new(),
     };
-    let replayed = driver.replay(&scenario.steps).await;
-    let stopped = env.down().await;
-    replayed?;
-    stopped?;
-    let outcomes = driver.outcomes;
-    print!("{}", verdict(&args.scenario, &outcomes, up_at, up_seconds));
-    if outcomes.is_empty() || !outcomes.iter().all(Outcome::passed) {
-        return Err(io::Error::other("a run did not succeed"));
-    }
-    Ok(())
+    driver.replay(&scenario.steps).await?;
+    Ok((driver.outcomes, up_at, up_seconds))
 }
 
 async fn git(repo: &Path, args: &[&str], input: Option<&[u8]>) -> io::Result<Vec<u8>> {
@@ -126,27 +142,28 @@ impl Driver<'_> {
         }
     }
 
-    async fn git(&self, args: &str) -> io::Result<String> {
-        let stdout = git(&self.repo, &words(args), None).await?;
+    async fn git(&self, args: &[&str]) -> io::Result<String> {
+        let stdout = git(&self.repo, args, None).await?;
         Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
     }
 
     async fn commit(&self, branch: &str, append: &str, line: &str) -> io::Result<()> {
-        if self.git(&format!("switch -q {branch}")).await.is_err() {
+        if self.git(&["switch", "-q", branch]).await.is_err() {
             let base = &self.args.environment.default_branch;
-            self.git(&format!("switch -q -c {branch} {base}")).await?;
+            self.git(&["switch", "-q", "-c", branch, base]).await?;
         }
         let file = self.repo.join(append);
         let text = fs::read_to_string(&file).await.unwrap_or_default();
         fs::write(&file, format!("{text}{line}\n")).await?;
         let message = format!("Append to {append}");
-        git(&self.repo, &["commit", "-q", "-a", "-m", &message], None).await?;
+        self.git(&["add", "-A"]).await?;
+        self.git(&["commit", "-q", "-m", &message]).await?;
         Ok(())
     }
 
     async fn push(&mut self, branch: &str) -> io::Result<()> {
-        self.git(&format!("switch -q {branch}")).await?;
-        let after = self.git("rev-parse HEAD").await?;
+        self.git(&["switch", "-q", branch]).await?;
+        let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
         let payload = self.repository().push(&Push {
             branch,
@@ -160,15 +177,14 @@ impl Driver<'_> {
 
     async fn open(&mut self, head: &str, base: &str) -> io::Result<()> {
         let number = self.pulls.len() as u64 + 1;
-        let base_sha = self.git(&format!("rev-parse {base}")).await?;
-        let head_sha = self.git(&format!("rev-parse {head}")).await?;
-        let changed = self
-            .git(&format!("diff --name-only {base_sha}...{head_sha}"))
+        let base_sha = self.git(&["rev-parse", base]).await?;
+        let head_sha = self.git(&["rev-parse", head]).await?;
+        let range = format!("{base_sha}...{head_sha}");
+        let changed = self.git(&["diff", "--name-only", &range]).await?;
+        self.git(&["switch", "-q", "--detach", &base_sha]).await?;
+        self.git(&["merge", "-q", "--no-ff", "--no-edit", &head_sha])
             .await?;
-        self.git(&format!("switch -q --detach {base_sha}")).await?;
-        self.git(&format!("merge -q --no-ff --no-edit {head_sha}"))
-            .await?;
-        let merge = self.git("rev-parse HEAD").await?;
+        let merge = self.git(&["rev-parse", "HEAD"]).await?;
         self.pulls.push(json!({
             "number": number,
             "state": "open",
@@ -217,21 +233,45 @@ impl Driver<'_> {
         fs::write(format!("{dir}/events/{name}.json"), payload.to_string()).await?;
         let runs = "/_apis/v1/Message/workflow/runs";
         let known: Vec<standin::Run> = self.get(runs).await?;
-        let mut client = format!(
-            "run --rm --network {} -v {}:/repo -v {dir}/events:/events:ro -w /repo \
-             --entrypoint dotnet {STANDIN_IMAGE} /opt/runner.server/Runner.Client.dll \
-             --server http://runner-server --event {event} --payload /events/{name}.json \
-             --ref {git_ref} --sha {sha} --repository {}",
-            self.env.name,
-            self.repo.display(),
-            self.args.repository
+        let label = format!("velnor-local={}", self.env.name);
+        let (repo, events) = (
+            format!("{}:/repo", self.repo.display()),
+            format!("{dir}/events:/events:ro"),
         );
+        let payload_path = format!("/events/{name}.json");
+        let mut client = words("run --rm -w /repo --entrypoint dotnet");
+        client.extend([
+            "--label",
+            &label,
+            "--network",
+            &self.env.name,
+            "-v",
+            &repo,
+            "-v",
+            &events,
+        ]);
+        client.push(STANDIN_IMAGE);
+        client.extend(words(
+            "/opt/runner.server/Runner.Client.dll --server http://runner-server",
+        ));
+        client.extend([
+            "--event",
+            event,
+            "--payload",
+            &payload_path,
+            "--ref",
+            git_ref,
+            "--sha",
+            sha,
+        ]);
+        client.extend(["--repository", &self.args.repository]);
         if let Some(workflow) = &self.args.workflow {
-            client = format!("{client} -W {workflow}");
+            client.extend(["-W", workflow]);
         }
         let log = std::fs::File::create(format!("{dir}/logs/{name}.log"))?;
         Command::new("docker")
-            .args(words(&client))
+            .args(&client)
+            .kill_on_drop(true)
             .stdin(Stdio::null())
             .stdout(log.try_clone()?)
             .stderr(log)

@@ -1,5 +1,5 @@
 {
-  "description": "A run on the default branch saves the cache. Then a pull request appends a comment line to rust-toolchain.toml, which selects every lane and changes no source, so nothing should compile.",
+  "description": "A push to the default branch saves the caches. Then a pull request appends a comment line to rust-toolchain.toml, which selects every lane and changes no source. Its run restores those caches, so no third-party crate is downloaded or compiled; the workspace crates compile again.",
   "steps": [
     {"push": "main"},
     {"commit": {"branch": "warm", "append": "rust-toolchain.toml", "line": "# velnor-local warm"}},

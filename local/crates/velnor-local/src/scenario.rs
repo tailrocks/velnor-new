@@ -31,6 +31,25 @@ impl Scenario {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         serde_json::from_slice(bytes).map_err(|e| format!("not a scenario: {e}"))
     }
+
+    pub fn refuse_options<'a>(
+        &'a self,
+        values: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), String> {
+        let steps = self.steps.iter().flat_map(|step| match step {
+            Step::Push(branch) => vec![branch.as_str()],
+            Step::Commit { branch, append, .. } => vec![branch.as_str(), append.as_str()],
+            Step::OpenPullRequest { head, base } => vec![head.as_str(), base.as_str()],
+        });
+        match values
+            .into_iter()
+            .chain(steps)
+            .find(|value| value.is_empty() || value.starts_with('-'))
+        {
+            Some(value) => Err(format!("`{value}` is empty or starts with `-`")),
+            None => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -73,8 +92,9 @@ pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64
         )
     );
     text.push_str(
-        "Executed: every step of every job above, by GitHub's official runner in linux/arm64 containers.\n\
-         Stood in: runner.server queued the jobs and checked out the local copy of the repository; \
+        "Executed: every step of every job above except actions/checkout, by GitHub's official runner \
+         in linux/arm64 containers.\n\
+         Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; \
          the cache server decided every cache hit, miss and refusal with velnor-cache-rules; \
          the API stub answered GITHUB_API_URL.\n",
     );
