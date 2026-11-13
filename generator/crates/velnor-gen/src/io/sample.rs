@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoPath;
 use velnor_rust::{MetadataError, manifests};
 
+use crate::expected_files;
+
 use super::{Error, read_view, regular_file, replace, toplevel};
 
 pub const SAMPLES: &str = "generator/samples";
@@ -19,6 +21,7 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
+    expected_files(&view).map_err(Error::Detect)?;
     let recording = Recording {
         view: view.files,
         manifests: manifests(&view.tracked_paths),
@@ -69,15 +72,23 @@ fn percent_encode(text: &str) -> String {
         .collect()
 }
 
+fn relocate_text(text: &str, from: &[&str]) -> String {
+    from.iter().fold(text.to_owned(), |text, prefix| {
+        text.replace(prefix, SAMPLE_REPOSITORY)
+    })
+}
+
 fn relocate(value: &mut serde_json::Value, from: &[&str]) {
     match value {
-        serde_json::Value::String(text) => {
-            for prefix in from {
-                *text = text.replace(prefix, SAMPLE_REPOSITORY);
+        serde_json::Value::String(text) => *text = relocate_text(text, from),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|v| relocate(v, from)),
+        serde_json::Value::Object(map) => {
+            let entries = std::mem::take(map);
+            for (key, mut entry) in entries {
+                relocate(&mut entry, from);
+                map.insert(relocate_text(&key, from), entry);
             }
         }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(|v| relocate(v, from)),
-        serde_json::Value::Object(map) => map.values_mut().for_each(|v| relocate(v, from)),
         _ => {}
     }
 }

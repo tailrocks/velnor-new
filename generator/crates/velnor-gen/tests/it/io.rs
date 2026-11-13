@@ -291,6 +291,14 @@ fn a_checkout_at_the_filesystem_root_cannot_be_recorded() {
 }
 
 #[test]
+fn recorded_metadata_names_no_checkout_in_object_keys() -> TestResult {
+    let json = br#"{"metadata":{"/home/someone/work/project/x":1}}"#;
+    let recorded = relocate_metadata(Path::new("/home/someone/work/project"), json)?;
+    assert!(!String::from_utf8(recorded)?.contains("someone"));
+    Ok(())
+}
+
+#[test]
 fn a_leftover_or_planted_temporary_file_never_redirects_the_write() -> TestResult {
     let scratch = Scratch::new("temporary")?;
     let target = scratch.outside().join("victim.yml");
