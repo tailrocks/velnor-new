@@ -6,6 +6,7 @@ pub mod collect;
 pub mod compare;
 pub mod error;
 pub mod github;
+pub mod inputs;
 pub mod io;
 pub mod logscan;
 pub mod metrics;
