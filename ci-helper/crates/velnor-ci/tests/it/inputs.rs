@@ -4,12 +4,11 @@
 use velnor_ci::inputs::{Tracked, TrackedFile, parse_inputs, parse_ls_files};
 
 #[test]
-fn only_unmodified_regular_files_at_stage_zero_with_a_writable_path_are_tracked() {
+fn only_regular_files_at_stage_zero_with_a_writable_path_are_tracked() {
     let blob = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
     let records = [
         format!("100644 {blob} 0\tsrc/lib.rs"),
         format!("100755 {blob} 0\tscripts/run me"),
-        format!("100644 {blob} 0\tsrc/edited.rs"),
         format!("120000 {blob} 0\tlink"),
         format!("160000 {blob} 0\tvendor/sub"),
         format!("100644 {blob} 1\tconflicted.rs"),
@@ -17,7 +16,7 @@ fn only_unmodified_regular_files_at_stage_zero_with_a_writable_path_are_tracked(
         format!("100644 {blob} 0\tline\nbreak.rs"),
     ];
     let staged = records.join("\0") + "\0";
-    let tracked = parse_ls_files(staged.as_bytes(), b"src/edited.rs\0");
+    let tracked = parse_ls_files(staged.as_bytes());
     let file = |path: &str, mode: &str| TrackedFile {
         path: path.to_owned(),
         blob: blob.to_owned(),
@@ -30,7 +29,7 @@ fn only_unmodified_regular_files_at_stage_zero_with_a_writable_path_are_tracked(
                 file("src/lib.rs", "100644"),
                 file("scripts/run me", "100755")
             ],
-            modified: 1,
+            absent: vec![],
             unsupported: 2,
         }
     );

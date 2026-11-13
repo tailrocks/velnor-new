@@ -2,26 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File, FileTimes};
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 use crate::inputs::{
     INPUTS_FILE, SavedInput, Tracked, format_inputs, parse_inputs, parse_ls_files, plan_restore,
+    with_worktree_blobs,
 };
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
-    let tracked = tracked_files(root)?;
+    let tracked = worktree_files(root)?;
     let mut saved = Vec::with_capacity(tracked.files.len());
     for file in &tracked.files {
-        if let Some(mtime_ns) = modified_ns(&root.join(&file.path))? {
-            saved.push(SavedInput {
-                file: file.clone(),
-                mtime_ns,
-            });
-        }
+        saved.push(SavedInput {
+            file: file.clone(),
+            mtime_ns: modified_ns(&root.join(&file.path))?,
+        });
     }
     let path = root.join(INPUTS_FILE);
     if let Some(parent) = path.parent() {
@@ -31,9 +30,9 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files to {INPUTS_FILE}; left out: {} modified in the worktree, {} with a path the file cannot hold\n",
+        "saved {} tracked files to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold\n",
         saved.len(),
-        tracked.modified,
+        tracked.absent.len(),
         tracked.unsupported
     ))
 }
@@ -47,61 +46,103 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let plan = plan_restore(&parse_inputs(&text)?, &tracked_files(root)?);
+    let plan = plan_restore(&parse_inputs(&text)?, &worktree_files(root)?);
     for input in &plan.restore {
         set_modified_ns(&root.join(&input.file.path), input.mtime_ns)?;
     }
     Ok(format!(
-        "restored the modification time of {} unchanged files; {} changed, {} new, {} modified in the worktree, {} with a path the file cannot hold\n",
+        "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold\n",
         plan.restore.len(),
         plan.changed,
         plan.new,
-        plan.modified,
+        plan.deleted,
+        plan.absent,
         plan.unsupported
     ))
 }
 
-fn tracked_files(root: &Path) -> Result<Tracked, CiError> {
-    let staged = git_ls_files(root, &["-s", "-z"])?;
-    let modified = git_ls_files(root, &["-m", "-z"])?;
-    Ok(parse_ls_files(&staged, &modified))
+fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
+    let index = parse_ls_files(&git(root, &["ls-files", "-s", "-z"], None)?);
+    let (present, absent): (Vec<_>, Vec<_>) = index
+        .files
+        .into_iter()
+        .partition(|file| is_regular_file(&root.join(&file.path)));
+    let paths: String = present
+        .iter()
+        .map(|file| file.path.clone() + "\n")
+        .collect();
+    let hashes = git(
+        root,
+        &["hash-object", "--no-filters", "--stdin-paths"],
+        Some(paths.as_bytes()),
+    )?;
+    let hashes = String::from_utf8(hashes)
+        .map_err(|e| CiError::new(format!("git hash-object printed non-UTF-8: {e}")))?;
+    Ok(Tracked {
+        files: with_worktree_blobs(present, &hashes)?,
+        absent: absent.into_iter().map(|file| file.path).collect(),
+        unsupported: index.unsupported,
+    })
 }
 
-fn git_ls_files(root: &Path, args: &[&str]) -> Result<Vec<u8>, CiError> {
-    let output = Command::new("git")
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
+}
+
+fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiError> {
+    let mut child = Command::new("git")
         .arg("-C")
         .arg(root)
-        .arg("ls-files")
         .args(args)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run git ls-files: {e}")))?;
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| CiError::new(format!("cannot run git {}: {e}", args[0])))?;
+    let input = child.stdin.take();
+    let output = std::thread::scope(|scope| {
+        let writer = scope.spawn(move || match (input, stdin) {
+            (Some(mut pipe), Some(bytes)) => pipe.write_all(bytes),
+            _ => Ok(()),
+        });
+        let output = child.wait_with_output();
+        let written = writer
+            .join()
+            .unwrap_or_else(|_| Err(std::io::Error::other("stdin writer panicked")));
+        output.and_then(|output| written.map(|()| output))
+    })
+    .map_err(|e| CiError::new(format!("git {}: {e}", args[0])))?;
     if !output.status.success() {
         return Err(CiError::new(format!(
-            "git ls-files failed: {}",
+            "git {} failed: {}",
+            args[0],
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
     Ok(output.stdout)
 }
 
-fn modified_ns(path: &Path) -> Result<Option<u64>, CiError> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(CiError::new(format!("cannot stat {}: {e}", path.display()))),
-    };
-    let modified = metadata
-        .modified()
+fn modified_ns(path: &Path) -> Result<u64, CiError> {
+    let modified = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
         .map_err(|e| CiError::new(format!("cannot read mtime of {}: {e}", path.display())))?;
-    Ok(modified
+    modified
         .duration_since(UNIX_EPOCH)
         .ok()
-        .and_then(|since| u64::try_from(since.as_nanos()).ok()))
+        .and_then(|since| u64::try_from(since.as_nanos()).ok())
+        .ok_or_else(|| CiError::new(format!("mtime of {} is out of range", path.display())))
 }
 
 fn set_modified_ns(path: &Path, mtime_ns: u64) -> Result<(), CiError> {
     let time = SystemTime::UNIX_EPOCH + Duration::from_nanos(mtime_ns);
-    File::open(path)
+    File::options()
+        .write(true)
+        .open(path)
+        .or_else(|_| File::open(path))
         .and_then(|file| file.set_times(FileTimes::new().set_modified(time)))
         .map_err(|e| CiError::new(format!("cannot set mtime of {}: {e}", path.display())))
 }

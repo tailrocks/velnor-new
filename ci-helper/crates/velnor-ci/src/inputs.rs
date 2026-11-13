@@ -23,7 +23,7 @@ pub struct SavedInput {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Tracked {
     pub files: Vec<TrackedFile>,
-    pub modified: usize,
+    pub absent: Vec<String>,
     pub unsupported: usize,
 }
 
@@ -32,7 +32,8 @@ pub struct RestorePlan {
     pub restore: Vec<SavedInput>,
     pub changed: usize,
     pub new: usize,
-    pub modified: usize,
+    pub deleted: usize,
+    pub absent: usize,
     pub unsupported: usize,
 }
 
@@ -43,24 +44,16 @@ enum Entry {
 }
 
 #[must_use]
-pub fn parse_ls_files(staged: &[u8], modified: &[u8]) -> Tracked {
-    let modified: BTreeSet<&[u8]> = nul_records(modified).collect();
+pub fn parse_ls_files(staged: &[u8]) -> Tracked {
     let mut tracked = Tracked::default();
-    for record in nul_records(staged) {
+    for record in staged.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
         match parse_ls_files_record(record) {
-            Entry::File(file) if modified.contains(file.path.as_bytes()) => tracked.modified += 1,
             Entry::File(file) => tracked.files.push(file),
             Entry::Unsupported => tracked.unsupported += 1,
             Entry::Skipped => {}
         }
     }
     tracked
-}
-
-fn nul_records(output: &[u8]) -> impl Iterator<Item = &[u8]> {
-    output
-        .split(|byte| *byte == 0)
-        .filter(|record| !record.is_empty())
 }
 
 fn parse_ls_files_record(record: &[u8]) -> Entry {
@@ -89,6 +82,28 @@ fn parse_ls_files_record(record: &[u8]) -> Entry {
 
 fn representable(path: &str) -> bool {
     !path.is_empty() && !path.contains(['\t', '\n', '\r'])
+}
+
+pub fn with_worktree_blobs(
+    files: Vec<TrackedFile>,
+    hashes: &str,
+) -> Result<Vec<TrackedFile>, CiError> {
+    let hashes: Vec<&str> = hashes.lines().collect();
+    if hashes.len() != files.len() {
+        return Err(CiError::new(format!(
+            "git hash-object returned {} ids for {} files",
+            hashes.len(),
+            files.len()
+        )));
+    }
+    Ok(files
+        .into_iter()
+        .zip(hashes)
+        .map(|(file, blob)| TrackedFile {
+            blob: blob.to_owned(),
+            ..file
+        })
+        .collect())
 }
 
 #[must_use]
@@ -146,17 +161,27 @@ fn parse_inputs_line(line: &str) -> Option<SavedInput> {
 
 #[must_use]
 pub fn plan_restore(saved: &[SavedInput], tracked: &Tracked) -> RestorePlan {
-    let saved: BTreeMap<&str, &SavedInput> = saved
+    let saved_by_path: BTreeMap<&str, &SavedInput> = saved
         .iter()
         .map(|input| (input.file.path.as_str(), input))
         .collect();
+    let current: BTreeSet<&str> = tracked
+        .files
+        .iter()
+        .map(|file| file.path.as_str())
+        .chain(tracked.absent.iter().map(String::as_str))
+        .collect();
     let mut plan = RestorePlan {
-        modified: tracked.modified,
+        deleted: saved_by_path
+            .keys()
+            .filter(|path| !current.contains(*path))
+            .count(),
+        absent: tracked.absent.len(),
         unsupported: tracked.unsupported,
         ..RestorePlan::default()
     };
     for file in &tracked.files {
-        match saved.get(file.path.as_str()) {
+        match saved_by_path.get(file.path.as_str()) {
             Some(input) if input.file == *file => plan.restore.push(SavedInput {
                 file: file.clone(),
                 mtime_ns: input.mtime_ns,

@@ -30,11 +30,11 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum InputsCommand {
     #[command(
-        about = "Write target/.velnor/inputs.tsv: path, blob id and modification time in nanoseconds of every tracked file"
+        about = "Write target/.velnor/inputs.tsv: path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in the worktree; paths a TSV field cannot hold are counted and left out"
     )]
     Save,
     #[command(
-        about = "Set the modification time of every tracked file whose blob id is unchanged to the saved value"
+        about = "Set the saved modification time on every tracked file whose path, bytes on disk and mode equal the saved ones; report changed, new, deleted, absent and left-out files"
     )]
     Restore,
 }
