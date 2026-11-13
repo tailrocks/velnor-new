@@ -199,7 +199,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
+          VELNOR_NAMED_CHECK_LANES_JSON: "{\"check-generator-samples\":[{\"job_id\":\"check-generator-samples\"}],\"check-maintenance-helpers\":[{\"job_id\":\"check-maintenance-helpers\"}]}"
         run: &r11 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.78'"
       - name: Resolve qualification predecessor
         if: github.event_name == 'workflow_dispatch'
