@@ -1,0 +1,43 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
+use clap::{Args, Parser, Subcommand};
+use velnor_cache_rules::REPOSITORY_LIMIT_BYTES;
+
+#[derive(Debug, Parser)]
+#[command(name = "velnor-local", version, about = "The local GitHub environment")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    #[command(
+        about = "Serve GitHub's cache protocol from local disk under GitHub's cache rules, and forward every other request to runner.server"
+    )]
+    CacheServer(CacheServerArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CacheServerArgs {
+    #[arg(long, default_value = "127.0.0.1:80", help = "Address to listen on")]
+    pub listen: SocketAddr,
+    #[arg(
+        long,
+        help = "runner.server as host:port; every request that is not a cache call goes there"
+    )]
+    pub upstream: String,
+    #[arg(long, help = "Directory that holds the archives and the index file")]
+    pub dir: PathBuf,
+    #[arg(
+        long,
+        help = "Public half of runner.server's token signing key, PKCS#1 RSAPublicKey DER"
+    )]
+    pub token_key: PathBuf,
+    #[arg(long, default_value_t = REPOSITORY_LIMIT_BYTES, help = "Cache size limit of one repository in bytes")]
+    pub limit_bytes: u64,
+}
