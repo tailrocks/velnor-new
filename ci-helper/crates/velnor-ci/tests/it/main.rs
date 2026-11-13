@@ -4,7 +4,6 @@
 mod collect;
 mod compare;
 mod gate;
-mod gate_binary;
 mod inputs;
 mod io;
 mod logscan;
