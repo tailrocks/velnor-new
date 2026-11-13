@@ -3,7 +3,7 @@ ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git jq sudo unzip xz-utils zstd \
+    && apt-get install -y --no-install-recommends build-essential ca-certificates curl git jq sudo unzip xz-utils zstd \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1001 runner && echo "runner ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner
 WORKDIR /home/runner
