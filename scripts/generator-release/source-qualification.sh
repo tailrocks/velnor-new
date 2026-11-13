@@ -477,9 +477,16 @@ after="$evidence/cargo-fetch-locks.after.txt"
 identity="$evidence/cargo-fetch-lock-identity.txt"
 manifests=(Cargo.toml crates/velnor-runner/Cargo.toml)
 locks=(Cargo.lock crates/velnor-runner/Cargo.lock)
+fetch_scope=root-and-runner
 if [ -f "$root/ci-helper/Cargo.toml" ]; then
   manifests+=(ci-helper/Cargo.toml)
   locks+=(ci-helper/Cargo.lock)
+  fetch_scope="$fetch_scope-and-ci-helper"
+fi
+if [ -f "$root/local/Cargo.toml" ]; then
+  manifests+=(local/Cargo.toml)
+  locks+=(local/Cargo.lock)
+  fetch_scope="$fetch_scope-and-local"
 fi
 final_status=0
 fetch_modes=()
@@ -677,7 +684,7 @@ if [ -n "$exact_hit_network_fetch" ]; then
 fi
 {
   printf 'source_head=%s\n' "$GITHUB_SHA"
-  printf 'fetch_scope=root-and-runner\n'
+  printf 'fetch_scope=%s\n' "$fetch_scope"
   printf 'target_filter=none\n'
   printf 'locked=true\n'
   printf 'cargo_home=%s\n' "$CARGO_HOME"

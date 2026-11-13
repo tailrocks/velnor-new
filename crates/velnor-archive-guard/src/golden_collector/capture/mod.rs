@@ -15,8 +15,10 @@ use std::env;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use tempfile::Builder;
+use velnor_actions_mise::BoundedCommandOutput;
 
 use self::executable::Executable;
 use super::filesystem;
@@ -39,6 +41,22 @@ struct Context<'a> {
     version: &'a str,
     target: &'a str,
     cli_sha256: &'a str,
+    golden_dir: &'a Path,
+    oracle: &'a oracle::Snapshot,
+}
+
+impl Context<'_> {
+    fn run_candidate(
+        &self,
+        command: &mut Command,
+        persist: impl FnOnce(&BoundedCommandOutput) -> Result<(), CollectorError>,
+    ) -> Result<BoundedCommandOutput, CollectorError> {
+        let output = self
+            .cli
+            .run_candidate(self.guard, self.root, command, persist);
+        oracle::verify_unchanged(self.golden_dir, self.oracle)?;
+        output
+    }
 }
 
 struct WorkspaceRun<'a> {
@@ -110,7 +128,9 @@ fn run_in_workspace(run: &WorkspaceRun<'_>) -> Result<(), CollectorError> {
         cli_sha256,
         oracle,
     } = *run;
-    let version = candidate_version(guard, root, cli, workspace)?;
+    let version = candidate_version(guard, root, cli, workspace);
+    oracle::verify_unchanged(golden_dir, oracle)?;
+    let version = version?;
     let context = Context {
         root,
         cli,
@@ -119,6 +139,8 @@ fn run_in_workspace(run: &WorkspaceRun<'_>) -> Result<(), CollectorError> {
         version: &version,
         target,
         cli_sha256,
+        golden_dir,
+        oracle,
     };
     let stage = workspace.join("stage");
     fs::create_dir(&stage).map_err(CollectorError::operational)?;

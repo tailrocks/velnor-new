@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [workspace]
-members = ["crates/velnor-local"]
+members = ["crates/velnor-cache-rules", "crates/velnor-local"]
 resolver = "3"
 
 [workspace.package]
@@ -31,5 +31,6 @@ panic = "deny"
 todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
+missing_errors_doc = "allow"
 allow_attributes_without_reason = "deny"
 allow_attributes = "warn"

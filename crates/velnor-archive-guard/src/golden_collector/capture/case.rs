@@ -108,11 +108,9 @@ fn run_candidate(
         command.arg(path);
     }
     fixture_git::isolate_git_environment(&mut command);
-    context
-        .cli
-        .run_candidate(context.guard, context.root, &mut command, |output| {
-            output::persist_result(raw, name, out, output)
-        })
+    context.run_candidate(&mut command, |output| {
+        output::persist_result(raw, name, out, output)
+    })
 }
 
 fn validate_bindings(

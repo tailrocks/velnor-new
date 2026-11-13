@@ -24,6 +24,7 @@ pub(super) fn copy_mutation_repository(
         "crates",
         "fixtures",
         "images",
+        "local",
         "scripts",
     ] {
         copy_tree(&source.join(directory), &destination.join(directory))?;

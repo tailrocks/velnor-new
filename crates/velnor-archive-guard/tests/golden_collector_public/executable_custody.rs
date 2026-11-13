@@ -178,18 +178,21 @@ fn replacing_current_executable_after_nested_plan_stops_before_generate()
 
 #[test]
 fn rejects_candidate_changes_to_fixture_or_dogfood_source() -> Result<(), Box<dyn Error>> {
-    for (mode, expected) in [
+    for (mode, expected, stopped_before) in [
         (
             "mutate-fixture-plan",
             "candidate changed fixture repository during plan",
+            "raw/nested/generate.status",
         ),
         (
             "mutate-fixture-generate",
             "candidate changed fixture repository during generate",
+            "raw/mbx-nextest",
         ),
         (
             "mutate-dogfood-plan",
             "candidate changed dogfood source workflows",
+            "raw/dogfood/generate.status",
         ),
     ] {
         let harness = Harness::new()?;
@@ -207,6 +210,12 @@ fn rejects_candidate_changes_to_fixture_or_dogfood_source() -> Result<(), Box<dy
             String::from_utf8_lossy(&output.stderr)
         );
         assert_eq!(fs::read(oracle.join("MANIFEST.sha256"))?, before);
+        let workspace =
+            retained_workspace(&output).ok_or("failed evidence workspace was not retained")?;
+        assert!(
+            !workspace.join(stopped_before).exists(),
+            "{mode} kept running"
+        );
         retain_test_fixture(harness);
     }
     Ok(())
