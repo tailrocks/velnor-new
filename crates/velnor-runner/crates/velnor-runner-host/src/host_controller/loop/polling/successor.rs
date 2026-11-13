@@ -60,7 +60,7 @@ async fn reserve_physical_successor(
         context.docker,
         context.journal,
         context.config.resource_budget()?,
-        context.release_read_secret,
+        context.image_authority,
         context.selected_engine.endpoint(),
     )
     .await;
@@ -228,7 +228,7 @@ async fn recover_candidate(
         context.journal,
         budget,
         context.docker,
-        context.release_read_secret,
+        context.image_authority,
     )
     .await
 }

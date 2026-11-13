@@ -95,7 +95,7 @@ async fn finish_connection_preparation(
         request.journal,
         request.selected_engine,
         request.worker_images,
-        request.options.release_read_secret,
+        request.options.image_authority,
     )?;
     let completion = start_completion_worker(&authority.setup, &request, native_cleanup)?;
     let PrepareConnectionRequest {
@@ -160,7 +160,7 @@ fn native_cleanup_runtime(
     journal: &crate::journal::Journal,
     selected_engine: &crate::launch::SelectedEngineContext,
     worker_images: &crate::launch::VerifiedWorkerImages,
-    release_read_secret: &Arc<crate::launch::ReleaseReadSecret>,
+    image_authority: &Arc<crate::launch::ImageAuthority>,
 ) -> Result<NativeCleanupRuntime, ListenFault> {
     if !selected_engine.matches_images(worker_images) {
         return Err(HostError::Ownership.into());
@@ -174,7 +174,7 @@ fn native_cleanup_runtime(
             platform: selected_engine.platform().to_owned(),
         },
         selected_engine.clone(),
-        Arc::clone(release_read_secret),
+        Arc::clone(image_authority),
     )?)
 }
 

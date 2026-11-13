@@ -92,7 +92,9 @@ fn guest_identity(
         WorkerImageOrigin::Registry(registry)
             if registry.observation.validate(&registry.identity).is_ok() =>
         {
-            let expected_manifest = images.registry_manifest_sha256();
+            let expected_manifest = images
+                .registry_manifest_sha256()
+                .ok_or(HostError::ForbiddenMount)?;
             identity::registry(&identity::RegistryInput {
                 role: registry.identity.role,
                 expected_role: role,
@@ -101,11 +103,12 @@ fn guest_identity(
                 release_manifest_sha256: &registry.identity.release_manifest_sha256,
                 expected_release_manifest_sha256: expected_manifest,
                 registry_digest: &registry.identity.registry_digest,
-                manifest_digest: image.manifest_digest(),
-                config_digest: image.config_digest(),
+                manifest_digest: &registry.identity.registry_digest,
+                config_digest: &registry.identity.config_digest,
             })
         }
         WorkerImageOrigin::Registry(_) => None,
+        WorkerImageOrigin::Developer => identity::developer(image.runtime_id()),
     };
     result.ok_or(HostError::ForbiddenMount)
 }

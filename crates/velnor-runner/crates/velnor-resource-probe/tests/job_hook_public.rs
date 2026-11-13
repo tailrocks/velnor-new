@@ -7,6 +7,10 @@ mod cleanup_record;
 #[path = "job_hook_public/cleanup_observer_tmpfs.rs"]
 mod cleanup_observer_tmpfs;
 
+#[cfg(target_os = "linux")]
+#[path = "job_hook_public/job_facts_guest_image.rs"]
+mod job_facts_guest_image;
+
 use std::error::Error;
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};

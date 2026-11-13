@@ -10,7 +10,7 @@ use crate::{
     error::HostError,
     journal::Journal,
     launch::{
-        PositivePollContext as PositiveTurnContext, ReleaseReadSecret, SelectedEngineContext,
+        ImageAuthority, PositivePollContext as PositiveTurnContext, SelectedEngineContext,
         VerifiedWorkerImages, ZeroHeaderMode,
     },
 };
@@ -45,7 +45,7 @@ pub(super) struct PositivePollContext<'a> {
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
     pub(super) state: &'a Path,
-    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) admission_ready: bool,
 }
 

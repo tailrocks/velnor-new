@@ -24,7 +24,7 @@ use crate::{
     error::HostError,
     journal::{ConnectionJournal, Journal},
     launch::{
-        CompletionWorker, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
+        CompletionWorker, ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
         scoped_runtime::{
             AuthorizedScopedExecution, PendingScopedExecution, RunnerReadyBootstrap,
             RunnerReadyRegistry, ScopedChannelOutcome,
@@ -222,7 +222,7 @@ impl PreparedConnection {
                     HostError::Journal,
                 )));
             };
-            let secret = match ReleaseReadSecret::load(&config) {
+            let secret = match ImageAuthority::load(&config) {
                 Ok(secret) => secret,
                 Err(error) => {
                     return Err(Box::new(PendingScopedExecution::Runner(

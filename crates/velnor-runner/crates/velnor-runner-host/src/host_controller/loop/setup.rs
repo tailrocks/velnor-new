@@ -10,7 +10,7 @@ use crate::{
     error::HostError,
     journal::{CapacityLimits, EngineContext, Journal, OperationalCapacityLimits},
     launch::{
-        ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages, retained_tmpfs_memory_bytes,
+        ImageAuthority, SelectedEngineContext, VerifiedWorkerImages, retained_tmpfs_memory_bytes,
     },
     launch_blocking::ListenFault,
 };
@@ -91,7 +91,7 @@ pub(super) async fn prepare_active_connections(
     config: &HostConfig,
     selected_engine: &SelectedEngineContext,
     worker_images: &VerifiedWorkerImages,
-    release_read_secret: &Arc<ReleaseReadSecret>,
+    image_authority: &Arc<ImageAuthority>,
     docker: &Docker,
 ) -> Result<Vec<PreparedConnection>, ListenFault> {
     let allocations = journal.header_allocations().await?;
@@ -117,7 +117,7 @@ pub(super) async fn prepare_active_connections(
                 worker_images,
                 docker,
                 options: ConnectionLaunchOptions {
-                    release_read_secret,
+                    image_authority,
                     requested_header_capacity: target,
                 },
             })
@@ -160,7 +160,7 @@ pub(super) async fn bind_connection(
 }
 
 pub(super) struct ConnectionLaunchOptions<'a> {
-    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) requested_header_capacity: u32,
 }
 

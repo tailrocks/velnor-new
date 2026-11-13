@@ -36,6 +36,9 @@ pub enum HostError {
     #[error("scale set selector does not match the runner platform")]
     PlatformSelector,
 
+    #[error("developer images require a binary built without a release identity")]
+    DeveloperImages,
+
     #[error("bad path")]
     Path,
 
@@ -115,6 +118,7 @@ impl HostError {
         match self {
             Self::Config => "config",
             Self::PlatformSelector => "platform_selector",
+            Self::DeveloperImages => "developer_images",
             Self::Path => "path",
             Self::Lock => "lock",
             Self::Journal => "journal",

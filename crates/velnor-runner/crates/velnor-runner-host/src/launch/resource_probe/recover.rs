@@ -4,18 +4,21 @@
 use bollard::{Docker, models::SystemInfo};
 
 use crate::error::HostError;
-use crate::journal::{HostHelperRole, Journal, ProbePhase, ProbeRow, ProbeWork};
+use crate::journal::{Journal, ProbePhase, ProbeRow};
 
 use super::execute::ProbeCleanupEvidence;
 #[path = "recover/dispatch.rs"]
 mod dispatch;
+#[path = "recover/persisted.rs"]
+mod persisted;
 #[path = "recover/unattached.rs"]
 mod unattached;
 use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
-use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
+use super::projection::{DockerRoot, ProbeProjection};
 use dispatch::{ActiveRecoveryTarget, active_recovery_target, supports_stop};
+use persisted::persisted_projection;
 
 pub(super) async fn active(
     docker: &Docker,
@@ -337,49 +340,6 @@ async fn inspect_pair(
         }
         _ => Err(HostError::Ownership),
     }
-}
-
-fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjection, HostError> {
-    let ProbeWork::ResourceProbe {
-        purpose,
-        request_sha256,
-        ..
-    } = row.work()
-    else {
-        return Err(HostError::Ownership);
-    };
-    let mut matched = None;
-    for daemon_architecture in ["x86_64", "aarch64"] {
-        let image = VerifiedProbeImage::from_journal(
-            row.runtime_image_id.clone(),
-            daemon_architecture.to_owned(),
-            row.source_revision.clone(),
-            row.image_binding_digest.clone(),
-        )?;
-        let projection = ProbeProjection::build_from_purpose(
-            row.operation_id.clone(),
-            row.instance_id.clone(),
-            row.engine_id.clone(),
-            root.path(),
-            image,
-            *purpose,
-            request_sha256.clone(),
-        )?;
-        if row.projection_digest == projection.projection_digest
-            && matched.replace(projection).is_some()
-        {
-            return Err(HostError::Ownership);
-        }
-    }
-    let projection = matched.ok_or(HostError::Ownership)?;
-    if row.helper_role() != HostHelperRole::ResourceProbe
-        || row.role != "resource-probe"
-        || row.operation_name != projection.name
-        || row.projection_digest != projection.projection_digest
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(projection)
 }
 
 async fn quarantine<T>(

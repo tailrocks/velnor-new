@@ -3,7 +3,7 @@
 
 use bollard::models::ContainerConfig;
 
-use super::{PLATFORM, valid_sha};
+use super::valid_sha;
 
 pub(crate) struct VerifiedCandidate {
     pub(in crate::launch::resource_probe) runtime_id: String,
@@ -22,6 +22,7 @@ pub(crate) struct VerifiedCandidate {
 #[derive(Debug, Clone)]
 pub(in crate::launch) enum ProbeImageOrigin {
     Registry { manifest_sha256: String },
+    Developer,
 }
 
 impl VerifiedCandidate {
@@ -66,7 +67,7 @@ impl ProbeImagePreparationEvidence {
             || !digest(&candidate.binding_fingerprint)
             || !candidate.origin.valid()
             || !valid_sha(&candidate.source_revision)
-            || candidate.platform != PLATFORM
+            || crate::config::RunnerPlatform::parse(&candidate.platform).is_none()
             || !matches!(candidate.daemon_architecture.as_str(), "aarch64" | "x86_64")
             || candidate.engine_id.is_empty()
             || !digest(&candidate.docker_root_digest)
@@ -115,6 +116,7 @@ impl ProbeImageOrigin {
     fn valid(&self) -> bool {
         match self {
             Self::Registry { manifest_sha256 } => digest(manifest_sha256),
+            Self::Developer => true,
         }
     }
 }

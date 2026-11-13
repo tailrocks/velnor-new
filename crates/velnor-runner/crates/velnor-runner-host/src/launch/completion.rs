@@ -84,13 +84,13 @@ impl CompletionWorker {
         journal
             .ensure_image_imports_resolved(selected.engine_id())
             .await?;
-        let release_secret = Arc::new(crate::launch::ReleaseReadSecret::parse(release_read_token)?);
+        let image_authority = Arc::new(crate::launch::ImageAuthority::parse(release_read_token)?);
         let native_cleanup = NativeCleanupRuntime::new(
             bounded.clone(),
             journal.clone(),
             engine_context,
             selected.clone(),
-            release_secret,
+            image_authority,
         )?;
         Self::start_scoped(
             scope,

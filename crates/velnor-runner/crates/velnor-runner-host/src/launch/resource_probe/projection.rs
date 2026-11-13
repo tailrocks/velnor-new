@@ -25,7 +25,6 @@ pub(super) use validation::{expected_container_config, expected_image_config};
 
 const PROBE_TARGET: &str = "/velnor/docker-root";
 pub(super) const CGROUP_TARGET: &str = "/sys/fs/cgroup";
-const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
 pub(super) const PROBE_USER: &str = "65532:65532";
 const PROBE_WORKING_DIR: &str = "/";
@@ -81,7 +80,7 @@ impl VerifiedProbeImage {
         config: &ContainerConfig,
     ) -> Result<Self, HostError> {
         if !digest_reference(&runtime_id)
-            || platform != PROBE_PLATFORM
+            || crate::config::RunnerPlatform::parse(&platform).is_none()
             || !valid_daemon_architecture(&daemon_architecture)
             || !hex_string(&source_revision, 40)
             || !hex_string(&binding_fingerprint, 64)
@@ -100,6 +99,7 @@ impl VerifiedProbeImage {
 
     pub(super) fn from_journal(
         runtime_id: String,
+        platform: crate::config::RunnerPlatform,
         daemon_architecture: String,
         source_revision: String,
         binding_fingerprint: String,
@@ -113,7 +113,7 @@ impl VerifiedProbeImage {
         }
         Ok(Self {
             runtime_id,
-            platform: PROBE_PLATFORM.to_owned(),
+            platform: platform.as_str().to_owned(),
             daemon_architecture,
             source_revision,
             binding_fingerprint,

@@ -14,7 +14,7 @@ use crate::{
     docker_client::{connect_unix, docker_deadline},
     error::HostError,
     journal::{EngineContext, Journal},
-    launch::{ReleaseReadSecret, SelectedEngineContext, startup_storage_profile},
+    launch::{ImageAuthority, SelectedEngineContext, startup_storage_profile},
     launch_blocking::ListenFault,
 };
 
@@ -106,7 +106,7 @@ struct ControllerLoop<'a> {
     doctor_worker: Option<DoctorProbeWorker>,
     _readiness_worker: readiness::ReadinessWorker,
     doctor_attempted_request_id: Option<i64>,
-    release_read_secret: Arc<ReleaseReadSecret>,
+    image_authority: Arc<ImageAuthority>,
     admission_ready: bool,
     rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
@@ -117,19 +117,19 @@ impl<'a> ControllerLoop<'a> {
         current: HostConfig,
         state: &Path,
         daemon_lock: &'a DaemonLock,
-        release_read_secret: ReleaseReadSecret,
+        image_authority: ImageAuthority,
     ) -> Result<Self, ListenFault> {
         let base = open_controller_base(&current, state, daemon_lock).await?;
-        Self::finish_initialization(current, daemon_lock, release_read_secret, base).await
+        Self::finish_initialization(current, daemon_lock, image_authority, base).await
     }
 
     async fn finish_initialization(
         current: HostConfig,
         daemon_lock: &'a DaemonLock,
-        release_read_secret: ReleaseReadSecret,
+        image_authority: ImageAuthority,
         base: ControllerBase,
     ) -> Result<Self, ListenFault> {
-        let release_read_secret = Arc::new(release_read_secret);
+        let image_authority = Arc::new(image_authority);
         let ControllerBase {
             state,
             docker,
@@ -145,7 +145,7 @@ impl<'a> ControllerLoop<'a> {
             selected_engine: &selected_engine,
             journal: &journal,
             lineage: &lineage,
-            release_read_secret: &release_read_secret,
+            image_authority: &image_authority,
         })
         .await?;
         let worker_images = startup.worker_images;
@@ -155,7 +155,7 @@ impl<'a> ControllerLoop<'a> {
             &current,
             &selected_engine,
             &worker_images,
-            &release_read_secret,
+            &image_authority,
             &docker,
         )
         .await?;
@@ -179,7 +179,7 @@ impl<'a> ControllerLoop<'a> {
             journal.clone(),
             selected_engine.clone(),
             control_state.clone(),
-            Arc::clone(&release_read_secret),
+            Arc::clone(&image_authority),
         )?;
         let mut pending_retirements = Vec::new();
         setup::discover_retirements(&state, &current, &mut pending_retirements);
@@ -199,7 +199,7 @@ impl<'a> ControllerLoop<'a> {
             doctor_worker: None,
             _readiness_worker: readiness_worker,
             doctor_attempted_request_id: None,
-            release_read_secret,
+            image_authority,
             admission_ready: startup.admission_ready,
             rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
@@ -239,7 +239,7 @@ impl<'a> ControllerLoop<'a> {
             control_state: &self.control_state,
             selected_engine: &self.selected_engine,
             worker_images: &self.worker_images,
-            release_read_secret: &self.release_read_secret,
+            image_authority: &self.image_authority,
             docker: &self.docker,
             connection_sessions: &mut self.connection_sessions,
         };
@@ -277,7 +277,7 @@ impl<'a> ControllerLoop<'a> {
                 selected_engine: &self.selected_engine,
                 worker_images: &self.worker_images,
                 state: &self.state,
-                release_read_secret: &self.release_read_secret,
+                image_authority: &self.image_authority,
                 admission_ready: self.admission_ready,
                 control_state: &self.control_state,
             },
@@ -306,7 +306,7 @@ impl<'a> ControllerLoop<'a> {
                 &self.current,
                 &self.selected_engine,
                 &self.worker_images,
-                &self.release_read_secret,
+                &self.image_authority,
                 &self.docker,
             )
             .await
@@ -360,7 +360,7 @@ impl<'a> ControllerLoop<'a> {
                 }
             },
             self.current.max_jobs(),
-            &self.release_read_secret,
+            &self.image_authority,
             &self.worker_images,
             &self.current.docker().endpoint,
         )
