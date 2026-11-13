@@ -20,7 +20,9 @@ jobs:
           persist-credentials: false
       - name: Fetch velnor-ci 0.1.79
         env:
+          # jactionlint ignore=obfuscation
           SHA: '${{ fromJSON(''{"Linux-X64":"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e","Linux-ARM64":"56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6","macOS-ARM64":"39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+          # jactionlint ignore=obfuscation
           URL: '${{ fromJSON(''{"Linux-X64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64","Linux-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64","macOS-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-macos-arm64"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
         run: |
           curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"

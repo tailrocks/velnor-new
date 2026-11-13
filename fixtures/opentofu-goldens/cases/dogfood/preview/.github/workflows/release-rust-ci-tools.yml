@@ -73,11 +73,11 @@ jobs:
       - name: Run velnor-ci
         env:
           SUFFIX: ${{ matrix.suffix }}
-        run: dist/velnor-ci-$SUFFIX --version
+        run: dist/velnor-ci-"$SUFFIX" --version
       - name: Run velnor-gen
         env:
           SUFFIX: ${{ matrix.suffix }}
-        run: dist/velnor-gen-$SUFFIX --version
+        run: dist/velnor-gen-"$SUFFIX" --version
       - name: Show the file sizes
         run: ls -l dist
       - name: Upload the binaries
