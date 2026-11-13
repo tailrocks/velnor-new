@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::gate::release_gate;
+use velnor_ci::gate::{check_tag, release_gate};
 use velnor_ci::github::{check_runs_path, compare_path};
 
 use crate::support::{FakeGitHub, repo};
@@ -22,13 +22,19 @@ fn refusal(fake: &FakeGitHub, sha: &str) -> String {
     }
 }
 
-fn with_runs(sha: &str, runs: &str) -> FakeGitHub {
+fn with_total(sha: &str, total: usize, runs: &str) -> FakeGitHub {
     let mut fake = FakeGitHub::gate();
     fake.respond(
         check_runs_path(&repo(), sha, "Required"),
-        &format!("{{\"check_runs\": {runs}}}"),
+        &format!("{{\"total_count\": {total}, \"check_runs\": {runs}}}"),
     );
     fake
+}
+
+fn with_runs(sha: &str, runs: &str) -> FakeGitHub {
+    let listed = serde_json::from_str::<Vec<serde_json::Value>>(runs)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    with_total(sha, listed.len(), runs)
 }
 
 #[test]
@@ -150,5 +156,55 @@ fn the_default_branch_is_whatever_the_repository_says() {
     assert_eq!(
         verdict(&fake, ON_MAIN_GREEN).map(|said| said.lines().next().map(str::to_owned)),
         Ok(Some(format!("commit {ON_MAIN_GREEN} is on trunk/a b")))
+    );
+}
+
+#[test]
+fn a_page_that_does_not_hold_every_run_of_required_is_refused_not_trusted() {
+    let green = "[{\"name\": \"Required\", \"status\": \"completed\", \"conclusion\": \"success\", \"app\": {\"slug\": \"github-actions\"}}]";
+    assert!(verdict(&with_total(ON_MAIN_GREEN, 1, green), ON_MAIN_GREEN).is_ok());
+    let said = refusal(&with_total(ON_MAIN_GREEN, 2, green), ON_MAIN_GREEN);
+    assert!(said.contains("lists 2 runs of check Required"), "{said}");
+    assert!(said.contains("returned 1"), "{said}");
+}
+
+#[test]
+fn only_the_tag_of_the_version_of_the_program_is_released() {
+    assert_eq!(
+        check_tag("0.1.79", "rust-ci-v0.1.79").map_err(|e| e.to_string()),
+        Ok("tag rust-ci-v0.1.79 names version 0.1.79\n".to_owned())
+    );
+    for tag in [
+        "rust-ci-v0.1.80",
+        "rust-ci-v0.1.7",
+        "rust-ci-v0.1.79-rc1",
+        "rust-ci-v0.1.79 ",
+        "v0.1.79",
+        "0.1.79",
+        "",
+    ] {
+        let said = check_tag("0.1.79", tag).map_err(|e| e.to_string());
+        assert_eq!(
+            said,
+            Err(format!(
+                "tag {tag} must be rust-ci-v0.1.79, because this program is version 0.1.79"
+            ))
+        );
+    }
+}
+
+#[test]
+fn a_branch_name_stays_one_segment_of_the_comparison_path() {
+    assert_eq!(
+        compare_path(&repo(), "release/stable #1", ON_MAIN_GREEN),
+        format!(
+            "/repos/tailrocks/velnor-new/compare/release%2Fstable%20%231...{ON_MAIN_GREEN}?per_page=1"
+        )
+    );
+    assert_eq!(
+        check_runs_path(&repo(), ON_MAIN_GREEN, "Required"),
+        format!(
+            "/repos/tailrocks/velnor-new/commits/{ON_MAIN_GREEN}/check-runs?check_name=Required&filter=latest&per_page=100"
+        )
     );
 }

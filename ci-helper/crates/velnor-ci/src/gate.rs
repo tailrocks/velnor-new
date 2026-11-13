@@ -29,6 +29,13 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Strin
         &github.get(&check_runs_path(repo, sha, REQUIRED_CHECK))?,
         "check runs",
     )?;
+    if checks.total_count > checks.check_runs.len() {
+        return Err(CiError::new(format!(
+            "GitHub lists {} runs of check {REQUIRED_CHECK} on commit {sha} and returned {}",
+            checks.total_count,
+            checks.check_runs.len()
+        )));
+    }
     let mut failures = Vec::new();
     if !matches!(compare.status.as_str(), "identical" | "behind") {
         failures.push(format!(
@@ -47,6 +54,17 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Strin
         ))
     } else {
         Err(CiError::new(failures.join("\n")))
+    }
+}
+
+pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
+    let expected = format!("rust-ci-v{version}");
+    if tag == expected {
+        Ok(format!("tag {tag} names version {version}\n"))
+    } else {
+        Err(CiError::new(format!(
+            "tag {tag} must be {expected}, because this program is version {version}"
+        )))
     }
 }
 

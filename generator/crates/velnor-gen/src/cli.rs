@@ -33,6 +33,11 @@ pub enum Command {
         #[arg(help = "The release version, MAJOR.MINOR.PATCH")]
         version: String,
     },
+    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    CheckTag {
+        #[arg(help = "The release tag")]
+        tag: String,
+    },
     #[command(about = "Record a golden-test sample from a real checkout into generator/samples")]
     RecordSample {
         #[arg(help = "A path inside the checkout to record")]

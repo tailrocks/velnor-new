@@ -78,6 +78,14 @@ jobs:
         env:
           SUFFIX: ${{ matrix.suffix }}
         run: dist/velnor-gen-"$SUFFIX" --version
+      - name: Check the tag against the version of velnor-ci
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: dist/velnor-ci-"$SUFFIX" check-tag "$GITHUB_REF_NAME"
+      - name: Check the tag against the version of velnor-gen
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: dist/velnor-gen-"$SUFFIX" check-tag "$GITHUB_REF_NAME"
       - name: Show the file sizes
         run: ls -l dist
       - name: Upload the binaries

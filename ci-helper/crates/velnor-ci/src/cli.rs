@@ -28,6 +28,14 @@ pub enum Command {
         about = "Exit 1 unless the commit is on the default branch and its check Required passed; reads GITHUB_TOKEN"
     )]
     ReleaseGate(ReleaseGateArgs),
+    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    CheckTag(CheckTagArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckTagArgs {
+    #[arg(help = "The release tag")]
+    pub tag: String,
 }
 
 #[derive(Debug, Args)]

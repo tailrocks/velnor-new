@@ -90,6 +90,7 @@ pub struct ApiCompare {
 
 #[derive(Debug, Deserialize)]
 pub struct ApiCheckRuns {
+    pub total_count: usize,
     pub check_runs: Vec<ApiCheckRun>,
 }
 
@@ -124,7 +125,7 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 #[must_use]
 pub fn check_runs_path(repo: &Repo, sha: &str, check: &str) -> String {
     format!(
-        "/repos/{repo}/commits/{sha}/check-runs?check_name={}&filter=latest",
+        "/repos/{repo}/commits/{sha}/check-runs?check_name={}&filter=latest&per_page=100",
         encode(check)
     )
 }
@@ -132,7 +133,7 @@ pub fn check_runs_path(repo: &Repo, sha: &str, check: &str) -> String {
 fn encode(text: &str) -> String {
     text.bytes()
         .map(|byte| {
-            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
                 char::from(byte).to_string()
             } else {
                 format!("%{byte:02X}")

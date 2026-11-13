@@ -117,6 +117,18 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             "{id}"
         );
     }
+    let tag_checks: Vec<&str> = values(&jobs[0].1, "run")
+        .into_iter()
+        .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
+        .collect();
+    assert_eq!(
+        tag_checks,
+        [
+            "dist/velnor-ci-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\"",
+            "dist/velnor-gen-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\""
+        ]
+    );
+    assert_eq!(jobs[0].0, "build");
     assert_eq!(jobs.last().map(|(id, _)| id.as_str()), Some(WRITER));
     let writer = &jobs[jobs.len() - 1].1;
     let runs = values(writer, "run");

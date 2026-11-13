@@ -22,7 +22,7 @@ use velnor_rust::{
 mod sample;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, drift, expected_files};
+use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -81,6 +81,19 @@ where
     Cli::from_arg_matches(&matches)
 }
 
+fn tag_verdict(tag: &str) -> Exit {
+    match check_tag(env!("CARGO_PKG_VERSION"), tag) {
+        Ok(message) => {
+            println!("{message}");
+            Exit::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("velnor-gen: {message}");
+            Exit::from(1)
+        }
+    }
+}
+
 fn finish(result: Result<String, Error>) -> Exit {
     match result {
         Ok(message) => {
@@ -108,6 +121,7 @@ pub fn main() -> Exit {
             );
         }
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
+        Command::CheckTag { tag } => return tag_verdict(tag),
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
@@ -140,6 +154,7 @@ pub fn main() -> Exit {
 
 fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     let version = release_version(version).map_err(Error::Lock)?;
+    require_compatible(&version).map_err(Error::Generate)?;
     let root = toplevel(root)?;
     let url = sums_url(&version);
     let sums = program(
@@ -154,10 +169,24 @@ fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
         ],
     )?;
     let lock = pin_lock(version.as_str(), &String::from_utf8_lossy(&sums)).map_err(Error::Lock)?;
-    replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())?;
+    write_lock(&root, &lock)?;
+    program(
+        &root,
+        "git",
+        &[
+            OsStr::new("add"),
+            OsStr::new("--"),
+            OsStr::new(LOCK_PATH.as_str()),
+        ],
+    )?;
     Ok(format!(
-        "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH}"
+        "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH} and staged it"
     ))
+}
+
+pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
+    regular_file(root, &LOCK_PATH)?;
+    replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())
 }
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {

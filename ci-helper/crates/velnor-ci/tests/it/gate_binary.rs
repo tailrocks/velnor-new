@@ -94,3 +94,19 @@ fn release_gate_without_a_token_exits_1_before_any_request() {
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("set GITHUB_TOKEN"));
 }
+
+#[test]
+fn check_tag_exits_0_for_the_tag_of_its_own_version_and_1_for_any_other() {
+    let version = env!("CARGO_PKG_VERSION");
+    for (tag, code) in [
+        (format!("rust-ci-v{version}"), Some(0)),
+        ("rust-ci-v0.0.0".to_owned(), Some(1)),
+        (version.to_owned(), Some(1)),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["check-tag", &tag])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(output.status.code(), code, "{tag}");
+    }
+}

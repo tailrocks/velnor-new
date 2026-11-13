@@ -13,12 +13,13 @@ use clap::{CommandFactory, FromArgMatches};
 
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
-    BenchCommand, Cli, CollectArgs, Command, CompareArgs, InputsCommand, ReleaseGateArgs,
+    BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
+    ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
 use crate::error::CiError;
-use crate::gate::release_gate;
+use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
 
@@ -72,6 +73,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
         Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
         Command::ReleaseGate(args) => run_release_gate(&args),
+        Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
     }
 }
 

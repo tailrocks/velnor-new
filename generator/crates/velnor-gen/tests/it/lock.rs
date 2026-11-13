@@ -157,7 +157,7 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
         let said = result.err().map(|e| e.to_string()).unwrap_or_default();
         assert!(
             said.contains(&format!(
-                "{LOCK_PATH} pins velnor-ci {version}, but this velnor-gen works with velnor-ci {major}.{minor}.x"
+                "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {major}.{minor}.x"
             )),
             "{said}"
         );
