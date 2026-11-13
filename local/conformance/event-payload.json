@@ -123,6 +123,48 @@
         "GITHUB_WORKSPACE": "set"
       }
     },
+    "schedule": {
+      "fields": {
+        "action": "absent",
+        "repository.default_branch": "string",
+        "repository.fork": "boolean",
+        "repository.full_name": "string",
+        "repository.owner.login": "string",
+        "schedule": "string",
+        "sender.login": "absent"
+      },
+      "top_level": [
+        "organization",
+        "repository",
+        "schedule",
+        "workflow"
+      ],
+      "values": {
+        "GITHUB_BASE_REF": "",
+        "GITHUB_EVENT_NAME": "schedule",
+        "GITHUB_HEAD_REF": "",
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_REF_NAME": "main",
+        "GITHUB_REF_TYPE": "branch"
+      },
+      "variables": {
+        "GITHUB_API_URL": "set",
+        "GITHUB_BASE_REF": "empty",
+        "GITHUB_EVENT_NAME": "set",
+        "GITHUB_EVENT_PATH": "set",
+        "GITHUB_HEAD_REF": "empty",
+        "GITHUB_REF": "set",
+        "GITHUB_REF_NAME": "set",
+        "GITHUB_REF_TYPE": "set",
+        "GITHUB_REPOSITORY": "set",
+        "GITHUB_REPOSITORY_OWNER": "set",
+        "GITHUB_RUN_ATTEMPT": "set",
+        "GITHUB_SERVER_URL": "set",
+        "GITHUB_SHA": "set",
+        "GITHUB_WORKFLOW_REF": "set",
+        "GITHUB_WORKSPACE": "set"
+      }
+    },
     "workflow_dispatch": {
       "fields": {
         "action": "absent",

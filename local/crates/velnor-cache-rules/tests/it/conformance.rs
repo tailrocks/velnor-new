@@ -73,6 +73,7 @@ fn token_scopes_match_the_access_of_each_recorded_event() {
     let cases = [
         ("push", push("probe-<tag>-events")),
         ("pull_request", pull(7, "main")),
+        ("schedule", push("main")),
     ];
     for (name, event) in cases {
         let access = access_for(&event, "main");
