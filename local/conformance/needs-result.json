@@ -1,0 +1,33 @@
+{
+  "legs": {
+    "default-branch": {
+      "needs": {
+        "after-skipped": {
+          "outputs": {},
+          "result": "skipped"
+        },
+        "canceller": {
+          "outputs": {},
+          "result": "cancelled"
+        },
+        "skipped": {
+          "outputs": {},
+          "result": "skipped"
+        },
+        "sleeper": {
+          "outputs": {
+            "value": "set"
+          },
+          "result": "cancelled"
+        }
+      },
+      "results": {
+        "after-skipped": "skipped",
+        "canceller": "cancelled",
+        "skipped": "skipped",
+        "sleeper": "cancelled"
+      }
+    }
+  },
+  "probe": "needs-result"
+}

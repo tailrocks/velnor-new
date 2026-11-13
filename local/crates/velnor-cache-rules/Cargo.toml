@@ -18,6 +18,9 @@ path = "src/lib.rs"
 test = false
 doctest = false
 
+[dev-dependencies]
+serde_json = { version = "=1.0.154" }
+
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
