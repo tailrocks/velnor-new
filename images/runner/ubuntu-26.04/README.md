@@ -11,22 +11,23 @@ docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA="$(git rev-par
 On an Apple Silicon Mac, the same Dockerfiles build native `linux/arm64`
 runner and DinD images. These images are built locally, are never published,
 and do not go through image qualification. An ARM result is never recorded as
-the amd64 baseline. A scale set that runs these images uses its own selector,
-such as `ubuntu-26.04-arm-scale-set`.
+the amd64 baseline. The runner host accepts only `linux/amd64`, so
+`velnor-runner` does not start these images.
 
 `.velnor/runner.lock` pins the arm64 build. `base_image_arm64_digest` is the
 `linux/arm64/v8` child of the same Ubuntu manifest list as the amd64 base.
 The `*_arm64_sha256` keys hold the checksums of the arm64 downloads, at the
 same versions as the amd64 downloads. The Dockerfile has no default for an
 arm64 checksum, so the build fails unless each checksum is passed from the
-lock. A named build context replaces the pinned amd64 base with the arm64
-child. The helper programs are built for `aarch64-unknown-linux-musl`, and
+lock. The image publication check fails when an architecture arm of either
+Dockerfile differs from the URLs and checksums in the lock. A named build
+context replaces the pinned amd64 base with the arm64 child. The helper programs are built for `aarch64-unknown-linux-musl`, and
 they are static like the amd64 `x86_64-unknown-linux-musl` helpers.
 
-Run from the repository root. `STAGES` is an empty directory outside the
-checkout.
+Run from the repository root.
 
 ```sh
+STAGES="$(mktemp -d)"
 lock() { sed -n "s/^$1 = \"\(.*\)\"\$/\1/p" .velnor/runner.lock; }
 docker run --rm --platform linux/arm64 -v "$PWD:/src:ro" -v velnor-arm64-target:/target -v "$STAGES:/out" \
   -e CARGO_TARGET_DIR=/target rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 \

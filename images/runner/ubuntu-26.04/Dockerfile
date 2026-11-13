@@ -72,15 +72,8 @@ RUN /home/runner/bin/installdependencies.sh \
     && rm -rf /var/lib/apt/lists/*
 
 RUN case "${TARGETARCH}" in \
-        amd64) docker_url="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
-            compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
-            buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" ;; \
-        arm64) docker_url="https://download.docker.com/linux/static/stable/aarch64/docker-${DOCKER_VERSION}.tgz" \
-            compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-aarch64" \
-            buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-arm64" \
-            DOCKER_SHA256="${DOCKER_ARM64_SHA256}" \
-            COMPOSE_SHA256="${COMPOSE_ARM64_SHA256}" \
-            BUILDX_SHA256="${BUILDX_ARM64_SHA256}" ;; \
+        amd64) docker_url="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" ;; \
+        arm64) docker_url="https://download.docker.com/linux/static/stable/aarch64/docker-${DOCKER_VERSION}.tgz" compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-aarch64" buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-arm64" DOCKER_SHA256="${DOCKER_ARM64_SHA256}" COMPOSE_SHA256="${COMPOSE_ARM64_SHA256}" BUILDX_SHA256="${BUILDX_ARM64_SHA256}" ;; \
         *) exit 1 ;; \
     esac \
     && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz "${docker_url}" \
