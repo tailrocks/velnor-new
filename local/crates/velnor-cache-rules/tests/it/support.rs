@@ -12,13 +12,19 @@ pub(crate) fn rows(table: &str) -> Vec<Vec<&str>> {
         .collect()
 }
 
+pub(crate) fn number(text: &str) -> u64 {
+    let parsed = text.parse::<u64>();
+    assert!(parsed.is_ok(), "not a number: {text:?}");
+    parsed.unwrap_or_default()
+}
+
 pub(crate) fn list(field: &str) -> Vec<&str> {
     field.split_whitespace().filter(|w| *w != "-").collect()
 }
 
 pub(crate) fn scope(spec: &str) -> Scope {
     match (spec.strip_prefix('#'), spec.strip_prefix("t:")) {
-        (Some(number), _) => Scope::pull_merge(number.parse().unwrap_or_default()),
+        (Some(text), _) => Scope::pull_merge(number(text)),
         (_, Some(name)) => Scope::tag(name),
         _ => Scope::branch(spec),
     }
@@ -37,7 +43,7 @@ pub(crate) fn event(spec: &str) -> Event {
         "tag" => Event::Tag { name },
         "queue" => Event::MergeGroup { queue_branch: name },
         _ => Event::PullRequest {
-            number: name.parse().unwrap_or_default(),
+            number: number(&name),
             base_branch: part[2].to_owned(),
         },
     }
@@ -45,7 +51,7 @@ pub(crate) fn event(spec: &str) -> Event {
 
 pub(crate) fn entry(spec: &str) -> Entry {
     let part: Vec<&str> = spec.split('|').collect();
-    let number = |at: usize, or: u64| part.get(at).map_or(or, |n| n.parse().unwrap_or(or));
+    let number = |at: usize, or: u64| part.get(at).map_or(or, |n| number(n));
     let created = number(3, 0);
     Entry {
         scope: scope(part[0]),

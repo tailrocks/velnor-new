@@ -5,7 +5,7 @@ use velnor_cache_rules::{
     ENTRY_LIFETIME_SECONDS, REPOSITORY_LIMIT_BYTES, Timestamp, access_for, evict,
 };
 
-use crate::support::{entries, event, found, list, reserved, rows, short};
+use crate::support::{entries, event, found, list, number, reserved, rows, short};
 
 fn access_table(table: &str) {
     for row in rows(table) {
@@ -28,11 +28,7 @@ fn found_table(table: &str) {
 
 fn evict_table(table: &str) {
     for row in rows(table) {
-        let ids = evict(
-            &entries(row[0]),
-            Timestamp(10_000_000),
-            row[1].parse().unwrap_or_default(),
-        );
+        let ids = evict(&entries(row[0]), Timestamp(10_000_000), number(row[1]));
         let evicted: Vec<String> = ids
             .iter()
             .map(|id| format!("{}|{}", short(&id.scope), id.key))
