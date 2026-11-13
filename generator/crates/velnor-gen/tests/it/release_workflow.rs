@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
+use velnor_render::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -62,7 +62,11 @@ fn steps(lines: &[&str]) -> Vec<RenderedStep> {
     let runs = values(lines, "run")
         .into_iter()
         .map(|command| RenderedStep {
-            run: Some(command.to_owned()),
+            run: Some(if command == "|" {
+                FETCH_HELPER_RUN.to_owned()
+            } else {
+                command.to_owned()
+            }),
             ..RenderedStep::default()
         });
     uses.chain(runs).collect()
@@ -86,7 +90,39 @@ fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
     };
     assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
     assert_eq!(check_rules(&rendered), Ok(()));
-    assert!(!text.contains("run: |") && !text.contains("run: >"));
+    let fetch = format!(
+        "run: |\n{}\n",
+        FETCH_HELPER_RUN
+            .lines()
+            .map(|line| format!("          {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert_eq!(text.matches("run: |").count(), text.matches(&fetch).count());
+    assert!(!text.contains("run: >"));
+    Ok(())
+}
+
+#[test]
+fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() -> TestResult {
+    let text = read()?;
+    let jobs = jobs(&text);
+    let (id, gate) = &jobs[0];
+    assert_eq!(id, "gate");
+    assert_eq!(
+        values(gate, "run"),
+        [
+            "|",
+            "velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
+        ]
+    );
+    let digest = values(gate, "SHA");
+    assert_eq!(digest.len(), 1);
+    assert_eq!(digest[0].len(), 64);
+    assert!(values(gate, "URL")[0].contains("/releases/download/rust-ci-v"));
+    assert!(values(gate, "uses").is_empty());
+    assert_eq!(values(gate, "contents"), ["read"]);
+    assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
     Ok(())
 }
 
@@ -117,7 +153,7 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             "{id}"
         );
     }
-    let tag_checks: Vec<&str> = values(&jobs[0].1, "run")
+    let tag_checks: Vec<&str> = values(&jobs[1].1, "run")
         .into_iter()
         .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
         .collect();
@@ -128,7 +164,7 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             "dist/velnor-gen-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\""
         ]
     );
-    assert_eq!(jobs[0].0, "build");
+    assert_eq!(jobs[1].0, "build");
     assert_eq!(jobs.last().map(|(id, _)| id.as_str()), Some(WRITER));
     let writer = &jobs[jobs.len() - 1].1;
     let runs = values(writer, "run");
