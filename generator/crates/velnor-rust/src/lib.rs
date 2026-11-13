@@ -7,6 +7,6 @@ mod metadata;
 mod plan;
 
 pub use config::CONFIG_PATH;
-pub use detect::{DetectError, detect, metadata_roots, wanted_files};
+pub use detect::{DetectError, detect, manifests, metadata_roots, wanted_files};
 pub use metadata::{MetadataError, reduce_metadata};
 pub use plan::plan;

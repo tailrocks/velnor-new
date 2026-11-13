@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod drift;
+mod golden;
 mod inputs;
 mod io;
 mod pipeline;

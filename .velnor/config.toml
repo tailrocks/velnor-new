@@ -932,6 +932,22 @@ label = "ubuntu-26.04"
 platform = "linux_x64"
 executor = "hosted"
 
+[[checks]]
+id = "generator-samples"
+task = "lint-generator-samples"
+inputs = [
+  "generator/samples/lab-150/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/two-roots/expected/.github/workflows/rust-ci.yml",
+  "mise.toml",
+]
+tools = ["jactionlint-linux-x64"]
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+
 [[qualified_tools]]
 id = "cargo-nextest"
 backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }

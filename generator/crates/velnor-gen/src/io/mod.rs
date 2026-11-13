@@ -16,8 +16,13 @@ use velnor_model::{RepoPath, RepoView};
 use velnor_render::OWNED_PATHS;
 use velnor_rust::{DetectError, MetadataError, metadata_roots, reduce_metadata, wanted_files};
 
+mod sample;
+
 use crate::cli::{Cli, Command};
 use crate::{Drift, drift, expected_files};
+pub use sample::{
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
+};
 
 #[derive(Debug)]
 pub enum Error {
@@ -52,6 +57,18 @@ impl std::error::Error for Error {}
 #[must_use]
 pub fn main() -> Exit {
     let cli = Cli::parse();
+    if let Command::RecordSample { checkout, name } = &cli.command {
+        return match record_sample(&cli.root, checkout, name) {
+            Ok(()) => {
+                println!("recorded {SAMPLES}/{name}");
+                Exit::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("velnor-gen: {error}");
+                Exit::from(2)
+            }
+        };
+    }
     match execute(&cli) {
         Ok(drifts) if cli.command == Command::Check && !drifts.is_empty() => {
             for drift in &drifts {
@@ -82,7 +99,7 @@ pub fn main() -> Exit {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let expected = expected_files(&read_view(&root)?).map_err(Error::Detect)?;
+    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Detect)?;
     let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
@@ -103,7 +120,7 @@ pub fn apply(
         let existing = regular_file(root, path)?;
         match (change, expected.get(path), existing) {
             (Drift::Foreign(_), _, _) => return Err(Error::Foreign(path.clone())),
-            (_, Some(content), _) => replace(&root.join(path.as_str()), content)?,
+            (_, Some(content), _) => replace(&root.join(path.as_str()), content.as_bytes())?,
             (_, None, Some(file)) => {
                 fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?;
             }
@@ -113,7 +130,7 @@ pub fn apply(
     Ok(())
 }
 
-fn replace(file: &Path, content: &str) -> Result<(), Error> {
+fn replace(file: &Path, content: &[u8]) -> Result<(), Error> {
     let parent = file
         .parent()
         .ok_or_else(|| Error::File(file.into(), ErrorKind::InvalidInput.into()))?;
@@ -132,7 +149,7 @@ fn replace(file: &Path, content: &str) -> Result<(), Error> {
         .write(true)
         .create_new(true)
         .open(&temporary)
-        .and_then(|mut handle| handle.write_all(content.as_bytes()))
+        .and_then(|mut handle| handle.write_all(content))
         .and_then(|()| fs::rename(&temporary, file))
         .map_err(|e| Error::File(file.into(), e))
 }
@@ -153,7 +170,9 @@ fn toplevel(path: &Path) -> Result<PathBuf, Error> {
     fs::canonicalize(&root).map_err(|e| Error::File(root, e))
 }
 
-fn read_view(root: &Path) -> Result<RepoView, Error> {
+type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
+
+fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
@@ -172,6 +191,7 @@ fn read_view(root: &Path) -> Result<RepoView, Error> {
         tracked_paths,
         rust_metadata: BTreeMap::new(),
     };
+    let mut recorded = BTreeMap::new();
     for manifest in metadata_roots(&view).map_err(Error::Detect)? {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
             *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
@@ -195,9 +215,12 @@ fn read_view(root: &Path) -> Result<RepoView, Error> {
             ],
         )?;
         let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
+        if keep_metadata {
+            recorded.insert(workspace.clone(), output);
+        }
         view.rust_metadata.insert(workspace, metadata);
     }
-    Ok(view)
+    Ok((view, recorded))
 }
 
 pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {
