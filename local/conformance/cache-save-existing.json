@@ -1,0 +1,18 @@
+{
+  "legs": {
+    "default-branch": {
+      "first_save": "success",
+      "second_save_conclusion": "success",
+      "second_save_outcome": "success",
+      "step_output": [
+        [
+          "Cache saved with key: lab-probe-existing-<tag>"
+        ],
+        [
+          "Failed to save: Unable to reserve cache with key lab-probe-existing-<tag>, another job may be creating this cache."
+        ]
+      ]
+    }
+  },
+  "probe": "cache-save-existing"
+}

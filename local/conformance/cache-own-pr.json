@@ -1,0 +1,19 @@
+{
+  "legs": {
+    "run-1": {
+      "restore": {
+        "hit": "",
+        "matched": ""
+      },
+      "saved": true
+    },
+    "run-2": {
+      "restore": {
+        "hit": "true",
+        "matched": "lab-probe-own-<tag>"
+      },
+      "saved": false
+    }
+  },
+  "probe": "cache-own-pr"
+}

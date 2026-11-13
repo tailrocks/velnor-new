@@ -53,6 +53,10 @@ docker run --rm --network velnor-local -v "$REPO:/repo" -v "$STATE/events:/event
 
 `testdata/cache-client/` holds the calls of `@actions/cache` 6.1.0 (`actions/cache` commit `55cc8345863c7cc4c66a329aec7e433d2d1c52a9`) on a miss with save, then on a hit. Requests come from the real client. Responses come from `runner.server`, not from GitHub. Bearer tokens and URL signatures are replaced with `REDACTED`, and binary bodies with their size.
 
+## Conformance
+
+`conformance/<probe>.json` holds how real GitHub behaved, measured by the probes of [tailrocks/velnor-lab](https://github.com/tailrocks/velnor-lab) (`lab probes`) and checked there every week. One file per probe, one entry per leg, with tags, run ids and pull request numbers replaced by placeholders. `token`, `cache-save-existing`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are replayed through `velnor-cache-rules` by `tests/it/conformance.rs`. `needs-result` and `event-payload` have no reader yet; the last box of the driver issue (#632) checks the local environment against them. Copy new files from the lab's `conformance/` when `lab probes` changes them.
+
 ## Cache rules and cache server
 
 `crates/velnor-cache-rules/` answers "what would GitHub's cache do?" for any sequence of events: which scopes a run reads and writes, which entry a restore finds, whether a save is refused, and which entries GitHub evicts. It takes data and returns data. `crates/velnor-cache-rules/RULES.md` lists each rule with its source in GitHub's documentation, or marks it as modelled or probed.

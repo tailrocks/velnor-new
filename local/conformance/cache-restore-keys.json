@@ -1,0 +1,31 @@
+{
+  "legs": {
+    "default-branch": {
+      "exact": {
+        "hit": "true",
+        "matched": "lab-probe-keys-<tag>-b"
+      },
+      "key_prefix": {
+        "hit": "false",
+        "matched": "lab-probe-keys-<tag>-a"
+      },
+      "no_match": {
+        "hit": "",
+        "matched": ""
+      },
+      "restore_key_order": {
+        "hit": "false",
+        "matched": "lab-probe-keys-<tag>-b"
+      },
+      "restore_key_prefix": {
+        "hit": "false",
+        "matched": "lab-probe-keys-<tag>-a"
+      },
+      "saved_in_order": [
+        "b",
+        "a"
+      ]
+    }
+  },
+  "probe": "cache-restore-keys"
+}
