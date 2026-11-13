@@ -304,6 +304,8 @@ Each fact comes from the GitHub REST documentation: [pull request files](https:/
 - Contents: a directory lists at most 1,000 entries. A symlink whose target is a normal file in the repository returns that file's object; any other symlink returns `type: "symlink"` with `target`. An omitted `ref` reads the default branch, which the stub takes from `--default-branch`.
 - Modelled: the stub accepts `per_page` up to 250 on compare so that the continuation link of the first, unpaged page of 250 commits can be followed; GitHub documents a maximum of 100.
 - A submodule inside a directory listing has `type: "file"`; asked for directly it has `type: "submodule"`. The stub does the same.
+- Modelled: a submodule entry carries the gitlink sha and no `submodule_git_url`; the stub does not read `.gitmodules`.
+- A removed file's `blob_url`, `raw_url` and `contents_url` use the base sha, as in the captured responses.
 - Not served: `contents/` with no path is the repository root listing on GitHub. The stub answers it with 501 because the helper does not call it; the issue that makes the helper list the root adds it.
 - Modelled, not documented: a diff over the stub's size limit answers 422 with `{"message": "Validation Failed", "errors": [{"resource": "Diff", "code": "too_large"}]}`.
 - Modelled, not documented: the stub answers 404 with `{"message": "Not Found", "documentation_url", "status"}` for a missing resource and 403 with a `too_large` error for a blob over 1 MB. The stub's commit objects carry `sha`, `url`, `html_url`, `commit` (`author`, `committer`, `message`, `tree`) and `parents`, a subset of GitHub's.

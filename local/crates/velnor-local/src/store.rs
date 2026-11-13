@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use velnor_cache_rules::{
@@ -51,6 +51,14 @@ impl Record {
             size_bytes: self.size_bytes,
             created: Timestamp(self.created),
             last_access: Timestamp(self.last_access),
+        }
+    }
+
+    fn entry_id(&self) -> EntryId {
+        EntryId {
+            scope: Scope(self.scope.clone()),
+            key: self.key.clone(),
+            version: self.version.clone(),
         }
     }
 
@@ -183,13 +191,17 @@ impl Index {
 impl Index {
     #[must_use]
     pub fn listed(&self, repository: &str, now: u64) -> Vec<Record> {
-        let live = self.live(repository, true, now);
+        let live: HashSet<EntryId> = self
+            .live(repository, true, now)
+            .iter()
+            .map(Entry::id)
+            .collect();
         self.records
             .iter()
             .filter(|record| {
                 record.committed
                     && record.repository == repository
-                    && live.iter().any(|entry| record.is(repository, &entry.id()))
+                    && live.contains(&record.entry_id())
             })
             .cloned()
             .collect()

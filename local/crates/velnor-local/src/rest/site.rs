@@ -52,7 +52,8 @@ impl Site<'_> {
     }
 
     #[must_use]
-    pub fn file(&self, file: &FileDiff, head: &str) -> Value {
+    pub fn file(&self, file: &FileDiff, base: &str, head: &str) -> Value {
+        let at = if file.status == "removed" { base } else { head };
         let mut value = json!({
             "sha": file.sha,
             "filename": file.filename,
@@ -60,9 +61,9 @@ impl Site<'_> {
             "additions": file.additions,
             "deletions": file.deletions,
             "changes": file.additions + file.deletions,
-            "blob_url": self.blob_url("blob", head, &file.filename),
-            "raw_url": self.blob_url("raw", head, &file.filename),
-            "contents_url": self.contents_url(head, &file.filename),
+            "blob_url": self.blob_url("blob", at, &file.filename),
+            "raw_url": self.blob_url("raw", at, &file.filename),
+            "contents_url": self.contents_url(at, &file.filename),
         });
         if let Some(patch) = &file.patch {
             value["patch"] = json!(patch);
@@ -114,7 +115,7 @@ impl Site<'_> {
                 .files
                 .iter()
                 .take(COMPARE_FILES_CAP)
-                .map(|file| self.file(file, compare.head))
+                .map(|file| self.file(file, &compare.base.sha, compare.head))
                 .collect()
         } else {
             Vec::new()

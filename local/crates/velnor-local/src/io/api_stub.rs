@@ -19,6 +19,8 @@ use crate::rest::{
     TreeEntry,
 };
 
+const SYMLINK_TARGET_LIMIT: u64 = 4096;
+
 #[derive(Debug)]
 pub struct ApiStubConfig {
     pub repo: PathBuf,
@@ -170,7 +172,7 @@ impl ApiStub {
         let files: Vec<Value> = files
             .iter()
             .take(PULL_FILES_CAP)
-            .map(|file| call.site.file(file, &head))
+            .map(|file| call.site.file(file, &base, &head))
             .collect();
         paged(call, DEFAULT_PER_PAGE, &files)
     }
@@ -294,7 +296,7 @@ impl ApiStub {
     }
 
     async fn link_target(&self, commit: &str, entry: &TreeEntry) -> Option<TreeEntry> {
-        if entry.kind() != "symlink" {
+        if entry.kind() != "symlink" || entry.size > SYMLINK_TARGET_LIMIT {
             return None;
         }
         let bytes = self.git.run(&["cat-file", "blob", &entry.sha]).await?;

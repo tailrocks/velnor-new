@@ -165,6 +165,13 @@ async fn pull_request_files_come_from_the_two_commits_in_github_json_shape() {
         (&json!("removed"), &json!(old_sha))
     );
     assert_eq!(removed["deletions"], 1);
+    assert_eq!(
+        removed["raw_url"],
+        format!(
+            "http://api.localhost/tailrocks/velnor-lab/raw/{}/b.txt",
+            c.base
+        )
+    );
     let renamed = file(&files, "e.txt");
     assert_eq!(renamed["status"], "renamed");
     assert_eq!(renamed["previous_filename"], "c.txt");
