@@ -13,7 +13,7 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::{Body, now, read_index, write_index};
-use crate::github::{
+use crate::rest::{
     self, Api, COMMIT_FORMAT, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES,
     Commit, Comparison, DEFAULT_PER_PAGE, FileDiff, PULL_FILES_CAP, Page, Site, TreeEntry,
 };
@@ -51,7 +51,7 @@ impl Reply {
     }
 
     fn missing() -> Self {
-        Self::with(404, github::not_found(), None)
+        Self::with(404, rest::not_found(), None)
     }
 }
 
@@ -77,24 +77,24 @@ impl ApiStub {
             .and_then(|value| value.to_str().ok())
             .unwrap_or("localhost")
             .to_owned();
-        let repository = github::repository(&path);
+        let repository = rest::repository(&path);
         let call = Call {
             host: &host,
             path: &path,
-            params: github::query(request.uri().query().unwrap_or_default()),
+            params: rest::query(request.uri().query().unwrap_or_default()),
             site: Site {
                 host: &host,
                 repository: &repository,
             },
         };
-        let reply = match github::route(&method, &path) {
+        let reply = match rest::route(&method, &path) {
             Api::PullFiles { number } => self.pull_files(&call, number).await,
             Api::PullList => self.pull_list(&call).await,
             Api::Compare { base, head } => self.compare(&call, &base, &head).await,
             Api::Contents { path } => self.contents(&call, &path).await,
             Api::CacheList => self.cache_list(&call).await,
             Api::CacheDelete { id } => self.cache_delete(&call, id).await,
-            Api::NotImplemented => Reply::with(501, github::not_implemented(&method, &path), None),
+            Api::NotImplemented => Reply::with(501, rest::not_implemented(&method, &path), None),
         };
         eprintln!("{method} {path} {}", reply.status);
         response(reply)
@@ -144,7 +144,7 @@ impl ApiStub {
                 &range,
             ])
             .await?;
-        Some(github::parse_diff(&text))
+        Some(rest::parse_diff(&text))
     }
 
     async fn commits(&self, args: &[&str]) -> Option<Vec<Commit>> {
@@ -152,7 +152,7 @@ impl ApiStub {
         let mut full = vec!["log", "--no-color", &format];
         full.extend_from_slice(args);
         let text = self.git_text(&full).await?;
-        Some(github::parse_commits(&text))
+        Some(rest::parse_commits(&text))
     }
 
     async fn pulls(&self) -> Vec<Value> {
@@ -266,7 +266,7 @@ impl ApiStub {
             }
             "submodule" => Reply::ok(site.content_entry(entry, reference)),
             _ if entry.size > CONTENTS_LIMIT_BYTES => {
-                Reply::with(403, github::forbidden_too_large(), None)
+                Reply::with(403, rest::forbidden_too_large(), None)
             }
             _ => match self.git(&["cat-file", "blob", &entry.sha]).await {
                 Some(bytes) => Reply::ok(site.content_file(entry, reference, &bytes)),
@@ -279,7 +279,7 @@ impl ApiStub {
         let text = self
             .git_text(&["ls-tree", "-z", "-l", commit, "--", path])
             .await?;
-        Some(github::parse_tree(&text))
+        Some(rest::parse_tree(&text))
     }
 
     async fn cache_list(&self, call: &Call<'_>) -> Reply {
@@ -287,7 +287,7 @@ impl ApiStub {
             return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
         };
         let listed = index.listed(call.site.repository, now());
-        let entries = github::cache_list(&listed, &call.params);
+        let entries = rest::cache_list(&listed, &call.params);
         let page = Page::from_query(&call.params, DEFAULT_PER_PAGE);
         Reply::with(
             200,

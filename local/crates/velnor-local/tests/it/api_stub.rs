@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_local::github::rfc3339;
+use velnor_local::rest::rfc3339;
 
 use crate::support::{Harness, MAIN, Stub, temp_dir};
 
