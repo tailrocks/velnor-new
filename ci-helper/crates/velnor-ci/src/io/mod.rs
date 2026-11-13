@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod http;
+mod inputs;
 
 use std::fs;
 use std::io::Read;
@@ -10,7 +11,8 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
-use crate::cli::{BenchCommand, Cli, CollectArgs, Command, CompareArgs};
+pub use self::inputs::{restore_inputs, save_inputs};
+use crate::cli::{BenchCommand, Cli, CollectArgs, Command, CompareArgs, InputsCommand};
 use crate::collect::collect;
 use crate::compare::compare;
 use crate::error::CiError;
@@ -37,7 +39,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
+        Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
+        Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
     }
+}
+
+fn current_dir() -> Result<std::path::PathBuf, CiError> {
+    std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))
 }
 
 fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
