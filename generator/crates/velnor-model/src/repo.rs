@@ -29,7 +29,7 @@ pub struct RustPackage {
 pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
-    pub path: Option<RepoPath>,
+    pub manifest: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

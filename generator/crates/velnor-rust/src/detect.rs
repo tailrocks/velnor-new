@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fmt;
 
 use velnor_model::{RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, ToolPins};
@@ -28,6 +29,24 @@ impl fmt::Display for DetectError {
 }
 
 impl std::error::Error for DetectError {}
+
+#[must_use]
+pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
+    std::iter::once(CONFIG_PATH)
+        .chain(MISE_CONFIGS)
+        .filter(|path| tracked.contains(path))
+        .collect()
+}
+
+pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
+    let config = config(view)?;
+    let mut manifests: Vec<RepoPath> = tracked_manifests(view)
+        .filter(|manifest| !excluded(&config, manifest))
+        .cloned()
+        .collect();
+    manifests.sort_by_key(|manifest| (manifest.as_str().matches('/').count(), manifest.clone()));
+    Ok(manifests)
+}
 
 pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
@@ -66,11 +85,7 @@ fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
         .files
         .get(&CONFIG_PATH)
         .map_or_else(|| Ok(RustCiConfig::default()), |bytes| parse(bytes))?;
-    let manifests: Vec<&RepoPath> = view
-        .tracked_paths
-        .iter()
-        .filter(|path| path.as_str() == "Cargo.toml" || path.as_str().ends_with("/Cargo.toml"))
-        .collect();
+    let manifests: Vec<&RepoPath> = tracked_manifests(view).collect();
     match config
         .exclude
         .iter()
@@ -88,4 +103,10 @@ fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
         .exclude
         .iter()
         .any(|excluded| manifest.is_within(excluded))
+}
+
+fn tracked_manifests(view: &RepoView) -> impl Iterator<Item = &RepoPath> {
+    view.tracked_paths
+        .iter()
+        .filter(|path| path.as_str() == "Cargo.toml" || path.as_str().ends_with("/Cargo.toml"))
 }
