@@ -339,6 +339,55 @@ fn gc1_t51_evidence_rejects_unbound_identity() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn gc1_t51_evidence_rejects_attestation_from_another_run_or_for_other_files()
+-> Result<(), Box<dyn Error>> {
+    let fixture = fixture()?;
+    let closure = closure_json();
+    for (run, label) in [
+        ("8/attempts/2", "another run"),
+        ("7/attempts/1", "another attempt"),
+    ] {
+        let mut inputs = evidence_inputs();
+        inputs.attestation = attestation_json(
+            run,
+            &inputs.archive,
+            inputs.record.as_bytes(),
+            closure.as_bytes(),
+        );
+        let (code, output, _) = run_evidence_program(&fixture, &inputs, &inputs.record, &[])?;
+        if code == 0 {
+            return Err(fail(&format!(
+                "evidence program accepted an attestation from {label}"
+            )));
+        }
+        require(
+            &output,
+            "Attestation certificate run identity is incorrect.",
+            label,
+        )?;
+    }
+    let mut inputs = evidence_inputs();
+    inputs.attestation = attestation_json(
+        "7/attempts/2",
+        b"another archive",
+        inputs.record.as_bytes(),
+        closure.as_bytes(),
+    );
+    let (code, output, _) = run_evidence_program(&fixture, &inputs, &inputs.record, &[])?;
+    if code == 0 {
+        return Err(fail(
+            "evidence program accepted an attestation for other files",
+        ));
+    }
+    require(
+        &output,
+        "Attestation subjects are incorrect.",
+        "other files",
+    )?;
+    Ok(())
+}
+
 #[path = "gc1_t51_evidence.rs"]
 mod gc1_t51_evidence;
 

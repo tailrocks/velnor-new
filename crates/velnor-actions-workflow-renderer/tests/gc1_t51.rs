@@ -201,12 +201,6 @@ pub(crate) fn artifact_response_json() -> String {
     )
 }
 
-pub(crate) fn attestation_json() -> String {
-    format!(
-        "[{{\"verificationResult\":{{\"signature\":{{\"certificate\":{{\"sourceRepositoryIdentifier\":1390620900,\"githubWorkflowRepository\":\"tailrocks/velnor-new\",\"githubWorkflowSHA\":\"{SOURCE_SHA}\",\"githubWorkflowRef\":\"refs/heads/main\",\"githubWorkflowTrigger\":\"workflow_dispatch\",\"sourceRepositoryRef\":\"refs/heads/main\",\"sourceRepositoryDigest\":\"{SOURCE_SHA}\"}}}}}}}}]"
-    )
-}
-
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,
     pub(crate) driver: std::path::PathBuf,
