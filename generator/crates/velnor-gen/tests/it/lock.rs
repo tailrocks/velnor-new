@@ -47,7 +47,7 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
     let without = |name: &str| -> String {
         SUMS.lines()
             .filter(|line| !line.ends_with(name))
-            .map(|line| format!("{line}\n"))
+            .flat_map(|line| [line, "\n"])
             .collect()
     };
     let twice = format!("{SUMS}{}\n", SUMS.lines().next().unwrap_or_default());
