@@ -44,6 +44,17 @@ lockfile = true
 command = "mbx"
 env = { MBX_CARGO_SHIM_MODE = "1" }
 
+[tasks.lint-generator-samples]
+description = "Lint the workflows in the expected output of the generator samples"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+set -- generator/samples/*/expected/.github/workflows/*.yml
+test -e "$1"
+jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes= "$@"
+'''
+
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''

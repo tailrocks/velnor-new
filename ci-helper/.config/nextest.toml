@@ -5,3 +5,6 @@ retries = 0
 test-threads = "num-cpus"
 status-level = "all"
 final-status-level = "flaky"
+
+[profile.default]
+slow-timeout = { period = "2s", terminate-after = 1 }

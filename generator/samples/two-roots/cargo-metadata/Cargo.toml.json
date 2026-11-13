@@ -1,0 +1,114 @@
+{
+  "build_directory": "/repo/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "core",
+          "optional": false,
+          "path": "/repo/core",
+          "registry": null,
+          "rename": null,
+          "req": "*",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/app#0.1.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/app/Cargo.toml",
+      "metadata": null,
+      "name": "app",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "app",
+          "src_path": "/repo/app/src/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/core#0.1.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/core/Cargo.toml",
+      "metadata": null,
+      "name": "core",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": true,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "core",
+          "src_path": "/repo/core/src/lib.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.0"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo/app#0.1.0",
+    "path+file:///repo/core#0.1.0"
+  ],
+  "workspace_members": [
+    "path+file:///repo/app#0.1.0",
+    "path+file:///repo/core#0.1.0"
+  ],
+  "workspace_root": "/repo"
+}

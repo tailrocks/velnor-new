@@ -32,3 +32,7 @@ velnor-model.workspace = true
 velnor-rust.workspace = true
 velnor-render.workspace = true
 clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+similar.workspace = true
