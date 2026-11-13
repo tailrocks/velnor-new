@@ -158,7 +158,7 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     assert_eq!(repo.mtime("tools/gen.sh"), checkout);
     assert_eq!(
         report,
-        "restored the modification time of 3 unchanged files; 3 changed, 1 new, 1 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+        "restored the modification time of 3 unchanged files; 3 changed, 1 new, 1 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
     );
 }
 
@@ -184,7 +184,7 @@ fn a_saved_file_that_sparse_checkout_left_out_is_counted_not_an_error() {
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(
         report,
-        "restored the modification time of 1 unchanged files; 0 changed, 0 new, 0 deleted, 2 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+        "restored the modification time of 1 unchanged files; 0 changed, 0 new, 0 deleted, 2 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
     );
 }
 
@@ -223,7 +223,7 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(
         report,
-        "restored the modification time of 2 unchanged files; 1 changed, 1 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+        "restored the modification time of 2 unchanged files; 1 changed, 1 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
     );
 }
 
@@ -255,7 +255,7 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(
         report,
-        "restored the modification time of 2 unchanged files; 2 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+        "restored the modification time of 2 unchanged files; 2 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
     );
 }
 
@@ -284,8 +284,8 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     assert_eq!(
         (saved.as_str(), report.as_str()),
         (
-            "saved 3 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n",
-            "restored the modification time of 3 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+            "saved 3 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+            "restored the modification time of 3 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
         )
     );
 }
@@ -342,7 +342,7 @@ fn an_unchanged_symlink_does_not_block_restore() {
     assert_eq!(repo.mtime("data/a.txt"), built);
     assert_eq!(
         report,
-        "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules\n"
+        "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
     );
 }
 
@@ -366,6 +366,111 @@ fn a_symlink_the_file_cannot_hold_means_nothing_is_saved() {
         (
             "saved nothing: 1 tracked symlinks have a path or target the file cannot hold, so restore finds no saved inputs\n",
             "no target/.velnor/inputs.tsv; nothing restored (cold run)\n"
+        )
+    );
+}
+
+#[test]
+fn a_symlink_retargeted_inside_a_submodule_restores_nothing() {
+    let origin = Repo::new("submodule-origin");
+    std::os::unix::fs::symlink("../data/a.txt", origin.root().join("link.txt"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    origin.git(&["add", "--all"]);
+    origin.commit();
+
+    let repo = Repo::new("submodule");
+    repo.write("data/a.txt", "a\n");
+    repo.write("data/b.txt", "b\n");
+    let origin_path = origin.root().to_str().unwrap_or_else(|| unreachable!());
+    repo.git(&[
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "--quiet",
+        "add",
+        origin_path,
+        "sub",
+    ]);
+    repo.commit();
+    let paths = [".gitignore", "data/a.txt", "data/b.txt"];
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, built);
+    }
+    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let sub = repo.root().join("sub");
+    fs::remove_file(sub.join("link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../data/b.txt", sub.join("link.txt"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["-C", "sub", "add", "--all"]);
+    repo.git(&[
+        "-C",
+        "sub",
+        "-c",
+        "user.name=lab",
+        "-c",
+        "user.email=lab@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--quiet",
+        "--message",
+        "retarget",
+    ]);
+    repo.git(&["add", "sub"]);
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("data/a.txt"), checkout);
+    assert_eq!(repo.mtime("data/b.txt"), checkout);
+    assert_eq!(
+        report,
+        "restored nothing: 1 tracked symlinks are new, changed or deleted since the save\n"
+    );
+}
+
+#[test]
+fn files_inside_a_submodule_are_restored_when_unchanged() {
+    let origin = Repo::new("submodule-files-origin");
+    origin.write("src/lib.rs", "pub fn sub() {}\n");
+    origin.commit();
+
+    let repo = Repo::new("submodule-files");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let origin_path = origin.root().to_str().unwrap_or_else(|| unreachable!());
+    repo.git(&[
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "--quiet",
+        "add",
+        origin_path,
+        "sub",
+    ]);
+    repo.commit();
+    let paths = [".gitignore", ".gitmodules", "src/lib.rs", "sub/src/lib.rs"];
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, built);
+    }
+    let saved = save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("sub/src/lib.rs"), built);
+    assert_eq!(
+        (saved.as_str(), report.as_str()),
+        (
+            "saved 5 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+            "restored the modification time of 5 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
         )
     );
 }

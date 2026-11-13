@@ -50,7 +50,7 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules\n",
+        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
         tracked.absent.len(),
@@ -81,7 +81,7 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
     Ok(format!(
-        "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules\n",
+        "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         plan.restore.len(),
         plan.changed,
         plan.new,
@@ -104,7 +104,11 @@ fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
 }
 
 fn top_level_files(root: &Path) -> Result<Tracked, CiError> {
-    let index = parse_ls_files(&git(root, &["ls-files", "-s", "-z"], None)?);
+    let index = parse_ls_files(&git(
+        root,
+        &["ls-files", "-s", "-z", "--recurse-submodules"],
+        None,
+    )?);
     let mut present = Vec::with_capacity(index.files.len());
     let mut absent = Vec::new();
     for file in index.files {
