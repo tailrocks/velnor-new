@@ -3,11 +3,15 @@
 
 mod detect;
 mod drift;
+mod facts;
 mod golden;
 mod inputs;
 mod io;
 mod lock;
 mod pipeline;
 mod release_workflow;
+mod repo_sample;
 mod rules;
+mod tool_pins;
+mod toolchain;
 mod version;
