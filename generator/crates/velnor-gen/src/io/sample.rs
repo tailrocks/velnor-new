@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use velnor_model::RepoPath;
-use velnor_rust::{MetadataError, manifests};
+use velnor_rust::{MetadataError, cargo_files};
 
 use crate::expected_files;
 
@@ -24,7 +24,7 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     expected_files(&view).map_err(Error::Generate)?;
     let recording = Recording {
         view: view.files,
-        manifests: manifests(&view.tracked_paths),
+        manifests: cargo_files(&view.tracked_paths),
         metadata: metadata
             .into_iter()
             .map(|(workspace, json)| Ok((workspace, relocate_metadata(&checkout, &json)?)))

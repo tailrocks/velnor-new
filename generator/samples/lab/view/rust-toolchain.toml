@@ -1,0 +1,34 @@
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = [
+  "clippy",
+  "rustfmt",
+]
+targets = [
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+]
+# lab warm 1794554633-0
+# lab warm 1794554858-0
+# lab warm 1794555715-0
+# lab warm 1794557707-0
+# lab warm 1794557861-0
+# lab warm 1794558947-0
+# lab warm 1794559770-0
+# lab warm 1794560568-0
+# lab warm 1794561456-0
+# lab warm 1794562656-0
+# lab warm 1794563572-0
+# lab warm 1794564471-0
+# lab warm 1794565502-0
+# lab warm 1794566510-0
+# lab warm 1794567289-0
+# lab warm 1794568009-0
+# lab warm 1794569161-0
+# lab warm 1794571267-0
+# lab warm 1794573717-0
+# lab warm 1794573861-0
+# lab warm 1794576132-0
+# lab warm 1794576290-0
+# lab warm 1794576448-0

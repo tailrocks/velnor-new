@@ -57,6 +57,7 @@ macro_rules! id {
 }
 
 id!(RepoPath, repo_path);
+id!(PathGlob, repo_path);
 id!(PackageName, text);
 id!(TargetName, text);
 id!(RunnerLabel, text);
@@ -74,13 +75,50 @@ impl RepoPath {
     }
 
     #[must_use]
-    pub fn is_within(&self, ancestor: &Self) -> bool {
-        self == ancestor
-            || self
-                .0
-                .strip_prefix(ancestor.as_str())
-                .is_some_and(|rest| rest.starts_with('/'))
+    pub fn sibling(&self, name: &Self) -> Self {
+        match self.parent() {
+            Some(parent) => Self(Cow::Owned(format!("{parent}/{name}"))),
+            None => name.clone(),
+        }
     }
+}
+
+impl PathGlob {
+    #[must_use]
+    pub fn matches(&self, path: &RepoPath) -> bool {
+        let pattern: Vec<&str> = self.as_str().split('/').collect();
+        let segments: Vec<&str> = path.as_str().split('/').collect();
+        (1..=segments.len()).any(|length| glob(&pattern, &segments[..length]))
+    }
+}
+
+fn glob(pattern: &[&str], path: &[&str]) -> bool {
+    match pattern.split_first() {
+        None => path.is_empty(),
+        Some((&"**", rest)) => (0..=path.len()).any(|skip| glob(rest, &path[skip..])),
+        Some((segment, rest)) => path
+            .split_first()
+            .is_some_and(|(head, tail)| wildcard(segment, head) && glob(rest, tail)),
+    }
+}
+
+fn wildcard(pattern: &str, text: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = text.strip_prefix(first) else {
+        return false;
+    };
+    let mut parts: Vec<&str> = parts.collect();
+    let Some(last) = parts.pop() else {
+        return rest.is_empty();
+    };
+    for part in parts {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.ends_with(last)
 }
 
 impl HelperVersion {

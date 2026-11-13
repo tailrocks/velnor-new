@@ -74,7 +74,7 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
             ],
             targets: vec![
                 target("app", vec![TargetKind::Bin])?,
-                target("derive", vec![TargetKind::Lib])?,
+                target("derive", vec![TargetKind::ProcMacro])?,
                 target("build-script-build", vec![TargetKind::BuildScript])?,
                 target("smoke", vec![TargetKind::Test])?,
             ],

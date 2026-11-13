@@ -1,3 +1,4 @@
+Cargo.lock
 Cargo.toml
 app/Cargo.toml
 core/Cargo.toml
@@ -151,6 +152,7 @@ grow/g146/Cargo.toml
 grow/g147/Cargo.toml
 grow/g148/Cargo.toml
 grow/g149/Cargo.toml
+lab/Cargo.lock
 lab/Cargo.toml
 lib/Cargo.toml
 macros/Cargo.toml

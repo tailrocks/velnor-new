@@ -114,7 +114,8 @@ fn target_of(target: RawTarget) -> Result<Target, MetadataError> {
         .kind
         .iter()
         .map(|kind| match kind.as_str() {
-            "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro" => Ok(TargetKind::Lib),
+            "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" => Ok(TargetKind::Lib),
+            "proc-macro" => Ok(TargetKind::ProcMacro),
             "bin" => Ok(TargetKind::Bin),
             "test" => Ok(TargetKind::Test),
             "bench" => Ok(TargetKind::Bench),

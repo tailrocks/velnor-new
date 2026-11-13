@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ids::{PackageName, RepoPath, RunnerLabel, TargetName};
+use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
 use crate::plan::HelperRelease;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -49,6 +49,7 @@ pub struct Target {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetKind {
     Lib,
+    ProcMacro,
     Bin,
     Test,
     Bench,
@@ -59,6 +60,7 @@ pub enum TargetKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoFacts {
     pub rust_roots: Vec<RustRoot>,
+    pub toolchain: Option<Toolchain>,
     pub tools: ToolPins,
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
@@ -67,19 +69,59 @@ pub struct RepoFacts {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {
     pub manifest: RepoPath,
-    pub packages: Vec<PackageName>,
+    pub members: Vec<RustMember>,
+    pub depends_on: Vec<RepoPath>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RustMember {
+    pub name: PackageName,
+    pub manifest: RepoPath,
+    pub directory: Option<RepoPath>,
+    pub dependencies: Vec<MemberDependency>,
+    pub targets: Vec<Target>,
+}
+
+impl RustMember {
+    #[must_use]
+    pub fn has_test_target(&self) -> bool {
+        self.targets
+            .iter()
+            .any(|target| target.kinds.contains(&TargetKind::Test))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberDependency {
+    pub name: PackageName,
+    pub kind: DependencyKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Toolchain {
+    pub channel: String,
+    pub components: Vec<String>,
+    pub targets: Vec<String>,
+    pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolPins {
+    pub config: RepoPath,
+    pub tools: BTreeMap<String, ToolPin>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ToolPins {
-    pub mise: Option<RepoPath>,
+pub struct ToolPin {
+    pub requested: Vec<String>,
+    pub locked: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub timeout_minutes: u16,
-    pub exclude: Vec<RepoPath>,
+    pub exclude: Vec<PathGlob>,
 }
 
 impl Default for RustCiConfig {

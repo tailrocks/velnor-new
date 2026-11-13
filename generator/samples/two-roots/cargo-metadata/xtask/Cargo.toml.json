@@ -12,7 +12,7 @@
       "edition": "2024",
       "features": {},
       "homepage": null,
-      "id": "path+file:///repo/xtask#0.1.0",
+      "id": "path+file:///repo/xtask#0.0.0",
       "keywords": [],
       "license": null,
       "license_file": null,
@@ -41,17 +41,17 @@
           "test": true
         }
       ],
-      "version": "0.1.0"
+      "version": "0.0.0"
     }
   ],
   "resolve": null,
   "target_directory": "/repo/xtask/target",
   "version": 1,
   "workspace_default_members": [
-    "path+file:///repo/xtask#0.1.0"
+    "path+file:///repo/xtask#0.0.0"
   ],
   "workspace_members": [
-    "path+file:///repo/xtask#0.1.0"
+    "path+file:///repo/xtask#0.0.0"
   ],
   "workspace_root": "/repo/xtask"
 }

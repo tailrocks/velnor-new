@@ -1,6 +1,8 @@
+Cargo.lock
 Cargo.toml
 app/Cargo.toml
 core/Cargo.toml
+lab/Cargo.lock
 lab/Cargo.toml
 lib/Cargo.toml
 macros/Cargo.toml
