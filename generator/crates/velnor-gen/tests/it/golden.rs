@@ -227,6 +227,9 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
 #[test]
 fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
     let sample = std::env::temp_dir().join(format!("velnor-gen-golden-{}", std::process::id()));
+    if sample.exists() {
+        fs::remove_dir_all(&sample)?;
+    }
     fs::create_dir_all(&sample)?;
     fs::write(
         sample.join("manifests.txt"),
