@@ -115,6 +115,10 @@ cargo fetch --locked
   cargo fetch --locked
 )
 (
+  cd "$ROOT/generator"
+  cargo fetch --locked
+)
+(
   cd "$ROOT/local"
   cargo fetch --locked
 )

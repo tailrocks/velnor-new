@@ -125,6 +125,9 @@ rules:
         - "crates/velnor-runner/crates/*/build.rs"
         - "ci-helper/crates/*/src/**"
         - "ci-helper/crates/*/tests/**"
+        - "generator/crates/*/src/**"
+        - "generator/crates/*/tests/**"
+        - "generator/samples/**"
         - "local/crates/*/src/**"
         - "local/crates/*/tests/**"
     level: error
@@ -148,9 +151,10 @@ rules:
         - Cargo.lock
         - crates/velnor-runner/Cargo.lock
         - ci-helper/Cargo.lock
+        - generator/Cargo.lock
         - local/Cargo.lock
     level: error
-    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock and local/Cargo.lock are resolved."
+    message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock, generator/Cargo.lock and local/Cargo.lock are resolved."
 
   - id: velnor-no-stray-npm-lock
     kind: file_absent

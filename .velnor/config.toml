@@ -81,6 +81,11 @@ packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = ["generator/**"]
+packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = [
   "crates/velnor-runner/crates/velnor-runner-attestation/**",
   "crates/velnor-runner/Cargo.toml",

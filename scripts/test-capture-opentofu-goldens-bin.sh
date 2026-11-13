@@ -318,7 +318,7 @@ verify_guard_receipt() {
   local label="$1" receipt="$2" direct_receipt="$3" expected_fetch_count="${4:-0}"
   test_mise_adapter_verify "$label" "$receipt" "$RUST_VERSION" \
     "$VELNOR_TEST_CARGO_GUARD" "$expected_fetch_count" || return 1
-  if [ "$expected_fetch_count" -eq 4 ] && ! awk '
+  if [ "$expected_fetch_count" -eq 5 ] && ! awk '
       function field(name, field_number, prefix) {
         prefix = name "="
         for (field_number = 1; field_number <= NF; field_number++) {
@@ -348,6 +348,9 @@ verify_guard_receipt() {
           } else if (ends_with(path, "/dogfood-repo/ci-helper")) {
             ci_helper_count++
             ci_helper_path = path
+          } else if (ends_with(path, "/dogfood-repo/generator")) {
+            generator_count++
+            generator_path = path
           } else if (ends_with(path, "/dogfood-repo/local")) {
             local_count++
             local_path = path
@@ -358,9 +361,10 @@ verify_guard_receipt() {
             unexpected++
           }
         }
-        if (fetches != 4 || root_count != 1 || nested_count != 1 || ci_helper_count != 1 || local_count != 1 || unexpected \
+        if (fetches != 5 || root_count != 1 || nested_count != 1 || ci_helper_count != 1 || generator_count != 1 || local_count != 1 || unexpected \
           || nested_path != root_path "/crates/velnor-runner" \
           || ci_helper_path != root_path "/ci-helper" \
+          || generator_path != root_path "/generator" \
           || local_path != root_path "/local") exit 1
       }
     ' "$receipt"; then
@@ -729,7 +733,7 @@ expect_release_check_match() {
     exit 1
   fi
   if [ -z "$operator_guard" ] \
-    && ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 4; then
+    && ! verify_guard_receipt release-check "$MISE_RECEIPT" "$GUARD_RECEIPT" 5; then
     cat "$log" >&2
     exit 1
   fi
@@ -1387,7 +1391,7 @@ expect_dogfood_guard_mutation_rejected() {
     echo "FAIL: dogfood mutation did not run real Cargo metadata and fail closed (exit $status)" >&2
     exit 1
   fi
-  if ! verify_guard_receipt dogfood-guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT" 4; then
+  if ! verify_guard_receipt dogfood-guard-mutation "$MISE_RECEIPT" "$GUARD_RECEIPT" 5; then
     cat "$log" >&2
     exit 1
   fi
