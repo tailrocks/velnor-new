@@ -73,5 +73,27 @@ node_checksum_signature_url = "https://nodejs.org/dist/v26.12.0/SHASUMS256.txt.s
 node_checksum_signing_key_fingerprint = "C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"
 node_source_tag_signature = "PASS: GitHub signed tag; PASS: checksum manifest signature against the official Node.js release key."
 
+arm64_platform = "linux/arm64"
+arm64_observed_date = "2026-11-13"
+base_image_arm64_digest = "sha256:7f787d965bc0e4cd42b5f74c013515d6e24ce691c881c81c42e4db59a791e5ce"
+base_image_arm64_digest_source = "registry-1.docker.io/library/ubuntu manifest list sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944; linux/arm64/v8 child manifest"
+runner_arm64_asset_url = "https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-arm64-2.338.0.tar.gz"
+runner_arm64_asset_size_bytes = 140012091
+runner_arm64_sha256 = "628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b"
+runner_arm64_sha256_source = "GitHub Release API asset digest"
+docker_arm64_archive_url = "https://download.docker.com/linux/static/stable/aarch64/docker-29.9.1.tgz"
+docker_arm64_archive_size_bytes = 77943393
+docker_arm64_sha256 = "3e93cc6d1a686456a3b18eefdde26467a837a7a2b257af22e27cba1dbc1b2018"
+docker_arm64_sha256_source = "Measured from the official HTTPS archive; the download path has no .sha256 or .sig sidecar"
+buildx_arm64_asset_url = "https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-arm64"
+buildx_arm64_sha256 = "38e890e1a162bfdbf32fbe91404991dc4fc28e55b0de901b34374a061bab4d2c"
+buildx_arm64_sha256_source = "GitHub Release API asset digest"
+compose_arm64_asset_url = "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-aarch64"
+compose_arm64_sha256 = "733ec76717ceb59052a9609b9dadfb523b2df8eab57a54212872d10a58078ea2"
+compose_arm64_sha256_source = "GitHub Release API asset digest"
+node_arm64_archive_url = "https://nodejs.org/dist/v26.12.0/node-v26.12.0-linux-arm64.tar.gz"
+node_arm64_sha256 = "ec53c915c3fdd8786c5685abd25ae3fe9fba0692307f9811d7caaadea1bcaf03"
+node_arm64_sha256_source = "node_checksum_manifest_url; PASS: node_checksum_signature_url against node_checksum_signing_key_fingerprint."
+
 bollard = "=0.21.1"
 turso = "=0.8.3"

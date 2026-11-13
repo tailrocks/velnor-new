@@ -6,6 +6,9 @@ Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" -t velnor-dind:29.9.1 images/dind
 ```
 
+The local `linux/arm64` developer build of this image is described in the
+[runner image README](../runner/ubuntu-26.04/README.md#linuxarm64-developer-build).
+
 Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
 downloaded from the [official static archive](https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz).
 SHA256 `c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57`

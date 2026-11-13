@@ -19,6 +19,12 @@ ARG BUILDX_SHA256=4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d2
 ARG NODE_VERSION=26.12.0
 ARG NODE_SHA256=d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c
 ARG DEBIAN_FRONTEND=noninteractive
+ARG TARGETARCH
+ARG RUNNER_ARM64_SHA256
+ARG DOCKER_ARM64_SHA256
+ARG COMPOSE_ARM64_SHA256
+ARG BUILDX_ARM64_SHA256
+ARG NODE_ARM64_SHA256
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -47,10 +53,14 @@ WORKDIR /home/runner
 # glibc does not fall back, so extract fails with "Function not implemented".
 # busybox tar unpacks the official tarball and stays the tar the runner execs.
 USER root
-RUN apt-get update \
+RUN case "${TARGETARCH}" in \
+        amd64) runner_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" ;; \
+        arm64) runner_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz" RUNNER_SHA256="${RUNNER_ARM64_SHA256}" ;; \
+        *) exit 1 ;; \
+    esac \
+    && apt-get update \
     && apt-get install -y --no-install-recommends busybox \
-    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/actions-runner.tar.gz \
-        "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/actions-runner.tar.gz "${runner_url}" \
     && echo "${RUNNER_SHA256}  /tmp/actions-runner.tar.gz" | sha256sum -c - \
     && busybox tar -xzf /tmp/actions-runner.tar.gz -C /home/runner \
     && rm -f /tmp/actions-runner.tar.gz \
@@ -61,17 +71,26 @@ RUN apt-get update \
 RUN /home/runner/bin/installdependencies.sh \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
-        "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
+RUN case "${TARGETARCH}" in \
+        amd64) docker_url="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
+            compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+            buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" ;; \
+        arm64) docker_url="https://download.docker.com/linux/static/stable/aarch64/docker-${DOCKER_VERSION}.tgz" \
+            compose_url="https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-aarch64" \
+            buildx_url="https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-arm64" \
+            DOCKER_SHA256="${DOCKER_ARM64_SHA256}" \
+            COMPOSE_SHA256="${COMPOSE_ARM64_SHA256}" \
+            BUILDX_SHA256="${BUILDX_ARM64_SHA256}" ;; \
+        *) exit 1 ;; \
+    esac \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz "${docker_url}" \
     && echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
     && tar -xzf /tmp/docker.tgz --strip-components=1 -C /usr/local/bin docker/docker \
     && rm -f /tmp/docker.tgz \
     && mkdir -p /usr/local/lib/docker/cli-plugins \
-    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
-        "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose "${compose_url}" \
     && echo "${COMPOSE_SHA256}  /usr/local/lib/docker/cli-plugins/docker-compose" | sha256sum -c - \
-    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /usr/local/lib/docker/cli-plugins/docker-buildx \
-        "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /usr/local/lib/docker/cli-plugins/docker-buildx "${buildx_url}" \
     && echo "${BUILDX_SHA256}  /usr/local/lib/docker/cli-plugins/docker-buildx" | sha256sum -c - \
     && chmod 0755 /usr/local/bin/docker \
         /usr/local/lib/docker/cli-plugins/docker-compose \
@@ -191,8 +210,12 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
 # /usr/bin/tar is the job shim after the divert. Listing that trusted vendor
 # archive goes through GNU tar and does not finish under qemu-user. BusyBox
 # unpacks it. Job archives still enter the shim.
-RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
-        "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
+RUN case "${TARGETARCH}" in \
+        amd64) node_url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" ;; \
+        arm64) node_url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz" NODE_SHA256="${NODE_ARM64_SHA256}" ;; \
+        *) exit 1 ;; \
+    esac \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz "${node_url}" \
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
     && busybox tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
