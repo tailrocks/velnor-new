@@ -5,6 +5,7 @@ pub mod cli;
 pub mod collect;
 pub mod compare;
 pub mod error;
+pub mod gate;
 pub mod github;
 pub mod inputs;
 pub mod io;

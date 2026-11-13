@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::CiError;
-use crate::github::{ApiJob, ApiJobs, ApiRun, GitHub, Repo, job_log_path, jobs_path, run_path};
+use crate::github::{
+    ApiJob, ApiJobs, ApiRun, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
+};
 use crate::logscan;
 use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
 use crate::time::{parse_utc, seconds_between};
@@ -140,9 +142,4 @@ fn job_metrics(
         steps,
         log,
     })
-}
-
-fn parse<T: serde::de::DeserializeOwned>(body: &str, what: &str) -> Result<T, CiError> {
-    serde_json::from_str(body)
-        .map_err(|e| CiError::new(format!("cannot read GitHub {what} response: {e}")))
 }

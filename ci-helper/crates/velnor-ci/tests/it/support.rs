@@ -12,6 +12,7 @@ pub(crate) const RUN: &str = include_str!("data/run.json");
 pub(crate) const JOBS: &str = include_str!("data/jobs.json");
 pub(crate) const CLI_LOG: &str = include_str!("data/cli-job.log");
 pub(crate) const CORE_LOG: &str = include_str!("data/core-job.log");
+pub(crate) const GATE: &str = include_str!("data/gate.json");
 pub(crate) const MACHETE_LOG: &str = "2026-11-12T08:36:40.0000000Z Running cargo machete\n";
 
 pub(crate) const RUN_ID: u64 = 43_184_351_757;
@@ -33,6 +34,16 @@ impl FakeGitHub {
         fake.respond(job_log_path(&repo, MACHETE_ID), MACHETE_LOG);
         fake.respond(job_log_path(&repo, CLI_ID), CLI_LOG);
         fake.respond(job_log_path(&repo, CORE_ID), CORE_LOG);
+        fake
+    }
+
+    pub(crate) fn gate() -> Self {
+        let recorded: BTreeMap<String, serde_json::Value> =
+            serde_json::from_str(GATE).unwrap_or_else(|e| unreachable!("{e}"));
+        let mut fake = Self::default();
+        for (path, body) in recorded {
+            fake.respond(path, &body.to_string());
+        }
         fake
     }
 
