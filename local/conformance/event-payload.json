@@ -1,0 +1,174 @@
+{
+  "legs": {
+    "pull_request": {
+      "fields": {
+        "action": "string",
+        "after": "absent",
+        "before": "absent",
+        "number": "number",
+        "pull_request.base.ref": "string",
+        "pull_request.base.repo.full_name": "string",
+        "pull_request.base.sha": "sha",
+        "pull_request.changed_files": "number",
+        "pull_request.draft": "boolean",
+        "pull_request.head.ref": "string",
+        "pull_request.head.repo.fork": "boolean",
+        "pull_request.head.repo.full_name": "string",
+        "pull_request.head.sha": "sha",
+        "pull_request.labels": "array",
+        "pull_request.merged": "boolean",
+        "pull_request.number": "number",
+        "pull_request.state": "string",
+        "pull_request.title": "string",
+        "pull_request.user.login": "string",
+        "repository.default_branch": "string",
+        "repository.fork": "boolean",
+        "repository.full_name": "string",
+        "repository.owner.login": "string",
+        "sender.login": "string"
+      },
+      "top_level": [
+        "action",
+        "number",
+        "organization",
+        "pull_request",
+        "repository",
+        "sender"
+      ],
+      "values": {
+        "GITHUB_BASE_REF": "main",
+        "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_HEAD_REF": "probe-<tag>-events",
+        "GITHUB_REF": "refs/pull/<n>/merge",
+        "GITHUB_REF_NAME": "<n>/merge",
+        "GITHUB_REF_TYPE": "branch"
+      },
+      "variables": {
+        "GITHUB_API_URL": "set",
+        "GITHUB_BASE_REF": "set",
+        "GITHUB_EVENT_NAME": "set",
+        "GITHUB_EVENT_PATH": "set",
+        "GITHUB_HEAD_REF": "set",
+        "GITHUB_REF": "set",
+        "GITHUB_REF_NAME": "set",
+        "GITHUB_REF_TYPE": "set",
+        "GITHUB_REPOSITORY": "set",
+        "GITHUB_REPOSITORY_OWNER": "set",
+        "GITHUB_RUN_ATTEMPT": "set",
+        "GITHUB_SERVER_URL": "set",
+        "GITHUB_SHA": "set",
+        "GITHUB_WORKFLOW_REF": "set",
+        "GITHUB_WORKSPACE": "set"
+      }
+    },
+    "push": {
+      "fields": {
+        "action": "absent",
+        "after": "sha",
+        "base_ref": "null",
+        "before": "sha",
+        "commits": "array",
+        "compare": "string",
+        "created": "boolean",
+        "deleted": "boolean",
+        "forced": "boolean",
+        "head_commit.id": "sha",
+        "pusher.name": "string",
+        "ref": "string",
+        "repository.default_branch": "string",
+        "repository.fork": "boolean",
+        "repository.full_name": "string",
+        "repository.owner.login": "string",
+        "sender.login": "string"
+      },
+      "top_level": [
+        "after",
+        "base_ref",
+        "before",
+        "commits",
+        "compare",
+        "created",
+        "deleted",
+        "forced",
+        "head_commit",
+        "organization",
+        "pusher",
+        "ref",
+        "repository",
+        "sender"
+      ],
+      "values": {
+        "GITHUB_BASE_REF": "",
+        "GITHUB_EVENT_NAME": "push",
+        "GITHUB_HEAD_REF": "",
+        "GITHUB_REF": "refs/heads/probe-<tag>-events",
+        "GITHUB_REF_NAME": "probe-<tag>-events",
+        "GITHUB_REF_TYPE": "branch"
+      },
+      "variables": {
+        "GITHUB_API_URL": "set",
+        "GITHUB_BASE_REF": "empty",
+        "GITHUB_EVENT_NAME": "set",
+        "GITHUB_EVENT_PATH": "set",
+        "GITHUB_HEAD_REF": "empty",
+        "GITHUB_REF": "set",
+        "GITHUB_REF_NAME": "set",
+        "GITHUB_REF_TYPE": "set",
+        "GITHUB_REPOSITORY": "set",
+        "GITHUB_REPOSITORY_OWNER": "set",
+        "GITHUB_RUN_ATTEMPT": "set",
+        "GITHUB_SERVER_URL": "set",
+        "GITHUB_SHA": "set",
+        "GITHUB_WORKFLOW_REF": "set",
+        "GITHUB_WORKSPACE": "set"
+      }
+    },
+    "workflow_dispatch": {
+      "fields": {
+        "action": "absent",
+        "inputs": "object",
+        "ref": "string",
+        "repository.default_branch": "string",
+        "repository.fork": "boolean",
+        "repository.full_name": "string",
+        "repository.owner.login": "string",
+        "sender.login": "string",
+        "workflow": "string"
+      },
+      "top_level": [
+        "inputs",
+        "organization",
+        "ref",
+        "repository",
+        "sender",
+        "workflow"
+      ],
+      "values": {
+        "GITHUB_BASE_REF": "",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_HEAD_REF": "",
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_REF_NAME": "main",
+        "GITHUB_REF_TYPE": "branch"
+      },
+      "variables": {
+        "GITHUB_API_URL": "set",
+        "GITHUB_BASE_REF": "empty",
+        "GITHUB_EVENT_NAME": "set",
+        "GITHUB_EVENT_PATH": "set",
+        "GITHUB_HEAD_REF": "empty",
+        "GITHUB_REF": "set",
+        "GITHUB_REF_NAME": "set",
+        "GITHUB_REF_TYPE": "set",
+        "GITHUB_REPOSITORY": "set",
+        "GITHUB_REPOSITORY_OWNER": "set",
+        "GITHUB_RUN_ATTEMPT": "set",
+        "GITHUB_SERVER_URL": "set",
+        "GITHUB_SHA": "set",
+        "GITHUB_WORKFLOW_REF": "set",
+        "GITHUB_WORKSPACE": "set"
+      }
+    }
+  },
+  "probe": "event-payload"
+}
