@@ -151,6 +151,8 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
     );
     assert_eq!(values(gate, "uses"), Vec::<&str>::new());
     assert_eq!(values(gate, "contents"), ["read"]);
+    assert_eq!(values(gate, "checks"), ["read"]);
+    assert_eq!(values(gate, "GITHUB_TOKEN"), ["${{ github.token }}"]);
     assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
     Ok(())
 }
