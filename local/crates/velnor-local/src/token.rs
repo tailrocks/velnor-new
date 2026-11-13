@@ -17,6 +17,7 @@ pub struct Claims {
     #[serde(rename = "defaultRef")]
     pub default_ref: String,
     pub exp: u64,
+    pub scp: String,
 }
 
 #[derive(Deserialize)]

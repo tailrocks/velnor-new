@@ -153,6 +153,7 @@ impl CacheServer {
             access: &access,
             key: &body.key,
             version: &body.version,
+            writer: &claims.scp,
         };
         let (reply, gone) = match call {
             "GetCacheEntryDownloadURL" => match index.restore(&at, &body.restore_keys, now) {

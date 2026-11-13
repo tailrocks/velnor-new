@@ -29,6 +29,8 @@ pub struct Record {
     pub created: u64,
     pub last_access: u64,
     pub committed: bool,
+    #[serde(default)]
+    pub writer: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,6 +39,7 @@ pub struct Lookup<'a> {
     pub access: &'a Access,
     pub key: &'a str,
     pub version: &'a str,
+    pub writer: &'a str,
 }
 
 impl Record {
@@ -135,6 +138,7 @@ impl Index {
             created: now,
             last_access: now,
             committed: false,
+            writer: at.writer.to_owned(),
         };
         self.records.push(record.clone());
         Ok((record, replaced))
@@ -143,9 +147,9 @@ impl Index {
     #[must_use]
     pub fn pending(&self, at: &Lookup<'_>) -> Option<&Record> {
         let id = at.id();
-        self.records
-            .iter()
-            .find(|record| !record.committed && record.is(at.repository, &id))
+        self.records.iter().find(|record| {
+            !record.committed && record.writer == at.writer && record.is(at.repository, &id)
+        })
     }
 
     #[must_use]
@@ -170,9 +174,7 @@ impl Index {
         );
         let (gone, kept) = std::mem::take(&mut self.records)
             .into_iter()
-            .partition(|record| {
-                record.committed && evicted.iter().any(|id| record.is(&repository, id))
-            });
+            .partition(|record| evicted.iter().any(|id| record.is(&repository, id)));
         self.records = kept;
         gone
     }

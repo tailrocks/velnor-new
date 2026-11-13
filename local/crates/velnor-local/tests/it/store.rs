@@ -23,6 +23,7 @@ fn at<'a>(access: &'a Access, key: &'a str) -> Lookup<'a> {
         access,
         key,
         version: "v",
+        writer: "job-1",
     }
 }
 
@@ -110,4 +111,31 @@ fn a_save_over_the_limit_does_not_evict_another_upload_in_progress() {
 
     assert_eq!(gone, vec!["b".to_owned()]);
     assert!(index.pending(&at(&access, "uploading")).is_some());
+}
+
+#[test]
+fn a_late_finalize_from_a_replaced_writer_finds_no_reservation() {
+    let access = main_access();
+    let first = at(&access, "tools");
+    let second = Lookup {
+        writer: "job-2",
+        ..at(&access, "tools")
+    };
+    let mut index = Index::default();
+    assert!(index.create(&first, "first".to_owned(), SAVED).is_ok());
+    assert!(
+        index
+            .create(
+                &second,
+                "second".to_owned(),
+                SAVED + RESERVATION_SECONDS + 1
+            )
+            .is_ok()
+    );
+
+    assert_eq!(index.pending(&first), None);
+    assert_eq!(
+        index.pending(&second).map(|record| record.blob.clone()),
+        Some("second".to_owned())
+    );
 }
