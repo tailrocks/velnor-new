@@ -163,7 +163,7 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        let files = match self.git.diff(&base, &head).await {
+        let files = match self.git.diff(&base, &head, PULL_FILES_CAP).await {
             Ok(files) => files,
             Err(failure) => return Reply::from(failure),
         };
@@ -204,7 +204,7 @@ impl ApiStub {
         let page = Page::from_query(&call.params, default, COMPARE_COMMITS_DEFAULT);
         let (skip, take) = page.newest_first(ahead);
         let files = if page.page == 1 {
-            match self.git.diff(&base, &head).await {
+            match self.git.diff(&base, &head, COMPARE_FILES_CAP).await {
                 Ok(files) => files,
                 Err(failure) => return Reply::from(failure),
             }
@@ -247,7 +247,12 @@ impl ApiStub {
             .params
             .get("ref")
             .map_or(self.config.default_branch.as_str(), String::as_str);
-        let Some(commit) = self.git.resolve(reference).await else {
+        let qualified = if call.params.contains_key("ref") {
+            reference.to_owned()
+        } else {
+            format!("refs/heads/{reference}")
+        };
+        let Some(commit) = self.git.resolve(&qualified).await else {
             return Reply::missing();
         };
         let path = path.trim_end_matches('/');

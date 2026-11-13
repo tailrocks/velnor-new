@@ -78,7 +78,12 @@ impl Git {
         Some(sha.trim().to_owned())
     }
 
-    pub(super) async fn diff(&self, base: &str, head: &str) -> Result<Vec<FileDiff>, Failure> {
+    pub(super) async fn diff(
+        &self,
+        base: &str,
+        head: &str,
+        cap: usize,
+    ) -> Result<Vec<FileDiff>, Failure> {
         let range = format!("{base}...{head}");
         let bytes = self
             .capped(
@@ -97,6 +102,7 @@ impl Git {
             )
             .await?;
         let mut files = rest::parse_diff(&String::from_utf8_lossy(&bytes));
+        files.truncate(cap);
         for file in &mut files {
             if file.sha.is_none() && file.status != "removed" {
                 let spec = format!("{head}:{}", file.filename);

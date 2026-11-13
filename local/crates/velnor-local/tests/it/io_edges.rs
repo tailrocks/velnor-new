@@ -88,6 +88,17 @@ async fn contents_without_ref_read_the_default_branch_not_the_checkout() {
 }
 
 #[tokio::test]
+async fn a_tag_named_like_the_default_branch_does_not_shadow_the_branch() {
+    let c = changed("io-tag");
+    c.repo.git(&["tag", "main", &c.base]);
+    let stub = c.repo.stub("io-tag", &json!([]));
+
+    let reply = stub.get(&format!("{REPO}/contents/a.txt")).await;
+
+    assert_eq!(decoded(&reply.json()), "one\nTWO\nthree\n");
+}
+
+#[tokio::test]
 async fn paths_are_literal_and_symlinks_to_files_in_the_repository_are_followed() {
     let repo = TempRepo::new("io-literal");
     repo.write(":(exclude)a.txt", b"magic\n");
