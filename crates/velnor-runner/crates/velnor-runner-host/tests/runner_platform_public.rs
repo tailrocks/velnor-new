@@ -56,7 +56,11 @@ fn arm64_host_is_accepted_with_an_arm_selector() -> Result<(), HostError> {
     let text = config(
         "linux/arm64",
         "ubuntu-26.04-arm-scale-set",
-        &["velnor", "ubuntu-26.04-arm-scale-set"],
+        &[
+            "velnor",
+            "ubuntu-26.04-arm-scale-set",
+            "ubuntu-24.04-arm-scale-set",
+        ],
     );
     let parsed = HostConfig::parse(&text)?;
     assert_eq!(parsed.docker.platform, "linux/arm64");
@@ -66,44 +70,40 @@ fn arm64_host_is_accepted_with_an_arm_selector() -> Result<(), HostError> {
 
 #[test]
 fn arm64_and_amd64_never_share_a_selector() {
-    for (platform, name, labels) in [
-        (
-            "linux/arm64",
-            "ubuntu-26.04-scale-set",
-            &["velnor", "ubuntu-26.04-scale-set"][..],
-        ),
-        (
-            "linux/arm64",
-            "ubuntu-26.04-arm-scale-set",
-            &[
-                "velnor",
-                "ubuntu-26.04-arm-scale-set",
-                "ubuntu-26.04-scale-set",
-            ][..],
-        ),
-        (
-            "linux/amd64",
-            "ubuntu-26.04-arm-scale-set",
-            &["velnor", "ubuntu-26.04-arm-scale-set"][..],
-        ),
-        (
-            "linux/amd64",
-            "ubuntu-26.04-scale-set",
-            &[
-                "velnor",
-                "ubuntu-26.04-scale-set",
-                "ubuntu-26.04-arm-scale-set",
-            ][..],
-        ),
-        (
-            "linux/riscv64",
-            "ubuntu-26.04-scale-set",
-            &["velnor", "ubuntu-26.04-scale-set"][..],
-        ),
+    let arm = "ubuntu-26.04-arm-scale-set";
+    let amd = "ubuntu-26.04-scale-set";
+    for (platform, name, extra) in [
+        ("linux/arm64", amd, None),
+        ("linux/arm64", arm, Some(amd)),
+        ("linux/arm64", arm, Some("x64")),
+        ("linux/arm64", arm, Some("linux-amd64")),
+        ("linux/arm64", arm, Some("ubuntu-26.04-scale-set-x")),
+        ("linux/arm64", arm, Some("x-arm-scale-set")),
+        ("linux/arm64", "x-arm-scale-set", None),
+        ("linux/arm64", "arm-scale-set", None),
+        ("linux/amd64", arm, None),
+        ("linux/amd64", amd, Some(arm)),
+        ("linux/amd64", amd, Some("arm-scale-set")),
+        ("linux/amd64", amd, Some("x-arm-scale-set")),
     ] {
-        assert!(
-            HostConfig::parse(&config(platform, name, labels)).is_err(),
-            "accepted {platform} with {name} {labels:?}"
+        let mut labels = vec!["velnor", name];
+        labels.extend(extra);
+        assert_eq!(
+            HostConfig::parse(&config(platform, name, &labels)),
+            Err(HostError::PlatformSelector),
+            "{platform} with {labels:?}"
         );
     }
+}
+
+#[test]
+fn an_unknown_platform_is_an_invalid_config() {
+    assert_eq!(
+        HostConfig::parse(&config(
+            "linux/riscv64",
+            "ubuntu-26.04-scale-set",
+            &["velnor", "ubuntu-26.04-scale-set"],
+        )),
+        Err(HostError::Config)
+    );
 }

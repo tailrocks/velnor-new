@@ -3,7 +3,8 @@
 
 use super::ScaleSetSelector;
 
-const SCALE_SET_SUFFIX: &str = "-scale-set";
+const VELNOR_LABEL: &str = "velnor";
+const ARM_MARKER: &str = "arm-scale-set";
 const ARM_SCALE_SET_SUFFIX: &str = "-arm-scale-set";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,13 +40,31 @@ impl RunnerPlatform {
     }
 
     pub(super) fn routes(self, selector: &ScaleSetSelector) -> bool {
-        let arm = selector.name().ends_with(ARM_SCALE_SET_SUFFIX);
-        let foreign = |label: &String| match self {
-            Self::LinuxAmd64 => label.ends_with(ARM_SCALE_SET_SUFFIX),
+        match self {
+            Self::LinuxAmd64 => !selector
+                .labels()
+                .iter()
+                .any(|label| label.contains(ARM_MARKER)),
             Self::LinuxArm64 => {
-                label.ends_with(SCALE_SET_SUFFIX) && !label.ends_with(ARM_SCALE_SET_SUFFIX)
+                arm_selector(selector.name())
+                    && selector
+                        .labels()
+                        .iter()
+                        .all(|label| label == VELNOR_LABEL || arm_selector(label))
             }
-        };
-        arm == (self == Self::LinuxArm64) && !selector.labels().iter().any(foreign)
+        }
     }
+}
+
+fn arm_selector(label: &str) -> bool {
+    label
+        .strip_suffix(ARM_SCALE_SET_SUFFIX)
+        .and_then(|image| image.split_once('-'))
+        .is_some_and(|(os, version)| {
+            !os.is_empty()
+                && os.bytes().all(|byte| byte.is_ascii_lowercase())
+                && version
+                    .split('.')
+                    .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        })
 }

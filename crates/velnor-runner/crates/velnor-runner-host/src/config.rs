@@ -298,16 +298,17 @@ fn validate_docker(
     docker: &DockerConfig,
     connections: &[RepositoryConnection],
 ) -> Result<(), HostError> {
-    if RunnerPlatform::parse(&docker.platform).is_some_and(|platform| {
-        connections
-            .iter()
-            .all(|connection| platform.routes(&connection.scale_set))
-    }) && !docker.context.is_empty()
-        && unix_endpoint(&docker.endpoint)
+    let platform = RunnerPlatform::parse(&docker.platform).ok_or(HostError::Config)?;
+    if docker.context.is_empty() || !unix_endpoint(&docker.endpoint) {
+        return Err(HostError::Config);
+    }
+    if connections
+        .iter()
+        .all(|connection| platform.routes(&connection.scale_set))
     {
         Ok(())
     } else {
-        Err(HostError::Config)
+        Err(HostError::PlatformSelector)
     }
 }
 
