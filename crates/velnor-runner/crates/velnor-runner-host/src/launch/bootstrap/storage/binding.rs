@@ -76,7 +76,8 @@ impl ObservedStorageRole {
     }
 }
 
-pub(crate) struct ObservedContainerCgroup {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObservedContainerCgroup {
     pub(super) role: BootstrapContainerRole,
     pub(super) container_id: String,
     pub(super) path: String,
@@ -88,27 +89,33 @@ pub(crate) struct ObservedContainerCgroup {
 }
 
 impl ObservedContainerCgroup {
-    pub(crate) const fn role(&self) -> BootstrapContainerRole {
+    #[must_use]
+    pub const fn role(&self) -> BootstrapContainerRole {
         self.role
     }
 
-    pub(crate) fn container_id(&self) -> &str {
+    #[must_use]
+    pub fn container_id(&self) -> &str {
         &self.container_id
     }
 
-    pub(crate) fn path(&self) -> &str {
+    #[must_use]
+    pub fn path(&self) -> &str {
         &self.path
     }
 
-    pub(crate) const fn memory(&self) -> (Option<u64>, u64) {
+    #[must_use]
+    pub const fn memory(&self) -> (Option<u64>, u64) {
         (self.memory_max_bytes, self.memory_current_bytes)
     }
 
-    pub(crate) const fn cpu(&self) -> (Option<u64>, u64) {
+    #[must_use]
+    pub const fn cpu(&self) -> (Option<u64>, u64) {
         (self.cpu_quota_micros, self.cpu_period_micros)
     }
 
-    pub(crate) const fn pids_max(&self) -> Option<u64> {
+    #[must_use]
+    pub const fn pids_max(&self) -> Option<u64> {
         self.pids_max
     }
 }

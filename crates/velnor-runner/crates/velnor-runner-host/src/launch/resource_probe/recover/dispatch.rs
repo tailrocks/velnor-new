@@ -3,7 +3,7 @@
 
 use crate::{
     error::HostError,
-    journal::{HostHelperRole, ProbeWork},
+    journal::{HostHelperRole, ProbePhase, ProbeWork},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,4 +25,14 @@ pub(super) fn active_recovery_target(
         }
         _ => Err(HostError::Ownership),
     }
+}
+
+pub(super) fn supports_stop(phase: ProbePhase) -> bool {
+    matches!(
+        phase,
+        ProbePhase::StartRequested
+            | ProbePhase::Started
+            | ProbePhase::WaitRequested
+            | ProbePhase::StopRequested
+    )
 }

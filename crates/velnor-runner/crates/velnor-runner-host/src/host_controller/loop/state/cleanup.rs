@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use crate::error::HostError;
 
 use super::PreparedConnection;
@@ -13,6 +15,58 @@ pub(super) async fn collect_proven_pending_cleanup(
     collect_bootstrap_cleanup(connection).await?;
     collect_authorization_cleanup(connection).await?;
     collect_acquired_cleanup(connection).await
+}
+
+pub(in crate::host_controller::loop_driver) fn wake_completion_with_fresh_admin(
+    connection: &mut PreparedConnection,
+) -> Result<(), HostError> {
+    if connection.completion.is_none() {
+        return Ok(());
+    }
+    refresh_admin_if_due(connection, Instant::now())?;
+    if let Some(completion) = connection.completion.as_ref() {
+        completion.notify();
+    }
+    Ok(())
+}
+
+pub(super) fn refresh_admin_while_cleanup_pending(connection: &mut PreparedConnection) {
+    let pending = !connection.ready_intents.is_empty()
+        || !connection.pending_bootstrap.is_empty()
+        || !connection.unkeyed_bootstrap.is_empty()
+        || !connection.pending_authorization.is_empty()
+        || !connection.unkeyed_authorization.is_empty()
+        || !connection.pending_acquired_recovery.is_empty()
+        || !connection.unkeyed_acquired_recovery.is_empty();
+    if pending {
+        let _refreshed = refresh_admin_if_due(connection, Instant::now());
+    }
+}
+
+fn refresh_admin_if_due(
+    connection: &mut PreparedConnection,
+    now: Instant,
+) -> Result<(), HostError> {
+    if !connection.admin_refresh.is_due(now) {
+        return Ok(());
+    }
+    let (Some(completion), Some(credentials)) = (
+        connection.completion.as_ref(),
+        connection.credentials.as_mut(),
+    ) else {
+        return Ok(());
+    };
+    let refreshed = credentials
+        .link
+        .refresh_admin(&connection.binding, credentials.github_pat.expose())
+        .is_ok();
+    if !refreshed {
+        connection.admin_refresh.record_failure(now);
+        return Ok(());
+    }
+    completion.refresh_admin(credentials.link.admin_origin(), credentials.link.token())?;
+    connection.admin_refresh.record_success(now, None);
+    Ok(())
 }
 
 async fn collect_ready_cleanup(connection: &mut PreparedConnection) -> Result<(), HostError> {

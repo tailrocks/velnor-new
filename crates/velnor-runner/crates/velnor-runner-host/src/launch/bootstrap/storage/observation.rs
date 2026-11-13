@@ -21,6 +21,7 @@ use zeroize::Zeroize;
 mod aggregate;
 mod provider_entry;
 use aggregate::observe_storage_resources as observe_storage_resources_core;
+pub use aggregate::observed_cgroups;
 pub(in crate::launch) use provider_entry::observe_storage_resources_with_provider;
 
 use crate::{

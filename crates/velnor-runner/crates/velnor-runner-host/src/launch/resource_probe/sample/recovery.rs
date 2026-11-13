@@ -25,7 +25,7 @@ impl Observation {
         let pair = budget.pair();
         let reserve = budget.admission_reserve();
         let required_cpu = pair.cpu_millicores.checked_add(reserve.cpu_millicores)?;
-        let required_memory = pair.memory_bytes.checked_add(reserve.memory_bytes)?;
+        let required_memory = super::required_memory_bytes(&budget)?;
         let recent = self.is_recent_at(std::time::Instant::now());
         if !recent
             || self.engine_id != expected_engine_id
@@ -64,8 +64,20 @@ impl RecoveryObservation {
         engine_id: &str,
         root_digest: &str,
     ) -> Option<StorageProvisioningAdmission> {
-        self.observation
-            .storage_provisioning_admission(profile, engine_id, root_digest)
+        let admission =
+            self.observation
+                .storage_provisioning_admission(profile, engine_id, root_digest)?;
+        admission
+            .validate_for(
+                profile,
+                &self.observation.sample_generation_id,
+                engine_id,
+                root_digest,
+                self.charge.1,
+                std::time::Instant::now(),
+            )
+            .ok()?;
+        Some(admission)
     }
 
     pub(crate) fn consume_for_recovery(

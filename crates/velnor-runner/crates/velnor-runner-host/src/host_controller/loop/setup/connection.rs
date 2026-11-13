@@ -20,7 +20,8 @@ use crate::{
 };
 
 use super::super::state::{
-    PreparedConnection, PreparedSetup, SessionCredentials, session_assigned_total,
+    AdminRefreshSchedule, PreparedConnection, PreparedSetup, SessionCredentials,
+    session_assigned_total,
 };
 
 use super::{PrepareConnectionRequest, bind_connection, connection_pat};
@@ -150,6 +151,7 @@ async fn finish_connection_preparation(
         unkeyed_authorization: Vec::new(),
         pending_acquired_recovery: BTreeMap::new(),
         unkeyed_acquired_recovery: Vec::new(),
+        admin_refresh: AdminRefreshSchedule::due_at(std::time::Instant::now()),
     })
 }
 

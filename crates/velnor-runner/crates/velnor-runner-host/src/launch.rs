@@ -81,7 +81,9 @@ mod trace;
 mod turn;
 pub(crate) mod verified_images;
 
-pub use bootstrap::{BootstrapContainerRole, runner_pair_environment};
+pub use bootstrap::{
+    BootstrapContainerRole, ObservedContainerCgroup, observed_cgroups, runner_pair_environment,
+};
 pub use completion::CompletionWorker;
 pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};

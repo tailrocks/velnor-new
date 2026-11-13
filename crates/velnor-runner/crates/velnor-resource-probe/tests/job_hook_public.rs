@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "job_hook_public/cleanup_record.rs"]
+mod cleanup_record;
+
+#[path = "job_hook_public/cleanup_observer_tmpfs.rs"]
+mod cleanup_observer_tmpfs;
+
 use std::error::Error;
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};

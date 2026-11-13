@@ -243,6 +243,11 @@ cat >"$TEST_RUNNER_ROOT/bin/Runner.Listener" <<'STUB'
 set -euo pipefail
 printf '%s\n' "$*" >"$READINESS_LISTENER_MARKER"
 printf '%s\n' "${ACTIONS_RUNNER_INPUT_JITCONFIG:-}" >"${READINESS_LISTENER_MARKER}.jit"
+: >"${READINESS_LISTENER_MARKER}.default-file"
+mkdir "${READINESS_LISTENER_MARKER}.default-dir"
+umask 077
+: >"${READINESS_LISTENER_MARKER}.private-file"
+mkdir "${READINESS_LISTENER_MARKER}.private-dir"
 STUB
 
 chmod 0755 "$STUB_BIN/timeout" "$STUB_BIN/sleep" "$STUB_BIN/dd" \
@@ -286,12 +291,12 @@ grep -Fq '"unix:///var/run/docker.sock"' "$ENTRYPOINT"
 run_entrypoint() {
   local name="$1" expected_status="$2" status=0
   shift 2
-  rm -f "$LISTENER_MARKER" "${LISTENER_MARKER}.jit"
+  rm -rf "$LISTENER_MARKER" "${LISTENER_MARKER}.jit" "${LISTENER_MARKER}.default-file" "${LISTENER_MARKER}.default-dir" "${LISTENER_MARKER}.private-file" "${LISTENER_MARKER}.private-dir"
   : >"$DOCKER_LOG"
   : >"$API_LOG"
   : >"$TIMEOUT_LOG"
   rm -f "$DOCKER_COUNT"
-  if printf 'jit-secret-fixture' | env PATH="$STUB_BIN:$SAVED_PATH" \
+  if printf 'jit-secret-fixture' | (umask 077; env PATH="$STUB_BIN:$SAVED_PATH" \
     DOCKER_HOST='tcp://untrusted.invalid:2375' DOCKER_CONTEXT='untrusted-context' \
     READINESS_TIMEOUT_LOG="$TIMEOUT_LOG" READINESS_TIMEOUT_MODE="$1" \
     READINESS_DOCKER_LOG="$DOCKER_LOG" READINESS_DOCKER_COUNT="$DOCKER_COUNT" \
@@ -299,7 +304,7 @@ run_entrypoint() {
     READINESS_SOCKET_MARKER="$SOCKET_MARKER" READINESS_EXPECTED_SOCKET="$PRODUCTION_SOCKET" \
     READINESS_DOCKER_MODE="$2" READINESS_READY_AFTER="${3:-3}" \
     READINESS_LISTENER_MARKER="$LISTENER_MARKER" \
-    "$TEST_IMAGE_DIR/velnor-runner-entrypoint" >"$TEST_DIR/$name.log" 2>&1; then
+    "$TEST_IMAGE_DIR/velnor-runner-entrypoint" >"$TEST_DIR/$name.log" 2>&1); then
     status=0
   else
     status=$?
@@ -371,6 +376,17 @@ run_entrypoint api-becomes-ready 0 run delayed 3
 }
 [[ "$(cat "$LISTENER_MARKER")" == run ]]
 grep -Fxq 'jit-secret-fixture' "${LISTENER_MARKER}.jit"
+python3 - "$LISTENER_MARKER" <<'PYMODES'
+import os
+import stat
+import sys
+
+for suffix, expected in ((".default-file", 0o644), (".default-dir", 0o755),
+                         (".private-file", 0o600), (".private-dir", 0o700)):
+    actual = stat.S_IMODE(os.stat(sys.argv[1] + suffix).st_mode)
+    if actual != expected:
+        raise SystemExit(f"FAIL: {suffix} mode {actual:o}, expected {expected:o}")
+PYMODES
 [[ "$(cat "$DOCKER_COUNT")" == 3 ]]
 grep -Fq 'API unavailable while socket path exists' "$API_LOG"
 grep -Fq 'responsive API' "$API_LOG"

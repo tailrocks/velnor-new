@@ -103,8 +103,9 @@ fn perform_with_scratch(
     let body_path = scratch.path("body");
     write_private(&body_path, &request.body)?;
     let max_time = remaining(deadline).ok_or(CurlFail::Timeout)?;
-    let config = curl_config(&url, request, &body_path, max_time)?;
-    let response = process::run_curl(&config, deadline, max_response_bytes)?;
+    let config = crate::curl_config::encode(&url, request, &body_path, max_time)
+        .map_err(|_| CurlFail::Reset)?;
+    let response = process::run_curl(config.as_str(), deadline, max_response_bytes)?;
     retry_after::record_response(base, response.status, response.retry_after.as_deref());
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
@@ -190,62 +191,13 @@ pub(crate) const CURL_ARGV: &[&str] = &[
     "0",
 ];
 
-fn curl_config(
-    url: &str,
-    request: &SessionRequest,
-    body: &Path,
-    max_time: Duration,
-) -> Result<String, CurlFail> {
-    let max_time_seconds = max_time.as_secs_f64();
-    let mut lines = vec![
-        format!("request = \"{}\"", method_name(request.method)),
-        quoted("url", url)?,
-        "output = \"-\"".to_owned(),
-        "write-out = \"%{http_code}%{stderr}%header{retry-after}\"".to_owned(),
-        format!("max-time = {max_time_seconds:.3}"),
-    ];
-    for (name, value) in &request.headers {
-        let header = format!("{name}: {value}");
-        lines.push(quoted("header", &header)?);
-    }
-    if sends_body(request.method) {
-        lines.push(format!("data-binary = \"@{}\"", display_path(body)?));
-    }
-    Ok(lines.join("\n"))
-}
-
-fn sends_body(method: Method) -> bool {
-    matches!(method, Method::Post | Method::Patch)
-}
-
-const fn method_name(method: Method) -> &'static str {
+pub(crate) const fn method_name(method: Method) -> &'static str {
     match method {
         Method::Get => "GET",
         Method::Post => "POST",
         Method::Delete => "DELETE",
         Method::Patch => "PATCH",
     }
-}
-
-fn quoted(key: &str, value: &str) -> Result<String, CurlFail> {
-    if value
-        .chars()
-        .any(|ch| matches!(ch, '"' | '\n' | '\r' | '\0'))
-    {
-        return Err(CurlFail::Reset);
-    }
-    Ok(format!("{key} = \"{value}\""))
-}
-
-fn display_path(path: &Path) -> Result<String, CurlFail> {
-    let text = path.to_str().ok_or(CurlFail::Reset)?;
-    if text
-        .chars()
-        .any(|ch| matches!(ch, '"' | '\n' | '\r' | '\0'))
-    {
-        return Err(CurlFail::Reset);
-    }
-    Ok(text.to_owned())
 }
 
 pub(crate) fn join_url(base: &str, path: &str, query: Option<&str>) -> Option<String> {

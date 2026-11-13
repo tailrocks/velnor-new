@@ -4,7 +4,8 @@
 use std::time::{Duration, Instant};
 
 use backing::{apply_backing_capacity, root_backing_mappings, validate_owned_sample};
-use capacity::{instance_binding_digest, observed_cgroup, observed_roles};
+pub use capacity::observed_cgroups;
+use capacity::{instance_binding_digest, observed_roles};
 use worker::{probe_attachment, validate_guest_identity, validate_plan, worker_attachments};
 
 use crate::{
@@ -13,8 +14,7 @@ use crate::{
     launch::{
         StartObservationWitness,
         bootstrap::{
-            BootstrapContainerRole, PreparedAcquiredBootstrap, StartedBootstrapPair,
-            VerifiedStorageResourceBinding,
+            PreparedAcquiredBootstrap, StartedBootstrapPair, VerifiedStorageResourceBinding,
         },
         resource_probe::{
             ImageProvider, OwnedCgroupSubjects, OwnedContainerSubjects, VerifiedOwnedCgroups,
@@ -285,18 +285,13 @@ fn assemble_binding<P: ImageProvider>(
 ) -> Result<VerifiedStorageResourceBinding, HostError> {
     let acquired = run.prepared.acquired();
     let witness = acquired.observation();
-    let cgroups = vec![
-        observed_cgroup(
-            workers.runner.observation(),
-            BootstrapContainerRole::Runner,
-            run.started.runner_container_id(),
-        )?,
-        observed_cgroup(
-            workers.dind.observation(),
-            BootstrapContainerRole::Dind,
-            run.started.dind_container_id(),
-        )?,
-    ];
+    let cgroups = observed_cgroups(
+        workers.runner.observation(),
+        workers.dind.observation(),
+        owned.observation(),
+        run.started.runner_container_id(),
+        run.started.dind_container_id(),
+    )?;
     Ok(VerifiedStorageResourceBinding {
         reservation_id: acquired.reservation_id(),
         operation_id: acquired.intent_id(),

@@ -12,9 +12,11 @@
 pub(crate) mod artifact_admission;
 mod assign;
 mod compile_identity;
+mod completion_admin;
 mod config;
 mod connect;
 mod controller_ipc;
+pub mod curl_config;
 mod daemon_lock;
 mod digest_hex;
 mod docker_client;
@@ -44,6 +46,7 @@ mod stage;
 mod worker;
 
 pub use assign::{Offer, offer};
+pub use completion_admin::{CompletionAdminClient, CompletionAdminSession};
 pub use config::{
     ApprovedJobAuthorityPolicy, ConnectionId, DockerConfig, HostConfig, HostLimits,
     JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection, ScaleSetSelector,
@@ -75,10 +78,11 @@ pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch::{
     AcquiredRegistryImage, BootstrapContainerRole, CompletionWorker, DaemonSelection,
-    ImageObservation, ImageReference, ImageSession, RegistryImageSpecification, RegistryProjection,
-    WorkerImage, acquire_registry_image, resume_deferred_offer_acquire_with_transport,
-    runner_pair_environment, verify_persisted_execution_source_role,
-    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
+    ImageObservation, ImageReference, ImageSession, ObservedContainerCgroup,
+    RegistryImageSpecification, RegistryProjection, WorkerImage, acquire_registry_image,
+    observed_cgroups, resume_deferred_offer_acquire_with_transport, runner_pair_environment,
+    verify_persisted_execution_source_role, verify_worker_attestation_manifest,
+    verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use launch_blocking::ListenFault;
 pub use listen::queue_path;

@@ -33,6 +33,15 @@ pub fn queue_path<'a>(base: &str, queue_url: &'a str) -> Option<&'a str> {
 
 pub(crate) struct Secret(String);
 
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("Secret")
+            .field(&"[REDACTED]")
+            .finish()
+    }
+}
+
 impl Secret {
     #[must_use]
     pub(crate) fn new(text: &str) -> Self {
@@ -107,6 +116,40 @@ impl Link {
     pub(crate) fn set_base(&mut self, base: &str) -> Result<(), EnsureError> {
         self.transport.set_base(base).map_err(map_host)?;
         base.clone_into(&mut self.base);
+        Ok(())
+    }
+
+    pub(crate) fn refresh_admin(
+        &mut self,
+        binding: &RepositoryConnection,
+        pat: &str,
+    ) -> Result<(), HostError> {
+        let (owner, repo) = binding
+            .repository
+            .split_once('/')
+            .ok_or(HostError::Config)?;
+        let mut transport = HttpsTransport::new(GITHUB_API)?;
+        let registration = velnor_runner_github::registration_token(
+            &mut transport,
+            &velnor_runner_github::RegistrationTokenCall {
+                scope: velnor_runner_github::RegistrationScope::Repository { owner, repo },
+                pat,
+            },
+        )
+        .map_err(|_| HostError::Endpoint)?;
+        let config_url = format!("https://github.com/{owner}/{repo}");
+        let admin = velnor_runner_github::admin_connection(
+            &mut transport,
+            &velnor_runner_github::AdminConnectionCall {
+                config_url: &config_url,
+                registration_token: registration.expose(),
+            },
+        )
+        .map_err(|_| HostError::Endpoint)?;
+        let base = admin.expose_url().to_owned();
+        self.transport.set_base(&base)?;
+        self.admin = admin;
+        self.base = base;
         Ok(())
     }
 }
