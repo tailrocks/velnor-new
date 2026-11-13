@@ -76,8 +76,8 @@ async fn create(
     response_evidence: &mut Option<StorageInitializerCreateResponse>,
 ) -> Result<VerifiedStorageInitializerCreated, HostError> {
     verify_claim_image(claim, image)?;
-    verify_engine(docker, journal, claim).await?;
-    let expected_env = verify_image(docker, claim).await?;
+    let engine = verify_engine(docker, journal, claim).await?;
+    let expected_env = verify_image(docker, claim, &engine).await?;
     verify_volumes(docker, claim).await?;
 
     let create = specification::specification(

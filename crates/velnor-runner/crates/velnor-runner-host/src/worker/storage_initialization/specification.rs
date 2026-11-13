@@ -4,14 +4,13 @@
 use bollard::models::{ContainerCreateBody, HostConfig, Mount, MountType, MountVolumeOptions};
 use bollard::query_parameters::CreateContainerOptions;
 
-use crate::{error::HostError, launch::VerifiedWorkerImages};
+use crate::{config::RunnerPlatform, error::HostError, launch::VerifiedWorkerImages};
 
 use super::{
     super::{DockerResourceLimits, ResourceBudget},
     request_result::valid_operation_id,
 };
 
-const PLATFORM: &str = "linux/amd64";
 const EXECUTABLE: &str = "/velnor/storage-init";
 const HOME_TARGET: &str = "/velnor/init/home";
 const WORK_TARGET: &str = "/velnor/init/work";
@@ -21,20 +20,20 @@ const METADATA_TARGET: &str = "/velnor/init/metadata";
 pub(crate) struct StorageInitializationImage {
     runtime_id: String,
     source_sha: String,
+    platform: RunnerPlatform,
 }
 
 impl StorageInitializationImage {
     pub(crate) fn from_verified_release(images: &VerifiedWorkerImages) -> Result<Self, HostError> {
         let identity = images.runner();
-        if images.platform() != PLATFORM
-            || !sha256_digest(identity.runtime_id())
-            || !lower_hex(images.source_sha(), 40)
-        {
+        let platform = RunnerPlatform::parse(images.platform()).ok_or(HostError::Identity)?;
+        if !sha256_digest(identity.runtime_id()) || !lower_hex(images.source_sha(), 40) {
             return Err(HostError::Identity);
         }
         Ok(Self {
             runtime_id: identity.runtime_id().to_owned(),
             source_sha: images.source_sha().to_owned(),
+            platform,
         })
     }
 
@@ -131,7 +130,7 @@ pub(crate) fn specification(
     Ok(StorageInitializationCreate {
         options: CreateContainerOptions {
             name: Some(name),
-            platform: PLATFORM.to_owned(),
+            platform: image.platform.as_str().to_owned(),
         },
         config: ContainerCreateBody {
             image: Some(image.runtime_id.clone()),
@@ -202,3 +201,6 @@ fn lower_hex(value: &str, length: usize) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
+
+#[cfg(test)]
+mod tests;

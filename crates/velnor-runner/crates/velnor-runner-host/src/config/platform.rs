@@ -39,6 +39,14 @@ impl RunnerPlatform {
         }
     }
 
+    #[must_use]
+    pub const fn image_architecture(self) -> &'static str {
+        match self {
+            Self::LinuxAmd64 => "amd64",
+            Self::LinuxArm64 => "arm64",
+        }
+    }
+
     pub(super) fn routes(self, selector: &ScaleSetSelector) -> bool {
         match self {
             Self::LinuxAmd64 => !selector

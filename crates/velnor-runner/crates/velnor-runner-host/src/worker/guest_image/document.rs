@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::config::RepositoryConnection;
+use crate::config::{RepositoryConnection, RunnerPlatform};
 use crate::error::HostError;
 use crate::launch::verified_images::WorkerImageOrigin;
 use velnor_runner_image_manifest::ImageKind;
@@ -13,7 +13,6 @@ mod identity;
 use crate::launch::{VerifiedImageIdentity, VerifiedWorkerImages};
 use identity::GuestImageIdentity;
 
-const GUEST_PLATFORM: &str = "linux/amd64";
 const SCHEMA: &str = "velnor.guest-image/v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -42,7 +41,7 @@ impl GuestImageDocument {
         connection: &RepositoryConnection,
         images: &VerifiedWorkerImages,
     ) -> Result<Self, HostError> {
-        Self::validate_images(images)?;
+        let platform = Self::validate_images(images)?;
         let selector = &connection.scale_set;
         let canonical_selector =
             crate::config::ScaleSetSelector::try_new(selector.name(), selector.labels())?;
@@ -52,7 +51,7 @@ impl GuestImageDocument {
         Ok(Self {
             schema: SCHEMA,
             source_sha: images.source_sha().to_owned(),
-            guest_platform: GUEST_PLATFORM,
+            guest_platform: platform.as_str(),
             scale_set: GuestScaleSet {
                 name: selector.name().to_owned(),
                 labels: selector.labels().to_vec(),
@@ -64,18 +63,20 @@ impl GuestImageDocument {
         })
     }
 
-    pub(super) fn validate_images(images: &VerifiedWorkerImages) -> Result<(), HostError> {
+    pub(super) fn validate_images(
+        images: &VerifiedWorkerImages,
+    ) -> Result<RunnerPlatform, HostError> {
+        let platform = RunnerPlatform::parse(images.platform()).ok_or(HostError::ForbiddenMount)?;
         if images.engine_id().is_empty()
             || !lower_hex(images.docker_root_digest(), 64)
             || images.daemon_architecture().is_empty()
-            || images.platform() != GUEST_PLATFORM
             || !lower_hex(images.source_sha(), 40)
         {
             return Err(HostError::ForbiddenMount);
         }
         guest_identity(images.runner(), ImageKind::Runner, images)?;
         guest_identity(images.dind(), ImageKind::Dind, images)?;
-        Ok(())
+        Ok(platform)
     }
 }
 
