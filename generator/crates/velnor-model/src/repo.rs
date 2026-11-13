@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ids::{PackageName, RepoPath, RunnerLabel, TargetName};
+use crate::plan::HelperRelease;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
@@ -60,6 +61,7 @@ pub struct RepoFacts {
     pub rust_roots: Vec<RustRoot>,
     pub tools: ToolPins,
     pub config: RustCiConfig,
+    pub helper: Option<HelperRelease>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

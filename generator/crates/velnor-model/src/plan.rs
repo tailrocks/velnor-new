@@ -115,6 +115,17 @@ pub enum Platform {
 }
 
 impl Platform {
+    pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
+
+    #[must_use]
+    pub const fn file_suffix(self) -> &'static str {
+        match self {
+            Self::LinuxX64 => "linux-x64",
+            Self::LinuxArm64 => "linux-arm64",
+            Self::MacosArm64 => "macos-arm64",
+        }
+    }
+
     #[must_use]
     pub const fn runner_key(self) -> &'static str {
         match self {

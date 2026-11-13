@@ -11,10 +11,13 @@ use std::process::Command as Process;
 
 pub use std::process::ExitCode as Exit;
 
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_render::OWNED_PATHS;
-use velnor_rust::{DetectError, MetadataError, metadata_roots, reduce_metadata, wanted_files};
+use velnor_rust::{
+    DetectError, LOCK_PATH, LockError, MetadataError, metadata_roots, pin_lock, reduce_metadata,
+    release_version, sums_url, wanted_files,
+};
 
 mod sample;
 
@@ -34,6 +37,7 @@ pub enum Error {
     Metadata(MetadataError),
     Detect(DetectError),
     Generate(GenerateError),
+    Lock(LockError),
 }
 
 impl fmt::Display for Error {
@@ -50,6 +54,7 @@ impl fmt::Display for Error {
             Self::Metadata(error) => error.fmt(f),
             Self::Detect(error) => error.fmt(f),
             Self::Generate(error) => error.fmt(f),
+            Self::Lock(error) => error.fmt(f),
         }
     }
 }
@@ -57,19 +62,53 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[must_use]
+pub fn version_text() -> String {
+    format!(
+        "{} ({})",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("VELNOR_COMMIT").unwrap_or("unknown")
+    )
+}
+
+pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let matches = Cli::command()
+        .version(version_text())
+        .try_get_matches_from(args)?;
+    Cli::from_arg_matches(&matches)
+}
+
+fn finish(result: Result<String, Error>) -> Exit {
+    match result {
+        Ok(message) => {
+            println!("{message}");
+            Exit::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("velnor-gen: {error}");
+            Exit::from(2)
+        }
+    }
+}
+
+#[must_use]
 pub fn main() -> Exit {
-    let cli = Cli::parse();
-    if let Command::RecordSample { checkout, name } = &cli.command {
-        return match record_sample(&cli.root, checkout, name) {
-            Ok(()) => {
-                println!("recorded {SAMPLES}/{name}");
-                Exit::SUCCESS
-            }
-            Err(error) => {
-                eprintln!("velnor-gen: {error}");
-                Exit::from(2)
-            }
-        };
+    let cli = match parse_cli(std::env::args_os()) {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
+    };
+    match &cli.command {
+        Command::RecordSample { checkout, name } => {
+            return finish(
+                record_sample(&cli.root, checkout, name)
+                    .map(|()| format!("recorded {SAMPLES}/{name}")),
+            );
+        }
+        Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
+        Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
         Ok(drifts) if cli.command == Command::Check && !drifts.is_empty() => {
@@ -97,6 +136,28 @@ pub fn main() -> Exit {
             Exit::from(2)
         }
     }
+}
+
+fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
+    let version = release_version(version).map_err(Error::Lock)?;
+    let root = toplevel(root)?;
+    let url = sums_url(&version);
+    let sums = program(
+        &root,
+        "curl",
+        &[
+            OsStr::new("--fail"),
+            OsStr::new("--silent"),
+            OsStr::new("--show-error"),
+            OsStr::new("--location"),
+            OsStr::new(&url),
+        ],
+    )?;
+    let lock = pin_lock(version.as_str(), &String::from_utf8_lossy(&sums)).map_err(Error::Lock)?;
+    replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())?;
+    Ok(format!(
+        "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH}"
+    ))
 }
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {

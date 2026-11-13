@@ -7,13 +7,16 @@ pub mod io;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{HelperRelease, HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
-use velnor_rust::{DetectError, detect, plan};
+use velnor_rust::{DetectError, LOCK_PATH, detect, plan};
+
+pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
     Detect(DetectError),
+    IncompatibleHelper(HelperVersion),
     Rules(Vec<RuleViolation>),
 }
 
@@ -21,6 +24,11 @@ impl fmt::Display for GenerateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Detect(error) => error.fmt(f),
+            Self::IncompatibleHelper(version) => write!(
+                f,
+                "{LOCK_PATH} pins velnor-ci {version}, but this velnor-gen works with velnor-ci {}.{}.x; run `velnor-gen pin-helper <version>` with a compatible release",
+                COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
+            ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {
@@ -41,7 +49,18 @@ impl From<DetectError> for GenerateError {
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
-    render(&plan(&detect(view)?)).map_err(GenerateError::Rules)
+    let facts = detect(view)?;
+    check_helper(&facts)?;
+    render(&plan(&facts)).map_err(GenerateError::Rules)
+}
+
+fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {
+    match facts.helper.as_ref().map(HelperRelease::version) {
+        Some(version) if version.series() != Some(COMPATIBLE_HELPER_SERIES) => {
+            Err(GenerateError::IncompatibleHelper(version.clone()))
+        }
+        _ => Ok(()),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

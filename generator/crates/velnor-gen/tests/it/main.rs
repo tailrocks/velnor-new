@@ -5,5 +5,7 @@ mod drift;
 mod golden;
 mod inputs;
 mod io;
+mod lock;
 mod pipeline;
 mod rules;
+mod version;

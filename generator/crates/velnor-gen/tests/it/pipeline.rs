@@ -12,7 +12,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 
-fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Box<dyn Error>> {
     let mut view = RepoView::default();
     for (index, root) in roots.iter().enumerate() {
         let manifest = RepoPath::new(*root)?;
@@ -38,7 +38,7 @@ fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Box<dyn Error
     Ok(view)
 }
 
-fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
+pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
     let mut files = expected_files(view)?;
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
