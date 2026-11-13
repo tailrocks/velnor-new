@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ids::{DownloadUrl, HelperVersion, JobId, RepoPath, RunnerLabel, Sha256};
+use crate::ids::{DownloadUrl, HelperVersion, InvalidId, JobId, RepoPath, RunnerLabel, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -72,8 +72,33 @@ pub enum HelperCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelperRelease {
-    pub version: HelperVersion,
-    pub binaries: BTreeMap<Platform, HelperBinary>,
+    version: HelperVersion,
+    binaries: BTreeMap<Platform, HelperBinary>,
+}
+
+impl HelperRelease {
+    pub fn new(
+        version: HelperVersion,
+        binaries: BTreeMap<Platform, HelperBinary>,
+    ) -> Result<Self, InvalidId> {
+        if binaries.is_empty() {
+            return Err(InvalidId {
+                kind: "HelperRelease",
+                value: version.to_string(),
+            });
+        }
+        Ok(Self { version, binaries })
+    }
+
+    #[must_use]
+    pub fn version(&self) -> &HelperVersion {
+        &self.version
+    }
+
+    #[must_use]
+    pub fn binaries(&self) -> &BTreeMap<Platform, HelperBinary> {
+        &self.binaries
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

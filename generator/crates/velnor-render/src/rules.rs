@@ -22,7 +22,7 @@ pub const ALLOWED_ACTIONS: [&str; 6] = [
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 
 const FORBIDDEN_WORDS: [&str; 4] = ["if", "for", "while", "case"];
-const FORBIDDEN_SYMBOLS: [&str; 6] = ["|", "&&", "||", ";", "$(", "`"];
+const FORBIDDEN_SYMBOLS: [&str; 7] = ["|", "&", "&&", "||", ";", "$(", "`"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {

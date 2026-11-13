@@ -153,6 +153,9 @@ const fn download_url(value: &[u8]) -> bool {
     if value.len() <= prefix.len() {
         return false;
     }
+    if !value[prefix.len()].is_ascii_alphanumeric() {
+        return false;
+    }
     let mut index = 0;
     while index < value.len() {
         let byte = value[index];

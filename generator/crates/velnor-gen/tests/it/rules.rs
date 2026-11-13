@@ -60,13 +60,13 @@ fn release() -> Result<HelperRelease, Box<dyn Error>> {
             sha256: Sha256::new(digit.to_string().repeat(64))?,
         })
     };
-    Ok(HelperRelease {
-        version: HelperVersion::new("1.2.3")?,
-        binaries: BTreeMap::from([
+    Ok(HelperRelease::new(
+        HelperVersion::new("1.2.3")?,
+        BTreeMap::from([
             (Platform::LinuxX64, binary("velnor-ci-linux-x64", 'a')?),
             (Platform::MacosArm64, binary("velnor-ci-macos-arm64", 'b')?),
         ]),
-    })
+    )?)
 }
 
 fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
@@ -111,6 +111,7 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
             run("case x in x) echo x;; esac"),
             Rule::ForbiddenSyntax("case"),
         ),
+        (run("cargo test & echo done"), Rule::ForbiddenSyntax("&")),
         (run("echo a | cat"), Rule::ForbiddenSyntax("|")),
         (run("true && echo x"), Rule::ForbiddenSyntax("&&")),
         (run("false || echo x"), Rule::ForbiddenSyntax("||")),
@@ -146,6 +147,26 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
             "{step:?} gave {found:?}, wanted {rule:?}"
         );
     }
+}
+
+#[test]
+fn a_helper_release_that_could_not_work_is_refused_before_rendering() -> TestResult {
+    let good = format!("https://example.com/{}", "a");
+    assert!(DownloadUrl::new(good).is_ok());
+    for url in [
+        "https://?",
+        "https://",
+        "http://example.com/a",
+        "https://exa mple.com",
+        "https://a.com/'x",
+    ] {
+        assert!(DownloadUrl::new(url).is_err(), "{url}");
+    }
+    for digest in ["", "ABC", &"g".repeat(64), &"a".repeat(63)] {
+        assert!(Sha256::new(digest).is_err(), "{digest}");
+    }
+    assert!(HelperRelease::new(HelperVersion::new("1.2.3")?, BTreeMap::new()).is_err());
+    Ok(())
 }
 
 #[test]

@@ -49,7 +49,7 @@ fn rendered_step(step: &Step) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::FetchHelper(release) => RenderedStep {
-            name: format!("Fetch velnor-ci {}", release.version),
+            name: format!("Fetch velnor-ci {}", release.version()),
             env: vec![
                 (
                     "SHA".to_owned(),
@@ -75,7 +75,7 @@ fn by_platform<T: fmt::Display>(
     field: impl Fn(&HelperBinary) -> &T,
 ) -> Value {
     let table = release
-        .binaries
+        .binaries()
         .iter()
         .map(|(platform, binary)| format!("\"{}\":\"{}\"", platform.runner_key(), field(binary)))
         .collect::<Vec<_>>()
