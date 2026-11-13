@@ -8,7 +8,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use velnor_gen::Drift;
-use velnor_gen::io::{Error as IoError, apply, read_files};
+use velnor_gen::io::{Error as IoError, apply, manifest_file, read_files};
 use velnor_model::RepoPath;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -140,6 +140,54 @@ fn inputs_are_read_only_from_real_files_inside_the_repository() -> TestResult {
     directory_link.link(".velnor", &directory_link.outside())?;
     for scratch in [&file_link, &directory_link] {
         let result = read_files(&scratch.repo(), std::slice::from_ref(&config));
+        assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_leftover_or_planted_temporary_file_never_redirects_the_write() -> TestResult {
+    let scratch = Scratch::new("temporary")?;
+    let target = scratch.outside().join("victim.yml");
+    write(&target, "theirs\n")?;
+    scratch.link(".github/workflows/.rust-ci.yml.velnor-gen", &target)?;
+    apply(
+        &scratch.repo(),
+        &expected()?,
+        &[Drift::Missing(workflow()?)],
+    )?;
+    assert_eq!(fs::read_to_string(&target)?, "theirs\n");
+    assert_eq!(
+        fs::read_to_string(scratch.repo().join(WORKFLOW))?,
+        "generated\n"
+    );
+    let mut left = fs::read_dir(scratch.repo().join(".github/workflows"))?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<Result<Vec<_>, _>>()?;
+    left.sort();
+    assert_eq!(left, vec!["rust-ci.yml"]);
+    Ok(())
+}
+
+#[test]
+fn cargo_metadata_is_run_only_on_a_real_manifest_inside_the_repository() -> TestResult {
+    let manifest = RepoPath::new("crates/a/Cargo.toml")?;
+    let real = Scratch::new("manifest")?;
+    write(&real.repo().join(manifest.as_str()), "[package]\n")?;
+    assert_eq!(
+        manifest_file(&real.repo(), &manifest)?,
+        real.repo().join(manifest.as_str())
+    );
+
+    let file_link = Scratch::new("manifest-file-link")?;
+    write(&file_link.outside().join("Cargo.toml"), "[package]\n")?;
+    file_link.link(manifest.as_str(), &file_link.outside().join("Cargo.toml"))?;
+    let directory_link = Scratch::new("manifest-directory-link")?;
+    write(&directory_link.outside().join("Cargo.toml"), "[package]\n")?;
+    directory_link.link("crates/a", &directory_link.outside())?;
+    let missing = Scratch::new("manifest-missing")?;
+    for scratch in [&file_link, &directory_link, &missing] {
+        let result = manifest_file(&scratch.repo(), &manifest);
         assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     }
     Ok(())

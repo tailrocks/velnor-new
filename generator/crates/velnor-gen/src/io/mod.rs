@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
@@ -102,13 +103,7 @@ pub fn apply(
         let existing = regular_file(root, path)?;
         match (change, expected.get(path), existing) {
             (Drift::Foreign(_), _, _) => return Err(Error::Foreign(path.clone())),
-            (_, Some(content), _) => {
-                let file = root.join(path.as_str());
-                if let Some(parent) = file.parent() {
-                    fs::create_dir_all(parent).map_err(|e| Error::File(parent.into(), e))?;
-                }
-                fs::write(&file, content).map_err(|e| Error::File(file.clone(), e))?;
-            }
+            (_, Some(content), _) => replace(&root.join(path.as_str()), content)?,
             (_, None, Some(file)) => {
                 fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?;
             }
@@ -116,6 +111,34 @@ pub fn apply(
         }
     }
     Ok(())
+}
+
+fn replace(file: &Path, content: &str) -> Result<(), Error> {
+    let parent = file
+        .parent()
+        .ok_or_else(|| Error::File(file.into(), ErrorKind::InvalidInput.into()))?;
+    fs::create_dir_all(parent).map_err(|e| Error::File(parent.into(), e))?;
+    let mut name = OsString::from(".");
+    name.push(file.file_name().unwrap_or_default());
+    name.push(".velnor-gen");
+    let temporary = parent.join(name);
+    match fs::remove_file(&temporary) {
+        Err(error) if error.kind() != ErrorKind::NotFound => {
+            return Err(Error::File(temporary, error));
+        }
+        _ => {}
+    }
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .and_then(|mut handle| handle.write_all(content.as_bytes()))
+        .and_then(|()| fs::rename(&temporary, file))
+        .map_err(|e| Error::File(file.into(), e))
+}
+
+pub fn manifest_file(root: &Path, manifest: &RepoPath) -> Result<PathBuf, Error> {
+    regular_file(root, manifest)?.ok_or_else(|| Error::NotRegular(manifest.clone()))
 }
 
 fn toplevel(path: &Path) -> Result<PathBuf, Error> {
@@ -156,7 +179,7 @@ fn read_view(root: &Path) -> Result<RepoView, Error> {
         if known {
             continue;
         }
-        let path = root.join(manifest.as_str());
+        let path = manifest_file(root, &manifest)?;
         let directory = path.parent().unwrap_or(root);
         let output = program(
             directory,
@@ -195,7 +218,7 @@ fn regular_file(root: &Path, path: &RepoPath) -> Result<Option<PathBuf>, Error> 
         current.push(part);
         let metadata = match fs::symlink_metadata(&current) {
             Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(Error::File(current, error)),
         };
         let last = index + 1 == parts.len();
