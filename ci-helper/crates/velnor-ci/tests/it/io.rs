@@ -219,6 +219,61 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
 }
 
 #[test]
+fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
+    let repo = Repo::new("chmod");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("tools/run.sh", "echo run\n");
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in [".gitignore", "src/lib.rs", "tools/run.sh"] {
+        repo.set_mtime(path, built);
+    }
+    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    fs::set_permissions(
+        repo.root().join("tools/run.sh"),
+        Permissions::from_mode(0o755),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in [".gitignore", "src/lib.rs", "tools/run.sh"] {
+        repo.set_mtime(path, checkout);
+    }
+    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("tools/run.sh"), checkout);
+    assert_eq!(repo.mtime("src/lib.rs"), built);
+    assert_eq!(
+        report,
+        "restored the modification time of 2 unchanged files; 1 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
+    );
+}
+
+#[test]
+fn a_workspace_below_the_repository_root_is_saved_and_restored() {
+    let repo = Repo::new("nested");
+    repo.write("rust/src/lib.rs", "pub fn one() {}\n");
+    repo.write("docs/notes.md", "notes\n");
+    let workspace = repo.root().join("rust");
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    repo.set_mtime("rust/src/lib.rs", built);
+    let saved = save_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    repo.set_mtime("rust/src/lib.rs", checkout);
+    let report = restore_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert!(workspace.join("target/.velnor/inputs.tsv").is_file());
+    assert_eq!(repo.mtime("rust/src/lib.rs"), built);
+    assert_eq!(
+        (saved.as_str(), report.as_str()),
+        (
+            "saved 1 tracked files to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold\n",
+            "restored the modification time of 1 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold\n"
+        )
+    );
+}
+
+#[test]
 fn restore_without_saved_inputs_changes_nothing() {
     let repo = Repo::new("cold");
     repo.write("src/lib.rs", "pub fn one() {}\n");

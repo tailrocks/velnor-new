@@ -9,8 +9,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, format_inputs, parse_inputs, parse_ls_files, plan_restore,
-    with_worktree_blobs,
+    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, parse_inputs, parse_ls_files,
+    plan_restore, with_worktree_blobs,
 };
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
@@ -63,14 +63,26 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
 
 fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
     let index = parse_ls_files(&git(root, &["ls-files", "-s", "-z"], None)?);
-    let (present, absent): (Vec<_>, Vec<_>) = index
-        .files
-        .into_iter()
-        .partition(|file| is_regular_file(&root.join(&file.path)));
-    let paths: String = present
-        .iter()
-        .map(|file| file.path.clone() + "\n")
-        .collect();
+    let mut present = Vec::with_capacity(index.files.len());
+    let mut absent = Vec::new();
+    for file in index.files {
+        match fs::symlink_metadata(root.join(&file.path)) {
+            Ok(metadata) if metadata.is_file() => present.push(TrackedFile {
+                mode: worktree_mode(&metadata, &file.mode),
+                ..file
+            }),
+            _ => absent.push(file.path),
+        }
+    }
+    let mut paths = String::new();
+    for file in &present {
+        let path = root.join(&file.path);
+        let path = path
+            .to_str()
+            .ok_or_else(|| CiError::new(format!("{} is not valid UTF-8", path.display())))?;
+        paths.push_str(path);
+        paths.push('\n');
+    }
     let hashes = git(
         root,
         &["hash-object", "--no-filters", "--stdin-paths"],
@@ -80,13 +92,24 @@ fn worktree_files(root: &Path) -> Result<Tracked, CiError> {
         .map_err(|e| CiError::new(format!("git hash-object printed non-UTF-8: {e}")))?;
     Ok(Tracked {
         files: with_worktree_blobs(present, &hashes)?,
-        absent: absent.into_iter().map(|file| file.path).collect(),
+        absent,
         unsupported: index.unsupported,
     })
 }
 
-fn is_regular_file(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
+#[cfg(unix)]
+fn worktree_mode(metadata: &fs::Metadata, _index_mode: &str) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    if metadata.permissions().mode() & 0o100 == 0 {
+        "100644".to_owned()
+    } else {
+        "100755".to_owned()
+    }
+}
+
+#[cfg(not(unix))]
+fn worktree_mode(_metadata: &fs::Metadata, index_mode: &str) -> String {
+    index_mode.to_owned()
 }
 
 fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiError> {
