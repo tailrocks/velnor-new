@@ -37,8 +37,8 @@ fn file_diff(section: &str) -> FileDiff {
         }
     }
     let find = |prefix: &str| header.iter().find_map(|line| line.strip_prefix(prefix));
-    let renamed_from = find("rename from ");
-    let filename = find("rename to ").map_or_else(|| same_name(names), str::to_owned);
+    let renamed_from = find("rename from ").map(path_text);
+    let filename = find("rename to ").map_or_else(|| same_name(names), path_text);
     let (old_sha, new_sha) = find("index ")
         .and_then(|rest| rest.split_whitespace().next())
         .and_then(|shas| shas.split_once(".."))
@@ -59,7 +59,7 @@ fn file_diff(section: &str) -> FileDiff {
     let count = |sign: char| hunks.iter().filter(|line| line.starts_with(sign)).count();
     FileDiff {
         filename,
-        previous_filename: renamed_from.map(str::to_owned),
+        previous_filename: renamed_from,
         status,
         sha: if status == "removed" {
             old_sha
@@ -73,8 +73,58 @@ fn file_diff(section: &str) -> FileDiff {
 }
 
 fn same_name(names: &str) -> String {
+    if names.starts_with('"') {
+        let first = unquote(names).map_or_else(String::new, |(path, _)| path);
+        return first.strip_prefix("a/").unwrap_or(&first).to_owned();
+    }
     let names = names.strip_prefix("a/").unwrap_or(names);
     names[..names.len().saturating_sub(3) / 2].to_owned()
+}
+
+fn path_text(text: &str) -> String {
+    if text.starts_with('"') {
+        unquote(text).map_or_else(|| text.to_owned(), |(path, _)| path)
+    } else {
+        text.to_owned()
+    }
+}
+
+fn unquote(text: &str) -> Option<(String, &str)> {
+    let body = text.strip_prefix('"')?;
+    let mut bytes = Vec::new();
+    let mut chars = body.char_indices();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '"' => {
+                return Some((
+                    String::from_utf8_lossy(&bytes).into_owned(),
+                    &body[at + 1..],
+                ));
+            }
+            '\\' => {
+                let (_, escape) = chars.next()?;
+                let value = match escape {
+                    'a' => 7,
+                    'b' => 8,
+                    't' => 9,
+                    'n' => 10,
+                    'v' => 11,
+                    'f' => 12,
+                    'r' => 13,
+                    '0'..='3' => {
+                        let digits: String = std::iter::once(escape)
+                            .chain(chars.by_ref().take(2).map(|(_, digit)| digit))
+                            .collect();
+                        u8::from_str_radix(&digits, 8).ok()?
+                    }
+                    other => u8::try_from(other).ok()?,
+                };
+                bytes.push(value);
+            }
+            other => bytes.extend_from_slice(other.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
+    }
+    None
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

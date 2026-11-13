@@ -10,15 +10,15 @@ use serde_json::{Value, json};
 
 use crate::support::{Stub, temp_dir};
 
-const REPO: &str = "/repos/tailrocks/velnor-lab";
+pub(crate) const REPO: &str = "/repos/tailrocks/velnor-lab";
 
 #[derive(Debug)]
-struct TempRepo {
-    dir: PathBuf,
+pub(crate) struct TempRepo {
+    pub(crate) dir: PathBuf,
 }
 
 impl TempRepo {
-    fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         let repo = Self {
             dir: temp_dir(name),
         };
@@ -26,7 +26,7 @@ impl TempRepo {
         repo
     }
 
-    fn git(&self, args: &[&str]) -> String {
+    pub(crate) fn git(&self, args: &[&str]) -> String {
         let output = Command::new("git")
             .arg("-C")
             .arg(&self.dir)
@@ -46,7 +46,7 @@ impl TempRepo {
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }
 
-    fn write(&self, path: &str, content: &[u8]) {
+    pub(crate) fn write(&self, path: &str, content: &[u8]) {
         let full = self.dir.join(path);
         if let Some(parent) = full.parent() {
             std::fs::create_dir_all(parent).unwrap_or_else(|e| unreachable!("{e}"));
@@ -54,13 +54,13 @@ impl TempRepo {
         std::fs::write(full, content).unwrap_or_else(|e| unreachable!("{e}"));
     }
 
-    fn commit(&self, message: &str) -> String {
+    pub(crate) fn commit(&self, message: &str) -> String {
         self.git(&["add", "--all"]);
         self.git(&["commit", "--quiet", "--message", message]);
         self.git(&["rev-parse", "HEAD"])
     }
 
-    fn stub(&self, name: &str, pulls: &Value) -> Stub {
+    pub(crate) fn stub(&self, name: &str, pulls: &Value) -> Stub {
         let state = temp_dir(&format!("{name}-state"));
         std::fs::write(state.join("pulls.json"), pulls.to_string())
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -68,17 +68,17 @@ impl TempRepo {
     }
 }
 
-fn pull(number: u64, base: &str, head: &str) -> Value {
+pub(crate) fn pull(number: u64, base: &str, head: &str) -> Value {
     json!({"number": number, "state": "open", "base": {"sha": base}, "head": {"sha": head}})
 }
 
-struct Changed {
-    base: String,
-    head: String,
-    repo: TempRepo,
+pub(crate) struct Changed {
+    pub(crate) base: String,
+    pub(crate) head: String,
+    pub(crate) repo: TempRepo,
 }
 
-fn changed(name: &str) -> Changed {
+pub(crate) fn changed(name: &str) -> Changed {
     let repo = TempRepo::new(name);
     repo.write("a.txt", b"one\ntwo\n");
     repo.write("b.txt", b"gone\n");
@@ -94,7 +94,7 @@ fn changed(name: &str) -> Changed {
     Changed { base, head, repo }
 }
 
-fn file<'a>(files: &'a Value, name: &str) -> &'a Value {
+pub(crate) fn file<'a>(files: &'a Value, name: &str) -> &'a Value {
     files
         .as_array()
         .into_iter()
@@ -169,6 +169,7 @@ async fn pull_request_files_come_from_the_two_commits_in_github_json_shape() {
     assert_eq!(renamed["status"], "renamed");
     assert_eq!(renamed["previous_filename"], "c.txt");
     assert_eq!(renamed["changes"], 0);
+    assert_eq!(renamed["sha"], c.repo.git(&["rev-parse", "HEAD:e.txt"]));
     assert!(renamed.get("patch").is_none());
     let binary = file(&files, "blob.bin");
     assert_eq!(binary["status"], "added");

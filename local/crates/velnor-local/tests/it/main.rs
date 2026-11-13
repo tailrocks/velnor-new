@@ -4,5 +4,6 @@
 mod api_stub;
 mod cache_server;
 mod io;
+mod io_edges;
 mod store;
 mod support;

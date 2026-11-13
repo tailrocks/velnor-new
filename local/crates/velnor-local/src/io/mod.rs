@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod api_stub;
+mod index_file;
 mod proxy;
 mod run;
 
@@ -89,7 +90,7 @@ impl CacheServer {
         })?;
         let body: CacheRequest = parse(&read_small_body(request.into_body()).await?)?;
         let now = now();
-        let mut index = self.index().await;
+        let mut index = self.index().await?;
         let before = index.clone();
         let claims =
             token::verify(token, &self.config.token_key, now).map_err(Error::unauthenticated)?;
@@ -169,7 +170,7 @@ impl CacheServer {
     }
 
     async fn upload(&self, blob: &str, request: Request<Body>) -> Result<Response<Body>, Error> {
-        if self.index().await.blob(blob, false).is_none() {
+        if self.index().await?.blob(blob, false).is_none() {
             return Err(Error::not_found("no reservation for this upload"));
         }
         let blocks = self.config.dir.join("blocks").join(blob);
@@ -208,7 +209,7 @@ impl CacheServer {
     }
 
     async fn download(&self, blob: &str) -> Result<Response<Body>, Error> {
-        if self.index().await.blob(blob, true).is_none() {
+        if self.index().await?.blob(blob, true).is_none() {
             return Err(Error::not_found("no cache entry at this address"));
         }
         let file = File::open(self.archive(blob))
@@ -232,7 +233,7 @@ impl CacheServer {
             .parse()
             .map_err(|_| Error::invalid(format!("{number} is not a pull request number")))?;
         let base: PullRequestBase = parse(&read_small_body(request.into_body()).await?)?;
-        let mut index = self.index().await;
+        let mut index = self.index().await?;
         let registered = index
             .pull_request_bases
             .entry(number)
@@ -256,12 +257,35 @@ impl CacheServer {
             .map_err(Error::internal)
     }
 
-    async fn index(&self) -> MutexGuard<'_, Index> {
+    async fn index(&self) -> Result<LockedIndex<'_>, Error> {
         let mut index = self.index.lock().await;
-        if let Ok(current) = read_index(&self.config.dir).await {
-            *index = current;
-        }
-        index
+        let lock = lock_index(&self.config.dir)
+            .await
+            .map_err(Error::internal)?;
+        *index = read_index(&self.config.dir)
+            .await
+            .map_err(Error::internal)?;
+        Ok(LockedIndex { index, _lock: lock })
+    }
+}
+
+#[derive(Debug)]
+struct LockedIndex<'a> {
+    index: MutexGuard<'a, Index>,
+    _lock: IndexLock,
+}
+
+impl std::ops::Deref for LockedIndex<'_> {
+    type Target = Index;
+
+    fn deref(&self) -> &Index {
+        &self.index
+    }
+}
+
+impl std::ops::DerefMut for LockedIndex<'_> {
+    fn deref_mut(&mut self) -> &mut Index {
+        &mut self.index
     }
 }
 
@@ -331,5 +355,6 @@ fn json_response(status: u16, body: &Value) -> Response<Body> {
     response
 }
 
+pub use index_file::{IndexLock, lock_index};
+use index_file::{read_index, remove_if_present, write_index};
 pub use run::main;
-use run::{read_index, write_index};

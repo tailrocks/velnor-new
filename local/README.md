@@ -81,4 +81,4 @@ cargo nextest run --locked
 velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache"
 ```
 
-The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. The cache server reads `index.json` again on every request, so a delete through the stub takes effect at once.
+The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.

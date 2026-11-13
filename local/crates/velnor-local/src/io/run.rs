@@ -4,7 +4,6 @@
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -20,7 +19,6 @@ use tokio::net::TcpListener;
 
 use super::{Body, CacheServer, Config, api_stub};
 use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command};
-use crate::store::Index;
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -94,19 +92,4 @@ where
             }
         });
     }
-}
-
-pub(super) async fn read_index(dir: &Path) -> std::io::Result<Index> {
-    match fs::read(dir.join("index.json")).await {
-        Ok(bytes) => serde_json::from_slice(&bytes).map_err(std::io::Error::other),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Index::default()),
-        Err(error) => Err(error),
-    }
-}
-
-pub(super) async fn write_index(dir: &Path, index: &Index) -> std::io::Result<()> {
-    let bytes = serde_json::to_vec_pretty(index).map_err(std::io::Error::other)?;
-    let staged = dir.join("index.json.tmp");
-    fs::write(&staged, bytes).await?;
-    fs::rename(&staged, dir.join("index.json")).await
 }

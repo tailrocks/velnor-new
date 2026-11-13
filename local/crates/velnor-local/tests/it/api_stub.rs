@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use serde_json::{Value, json};
+use velnor_local::io::lock_index;
 use velnor_local::rest::rfc3339;
 
 use crate::support::{Harness, MAIN, Stub, temp_dir};
@@ -165,6 +168,106 @@ async fn any_other_request_gets_501_with_a_json_body_that_names_the_path() {
             Some("application/json; charset=utf-8")
         );
     }
+}
+
+#[tokio::test]
+async fn a_stub_delete_waits_for_the_index_lock() {
+    let harness = Harness::new("api-lock", LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    let stub = stub_over(&harness, "api-lock");
+    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
+    let path = format!("{CACHES}/{id}");
+
+    let lock = lock_index(harness.dir())
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let blocked =
+        tokio::time::timeout(Duration::from_millis(300), stub.call("DELETE", &path)).await;
+    drop(lock);
+    let released = stub.call("DELETE", &path).await;
+
+    assert!(blocked.is_err());
+    assert_eq!(released.status, 204);
+}
+
+#[tokio::test]
+async fn saves_and_stub_deletes_running_together_lose_no_update() {
+    let harness = Harness::new("api-race", LIMIT).await;
+    for number in 0..12 {
+        harness.save(MAIN, &format!("old-{number}"), b"1").await;
+    }
+    let stub = stub_over(&harness, "api-race");
+    let listed = stub.get(&format!("{CACHES}?per_page=100")).await.json();
+    let ids: Vec<Value> = listed["actions_caches"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|entry| entry["id"].clone())
+        .collect();
+
+    let saving = async {
+        for number in 0..12 {
+            harness.save(MAIN, &format!("new-{number}"), b"2").await;
+        }
+    };
+    let deleting = async {
+        for id in &ids {
+            assert_eq!(
+                stub.call("DELETE", &format!("{CACHES}/{id}")).await.status,
+                204
+            );
+        }
+    };
+    tokio::join!(saving, deleting);
+
+    let after = stub.get(&format!("{CACHES}?per_page=100")).await.json();
+    let mut keys = keys(&after);
+    keys.sort();
+    let mut expected: Vec<String> = (0..12).map(|number| format!("new-{number}")).collect();
+    expected.sort();
+    assert_eq!(keys, expected);
+    assert_eq!(harness.restore(MAIN, "old-3").await["ok"], false);
+    assert_eq!(harness.restore(MAIN, "new-3").await["ok"], true);
+}
+
+#[tokio::test]
+async fn a_delete_that_cannot_remove_the_archive_fails_and_keeps_the_entry() {
+    let harness = Harness::new("api-keep", LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    let stub = stub_over(&harness, "api-keep");
+    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
+    let archive = std::fs::read_dir(harness.dir().join("archives"))
+        .ok()
+        .and_then(|mut entries| entries.next())
+        .and_then(Result::ok)
+        .map(|entry| entry.path())
+        .unwrap_or_default();
+    std::fs::remove_file(&archive).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::create_dir_all(archive.join("stuck")).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let failed = stub.call("DELETE", &format!("{CACHES}/{id}")).await;
+
+    assert_eq!(failed.status, 500);
+    assert_eq!(keys(&stub.get(CACHES).await.json()), ["tools"]);
+}
+
+#[tokio::test]
+async fn an_unreadable_index_is_an_error_not_a_stale_answer() {
+    let harness = Harness::new("api-stale", LIMIT).await;
+    harness.save(MAIN, "tools", b"1234").await;
+    std::fs::write(harness.dir().join("index.json"), "not json")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    let reply = harness
+        .twirp(
+            MAIN,
+            "GetCacheEntryDownloadURL",
+            &json!({"key": "tools", "version": "v"}),
+        )
+        .await;
+
+    assert_eq!(reply.status, 500);
+    assert_eq!(reply.json()["code"], "internal");
 }
 
 #[test]

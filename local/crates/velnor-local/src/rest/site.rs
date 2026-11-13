@@ -158,6 +158,15 @@ impl Site<'_> {
     }
 
     #[must_use]
+    pub fn listing_entry(&self, entry: &TreeEntry, reference: &str) -> Value {
+        let mut value = self.content_entry(entry, reference);
+        if entry.kind() == "submodule" {
+            value["type"] = json!("file");
+        }
+        value
+    }
+
+    #[must_use]
     pub fn content_file(&self, entry: &TreeEntry, reference: &str, bytes: &[u8]) -> Value {
         let mut value = self.content_entry(entry, reference);
         if entry.kind() == "symlink" {

@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use tokio::fs;
 use tokio::process::Command;
 
-use super::{Body, now, read_index, write_index};
+use super::{Body, lock_index, now, read_index, remove_if_present, write_index};
 use crate::rest::{
     self, Api, COMMIT_FORMAT, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES,
     Commit, Comparison, DEFAULT_PER_PAGE, FileDiff, PULL_FILES_CAP, Page, Site, TreeEntry,
@@ -125,7 +125,13 @@ impl ApiStub {
         }
         let spec = format!("{reference}^{{commit}}");
         let sha = self
-            .git_text(&["rev-parse", "--verify", "--quiet", &spec])
+            .git_text(&[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                "--end-of-options",
+                &spec,
+            ])
             .await?;
         Some(sha.trim().to_owned())
     }
@@ -141,16 +147,28 @@ impl ApiStub {
                 "--no-ext-diff",
                 "--src-prefix=a/",
                 "--dst-prefix=b/",
+                "--end-of-options",
                 &range,
             ])
             .await?;
-        Some(rest::parse_diff(&text))
+        let mut files = rest::parse_diff(&text);
+        for file in &mut files {
+            if file.sha.is_none() && file.status != "removed" {
+                let spec = format!("{head}:{}", file.filename);
+                file.sha = self
+                    .git_text(&["rev-parse", "--verify", "--end-of-options", &spec])
+                    .await
+                    .map(|sha| sha.trim().to_owned());
+            }
+        }
+        Some(files)
     }
 
-    async fn commits(&self, args: &[&str]) -> Option<Vec<Commit>> {
+    async fn commits(&self, options: &[&str], revisions: &str) -> Option<Vec<Commit>> {
         let format = format!("--format={COMMIT_FORMAT}");
         let mut full = vec!["log", "--no-color", &format];
-        full.extend_from_slice(args);
+        full.extend_from_slice(options);
+        full.extend_from_slice(&["--end-of-options", revisions]);
         let text = self.git_text(&full).await?;
         Some(rest::parse_commits(&text))
     }
@@ -182,13 +200,16 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        let Some(files) = self.diff(base, head).await else {
+        let (Some(base), Some(head)) = (self.resolve(base).await, self.resolve(head).await) else {
+            return Reply::missing();
+        };
+        let Some(files) = self.diff(&base, &head).await else {
             return Reply::missing();
         };
         let files: Vec<Value> = files
             .iter()
             .take(PULL_FILES_CAP)
-            .map(|file| call.site.file(file, head))
+            .map(|file| call.site.file(file, &head))
             .collect();
         paged(call, DEFAULT_PER_PAGE, &files)
     }
@@ -198,7 +219,7 @@ impl ApiStub {
             return Reply::missing();
         };
         let Some(merge_base) = self
-            .git_text(&["merge-base", &base, &head])
+            .git_text(&["merge-base", "--end-of-options", &base, &head])
             .await
             .map(|sha| sha.trim().to_owned())
         else {
@@ -207,10 +228,11 @@ impl ApiStub {
         let range = format!("{base}..{head}");
         let behind = format!("{head}..{base}");
         let (Some(commits), Some(base_commit), Some(merge_commit), Some(behind), Some(files)) = (
-            self.commits(&["--reverse", &range]).await,
-            self.commits(&["-1", &base]).await,
-            self.commits(&["-1", &merge_base]).await,
-            self.git_text(&["rev-list", "--count", &behind]).await,
+            self.commits(&["--reverse"], &range).await,
+            self.commits(&["-1"], &base).await,
+            self.commits(&["-1"], &merge_base).await,
+            self.git_text(&["rev-list", "--count", "--end-of-options", &behind])
+                .await,
             self.diff(&base, &head).await,
         ) else {
             return Reply::missing();
@@ -260,7 +282,7 @@ impl ApiStub {
                 Reply::ok(Value::Array(
                     listing
                         .iter()
-                        .map(|child| site.content_entry(child, reference))
+                        .map(|child| site.listing_entry(child, reference))
                         .collect(),
                 ))
             }
@@ -277,7 +299,15 @@ impl ApiStub {
 
     async fn tree(&self, commit: &str, path: &str) -> Option<Vec<TreeEntry>> {
         let text = self
-            .git_text(&["ls-tree", "-z", "-l", commit, "--", path])
+            .git_text(&[
+                "ls-tree",
+                "-z",
+                "-l",
+                "--end-of-options",
+                commit,
+                "--",
+                path,
+            ])
             .await?;
         Some(rest::parse_tree(&text))
     }
@@ -297,17 +327,30 @@ impl ApiStub {
     }
 
     async fn cache_delete(&self, call: &Call<'_>, id: u64) -> Reply {
-        let Ok(mut index) = read_index(&self.config.cache_dir).await else {
+        let dir = &self.config.cache_dir;
+        let Ok(_lock) = lock_index(dir).await else {
+            return Reply::with(500, json!({"message": "cache index is locked"}), None);
+        };
+        let Ok(mut index) = read_index(dir).await else {
             return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
         };
         let Some(record) = index.delete(call.site.repository, id) else {
             return Reply::missing();
         };
-        if write_index(&self.config.cache_dir, &index).await.is_err() {
+        let removed =
+            remove_if_present(fs::remove_file(dir.join("archives").join(&record.blob)).await).and(
+                remove_if_present(fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await),
+            );
+        if removed.is_err() {
+            return Reply::with(
+                500,
+                json!({"message": "cache archive could not be removed"}),
+                None,
+            );
+        }
+        if write_index(dir, &index).await.is_err() {
             return Reply::with(500, json!({"message": "cache index is not writable"}), None);
         }
-        let _ = fs::remove_file(self.config.cache_dir.join("archives").join(&record.blob)).await;
-        let _ = fs::remove_dir_all(self.config.cache_dir.join("blocks").join(&record.blob)).await;
         Reply {
             status: 204,
             body: None,
