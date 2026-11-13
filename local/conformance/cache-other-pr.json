@@ -1,0 +1,15 @@
+{
+  "legs": {
+    "second_pull_request": {
+      "exact_key_of_the_first": {
+        "hit": "",
+        "matched": ""
+      },
+      "restore_key_prefix": {
+        "hit": "",
+        "matched": ""
+      }
+    }
+  },
+  "probe": "cache-other-pr"
+}
