@@ -43,24 +43,18 @@ fn registry_identity_binds_role_source_and_release_without_archive_fields()
 }
 
 #[test]
-fn developer_identity_names_the_local_image_and_its_descriptor()
--> Result<(), Box<dyn std::error::Error>> {
+fn developer_identity_names_the_local_image() -> Result<(), Box<dyn std::error::Error>> {
     let image = format!("sha256:{}", "e".repeat(64));
-    let descriptor = format!("sha256:{}", "f".repeat(64));
-    let value = serde_json::to_value(
-        developer(&image, &descriptor).ok_or("valid developer identity rejected")?,
-    )?;
+    let value =
+        serde_json::to_value(developer(&image).ok_or("valid developer identity rejected")?)?;
     assert_eq!(
         value,
-        serde_json::json!({"origin":"developer", "image_id":image, "descriptor_digest":descriptor})
+        serde_json::json!({"origin":"developer", "image_id":image})
     );
+    assert!(developer("e").is_none(), "short image id accepted");
     assert!(
-        developer("e", &descriptor).is_none(),
-        "short image id accepted"
-    );
-    assert!(
-        developer(&image, "sha256:F").is_none(),
-        "malformed descriptor accepted"
+        developer("sha256:EEEE").is_none(),
+        "malformed image id accepted"
     );
     Ok(())
 }

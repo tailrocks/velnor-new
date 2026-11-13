@@ -108,9 +108,7 @@ fn guest_identity(
             })
         }
         WorkerImageOrigin::Registry(_) => None,
-        WorkerImageOrigin::Developer(developer) => {
-            identity::developer(image.runtime_id(), &developer.descriptor_digest)
-        }
+        WorkerImageOrigin::Developer => identity::developer(image.runtime_id()),
     };
     result.ok_or(HostError::ForbiddenMount)
 }

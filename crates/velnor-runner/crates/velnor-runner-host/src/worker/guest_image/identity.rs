@@ -18,7 +18,6 @@ pub(super) enum GuestImageIdentity {
     Developer {
         origin: &'static str,
         image_id: String,
-        descriptor_digest: String,
     },
 }
 
@@ -56,14 +55,10 @@ pub(super) fn registry(input: &RegistryInput<'_>) -> Option<GuestImageIdentity> 
     })
 }
 
-pub(super) fn developer(image_id: &str, descriptor_digest: &str) -> Option<GuestImageIdentity> {
-    if !sha256_digest(image_id) || !sha256_digest(descriptor_digest) {
-        return None;
-    }
-    Some(GuestImageIdentity::Developer {
+pub(super) fn developer(image_id: &str) -> Option<GuestImageIdentity> {
+    sha256_digest(image_id).then(|| GuestImageIdentity::Developer {
         origin: "developer",
         image_id: image_id.to_owned(),
-        descriptor_digest: descriptor_digest.to_owned(),
     })
 }
 

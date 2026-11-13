@@ -88,6 +88,7 @@ pub(crate) async fn retire_pending<E: TransitionEffects>(
 
 fn validate_transition(previous: &HostConfig, next: &HostConfig) -> Result<(), HostError> {
     if previous.docker != next.docker
+        || previous.developer_images() != next.developer_images()
         || previous.connections().iter().any(|current| {
             next.connection(&current.connection_id)
                 .is_some_and(|candidate| candidate != current)
@@ -177,3 +178,7 @@ impl TransitionEffects for JournalEffects<'_> {
         .await
     }
 }
+
+#[cfg(test)]
+#[path = "transitions/tests.rs"]
+mod tests;

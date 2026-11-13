@@ -35,19 +35,13 @@ pub(crate) struct RegistryWorkerImage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WorkerImageOrigin {
     Registry(Box<RegistryWorkerImage>),
-    Developer(DeveloperWorkerImage),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DeveloperWorkerImage {
-    pub(crate) descriptor_digest: String,
-    pub(crate) descriptor_size: u64,
+    Developer,
 }
 
 pub(in crate::launch) struct DeveloperWorkerImages {
     pub(in crate::launch) source_sha: String,
-    pub(in crate::launch) runner: (String, DeveloperWorkerImage),
-    pub(in crate::launch) dind: (String, DeveloperWorkerImage),
+    pub(in crate::launch) runner: String,
+    pub(in crate::launch) dind: String,
 }
 
 impl VerifiedWorkerImages {
@@ -183,18 +177,13 @@ impl VerifiedImageIdentity {
         })
     }
 
-    fn from_developer(
-        (runtime_id, image): (String, DeveloperWorkerImage),
-    ) -> Result<Self, HostError> {
-        if !sha256_digest(&runtime_id)
-            || !sha256_digest(&image.descriptor_digest)
-            || image.descriptor_size == 0
-        {
+    fn from_developer(runtime_id: String) -> Result<Self, HostError> {
+        if !sha256_digest(&runtime_id) {
             return Err(HostError::Identity);
         }
         Ok(Self {
             runtime_id,
-            origin: WorkerImageOrigin::Developer(image),
+            origin: WorkerImageOrigin::Developer,
         })
     }
     pub(crate) fn runtime_id(&self) -> &str {

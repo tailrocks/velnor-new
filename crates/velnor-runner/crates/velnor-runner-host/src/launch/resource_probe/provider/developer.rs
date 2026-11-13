@@ -9,7 +9,7 @@ use crate::config::{DeveloperImages, RunnerPlatform};
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::launch::verified_images::{DeveloperWorkerImage, DeveloperWorkerImages};
+use crate::launch::verified_images::DeveloperWorkerImages;
 use crate::launch::{SelectedEngineContext, VerifiedImageIdentity, VerifiedWorkerImages};
 
 use super::evidence::ProbeImageOrigin;
@@ -88,10 +88,9 @@ pub(in crate::launch::resource_probe) async fn prepare_worker_images(
     images: &DeveloperImages,
 ) -> Result<VerifiedWorkerImages, HostError> {
     let platform = RunnerPlatform::parse(expected.platform()).ok_or(HostError::Identity)?;
-    let (runner, runner_source) =
+    let runner_source =
         worker_image(docker, images.runner(), platform, WorkerImage::Runner).await?;
-    let (dind, dind_source) =
-        worker_image(docker, images.dind(), platform, WorkerImage::Dind).await?;
+    let dind_source = worker_image(docker, images.dind(), platform, WorkerImage::Dind).await?;
     if runner_source != dind_source {
         return Err(HostError::Identity);
     }
@@ -99,8 +98,8 @@ pub(in crate::launch::resource_probe) async fn prepare_worker_images(
         expected,
         DeveloperWorkerImages {
             source_sha: runner_source,
-            runner: (images.runner().to_owned(), runner),
-            dind: (images.dind().to_owned(), dind),
+            runner: images.runner().to_owned(),
+            dind: images.dind().to_owned(),
         },
     )
 }
@@ -109,15 +108,14 @@ pub(super) async fn verify_worker_image(
     docker: &Docker,
     images: &VerifiedWorkerImages,
     identity: &VerifiedImageIdentity,
-    expected: &DeveloperWorkerImage,
     role: WorkerImage,
 ) -> Result<(), ProviderFailure> {
     let platform =
         RunnerPlatform::parse(images.platform()).ok_or(ProviderFailure::ImageIdentity)?;
-    let (observed, source) = worker_image(docker, identity.runtime_id(), platform, role)
+    let source = worker_image(docker, identity.runtime_id(), platform, role)
         .await
         .map_err(|_| ProviderFailure::ImageIdentity)?;
-    if &observed == expected && source == images.source_sha() {
+    if source == images.source_sha() {
         Ok(())
     } else {
         Err(ProviderFailure::ImageIdentity)
@@ -129,23 +127,13 @@ async fn worker_image(
     image_id: &str,
     platform: RunnerPlatform,
     role: WorkerImage,
-) -> Result<(DeveloperWorkerImage, String), HostError> {
+) -> Result<String, HostError> {
     let inspect = inspect(docker, image_id, platform).await?;
     let source = source_label(&inspect)?;
     let config = serde_json::to_value(inspect.config.as_ref().ok_or(HostError::Docker)?)
         .map_err(|_| HostError::Docker)?;
     verify_worker_runtime_config(&config, role, &source)?;
-    let descriptor = inspect.descriptor.as_ref().ok_or(HostError::Docker)?;
-    Ok((
-        DeveloperWorkerImage {
-            descriptor_digest: descriptor.digest.clone().ok_or(HostError::Docker)?,
-            descriptor_size: descriptor
-                .size
-                .and_then(|size| u64::try_from(size).ok())
-                .ok_or(HostError::Docker)?,
-        },
-        source,
-    ))
+    Ok(source)
 }
 
 async fn inspect(

@@ -42,9 +42,8 @@ pub(super) async fn verify_worker_images_for_engine(
             WorkerImageOrigin::Registry(image) => {
                 verify_image(expected.endpoint(), &selected, image).await?;
             }
-            WorkerImageOrigin::Developer(image) => {
-                super::developer::verify_worker_image(docker, images, identity, image, role)
-                    .await?;
+            WorkerImageOrigin::Developer => {
+                super::developer::verify_worker_image(docker, images, identity, role).await?;
             }
         }
     }
