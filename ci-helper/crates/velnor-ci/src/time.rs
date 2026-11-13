@@ -3,7 +3,7 @@
 
 #[must_use]
 pub fn parse_utc(text: &str) -> Option<i64> {
-    let text = text.strip_suffix('Z')?;
+    let (text, offset) = split_offset(text)?;
     let (date, time) = text.split_once('T')?;
     let mut date = date.split('-');
     let year: i64 = date.next()?.parse().ok()?;
@@ -20,7 +20,27 @@ pub fn parse_utc(text: &str) -> Option<i64> {
     if time.next().is_some() || hour > 23 || minute > 59 || second > 60 {
         return None;
     }
-    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second)
+    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second - offset)
+}
+
+fn split_offset(text: &str) -> Option<(&str, i64)> {
+    if let Some(utc) = text.strip_suffix('Z') {
+        return Some((utc, 0));
+    }
+    let at = text.len().checked_sub(6)?;
+    let (head, tail) = text.split_at_checked(at)?;
+    let sign = match tail.as_bytes().first()? {
+        b'+' => 1,
+        b'-' => -1,
+        _ => return None,
+    };
+    let (hours, minutes) = tail[1..].split_once(':')?;
+    let hours: i64 = hours.parse().ok()?;
+    let minutes: i64 = minutes.parse().ok()?;
+    if hours > 23 || minutes > 59 {
+        return None;
+    }
+    Some((head, sign * (hours * 3_600 + minutes * 60)))
 }
 
 #[must_use]
