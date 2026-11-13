@@ -11,6 +11,10 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
 const WRITER: &str = "release";
+const PINNED: (&str, &str) = (
+    "0.1.79",
+    "a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386",
+);
 
 fn read() -> Result<String, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -116,11 +120,19 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
             "velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
         ]
     );
-    let digest = values(gate, "SHA");
-    assert_eq!(digest.len(), 1);
-    assert_eq!(digest[0].len(), 64);
-    assert!(values(gate, "URL")[0].contains("/releases/download/rust-ci-v"));
-    assert!(values(gate, "uses").is_empty());
+    let (version, digest) = PINNED;
+    assert_eq!(values(gate, "SHA"), [digest]);
+    assert_eq!(
+        values(gate, "URL"),
+        [format!(
+            "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v{version}/velnor-ci-linux-x64"
+        )]
+    );
+    assert_eq!(
+        values(gate, "name")[1],
+        format!("Fetch velnor-ci {version}")
+    );
+    assert_eq!(values(gate, "uses"), Vec::<&str>::new());
     assert_eq!(values(gate, "contents"), ["read"]);
     assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
     Ok(())
