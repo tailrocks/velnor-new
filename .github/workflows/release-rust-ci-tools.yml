@@ -9,8 +9,31 @@ concurrency:
   group: ${{ github.workflow_ref }}
   cancel-in-progress: false
 jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Fetch velnor-ci 0.1.79
+        env:
+          SHA: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
+          URL: https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64
+        run: |
+          curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"
+          echo "$SHA  $RUNNER_TEMP/vbin/velnor-ci" > "$RUNNER_TEMP/velnor-ci.sha"
+          shasum -a 256 -c "$RUNNER_TEMP/velnor-ci.sha"
+          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
+          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+      - name: Check that the tagged commit is on the default branch and passed Required
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: velnor-ci release-gate --repo "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
   build:
     name: Build ${{ matrix.suffix }}
+    needs: gate
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
