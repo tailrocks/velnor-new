@@ -85,16 +85,18 @@ fn mismatches(
     paths
         .into_iter()
         .filter_map(|path| {
-            let want = on_disk
-                .get(path)
-                .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
-                .unwrap_or_default();
-            let have = generated.get(path).cloned().unwrap_or_default();
-            (want != have).then(|| {
-                let diff = TextDiff::from_lines(&want, &have)
-                    .unified_diff()
-                    .header(&format!("expected/{path}"), &format!("generated/{path}"))
-                    .to_string();
+            let want = on_disk.get(path);
+            let have = generated.get(path);
+            (want.map(Vec::as_slice) != have.map(String::as_bytes)).then(|| {
+                let want_text = want.map(|b| String::from_utf8_lossy(b).into_owned());
+                let have_text = have.cloned();
+                let diff = TextDiff::from_lines(
+                    want_text.as_deref().unwrap_or_default(),
+                    have_text.as_deref().unwrap_or_default(),
+                )
+                .unified_diff()
+                .header(&format!("expected/{path}"), &format!("generated/{path}"))
+                .to_string();
                 format!("sample {name}\n{diff}")
             })
         })
@@ -126,5 +128,30 @@ fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
         "run `UPDATE_GOLDENS=1 cargo nextest run` and review the diff of expected/\n{}",
         failures.join("\n")
     );
+    Ok(())
+}
+
+#[test]
+fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
+    let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
+    let empty = BTreeMap::from([(path.clone(), String::new())]);
+    assert!(!mismatches("s", &empty, &BTreeMap::new()).is_empty());
+    assert!(
+        !mismatches(
+            "s",
+            &BTreeMap::new(),
+            &BTreeMap::from([(path.clone(), vec![])])
+        )
+        .is_empty()
+    );
+    let text = BTreeMap::from([(path.clone(), "\u{fffd}".to_owned())]);
+    let invalid = BTreeMap::from([(path.clone(), vec![0xff])]);
+    assert!(!mismatches("s", &text, &invalid).is_empty());
+    let same = BTreeMap::from([(path, b"a\n".to_vec())]);
+    let generated = BTreeMap::from([(
+        RepoPath::new(".github/workflows/rust-ci.yml")?,
+        "a\n".to_owned(),
+    )]);
+    assert!(mismatches("s", &generated, &same).is_empty());
     Ok(())
 }
