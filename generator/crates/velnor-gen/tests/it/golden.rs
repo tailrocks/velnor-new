@@ -18,6 +18,19 @@ fn samples() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
 }
 
+fn sample_dirs() -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(samples())? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            return Err(format!("{} is not a real directory", entry.path().display()).into());
+        }
+        dirs.push(entry.path());
+    }
+    dirs.sort();
+    Ok(dirs)
+}
+
 fn files_under(directory: &Path) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dyn Error>> {
     let mut files = BTreeMap::new();
     let mut pending = vec![directory.to_path_buf()];
@@ -106,11 +119,7 @@ fn mismatches(
 #[test]
 fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
     let update = std::env::var_os("UPDATE_GOLDENS").is_some();
-    let mut samples = fs::read_dir(samples())?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()?;
-    samples.retain(|path| path.is_dir());
-    samples.sort();
+    let samples = sample_dirs()?;
     assert!(!samples.is_empty(), "no sample recorded");
     let mut failures = Vec::new();
     for sample in &samples {
@@ -176,8 +185,7 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
         .map(str::to_owned)
         .collect();
     let mut present = BTreeSet::new();
-    for sample in fs::read_dir(samples())? {
-        let sample = sample?.path();
+    for sample in sample_dirs()? {
         for path in expected_files(&load(&sample)?)?.keys() {
             if matches!(
                 Path::new(path.as_str())

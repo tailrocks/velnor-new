@@ -273,6 +273,24 @@ fn recorded_metadata_names_no_checkout_whose_path_needs_url_escaping() -> TestRe
 }
 
 #[test]
+fn a_rejected_recording_removes_nothing_from_the_sample() -> TestResult {
+    let scratch = Scratch::new("record-atomic")?;
+    let sample = scratch.repo().join("generator/samples/demo");
+    write(&sample.join("view/mise.toml"), "kept\n")?;
+    scratch.link("generator/samples/demo/cargo-metadata", &scratch.outside())?;
+    let result = write_sample(&scratch.repo(), "demo", &Recording::default());
+    assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    assert_eq!(fs::read_to_string(sample.join("view/mise.toml"))?, "kept\n");
+    Ok(())
+}
+
+#[test]
+fn a_checkout_at_the_filesystem_root_cannot_be_recorded() {
+    let result = relocate_metadata(Path::new("/"), b"{}");
+    assert!(matches!(result, Err(IoError::Repository(_))), "{result:?}");
+}
+
+#[test]
 fn a_leftover_or_planted_temporary_file_never_redirects_the_write() -> TestResult {
     let scratch = Scratch::new("temporary")?;
     let target = scratch.outside().join("victim.yml");

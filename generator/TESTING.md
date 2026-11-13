@@ -23,13 +23,13 @@ A sample is a folder `samples/<name>/` with `view/` (the files the generator rea
 Record a sample from a real checkout. Never type one by hand.
 
 ```sh
-velnor-gen --root . record-sample <checkout> <name>
+cd generator && cargo run -p velnor-gen -- --root .. record-sample <checkout> <name>
 ```
 
 Add one sample for each behavior a change introduces, not one for each case. After a change of the output, rewrite `expected/` and review its diff in the pull request, because that diff is the review of what users get.
 
 ```sh
-UPDATE_GOLDENS=1 cargo nextest run
+cd generator && UPDATE_GOLDENS=1 cargo nextest run
 ```
 
 The check `generator-samples` lints every `expected/` workflow with `jactionlint`.
