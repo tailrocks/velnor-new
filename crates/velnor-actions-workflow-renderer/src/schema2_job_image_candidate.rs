@@ -174,6 +174,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
 fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let archive = format!("candidate/{ARCHIVE}");
     let record = format!("candidate/{RECORD}");
+    let closure = format!("candidate/{}", native::CLOSURE);
     let result = "$RUNNER_TEMP/job-image-publication.json";
     let steps = vec![
         artifact_id_check_step(artifact_id),
@@ -183,7 +184,7 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         fetch_source_inputs_step(),
         verify_attestations_step(&archive, &record),
         authority::materialize_step(),
-        authority::assemble_evidence_step(&archive, &record, result, artifact_id),
+        authority::assemble_evidence_step(&archive, &record, &closure, result, artifact_id),
         publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
     ];
     let fields = vec![
