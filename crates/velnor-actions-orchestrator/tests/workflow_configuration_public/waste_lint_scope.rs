@@ -16,13 +16,14 @@ use super::waste_verifier_oracle::{VerifierScan, verifier_homes};
 use super::workflow_configuration_fixture;
 
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const UNCOVERED_WORKFLOWS: [&str; 6] = [
+const UNCOVERED_WORKFLOWS: [&str; 7] = [
     "job-image-candidate.yml",
     "product-release-binary.yml",
     "product-release-generator.yml",
     "product-release-images.yml",
     "product-release.yml",
     "qualification.yml",
+    "release-rust-ci-tools.yml",
 ];
 
 fn assert_no_violations(label: &str, jobs: &[JobUse]) {

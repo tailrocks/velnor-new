@@ -114,7 +114,7 @@ none of their workflows; successful generation retires their prior marked files.
 | .github/jactionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
-| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
+| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path except `.github/workflows/release-rust-ci-tools.yml` is replaced or retired on successful generation; that one file is hand-written and preserved |
 | .github/dco.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only when `[dco]` is configured; a file whose first line carries the Velnor generated marker is owned (replaced, or retired when `[dco]` is removed); an unmarked file stays repository-owned and makes generation refuse to overwrite it |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
@@ -263,11 +263,13 @@ the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
-successful generation no longer emits them. The workflows namespace is fully
-generator-owned; manually maintained workflows placed there are retired, and
-no configuration key exempts one. Every workflow is generator output, so the
-`Check generated files` diff covers the whole namespace and no hand-owned
-workflow can hide from it.
+successful generation no longer emits them. The workflows namespace is
+generator-owned with one exception, `.github/workflows/release-rust-ci-tools.yml`,
+the hand-written workflow that releases the Rust CI tools, which generation
+preserves like any unmanaged entry. Every other manually maintained workflow
+placed there is retired, and no configuration key exempts one. Every other
+workflow is generator output, so the `Check generated files` diff covers the
+rest of the namespace and no other hand-owned workflow can hide from it.
 
 All other entries under `.github` are unmanaged repository content. Successful
 generation MUST preserve their file bytes, hidden names, symbolic links and

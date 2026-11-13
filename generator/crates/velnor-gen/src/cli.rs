@@ -8,7 +8,6 @@ use clap::{Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-gen",
-    version,
     about = "Generate the Rust CI workflow of a repository"
 )]
 pub struct Cli {
@@ -29,6 +28,16 @@ pub enum Command {
     Generate,
     #[command(about = "Exit 1 when a generated file differs from what generate would write")]
     Check,
+    #[command(about = "Download SHA256SUMS of a release and write .velnor/rust-ci.lock for it")]
+    PinHelper {
+        #[arg(help = "The release version, MAJOR.MINOR.PATCH")]
+        version: String,
+    },
+    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    CheckTag {
+        #[arg(help = "The release tag")]
+        tag: String,
+    },
     #[command(about = "Record a golden-test sample from a real checkout into generator/samples")]
     RecordSample {
         #[arg(help = "A path inside the checkout to record")]

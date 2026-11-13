@@ -7,6 +7,7 @@ use std::fmt;
 use velnor_model::{RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, ToolPins};
 
 use crate::config::{CONFIG_PATH, parse};
+use crate::lock::{LOCK_PATH, parse_lock};
 
 const MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static("mise.toml"),
@@ -16,6 +17,7 @@ const MISE_CONFIGS: [RepoPath; 2] = [
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DetectError {
     Config(String),
+    Lock(String),
     NoRustRoot,
 }
 
@@ -23,6 +25,7 @@ impl fmt::Display for DetectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Config(message) => write!(f, "{CONFIG_PATH}: {message}"),
+            Self::Lock(message) => write!(f, "{LOCK_PATH}: {message}"),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }
     }
@@ -32,7 +35,8 @@ impl std::error::Error for DetectError {}
 
 #[must_use]
 pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
-    std::iter::once(CONFIG_PATH)
+    [CONFIG_PATH, LOCK_PATH]
+        .into_iter()
         .chain(MISE_CONFIGS)
         .filter(|path| tracked.contains(path))
         .collect()
@@ -73,10 +77,16 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let mise = MISE_CONFIGS
         .into_iter()
         .find(|path| view.files.contains_key(path));
+    let helper = view
+        .files
+        .get(&LOCK_PATH)
+        .map(|bytes| parse_lock(bytes).map_err(|error| DetectError::Lock(error.to_string())))
+        .transpose()?;
     Ok(RepoFacts {
         rust_roots,
         tools: ToolPins { mise },
         config,
+        helper,
     })
 }
 
