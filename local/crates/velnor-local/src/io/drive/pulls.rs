@@ -124,7 +124,8 @@ impl Driver<'_> {
             if self.merge_commit(&base_sha, after).await.is_err() {
                 let _ = self.git(&["merge", "--abort"]).await;
                 println!(
-                    "velnor-local: pull request {number} has a merge conflict, so no pull_request event"
+                    "velnor-local {}: pull request {number} has a merge conflict, so no pull_request event",
+                    self.tag
                 );
                 continue;
             }
