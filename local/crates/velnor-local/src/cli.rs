@@ -24,6 +24,77 @@ pub enum Command {
         about = "Answer the GitHub API calls velnor-ci makes from a local git repository, a file of open pull requests and the cache server's index"
     )]
     ApiStub(ApiStubArgs),
+    #[command(
+        about = "Start runner.server, the cache server, the API stub and linux/arm64 runner containers for one state directory"
+    )]
+    Up(UpArgs),
+    #[command(about = "Stop and remove the containers and the network of one state directory")]
+    Down(DownArgs),
+    #[command(
+        about = "Start an environment, replay a scenario against a copy of a local repository, stop the environment and print a verdict"
+    )]
+    Run(RunArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct EnvironmentArgs {
+    #[arg(
+        long,
+        help = "State directory of this environment: keys, cache, API stub state, events and logs"
+    )]
+    pub dir: PathBuf,
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, at least one")]
+    pub runners: u16,
+    #[arg(
+        long,
+        default_value = "main",
+        help = "Default branch of the repository"
+    )]
+    pub default_branch: String,
+}
+
+#[derive(Debug, Args)]
+pub struct UpArgs {
+    #[command(flatten)]
+    pub environment: EnvironmentArgs,
+    #[arg(long, help = "Local git repository that the API stub reads")]
+    pub repo: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct DownArgs {
+    #[arg(long, help = "State directory of the environment")]
+    pub dir: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    #[arg(help = "Scenario name in --scenarios, or the path of a scenario file")]
+    pub scenario: String,
+    #[command(flatten)]
+    pub environment: EnvironmentArgs,
+    #[arg(
+        long,
+        help = "Local git checkout; it is copied with its uncommitted changes and never modified"
+    )]
+    pub repo: PathBuf,
+    #[arg(
+        long,
+        default_value = "local/scenarios",
+        help = "Directory of scenario files"
+    )]
+    pub scenarios: PathBuf,
+    #[arg(
+        long,
+        help = "Workflow file relative to the repository; every workflow runs when omitted"
+    )]
+    pub workflow: Option<String>,
+    #[arg(
+        long,
+        default_value = "local/repository",
+        help = "Repository as owner/name, as github.repository reports it"
+    )]
+    pub repository: String,
 }
 
 #[derive(Debug, Args)]

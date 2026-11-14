@@ -12,7 +12,7 @@ use super::Body;
 use crate::protocol::Error;
 
 #[derive(Debug)]
-pub(super) struct Proxy {
+pub(crate) struct Proxy {
     upstream: String,
     client: Client<HttpConnector, Body>,
 }
