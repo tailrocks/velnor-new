@@ -334,9 +334,11 @@ impl Driver<'_> {
             started: github["run_started_at"].as_str().and_then(standin::seconds),
             metrics: match collected {
                 Ok(done) if done.status.success() && written => Ok(metrics),
-                Ok(done) if done.status.success() => {
-                    Err(format!("{} wrote no file", metrics.display()))
-                }
+                Ok(done) if done.status.success() => Err(format!(
+                    "{} exited 0 but wrote no {}",
+                    self.args.velnor_ci.display(),
+                    metrics.display()
+                )),
                 Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
                 Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
             },
