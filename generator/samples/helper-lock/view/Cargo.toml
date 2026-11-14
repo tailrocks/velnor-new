@@ -1,9 +1,0 @@
-[package]
-name = "helper-sample"
-version = "0.0.0"
-edition = "2024"
-
-[dependencies]
-
-[lib]
-name = "helper_sample"

@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use velnor_model::RepoPath;
-use velnor_rust::{MetadataError, cargo_files};
+use velnor_rust::{MetadataError, cargo_files, wanted_files};
 
 use crate::expected_files;
 
@@ -22,8 +22,13 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
     expected_files(&view).map_err(Error::Generate)?;
+    let wanted = wanted_files(&view.tracked_paths);
     let recording = Recording {
-        view: view.files,
+        view: view
+            .files
+            .into_iter()
+            .filter(|(path, _)| wanted.contains(path))
+            .collect(),
         manifests: cargo_files(&view.tracked_paths),
         metadata: metadata
             .into_iter()
