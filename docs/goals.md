@@ -8,14 +8,18 @@ The work that gets the project there is tracked in the roadmap, issue [#574](htt
 
 | Code | Rule book |
 |---|---|
-| New work: the Rust generator in `generator/`, the CI helper in `ci-helper/`, the local environment in `local/`, and the workflows the generator writes | This file |
-| Everything else: the existing engine in `crates/`, its configuration in `.velnor/`, the workflows it generates, and the scripts, images and fixtures that support it. That includes this repository's own CI, Rust included, until the generator takes over the Rust part. The engine is maintained, not developed | [`hard-decisions.md`](hard-decisions.md), with the specifications under `proposed/` and the procedures under `implemented/` |
+| New work: the Rust generator in `generator/`, the CI helper in `ci-helper/`, the runner in `crates/velnor-runner`, the local environment in `local/`, and the workflows the generator writes | This file |
+| Everything else: the existing engine in `crates/` (except `crates/velnor-runner`), its configuration in `.velnor/`, the workflows it generates, and the scripts, images and fixtures that support it. That includes this repository's own CI, Rust included, until the generator takes over the Rust part. The engine is maintained, not developed | [`hard-decisions.md`](hard-decisions.md), with the specifications under `proposed/` and the procedures under `implemented/` |
 
 The root `AGENTS.md` applies to all code. Hard decisions bind the existing engine only. Where new work needs the same choice, this file states it.
 
-New work serves Rust projects on GitHub Actions with GitHub-hosted runners. Jobs are executed by GitHub's official runner. Velnor does not implement a runner of its own.
+New work serves Rust projects on GitHub Actions, on GitHub-hosted or self-hosted runners. On GitHub-hosted runners, GitHub's official runner executes the jobs.
 
 ## Vision
+
+Velnor has two parts. The generator (`velnor-gen`, with its helper `velnor-ci`) writes the GitHub Actions workflows a project needs; they run on GitHub-hosted runners or on self-hosted runners. The runner (`velnor-runner`) runs jobs on the project's own machines. `velnor-local` runs a checkout's workflows on a developer's machine without pushing, imitating GitHub, and starts each job through the runner.
+
+The runner is developed as a product in its own right, because local mode and self-hosted runs depend on it.
 
 Velnor reads a Rust project and writes the GitHub Actions workflows that check it. It gives the shortest wait for a trustworthy result that GitHub-hosted runners allow, and the project's owner does not have to tune anything by hand. Velnor analyses the project and decides. Where the project makes a choice in its configuration, Velnor follows it.
 
@@ -68,7 +72,7 @@ These are the numbers behind the promises, for a workflow the generator writes, 
 8. **A pull request builds on its own last run.** A pull request from this repository saves what it built, and only that pull request reads it.
 9. **No logic in YAML.** Every generated `run:` step is one command. A generated workflow uses only actions from a fixed list, each pinned to a full commit SHA. Decisions and loops live in one small helper program, written in Rust and shipped prebuilt.
 10. **Configuration matches reality.** Velnor checks its configuration against the repository, such as the name of the default branch. A mismatch fails the run.
-11. **Local first.** A workflow is verified on the developer's machine with GitHub's official runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
+11. **Local first.** A workflow is verified on the developer's machine with the Velnor runner, a local stand-in for GitHub and a local cache that enforces GitHub's rules. Real GitHub confirms it afterwards.
 12. **Proven on real projects.** A change is tried on the small lab project `tailrocks/velnor-lab` first. This repository runs on its own generator, and that is the final proof. The plan and the required check of a run always come from a released version, never from the change under test.
 13. **Projects stay current.** A new Velnor version reaches a project only after it has passed on the lab project, and it is merged only with the project's own checks green. Velnor's own programs are released only from a tag on a commit of the default branch whose required check passed. The job that publishes checks out nothing and runs no code of the repository. It publishes files that a job without write permission built, after checking their digests.
 14. **Decided by experiment.** A choice between tools or designs is settled by an experiment on the lab project. The question, the measurements and the rule that picks the winner are written down before the first run. Whoever runs the experiment applies the rule and commits the result with its raw data. A choice that would change this file or a hard decision goes to the owner.
