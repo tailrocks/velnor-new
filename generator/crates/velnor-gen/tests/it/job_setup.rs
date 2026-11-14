@@ -117,7 +117,7 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
 }
 
 #[test]
-fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
+fn a_mise_configuration_may_not_load_hook_or_alias_anything() -> TestResult {
     let mise = RepoPath::new("mise.toml")?;
     let nextest = "\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
     for text in [
@@ -125,6 +125,14 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         format!("env_path = [\"bin\"]\n\n[tools]\n{nextest}"),
         format!("[settings]\nenv_file = \".env\"\n\n[tools]\n{nextest}"),
         format!("[hooks]\npostinstall = \"echo\"\n\n[tools]\n{nextest}"),
+        format!(
+            "[tools]\n{}",
+            nextest.replace(
+                "\"0.9.151\"",
+                "{ version = \"0.9.151\", postinstall = \"echo\" }"
+            )
+        ),
+        format!("[tool_alias.rust.versions]\nstable = \"1.98.0\"\n\n[tools]\n{nextest}"),
         format!("[tools]\n{nextest}rust = \"1.84.0\"\n\"core:rust\" = \"1.85.0\"\n"),
         format!(
             "[tools]\n{nextest}rust = [{{ version = \"1.84.1\", os = [\"macos\"] }}, {{ version = \"1.95.0\", os = [\"linux\"] }}]\n"
@@ -140,6 +148,12 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
             "{text}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
+    let mise = RepoPath::new("mise.toml")?;
     for variable in [
         "RUSTDOCFLAGS",
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTDOCFLAGS",

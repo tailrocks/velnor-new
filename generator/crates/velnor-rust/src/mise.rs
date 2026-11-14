@@ -34,11 +34,24 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
         let settings = parsed.get("settings").and_then(Value::as_table);
-        if let Some(name) = ["env", "include", "env_file", "env_path", "hooks"]
-            .into_iter()
-            .find(|key| {
-                parsed.contains_key(*key) || settings.is_some_and(|table| table.contains_key(*key))
-            })
+        let postinstall = parsed
+            .get("tools")
+            .and_then(Value::as_table)
+            .is_some_and(|tools| tools.values().any(runs_a_command));
+        if let Some(name) = [
+            "env",
+            "include",
+            "env_file",
+            "env_path",
+            "hooks",
+            "tool_alias",
+            "alias",
+        ]
+        .into_iter()
+        .find(|key| {
+            parsed.contains_key(*key) || settings.is_some_and(|table| table.contains_key(*key))
+        })
+        .or(postinstall.then_some("tools.postinstall"))
         {
             return Err(DetectError::invalid(
                 config,
@@ -129,6 +142,14 @@ pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
     RUST_TOOLS
         .into_iter()
         .find(|name| pins.tools.contains_key(*name))
+}
+
+fn runs_a_command(value: &Value) -> bool {
+    match value {
+        Value::Table(entry) => entry.contains_key("postinstall"),
+        Value::Array(items) => items.iter().any(runs_a_command),
+        _ => false,
+    }
 }
 
 fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
