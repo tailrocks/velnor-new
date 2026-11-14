@@ -3,11 +3,14 @@
 
 mod api_stub;
 mod cache_server;
+mod checkout;
 mod driver;
 mod environment;
 mod io;
 mod io_edges;
 mod report;
+mod restore;
+mod side;
 mod standin;
 mod store;
 mod support;

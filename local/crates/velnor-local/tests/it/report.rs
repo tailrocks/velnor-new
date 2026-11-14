@@ -60,6 +60,11 @@ fn each_scenario_gets_its_own_environment_and_a_shared_one_is_refused() {
     let mut same = vec![resolved("/state/common"), resolved("/state/common")];
     same[1].0 = "b".to_owned();
     assert!(distinct(&same).is_err_and(|error| error.contains("a and b")));
+    for nested in ["/state/common/cache", "/state"] {
+        let pair = [resolved("/state/common"), resolved(nested)];
+        assert!(distinct(&pair).is_err(), "{nested}");
+    }
+    assert!(distinct(&[resolved("/state/common"), resolved("/state/commons")]).is_ok());
     for shared in [
         &["docs", "docs"][..],
         &["docs", "other/docs.json"],
@@ -111,6 +116,7 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         started: Some(110),
         metrics: Err("no".to_owned()),
         caches: vec!["job lint: key k found no entry".to_owned()],
+        trusted: true,
     };
     let text = verdict("leaf", &[outcome], 100, 4.5);
     assert!(

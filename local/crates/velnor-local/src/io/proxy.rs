@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use http_body_util::BodyExt;
-use hyper::header::UPGRADE;
+use hyper::header::{AUTHORIZATION, HeaderValue, UPGRADE};
 use hyper::{Request, Response, StatusCode, Uri};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -14,6 +14,7 @@ use crate::protocol::Error;
 #[derive(Debug)]
 pub(crate) struct Proxy {
     upstream: String,
+    authorization: Option<String>,
     client: Client<HttpConnector, Body>,
 }
 
@@ -21,7 +22,15 @@ impl Proxy {
     pub(super) fn new(upstream: &str) -> Self {
         Self {
             upstream: upstream.to_owned(),
+            authorization: None,
             client: Client::builder(TokioExecutor::new()).build(HttpConnector::new()),
+        }
+    }
+
+    pub(super) fn authorized(upstream: &str, token: &str) -> Self {
+        Self {
+            authorization: Some(format!("Bearer {token}")),
+            ..Self::new(upstream)
         }
     }
 
@@ -36,6 +45,10 @@ impl Proxy {
         *request.uri_mut() = format!("http://{}{path}", self.upstream)
             .parse::<Uri>()
             .map_err(Error::internal)?;
+        if let Some(authorization) = &self.authorization {
+            let value = HeaderValue::from_str(authorization).map_err(Error::internal)?;
+            request.headers_mut().insert(AUTHORIZATION, value);
+        }
         let downstream = request
             .headers()
             .contains_key(UPGRADE)
