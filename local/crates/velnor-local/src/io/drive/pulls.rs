@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use tokio::fs;
 
 use super::Driver;
-use crate::event::{MergeGroup, PullRequest};
+use crate::event::{Commit, MergeGroup, PullRequest};
 use crate::io::env::request;
 use crate::io::now;
 use crate::rest::rfc3339;
@@ -120,14 +120,25 @@ impl Driver<'_> {
         after: &str,
     ) -> io::Result<Vec<(usize, String)>> {
         let mut moved = Vec::new();
+        let mut rebased = false;
         for at in 0..self.pulls.len() {
             if self.pulls[at].open && self.pulls[at].head == branch {
                 let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
                 self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
                 moved.push((at, before));
+            } else if self.pulls[at].open && self.pulls[at].base == branch {
+                after.clone_into(&mut self.pulls[at].base_sha);
+                let (number, head) = (self.pulls[at].number, self.pulls[at].head_sha.clone());
+                if let Ok(merge) = self.merge_commit(after, &head).await {
+                    let merge_ref = format!("refs/pull/{number}/merge");
+                    self.git(&["update-ref", &merge_ref, &merge]).await?;
+                } else {
+                    let _ = self.git(&["merge", "--abort"]).await;
+                }
+                rebased = true;
             }
         }
-        if !moved.is_empty() {
+        if !moved.is_empty() || rebased {
             self.write_pulls().await?;
         }
         Ok(moved)
@@ -186,9 +197,20 @@ impl Driver<'_> {
             .await?;
         self.git(&["update-ref", &format!("refs/heads/{queue}"), &merge])
             .await?;
+        let log = self
+            .git(&[
+                "log",
+                "-1",
+                "--format=%T%x00%cI%x00%an%x00%ae%x00%cn%x00%ce%x00%B",
+                &merge,
+            ])
+            .await?;
+        let commit = Commit::parse(&log)
+            .ok_or_else(|| io::Error::other(format!("cannot read commit {merge}")))?;
         let payload = self.repository().merge_group(&MergeGroup {
             base: (&base, &base_sha),
             head: (&queue, &merge),
+            commit: &commit,
         });
         self.send(
             "merge_group",

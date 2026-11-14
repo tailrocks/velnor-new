@@ -36,6 +36,11 @@ pub enum Reason {
     UnmatchedExclude(PathGlob),
     HelperLock(LockError),
     InvalidPatch(String),
+    OverlappingRules {
+        non_input: PathGlob,
+        input: PathGlob,
+    },
+    UnknownInputPackage(String),
 }
 
 impl DetectError {
@@ -66,6 +71,14 @@ impl fmt::Display for Reason {
                 write!(f, "exclude entry {glob} matches no tracked Cargo.toml")
             }
             Self::HelperLock(error) => error.fmt(f),
+            Self::OverlappingRules { non_input, input } => write!(
+                f,
+                "non_inputs entry {non_input} overlaps inputs entry {input}; a path cannot select nothing and select packages"
+            ),
+            Self::UnknownInputPackage(package) => write!(
+                f,
+                "inputs names {package}, which is not a package of this repository"
+            ),
             Self::InvalidPatch(key) => {
                 write!(
                     f,
