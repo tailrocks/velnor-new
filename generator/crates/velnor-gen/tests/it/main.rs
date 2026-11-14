@@ -12,6 +12,7 @@ mod inputs;
 mod io;
 mod lock;
 mod lock_affected;
+mod lock_consistency;
 mod patch;
 mod pipeline;
 mod release_workflow;

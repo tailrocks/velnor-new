@@ -250,11 +250,19 @@ impl<'a> Graph<'a> {
             .iter()
             .map(|member| member.name.clone())
             .collect();
+        let edited: BTreeSet<PackageName> = root
+            .members
+            .iter()
+            .filter(|member| {
+                member.manifest != root.manifest && self.changes.paths.contains(&member.manifest)
+            })
+            .map(|member| member.name.clone())
+            .collect();
         let affected = match (
             self.changes.base_files.get(path),
             self.changes.head_files.get(path),
         ) {
-            (Some(base), Some(head)) => lock_affected(base, head, &names).ok(),
+            (Some(base), Some(head)) => lock_affected(base, head, &names, &edited).ok(),
             _ => None,
         };
         match affected {
