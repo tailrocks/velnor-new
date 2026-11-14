@@ -8,6 +8,7 @@ use std::path::Path;
 use tokio::fs;
 
 use super::env::{program, words};
+use crate::event::{Changes, NO_COMMIT};
 use crate::scenario::link_inside;
 
 const GIT_CONFIG: &str =
@@ -99,4 +100,44 @@ pub async fn copy_untracked(
     }
     fs::symlink(&link, &target).await?;
     Ok(None)
+}
+
+pub async fn changes(
+    repo: &Path,
+    branch: &str,
+    before: &str,
+    after: &str,
+) -> io::Result<Vec<Changes>> {
+    let others = format!("--exclude={branch}");
+    let range = format!("{before}..{after}");
+    let args = if before == NO_COMMIT {
+        vec![
+            "rev-list",
+            "--reverse",
+            after,
+            "--not",
+            &others,
+            "--branches",
+        ]
+    } else {
+        vec!["rev-list", "--reverse", &range]
+    };
+    let listed = String::from_utf8_lossy(&git(repo, &args, None).await?).into_owned();
+    let mut commits = Vec::new();
+    for id in listed.lines() {
+        let args = [
+            "diff-tree",
+            "-z",
+            "--no-commit-id",
+            "--name-status",
+            "--no-renames",
+            "--diff-merges=first-parent",
+            "-r",
+            "--root",
+            id,
+        ];
+        let listed = git(repo, &args, None).await?;
+        commits.push(Changes::parse(id, &String::from_utf8_lossy(&listed)));
+    }
+    Ok(commits)
 }

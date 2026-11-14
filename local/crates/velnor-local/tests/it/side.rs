@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_local::event::{PullRequest, Push, Repository};
+use velnor_local::event::{Changes, PullRequest, Push, Repository};
 use velnor_local::scenario::Scenario;
 use velnor_local::side::{Side, fork_heads, push_event, refuse_fork_branches, registered_on};
 use velnor_local::standin::ClientCall;
@@ -33,6 +33,7 @@ fn only_a_pull_request_from_a_fork_is_untrusted_and_it_never_falls_back_to_the_t
         branch: "patch",
         before: SHA,
         after: SHA,
+        commits: &[],
     });
     assert_eq!(Side::of(&pull(true)), Side::Untrusted);
     assert_eq!(Side::of(&pull(false)), Side::Trusted);
@@ -95,6 +96,7 @@ fn a_push_of_a_fork_branch_sends_no_push_event() {
         branch,
         before: SHA,
         after: SHA,
+        commits: &[],
     };
     assert!(push_event(&REPOSITORY, &push("patch"), &forks).is_none());
     let sent = push_event(&REPOSITORY, &push("main"), &forks);
@@ -129,6 +131,7 @@ fn a_job_gets_no_secrets_variables_or_token_from_the_client() {
             "--ref",
             "--sha",
             "--repository",
+            "--no-default-payload",
             "-W"
         ]
     );
@@ -144,4 +147,26 @@ fn a_job_gets_no_secrets_variables_or_token_from_the_client() {
 fn a_fork_pull_request_is_registered_with_both_cache_servers() {
     assert_eq!(registered_on(true), [Side::Trusted, Side::Untrusted]);
     assert_eq!(registered_on(false), [Side::Trusted]);
+}
+
+#[test]
+fn a_push_lists_the_files_each_commit_adds_removes_and_modifies() {
+    let changes = Changes::parse(
+        SHA,
+        "A\0probes/new.txt\0M\0Cargo.lock\0D\0old.txt\0T\0link\0",
+    );
+    assert_eq!(changes.added, ["probes/new.txt"]);
+    assert_eq!(changes.modified, ["Cargo.lock", "link"]);
+    assert_eq!(changes.removed, ["old.txt"]);
+    let commits = [changes];
+    let payload = REPOSITORY.push(&Push {
+        branch: "main",
+        before: "b151fd5994a1e3e2b2ba84bf7d3c3d1e5a5e4f60",
+        after: SHA,
+        commits: &commits,
+    });
+    assert_eq!(payload["commits"][0]["id"], SHA);
+    assert_eq!(payload["commits"][0]["added"][0], "probes/new.txt");
+    assert_eq!(payload["commits"][0]["removed"][0], "old.txt");
+    assert_eq!(payload["commits"][0]["modified"][1], "link");
 }

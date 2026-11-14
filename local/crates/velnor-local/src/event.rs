@@ -7,16 +7,6 @@ pub const SENDER: &str = "velnor-local";
 pub const FORK_OWNER: &str = "velnor-local-fork";
 pub const NO_COMMIT: &str = "0000000000000000000000000000000000000000";
 
-#[must_use]
-pub fn for_standin(mut payload: Value) -> Value {
-    if payload["workflow"].is_string()
-        && let Some(object) = payload.as_object_mut()
-    {
-        object.remove("workflow");
-    }
-    payload
-}
-
 #[derive(Debug)]
 pub struct Repository<'a> {
     pub full_name: &'a str,
@@ -28,6 +18,35 @@ pub struct Push<'a> {
     pub branch: &'a str,
     pub before: &'a str,
     pub after: &'a str,
+    pub commits: &'a [Changes],
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Changes {
+    pub id: String,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub modified: Vec<String>,
+}
+
+impl Changes {
+    #[must_use]
+    pub fn parse(id: &str, name_status: &str) -> Self {
+        let mut changes = Self {
+            id: id.to_owned(),
+            ..Self::default()
+        };
+        let mut fields = name_status.split('\0').filter(|field| !field.is_empty());
+        while let (Some(status), Some(path)) = (fields.next(), fields.next()) {
+            let list = match status {
+                "A" => &mut changes.added,
+                "D" => &mut changes.removed,
+                _ => &mut changes.modified,
+            };
+            list.push(path.to_owned());
+        }
+        changes
+    }
 }
 
 #[derive(Debug)]
@@ -111,7 +130,18 @@ impl Repository<'_> {
         payload["compare"] = json!(format!("{}...{}", push.before, push.after));
         payload["pusher"] = json!({"name": SENDER});
         payload["head_commit"] = json!({"id": push.after});
-        payload["commits"] = json!([{"id": push.after}]);
+        payload["commits"] = push
+            .commits
+            .iter()
+            .map(|commit| {
+                json!({
+                    "id": commit.id,
+                    "added": commit.added,
+                    "removed": commit.removed,
+                    "modified": commit.modified,
+                })
+            })
+            .collect();
         payload
     }
 
