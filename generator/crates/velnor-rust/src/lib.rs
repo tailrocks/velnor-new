@@ -12,6 +12,7 @@ mod lock_affected;
 mod manifest_diff;
 mod metadata;
 mod mise;
+mod owners;
 mod plan;
 mod reads;
 mod roots;
@@ -30,10 +31,11 @@ pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use mise::check_tools;
+pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
 pub use reads::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, format_inputs_lock, locate,
-    normalize, parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
+    rerun_if_changed, unlisted,
 };
 pub use select::{root_slug, select, unknown_paths, unread_packages};
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
