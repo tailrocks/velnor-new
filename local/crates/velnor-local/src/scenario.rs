@@ -264,10 +264,13 @@ pub fn inside(root: &Path, dir: &Path) -> bool {
 pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, PathBuf)>, String> {
     let mut planned: Vec<(String, String, PathBuf)> = Vec::new();
     for scenario in scenarios {
-        let stem = Path::new(scenario).file_stem().map_or_else(
-            || scenario.clone(),
-            |stem| stem.to_string_lossy().into_owned(),
-        );
+        let path = Path::new(scenario);
+        let stem = match (path.extension(), path.file_stem()) {
+            (Some(extension), Some(stem)) if extension == "json" => {
+                stem.to_string_lossy().into_owned()
+            }
+            _ => scenario.clone(),
+        };
         let mut parts = Path::new(&stem).components();
         if !matches!(
             (parts.next(), parts.next()),
@@ -290,6 +293,18 @@ pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, Pat
         planned.push((scenario.clone(), stem, dir));
     }
     Ok(planned)
+}
+
+pub fn distinct(planned: &[(String, String, PathBuf)]) -> Result<(), String> {
+    for (index, (scenario, _, dir)) in planned.iter().enumerate() {
+        if let Some((other, ..)) = planned[..index].iter().find(|(_, _, taken)| taken == dir) {
+            return Err(format!(
+                "{other} and {scenario} would share the environment {}; give each scenario its own directory",
+                dir.display()
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {

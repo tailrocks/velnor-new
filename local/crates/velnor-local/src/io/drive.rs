@@ -19,7 +19,9 @@ use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
-use crate::scenario::{Outcome, Scenario, Step, inside, overlapping, plan, summary, verdict};
+use crate::scenario::{
+    Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
+};
 use crate::standin;
 
 mod outcome;
@@ -40,7 +42,12 @@ struct Driver<'a> {
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
-    let planned = plan(&args.scenario, &args.environment.dir).map_err(io::Error::other)?;
+    let mut planned = plan(&args.scenario, &args.environment.dir).map_err(io::Error::other)?;
+    for (_, _, dir) in &mut planned {
+        fs::create_dir_all(&*dir).await?;
+        *dir = fs::canonicalize(&*dir).await?;
+    }
+    distinct(&planned).map_err(io::Error::other)?;
     let args = Arc::new(args);
     let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
     let closer = Arc::clone(&slots);

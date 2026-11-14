@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use velnor_local::scenario::{Outcome, inside, plan, restores, summary, verdict};
+use velnor_local::scenario::{Outcome, distinct, inside, plan, restores, summary, verdict};
 use velnor_local::standin::Job;
 
 #[test]
@@ -48,6 +48,18 @@ fn each_scenario_gets_its_own_environment_and_a_shared_one_is_refused() {
     let two = plan(&names(&["docs", "x/leaf.json"]), root).unwrap_or_else(|e| unreachable!("{e}"));
     let dirs: Vec<&Path> = two.iter().map(|(_, _, dir)| dir.as_path()).collect();
     assert_eq!(dirs, [Path::new("/state/docs"), Path::new("/state/leaf")]);
+    assert!(distinct(&two).is_ok());
+    let dotted = plan(
+        &names(&["release", "release.v2", "x/release.v3.json"]),
+        root,
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let stems: Vec<&str> = dotted.iter().map(|(_, stem, _)| stem.as_str()).collect();
+    assert_eq!(stems, ["release", "release.v2", "release.v3"]);
+    let resolved = |dir: &str| ("a".to_owned(), "a".to_owned(), PathBuf::from(dir));
+    let mut same = vec![resolved("/state/common"), resolved("/state/common")];
+    same[1].0 = "b".to_owned();
+    assert!(distinct(&same).is_err_and(|error| error.contains("a and b")));
     for shared in [
         &["docs", "docs"][..],
         &["docs", "other/docs.json"],
