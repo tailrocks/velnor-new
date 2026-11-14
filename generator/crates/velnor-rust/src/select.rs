@@ -65,10 +65,24 @@ pub fn root_slug(manifest: &RepoPath) -> String {
     }
 }
 
+const OWN_FOLDERS: [&str; 4] = ["src/", "tests/", "benches/", "examples/"];
+const BUILD_SCRIPT: &str = "build.rs";
+
 struct Node<'a> {
     root: Option<usize>,
     name: &'a PackageName,
     directory: Option<RepoPath>,
+    whole: bool,
+}
+
+impl Node<'_> {
+    fn claims(&self, path: &RepoPath) -> bool {
+        relative(self.directory.as_ref(), path).is_some_and(|rest| {
+            self.whole
+                || rest == BUILD_SCRIPT
+                || OWN_FOLDERS.iter().any(|folder| rest.starts_with(folder))
+        })
+    }
 }
 
 struct Graph<'a> {
@@ -100,6 +114,7 @@ impl<'a> Graph<'a> {
                         root: Some(index),
                         name: &member.name,
                         directory: member.directory.clone(),
+                        whole: member.manifest != root.manifest,
                     },
                 );
             }
@@ -115,6 +130,7 @@ impl<'a> Graph<'a> {
                     root: None,
                     name: &dependency.name,
                     directory: dependency.manifest.parent(),
+                    whole: true,
                 });
             }
         }
@@ -122,31 +138,33 @@ impl<'a> Graph<'a> {
     }
 
     fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>) {
-        let root = innermost(
-            self.roots
-                .iter()
-                .enumerate()
-                .map(|(index, root)| (index, root.manifest.parent())),
-            path,
-        );
-        let package = innermost(
-            self.nodes
-                .iter()
-                .filter(|(_, node)| root.is_some() && node.root == root)
-                .map(|(manifest, node)| (*manifest, node.directory.clone())),
-            path,
-        );
-        match (root, package) {
-            (_, Some(manifest)) => walk.seed(manifest, SelectionReason::Changed(path.clone())),
-            (Some(index), None) => walk.trigger(&self.roots[index], index, path),
-            (None, None) => {
-                for (index, root) in self.roots.iter().enumerate() {
-                    walk.trigger(root, index, path);
+        let root = self
+            .roots
+            .iter()
+            .enumerate()
+            .filter(|(_, root)| contains(root.manifest.parent().as_ref(), path))
+            .max_by_key(|(_, root)| depth(root.manifest.parent().as_ref()))
+            .map(|(index, _)| index);
+        let package = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| root.is_some() && node.root == root && node.claims(path))
+            .max_by_key(|(_, node)| depth(node.directory.as_ref()))
+            .map(|(manifest, _)| *manifest);
+        if let Some(manifest) = package {
+            walk.seed(manifest, SelectionReason::Changed(path.clone()));
+        } else {
+            let area = root.and_then(|index| self.roots[index].manifest.parent());
+            for (index, candidate) in self.roots.iter().enumerate() {
+                if root == Some(index)
+                    || within(area.as_ref(), candidate.manifest.parent().as_ref())
+                {
+                    walk.trigger(candidate, index, path);
                 }
             }
         }
         for (manifest, node) in &self.nodes {
-            if node.root.is_none() && contains(node.directory.as_ref(), path) {
+            if node.root.is_none() && node.claims(path) {
                 walk.seed(manifest, SelectionReason::Changed(path.clone()));
             }
         }
@@ -173,20 +191,24 @@ impl<'a> Walk<'a> {
     }
 }
 
-fn innermost<K>(
-    candidates: impl Iterator<Item = (K, Option<RepoPath>)>,
-    path: &RepoPath,
-) -> Option<K> {
-    candidates
-        .filter(|(_, directory)| contains(directory.as_ref(), path))
-        .max_by_key(|(_, directory)| directory.as_ref().map_or(0, |d| d.as_str().len()))
-        .map(|(key, _)| key)
+fn depth(directory: Option<&RepoPath>) -> usize {
+    directory.map_or(0, |directory| directory.as_str().len())
+}
+
+fn within(area: Option<&RepoPath>, directory: Option<&RepoPath>) -> bool {
+    directory.is_some_and(|directory| contains(area, directory))
+}
+
+fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
+    match directory {
+        None => Some(path.as_str()),
+        Some(directory) => path
+            .as_str()
+            .strip_prefix(directory.as_str())?
+            .strip_prefix('/'),
+    }
 }
 
 fn contains(directory: Option<&RepoPath>, path: &RepoPath) -> bool {
-    directory.is_none_or(|directory| {
-        path.as_str()
-            .strip_prefix(directory.as_str())
-            .is_some_and(|rest| rest.starts_with('/'))
-    })
+    relative(directory, path).is_some()
 }

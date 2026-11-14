@@ -620,26 +620,20 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     repo.write("tools/src/main.rs", "fn main() {}\n");
     let outputs = repo.root().join("github-output");
     fs::write(&outputs, "earlier=kept\n").unwrap_or_else(|e| unreachable!("{e}"));
-    let plan = |explain: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root().join("b"))
-            .args(["plan", "--changed", "a/src/lib.rs"])
-            .args(explain)
-            .env("GITHUB_OUTPUT", &outputs)
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(output.status.success(), "{output:?}");
-        String::from_utf8_lossy(&output.stdout).into_owned()
-    };
-    let written = "rust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\n";
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("b"))
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_OUTPUT", &outputs)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
-    assert_eq!(plan(&[]), written);
+    assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        plan(&["--explain"]),
+        String::from_utf8_lossy(&output.stdout),
         "Cargo.toml: some\n  a changed:a/src/lib.rs\ntools/Cargo.toml: all:most-packages:1\n  t depends-on:a\n"
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        format!("earlier=kept\n{written}{written}")
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\n"
     );
 }

@@ -157,7 +157,7 @@ fn a_change_selects_its_package_and_every_package_that_depends_on_it_in_any_root
             ),
             (
                 &["unknown/file.bin"],
-                vec![unknown("unknown/file.bin"), none.clone()],
+                vec![unknown("unknown/file.bin"), unknown("unknown/file.bin")],
             ),
             (&[], vec![none.clone(), none.clone()]),
             (
@@ -209,7 +209,18 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
         vec![
             (
                 &["Cargo.lock"],
-                vec![unknown("Cargo.lock"), RustSelection::None],
+                vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
+            ),
+            (
+                &["rust-toolchain.toml"],
+                vec![
+                    unknown("rust-toolchain.toml"),
+                    unknown("rust-toolchain.toml"),
+                ],
+            ),
+            (
+                &[".cargo/config.toml"],
+                vec![unknown(".cargo/config.toml"), unknown(".cargo/config.toml")],
             ),
             (
                 &["helper/README.md"],
@@ -240,4 +251,60 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
             ),
         ],
     );
+}
+
+#[test]
+fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
+    let top = RustMember {
+        directory: None,
+        manifest: path("Cargo.toml"),
+        ..member("top", "top", &[])
+    };
+    let facts = facts(vec![
+        (
+            "Cargo.toml",
+            vec![
+                top,
+                member("m1", "m1", &[]),
+                member("m2", "m2", &[]),
+                member("m3", "m3", &[]),
+            ],
+        ),
+        (
+            "inner/Cargo.toml",
+            vec![member("i1", "inner/i1", &[]), member("i2", "inner/i2", &[])],
+        ),
+    ]);
+    let none = RustSelection::None;
+    let mut rows: Vec<(&[&str], Vec<RustSelection>)> = ["src/lib.rs", "build.rs", "tests/it.rs"]
+        .iter()
+        .map(|file| -> (&[&str], Vec<RustSelection>) {
+            (
+                std::slice::from_ref(file),
+                vec![some(&[("top", changed(file))]), none.clone()],
+            )
+        })
+        .collect();
+    rows.extend([
+        (
+            &["Cargo.lock"][..],
+            vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
+        ),
+        (
+            &["README.md"],
+            vec![unknown("README.md"), unknown("README.md")],
+        ),
+        (
+            &["inner/i1/src/lib.rs"],
+            vec![
+                none.clone(),
+                some(&[("i1", changed("inner/i1/src/lib.rs"))]),
+            ],
+        ),
+        (
+            &["inner/README.md"],
+            vec![none.clone(), unknown("inner/README.md")],
+        ),
+    ]);
+    assert_selects(&facts, rows);
 }
