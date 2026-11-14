@@ -35,6 +35,7 @@ pub enum Reason {
     },
     UnmatchedExclude(PathGlob),
     HelperLock(LockError),
+    InvalidPatch(String),
 }
 
 impl DetectError {
@@ -65,6 +66,12 @@ impl fmt::Display for Reason {
                 write!(f, "exclude entry {glob} matches no tracked Cargo.toml")
             }
             Self::HelperLock(error) => error.fmt(f),
+            Self::InvalidPatch(key) => {
+                write!(
+                    f,
+                    "{key} must be a table whose path is a folder in the repository"
+                )
+            }
         }
     }
 }

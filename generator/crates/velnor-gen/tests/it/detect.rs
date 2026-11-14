@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{DependencyKind, MemberDependency, PackageName, PathGlob, RepoView, TargetKind};
+use velnor_model::{DependencyKind, PathGlob, RepoView, TargetKind};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
 use crate::facts::{Shape, TestResult, lib, package, path, repo, root, shape};
@@ -135,17 +135,20 @@ fn path_dependencies_are_edges_between_members_and_between_roots() -> TestResult
             ("generator/Cargo.toml".to_owned(), vec![]),
         ]
     );
-    let member = facts.rust_roots[0]
+    let dependencies: Vec<String> = facts.rust_roots[0]
         .members
         .iter()
-        .find(|member| member.name.as_str() == "velnor-ci")
-        .ok_or("velnor-ci is not a member")?;
+        .filter(|member| member.name.as_str() == "velnor-ci")
+        .flat_map(|member| &member.dependencies)
+        .map(|d| format!("{} {:?} {}", d.name, d.kind, d.manifest))
+        .collect();
     assert_eq!(
-        member.dependencies,
-        vec![MemberDependency {
-            name: PackageName::new("support")?,
-            kind: DependencyKind::Dev,
-        }]
+        dependencies,
+        [
+            "velnor-model Normal generator/crates/velnor-model/Cargo.toml",
+            "support Dev ci-helper/crates/support/Cargo.toml",
+            "fixture Normal fixtures/fixture/Cargo.toml",
+        ]
     );
     Ok(())
 }

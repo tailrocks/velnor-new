@@ -4,16 +4,19 @@
 mod http;
 mod inputs;
 
-use std::fs;
-use std::io::Read;
+use std::collections::BTreeMap;
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
+use velnor_model::ChangeSet;
+use velnor_rust::select;
 
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
-    BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
+    BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand, PlanArgs,
     ReleaseGateArgs,
 };
 use crate::collect::collect;
@@ -22,9 +25,11 @@ use crate::error::CiError;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
+use crate::plan::{explain, outputs};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
+const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
 
@@ -74,7 +79,32 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
+        Command::Plan(args) => run_plan(&args),
     }
+}
+
+fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
+    let facts =
+        velnor_gen::io::read_facts(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
+    let changes = ChangeSet {
+        paths: args.changed.iter().cloned().collect(),
+        base_files: BTreeMap::new(),
+    };
+    let selections = select(&facts, &changes);
+    let outputs = outputs(&selections)?;
+    if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&file)
+            .and_then(|mut handle| handle.write_all(outputs.as_bytes()))
+            .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
+    }
+    Ok(if args.explain {
+        explain(&selections)
+    } else {
+        outputs
+    })
 }
 
 fn current_dir() -> Result<std::path::PathBuf, CiError> {
