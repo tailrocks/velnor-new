@@ -20,22 +20,17 @@ use crate::worker::storage_initialization::{
 
 use super::super::connection::storage::in_transaction;
 use docker::{FixtureDocker, HELPER_ID};
-use seed::{ENGINE_ID, IMAGE_ID, OPERATION_ID, RESERVATION_ID, Recorded, SOURCE_SHA};
+use seed::{ENGINE_ID, IMAGE_ID, PRIVATE_VOLUME};
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-fn recorded(
-    [reservation, intent, create_dispatch, create, abort]: [&str; 5],
-    abort_helper_id: Option<&str>,
-) -> Recorded {
-    Recorded {
-        reservation: reservation.to_owned(),
-        intent: intent.to_owned(),
-        create_dispatch: create_dispatch.to_owned(),
-        create: create.to_owned(),
-        abort: abort.to_owned(),
-        abort_helper_id: abort_helper_id.map(str::to_owned),
-    }
+fn recorded(states: [&str; 5], abort_helper_id: Option<&str>) -> Vec<Option<String>> {
+    states
+        .into_iter()
+        .map(Some)
+        .chain([abort_helper_id])
+        .map(|value| value.map(str::to_owned))
+        .collect()
 }
 
 async fn kill_after_helper_created(
@@ -54,19 +49,19 @@ async fn kill_after_helper_created(
     .validate()?;
     let limits = StorageInitializationLimits::from_reserved_budget(budget, 500, 64 << 20, 16)?;
     let image =
-        StorageInitializationImage::for_test(IMAGE_ID, SOURCE_SHA, RunnerPlatform::LinuxAmd64);
+        StorageInitializationImage::for_test(IMAGE_ID, &"1".repeat(40), RunnerPlatform::LinuxAmd64);
     let metadata = VerifiedCreatedStorageObject::for_test(
-        RESERVATION_ID,
-        OPERATION_ID,
+        2,
+        1,
         ENGINE_ID,
         root,
         StorageRole::EngineMetadata,
-        &seed::volume("-metadata"),
+        &format!("{PRIVATE_VOLUME}-metadata"),
     );
     let initialization = initialize(
         docker,
         scope,
-        RESERVATION_ID,
+        2,
         &image,
         limits,
         Duration::from_secs(30),
@@ -94,8 +89,7 @@ async fn restart_recovers_the_storage_initializer_of_a_killed_daemon() -> TestRe
     let fixture = FixtureDocker::start(&socket)?;
     let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
-    let (scope, root) =
-        seed::reservation_at_storage_initialization(&journal, &seed::binding()?, &docker).await?;
+    let (scope, root) = seed::reservation_at_storage_initialization(&journal, &docker).await?;
     kill_after_helper_created(&docker, &scope, &root, &fixture).await?;
     let stuck = recorded(
         [
@@ -107,13 +101,14 @@ async fn restart_recovers_the_storage_initializer_of_a_killed_daemon() -> TestRe
         ],
         None,
     );
-    assert_eq!(seed::recorded(&journal).await?, stuck);
+    assert_eq!(seed::recorded(&journal, 2).await?, stuck);
+    let pair_stage = seed::recorded(&journal, 3).await?;
 
     fixture.take_requests();
     recover_interrupted(&docker, &scope).await?;
     assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert!(fixture.helper_present());
-    assert_eq!(seed::recorded(&journal).await?, stuck);
+    assert_eq!(seed::recorded(&journal, 2).await?, stuck);
 
     restart(&journal, &docker, &scope).await?;
     let requests = fixture.take_requests();
@@ -130,10 +125,11 @@ async fn restart_recovers_the_storage_initializer_of_a_killed_daemon() -> TestRe
         ],
         Some(HELPER_ID),
     );
-    assert_eq!(seed::recorded(&journal).await?, recovered);
+    assert_eq!(seed::recorded(&journal, 2).await?, recovered);
+    assert_eq!(seed::recorded(&journal, 3).await?, pair_stage);
 
     restart(&journal, &docker, &scope).await?;
     assert_eq!(fixture.take_requests(), Vec::<String>::new());
-    assert_eq!(seed::recorded(&journal).await?, recovered);
+    assert_eq!(seed::recorded(&journal, 2).await?, recovered);
     Ok(())
 }
