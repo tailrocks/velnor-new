@@ -106,6 +106,24 @@ impl Index {
         })
     }
 
+    fn covered(&self) -> Vec<bool> {
+        let mut covered = vec![false; self.keys.len()];
+        let mut pending: Vec<usize> = (0..self.keys.len())
+            .filter(|index| matches!(self.keys[*index], Key::Member(_)))
+            .collect();
+        while let Some(index) = pending.pop() {
+            if std::mem::replace(&mut covered[index], true) {
+                continue;
+            }
+            pending.extend(
+                self.dependencies[index]
+                    .iter()
+                    .filter_map(|dependency| self.by_key.get(dependency)),
+            );
+        }
+        covered
+    }
+
     fn without_source(&self) -> BTreeSet<&Key> {
         self.keys.iter().filter(|key| !key.has_source()).collect()
     }
@@ -185,11 +203,17 @@ fn reached(
         .iter()
         .map(|member| (member.as_str(), member))
         .collect();
+    let covered = head.covered();
+    if let Some(origin) = changed.iter().find(|origin| !covered[**origin]) {
+        return Err(LockError::new(format!(
+            "{} changed in the lockfile and no member reaches it",
+            head.keys[*origin].name()
+        )));
+    }
     let mut found = BTreeMap::new();
+    let mut seen = BTreeSet::new();
     for origin in changed {
         let cause = head.keys[*origin].name();
-        let mut reaches_member = false;
-        let mut seen = BTreeSet::new();
         let mut pending = vec![*origin];
         while let Some(index) = pending.pop() {
             if !seen.insert(index) {
@@ -198,17 +222,9 @@ fn reached(
             if let Key::Member(name) = &head.keys[index]
                 && let Some(member) = by_name.get(name.as_str())
             {
-                reaches_member = true;
-                found
-                    .entry((*member).clone())
-                    .or_insert_with(|| cause.to_owned());
+                found.insert((*member).clone(), cause.to_owned());
             }
             pending.extend(&head.dependents[index]);
-        }
-        if !reaches_member {
-            return Err(LockError::new(format!(
-                "{cause} changed in the lockfile and no member reaches it"
-            )));
         }
     }
     Ok(found)
