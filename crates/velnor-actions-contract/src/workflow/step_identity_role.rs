@@ -160,6 +160,8 @@ pub enum StepRole {
 
     StateSealUpload,
 
+    StateSealArtifactGuard,
+
     StateSealDownload,
 
     StateSealSubject,

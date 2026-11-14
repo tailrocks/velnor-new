@@ -206,7 +206,12 @@ pub(super) fn caller(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
                 Yaml::str("${{ steps.receipt.outputs.artifact-id }}"),
             )]),
         ),
-        ("steps", Yaml::Seq(steps_list)),
+        (
+            "steps",
+            Yaml::Seq(crate::schema2::features::guard_artifact_downloads(
+                steps_list,
+            )),
+        ),
     ]);
     let signer = map(&[
         ("needs", seq(&["qualify-images"])),
@@ -257,20 +262,6 @@ pub(super) fn caller(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
 }
 
 pub(super) fn signer() -> Yaml {
-    let validate = map(&[
-        ("name", Yaml::str("Validate receipt artifact identity")),
-        (
-            "env",
-            map(&[(
-                "RECEIPT_ARTIFACT_ID",
-                Yaml::str("${{ inputs.receipt_artifact_id }}"),
-            )]),
-        ),
-        (
-            "run",
-            Yaml::str("set -eu\ncase \"$RECEIPT_ARTIFACT_ID\" in ''|*[!0-9]*|0) exit 1;; esac"),
-        ),
-    ]);
     let download = action(
         "Download exact qualification receipt",
         steps::DOWNLOAD_ARTIFACT_USES,
@@ -299,7 +290,12 @@ pub(super) fn signer() -> Yaml {
                 ("id-token", "write"),
             ]),
         ),
-        ("steps", Yaml::Seq(vec![validate, download, attest])),
+        (
+            "steps",
+            Yaml::Seq(crate::schema2::features::guard_artifact_downloads(vec![
+                download, attest,
+            ])),
+        ),
     ]);
     map(&[
         ("name", Yaml::str("Attest runner image qualification")),

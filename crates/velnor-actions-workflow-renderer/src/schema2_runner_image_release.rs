@@ -227,7 +227,10 @@ fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
         ),
         ("needs", seq(&["discover-producer", "discover-artifacts"])),
         ("outputs", publish_outputs()),
-        ("steps", Yaml::Seq(list)),
+        (
+            "steps",
+            Yaml::Seq(crate::schema2::features::guard_artifact_downloads(list)),
+        ),
     ]))
 }
 

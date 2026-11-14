@@ -131,7 +131,7 @@ impl StepRole {
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::TofuProvidersPrepare | Self::NonInputGuard => {
+            Self::TofuProvidersPrepare | Self::NonInputGuard | Self::StateSealArtifactGuard => {
                 matches!(kind, StepKind::Shell { .. })
             }
             Self::PrivateTokenMint => matches!(kind,

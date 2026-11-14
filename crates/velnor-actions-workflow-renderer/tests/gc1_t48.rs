@@ -298,6 +298,8 @@ pub(crate) use gc1_t48_argv::*;
 mod gc1_t48_runner_family;
 #[path = "gc1_t48_runner_preview.rs"]
 mod gc1_t48_runner_preview;
+#[path = "runner_image_artifact_guard_public.rs"]
+mod runner_image_artifact_guard_public;
 
 #[path = "gc1_t48_release_supersession.rs"]
 mod gc1_t48_release_supersession;

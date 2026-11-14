@@ -20,7 +20,8 @@ const PRODUCER_SEQUENCE: [StepRole; 7] = [
     StepRole::StateProduced,
 ];
 
-const SEAL_SEQUENCE: [StepRole; 8] = [
+const SEAL_SEQUENCE: [StepRole; 9] = [
+    StepRole::StateSealArtifactGuard,
     StepRole::StateSealDownload,
     StepRole::StateSealSubject,
     StepRole::StateSealTip,

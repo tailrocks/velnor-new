@@ -40,7 +40,10 @@ pub(super) fn release_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError
                 ("contents", "write"),
             ]),
         ),
-        ("steps", Yaml::Seq(list)),
+        (
+            "steps",
+            Yaml::Seq(crate::schema2::features::guard_artifact_downloads(list)),
+        ),
     ]))
 }
 
