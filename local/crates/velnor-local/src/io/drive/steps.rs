@@ -38,10 +38,11 @@ impl Driver<'_> {
         ];
         let mut cargo = Command::new("cargo");
         cargo.args(update).arg(&manifest);
-        for config in [".cargo/config.toml", ".cargo/config"] {
+        for config in [".cargo/config", ".cargo/config.toml"] {
             let path = self.repo.join(config);
             if fs::metadata(&path).await.is_ok() {
                 cargo.arg("--config").arg(path);
+                break;
             }
         }
         let updated = cargo
