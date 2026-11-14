@@ -132,7 +132,7 @@ pub(super) fn connect_with_store<R, F>(
 ) -> Result<(), ConnectError>
 where
     R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+    F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
 {
     connect_with_store_and_reactivate(input, service, request, store, |state, binding| {
         crate::readiness_probe::reactivate_connection_until(
@@ -152,7 +152,7 @@ pub(super) fn connect_with_store_and_reactivate<R, F, G>(
 ) -> Result<(), ConnectError>
 where
     R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+    F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
     G: FnOnce(&Path, &RepositoryConnection) -> Result<bool, HostError>,
 {
     let connection_id =

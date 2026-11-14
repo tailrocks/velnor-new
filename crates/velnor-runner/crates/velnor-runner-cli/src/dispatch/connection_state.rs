@@ -46,7 +46,7 @@ pub(super) fn store_token<R, F>(
 ) -> Result<(), ConnectError>
 where
     R: Read,
-    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+    F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
 {
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
     store(credential_ref.service(), credential_ref.account(), &secret).map_err(ConnectError::Secret)
