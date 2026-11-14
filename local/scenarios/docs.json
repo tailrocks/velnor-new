@@ -1,0 +1,8 @@
+{
+  "description": "A push to the default branch saves the caches. Then a pull request appends a line to docs/notes.md and changes nothing that Rust jobs read.",
+  "steps": [
+    {"push": "{default}"},
+    {"commit": {"branch": "docs", "append": "docs/notes.md", "line": "- velnor-local docs"}},
+    {"open_pull_request": {"head": "docs", "base": "{default}"}}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "description": "A push to the default branch saves the caches. Then a pull request bumps fnv, the one external crate only tool uses, to its next patch version.",
+  "steps": [
+    {"push": "{default}"},
+    {"update_lock": {"branch": "lock", "package": "fnv"}},
+    {"open_pull_request": {"head": "lock", "base": "{default}"}}
+  ]
+}

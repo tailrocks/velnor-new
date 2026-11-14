@@ -1,0 +1,15 @@
+{
+  "description": "Merge a pull request into the default branch, open a pull request, push to it again, open a second pull request, close the first.",
+  "steps": [
+    {"commit": {"branch": "first", "append": "docs/notes.md", "line": "- velnor-local story first"}},
+    {"open_pull_request": {"head": "first", "base": "{default}"}},
+    {"merge_pull_request": "first"},
+    {"commit": {"branch": "second", "append": "app/src/main.rs", "line": "// velnor-local story second"}},
+    {"open_pull_request": {"head": "second", "base": "{default}"}},
+    {"commit": {"branch": "second", "append": "app/src/main.rs", "line": "// velnor-local story second, again"}},
+    {"push": "second"},
+    {"commit": {"branch": "third", "append": "core/src/lib.rs", "line": "// velnor-local story third"}},
+    {"open_pull_request": {"head": "third", "base": "{default}"}},
+    {"close_pull_request": "second"}
+  ]
+}

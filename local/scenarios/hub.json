@@ -1,0 +1,8 @@
+{
+  "description": "A push to the default branch saves the caches. Then a pull request appends a comment line to core/src/lib.rs, the crate that lib and app depend on.",
+  "steps": [
+    {"push": "{default}"},
+    {"commit": {"branch": "hub", "append": "core/src/lib.rs", "line": "// velnor-local hub"}},
+    {"open_pull_request": {"head": "hub", "base": "{default}"}}
+  ]
+}
