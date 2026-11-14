@@ -51,10 +51,33 @@ pub struct PlanArgs {
         help = "Print each selected package with its reason, and the trigger when a root selects everything, instead of the outputs"
     )]
     pub explain: bool,
+    #[arg(
+        long = "base-file",
+        value_name = "PATH=FILE",
+        value_parser = base_file,
+        help = "The text a changed Cargo.lock or root Cargo.toml had before the change: the repository path, an equals sign, and a file holding the old text. Without it a changed Cargo.lock or root Cargo.toml selects everything. Repeat for each file"
+    )]
+    pub base_files: Vec<BaseFile>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BaseFile {
+    pub path: RepoPath,
+    pub file: PathBuf,
 }
 
 fn repo_path(text: &str) -> Result<RepoPath, InvalidId> {
     RepoPath::new(text)
+}
+
+fn base_file(text: &str) -> Result<BaseFile, String> {
+    let (path, file) = text
+        .split_once('=')
+        .ok_or_else(|| "expected PATH=FILE".to_owned())?;
+    Ok(BaseFile {
+        path: RepoPath::new(path).map_err(|e| e.to_string())?,
+        file: PathBuf::from(file),
+    })
 }
 
 #[derive(Debug, Args)]

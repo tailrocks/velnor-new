@@ -25,6 +25,12 @@ impl fmt::Display for LockError {
 
 impl std::error::Error for LockError {}
 
+impl LockError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Lock {
