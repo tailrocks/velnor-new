@@ -18,7 +18,7 @@
 - Generated-output provenance: there is no dedicated version-preparation CLI
   subcommand. Supported `velnor-actions generate` writes the root `.github`
   tree; `velnor-actions generate --output-dir PATH` writes a preview under
-  `PATH/.github`. The [T04 golden record](../proposed/opentofu-goldens/README.md#product-version-prep-2026-10-09)
+  `PATH/.github`. The [T04 golden record](../../fixtures/opentofu-goldens/README.md#product-version-prep-v015-2026-10-09)
   documents the capture/check workflow and parity-golden evidence for this
   preparation. Those are generation-specific records, not a passing full
   repository gate or release acceptance.

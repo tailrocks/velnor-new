@@ -3,11 +3,19 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::fs;
 
 use serde_json::json;
-use velnor_actions_orchestrator::{PlanOutputMode, plan_outputs};
+use velnor_actions_orchestrator::{
+    PlanOutputMode, plan_outputs, prepare, render_staged_tree_with, write_request_parts,
+};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::bun_planning_fixture::{BunPlanningRepo, ChangedMember, make_bun_planning_repo};
+use super::support::rendered_job_block;
+
+use super::bun_planning_fixture::{
+    BunPlanningRepo, ChangedMember, make_bun_planning_repo, make_bun_planning_repo_with_scopes,
+};
 use super::scoped_workspace::{PlanRun, merge_verdict, miss_reasons, plan_request, verdict_passed};
 
 const REQUIRED_LOGICAL_JOBS: [&str; 4] = [
@@ -110,4 +118,124 @@ fn expected_jobs(ui: &str, web: &str) -> BTreeMap<String, String> {
         expected.insert(logical_id.to_owned(), disposition.to_owned());
     }
     expected
+}
+
+#[test]
+fn fork_private_registry_admission_follows_selected_bun_work() -> Result<(), Box<dyn Error>> {
+    for (changed, private, fork, expected) in [
+        (ChangedMember::Web, true, true, None),
+        (ChangedMember::Web, true, false, Some("run")),
+        (ChangedMember::Web, false, true, Some("run")),
+        (ChangedMember::Docs, true, true, Some("not_affected")),
+    ] {
+        let repo = make_bun_planning_repo_with_scopes(changed, private)?;
+        let rendered = render_staged_tree_with(&prepare(repo.repo.path())?, None)?;
+        let workflow = rendered.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+        let job = rendered_job_block(workflow, "bun-fixture-web")?;
+        assert_eq!(
+            job.contains("Install dependencies (registry phase)"),
+            private
+        );
+        assert_eq!(job.contains("packages: read"), private);
+        if !private {
+            assert!(!job.contains("packages:"));
+        }
+        assert!(
+            job.contains("!contains(needs.plan.outputs.not_affected_jobs, ',bun-fixture-web,')")
+        );
+        let request_dir = tempfile::tempdir()?;
+        let request_path = request_dir.path().join("plan-v1-request.json");
+        let payload = json!({"pull_request": {"base": {"sha": repo.base}, "head": {"sha": repo.head, "repo": {"fork": fork}}}});
+        write_request_parts(
+            &request_path,
+            "pull_request",
+            &payload.to_string(),
+            None,
+            None,
+            request_dir.path(),
+        )?;
+        let mut request: serde_json::Value = serde_json::from_slice(&fs::read(request_path)?)?;
+        assert_eq!(request["event"], if fork { "fork" } else { "pull_request" });
+        request["root"] = json!(repo.repo.path());
+        request["run_key"] = json!("r190003-a1");
+        match expected {
+            None => {
+                let error = plan_request(&request)
+                    .err()
+                    .ok_or("fork private registry plan unexpectedly succeeded")?;
+                assert!(
+                    error
+                        .to_string()
+                        .contains("private_npm_registry_forbidden_for_fork"),
+                    "{error}"
+                );
+            }
+            Some(disposition) => {
+                let run = plan_request(&request).map_err(|err| {
+                    format!("case private={private} fork={fork} expected={disposition}: {err}")
+                })?;
+                assert_eq!(
+                    run.jobs()?.get("bun-fixture-web").map(String::as_str),
+                    Some(disposition)
+                );
+                if matches!(changed, ChangedMember::Docs) {
+                    assert!(
+                        run.jobs()?
+                            .iter()
+                            .filter(|(id, _)| id.starts_with("bun-"))
+                            .all(|(_, value)| value == "not_affected")
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn private_suite_only_is_rejected_for_selected_fork_work() -> Result<(), Box<dyn Error>> {
+    let repo = make_bun_planning_repo_with_scopes(ChangedMember::SuiteOnly, true)?;
+    let rendered = render_staged_tree_with(&prepare(repo.repo.path())?, None)?;
+    let workflow = rendered.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    assert!(rendered_job_block(workflow, "bun-fixture-web").is_err());
+    let suite = rendered_job_block(workflow, "bun-fixture-web--browser")?;
+    assert!(suite.contains("Install dependencies (registry phase)"));
+    assert!(suite.contains("packages: read"));
+
+    for fork in [false, true] {
+        let request_dir = tempfile::tempdir()?;
+        let path = request_dir.path().join("plan-v1-request.json");
+        let payload = json!({"pull_request": {"base": {"sha": repo.base}, "head": {"sha": repo.head, "repo": {"fork": fork}}}});
+        write_request_parts(
+            &path,
+            "pull_request",
+            &payload.to_string(),
+            None,
+            None,
+            request_dir.path(),
+        )?;
+        let mut request: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
+        assert_eq!(request["event"], if fork { "fork" } else { "pull_request" });
+        request["root"] = json!(repo.repo.path());
+        request["run_key"] = json!("r190004-a1");
+        if fork {
+            let error = plan_request(&request)
+                .err()
+                .ok_or("fork private suite plan unexpectedly succeeded")?;
+            assert!(
+                error
+                    .to_string()
+                    .contains("private_npm_registry_forbidden_for_fork"),
+                "{error}"
+            );
+        } else {
+            let jobs = plan_request(&request)?.jobs()?;
+            assert!(!jobs.contains_key("bun-fixture-web"));
+            assert_eq!(
+                jobs.get("bun-fixture-web--browser").map(String::as_str),
+                Some("run")
+            );
+        }
+    }
+    Ok(())
 }

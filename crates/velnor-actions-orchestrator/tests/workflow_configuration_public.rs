@@ -15,6 +15,8 @@ mod bun_assets_routing_support;
 mod bun_dispositions;
 #[path = "workflow_configuration_public/bun_expansion.rs"]
 mod bun_expansion;
+#[path = "workflow_configuration_public/bun_fork_fence.rs"]
+mod bun_fork_fence;
 #[path = "workflow_configuration_public/bun_lifecycle_scope.rs"]
 mod bun_lifecycle_scope;
 #[path = "workflow_configuration_public/bun_malformed.rs"]
