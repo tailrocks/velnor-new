@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::ids::{DownloadUrl, HelperVersion, InvalidId, JobId, RepoPath, RunnerLabel, Sha256};
+use crate::ids::{
+    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -45,6 +47,10 @@ pub enum Access {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Job {
     pub id: JobId,
+    pub name: Option<String>,
+    pub comment: Option<String>,
+    pub needs: Vec<JobId>,
+    pub when: When,
     pub runs_on: RunnerLabel,
     pub timeout_minutes: u16,
     pub steps: Vec<Step>,
@@ -53,15 +59,28 @@ pub struct Job {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
     pub kind: StepKind,
+    pub directory: Option<RepoPath>,
+    pub when: When,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum When {
+    #[default]
+    Success,
+    NotCancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
     Checkout { depth: u32 },
+    InstallTools,
+    RustComponents(Vec<String>),
+    RustTargets(Vec<String>),
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,
     FetchHelper(HelperRelease),
+    FailWhenANeedFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,5 +157,31 @@ impl Platform {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CargoCommand {
-    FmtCheck { manifest: RepoPath },
+    FmtCheck,
+    Clippy { extra: Vec<String> },
+    CheckAlone { package: PackageName },
+    NextestRun { filter: FilterRef },
+    NextestArchive { file: RepoPath },
+    Doctest,
+    Doc,
+    Deny,
+    Machete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterRef {
+    All,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shape {
+    OneJob,
+    LintAndTest,
+    BuildThenGroups,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShapeDecision {
+    pub shape: Shape,
+    pub reason: String,
 }

@@ -38,6 +38,7 @@ fn target(
         name: TargetName::new(name)?,
         kinds,
         tests,
+        doctest: true,
         source: source.map(path).transpose()?,
         requires_features: name == "derive",
     })

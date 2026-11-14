@@ -68,6 +68,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         config: RustCiConfig::default(),
         helper: None,
         compile_inputs: BTreeMap::new(),
+        timings: BTreeMap::new(),
         unowned,
     }
 }

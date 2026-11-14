@@ -8,6 +8,7 @@ use velnor_model::{AllTrigger, PackageName, RepoPath, RustCiConfig, WORKFLOW_PAT
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config};
+use crate::timings::TIMINGS_PATH;
 
 pub(crate) enum Class<'c> {
     Nothing,
@@ -68,6 +69,7 @@ fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
         || name == CARGO_LOCK.as_str()
         || *path == CONFIG_PATH
         || *path == INPUTS_LOCK
+        || *path == TIMINGS_PATH
     {
         Some(AllTrigger::Global(path.clone()))
     } else {

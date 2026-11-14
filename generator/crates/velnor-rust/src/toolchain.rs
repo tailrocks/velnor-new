@@ -92,10 +92,32 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
     Ok(Toolchain {
         channel,
         path,
-        components: strings(section, "components", "toolchain.components")?,
-        targets: strings(section, "targets", "toolchain.targets")?,
+        components: names(
+            strings(section, "components", "toolchain.components")?,
+            "toolchain.components",
+        )?,
+        targets: names(
+            strings(section, "targets", "toolchain.targets")?,
+            "toolchain.targets",
+        )?,
         profile,
     })
+}
+
+fn names(items: Vec<String>, key: &'static str) -> Result<Vec<String>, Reason> {
+    match items.iter().find(|name| {
+        name.is_empty()
+            || name.starts_with('-')
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    }) {
+        Some(bad) => Err(Reason::InvalidValue {
+            key,
+            value: bad.clone(),
+        }),
+        None => Ok(items),
+    }
 }
 
 fn text(value: &Value, key: &'static str) -> Result<String, Reason> {

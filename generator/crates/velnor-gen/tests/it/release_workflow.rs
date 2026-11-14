@@ -110,6 +110,7 @@ fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
                 runs_on: String::new(),
                 timeout_minutes: 1,
                 steps: steps(lines),
+                ..RenderedJob::default()
             })
             .collect(),
     };
