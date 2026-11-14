@@ -5,7 +5,7 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::{audit, own_units, own_units_in, unit, workspace_below_the_root};
+use super::{audit, own_units, own_units_in, placed, unit, workspace_below_the_root};
 use crate::io::Repo;
 
 const DEBUG: &str = "rust/target/debug";
@@ -145,4 +145,69 @@ fn a_configuration_known_only_from_fingerprints_without_dep_info_makes_the_audit
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     refuses(&audit(&repo, &["--write"]), &format!("/{triple} for app"));
+}
+
+fn build_dependency_on_lib(repo: &Repo) {
+    repo.write(
+        "rust/app/Cargo.toml",
+        "[package]\nname = \"app\"\nedition = \"2024\"\n\n[build-dependencies]\nlib = { path = \"../lib\" }\n",
+    );
+    repo.git(&["add", "--all"]);
+}
+
+#[test]
+fn the_host_build_script_run_of_a_build_dependency_member_is_required_in_the_host_directory() {
+    let repo = workspace_below_the_root();
+    build_dependency_on_lib(&repo);
+    let triple = "rust/target/x86_64-unknown-linux-gnu/debug";
+    own_units_in(&repo, DEBUG, triple, &[]);
+    unit(
+        &repo,
+        &format!("{DEBUG}/deps/lib-f0000000000000b1.d"),
+        "out.d: lib/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{DEBUG}/.fingerprint/lib-f0000000000000b1/lib-lib"),
+        "",
+    );
+    let target_only = audit(&repo, &["--write"]);
+    refuses(
+        &target_only,
+        &format!(
+            "/{triple} for lib (rust/lib/Cargo.toml) target build-script-build (rust/lib/build.rs, 0 of 1 units);"
+        ),
+    );
+    assert!(!written(&repo));
+
+    unit(
+        &repo,
+        &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
+        "",
+    );
+    let host_run = audit(&repo, &["--write"]);
+    assert!(host_run.status.success(), "{host_run:?}");
+}
+
+#[test]
+fn an_orphan_unit_of_a_member_in_a_target_directory_makes_that_directory_a_candidate() {
+    let repo = workspace_below_the_root();
+    let triple = "rust/target/x86_64-unknown-linux-gnu/debug";
+    placed(&repo, triple);
+    for (configuration, package, hash) in [
+        (DEBUG, "app", "f0000000000000c1"),
+        (DEBUG, "lib", "f0000000000000c2"),
+        (triple, "lib", "f0000000000000c3"),
+    ] {
+        unit(
+            &repo,
+            &format!("{configuration}/.fingerprint/{package}-{hash}/lib-{package}"),
+            "",
+        );
+    }
+    refuses(
+        &audit(&repo, &["--write"]),
+        &format!("/{triple} for app (rust/app/Cargo.toml)"),
+    );
+    assert!(!written(&repo));
 }
