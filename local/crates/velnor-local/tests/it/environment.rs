@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use velnor_local::cli::EnvironmentArgs;
 use velnor_local::event::{PullRequest, Push, Repository};
 use velnor_local::io::env::{Engine, Environment};
-use velnor_local::io::{guarded, open};
+use velnor_local::io::{guarded, open, restore_only};
 
 use crate::support::temp_dir;
 
@@ -212,6 +212,8 @@ async fn the_untrusted_side_has_its_own_network_and_keys_and_no_way_to_the_stub(
         let untrusted_role = name.starts_with(&format!("{trusted}-fork-"));
         let network = if untrusted_role { &untrusted } else { &trusted };
         assert_eq!(after(call, "--network"), [network.as_str()], "{name}");
+        let restoring = call.iter().any(|arg| arg == "--restore-only");
+        assert_eq!(restoring, name.ends_with("-fork-cache"), "{name}");
         for published in after(call, "-p") {
             assert_eq!(published, "127.0.0.1::81", "{name}");
         }
@@ -325,6 +327,41 @@ async fn the_open_port_refuses_pull_request_registration() {
             )
             .unwrap_or_else(|e| unreachable!("{e}"));
         let response = open(request, handled).await;
+        assert_eq!(response.status().as_u16(), status, "{method} {path}");
+    }
+}
+
+#[tokio::test]
+async fn the_untrusted_cache_server_serves_restores_and_refuses_every_write() {
+    use http_body_util::BodyExt;
+    let handled = |_| async {
+        let body: velnor_local::io::Body = http_body_util::Empty::new()
+            .map_err(|never| match never {})
+            .boxed_unsync();
+        let mut response = hyper::Response::new(body);
+        *response.status_mut() = hyper::StatusCode::NO_CONTENT;
+        response
+    };
+    let twirp = "/twirp/github.actions.results.api.v1.CacheService/";
+    for (method, path, status) in [
+        ("POST", format!("{twirp}GetCacheEntryDownloadURL"), 204),
+        ("GET", "/velnor-cache/archives/abc".to_owned(), 204),
+        ("GET", "/_apis/v1/Message".to_owned(), 204),
+        ("POST", format!("{twirp}CreateCacheEntry"), 403),
+        ("POST", format!("{twirp}FinalizeCacheEntryUpload"), 403),
+        ("PUT", "/velnor-cache/archives/abc".to_owned(), 403),
+        ("PUT", "/_velnor/pull-requests/3".to_owned(), 403),
+    ] {
+        let request = hyper::Request::builder()
+            .method(method)
+            .uri(&path)
+            .body(
+                http_body_util::Empty::new()
+                    .map_err(|never| match never {})
+                    .boxed_unsync(),
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let response = restore_only(request, handled).await;
         assert_eq!(response.status().as_u16(), status, "{method} {path}");
     }
 }

@@ -11,7 +11,7 @@ mod proxy;
 mod reply;
 mod run;
 
-pub use run::{guarded, open};
+pub use run::{guarded, open, restore_only};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

@@ -16,6 +16,16 @@ pub fn control_only(path: &str) -> bool {
     path.starts_with(PULL_REQUEST_PREFIX)
 }
 
+#[must_use]
+pub fn writes(method: &str, path: &str) -> bool {
+    match route(path) {
+        Route::Twirp(call) => call != "GetCacheEntryDownloadURL",
+        Route::Archive(_) => method != "GET",
+        Route::PullRequest(_) => true,
+        Route::Upstream => false,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route<'a> {
     Twirp(&'a str),

@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
 use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, ControlArgs, UpArgs};
-use crate::protocol::control_only;
+use crate::protocol::{control_only, writes};
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -65,9 +65,17 @@ async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {
         limit_bytes: args.limit_bytes,
     };
     let server = CacheServer::open(config).await?;
+    let restoring = args.restore_only;
     serve("cache-server", args.listen, &args.control, move |request| {
         let server = Arc::clone(&server);
-        async move { server.handle(request).await }
+        async move {
+            let handle = |request| async move { server.handle(request).await };
+            if restoring {
+                restore_only(request, handle).await
+            } else {
+                handle(request).await
+            }
+        }
     })
     .await
 }
@@ -102,6 +110,18 @@ where
     }
     let refusal = json!({"message": "this port needs the control token as a bearer token"});
     super::json_response(401, &refusal)
+}
+
+pub async fn restore_only<H, F>(request: Request<Body>, handler: H) -> Response<Body>
+where
+    H: FnOnce(Request<Body>) -> F,
+    F: Future<Output = Response<Body>>,
+{
+    if writes(request.method().as_str(), request.uri().path()) {
+        let refusal = json!({"message": "this cache server serves restores only, as GitHub does for pull requests from forks"});
+        return super::json_response(403, &refusal);
+    }
+    handler(request).await
 }
 
 pub async fn open<H, F>(request: Request<Body>, handler: H) -> Response<Body>

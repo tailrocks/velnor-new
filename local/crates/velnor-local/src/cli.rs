@@ -174,6 +174,11 @@ pub struct CacheServerArgs {
     pub token_key: PathBuf,
     #[arg(long, default_value_t = REPOSITORY_LIMIT_BYTES, help = "Cache size limit of one repository in bytes")]
     pub limit_bytes: u64,
+    #[arg(
+        long,
+        help = "Serve restores only and refuse every cache write, as GitHub does for pull requests from forks"
+    )]
+    pub restore_only: bool,
     #[command(flatten)]
     pub control: ControlArgs,
 }

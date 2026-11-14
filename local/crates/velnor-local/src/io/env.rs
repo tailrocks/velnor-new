@@ -281,10 +281,13 @@ impl<E: Engine> Environment<E> {
         let der = mount(&format!("{keys}/token.pub.der"), "/keys/token.pub.der:ro");
         let data = mount("cache", "/data");
         let control = mount("keys/control", "/keys/control:ro");
-        let server = words(
+        let mut server = words(
             "cache-server --listen 0.0.0.0:80 --upstream runner-server:80 --dir /data --token-key /keys/token.pub.der \
              --control-listen 0.0.0.0:81 --control-token /keys/control",
         );
+        if Side::of_role(prefix) == Side::Untrusted {
+            server.push("--restore-only");
+        }
         self.start(
             &format!("{prefix}cache"),
             "run -d --network-alias github.localhost -p 127.0.0.1::81",
