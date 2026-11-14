@@ -13,7 +13,7 @@ use tokio::fs;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-use super::checkout::{copy_checkout, git};
+use super::checkout::{changes, copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
@@ -287,7 +287,7 @@ impl Driver<'_> {
         self.git(&["switch", "-q", branch]).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
-        let commits = self.changes(branch, before, &after).await?;
+        let commits = changes(&self.repo, branch, before, &after).await?;
         let push = Push {
             branch,
             before,

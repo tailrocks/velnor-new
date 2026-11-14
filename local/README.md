@@ -60,7 +60,7 @@ With several scenarios, `$STATE` in this paragraph stands for `$STATE/<scenario>
 
 - `Runner.Server__GitApiServerUrl=http://api-stub` becomes `GITHUB_API_URL` in every job, so the helper's API calls reach the stub. Action downloads keep their own URLs (`Runner.Server:ActionDownloadUrls`).
 - `Runner.Server__GitServerUrl=http://github.localhost` becomes `GITHUB_SERVER_URL` in every job. `@actions/cache` uses the v2 cache protocol only when that host is `github.com`, ends in `.ghe.com` or ends in `.localhost`. For any other host, such as plain `localhost`, it assumes GitHub Enterprise Server and uses v1. `runner.server` sets the job variable `actions_uses_cache_service_v2=true` itself.
-- The stand-in image patches runner.server: `refs/pull/<n>/merge` gets `ref_name` `<n>/merge` and `ref_type` `branch`, as on GitHub, and a `workflow` string in a payload is ignored, where runner.server would read it as a `workflow_run` object and answer 500.
+- The stand-in image patches runner.server: `refs/pull/<n>/merge` gets `ref_name` `<n>/merge` and `ref_type` `branch`, as on GitHub, and a `workflow` string in a payload (as `schedule` and `workflow_dispatch` carry) is ignored, where runner.server would answer 500, while a `workflow` object (the upstream workflow of `workflow_run`) is still read for `on.workflow_run.workflows`.
 - `GITHUB_ACTIONS_RUNNER_FORCE_GHES=1` makes `config.sh` register through `/api/v3/actions/runner-registration`, which `runner.server` serves. Without it, the runner treats `github.localhost` as github.com and calls `api.github.localhost`, which does not exist.
 - `runner.server` builds the job's cache address from the host the runner called, so the cache server receives the cache calls when it owns `github.localhost`. No change to the stand-in is needed.
 - The cache server reads the run's ref, default branch and repository from the runtime token, which `runner.server` signs with `token.pem`. The cache server verifies it with `token.pub.der`. Keep `$STATE/keys/` outside the checkout.
@@ -87,10 +87,10 @@ velnor-local run probe-cache-pr-reads --repo "$LAB" --dir "$STATE" --workflow .g
 velnor-local conformance --dir "$STATE"
 ```
 
-It prints each leg as `reproduced`, with its differences, or as `not observed`, and exits with an error unless every leg is reproduced. The legs of `event-payload`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are reproduced. The rest differ, each for a reason listed in #632:
+It prints each leg as `reproduced`, with its differences, or as `not observed`, and exits with an error unless every leg is reproduced. The legs of `event-payload`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are reproduced. The rest differ, each for a reason listed in #632 (the lab-side fixes are tailrocks/velnor-lab#289):
 
 - `cache-save-existing` reads the job log from `https://api.github.com`, not from `GITHUB_API_URL`; with the probe reading `GITHUB_API_URL` it is reproduced.
-- `needs-result` cancels its run with `gh run cancel`, which the runner image does not have and which would call github.com.
+- `needs-result` cancels its run with `gh run cancel`, which the runner image does not have and which would call github.com. Cancellation is not modelled: a run that cancels itself is not cancelled locally, so `if: cancelled()` and `needs.<job>.result == 'cancelled'` behave differently from GitHub.
 - `token` reads GitHub's own claims, such as the cache scopes in `ac`; runner.server signs other claims (`ref`, `defaultRef`, `repository`), which the cache server reads, and the cache scopes they lead to are what `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` check.
 
 ## Cache rules and cache server

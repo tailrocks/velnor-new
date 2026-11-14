@@ -6,6 +6,8 @@ use std::os::unix::fs::symlink;
 use std::process::{Command, Stdio};
 
 use serde_json::json;
+use velnor_local::event::NO_COMMIT;
+use velnor_local::io::checkout::changes;
 
 use crate::io::{REPO, TempRepo, changed, decoded, file, pull};
 
@@ -325,4 +327,37 @@ async fn a_submodule_is_a_file_in_a_listing_and_a_submodule_when_asked_for_direc
         .collect();
     assert_eq!(types, [("keep.txt", "file"), ("mod", "file")]);
     assert_eq!(direct["type"], "submodule");
+}
+
+#[tokio::test]
+async fn a_pushed_branch_lists_its_own_commits_and_a_merge_its_first_parent_diff() {
+    let repo = TempRepo::new("push-changes");
+    repo.write("base.txt", b"base");
+    repo.commit("base");
+    repo.git(&["switch", "--quiet", "--create", "feature"]);
+    repo.write("feature.txt", b"feature");
+    let feature = repo.commit("feature");
+    repo.git(&["switch", "--quiet", "main"]);
+    repo.write("main.txt", b"main");
+    let before = repo.commit("main");
+    let new = changes(&repo.dir, "feature", NO_COMMIT, &feature)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(new.len(), 1);
+    assert_eq!(new[0].added, ["feature.txt"]);
+    repo.git(&[
+        "merge",
+        "--quiet",
+        "--no-ff",
+        "--message",
+        "merge",
+        "feature",
+    ]);
+    let merge = repo.git(&["rev-parse", "HEAD"]);
+    let merged = changes(&repo.dir, "main", &before, &merge)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let ids: Vec<&str> = merged.iter().map(|commit| commit.id.as_str()).collect();
+    assert_eq!(ids, [feature.as_str(), merge.as_str()]);
+    assert_eq!(merged[1].added, ["feature.txt"]);
 }

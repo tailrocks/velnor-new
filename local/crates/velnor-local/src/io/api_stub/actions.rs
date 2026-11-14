@@ -74,7 +74,9 @@ impl ApiStub {
         let jobs: Vec<standin::Job> = self
             .standin(&format!("/_apis/v1/Message?runid={id}"))
             .await?;
-        let attempt = attempt.or_else(|| jobs.iter().map(|job| job.attempt).max())?;
+        let Some(attempt) = attempt.or_else(|| jobs.iter().map(|job| job.attempt).max()) else {
+            return Some(Vec::new());
+        };
         let mut listed = Vec::new();
         for job in jobs.iter().filter(|job| job.attempt == attempt) {
             listed.push(runs::job(job, &self.records(job).await?));

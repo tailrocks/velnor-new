@@ -69,7 +69,7 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
     for line in &lines {
         println!("velnor-local: {line}");
     }
-    if lines.is_empty() || !reproduced {
+    if !reproduced {
         return Err(std::io::Error::other(
             "the run does not reproduce every stored probe result",
         ));

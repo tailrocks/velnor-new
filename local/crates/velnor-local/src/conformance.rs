@@ -110,5 +110,6 @@ pub fn report(
             lines.push(line);
         }
     }
+    let reproduced = reproduced && !lines.is_empty();
     (lines, reproduced)
 }

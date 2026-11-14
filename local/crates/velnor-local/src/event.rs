@@ -7,7 +7,6 @@ pub const SENDER: &str = "velnor-local";
 pub const FORK_OWNER: &str = "velnor-local-fork";
 pub const NO_COMMIT: &str = "0000000000000000000000000000000000000000";
 
-#[must_use]
 #[derive(Debug)]
 pub struct Repository<'a> {
     pub full_name: &'a str,

@@ -175,4 +175,9 @@ async fn a_run_is_reported_with_its_latest_attempt_and_a_broken_workflow_by_its_
         .json();
     assert_eq!(broken["name"], ".github/workflows/broken.yml");
     assert_eq!(broken["conclusion"], "failure");
+    let jobless = stub
+        .call("GET", "/repos/tailrocks/velnor-lab/actions/runs/3/jobs")
+        .await;
+    assert_eq!(jobless.status, 200);
+    assert_eq!(jobless.json()["total_count"], 0);
 }

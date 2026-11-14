@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_local::conformance::{observations, report};
+use velnor_local::conformance::{differences, observations, report};
 
 const LOG: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
 | {
@@ -75,5 +75,23 @@ fn each_stored_leg_is_reported_as_reproduced_different_or_not_observed() {
         lines,
         ["cache-keys / default-branch: not stored in conformance/cache-keys.json"]
     );
+    assert!(!reproduced);
+}
+
+#[test]
+fn a_key_on_one_side_only_is_a_difference_and_a_run_with_no_observation_reproduces_nothing() {
+    let stored = json!({"claims": {"ac": "string", "sub": "string"}});
+    let observed = json!({"claims": {"sub": "string", "defaultRef": "string"}});
+    assert_eq!(
+        differences(&stored, &observed),
+        [
+            "claims.ac: GitHub only \"string\"",
+            "claims.defaultRef: local only \"string\"",
+        ]
+    );
+    let stored = |_: &str| Some(json!({"legs": {}}));
+    let logs = [("1-push.log".to_owned(), "| no observation here".to_owned())];
+    let (lines, reproduced) = report(&logs, &stored);
+    assert_eq!(lines, Vec::<String>::new());
     assert!(!reproduced);
 }
