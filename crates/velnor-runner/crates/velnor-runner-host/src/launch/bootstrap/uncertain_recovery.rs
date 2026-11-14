@@ -54,7 +54,7 @@ pub(crate) async fn recover_uncertain_reservations(
                     recovery.scope,
                     id,
                     "an interrupted storage initializer",
-                    &error,
+                    error,
                 );
             }
             continue;
@@ -86,12 +86,12 @@ async fn recover_pre_jit(
             recovery.scope,
             reservation.reservation_id,
             "an uncertain pre-JIT reservation",
-            &error,
+            error,
         );
     }
 }
 
-fn report(scope: &ConnectionJournal, reservation_id: i64, work: &str, error: &HostError) {
+fn report(scope: &ConnectionJournal, reservation_id: i64, work: &str, error: HostError) {
     eprintln!(
         "The controller keeps {work} charged for recovery. connection={} reservation={reservation_id} reason={error}",
         scope.connection_id().as_str()

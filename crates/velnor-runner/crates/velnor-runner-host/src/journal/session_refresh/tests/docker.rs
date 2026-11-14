@@ -70,14 +70,14 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> T
     let (route, query) = target.split_once('?').unwrap_or((&target, ""));
     let route = route.replace("%3A", ":");
     let request = format!("{method} {route}");
-    let hang = {
+    let killed_here = {
         let mut state = lock(state);
         state.requests.push(request.clone());
-        let hang = state.hang_on.as_deref() == Some(request.as_str());
-        if hang {
+        let matched = state.hang_on.as_deref() == Some(request.as_str());
+        if matched {
             state.hang_on = None;
         }
-        hang
+        matched
     };
     let segments: Vec<&str> = route.split('/').skip(1).collect();
     let response = match (method.as_str(), segments.as_slice()) {
@@ -102,7 +102,7 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> T
         ("DELETE", ["containers", HELPER_ID]) => lock(state).helper.take().map(|_| Value::Null),
         _ => None,
     };
-    if hang {
+    if killed_here {
         hung.notify_one();
         return std::future::pending().await;
     }
