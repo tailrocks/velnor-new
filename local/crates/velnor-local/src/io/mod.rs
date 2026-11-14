@@ -100,7 +100,8 @@ impl CacheServer {
             .map_err(Error::internal)?;
         file.write_all(format!("{line}\n").as_bytes())
             .await
-            .map_err(Error::internal)
+            .map_err(Error::internal)?;
+        file.flush().await.map_err(Error::internal)
     }
 
     async fn twirp(&self, call: &str, request: Request<Body>) -> Result<Response<Body>, Error> {
