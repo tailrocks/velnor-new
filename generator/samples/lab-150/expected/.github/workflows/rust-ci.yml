@@ -9,7 +9,8 @@ concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
-  format:
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-root:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -18,8 +19,545 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Format Cargo.toml
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
-      - name: Format lab/Cargo.toml
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Doctests
+        if: '${{ !cancelled() }}'
+        run: cargo test --doc --workspace --locked
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check app alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p app --locked
+      - name: Check core alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p core --locked
+      - name: Check grow-000 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-000 --locked
+      - name: Check grow-001 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-001 --locked
+      - name: Check grow-002 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-002 --locked
+      - name: Check grow-003 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-003 --locked
+      - name: Check grow-004 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-004 --locked
+      - name: Check grow-005 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-005 --locked
+      - name: Check grow-006 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-006 --locked
+      - name: Check grow-007 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-007 --locked
+      - name: Check grow-008 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-008 --locked
+      - name: Check grow-009 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-009 --locked
+      - name: Check grow-010 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-010 --locked
+      - name: Check grow-011 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-011 --locked
+      - name: Check grow-012 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-012 --locked
+      - name: Check grow-013 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-013 --locked
+      - name: Check grow-014 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-014 --locked
+      - name: Check grow-015 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-015 --locked
+      - name: Check grow-016 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-016 --locked
+      - name: Check grow-017 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-017 --locked
+      - name: Check grow-018 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-018 --locked
+      - name: Check grow-019 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-019 --locked
+      - name: Check grow-020 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-020 --locked
+      - name: Check grow-021 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-021 --locked
+      - name: Check grow-022 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-022 --locked
+      - name: Check grow-023 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-023 --locked
+      - name: Check grow-024 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-024 --locked
+      - name: Check grow-025 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-025 --locked
+      - name: Check grow-026 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-026 --locked
+      - name: Check grow-027 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-027 --locked
+      - name: Check grow-028 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-028 --locked
+      - name: Check grow-029 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-029 --locked
+      - name: Check grow-030 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-030 --locked
+      - name: Check grow-031 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-031 --locked
+      - name: Check grow-032 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-032 --locked
+      - name: Check grow-033 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-033 --locked
+      - name: Check grow-034 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-034 --locked
+      - name: Check grow-035 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-035 --locked
+      - name: Check grow-036 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-036 --locked
+      - name: Check grow-037 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-037 --locked
+      - name: Check grow-038 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-038 --locked
+      - name: Check grow-039 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-039 --locked
+      - name: Check grow-040 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-040 --locked
+      - name: Check grow-041 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-041 --locked
+      - name: Check grow-042 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-042 --locked
+      - name: Check grow-043 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-043 --locked
+      - name: Check grow-044 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-044 --locked
+      - name: Check grow-045 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-045 --locked
+      - name: Check grow-046 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-046 --locked
+      - name: Check grow-047 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-047 --locked
+      - name: Check grow-048 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-048 --locked
+      - name: Check grow-049 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-049 --locked
+      - name: Check grow-050 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-050 --locked
+      - name: Check grow-051 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-051 --locked
+      - name: Check grow-052 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-052 --locked
+      - name: Check grow-053 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-053 --locked
+      - name: Check grow-054 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-054 --locked
+      - name: Check grow-055 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-055 --locked
+      - name: Check grow-056 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-056 --locked
+      - name: Check grow-057 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-057 --locked
+      - name: Check grow-058 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-058 --locked
+      - name: Check grow-059 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-059 --locked
+      - name: Check grow-060 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-060 --locked
+      - name: Check grow-061 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-061 --locked
+      - name: Check grow-062 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-062 --locked
+      - name: Check grow-063 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-063 --locked
+      - name: Check grow-064 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-064 --locked
+      - name: Check grow-065 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-065 --locked
+      - name: Check grow-066 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-066 --locked
+      - name: Check grow-067 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-067 --locked
+      - name: Check grow-068 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-068 --locked
+      - name: Check grow-069 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-069 --locked
+      - name: Check grow-070 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-070 --locked
+      - name: Check grow-071 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-071 --locked
+      - name: Check grow-072 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-072 --locked
+      - name: Check grow-073 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-073 --locked
+      - name: Check grow-074 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-074 --locked
+      - name: Check grow-075 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-075 --locked
+      - name: Check grow-076 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-076 --locked
+      - name: Check grow-077 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-077 --locked
+      - name: Check grow-078 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-078 --locked
+      - name: Check grow-079 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-079 --locked
+      - name: Check grow-080 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-080 --locked
+      - name: Check grow-081 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-081 --locked
+      - name: Check grow-082 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-082 --locked
+      - name: Check grow-083 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-083 --locked
+      - name: Check grow-084 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-084 --locked
+      - name: Check grow-085 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-085 --locked
+      - name: Check grow-086 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-086 --locked
+      - name: Check grow-087 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-087 --locked
+      - name: Check grow-088 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-088 --locked
+      - name: Check grow-089 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-089 --locked
+      - name: Check grow-090 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-090 --locked
+      - name: Check grow-091 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-091 --locked
+      - name: Check grow-092 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-092 --locked
+      - name: Check grow-093 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-093 --locked
+      - name: Check grow-094 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-094 --locked
+      - name: Check grow-095 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-095 --locked
+      - name: Check grow-096 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-096 --locked
+      - name: Check grow-097 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-097 --locked
+      - name: Check grow-098 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-098 --locked
+      - name: Check grow-099 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-099 --locked
+      - name: Check grow-100 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-100 --locked
+      - name: Check grow-101 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-101 --locked
+      - name: Check grow-102 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-102 --locked
+      - name: Check grow-103 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-103 --locked
+      - name: Check grow-104 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-104 --locked
+      - name: Check grow-105 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-105 --locked
+      - name: Check grow-106 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-106 --locked
+      - name: Check grow-107 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-107 --locked
+      - name: Check grow-108 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-108 --locked
+      - name: Check grow-109 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-109 --locked
+      - name: Check grow-110 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-110 --locked
+      - name: Check grow-111 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-111 --locked
+      - name: Check grow-112 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-112 --locked
+      - name: Check grow-113 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-113 --locked
+      - name: Check grow-114 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-114 --locked
+      - name: Check grow-115 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-115 --locked
+      - name: Check grow-116 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-116 --locked
+      - name: Check grow-117 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-117 --locked
+      - name: Check grow-118 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-118 --locked
+      - name: Check grow-119 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-119 --locked
+      - name: Check grow-120 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-120 --locked
+      - name: Check grow-121 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-121 --locked
+      - name: Check grow-122 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-122 --locked
+      - name: Check grow-123 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-123 --locked
+      - name: Check grow-124 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-124 --locked
+      - name: Check grow-125 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-125 --locked
+      - name: Check grow-126 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-126 --locked
+      - name: Check grow-127 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-127 --locked
+      - name: Check grow-128 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-128 --locked
+      - name: Check grow-129 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-129 --locked
+      - name: Check grow-130 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-130 --locked
+      - name: Check grow-131 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-131 --locked
+      - name: Check grow-132 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-132 --locked
+      - name: Check grow-133 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-133 --locked
+      - name: Check grow-134 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-134 --locked
+      - name: Check grow-135 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-135 --locked
+      - name: Check grow-136 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-136 --locked
+      - name: Check grow-137 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-137 --locked
+      - name: Check grow-138 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-138 --locked
+      - name: Check grow-139 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-139 --locked
+      - name: Check grow-140 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-140 --locked
+      - name: Check grow-141 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-141 --locked
+      - name: Check grow-142 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-142 --locked
+      - name: Check grow-143 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-143 --locked
+      - name: Check grow-144 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-144 --locked
+      - name: Check grow-145 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-145 --locked
+      - name: Check grow-146 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-146 --locked
+      - name: Check grow-147 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-147 --locked
+      - name: Check grow-148 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-148 --locked
+      - name: Check grow-149 alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p grow-149 --locked
+      - name: Check lib alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p lib --locked
+      - name: Check macros alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p macros --locked
+      - name: Check tool alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p tool --locked
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        working-directory: lab
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: lab
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         working-directory: lab
         run: cargo-fmt --all --check
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        working-directory: lab
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        working-directory: lab
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        working-directory: lab
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check lab alone
+        if: '${{ !cancelled() }}'
+        working-directory: lab
+        run: cargo check -p lab --locked
+  required:
+    name: Required
+    needs:
+      - rust-root
+      - rust-lab
+    if: '${{ !cancelled() }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Fail when a Rust job failed or was cancelled
+        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
+        run: exit 1

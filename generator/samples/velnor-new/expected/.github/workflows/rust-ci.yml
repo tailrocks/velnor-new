@@ -9,7 +9,8 @@ concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
-  format:
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-root:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -18,17 +19,289 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Format Cargo.toml
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
-      - name: Format ci-helper/Cargo.toml
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check velnor-actions-actionlint alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-actionlint --locked
+      - name: Check velnor-actions-ansible alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-ansible --locked
+      - name: Check velnor-actions-bun alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-bun --locked
+      - name: Check velnor-actions-cli alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-cli --locked
+      - name: Check velnor-actions-contract alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-contract --locked
+      - name: Check velnor-actions-dbt alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-dbt --locked
+      - name: Check velnor-actions-freshness alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-freshness --locked
+      - name: Check velnor-actions-gradle alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-gradle --locked
+      - name: Check velnor-actions-mise alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-mise --locked
+      - name: Check velnor-actions-orchestrator alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-orchestrator --locked
+      - name: Check velnor-actions-rust alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-rust --locked
+      - name: Check velnor-actions-tofu alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-tofu --locked
+      - name: Check velnor-actions-workflow-renderer alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-actions-workflow-renderer --locked
+      - name: Check velnor-archive-guard alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p velnor-archive-guard --locked
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-ci_helper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        working-directory: ci-helper
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: ci-helper
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         working-directory: ci-helper
         run: cargo-fmt --all --check
-      - name: Format crates/velnor-runner/Cargo.toml
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        working-directory: ci-helper
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        working-directory: ci-helper
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        working-directory: ci-helper
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check velnor-ci alone
+        if: '${{ !cancelled() }}'
+        working-directory: ci-helper
+        run: cargo check -p velnor-ci --locked
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-crates_velnor_runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        working-directory: crates/velnor-runner
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: crates/velnor-runner
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
         run: cargo-fmt --all --check
-      - name: Format generator/Cargo.toml
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check velnor-resource-probe alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-resource-probe --locked
+      - name: Check velnor-runner-attestation alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-attestation --locked
+      - name: Check velnor-runner-cli alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-cli --locked
+      - name: Check velnor-runner-core alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-core --locked
+      - name: Check velnor-runner-github alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-github --locked
+      - name: Check velnor-runner-host alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-host --locked
+      - name: Check velnor-runner-image-manifest alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-image-manifest --locked
+      - name: Check velnor-runner-qualification alone
+        if: '${{ !cancelled() }}'
+        working-directory: crates/velnor-runner
+        run: cargo check -p velnor-runner-qualification --locked
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-generator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        working-directory: generator
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: generator
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         working-directory: generator
         run: cargo-fmt --all --check
-      - name: Format local/Cargo.toml
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check velnor-gen alone
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: cargo check -p velnor-gen --locked
+      - name: Check velnor-model alone
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: cargo check -p velnor-model --locked
+      - name: Check velnor-render alone
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: cargo check -p velnor-render --locked
+      - name: Check velnor-rust alone
+        if: '${{ !cancelled() }}'
+        working-directory: generator
+        run: cargo check -p velnor-rust --locked
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        working-directory: local
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: local
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Format
+        if: '${{ !cancelled() }}'
         working-directory: local
         run: cargo-fmt --all --check
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        working-directory: local
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        working-directory: local
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        working-directory: local
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check velnor-cache-rules alone
+        if: '${{ !cancelled() }}'
+        working-directory: local
+        run: cargo check -p velnor-cache-rules --locked
+      - name: Check velnor-local alone
+        if: '${{ !cancelled() }}'
+        working-directory: local
+        run: cargo check -p velnor-local --locked
+  required:
+    name: Required
+    needs:
+      - rust-root
+      - rust-ci_helper
+      - rust-crates_velnor_runner
+      - rust-generator
+      - rust-local
+    if: '${{ !cancelled() }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Fail when a Rust job failed or was cancelled
+        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
+        run: exit 1

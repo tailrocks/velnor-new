@@ -83,6 +83,23 @@ impl RepoPath {
     }
 }
 
+impl JobId {
+    #[must_use]
+    pub fn suffixed(&self, suffix: &str) -> Self {
+        let suffix: String = suffix
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        Self(Cow::Owned(format!("{}-{suffix}", self.0)))
+    }
+}
+
 impl PathGlob {
     #[must_use]
     pub fn matches(&self, path: &RepoPath) -> bool {
