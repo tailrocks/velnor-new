@@ -240,15 +240,17 @@ fn a_members_own_version_alone_names_nothing_and_with_a_changed_dependency_names
     );
 }
 
-#[test]
-fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
-    let base = workspace();
-    let before = render(4, &base, "");
-    let git = "git+https://example.com/repo?rev=abc#abc";
-    let with = |packages: &[Pkg]| render(4, packages, "");
-    let mut added_member = base.clone();
+const GIT: &str = "git+https://example.com/repo?rev=abc#abc";
+
+fn with(packages: &[Pkg]) -> String {
+    render(4, packages, "")
+}
+
+fn heads_to_refuse(base: &[Pkg]) -> Vec<(&'static str, String)> {
+    let before = with(base);
+    let mut added_member = base.to_vec();
     added_member.push(member("extra", &[]));
-    let mut added_path = base.clone();
+    let mut added_path = base.to_vec();
     added_path.push(member("local", &[]));
     let renamed: Vec<Pkg> = base
         .iter()
@@ -257,19 +259,19 @@ fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
             _ => package.clone(),
         })
         .collect();
-    let mut twice = base.clone();
+    let mut twice = base.to_vec();
     twice.push(krate("unused", "1.0.0", &[]));
     twice.push(krate("unused", "1.0.0", &[]));
-    let mut ambiguous = base.clone();
+    let mut ambiguous = base.to_vec();
     ambiguous.push(krate("fnv", "1.0.6", &[]));
-    let heads = [
+    vec![
         ("unparsable head", "not toml [".to_owned()),
         ("empty head", String::new()),
-        ("format change", render(3, &base, "")),
-        ("unknown format", render(5, &base, "")),
+        ("format change", render(3, base, "")),
+        ("unknown format", render(5, base, "")),
         (
             "git source change",
-            with(&replaced(&base, krate("fnv", "1.0.5", &[]).source(git))),
+            with(&replaced(base, krate("fnv", "1.0.5", &[]).source(GIT))),
         ),
         ("added member", with(&added_member)),
         ("added path package", with(&added_path)),
@@ -280,19 +282,38 @@ fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
             "patch change",
             render(
                 4,
-                &base,
+                base,
                 "\n[[patch.unused]]\nname = \"fnv\"\nversion = \"1.0.9\"\n",
             ),
         ),
         (
-            "metadata table",
-            render(4, &base, "\n[metadata]\n\"checksum fnv 1.0.5\" = \"x\"\n"),
+            "unknown package field",
+            before.replacen(
+                "name = \"fnv\"\nversion = \"1.0.5\"\n",
+                "name = \"fnv\"\nversion = \"1.0.5\"\nreplace = \"fnv 1.0.5\"\n",
+                1,
+            ),
         ),
-    ];
+        (
+            "unknown top-level key",
+            before.replacen("version = 4\n", "version = 4\nextra = 1\n", 1),
+        ),
+        (
+            "metadata table",
+            render(4, base, "\n[metadata]\n\"checksum fnv 1.0.5\" = \"x\"\n"),
+        ),
+    ]
+}
+
+#[test]
+fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
+    let base = workspace();
+    let before = with(&base);
+    let heads = heads_to_refuse(&base);
     for (label, head) in heads {
         assert_eq!(affected(&before, &head), None, "{label}");
     }
-    let git_before = with(&replaced(&base, krate("fnv", "1.0.5", &[]).source(git)));
+    let git_before = with(&replaced(&base, krate("fnv", "1.0.5", &[]).source(GIT)));
     assert_eq!(
         affected(&git_before, &git_before),
         Some(found(&[])),

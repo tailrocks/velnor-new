@@ -10,6 +10,7 @@ use crate::lock::LockError;
 const SUPPORTED_FORMATS: [i64; 2] = [3, 4];
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Document {
     version: Option<toml::Value>,
     #[serde(default)]
@@ -20,6 +21,7 @@ struct Document {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Entry {
     name: String,
     version: String,
