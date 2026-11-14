@@ -188,7 +188,7 @@ fn is_guard(step: &Yaml) -> bool {
             || name == "Validate producer artifact identity")))
 }
 
-fn artifact_guard(artifact_id: &str, condition: Option<&Yaml>) -> Yaml {
+pub(in crate::schema2) fn artifact_guard(artifact_id: &str, condition: Option<&Yaml>) -> Yaml {
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(ARTIFACT_ID_GUARD_NAME)),
         (
