@@ -5,7 +5,7 @@
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-- 71feda24add909df8b17eab324559dc89ce7af3ef9286d11652722b15af43a84  ./dogfood/plan.txt
+- 6c9f0e77b1664bae0cb720b5329ea02c4e84b1079f45417c98bb076d89a33393  ./dogfood/plan.txt
 - b3e2a627f0e9d560ea0cb5d65a5abf689df39889859ac98b9dff01fa8914fe50  ./dogfood/preview/.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 - 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
@@ -76,7 +76,7 @@
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
-- 2433a0196b1dd01c18cd8819629535c1fc3dc6b98a5e4886f5fc1f8e84a0218b  ./mbx-nextest/plan.txt
+- cb6002d7779eb0d00da17ba8c3ef2963cfe7528d79d2631f3f0cec1a94f30ebc  ./mbx-nextest/plan.txt
 - b3e2a627f0e9d560ea0cb5d65a5abf689df39889859ac98b9dff01fa8914fe50  ./mbx-nextest/preview/.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./mbx-nextest/preview/.github/CLAUDE.md
 - b0a505cae0bab8958f339b569807803812341b516efe74c28b095399e744d89b  ./mbx-nextest/preview/.github/actions/declared-task-0/action.yml
@@ -94,8 +94,8 @@
 - 427ff5b825979427d3dfa6ba6a10be7fdade88de98e4e515ea00328f0fbe7370  ./mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json
 - a43569760a8aad89b8284eca3f25f1ca1b1ef6962c58a0976a822ca2e9aba159  ./mbx-nextest/preview/.github/workflows/cache-prune.yml
 - 4fc8511d9406a99cf8d21469a1008090404fa89d8db9d0d2b7274360793ce556  ./mbx-nextest/preview/.github/workflows/ci.yml
-- f0f63c41e785e8a0ae8579d22d0ab48f38933db26ba518817169a4cca990fcf4  ./mbx-nextest/preview/.github/workflows/state-seal.yml
-- 68922c4489243ebbf623f8bbd8063e61ac1cbdb1e0292f9f1c869ce7215d8ffb  ./mbx-nextest/tree.sha256
+- cfa6e772b2eeccf01b1448ab76b5ced73e1ec47394857fbad8091e16d370db83  ./mbx-nextest/preview/.github/workflows/state-seal.yml
+- 52fd2025eb95a56f3c9845fa609ba52a9070db8efb6bdb65e1d1d9762a378a55  ./mbx-nextest/tree.sha256
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
 - f4af0b1e6e3e6bb0efe7f91f71c5203fe4ab2e3557db64f3c9a5539b2026234b  ./minimal-cargo/generate.stderr.txt
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt

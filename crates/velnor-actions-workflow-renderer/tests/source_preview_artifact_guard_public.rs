@@ -28,7 +28,9 @@ fn workflow_texts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
     Ok(texts)
 }
 
-fn guarded_downloads() -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
+type Guard = (String, String, String);
+
+fn guarded_downloads() -> Result<Vec<Guard>, Box<dyn Error>> {
     let mut found = Vec::new();
     for (path, text) in workflow_texts()? {
         let workflow: Value = serde_saphyr::from_str_with_options(
@@ -87,7 +89,18 @@ fn every_download_by_id_is_preceded_by_a_guard_in_the_same_job() -> Result<(), B
 fn guard_step_fails_for_empty_and_non_numeric_ids_and_passes_for_positive_integers()
 -> Result<(), Box<dyn Error>> {
     for (path, job, run) in guarded_downloads()? {
-        for bad in ["", "abc", "0", "-1", "1 2", "01", "1a", "1\n2", "9007199254740992", "12345678901234567"] {
+        for bad in [
+            "",
+            "abc",
+            "0",
+            "-1",
+            "1 2",
+            "01",
+            "1a",
+            "1\n2",
+            "9007199254740992",
+            "12345678901234567",
+        ] {
             assert!(
                 !run_guard(&run, bad)?,
                 "{path} {job}: guard accepted {bad:?}"

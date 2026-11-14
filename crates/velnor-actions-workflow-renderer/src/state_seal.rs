@@ -166,16 +166,7 @@ fn seal_job(
         "${{{{ needs.{}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} }}}}",
         root.producer_id
     );
-    let mut guard = shell_step(
-        "Validate exact artifact ID",
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            ARTIFACT_ID_GUARD.to_owned(),
-        ],
-        BTreeMap::from([("VELNOR_EVIDENCE_ARTIFACT_ID".to_owned(), artifact.clone())]),
-    )?;
-    guard.role = Some(StepRole::StateSealArtifactGuard);
+    let guard = state_seal_artifact_guard_step(&artifact)?;
     let mut download = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
@@ -243,8 +234,27 @@ fn seal_job(
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![guard, download, subject, tip, admit, save, bind, attest, retire],
+        steps: vec![
+            guard, download, subject, tip, admit, save, bind, attest, retire,
+        ],
     })
+}
+
+fn state_seal_artifact_guard_step(artifact: &str) -> Result<Step, RenderError> {
+    let mut guard = shell_step(
+        "Validate exact artifact ID",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            ARTIFACT_ID_GUARD.to_owned(),
+        ],
+        BTreeMap::from([(
+            "VELNOR_EVIDENCE_ARTIFACT_ID".to_owned(),
+            artifact.to_owned(),
+        )]),
+    )?;
+    guard.role = Some(StepRole::StateSealArtifactGuard);
+    Ok(guard)
 }
 
 fn transport_dir() -> Result<String, RenderError> {
