@@ -32,9 +32,10 @@ pub(super) use recover::recover_active;
 pub(crate) struct ControlPublicationInput<'a> {
     pub(crate) docker: &'a Docker,
     pub(crate) journal: &'a Journal,
+    pub(crate) connection_journal: &'a crate::journal::ConnectionJournal,
     pub(crate) selected: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
-    pub(crate) release_secret: &'a super::ReleaseReadSecret,
+    pub(crate) image_authority: &'a super::ImageAuthority,
     pub(crate) metadata: &'a VerifiedMetadataInitialization,
     pub(crate) channel: &'a VerifiedProofChannelBinding,
     pub(crate) guest_boot_id: &'a str,
@@ -85,10 +86,13 @@ pub(in crate::launch) async fn publish_job_facts_with_provider<
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
     let journal = input.connection_journal;
     let claim = input.claim;
-    match publish_job_facts_inner(input, provider).await {
+    let mut recorded = false;
+    match publish_job_facts_inner(input, provider, &mut recorded).await {
         Ok(proof) => Ok(proof),
         Err(error) => {
-            journal.mark_job_facts_publication_uncertain(claim).await?;
+            if !recorded {
+                journal.mark_job_facts_publication_uncertain(claim).await?;
+            }
             Err(error)
         }
     }
@@ -160,6 +164,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 async fn publish_job_facts_inner<P: crate::launch::resource_probe::ImageProvider>(
     input: JobFactsPublicationInput<'_>,
     provider: &P,
+    recorded: &mut bool,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
     let prepared = prepare_job_facts_publication(&input).await?;
     let probe = super::verify_publication_probe_image_until_with_provider(
@@ -188,7 +193,7 @@ async fn publish_job_facts_inner<P: crate::launch::resource_probe::ImageProvider
         prepared.runtime_identity.clone(),
         &prepared.binding_sha256,
     )?;
-    publish_prepared_job_facts(&input, prepared, probe, volume, request).await
+    publish_prepared_job_facts(&input, prepared, probe, volume, request, recorded).await
 }
 
 async fn publish_prepared_job_facts(
@@ -197,6 +202,7 @@ async fn publish_prepared_job_facts(
     probe: crate::launch::resource_probe::VerifiedPublicationProbeImage,
     volume: crate::worker::execution_authorization::VerifiedMetadataVolume,
     request: velnor_resource_probe::job_facts_wire::JobFactsPublicationContext,
+    recorded: &mut bool,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
     let parent = ExecutionPublicationParent::job_facts(
         input.claim,
@@ -205,7 +211,7 @@ async fn publish_prepared_job_facts(
         &request.payload_sha256,
     )?;
     let expected_request = request.clone();
-    let record = execute::publish_job_facts(
+    execute::publish_job_facts(
         execute::PublisherExecution {
             docker: input.docker,
             journal: input.journal,
@@ -218,16 +224,24 @@ async fn publish_prepared_job_facts(
         },
         request,
         parent,
+        |record| async move {
+            let proof = crate::launch::bootstrap::job_facts_publication(
+                input.claim,
+                &prepared.snapshot,
+                input.ready,
+                input.channel,
+                &expected_request,
+                &record,
+            )?;
+            input
+                .connection_journal
+                .record_job_facts_published(input.claim, &proof)
+                .await?;
+            *recorded = true;
+            Ok(proof)
+        },
     )
-    .await?;
-    crate::launch::bootstrap::job_facts_publication(
-        input.claim,
-        &prepared.snapshot,
-        input.ready,
-        input.channel,
-        &expected_request,
-        &record,
-    )
+    .await
 }
 
 fn job_facts_publication_binding(

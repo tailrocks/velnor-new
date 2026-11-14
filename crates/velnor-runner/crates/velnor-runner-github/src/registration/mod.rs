@@ -7,7 +7,10 @@ mod runners;
 mod scale_set;
 mod token;
 
-pub use admin::{AdminConnection, AdminConnectionCall, admin_connection, admin_token_is_fresh};
+pub use admin::{
+    ADMIN_TOKEN_FRESH_MARGIN_SECS, AdminConnection, AdminConnectionCall, admin_connection,
+    admin_token_is_fresh,
+};
 pub use groups::{RunnerGroup, list_runner_groups};
 pub use runners::{
     RunnerAbsenceReceipt, RunnerObservationOperation, RunnerRemovalStatus, RunnerResponseReceipt,

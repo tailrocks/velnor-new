@@ -22,8 +22,25 @@ pub(crate) fn resolve_selected_tools(
     rust_version: &str,
     rust_lock_options: &BTreeMap<String, String>,
 ) -> Result<Vec<BuildTaskTool>, OrchestratorError> {
-    task.tools
-        .iter()
+    resolve_selected_tool_keys(
+        &task.tools,
+        config,
+        lock,
+        rust_version,
+        rust_lock_options,
+        "macos-arm64",
+    )
+}
+
+pub(crate) fn resolve_selected_tool_keys(
+    keys: &[String],
+    config: &NativeMiseConfig,
+    lock: &NativeMiseLock,
+    rust_version: &str,
+    rust_lock_options: &BTreeMap<String, String>,
+    platform: &str,
+) -> Result<Vec<BuildTaskTool>, OrchestratorError> {
+    keys.iter()
         .map(|key| {
             let (version, config_options, os) =
                 selected_version_and_options(key, config, rust_version, rust_lock_options)?;
@@ -50,12 +67,20 @@ pub(crate) fn resolve_selected_tools(
                 .backend
                 .clone()
                 .ok_or_else(|| failure("build_task_tool_backend"))?;
-            let artifact = selected_artifact(key, selected)?;
+            let artifact = selected_artifact(key, selected, platform)?;
             validate_backend_selection(key, &backend, &config_options, selected)?;
             Ok(BuildTaskTool {
                 key: (*key).clone(),
                 version,
+                specifiers: selected
+                    .specifiers
+                    .clone()
+                    .ok_or_else(|| failure("build_task_tool_lock_mismatch"))?,
                 backend,
+                workflow: config
+                    .tools
+                    .get(key)
+                    .and_then(|selector| selector.workflow.clone()),
                 os,
                 config_options,
                 lock_options: selected.options.clone(),
@@ -85,6 +110,7 @@ pub(crate) fn selected_version_and_options(
     if !selector.valid_shape
         || !selector.unsupported_options.is_empty()
         || selector.mr_boxington.is_some()
+        || (selector.workflow.is_some() && key != "mr-boxington")
     {
         return Err(failure("build_task_tool_selector"));
     }
@@ -102,6 +128,7 @@ pub(crate) fn selected_version_and_options(
 fn selected_artifact(
     key: &str,
     selected: &NativeLockedTool,
+    platform: &str,
 ) -> Result<Option<BuildTaskArtifact>, OrchestratorError> {
     if key == "rust" {
         if !selected.platforms.is_empty() {
@@ -111,7 +138,7 @@ fn selected_artifact(
     }
     let artifact = selected
         .platforms
-        .get("macos-arm64")
+        .get(platform)
         .ok_or_else(|| failure("build_task_tool_artifact"))?;
     if !artifact.valid_shape
         || !artifact.unsupported_fields.is_empty()
@@ -132,6 +159,14 @@ fn selected_artifact(
         url_api: artifact.url_api.clone(),
         signer: artifact.signer.clone(),
         provenance: artifact.provenance.clone(),
+        repository_id: artifact
+            .repository_ids
+            .as_ref()
+            .and_then(|ids| ids.repository.clone()),
+        owner_id: artifact
+            .repository_ids
+            .as_ref()
+            .and_then(|ids| ids.owner.clone()),
     }))
 }
 

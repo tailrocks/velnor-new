@@ -4,6 +4,7 @@
 use bollard::{Docker, errors::Error as DockerError, models::ContainerInspectResponse};
 
 use crate::{
+    config::RunnerPlatform,
     docker_client::docker_deadline,
     error::HostError,
     journal::{ConnectionJournal, StorageInitializationClaim},
@@ -15,7 +16,7 @@ pub(super) async fn verify_engine(
     docker: &Docker,
     journal: &ConnectionJournal,
     claim: &StorageInitializationClaim,
-) -> Result<(), HostError> {
+) -> Result<SelectedEngineContext, HostError> {
     let selected = journal
         .engine_context()
         .await?
@@ -32,19 +33,23 @@ pub(super) async fn verify_engine(
     ) {
         return Err(HostError::Ownership);
     }
-    Ok(())
+    Ok(actual)
 }
 
 pub(super) async fn verify_image(
     docker: &Docker,
     claim: &StorageInitializationClaim,
+    engine: &SelectedEngineContext,
 ) -> Result<Vec<String>, HostError> {
+    let architecture = RunnerPlatform::parse(engine.platform())
+        .ok_or(HostError::Ownership)?
+        .image_architecture();
     let image = docker_deadline(docker.inspect_image(claim.image_runtime_id()))
         .await?
         .map_err(|_| HostError::Docker)?;
     if image.id.as_deref() != Some(claim.image_runtime_id())
         || image.os.as_deref() != Some("linux")
-        || image.architecture.as_deref() != Some("amd64")
+        || image.architecture.as_deref() != Some(architecture)
     {
         return Err(HostError::Ownership);
     }

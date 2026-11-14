@@ -11,6 +11,13 @@ keep satisfying every decision below. If a decision appears to conflict with
 another requirement, stop and ask the owner; do not resolve the conflict by
 editing the decision away.
 
+## Scope
+
+These decisions bind the existing engine in `crates/`, its configuration in
+`.velnor/`, the workflows it generates, and the scripts, images and fixtures
+that support it. They do not bind the new Rust generator: [the goals](goals.md) are its rule book and state which code each
+rule book governs.
+
 ## 1. One job per crate with parallel check steps
 
 **Decision.** Each Rust package/configuration owns exactly one generated CI
@@ -22,13 +29,15 @@ Clippy, Documentation, Unit and integration tests, and Doctests then run as
 parallel steps inside that job, using GitHub Actions native step concurrency
 (`background: true` members joined by one `wait-all`).
 
-**Amendment (doctests off).** No crate job has a Doctests step now. Every lib
+**Doctests.** The Doctests step exists only for a package that has a doctest
+target, and no crate job in this repository has one. Every lib
 sets `doctest = false`, and the generator drops the Doctests lane for a
 package that has no doctest target. The `no-doctests` alint rule
 (`.alint.yml`) fails on a doc code fence, an indented doc code block or a
 `#[doc]` include in `crates/**/src/**/*.rs`. The lane comes back automatically
-when a doctest target appears. Owner standing grant 2026-11-02, velnor-fast-ci
-GOAL.md, decision X76.
+when a doctest target appears. The doctest rule, the separate Cargo target
+lanes, the `union` default and `MBX_BUILD_SCRIPT_EXECUTION=1` in this decision
+were adopted under the owner's standing grant of 2026-11-02.
 
 **Rationale.** Version 0.1.20 split every crate into Lint, Tests and
 Documentation jobs. Each repeated checkout, tool setup, cache restore and
@@ -43,25 +52,23 @@ and overlaps the independent checks.
   job at the join, and the always-on report upload still runs afterwards.
   Required still demands every task report and every crate job the plan
   schedules; a crate job the plan marks `not_affected` must be skipped
-  (decision 4).
+  (decision 3).
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
-  compiled-state family; owner standing grant 2026-11-02, velnor-fast-ci
-  GOAL.md, decisions X61, X64 and X73) so Cargo's target-directory lock never
-  serializes test execution behind them. When a package has a doctest target,
-  doctests compile in their own lane `target/velnor-doctest`, and the
-  compiled-state producer runs the crate jobs' doctests lane record too (owner
-  standing grant 2026-11-02, velnor-fast-ci GOAL.md, decision X76). Tests reuse the built executables. Amended for decision X70
-  (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X70):
-  doctests used to share `target/` with the tests. On a filesystem without
-  reflinks, MBX restores replayed outputs as hard links to one store object,
-  and a replay in one lane moves the modification time shared by every link.
-  That makes the dependencies look newer to the test lane's Cargo, which
-  replays them while a concurrent doctest run still reads the same outputs, and
-  rustdoc fails with `extern location for <crate> does not exist`
-  (`docs/implemented/native-rust-crate-jobs.md`, "Cargo target lanes"). The amendment
-  restores the invariant in `docs/proposed/parallelism-and-selection-contract.md:220`
-  that concurrent Cargo writers use different target directories.
+  compiled-state family) so Cargo's target-directory lock never serializes
+  test execution behind them. Tests reuse the built executables. When a
+  package has a doctest target, doctests compile in their own lane
+  `target/velnor-doctest`, and the compiled-state producer runs the crate
+  jobs' doctests lane record too. Doctests do not share `target/` with the
+  tests: on a filesystem without reflinks, MBX restores replayed outputs as
+  hard links to one store object, and a replay in one lane moves the
+  modification time shared by every link. That makes the dependencies look
+  newer to the test lane's Cargo, which replays them while a concurrent
+  doctest run still reads the same outputs, and rustdoc fails with
+  `extern location for <crate> does not exist`
+  (`docs/implemented/native-rust-crate-jobs.md`, "Cargo target lanes").
+  Concurrent Cargo writers use different target directories
+  (`docs/proposed/parallelism-and-selection-contract.md`).
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern
@@ -71,12 +78,10 @@ and overlaps the independent checks.
   compiled caches read-only. See the
   [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
 - Compiled state is written on main. `union` is the generator default for
-  `[stacks.rust] compiled_state`, so velnor-new sets nothing (owner standing
-  grant 2026-11-02, velnor-fast-ci GOAL.md, decisions.tsv X64). It adds one
+  `[stacks.rust] compiled_state`, so velnor-new sets nothing. It adds one
   non-crate `state-producer-<root>` job and one `state-seal-<root>` job per
   Cargo root, both outside Required and `continue-on-error`. Crate jobs stay
-  read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1` (decisions.tsv X61, which
-  amends X48). Owner standing grant 2026-11-02 and X50. Setting `off` removes
+  read-only and run `MBX_BUILD_SCRIPT_EXECUTION=1`. Setting `off` removes
   the jobs.
 
 **Must not be reintroduced without owner approval:** per-phase crate jobs
@@ -106,19 +111,20 @@ job. The baseline-coverage skip path (trusted-baseline artifacts and
 mechanism. Container image build jobs join the same disposition table, keyed
 on their Dockerfile, context inputs and prebuilt crate (adopted per the split
 brief; owner may revisit). See [affected selection](implemented/affected-selection.md).
-Approved by the human owner on 2026-10-19, together with the decision 1
-amendment ("every crate job the plan schedules").
+The planner tests under
+`crates/velnor-actions-orchestrator/tests/workflow_configuration_public/` prove it.
+Approved by the human owner on 2026-10-19, together with the rule in decision 1
+that Required demands every crate job the plan schedules.
 The `complete = true` input rule, which lets a package with an unbounded
 read be selected only by its declared inputs, was approved by the human owner
 on 2026-10-20 (PR #192 review question; the alternative, running every such
 package on every pull request, was declined).
 
-**Amendment 2026-11-03 (owner directive: never build, test or lint what a
-change does not affect).** Authority: owner standing grant 2026-11-02,
-velnor-fast-ci GOAL.md, decisions X51 and X52. Generated workflows never run a
-build, test or lint job that the change does not affect. A pull request that
-changes only documentation runs no Rust job. The directive replaces the rule
-"no `ignore` list exists" with a typed, enforced exclusion:
+**Non-inputs.** Generated workflows never run a build, test or lint job that
+the change does not affect. A pull request that changes only documentation
+runs no Rust job. A path is excluded only through a typed, enforced list.
+This rule was adopted under the owner's standing grant of 2026-11-02; the
+approvals named above cover the rest of this decision.
 
 - `[stacks.rust] non_inputs` is a list of globs, empty by default. A path in it
   is removed from the Rust change set and from the checkout of every Rust job.
@@ -157,9 +163,6 @@ changes only documentation runs no Rust job. The directive replaces the rule
   `evidence.paths` still see the path.
 - `push`, `merge_group` and `workflow_dispatch` stay full runs.
 
-The earlier approval of 2026-10-19 is unchanged for everything else in this
-decision.
-
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a
 build. Baseline coverage never skipped anything in practice: it needed a green
@@ -181,7 +184,7 @@ job to skip steps inside it.
   tracked symlink claims it. A path an OpenTofu root owns but no Rust rule
   claims still runs every Rust job; the Tofu split feeds only Tofu root
   selection. A path leaves a stack only through `[stacks.rust] non_inputs`, which
-  config validation and the checkout guard enforce (amendment 2026-11-03).
+  config validation and the checkout guard enforce.
 - Unverified reads force a package (`undeclared_reads`): a package with a
   build script, or whose tracked `.rs` sources read outside the paths it
   claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
@@ -357,7 +360,7 @@ one `wait-all`). The only accepted JavaScript lockfile is the text `bun.lock`.
 Specification: [Bun contract](proposed/bun-contract.md).
 
 **Status.** Adopted per the split brief; owner may revisit. It extends decision 1 to a new stack.
-Suites amendment: coordinator decision, 2026-10-22, under the owner's autonomy rule
+Suites: coordinator decision, 2026-10-22, under the owner's autonomy rule
 ([record](proposed/bun-browser-suites.md#decision-record)); owner may revisit.
 
 **Rationale.** Decision 1's rationale holds for Bun: checkout, tool setup and `bun install`

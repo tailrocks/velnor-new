@@ -143,7 +143,7 @@ fn public_runner_publication_rejects_dind_kind_archive_before_registry_mutation(
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("image_publication_image_kind"),
+        stderr.contains("image_publication_family_provenance"),
         "wrong-kind archive rejection: {stderr}"
     );
     assert!(!fixture.receipt.exists());
@@ -234,6 +234,31 @@ fn runner_publication_rejects_lock_pins_inconsistent_with_image_source()
             "buildx_asset_url",
             "https://example.invalid/buildx",
             "image_publication_lock_url",
+        ),
+        (
+            "runner_arm64_asset_url",
+            "https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-x64-2.338.0.tar.gz",
+            "image_publication_lock_architecture",
+        ),
+        (
+            "compose_arm64_asset_url",
+            "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-x86_64",
+            "image_publication_lock_architecture",
+        ),
+        (
+            "docker_arm64_archive_url",
+            "https://download.docker.com/linux/static/stable/aarch64/docker-29.9.0.tgz",
+            "image_publication_lock_architecture",
+        ),
+        (
+            "node_arm64_sha256",
+            "d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b745311",
+            "image_publication_lock_architecture",
+        ),
+        (
+            "base_image_arm64_digest",
+            "sha256:7f787d965bc0",
+            "image_publication_lock_architecture",
         ),
     ] {
         let fixture = support::Fixture::new_for(support::FixtureProfile::Runner)?;

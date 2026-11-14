@@ -74,6 +74,10 @@ impl Fixture {
                 ),
             ),
         )?;
+        super::consumer_manifest_fixture::write(
+            &repo,
+            Path::new(env!("CARGO_BIN_EXE_velnor-actions")),
+        )?;
         Self::write_metadata(&workspace, &root)?;
         mise::write(&root, &workspace, None)?;
         Self::write_guard(&guard, "exec \"$@\"\n")?;

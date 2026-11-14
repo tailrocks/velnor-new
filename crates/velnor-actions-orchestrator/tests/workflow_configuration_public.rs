@@ -15,8 +15,6 @@ mod bun_assets_routing_support;
 mod bun_dispositions;
 #[path = "workflow_configuration_public/bun_expansion.rs"]
 mod bun_expansion;
-#[path = "workflow_configuration_public/bun_fork_fence.rs"]
-mod bun_fork_fence;
 #[path = "workflow_configuration_public/bun_lifecycle_scope.rs"]
 mod bun_lifecycle_scope;
 #[path = "workflow_configuration_public/bun_malformed.rs"]
@@ -83,6 +81,8 @@ mod ledger_cli_validator;
 mod ledger_cli_verify_script;
 #[path = "workflow_configuration_public/local_action_annotation.rs"]
 mod local_action_annotation;
+#[path = "workflow_configuration_public/mac_proof_cosign.rs"]
+mod mac_proof_cosign;
 #[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
 mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
@@ -169,6 +169,8 @@ mod source_qualification_sources;
 mod source_qualification_sources_keys;
 #[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
 mod source_qualification_sources_support;
+#[path = "workflow_configuration_public/stable_prepare_branch.rs"]
+mod stable_prepare_branch;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
@@ -235,6 +237,8 @@ mod tools_producers_scope;
 mod topology_e797385c74;
 #[path = "workflow_configuration_public/verification_tools.rs"]
 mod verification_tools;
+#[path = "workflow_configuration_public/waste_aliases.rs"]
+mod waste_aliases;
 #[path = "workflow_configuration_public/waste_graph.rs"]
 mod waste_graph;
 #[path = "workflow_configuration_public/waste_lint.rs"]
@@ -264,6 +268,49 @@ mod verdict_toolchain;
 
 #[path = "workflow_configuration_public/both_shared_producers.rs"]
 mod both_shared_producers;
+#[path = "workflow_configuration_public/source_qualification_both.rs"]
+mod source_qualification_both;
 
 #[path = "workflow_configuration_public/oracle_input_selection.rs"]
 mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_selection.rs"]
+mod source_qualification_selection;
+
+#[path = "workflow_configuration_public/source_qualification_routing_shape.rs"]
+mod source_qualification_routing_shape;
+
+#[path = "workflow_configuration_public/source_qualification_gather_routing.rs"]
+mod source_qualification_gather_routing;
+
+#[path = "workflow_configuration_public/producer_execution.rs"]
+mod producer_execution;
+
+#[path = "workflow_configuration_public/producer_execution_support.rs"]
+mod producer_execution_support;
+
+#[path = "workflow_configuration_public/producer_execution_fixture.rs"]
+mod producer_execution_fixture;
+
+#[path = "workflow_configuration_public/producer_execution_limits.rs"]
+mod producer_execution_limits;
+
+#[path = "workflow_configuration_public/runner_family_sdk_baseline.rs"]
+mod runner_family_sdk_baseline;
+
+#[path = "workflow_configuration_public/runner_family_selection.rs"]
+mod runner_family_selection;
+
+#[path = "workflow_configuration_public/runner_family_guard.rs"]
+mod runner_family_guard;
+
+#[path = "workflow_configuration_public/runner_family_render.rs"]
+mod runner_family_render;
+
+#[path = "workflow_configuration_public/runner_family_source.rs"]
+mod runner_family_source;
+
+#[path = "workflow_configuration_public/runner_family_authority.rs"]
+mod runner_family_authority;
+
+#[path = "workflow_configuration_public/premerge_event_proof.rs"]
+mod premerge_event_proof;

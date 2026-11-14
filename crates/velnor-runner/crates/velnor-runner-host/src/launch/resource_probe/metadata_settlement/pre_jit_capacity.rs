@@ -191,7 +191,7 @@ async fn observe_pre_jit_capacity(
         || cleanup.docker_root_digest() != claim.docker_root_digest()
         || image.engine_id() != claim.engine_id()
         || image.docker_root_digest() != claim.docker_root_digest()
-        || image.platform() != "linux/amd64"
+        || crate::config::RunnerPlatform::parse(image.platform()).is_none()
     {
         return Err(HostError::Ownership);
     }

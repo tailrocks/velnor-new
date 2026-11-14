@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::RenderError;
-use crate::composite::{
-    composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
-};
+use crate::composite::{composite_yaml_with_inputs, shared_call_named_with_inputs};
 use crate::yaml::Yaml;
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
@@ -21,19 +19,53 @@ pub(super) fn build_job(
     product: assets::ProductAsset,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
-    let call = local_action(action, name, steps, actions)?;
+    let call = super::build::source_build_action(action, name, steps, actions)?;
     let mut fields = workflow_steps::with_permissions(
-        base(name, runs_on, JobTimeout::PRODUCT_COMPILER),
+        base(
+            name,
+            runs_on,
+            if product.target == ReleaseTarget::LinuxX86_64 {
+                JobTimeout::PRODUCT_COMPILER
+            } else {
+                JobTimeout::PRODUCT_MACOS_COMPILER
+            },
+        ),
         workflow_steps::build_permissions(),
     );
     fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &["verify-release-source"]);
     fields.push((
         "outputs".to_owned(),
-        Yaml::Map(vec![(
-            "artifact_id".to_owned(),
-            Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
-        )]),
+        Yaml::Map(vec![
+            (
+                "artifact_id".to_owned(),
+                Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
+            ),
+            (
+                "sources_id".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_id }}"),
+            ),
+            (
+                "sources_digest".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_digest }}"),
+            ),
+            (
+                "sources_tree".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_tree }}"),
+            ),
+            (
+                "sources_root_lock".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_root_lock }}"),
+            ),
+            (
+                "sources_runner_lock".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_runner_lock }}"),
+            ),
+            (
+                "sources_attempt".to_owned(),
+                Yaml::str("${{ steps.build.outputs.sources_attempt }}"),
+            ),
+        ]),
     ));
     fields.push((
         "env".to_owned(),
@@ -293,17 +325,6 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(steps)
 }
 
-pub(super) fn local_action(
-    logical: &str,
-    name: &str,
-    steps: Vec<Yaml>,
-    actions: &mut Vec<(String, Yaml)>,
-) -> Result<Yaml, RenderError> {
-    let action = composite_yaml(name, steps)?;
-    actions.push((format!(".github/actions/{logical}/action.yml"), action));
-    shared_call_named(&format!("./.github/actions/{logical}"), name)
-}
-
 pub(super) fn local_action_with_inputs(
     logical: &str,
     name: &str,
@@ -318,7 +339,10 @@ pub(super) fn local_action_with_inputs(
                 (*input_name).to_owned(),
                 Yaml::Map(vec![
                     ("description".to_owned(), Yaml::str(*description)),
-                    ("required".to_owned(), Yaml::Bool(true)),
+                    (
+                        "required".to_owned(),
+                        Yaml::Bool(!input_name.starts_with("sources_")),
+                    ),
                 ]),
             )
         })

@@ -52,6 +52,7 @@ pub(crate) fn dispositions(
     event: WorkflowEvent,
     affected: Option<&BTreeSet<String>>,
     evidence: &ChangeEvidence,
+    include_runner_family: bool,
 ) -> Vec<PlanJob> {
     let mut jobs = Vec::new();
     for image in images {
@@ -73,6 +74,11 @@ pub(crate) fn dispositions(
                 disposition,
             });
         }
+    }
+    if include_runner_family {
+        jobs.push(runner_family_disposition(
+            root, discovery, event, affected, evidence,
+        ));
     }
     jobs
 }
@@ -126,7 +132,7 @@ fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
         else {
             return None;
         };
-        let facts = analyze_dockerfile(&text).ok()?;
+        let facts = analyze_dockerfile(&text, &[]).ok()?;
         if text.contains("--mount") {
             claims.claim(context);
         }
@@ -143,4 +149,106 @@ fn source_root(source: &str) -> &str {
         Some(at) => source[..at].rsplit_once('/').map_or("", |(dir, _)| dir),
         None => source,
     }
+}
+
+fn runner_family_disposition(
+    root: &Path,
+    discovery: &Discovery,
+    event: WorkflowEvent,
+    affected: Option<&BTreeSet<String>>,
+    evidence: &ChangeEvidence,
+) -> PlanJob {
+    let selected = match (selects_affected_work(event), affected, &evidence.paths) {
+        (true, Some(packages), Some(changed)) => {
+            runner_family_claims(root).is_none_or(|claims| claims.touched_by(changed))
+                || runner_family_prebuilt_selected(discovery, packages)
+        }
+        _ => true,
+    };
+    PlanJob {
+        lane: None,
+        job_id: velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID.to_owned(),
+        disposition: if selected {
+            JobDisposition::Run
+        } else {
+            JobDisposition::NotAffected
+        },
+    }
+}
+
+fn runner_family_prebuilt_selected(discovery: &Discovery, packages: &BTreeSet<String>) -> bool {
+    let names = [
+        "velnor-resource-probe",
+        "velnor-runner-host",
+        "velnor-actions-cli",
+    ];
+    names.iter().any(|name| {
+        let mut ids = discovery
+            .workspaces
+            .iter()
+            .flat_map(|planned| planned.record.packages.iter())
+            .filter(|package| package.in_workspace && !package.external && package.name == *name)
+            .map(|package| package.id.as_str())
+            .peekable();
+        ids.peek().is_none() || ids.any(|id| packages.contains(id))
+    })
+}
+
+fn runner_family_claims(root: &Path) -> Option<Claims> {
+    let mut claims = Claims::default();
+    for path in velnor_archive_guard::source_claims(root).ok()? {
+        claims.claim(&path);
+    }
+    let inputs = velnor_actions_contract::runner_publication_source_inputs().ok()?;
+    for &path in inputs {
+        claims.claim(path);
+    }
+    for path in velnor_actions_workflow_renderer::verification_jobs::FAMILY_PREFETCH_SOURCES {
+        claims.claim(path);
+    }
+    for path in [
+        "scripts/check-runner-image-candidate.sh",
+        ".cargo/config",
+        ".cargo/config.toml",
+        ".gitignore",
+        ".mise-version",
+        "mise.toml",
+        "mise.lock",
+        "rust-toolchain.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".velnor/config.toml",
+    ] {
+        claims.claim(path);
+    }
+    for (role, context, dockerfile) in [
+        (
+            "runner",
+            "images/runner/ubuntu-26.04",
+            "images/runner/ubuntu-26.04/Dockerfile",
+        ),
+        ("dind", "images/dind", "images/dind/Dockerfile"),
+        (
+            "resource_probe",
+            "images/resource-probe",
+            "images/resource-probe/Dockerfile",
+        ),
+    ] {
+        claims.claim(dockerfile);
+        claims.claim(&format!("{context}/.dockerignore"));
+        claims.claim(&format!("{dockerfile}.dockerignore"));
+        let RepoRead::Text(text) = read_repo_file(root, dockerfile, MAX_DOCKERFILE_BYTES).ok()?
+        else {
+            return None;
+        };
+        let policy = velnor_actions_contract::runner_publication_dockerfile_context(role)?;
+        let facts = policy.analyze(&text).ok()?;
+        if text.contains("--mount") {
+            claims.claim(context);
+        }
+        for source in &facts.context_sources {
+            claims.claim(&format!("{context}/{}", source_root(source)));
+        }
+    }
+    Some(claims)
 }

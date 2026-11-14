@@ -5,7 +5,7 @@ mod graph;
 
 mod identity;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use std::path::{Path, PathBuf};
 
@@ -13,7 +13,10 @@ use toml::Value;
 
 use crate::context::FreshnessContext;
 
-use super::{MemberOwners, manifest_label, path_text, read_toml_row, workspace};
+use super::{
+    MemberOwners, MemberWorkspace, manifest_label, path_dependencies, path_text, read_toml_row,
+    workspace,
+};
 
 pub(super) fn check_workspace(
     ctx: &mut FreshnessContext,
@@ -49,12 +52,82 @@ pub(super) fn check_workspace(
     let (members, declared) =
         workspace::read_member_manifests(ctx, manifests, inherited, &inherited_base);
     let by_name = index_lock(&locked);
-    let path_packages =
-        identity::check_declared(ctx, relative, &declared, &by_name, &members, owners);
-    graph::check_membership(ctx, relative, &locked, &members, &path_packages);
+    identity::check_declared(ctx, relative, &declared, &by_name, &members, owners);
+    let expected = transitive_path_packages(ctx, relative, document, owners, manifests);
+    graph::check_membership(ctx, relative, &locked, &expected);
     graph::check_lock_graph(ctx, relative, &locked, &by_name, &members);
     graph::check_lock_mtime(ctx, relative, manifests);
     locked
+}
+
+fn transitive_path_packages(
+    ctx: &mut FreshnessContext,
+    relative: &str,
+    document: &Value,
+    owners: &MemberOwners,
+    manifests: &[PathBuf],
+) -> BTreeSet<(String, String)> {
+    let mut path_packages = BTreeSet::new();
+    let root_workspace = MemberWorkspace {
+        root: ctx.root.join(relative),
+        document: document.clone(),
+    };
+    let mut pending = manifests
+        .iter()
+        .cloned()
+        .map(|manifest| (None::<String>, manifest, root_workspace.clone()))
+        .collect::<VecDeque<_>>();
+    let mut visited = BTreeSet::new();
+    while let Some((expected_name, manifest, workspace)) = pending.pop_front() {
+        let Ok(manifest) = manifest.canonicalize() else {
+            continue;
+        };
+        let Some(target) = read_toml_row(ctx, &manifest, "lock-staleness") else {
+            continue;
+        };
+        let name = target
+            .get("package")
+            .and_then(|package| package.get("name"))
+            .and_then(Value::as_str);
+        if expected_name
+            .as_deref()
+            .is_some_and(|expected| name != Some(expected))
+        {
+            continue;
+        }
+        let package = target.get("package").and_then(Value::as_table);
+        let actual = package
+            .and_then(|package| identity::effective_package_version(package, &workspace.document));
+        if let (Some(name), Some(actual)) = (name, actual) {
+            path_packages.insert((name.to_owned(), normalize_version(&actual).to_owned()));
+        } else {
+            ctx.fail_row(
+                "lock-staleness",
+                &path_text(&manifest),
+                "local package has no effective name and version",
+            );
+        }
+        if !visited.insert(manifest.clone()) {
+            continue;
+        }
+        for (name, target) in path_dependencies::path_dependencies(
+            &target,
+            manifest.parent().unwrap_or(Path::new(".")),
+            &workspace,
+        ) {
+            let Ok(target) = target.canonicalize() else {
+                continue;
+            };
+            if let Some(owner) = owners
+                .get(&target)
+                .filter(|owners| owners.len() == 1)
+                .and_then(|owners| owners.first())
+            {
+                pending.push_back((Some(name), target, owner.clone()));
+            }
+        }
+    }
+    path_packages
 }
 fn read_lock(ctx: &mut FreshnessContext, relative: &str) -> Option<Vec<Value>> {
     let lock = if relative.is_empty() {
@@ -90,7 +163,11 @@ fn version(entry: &Value) -> Option<&str> {
     entry
         .get("version")
         .and_then(Value::as_str)
-        .map(|value| value.split('+').next().unwrap_or(""))
+        .map(normalize_version)
+}
+
+fn normalize_version(value: &str) -> &str {
+    value.split('+').next().unwrap_or("")
 }
 
 fn source(entry: &Value) -> String {

@@ -1,0 +1,26 @@
+schema = 1
+
+[generator]
+binary = "velnor-actions"
+version = "0.1.74"
+commit = "c622bfb187556afb8d3ff3ca917a719e4bb7f32a"
+
+[[generator.binaries]]
+target = "x86_64-unknown-linux-gnu"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu"
+sha256 = "db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f"
+
+[[generator.binaries]]
+target = "aarch64-apple-darwin"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-aarch64-apple-darwin"
+sha256 = "0a97e53bdd5faada42c0e8bedce2c54f710ada669cdd58cc918aaac80df68772"
+
+[[generator.binaries]]
+target = "x86_64-apple-darwin"
+artifact = "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-apple-darwin"
+sha256 = "41d55fe769f40df114ace812a19566d5c188d99143f0a631299dc10ebed4c09c"
+
+[mise-bootstrap]
+version = "2026.11.1"
+artifact = "https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64"
+sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9"

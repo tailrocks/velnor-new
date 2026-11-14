@@ -64,10 +64,6 @@ impl ImageImportRequest {
         Ok(request)
     }
 
-    pub(crate) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
     pub(super) fn image_id_digest(&self) -> &str {
         self.image_index_digest
             .as_deref()

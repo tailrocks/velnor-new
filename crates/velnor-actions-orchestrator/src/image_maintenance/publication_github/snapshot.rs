@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::get_json;
+use super::{ImagePublicationProfile, get_json};
 use crate::{OrchestratorError, github_authority_read, internal::internal};
 use flate2::read::GzDecoder;
 use serde::Deserialize;
@@ -13,6 +13,9 @@ use std::{
     path::{Component, Path},
 };
 use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog};
+
+#[path = "snapshot_inventory.rs"]
+mod inventory;
 
 const HEX: &[u8; 16] = b"0123456789abcdef";
 const MAX_ARCHIVE_BYTES: usize = 64 * 1024 * 1024;
@@ -45,15 +48,23 @@ struct Entry {
     sha: String,
 }
 
+struct LoadedTree {
+    selected: BTreeMap<String, (String, String)>,
+    entries: Vec<Entry>,
+}
+
 pub(super) fn source_files(
     source: &str,
     paths: &[&str],
+    profile: ImagePublicationProfile,
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<BTreeMap<String, Vec<u8>>, OrchestratorError> {
-    let ids = load_tree(source, paths, token, deadline)?;
+    let tree = load_tree(source, paths, token, deadline)?;
     let bytes = download(source, token, deadline)?;
-    read_archive(bytes, &ids, source, deadline)
+    let files = read_archive(bytes, &tree.selected, source, deadline)?;
+    inventory::verify(profile, &files, paths, &tree.entries)?;
+    Ok(files)
 }
 
 fn load_tree(
@@ -61,7 +72,7 @@ fn load_tree(
     paths: &[&str],
     token: &str,
     deadline: CheckDeadline,
-) -> Result<BTreeMap<String, (String, String)>, OrchestratorError> {
+) -> Result<LoadedTree, OrchestratorError> {
     let commit: Commit = get_json(
         &format!("repos/tailrocks/velnor-new/git/commits/{source}"),
         token,
@@ -86,12 +97,14 @@ fn load_tree(
         return Err(internal("image_publication_source_inventory"));
     }
     let mut ids = BTreeMap::new();
-    for entry in tree.entries {
+    for entry in &tree.entries {
         if wanted.contains(entry.path.as_str())
             && (entry.kind != "blob"
                 || !matches!(entry.mode.as_str(), "100644" | "100755")
                 || !super::is_sha1(&entry.sha)
-                || ids.insert(entry.path, (entry.sha, entry.mode)).is_some())
+                || ids
+                    .insert(entry.path.clone(), (entry.sha.clone(), entry.mode.clone()))
+                    .is_some())
         {
             return Err(internal("image_publication_source_tree"));
         }
@@ -99,7 +112,10 @@ fn load_tree(
     if ids.len() != wanted.len() {
         return Err(internal("image_publication_source_inventory"));
     }
-    Ok(ids)
+    Ok(LoadedTree {
+        selected: ids,
+        entries: tree.entries,
+    })
 }
 
 fn download(

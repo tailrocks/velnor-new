@@ -12,7 +12,7 @@ use crate::{
     error::HostError,
     journal::Journal,
     launch::{
-        ReleaseReadSecret, SelectedEngineContext, SessionRefreshStartupAuthority,
+        ImageAuthority, SelectedEngineContext, SessionRefreshStartupAuthority,
         VerifiedWorkerImages, prepare_worker_images, startup_storage_profile,
     },
     launch_blocking::ListenFault,
@@ -23,10 +23,10 @@ pub(in crate::host_controller::loop_driver) async fn run_controller(
     current: HostConfig,
     state: &Path,
     daemon_lock: &DaemonLock,
-    release_read_secret: ReleaseReadSecret,
+    image_authority: ImageAuthority,
 ) -> Result<(), ListenFault> {
     let controller =
-        super::ControllerLoop::initialize(current, state, daemon_lock, release_read_secret).await?;
+        super::ControllerLoop::initialize(current, state, daemon_lock, image_authority).await?;
     Box::pin(controller.run()).await
 }
 
@@ -38,7 +38,7 @@ pub(super) struct StartupInputs<'a> {
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) journal: &'a Journal,
     pub(super) lineage: &'a EngineLineageGuard,
-    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) image_authority: &'a Arc<ImageAuthority>,
 }
 
 pub(super) struct StartupResources {
@@ -57,7 +57,7 @@ pub(super) async fn prepare_startup(
         selected_engine,
         journal,
         lineage,
-        release_read_secret,
+        image_authority,
     } = inputs;
 
     let legacy_reconcile = crate::launch::reconcile_gate(journal, docker).await?;
@@ -85,15 +85,9 @@ pub(super) async fn prepare_startup(
         .await?;
 
     let worker_images =
-        prepare_worker_images(docker, journal, selected_engine, release_read_secret).await?;
-    let admission_ready = prepare_storage_profile(
-        current,
-        docker,
-        journal,
-        release_read_secret,
-        &worker_images,
-    )
-    .await?;
+        prepare_worker_images(docker, journal, selected_engine, image_authority).await?;
+    let admission_ready =
+        prepare_storage_profile(current, docker, journal, image_authority, &worker_images).await?;
     Ok(StartupResources {
         worker_images,
         admission_ready,
@@ -104,7 +98,7 @@ async fn prepare_storage_profile(
     current: &HostConfig,
     docker: &Docker,
     journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
+    image_authority: &ImageAuthority,
     worker_images: &VerifiedWorkerImages,
 ) -> Result<bool, ListenFault> {
     let profile = startup_storage_profile(
@@ -112,8 +106,9 @@ async fn prepare_storage_profile(
         journal,
         current.resource_budget()?,
         current.max_jobs(),
-        release_read_secret,
+        image_authority,
         worker_images,
+        &current.docker().endpoint,
     )
     .await;
     if let Some(profile) = profile {

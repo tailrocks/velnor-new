@@ -273,7 +273,11 @@ fn public_runner_log_capture_completes_as_unavailable_when_diag_missing_or_tampe
 
     for bad_exit in [3_i64, 24_i64] {
         let bad_obs = run_runner_log_cleanup_scenario(bad_exit, b"unexpected".to_vec())?;
-        assert!(matches!(bad_obs.first, Err(HostError::Docker)));
+        assert!(
+            matches!(bad_obs.first, Err(HostError::Docker)),
+            "actual outcome: {:?}",
+            bad_obs.first
+        );
         assert!(bad_obs.replay.is_none());
         assert!(bad_obs.runner_present);
     }

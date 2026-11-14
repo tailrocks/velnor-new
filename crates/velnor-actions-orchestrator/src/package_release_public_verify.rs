@@ -8,7 +8,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::CheckDeadline;
 
 use super::{
-    HistoricalPackageReleaseAdmission, HistoricalPackageReleaseRecovery, OrchestratorError,
+    HistoricalPackageReleaseAdmission, HistoricalPackageReleaseRecovery, HistoricalWorkflowPin,
+    OrchestratorError,
     PUBLIC_VERIFY_BUDGET, PackageReleasePublicPolicy, PackageReleasePublicSelection,
     VerifiedPublicPackageRelease,
     assets::{
@@ -80,6 +81,7 @@ struct PublicReceiptAuthority {
     receipt: PackageReleaseReceipt,
     historical: bool,
     recovery: Option<HistoricalPackageReleaseRecovery>,
+    workflow_pin: Option<HistoricalWorkflowPin>,
 }
 
 fn read_verified_snapshot(
@@ -165,6 +167,7 @@ fn verify_public_receipt_authority(
         receipt,
         historical: historical_pin.is_some(),
         recovery,
+        workflow_pin: historical_pin.and_then(|pin| pin.workflow_pin().cloned()),
     })
 }
 
@@ -205,6 +208,7 @@ fn verify_public_release_custody(
         &authority.receipt,
         &signed,
         authority.recovery.as_ref(),
+        authority.workflow_pin.as_ref(),
         verification_deadline,
     )?;
     crate::package_release_publish::verify_publication_snapshot(&signed, snapshot)?;
@@ -226,16 +230,16 @@ fn verify_public_runs(
     receipt: &PackageReleaseReceipt,
     signed: &VerifiedAttestedSignedPackage,
     recovery: Option<&HistoricalPackageReleaseRecovery>,
+    workflow_pin: Option<&HistoricalWorkflowPin>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     if let Some(recovery) = recovery {
         crate::package_release_publish::verify_public_historical_release_recovery(
-            &policy.plan.repository,
-            policy.repository_id,
-            &policy.plan.default_branch,
-            signed.receipt(),
             &policy.plan,
+            policy.repository_id,
+            signed.receipt(),
             recovery,
+            workflow_pin,
             deadline,
         )
     } else {
@@ -244,6 +248,7 @@ fn verify_public_runs(
             policy.repository_id,
             &policy.plan.default_branch,
             receipt,
+            workflow_pin,
             deadline,
         )
     }

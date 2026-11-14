@@ -201,12 +201,6 @@ pub(crate) fn artifact_response_json() -> String {
     )
 }
 
-pub(crate) fn attestation_json() -> String {
-    format!(
-        "[{{\"verificationResult\":{{\"signature\":{{\"certificate\":{{\"sourceRepositoryIdentifier\":1390620900,\"githubWorkflowRepository\":\"tailrocks/velnor-new\",\"githubWorkflowSHA\":\"{SOURCE_SHA}\",\"githubWorkflowRef\":\"refs/heads/main\",\"githubWorkflowTrigger\":\"workflow_dispatch\",\"sourceRepositoryRef\":\"refs/heads/main\",\"sourceRepositoryDigest\":\"{SOURCE_SHA}\"}}}}}}}}]"
-    )
-}
-
 pub(crate) struct Fixture {
     pub(crate) root: tempfile::TempDir,
     pub(crate) driver: std::path::PathBuf,
@@ -325,6 +319,7 @@ pub(crate) fn pins() -> ProductReleasePins {
 
 pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        runner_image_family: None,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -356,3 +351,6 @@ pub(crate) use gc1_t51_stream::*;
 mod gc1_t51_argv;
 
 use gc1_t51_argv::*;
+
+#[path = "runner_family_fixed_publication.rs"]
+mod runner_family_fixed_publication;

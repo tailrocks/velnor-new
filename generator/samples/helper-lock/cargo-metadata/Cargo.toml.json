@@ -1,0 +1,57 @@
+{
+  "build_directory": "/repo/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo#helper-sample@0.0.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/Cargo.toml",
+      "metadata": null,
+      "name": "helper-sample",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": true,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "helper_sample",
+          "src_path": "/repo/src/lib.rs",
+          "test": true
+        }
+      ],
+      "version": "0.0.0"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo#helper-sample@0.0.0"
+  ],
+  "workspace_members": [
+    "path+file:///repo#helper-sample@0.0.0"
+  ],
+  "workspace_root": "/repo"
+}

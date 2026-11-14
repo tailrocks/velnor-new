@@ -16,6 +16,11 @@ use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 #[path = "matrix_tools.rs"]
 mod tools;
 
+#[path = "matrix_cosign.rs"]
+mod cosign;
+
+pub(crate) use cosign::prepare_runtime_cosign_step;
+
 #[path = "matrix_tofu_env.rs"]
 mod tofu_env;
 

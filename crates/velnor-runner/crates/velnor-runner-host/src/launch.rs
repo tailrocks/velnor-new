@@ -22,6 +22,9 @@ mod inspect;
 pub(crate) mod jit_conflict;
 mod name_taken;
 mod resource_probe;
+pub(crate) use resource_probe::{
+    ProjectedCandidate, inspect_projected_candidate, qualify_mac_family,
+};
 pub(crate) mod retirement;
 pub(crate) mod scoped_runtime;
 
@@ -51,8 +54,8 @@ pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
 
+pub(crate) use resource_probe::{ImageAuthority, RecoveryObservation};
 pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
-pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
@@ -78,14 +81,17 @@ mod trace;
 mod turn;
 pub(crate) mod verified_images;
 
-pub use bootstrap::{BootstrapContainerRole, runner_pair_environment};
+pub use bootstrap::{
+    BootstrapContainerRole, ObservedContainerCgroup, observed_cgroups, runner_pair_environment,
+};
 pub use completion::CompletionWorker;
 pub use execution_authorization::verify_persisted_execution_source_role;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub use resource_probe::{
-    WorkerImage, verify_worker_attestation_manifest, verify_worker_build_source,
-    verify_worker_runtime_config,
+    AcquiredRegistryImage, DaemonSelection, ImageObservation, ImageReference, ImageSession,
+    RegistryImageSpecification, RegistryProjection, WorkerImage, acquire_registry_image,
+    verify_worker_attestation_manifest, verify_worker_build_source, verify_worker_runtime_config,
 };
 pub use steps::resume_deferred_offer_acquire_with_transport;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
@@ -95,10 +101,11 @@ pub(crate) async fn startup_storage_profile(
     journal: &Journal,
     budget: ResourceBudget,
     max_jobs: u32,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
     images: &VerifiedWorkerImages,
+    endpoint: &str,
 ) -> Option<crate::journal::StorageProfile> {
-    let permit = resource_probe::start_permit(docker, journal, budget, secret).await?;
+    let permit = resource_probe::start_permit(docker, journal, budget, secret, endpoint).await?;
     (permit.resource_budget() == budget)
         .then(|| permit.storage_profile(images, budget, max_jobs))
         .flatten()

@@ -9,14 +9,14 @@ use crate::journal::{
     DoctorProbeOutcome, DoctorProbeState, DoctorProbeTicket, Journal, ProbePhase,
 };
 
-use super::ReleaseReadSecret;
-use super::provider::ReleaseImageProvider;
+use super::ImageAuthority;
 
 pub(super) async fn run(
     docker: &Docker,
     journal: &Journal,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
     ticket: &DoctorProbeTicket,
+    endpoint: &str,
 ) -> Result<Option<Value>, HostError> {
     let record = journal
         .doctor_probe_request_by_nonce(ticket.nonce())
@@ -37,9 +37,7 @@ pub(super) async fn run(
         return Ok(None);
     }
     let result = async {
-        let token = secret.as_provider_token()?;
-        let provider = ReleaseImageProvider::from_compiled_source(token, journal)
-            .map_err(|_| HostError::Docker)?;
+        let provider = super::image_provider(secret, journal, endpoint)?;
         Box::pin(super::lifecycle::collect_for_doctor(
             docker, journal, &provider, ticket,
         ))

@@ -139,3 +139,5 @@ pub use wrappers::{
 
 pub const TOOL_ID: &str = "mise";
 pub mod check_tool_probes;
+
+pub mod source_preview;

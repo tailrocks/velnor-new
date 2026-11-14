@@ -30,6 +30,14 @@ pub(super) fn build(
     let tofu_tasks = facts::tofu_tasks(input)?;
     let generated_sources = facts::generated_sources(input, prepared)?;
     let workflow_sources = facts::workflow_sources(input, prepared);
+    let runner_family_tools = input
+        .config
+        .runner_image_family
+        .as_ref()
+        .map(|_| {
+            crate::build_tasks::runner_family_tools(input.discovery).map(|(tools, _, _, _)| tools)
+        })
+        .transpose()?;
     let facts = graph::graph(input, prepared, jobs)?;
     let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state_recipes)?;
     let seal = crate::state_roots::seal_plan(jobs)?;
@@ -52,6 +60,7 @@ pub(super) fn build(
         },
         cargo_workspaces: &workspaces,
         workflow_sources: &workflow_sources,
+        runner_family_tools: runner_family_tools.as_deref(),
         generated_sources: &generated_sources,
         rust_tasks: &rust_tasks,
         tofu_tasks: &tofu_tasks,

@@ -31,6 +31,7 @@ mod gc1_t49;
 mod gc1_t50;
 mod gc1_t51;
 mod gc1_t52;
+mod qualified_archive_public;
 
 pub use velnor_actions_orchestrator::OrchestratorError;
 

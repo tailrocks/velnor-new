@@ -1,0 +1,2 @@
+SYNTHETIC TEST FIXTURE ONLY. No SDK build, qualification, release, Mac proof, or production publication authority is asserted.
+All release, producer, qualification, candidate and SDK values are synthetic. Only private repository, source, signer and invocation metadata reflect the actual signing job.

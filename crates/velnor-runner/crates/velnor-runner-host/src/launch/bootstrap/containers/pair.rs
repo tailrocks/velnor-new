@@ -8,7 +8,6 @@ use velnor_runner_github::EncodedJit;
 
 use crate::error::HostError;
 
-const PLATFORM: &str = "linux/amd64";
 const RUNNER_PIDS: i64 = 1_024;
 const DIND_PIDS: i64 = 2_048;
 const LOG_MAX_SIZE: &str = "10m";
@@ -21,8 +20,9 @@ mod spec;
 pub use config::runner_pair_environment;
 pub(super) use config::{create_body, fixed_mounts};
 
+pub(in crate::launch::bootstrap) use production::create_spec_sha256;
+pub(crate) use production::verify_pre_jit_created;
 pub(crate) use production::{BootstrapPairInput, start_bootstrap_pair};
-pub(in crate::launch::bootstrap) use production::{create_spec_sha256, verify_pre_jit_created};
 pub(crate) use spec::PairCreate;
 pub(crate) use spec::PairSpecContext;
 pub(in crate::launch::bootstrap) use spec::create_spec;

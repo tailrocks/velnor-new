@@ -254,6 +254,29 @@ pub(super) fn root_backing_role(role: StorageRole) -> Result<&'static str, HostE
     }
 }
 
+pub(super) fn root_attachment_matches_backing(
+    binding: &VerifiedStorageResourceBinding,
+    attachment: &crate::launch::bootstrap::ObservedStorageAttachment,
+    expected_digest: &str,
+) -> bool {
+    let mut matches = binding
+        .root_backings()
+        .iter()
+        .filter(|mapping| mapping.role() == attachment.role());
+    let Some(mapping) = matches.next() else {
+        return false;
+    };
+    matches.next().is_none()
+        && Some(mapping.container_id()) == attachment.container_id()
+        && mapping.logical_mount_id() == attachment.mount_id()
+        && mapping.logical_device() == attachment.device()
+        && mapping.logical_statx_device() == attachment.statx_device()
+        && mapping.logical_fs_type_magic() == attachment.fs_type_magic()
+        && mapping.logical_filesystem_id() == attachment.filesystem_id()
+        && mapping.logical_filesystem_digest() == attachment.filesystem_instance_digest()
+        && mapping.backing_filesystem_digest() == expected_digest
+}
+
 fn validate_observed_inode_values(
     policy: StorageInodePolicy,
     filesystem_kind: &str,

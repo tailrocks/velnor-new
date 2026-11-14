@@ -133,7 +133,9 @@ sha256 = "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
 probe = { kind = "rustc_verbose", expected = "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1" }
 "#;
 
-fn release_workflows(non_inputs: Option<&str>) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+pub(super) fn release_workflows(
+    non_inputs: Option<&str>,
+) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     let rust = non_inputs.map_or_else(String::new, |glob| format!("non_inputs = [\"{glob}\"]\n"));
     let config = CONFIG.replace("[stacks.rust]\n", &format!("[stacks.rust]\n{rust}"));
     let repo = make_repo(&format!("{config}\n{TAP}\n{QUALIFIED_RUST}"))?;
@@ -186,7 +188,7 @@ fn release_workflows(non_inputs: Option<&str>) -> Result<Vec<(String, String)>, 
         .collect()
 }
 
-fn jobs_of(workflow: &str) -> Vec<(String, Vec<String>)> {
+pub(super) fn jobs_of(workflow: &str) -> Vec<(String, Vec<String>)> {
     let Some((_, jobs)) = workflow.split_once("\njobs:\n") else {
         return Vec::new();
     };

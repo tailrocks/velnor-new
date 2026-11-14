@@ -54,6 +54,7 @@ pub fn verify_worker_attestation_manifest(
         blobs.insert(
             format!("blobs/sha256/{digest}"),
             Blob {
+                offset: None,
                 digest,
                 size: raw.len() as u64,
                 metadata: Some(raw.to_vec()),

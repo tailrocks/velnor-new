@@ -152,6 +152,7 @@ pub struct ToolCatalog {
     release_plz: String,
     crane: String,
     bun: String,
+    cosign: String,
     project: std::collections::BTreeSet<PinnedTool>,
     emission: bool,
     export_rustup_toolchain: bool,
@@ -172,6 +173,7 @@ impl ToolCatalog {
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
             crane: CRANE_VERSION.to_owned(),
             bun: BUN_VERSION.to_owned(),
+            cosign: COSIGN_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -210,6 +212,7 @@ impl ToolCatalog {
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
             crane: CRANE_VERSION.to_owned(),
             bun: BUN_VERSION.to_owned(),
+            cosign: COSIGN_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -230,6 +233,7 @@ impl ToolCatalog {
             PinnedTool::ReleasePlz => &self.release_plz,
             PinnedTool::Crane => &self.crane,
             PinnedTool::Bun => &self.bun,
+            PinnedTool::Cosign => &self.cosign,
         }
     }
 
@@ -239,6 +243,7 @@ impl ToolCatalog {
             PinnedTool::Nextest => {
                 format!("{NEXTEST_TOOL_SPEC_PREFIX}@{}", self.version(tool))
             }
+            PinnedTool::Cosign => format!("aqua:sigstore/cosign@{}", self.version(tool)),
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
     }

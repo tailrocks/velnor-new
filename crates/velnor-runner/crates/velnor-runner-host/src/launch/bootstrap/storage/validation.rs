@@ -37,6 +37,7 @@ pub(super) fn validate_storage_resource_binding(
     inventory::validate_attachments(
         &binding.roles,
         &binding.attachments,
+        &binding.root_backings,
         &binding.runner_container_id,
         &binding.dind_container_id,
     )?;
@@ -46,6 +47,30 @@ pub(super) fn validate_storage_resource_binding(
         &binding.dind_container_id,
     )?;
     validate_cleanup_binding_matches_attachments(binding)
+}
+
+fn root_attachment_matches_backing(
+    root_backings: &[super::VerifiedRootBackingMapping],
+    item: &super::ObservedStorageAttachment,
+    expected_container: Option<&str>,
+    backing_digest: &str,
+) -> bool {
+    let mut matches = root_backings
+        .iter()
+        .filter(|mapping| mapping.role() == item.role);
+    let Some(mapping) = matches.next() else {
+        return false;
+    };
+    matches.next().is_none()
+        && root_backings.len() == 2
+        && Some(mapping.container_id()) == expected_container
+        && mapping.logical_mount_id() == item.mount_id
+        && mapping.logical_device() == item.device()
+        && mapping.logical_statx_device() == item.statx_device()
+        && mapping.logical_fs_type_magic() == item.fs_type_magic
+        && mapping.logical_filesystem_id() == item.filesystem_id
+        && mapping.logical_filesystem_digest() == item.filesystem_instance_digest
+        && mapping.backing_filesystem_digest() == backing_digest
 }
 
 fn validate_cleanup_binding_matches_attachments(

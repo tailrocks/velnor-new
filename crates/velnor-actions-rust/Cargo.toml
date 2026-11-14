@@ -23,7 +23,7 @@ path = "tests/velnor_rust.rs"
 [dependencies]
 cargo-platform = { version = "=0.3.3" }
 semver = { version = "=1.0.28" }
-velnor-actions-contract = { version = "=0.1.78", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.79", path = "../velnor-actions-contract" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { version = "=1.1.8" }

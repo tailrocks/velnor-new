@@ -47,10 +47,10 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
     validate_empty_root(&home)?;
     validate_empty_root(&work)?;
     validate_empty_root(&metadata)?;
-    set_runner_owner(&home)?;
-    set_runner_owner(&work)?;
     let home_source_proof = create_child_directory(&home, "source-proof", HOME_SOURCE_PROOF)?;
     let inbox = create_child_directory(&home_source_proof, "inbox", HOME_INBOX)?;
+    set_runner_owner(&home)?;
+    set_runner_owner(&work)?;
     let runtime_identity = create_child_directory(&metadata, "runtime-identity", RUNTIME_IDENTITY)?;
     let job_facts = create_child_directory(&metadata, "job-facts", JOB_FACTS)?;
     let source_proof = create_child_directory(&metadata, "source-proof", SOURCE_PROOF)?;

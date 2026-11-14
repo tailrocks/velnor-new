@@ -22,6 +22,24 @@ pub(super) struct Harness {
 }
 
 impl Harness {
+    pub(super) fn new_with_clock() -> Result<Self, Box<dyn Error>> {
+        let path = PathBuf::from(
+            env::var_os("VELNOR_QUALIFICATION_CLOCK_DRIVER")
+                .ok_or("qualification clock driver is missing")?,
+        );
+        let metadata = fs::symlink_metadata(&path)?;
+        if !path.is_absolute()
+            || !metadata.file_type().is_file()
+            || metadata.permissions().mode() & 0o111 == 0
+            || fs::canonicalize(&path)? != path
+        {
+            return Err("qualification clock driver is not an absolute executable file".into());
+        }
+        let mut harness = Self::new()?;
+        harness.collector = path;
+        Ok(harness)
+    }
+
     pub(super) fn new() -> Result<Self, Box<dyn Error>> {
         let temp_parent = fs::canonicalize("/tmp")?;
         let temp = Builder::new()
@@ -218,14 +236,36 @@ pub(super) fn retained_workspace(output: &Output) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-pub(super) fn dogfood_plan_difference(
-    output: &Output,
-    root: &Path,
-) -> Result<String, Box<dyn Error>> {
-    let workspace = retained_workspace(output).ok_or("failed workspace was not retained")?;
+pub(super) fn assert_checked_in_goldens(
+    harness: &Harness,
+    oracle: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let expected = fs::read_to_string(
+        harness
+            .root
+            .join("fixtures/opentofu-goldens/MANIFEST.sha256"),
+    )?;
+    let cases = Command::new(&harness.guard_source)
+        .arg("tree-identity")
+        .arg(oracle.join("cases"))
+        .output()?;
+    assert!(
+        cases.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cases.stderr)
+    );
+    assert_eq!(String::from_utf8(cases.stdout)?, expected);
+    assert_eq!(
+        fs::read_to_string(oracle.join("MANIFEST.sha256"))?,
+        expected
+    );
+    Ok(())
+}
+
+pub(super) fn dogfood_plan_difference(stage: &Path, root: &Path) -> Result<String, Box<dyn Error>> {
     let expected =
         fs::read_to_string(root.join("fixtures/opentofu-goldens/cases/dogfood/plan.txt"))?;
-    let actual = fs::read_to_string(workspace.join("stage/dogfood/plan.txt"))?;
+    let actual = fs::read_to_string(stage.join("dogfood/plan.txt"))?;
     let mut expected_lines = expected.lines();
     let mut actual_lines = actual.lines();
     let mut line = 1;

@@ -2,6 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+pub(crate) fn attestation_json(run: &str, archive: &[u8], record: &[u8], closure: &[u8]) -> String {
+    serde_json::json!([{"verificationResult":{
+        "signature":{"certificate":{
+            "sourceRepositoryIdentifier":1_390_620_900_u64,
+            "githubWorkflowRepository":"tailrocks/velnor-new",
+            "githubWorkflowSHA":SOURCE_SHA,
+            "githubWorkflowRef":"refs/heads/main",
+            "githubWorkflowTrigger":"workflow_dispatch",
+            "sourceRepositoryRef":"refs/heads/main",
+            "sourceRepositoryDigest":SOURCE_SHA,
+            "runInvocationURI":format!("https://github.com/tailrocks/velnor-new/actions/runs/{run}")
+        }},
+        "statement":{"subject":[
+            {"name":"job-image.oci.tar","digest":{"sha256":sha256_hex(archive)}},
+            {"name":"job-image-candidate.json","digest":{"sha256":sha256_hex(record)}},
+            {"name":"job-image-native-source-closure.json","digest":{"sha256":sha256_hex(closure)}}
+        ]}
+    }}])
+    .to_string()
+}
+
 pub(crate) struct EvidenceInputs {
     pub(crate) record: String,
     pub(crate) archive: Vec<u8>,
@@ -14,13 +35,20 @@ pub(crate) struct EvidenceInputs {
 pub(crate) fn evidence_inputs() -> EvidenceInputs {
     let parts = image_parts();
     let archive = archive_bytes(&parts);
+    let record = record_json(&parts, &archive);
+    let attestation = attestation_json(
+        "7/attempts/2",
+        &archive,
+        record.as_bytes(),
+        closure_json().as_bytes(),
+    );
     EvidenceInputs {
-        record: record_json(&parts, &archive),
+        record,
         archive,
         ci_runs: ci_runs_json(),
         authenticated_source: authenticated_source_json(),
         artifact_response: artifact_response_json(),
-        attestation: attestation_json(),
+        attestation,
     }
 }
 
@@ -199,13 +227,7 @@ pub(crate) fn run_evidence_program(
         record_text.as_bytes(),
     )?;
     let archive_path = write_bytes(fixture.root.path(), "evidence.oci.tar", &inputs.archive)?;
-    let result_path = fixture
-        .root
-        .path()
-        .join("publication.json")
-        .to_str()
-        .ok_or_else(|| fail("result path left its string shape"))?
-        .to_owned();
+    let result_path = evidence_result_path(fixture)?;
     let ci_runs_path = write_bytes(
         fixture.root.path(),
         "ci-runs.json",
@@ -231,6 +253,11 @@ pub(crate) fn run_evidence_program(
         "record.attestation.json",
         inputs.attestation.as_bytes(),
     )?;
+    let closure_path = write_bytes(
+        fixture.root.path(),
+        "closure.json",
+        closure_json().as_bytes(),
+    )?;
     let mut output = Command::new("python3");
     output
         .arg(&wrapper)
@@ -244,6 +271,7 @@ pub(crate) fn run_evidence_program(
         .arg(&artifact_path)
         .arg(&archive_attestation_path)
         .arg(&record_attestation_path)
+        .arg(&closure_path)
         .env("VELNOR_IDENTITY_SOURCE", SOURCE_SHA)
         .env("VELNOR_IDENTITY_REPOSITORY", "tailrocks/velnor-new")
         .env("VELNOR_IDENTITY_REPOSITORY_ID", "1390620900")
@@ -266,6 +294,16 @@ pub(crate) fn run_evidence_program(
     let mut combined = String::from_utf8(output.stdout)?;
     combined.push_str(&String::from_utf8(output.stderr)?);
     Ok((code, combined, result_path))
+}
+
+fn evidence_result_path(fixture: &Fixture) -> Result<String, Box<dyn Error>> {
+    Ok(fixture
+        .root
+        .path()
+        .join("publication.json")
+        .to_str()
+        .ok_or_else(|| fail("result path left its string shape"))?
+        .to_owned())
 }
 
 pub(crate) fn check_evidence_file(fixture: &Fixture, path: &str) -> Result<String, Box<dyn Error>> {

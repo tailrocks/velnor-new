@@ -120,6 +120,7 @@ fn plan_internal_inner(
         request.event,
         changed.as_ref(),
         &evidence,
+        prep.config.runner_image_family.is_some(),
     ));
     for dispositions in [
         crate::select::ansible::dispositions,

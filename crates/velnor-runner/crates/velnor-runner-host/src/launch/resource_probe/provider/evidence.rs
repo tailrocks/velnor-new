@@ -3,7 +3,7 @@
 
 use bollard::models::ContainerConfig;
 
-use super::{PLATFORM, valid_sha};
+use super::valid_sha;
 
 pub(crate) struct VerifiedCandidate {
     pub(in crate::launch::resource_probe) runtime_id: String,
@@ -16,7 +16,13 @@ pub(crate) struct VerifiedCandidate {
     pub(in crate::launch::resource_probe) config: ContainerConfig,
     pub(in crate::launch::resource_probe) engine_id: String,
     pub(in crate::launch::resource_probe) docker_root_digest: String,
-    pub(in crate::launch::resource_probe) workspace_cleanup_digest: String,
+    pub(in crate::launch::resource_probe) origin: ProbeImageOrigin,
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::launch) enum ProbeImageOrigin {
+    Registry { manifest_sha256: String },
+    Developer,
 }
 
 impl VerifiedCandidate {
@@ -36,16 +42,32 @@ pub(in crate::launch) struct ProbeImagePreparationEvidence {
     binding_fingerprint: String,
     engine_id: String,
     docker_root_digest: String,
-    workspace_cleanup_digest: String,
+    origin: ProbeImageOrigin,
 }
 
 impl ProbeImagePreparationEvidence {
+    #[cfg(test)]
+    pub(in crate::launch) fn for_test(engine_id: &str, docker_root_digest: &str) -> Self {
+        Self {
+            runtime_id: format!("sha256:{}", "3".repeat(64)),
+            platform: "linux/amd64".to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
+            source_revision: "2".repeat(40),
+            binding_fingerprint: "4".repeat(64),
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+            origin: ProbeImageOrigin::Registry {
+                manifest_sha256: "5".repeat(64),
+            },
+        }
+    }
+
     fn from_candidate(candidate: &VerifiedCandidate) -> Option<Self> {
         if !digest_reference(&candidate.runtime_id)
             || !digest(&candidate.binding_fingerprint)
-            || !digest(&candidate.workspace_cleanup_digest)
+            || !candidate.origin.valid()
             || !valid_sha(&candidate.source_revision)
-            || candidate.platform != PLATFORM
+            || crate::config::RunnerPlatform::parse(&candidate.platform).is_none()
             || !matches!(candidate.daemon_architecture.as_str(), "aarch64" | "x86_64")
             || candidate.engine_id.is_empty()
             || !digest(&candidate.docker_root_digest)
@@ -60,7 +82,7 @@ impl ProbeImagePreparationEvidence {
             binding_fingerprint: candidate.binding_fingerprint.clone(),
             engine_id: candidate.engine_id.clone(),
             docker_root_digest: candidate.docker_root_digest.clone(),
-            workspace_cleanup_digest: candidate.workspace_cleanup_digest.clone(),
+            origin: candidate.origin.clone(),
         })
     }
 
@@ -85,8 +107,17 @@ impl ProbeImagePreparationEvidence {
     pub(in crate::launch) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
     }
-    pub(in crate::launch) fn workspace_cleanup_digest(&self) -> &str {
-        &self.workspace_cleanup_digest
+    pub(in crate::launch) fn origin(&self) -> &ProbeImageOrigin {
+        &self.origin
+    }
+}
+
+impl ProbeImageOrigin {
+    fn valid(&self) -> bool {
+        match self {
+            Self::Registry { manifest_sha256 } => digest(manifest_sha256),
+            Self::Developer => true,
+        }
     }
 }
 

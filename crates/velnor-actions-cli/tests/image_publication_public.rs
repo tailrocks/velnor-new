@@ -3,6 +3,11 @@
 
 use std::{error::Error, fs};
 
+#[path = "image_publication_public/mac_assembly.rs"]
+mod mac_assembly;
+#[path = "image_publication_public/mac_assembly_preview.rs"]
+mod mac_assembly_preview;
+
 #[path = "image_publication_public/attempt_identity.rs"]
 mod attempt_identity;
 #[path = "image_publication_public/job_identity.rs"]
@@ -372,3 +377,18 @@ fn assert_blob_fault_rejected(kind: &str, fault: support::BlobFault) -> Result<(
     assert_eq!(fs::read(&fixture.record)?, record_before);
     Ok(())
 }
+
+#[path = "image_publication_public/family_publication.rs"]
+mod family_publication;
+#[path = "image_publication_public/qualification_provenance.rs"]
+mod qualification_provenance;
+#[path = "image_publication_public/source_absences.rs"]
+mod source_absences;
+
+#[path = "image_publication_public/stored_zip.rs"]
+mod stored_zip;
+
+#[path = "image_publication_public/context_fixture.rs"]
+mod context_fixture;
+#[path = "image_publication_public/publication_context.rs"]
+mod publication_context;

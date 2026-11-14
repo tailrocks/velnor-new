@@ -12,9 +12,11 @@
 pub(crate) mod artifact_admission;
 mod assign;
 mod compile_identity;
+mod completion_admin;
 mod config;
 mod connect;
 mod controller_ipc;
+pub mod curl_config;
 mod daemon_lock;
 mod digest_hex;
 mod docker_client;
@@ -38,17 +40,18 @@ mod plist;
 mod readiness;
 mod readiness_scan;
 mod reconcile;
-pub(crate) mod resource_probe_record;
 pub mod resource_probe_release;
 mod scale_set;
 mod stage;
 mod worker;
 
 pub use assign::{Offer, offer};
+pub use completion_admin::{CompletionAdminClient, CompletionAdminSession};
 pub use config::{
-    ApprovedJobAuthorityPolicy, ConnectionId, DockerConfig, HostConfig, HostLimits,
-    JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection, ScaleSetSelector,
-    SourcePolicy, SourcePolicyMode, WorkflowEvent, build_job_authority_policy_json,
+    ApprovedJobAuthorityPolicy, ConnectionId, DeveloperImages, DockerConfig, HostConfig,
+    HostLimits, JobAuthorityRole, KeychainReference, PullRequestRule, RepositoryConnection,
+    RunnerPlatform, ScaleSetSelector, SourcePolicy, SourcePolicyMode, WorkflowEvent,
+    build_job_authority_policy_json,
 };
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use controller_ipc::{
@@ -73,10 +76,14 @@ pub use journal::pr_source_transition::{
     TransitionStage, UncertaintyReason,
 };
 pub use journal::{IntentState, Journal, Outcome};
-pub use keychain::{import_secret, load_secret, read_secret};
+pub use keychain::{
+    NormalizedSecret, SecretStore, import_secret, load_secret, read_secret, store_secret,
+};
 pub use launch::{
-    BootstrapContainerRole, CompletionWorker, WorkerImage,
-    resume_deferred_offer_acquire_with_transport, runner_pair_environment,
+    AcquiredRegistryImage, BootstrapContainerRole, CompletionWorker, DaemonSelection,
+    ImageObservation, ImageReference, ImageSession, ObservedContainerCgroup,
+    RegistryImageSpecification, RegistryProjection, WorkerImage, acquire_registry_image,
+    observed_cgroups, resume_deferred_offer_acquire_with_transport, runner_pair_environment,
     verify_persisted_execution_source_role, verify_worker_attestation_manifest,
     verify_worker_build_source, verify_worker_runtime_config,
 };

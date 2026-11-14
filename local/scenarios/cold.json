@@ -1,0 +1,8 @@
+{
+  "description": "The default branch builds from an empty cache: a pull request appends a comment line to rust-toolchain.toml and is squash-merged, and the push to the default branch runs cold and saves the caches.",
+  "steps": [
+    {"commit": {"branch": "cold", "append": "rust-toolchain.toml", "line": "# velnor-local cold"}},
+    {"open_pull_request": {"head": "cold", "base": "{default}"}},
+    {"merge_pull_request": "cold"}
+  ]
+}

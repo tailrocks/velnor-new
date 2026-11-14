@@ -1,0 +1,3398 @@
+{
+  "build_directory": "/repo/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "blake3",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.8.7",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "fs"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "semver",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.28",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "thiserror",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.0.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-runner-image-manifest",
+          "optional": false,
+          "path": "/repo/crates/velnor-runner/crates/velnor-runner-image-manifest",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-contract#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-contract/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-contract",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_contract",
+          "src_path": "/repo/crates/velnor-actions-contract/src/lib.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "example"
+          ],
+          "name": "runner_family_inputs",
+          "src_path": "/repo/crates/velnor-actions-contract/examples/runner_family_inputs.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_contract",
+          "src_path": "/repo/crates/velnor-actions-contract/tests/velnor_contract.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "crate_bootstrap_version_public",
+          "src_path": "/repo/crates/velnor-actions-contract/tests/crate_bootstrap_version_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "reusable_attestation_binding_public",
+          "src_path": "/repo/crates/velnor-actions-contract/tests/reusable_attestation_binding_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "source_preview_pair_public",
+          "src_path": "/repo/crates/velnor-actions-contract/tests/source_preview_pair_public.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "rust_backend"
+          ],
+          "kind": null,
+          "name": "flate2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "fs",
+            "process",
+            "std"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "tar",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.4.46",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-mise",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-runner-image-manifest",
+          "optional": false,
+          "path": "/repo/crates/velnor-runner/crates/velnor-runner-image-manifest",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "fs",
+            "process",
+            "std"
+          ],
+          "kind": "build",
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": "build",
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-archive-guard#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-archive-guard/Cargo.toml",
+      "metadata": {
+        "velnor": {
+          "v1-task-owner": "repository-maintenance"
+        }
+      },
+      "name": "velnor-archive-guard",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_archive_guard",
+          "src_path": "/repo/crates/velnor-archive-guard/src/lib.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "velnor-archive-guard",
+          "src_path": "/repo/crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "velnor-golden-collector",
+          "src_path": "/repo/crates/velnor-archive-guard/src/bin/velnor_golden_collector.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "example"
+          ],
+          "name": "golden_collector_clock",
+          "src_path": "/repo/crates/velnor-archive-guard/examples/golden_collector_clock.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "oci_candidate_configuration_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/oci_candidate_configuration_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "golden_collector_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/golden_collector_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "attested_projection_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/attested_projection_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "held_file_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/held_file_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "provenance_envelope_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/provenance_envelope_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "registry_graph_public",
+          "src_path": "/repo/crates/velnor-archive-guard/tests/registry_graph_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "custom-build"
+          ],
+          "name": "build-script-build",
+          "src_path": "/repo/crates/velnor-archive-guard/build.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "fs",
+            "process"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-actions-tofu",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-tofu",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-mise#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-mise/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-mise",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_mise",
+          "src_path": "/repo/crates/velnor-actions-mise/src/lib.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_mise",
+          "src_path": "/repo/crates/velnor-actions-mise/tests/velnor_mise.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "hcl-rs",
+          "optional": false,
+          "registry": null,
+          "rename": "hcl",
+          "req": "=0.19.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-tofu#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-tofu/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-tofu",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_tofu",
+          "src_path": "/repo/crates/velnor-actions-tofu/src/lib.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "custom-build"
+          ],
+          "name": "build-script-build",
+          "src_path": "/repo/crates/velnor-actions-tofu/build.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "cargo-platform",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.3.3",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "semver",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.28",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-rust#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-rust/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-rust",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_rust",
+          "src_path": "/repo/crates/velnor-actions-rust/src/lib.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_rust",
+          "src_path": "/repo/crates/velnor-actions-rust/tests/velnor_rust.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "release_workspace_cargo",
+          "src_path": "/repo/crates/velnor-actions-rust/tests/release_workspace_cargo.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "crate_release_semver_public",
+          "src_path": "/repo/crates/velnor-actions-rust/tests/crate_release_semver_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "tracked_manifest_public",
+          "src_path": "/repo/crates/velnor-actions-rust/tests/tracked_manifest_public.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-actionlint#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-actionlint/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-actionlint",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_actionlint",
+          "src_path": "/repo/crates/velnor-actions-actionlint/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "base64",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rust_backend"
+          ],
+          "kind": null,
+          "name": "flate2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "fs"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "semver",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.28",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-actionlint",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-actionlint",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-bun",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-bun",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-dbt",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-dbt",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-mise",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-rust",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-rust",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-tofu",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-tofu",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "serde-saphyr",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-actions-mise",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {
+        "test-render-capture": []
+      },
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-workflow-renderer#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-workflow-renderer/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-workflow-renderer",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_workflow_renderer",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/src/lib.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_workflow_renderer",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "generator_release_prepare_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/generator_release_prepare_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "product_release_binary_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/product_release_binary_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "prune_tools",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/prune_tools.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "mbx_stats",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/mbx_stats.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "prune_state",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/prune_state.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "rust_tree_digest_pin",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/rust_tree_digest_pin.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "crate_release_version_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/crate_release_version_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "source_preview_bootstrap_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/source_preview_bootstrap_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "source_preview_crypto_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/source_preview_crypto_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "source_preview_loader_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/source_preview_loader_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "cargo_source_handoff_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/cargo_source_handoff_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "premerge_event_proof_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/premerge_event_proof_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "runner_draft_publication_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/runner_draft_publication_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "source_preview_dsse_public",
+          "src_path": "/repo/crates/velnor-actions-workflow-renderer/tests/source_preview_dsse_public.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "thiserror",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.0.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-bun#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-bun/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-bun",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_bun",
+          "src_path": "/repo/crates/velnor-actions-bun/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "thiserror",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.0.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-dbt#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-dbt/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-dbt",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_dbt",
+          "src_path": "/repo/crates/velnor-actions-dbt/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "base64",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rust_backend"
+          ],
+          "kind": null,
+          "name": "flate2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "std",
+            "xz"
+          ],
+          "kind": null,
+          "name": "lzma-rust2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "fs",
+            "param",
+            "process"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "ring"
+          ],
+          "kind": null,
+          "name": "rustls",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.46",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "rustls-native-certs",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.8.5",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha1-checked",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.10.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "snap",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "tar",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.4.46",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "thiserror",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.0.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rustls-no-provider"
+          ],
+          "kind": null,
+          "name": "ureq",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.4.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-actionlint",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-actionlint",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-ansible",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-ansible",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-bun",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-bun",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-dbt",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-dbt",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-gradle",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-gradle",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-mise",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-rust",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-rust",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-tofu",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-tofu",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-workflow-renderer",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-workflow-renderer",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-archive-guard",
+          "optional": false,
+          "path": "/repo/crates/velnor-archive-guard",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "x509-cert",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.2.5",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "deflate-flate2"
+          ],
+          "kind": null,
+          "name": "zip",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=9.0.5",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "span-locations"
+          ],
+          "kind": "dev",
+          "name": "proc-macro2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.107",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "serde-saphyr",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "full",
+            "parsing",
+            "printing",
+            "visit"
+          ],
+          "kind": "dev",
+          "name": "syn",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.0.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {
+        "test-render-capture": [
+          "velnor-actions-workflow-renderer/test-render-capture"
+        ]
+      },
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-orchestrator#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-orchestrator/Cargo.toml",
+      "metadata": {
+        "cargo-machete": {
+          "ignored": [
+            "flate2"
+          ]
+        }
+      },
+      "name": "velnor-actions-orchestrator",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_orchestrator",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/src/lib.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "mac_proof_crypto_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/mac_proof_crypto_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "runner_image_build_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/runner_image_build_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "controller_approval_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/controller_approval_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "homebrew_adoption_seed_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/homebrew_adoption_seed_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_orchestrator",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "task_report_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/task_report_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "workflow_configuration_public",
+          "src_path": "/repo/crates/velnor-actions-orchestrator/tests/workflow_configuration_public.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "thiserror",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.0.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-ansible#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-ansible/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-ansible",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_ansible",
+          "src_path": "/repo/crates/velnor-actions-ansible/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-gradle#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-gradle/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-gradle",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_gradle",
+          "src_path": "/repo/crates/velnor-actions-gradle/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "base64",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "clap",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=4.6.7",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "fs",
+            "process"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "tempfile",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-contract",
+          "optional": true,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-freshness",
+          "optional": true,
+          "path": "/repo/crates/velnor-actions-freshness",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-mise",
+          "optional": true,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-actions-orchestrator",
+          "optional": true,
+          "path": "/repo/crates/velnor-actions-orchestrator",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "base64",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rust_backend"
+          ],
+          "kind": "dev",
+          "name": "flate2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "proc-macro2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.107",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "fs",
+            "process"
+          ],
+          "kind": "dev",
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "serde-saphyr",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=2.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "sha1-checked",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.10.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "full",
+            "visit"
+          ],
+          "kind": "dev",
+          "name": "syn",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.0.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tar",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.4.46",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "tempfile",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.27.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-actions-contract",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-contract",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-actions-mise",
+          "optional": false,
+          "path": "/repo/crates/velnor-actions-mise",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "velnor-archive-guard",
+          "optional": false,
+          "path": "/repo/crates/velnor-archive-guard",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.79",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rt-multi-thread",
+            "time"
+          ],
+          "kind": null,
+          "name": "tokio",
+          "optional": true,
+          "registry": null,
+          "rename": null,
+          "req": "=1.53.3",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": "cfg(target_os = \"macos\")",
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-runner-host",
+          "optional": true,
+          "path": "/repo/crates/velnor-runner/crates/velnor-runner-host",
+          "registry": null,
+          "rename": null,
+          "req": "=0.1.0",
+          "source": null,
+          "target": "cfg(target_os = \"macos\")",
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {
+        "default": [
+          "generator"
+        ],
+        "generator": [
+          "ledger-helper",
+          "dep:serde_json",
+          "dep:base64",
+          "dep:sha2",
+          "dep:tempfile",
+          "dep:toml",
+          "dep:rustix",
+          "dep:velnor-actions-mise",
+          "dep:velnor-actions-orchestrator",
+          "dep:velnor-actions-freshness",
+          "dep:clap",
+          "dep:velnor-runner-host",
+          "dep:tokio"
+        ],
+        "ledger-helper": [
+          "dep:velnor-actions-contract"
+        ]
+      },
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-cli#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-cli/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-actions-cli",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "velnor-actions",
+          "src_path": "/repo/crates/velnor-actions-cli/src/main.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "example"
+          ],
+          "name": "image-publication-fixture",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/examples/image_publication_fixture.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "example"
+          ],
+          "name": "qualification-diagnostics",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/examples/qualification_diagnostics.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "native_image_candidate_inventory_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/native_image_candidate_inventory_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "ledger_helper_public",
+          "src_path": "/repo/crates/velnor-actions-cli/tests/ledger_helper_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "lane_execution_both",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/lane_execution_both.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "velnor_cli",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/velnor_cli.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "api2026_pull_context_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/api2026_pull_context_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "preview_source_selection_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/preview_source_selection_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "candidate_freshness_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/candidate_freshness_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "bun_private_repository_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/bun_private_repository_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "bun_assets_handoff_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/bun_assets_handoff_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "check_runtime_identity_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/check_runtime_identity_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "preview_cross_job_identity_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/preview_cross_job_identity_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "review_completion_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/review_completion_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "pin_mirror_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/pin_mirror_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "runner_image_admission_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/runner_image_admission_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "check_job_source_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/check_job_source_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "image_publication_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/image_publication_public.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "mac_signer_early_public",
+          "required-features": [
+            "generator"
+          ],
+          "src_path": "/repo/crates/velnor-actions-cli/tests/mac_signer_early_public.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "rust_backend"
+          ],
+          "kind": null,
+          "name": "flate2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "fs",
+            "process"
+          ],
+          "kind": null,
+          "name": "rustix",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "ring"
+          ],
+          "kind": null,
+          "name": "rustls",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.23.46",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "rustls-native-certs",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.8.5",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "full",
+            "visit"
+          ],
+          "kind": null,
+          "name": "syn",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.0.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "rustls-no-provider"
+          ],
+          "kind": null,
+          "name": "ureq",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.4.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/velnor-actions-freshness#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/velnor-actions-freshness/Cargo.toml",
+      "metadata": {
+        "velnor": {
+          "v1-task-owner": "repository-maintenance"
+        }
+      },
+      "name": "velnor-actions-freshness",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_actions_freshness",
+          "src_path": "/repo/crates/velnor-actions-freshness/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.1.79"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo/crates/velnor-actions-contract#0.1.79",
+    "path+file:///repo/crates/velnor-archive-guard#0.1.79",
+    "path+file:///repo/crates/velnor-actions-mise#0.1.79",
+    "path+file:///repo/crates/velnor-actions-tofu#0.1.79",
+    "path+file:///repo/crates/velnor-actions-rust#0.1.79",
+    "path+file:///repo/crates/velnor-actions-actionlint#0.1.79",
+    "path+file:///repo/crates/velnor-actions-workflow-renderer#0.1.79",
+    "path+file:///repo/crates/velnor-actions-bun#0.1.79",
+    "path+file:///repo/crates/velnor-actions-dbt#0.1.79",
+    "path+file:///repo/crates/velnor-actions-orchestrator#0.1.79",
+    "path+file:///repo/crates/velnor-actions-ansible#0.1.79",
+    "path+file:///repo/crates/velnor-actions-gradle#0.1.79",
+    "path+file:///repo/crates/velnor-actions-cli#0.1.79",
+    "path+file:///repo/crates/velnor-actions-freshness#0.1.79"
+  ],
+  "workspace_members": [
+    "path+file:///repo/crates/velnor-actions-contract#0.1.79",
+    "path+file:///repo/crates/velnor-archive-guard#0.1.79",
+    "path+file:///repo/crates/velnor-actions-mise#0.1.79",
+    "path+file:///repo/crates/velnor-actions-tofu#0.1.79",
+    "path+file:///repo/crates/velnor-actions-rust#0.1.79",
+    "path+file:///repo/crates/velnor-actions-actionlint#0.1.79",
+    "path+file:///repo/crates/velnor-actions-workflow-renderer#0.1.79",
+    "path+file:///repo/crates/velnor-actions-bun#0.1.79",
+    "path+file:///repo/crates/velnor-actions-dbt#0.1.79",
+    "path+file:///repo/crates/velnor-actions-orchestrator#0.1.79",
+    "path+file:///repo/crates/velnor-actions-ansible#0.1.79",
+    "path+file:///repo/crates/velnor-actions-gradle#0.1.79",
+    "path+file:///repo/crates/velnor-actions-cli#0.1.79",
+    "path+file:///repo/crates/velnor-actions-freshness#0.1.79"
+  ],
+  "workspace_root": "/repo"
+}

@@ -85,6 +85,7 @@ fn volume_response(name: &str, labels: &Value) -> Value {
 
 fn remove_volume(path: &str, state: &mut State) -> Reply {
     let name = path.strip_prefix("volumes/").unwrap_or_default();
+    state.volume_delete_attempts.push(name.to_owned());
     if volume_is_attached(name, state) {
         return super::server_error();
     }

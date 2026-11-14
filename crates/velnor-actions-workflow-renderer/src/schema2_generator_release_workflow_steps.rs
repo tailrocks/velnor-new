@@ -119,19 +119,20 @@ pub(super) fn bash_step_with_id(id: &str, name: &str, run: &str) -> Yaml {
 }
 
 pub(super) fn bash_step_with_env(name: &str, run: &str, env: Vec<(&str, &str)>) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(name)),
-        (
+    let mut fields = vec![("name".to_owned(), Yaml::str(name))];
+    if !env.is_empty() {
+        fields.push((
             "env".to_owned(),
             Yaml::Map(
                 env.into_iter()
                     .map(|(key, value)| (key.to_owned(), Yaml::str(value)))
                     .collect(),
             ),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(run)),
-    ])
+        ));
+    }
+    fields.push(("shell".to_owned(), Yaml::str("bash")));
+    fields.push(("run".to_owned(), Yaml::str(run)));
+    Yaml::Map(fields)
 }
 
 pub(super) fn bash_step_with_token(
@@ -292,7 +293,7 @@ pub(super) fn attest_permissions() -> Yaml {
 }
 
 pub(super) fn qualification_permissions() -> Yaml {
-    Yaml::Map(Vec::new())
+    perm(&[("actions", "read")])
 }
 
 pub(super) fn publish_permissions() -> Yaml {
@@ -318,4 +319,59 @@ pub(super) fn subject_list(files: &[&str], directory: &str) -> String {
 
 fn newline_list(files: &[&str]) -> String {
     files.join("\n")
+}
+
+pub(super) fn source_upload_step(product: super::assets::ProductAsset) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Retain locked Cargo sources")),
+        ("id".to_owned(), Yaml::str("upload-sources")),
+        (
+            "if".to_owned(),
+            Yaml::str("${{ steps.sources-identity.outcome == 'success' }}"),
+        ),
+        ("continue-on-error".to_owned(), Yaml::Bool(true)),
+        (
+            "uses".to_owned(),
+            Yaml::str(crate::steps::UPLOAD_ARTIFACT_USES),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "name".to_owned(),
+                    Yaml::str(format!(
+                        "{}-sources-${{{{ github.run_attempt }}}}",
+                        product.workflow_artifact
+                    )),
+                ),
+                (
+                    "path".to_owned(),
+                    Yaml::str("${{ runner.temp }}/stable-cargo-sources/"),
+                ),
+                ("include-hidden-files".to_owned(), Yaml::str("true")),
+                ("if-no-files-found".to_owned(), Yaml::str("error")),
+                ("retention-days".to_owned(), Yaml::Int(1)),
+            ]),
+        ),
+    ])
+}
+
+pub(super) fn source_identity_step() -> Yaml {
+    let mut step = bash_step_with_id(
+        "sources-identity",
+        "Verify staged source identity",
+        r#"set -eu
+test "$(/usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
+test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_ROOT_LOCK"
+test "$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
+printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT""#,
+    );
+    if let Yaml::Map(fields) = &mut step {
+        fields.push((
+            "if".to_owned(),
+            Yaml::str("${{ env.STABLE_SOURCES_TREE != '' }}"),
+        ));
+        fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
+    step
 }

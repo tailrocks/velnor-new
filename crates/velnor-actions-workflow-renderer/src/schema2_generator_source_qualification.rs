@@ -12,6 +12,10 @@ use crate::{ProductReleasePins, RenderError, Schema2WorkflowRequest};
 #[path = "schema2_generator_source_qualification_jobs.rs"]
 mod jobs;
 
+#[path = "schema2_generator_source_qualification_routing.rs"]
+mod routing;
+use crate::source_qualification_plan::SourceQualificationPlan;
+
 use jobs::{
     GATHER_JOB_ID, GATHER_JOB_NAME, GATHER_PHASE, PREFETCH_PHASE,
     PRELUDE_AFTER_MISE_BEFORE_PREFETCH, PRELUDE_AFTER_PREFETCH, PREPARE_PHASE, PRODUCER_JOBS,
@@ -23,7 +27,10 @@ pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.y
 const SOURCES_FETCH_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
-pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(super) fn render(
+    request: &Schema2WorkflowRequest,
+    source_plan: Option<&SourceQualificationPlan>,
+) -> Result<Yaml, RenderError> {
     let pins = request.product_release.as_ref().ok_or_else(|| {
         RenderError::InvalidWorkflow("source_qualification_requires_generator_release".to_owned())
     })?;
@@ -36,20 +43,41 @@ pub(super) fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderErr
         ));
     }
     let runner = super::RunnerSpec::hosted(&request.hosted_label)?;
-    let mut jobs = Vec::new();
+    let plan = source_plan.ok_or_else(routing::invalid)?;
+    let mut jobs = vec![
+        ("plan".to_owned(), routing::plan_job(plan)?),
+        (
+            "selection".to_owned(),
+            routing::selection_job(plan, &runner)?,
+        ),
+    ];
     for producer in PRODUCER_JOBS {
         jobs.push((
             producer.id.to_owned(),
-            producer_job(&runner, &request.hosted_label, pins, producer)?,
+            producer_job(&runner, &request.hosted_label, pins, producer, plan)?,
         ));
     }
-    jobs.push((GATHER_JOB_ID.to_owned(), gather_job(&runner)?));
+    jobs.push((
+        GATHER_JOB_ID.to_owned(),
+        routing::gather_job(&runner, plan)?,
+    ));
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                ("pull_request".to_owned(), Yaml::Map(Vec::new())),
+                (
+                    "pull_request".to_owned(),
+                    Yaml::Map(vec![(
+                        "types".to_owned(),
+                        Yaml::Seq(
+                            crate::render::EXPECTED_PR_TYPES
+                                .iter()
+                                .map(|kind| Yaml::str(*kind))
+                                .collect(),
+                        ),
+                    )]),
+                ),
                 ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
             ]),
         ),
@@ -77,8 +105,10 @@ fn producer_job(
     runner_label: &str,
     pins: &ProductReleasePins,
     producer: &ProducerJob,
+    plan: &SourceQualificationPlan,
 ) -> Result<Yaml, RenderError> {
-    let mut steps = vec![checkout_step()];
+    let mut steps =
+        crate::non_input_checkout::restrict_checkout_yaml(checkout_step(), &plan.non_inputs);
     steps.push(prepare_step());
     steps.extend(phase_steps(&[VERIFY_CHECKOUT_PHASE]));
     steps.extend(sources_restore_steps(producer.id, runner_label)?);
@@ -88,7 +118,16 @@ fn producer_job(
     steps.extend(phase_steps(PRELUDE_AFTER_PREFETCH));
     steps.extend(phase_steps(producer.phases));
     steps.push(upload_step(&producer_artifact(producer.id)));
-    let mut fields = job_head(runner, producer.name, Vec::new())?;
+    let gate = vec![
+        ("needs".to_owned(), Yaml::Seq(vec![Yaml::str("selection")])),
+        (
+            "if".to_owned(),
+            Yaml::str(
+                "needs.selection.result == 'success' && needs.selection.outputs.decision == 'run'",
+            ),
+        ),
+    ];
+    let mut fields = job_head(runner, producer.name, gate)?;
     fields.extend([
         ("env".to_owned(), job_env()),
         ("steps".to_owned(), Yaml::Seq(steps)),
@@ -97,7 +136,10 @@ fn producer_job(
     Ok(Yaml::Map(fields))
 }
 
-fn sources_restore_steps(job_id: &str, runner_label: &str) -> Result<Vec<Yaml>, RenderError> {
+pub(super) fn sources_restore_steps(
+    job_id: &str,
+    runner_label: &str,
+) -> Result<Vec<Yaml>, RenderError> {
     let roots = SOURCES_FETCH_ROOTS.map(str::to_owned);
     let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
         .map_err(sources_restore_error)?;
@@ -125,51 +167,6 @@ fn sources_restore_error(error: crate::plan_sources::PlanSourcesError) -> Render
         PlanSourcesError::CacheSourcesPolicy(problem)
         | PlanSourcesError::CacheActionRef(problem) => RenderError::InvalidWorkflow(problem),
     }
-}
-
-fn gather_job(runner: &super::RunnerSpec) -> Result<Yaml, RenderError> {
-    let mut steps = vec![checkout_step()];
-    steps.extend(
-        PRODUCER_JOBS
-            .iter()
-            .map(|producer| download_step(producer.id, &producer_artifact(producer.id))),
-    );
-    steps.extend(phase_steps(&[GATHER_PHASE]));
-    steps.push(upload_step(
-        "source-qualification-${{ github.run_id }}-${{ github.run_attempt }}",
-    ));
-    steps.push(producers_succeeded_step());
-    let gate = vec![
-        (
-            "needs".to_owned(),
-            Yaml::Seq(PRODUCER_JOBS.iter().map(|job| Yaml::str(job.id)).collect()),
-        ),
-        ("if".to_owned(), Yaml::str("always()")),
-    ];
-    let mut fields = job_head(runner, GATHER_JOB_NAME, gate)?;
-    fields.push(("steps".to_owned(), Yaml::Seq(steps)));
-    runner.push_default_shell(&mut fields, false);
-    Ok(Yaml::Map(fields))
-}
-
-fn producers_succeeded_step() -> Yaml {
-    let condition = PRODUCER_JOBS
-        .iter()
-        .map(|job| format!("needs.{}.result != 'success'", job.id))
-        .collect::<Vec<_>>()
-        .join(" || ");
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Require every producer job to succeed"),
-        ),
-        ("if".to_owned(), Yaml::str(condition)),
-        ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "run".to_owned(),
-            Yaml::str("printf 'a producer job did not succeed\\n' >&2; exit 1"),
-        ),
-    ])
 }
 
 fn job_head(
@@ -327,32 +324,6 @@ fn upload_step(artifact: &str) -> Yaml {
                 ("if-no-files-found".to_owned(), Yaml::str("error")),
                 ("include-hidden-files".to_owned(), Yaml::Bool(true)),
                 ("retention-days".to_owned(), Yaml::Int(14)),
-            ]),
-        ),
-    ])
-}
-
-fn download_step(job_id: &str, artifact: &str) -> Yaml {
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str(format!("Download {job_id} evidence")),
-        ),
-        ("if".to_owned(), Yaml::str("always()")),
-        (
-            "uses".to_owned(),
-            Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES),
-        ),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str(artifact)),
-                (
-                    "path".to_owned(),
-                    Yaml::str(format!(
-                        "${{{{ runner.temp }}}}/source-qualification-jobs/{job_id}"
-                    )),
-                ),
             ]),
         ),
     ])

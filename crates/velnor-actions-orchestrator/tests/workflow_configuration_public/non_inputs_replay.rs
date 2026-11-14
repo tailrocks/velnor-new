@@ -214,6 +214,57 @@ fn adopted_config() -> String {
     format!("{DOCS_NON_INPUTS}{}", complete_rules())
 }
 
+#[test]
+fn cargo_handoff_scripts_select_the_renderer_without_selecting_unrelated_crates() -> TestResult {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
+    let config: toml::Value = toml::from_str(&fs::read_to_string(root)?)?;
+    let rules = config["stacks"]["rust"]["inputs"]
+        .as_array()
+        .ok_or("missing inputs")?;
+    let renderer = rules
+        .iter()
+        .find(|rule| {
+            rule["packages"].as_array().is_some_and(|packages| {
+                packages
+                    .iter()
+                    .any(|package| package.as_str() == Some("velnor-actions-workflow-renderer"))
+            })
+        })
+        .ok_or("missing renderer inputs")?;
+    let scoped_config = format!(
+        "{}\n[[stacks.rust.inputs]]\n{}",
+        adopted_config(),
+        toml::to_string(renderer)?
+    );
+    for path in [
+        "scripts/generator-release/cargo-source-handoff.sh",
+        "scripts/generator-release/cargo-git-handoff.py",
+        "scripts/generator-release/source-qualification.sh",
+    ] {
+        let run = replay(&[path], &scoped_config)?;
+        let selected = run.with_disposition("run")?;
+        assert!(
+            selected.contains("velnor-actions-workflow-renderer"),
+            "renderer omitted for {path}: {selected:?}"
+        );
+        assert!(
+            !selected.contains("velnor-runner-core"),
+            "unrelated runner selected for {path}: {selected:?}"
+        );
+        assert!(
+            !run.warnings()
+                .iter()
+                .any(|warning| warning == "unclassified_files:all_changed")
+        );
+    }
+    let docs = replay(&["docs/guide.md"], &scoped_config)?;
+    assert!(
+        docs.with_disposition("run")?.is_empty(),
+        "docs selected Rust jobs"
+    );
+    Ok(())
+}
+
 fn replay(paths: &[&str], config: &str) -> Result<PlanRun, Box<dyn Error>> {
     let (repo, base) = real_topology(config)?;
     for path in paths {

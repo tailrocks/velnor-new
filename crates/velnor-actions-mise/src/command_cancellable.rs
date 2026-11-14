@@ -86,6 +86,31 @@ impl IsolatedCommand {
     }
 
     #[cfg(unix)]
+    pub fn run_quiescent_prefix_until(
+        &self,
+        cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        let (work_deadline, cleanup_deadline) = quiescent_deadlines(deadline)?;
+        let mut streams = Streams::memory(cap).truncate();
+        let (mut output, receipt) = self.run_streams_with_policy(
+            &mut streams,
+            work_deadline,
+            &CancelHandle::new(),
+            super::SPAWN_DEADLINE_MESSAGE,
+            true,
+            Some(cleanup_deadline),
+        )?;
+        output.stdout = streams.into_memory();
+        receipt
+            .map(|proof| (output, proof))
+            .ok_or_else(|| MiseError::SpawnFailed {
+                program: self.program.to_string_lossy().into_owned(),
+                message: "quiescent_drain_receipt_missing".to_owned(),
+            })
+    }
+
+    #[cfg(unix)]
     pub fn run_quiescent_stdout_to_file_until(
         &self,
         output: &mut std::fs::File,
@@ -192,8 +217,13 @@ impl IsolatedCommand {
         } else {
             None
         };
-        let mut child = spawn_child(self, &mut anchor, reserved_cleanup_deadline)
-            .map_err(|problem| fail(&problem))?;
+        let mut child = spawn_child(
+            self,
+            &mut anchor,
+            reserved_cleanup_deadline,
+            streams.input.take(),
+        )
+        .map_err(|problem| fail(&problem))?;
         let mut context = ChildRunContext {
             program: &program,
             streams,
@@ -251,6 +281,15 @@ impl IsolatedCommand {
     }
 
     #[cfg(not(unix))]
+    pub fn run_quiescent_prefix_until(
+        &self,
+        cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<(ProcessOutput, super::ProcessGroupDrainReceipt), MiseError> {
+        self.run_quiescent_until(cap, deadline)
+    }
+
+    #[cfg(not(unix))]
     pub fn run_quiescent_cancellable_until(
         &self,
         cap: usize,
@@ -278,14 +317,5 @@ impl IsolatedCommand {
 
 #[cfg(unix)]
 fn quiescent_deadlines(deadline: CheckDeadline) -> Result<(CheckDeadline, Instant), MiseError> {
-    let remaining = deadline.remaining()?;
-    let work = remaining
-        .checked_sub(IsolatedCommand::PROCESS_CLEANUP_GRACE)
-        .filter(|duration| !duration.is_zero())
-        .ok_or_else(|| crate::checks::invalid("check_timeout", "insufficient_cleanup_budget"))?;
-    let work_deadline = CheckDeadline::after(work)?;
-    let cleanup_deadline = Instant::now()
-        .checked_add(remaining)
-        .ok_or_else(|| crate::checks::invalid("check_timeout", "deadline_overflow"))?;
-    Ok((work_deadline, cleanup_deadline))
+    deadline.split_cleanup(IsolatedCommand::PROCESS_CLEANUP_GRACE)
 }

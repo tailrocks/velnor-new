@@ -3,6 +3,7 @@
 
 mod ci_publication;
 mod encoding;
+mod family;
 mod journal;
 mod manifest_outcomes;
 mod oci;
@@ -24,6 +25,7 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 pub(crate) use ci_publication::PublicationProcess;
+pub(crate) use family::FamilyFixture;
 pub(crate) use journal::{read_pending, read_receipt};
 pub(crate) use manifest_outcomes::{CapturedOutcome, ReplayMutation};
 pub(crate) use profile::FixtureProfile;
@@ -105,13 +107,22 @@ impl Fixture {
         image_kind: &str,
         revision: &str,
     ) -> Result<Self, Box<dyn Error>> {
-        let image = oci::create_with_image_config(&json!({
-            "Labels": {
-                "org.opencontainers.image.revision": revision,
-                "io.velnor.image.kind": image_kind,
-            },
-            "User": "fixture",
-        }))?;
+        let config = if profile == FixtureProfile::Job {
+            json!({
+                "Labels": {
+                    "org.opencontainers.image.revision": revision,
+                    "io.velnor.image.kind": image_kind,
+                },
+                "User": "fixture",
+            })
+        } else {
+            oci::runner_config(profile, revision, image_kind)
+        };
+        let image = if profile == FixtureProfile::Job {
+            oci::create_with_image_config(&config)?
+        } else {
+            oci::create_runner_with_config(profile, &"a".repeat(40), &config)?
+        };
         Self::new_with_image(profile, image, RUN_ATTEMPT, profile.artifact_id())
     }
 
@@ -161,9 +172,11 @@ impl Fixture {
             .artifact_id()
             .checked_add(attempt_offset)
             .ok_or("fixture artifact ID overflow")?;
-        let image = match image_config {
-            Some(config) => oci::create_with_image_config(&config)?,
-            None => oci::create_for(profile, &"a".repeat(40))?,
+        let image = match (profile, image_config) {
+            (FixtureProfile::Job, Some(config)) => oci::create_with_image_config(&config)?,
+            (FixtureProfile::Job, None) => oci::create_for(profile, &"a".repeat(40))?,
+            (_, Some(_)) => return Err("runner image config fixture is unsupported".into()),
+            (_, None) => oci::create_runner_for(profile, &"a".repeat(40))?,
         };
         Self::new_with_image(profile, image, run_attempt, artifact_id)
     }
@@ -201,15 +214,15 @@ impl Fixture {
         let base = temp.path().canonicalize()?;
         let subjects =
             subjects::write_subjects(&base, profile, source, authority_sha, &image, run_attempt)?;
-        let attestation = records::attestation(
+        let attestation = records::attestation(records::AttestationInput {
             profile,
             source,
             authority_sha,
-            &subjects.archive_sha256,
-            &subjects.record_sha256,
-            &subjects.source_files,
+            archive_sha: &subjects.archive_sha256,
+            record_sha: &subjects.record_sha256,
+            source_files: &subjects.source_files,
             run_attempt,
-        )?;
+        })?;
         let qualification_attestation = subjects.qualification_attestation.clone();
         let state = records::state_value(
             profile,

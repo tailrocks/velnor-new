@@ -1,0 +1,8 @@
+{
+  "description": "A push to the default branch saves the caches. Then a pull request appends a comment line to app/src/main.rs, the crate nothing depends on.",
+  "steps": [
+    {"push": "{default}"},
+    {"commit": {"branch": "leaf", "append": "app/src/main.rs", "line": "// velnor-local leaf"}},
+    {"open_pull_request": {"head": "leaf", "base": "{default}"}}
+  ]
+}

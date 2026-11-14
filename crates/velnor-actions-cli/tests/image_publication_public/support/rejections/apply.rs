@@ -152,6 +152,12 @@ impl Fixture {
                 state["qualification_attestation"][0]["verificationResult"]["statement"]["subject"][0]["digest"]["sha256"] =
                     json!("e".repeat(64));
             })?,
+            RejectionCase::WrongProofEnvelopeDigest => self.update_qualification_proof(|proof| {
+                proof["images"][self.profile.name()]["provenance"]["envelope"]["sha256"] = json!("f".repeat(64));
+            })?,
+            RejectionCase::WrongProofContextDigest => self.update_qualification_proof(|proof| {
+                proof["images"][self.profile.name()]["provenance"]["named_contexts"]["resource_probe"]["sha256"] = json!("f".repeat(64));
+            })?,
             RejectionCase::WrongProofSource => self.update_qualification_proof(|proof| {
                 proof["source_commit"] = json!("c".repeat(40));
             })?,

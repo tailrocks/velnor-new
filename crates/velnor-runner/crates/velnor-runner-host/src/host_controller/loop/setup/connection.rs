@@ -20,7 +20,8 @@ use crate::{
 };
 
 use super::super::state::{
-    PreparedConnection, PreparedSetup, SessionCredentials, session_assigned_total,
+    AdminRefreshSchedule, PreparedConnection, PreparedSetup, SessionCredentials,
+    session_assigned_total,
 };
 
 use super::{PrepareConnectionRequest, bind_connection, connection_pat};
@@ -94,7 +95,7 @@ async fn finish_connection_preparation(
         request.journal,
         request.selected_engine,
         request.worker_images,
-        request.options.release_read_secret,
+        request.options.image_authority,
     )?;
     let completion = start_completion_worker(&authority.setup, &request, native_cleanup)?;
     let PrepareConnectionRequest {
@@ -150,6 +151,7 @@ async fn finish_connection_preparation(
         unkeyed_authorization: Vec::new(),
         pending_acquired_recovery: BTreeMap::new(),
         unkeyed_acquired_recovery: Vec::new(),
+        admin_refresh: AdminRefreshSchedule::due_at(std::time::Instant::now()),
     })
 }
 
@@ -158,8 +160,11 @@ fn native_cleanup_runtime(
     journal: &crate::journal::Journal,
     selected_engine: &crate::launch::SelectedEngineContext,
     worker_images: &crate::launch::VerifiedWorkerImages,
-    release_read_secret: &Arc<crate::launch::ReleaseReadSecret>,
+    image_authority: &Arc<crate::launch::ImageAuthority>,
 ) -> Result<NativeCleanupRuntime, ListenFault> {
+    if !selected_engine.matches_images(worker_images) {
+        return Err(HostError::Ownership.into());
+    }
     Ok(NativeCleanupRuntime::new(
         docker.clone(),
         journal.clone(),
@@ -169,8 +174,7 @@ fn native_cleanup_runtime(
             platform: selected_engine.platform().to_owned(),
         },
         selected_engine.clone(),
-        worker_images.clone(),
-        Arc::clone(release_read_secret),
+        Arc::clone(image_authority),
     )?)
 }
 

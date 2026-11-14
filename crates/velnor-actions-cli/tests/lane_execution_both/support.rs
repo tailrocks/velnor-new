@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::cli;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -10,7 +11,6 @@ use std::{
     process::Command,
 };
 use velnor_actions_contract::SUPPORTED_TARGETS;
-use velnor_actions_orchestrator::{MergeContext, merge_internal_with_context};
 
 pub(super) fn qualified_tool_root() -> Result<(Option<tempfile::TempDir>, PathBuf), Box<dyn Error>>
 {
@@ -46,6 +46,22 @@ pub(super) fn qualified_tool_root() -> Result<(Option<tempfile::TempDir>, PathBu
             catalog.version(velnor_actions_mise::PinnedTool::Nextest)
         ),
     )?;
+    let jactionlint = mise_tool(
+        &mise,
+        "jactionlint",
+        &format!(
+            "jactionlint@{}",
+            catalog.version(velnor_actions_mise::PinnedTool::Jactionlint)
+        ),
+    )?;
+    let shellcheck = mise_tool(
+        &mise,
+        "shellcheck",
+        &format!(
+            "shellcheck@{}",
+            catalog.version(velnor_actions_mise::PinnedTool::Shellcheck)
+        ),
+    )?;
     let staging = tempfile::tempdir()?;
     let root = staging.path().to_path_buf();
     fs::create_dir(root.join("bin"))?;
@@ -53,6 +69,8 @@ pub(super) fn qualified_tool_root() -> Result<(Option<tempfile::TempDir>, PathBu
         (&mise, "bin/mise"),
         (&mbx, "bin/mbx"),
         (&nextest, "bin/cargo-nextest"),
+        (&jactionlint, "bin/jactionlint"),
+        (&shellcheck, "bin/shellcheck"),
         (&cargo, "cargo"),
         (&rustup, "rustup"),
         (&data, "mise-data"),
@@ -121,23 +139,7 @@ pub(super) fn qualified_binary_digests() -> Result<Vec<(&'static str, String)>, 
         SourceBuildBootstrapHost, SourceBuildBootstrapTool, official,
     };
     let config: VelnorConfig = toml::from_str(include_str!("../../../../.velnor/config.toml"))?;
-    let nextest = config
-        .qualified_tools
-        .iter()
-        .find(|tool| tool.id == "cargo-nextest")
-        .and_then(|tool| {
-            tool.platforms
-                .iter()
-                .find(|platform| platform.platform == CheckPlatform::LinuxX64)
-        })
-        .and_then(|platform| {
-            platform
-                .executables
-                .iter()
-                .find(|executable| executable.name == "cargo-nextest")
-        })
-        .ok_or("qualified nextest pin missing")?;
-    Ok(vec![
+    let mut digests = vec![
         (
             "bin/mise",
             official(
@@ -156,8 +158,31 @@ pub(super) fn qualified_binary_digests() -> Result<Vec<(&'static str, String)>, 
             .binary_sha256()
             .to_owned(),
         ),
-        ("bin/cargo-nextest", nextest.sha256.clone()),
-    ])
+    ];
+    for (id, name, path) in [
+        ("cargo-nextest", "cargo-nextest", "bin/cargo-nextest"),
+        ("jactionlint-linux-x64", "jactionlint", "bin/jactionlint"),
+        ("shellcheck-linux-x64", "shellcheck", "bin/shellcheck"),
+    ] {
+        let executable = config
+            .qualified_tools
+            .iter()
+            .find(|tool| tool.id == id)
+            .and_then(|tool| {
+                tool.platforms
+                    .iter()
+                    .find(|platform| platform.platform == CheckPlatform::LinuxX64)
+            })
+            .and_then(|platform| {
+                platform
+                    .executables
+                    .iter()
+                    .find(|executable| executable.name == name)
+            })
+            .ok_or_else(|| format!("qualified {id} pin missing"))?;
+        digests.push((path, executable.sha256.clone()));
+    }
+    Ok(digests)
 }
 
 pub(super) fn verify_rust_toolchain(root: &Path) -> Result<(), Box<dyn Error>> {
@@ -218,14 +243,6 @@ pub(super) fn wrapper_command(
     Ok(command)
 }
 
-pub(super) fn action_script(yaml: &str) -> Result<String, Box<dyn Error>> {
-    let scalar = yaml
-        .lines()
-        .find_map(|line| line.trim_start().strip_prefix("run: "))
-        .ok_or("action run missing")?;
-    Ok(serde_json::from_str(scalar)?)
-}
-
 #[cfg(unix)]
 pub(super) fn link_dir(source: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
     std::os::unix::fs::symlink(source, dest)?;
@@ -238,19 +255,13 @@ pub(super) fn link_dir(_source: &Path, _dest: &Path) -> Result<(), Box<dyn Error
 pub(super) fn read_json(path: &Path) -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
-pub(super) fn assert_pass(request: &Value) -> Result<(), Box<dyn Error>> {
-    let out: Value = serde_json::from_str(&merge_internal_with_context(
-        &request.to_string(),
-        &MergeContext::detached(),
-    )?)?;
+pub(super) fn assert_pass(request: &Value, tools: &Path) -> Result<(), Box<dyn Error>> {
+    let out: Value = cli::invoke(tools, "merge-v1", request, true)?;
     assert_eq!(out["status"], "passed", "{out}");
     Ok(())
 }
-pub(super) fn assert_reject(request: &Value) -> Result<(), Box<dyn Error>> {
-    let out: Value = serde_json::from_str(&merge_internal_with_context(
-        &request.to_string(),
-        &MergeContext::detached(),
-    )?)?;
+pub(super) fn assert_reject(request: &Value, tools: &Path) -> Result<(), Box<dyn Error>> {
+    let out: Value = cli::invoke(tools, "merge-v1", request, false)?;
     assert_ne!(out["status"], "passed", "{out}");
     Ok(())
 }
@@ -276,11 +287,12 @@ pub(super) fn sha(bytes: &[u8]) -> String {
     }
     encoded
 }
-pub(super) fn fixture_manifest() -> String {
+pub(super) fn fixture_manifest() -> Result<String, Box<dyn Error>> {
+    let host_digest = sha(&fs::read(super::BIN)?);
     let version = env!("CARGO_PKG_VERSION");
-    let targets = SUPPORTED_TARGETS.iter().map(|target| { let data = format!("Velnor synthetic test payload; version={version}; target={target}\n"); json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": sha(data.as_bytes())}) }).collect::<Vec<_>>();
+    let targets = SUPPORTED_TARGETS.iter().map(|target| { let data = format!("Velnor synthetic test payload; version={version}; target={target}\n"); json!({"target": target, "artifact": format!("https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"), "sha256": if *target == "x86_64-unknown-linux-gnu" { host_digest.clone() } else { sha(data.as_bytes()) }}) }).collect::<Vec<_>>();
     let marker = sha(b"Velnor synthetic test source marker");
-    json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": &marker[..40], "targets": targets}).to_string()
+    Ok(json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": &marker[..40], "targets": targets}).to_string())
 }
 
 pub(super) fn fixture() -> Result<(tempfile::TempDir, PathBuf, String), Box<dyn Error>> {
@@ -336,7 +348,7 @@ platform = "linux/amd64"
     )?;
     fs::write(
         root.join(".velnor/release-manifest.json"),
-        fixture_manifest(),
+        fixture_manifest()?,
     )?;
     git(&root, &["init", "-b", "main"])?;
     git(&root, &["config", "user.name", "Fixture"])?;

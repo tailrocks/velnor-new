@@ -14,7 +14,7 @@ use crate::{
         MetadataSettlementResult,
     },
     launch::{
-        ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
+        ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::NativeCleanupRuntime,
     },
     listen::{Link, Secret},
@@ -30,7 +30,7 @@ pub(crate) struct ReconcileContext<'a> {
     pub(crate) github_pat: &'a Secret,
     pub(crate) selected: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
-    pub(crate) release_secret: &'a std::sync::Arc<ReleaseReadSecret>,
+    pub(crate) image_authority: &'a std::sync::Arc<ImageAuthority>,
 }
 
 pub(crate) async fn reconcile_claim(
@@ -55,13 +55,16 @@ pub(crate) async fn reconcile_claim(
     {
         return Err(HostError::Ownership);
     }
+    context
+        .journal
+        .ensure_image_imports_resolved(context.selected.engine_id())
+        .await?;
     let runtime = NativeCleanupRuntime::new(
         context.docker.clone(),
         context.journal.clone(),
         engine,
         context.selected.clone(),
-        context.images.clone(),
-        std::sync::Arc::clone(context.release_secret),
+        std::sync::Arc::clone(context.image_authority),
     )?;
     local::ensure_local_absence(
         &runtime,

@@ -212,6 +212,16 @@ pub(super) fn network_isolated(inspected: &ContainerInspectResponse) -> bool {
     let Some(networks) = settings.networks.as_ref() else {
         return false;
     };
+    if networks.is_empty() {
+        return inspected
+            .config
+            .as_ref()
+            .is_some_and(|config| config.network_disabled == Some(true))
+            && inspected
+                .host_config
+                .as_ref()
+                .is_some_and(|host| host.network_mode.as_deref() == Some("none"));
+    }
     if networks.len() != 1 {
         return false;
     }

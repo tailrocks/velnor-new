@@ -74,7 +74,8 @@ pub(super) fn observe_selected_daemon(
     if object_identity(&root)? != root_identity
         || observe_current_process(daemon.host_pid)? != daemon
         || daemon_executable_identity(daemon.host_pid)? != Some(executable_identity)
-        || process_docker_root(daemon.host_pid, docker_root_path)?.as_ref() != Some(&root_identity)
+        || !process_docker_root(daemon.host_pid, docker_root_path)?
+            .is_some_and(|candidate| same_root_object(&candidate, &root_identity))
     {
         return Err(ProbeError::Invalid("selected_daemon_changed"));
     }
@@ -137,12 +138,15 @@ fn daemon_executable_identity(pid: u32) -> Result<Option<ExecutableIdentity>, Pr
     {
         return Ok(None);
     }
-    let descriptor = open(
+    let descriptor = match open(
         format!("{PROC_ROOT}/{pid}/exe"),
         OFlags::PATH | OFlags::CLOEXEC,
         Mode::empty(),
-    )
-    .map_err(|error| ProbeError::Read("daemon_executable", error.into()))?;
+    ) {
+        Ok(descriptor) => descriptor,
+        Err(rustix::io::Errno::NOENT | rustix::io::Errno::SRCH) => return Ok(None),
+        Err(error) => return Err(ProbeError::Read("daemon_executable", error.into())),
+    };
     let status = fstat(&descriptor)
         .map_err(|error| ProbeError::Read("daemon_executable_stat", error.into()))?;
     if FileType::from_raw_mode(status.st_mode) != FileType::RegularFile {
@@ -155,9 +159,8 @@ fn daemon_executable_identity(pid: u32) -> Result<Option<ExecutableIdentity>, Pr
         StatxFlags::BASIC_STATS,
     )
     .map_err(|error| ProbeError::Read("daemon_executable_statx", error.into()))?;
-    if executable.stx_mask & StatxFlags::BASIC_STATS.bits() != StatxFlags::BASIC_STATS.bits()
-        || executable.stx_ino == 0
-    {
+    let required = StatxFlags::TYPE | StatxFlags::INO;
+    if executable.stx_mask & required.bits() != required.bits() || executable.stx_ino == 0 {
         return Err(ProbeError::Invalid("daemon_executable_statx_fields"));
     }
     Ok(Some(ExecutableIdentity {

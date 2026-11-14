@@ -25,6 +25,7 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 - **Role**: Official controller and listener for GitHub Actions Runner Scale Sets.
 - **Reference Areas**:
   - Scale set message protocol and session acquisition contracts (`JobMessageBase` in `types.go` deprecates `runnerRequestId` and sets `runnerRequestId: 0` on current `JobAvailable`, `JobAssigned`, `JobStarted`, and `JobCompleted` messages; because a job can be reassigned to a scale set up to three times with a new `scaleSetAssignTime` / `requestAssignedTime`, `velnor-runner-github` derives the positive synthetic `request_id` for `runnerRequestId: 0` from `jobId` plus the non-zero `scaleSetAssignTime` or `requestAssignedTime`).
+  - The pinned [client.go](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/client.go#L348-L405) joins API paths to the Actions service URL and sends the paired admin token as a bearer credential. Its [refresh path](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/client.go#L1136-L1159) replaces the URL and token together. Velnor preserves service URL paths and accepts HTTPS URLs without user information.
   - Ephemeral runner lifecycles, graceful teardown, and runner pool auto-scaling contracts.
   - Compatibility with GitHub Enterprise Server and GitHub.com scale set endpoints.
 
@@ -108,6 +109,20 @@ than from the certificate's caller source digest.
 ### Step shell resolution and `addPath`
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -p -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
+
+### Local stand-in registration and cache protocol
+
+These facts hold for runner v2.338.0 ([`197ca027`](https://github.com/actions/runner/tree/197ca027b90de199464dee3bb9ff198a1db60967)), the version in `.velnor/runner.lock`, and for `actions/cache` [`55cc8345`](https://github.com/actions/cache/tree/55cc8345863c7cc4c66a329aec7e433d2d1c52a9). `local/` depends on them. Check them again when either pin changes.
+
+- [`UrlUtil.IsHostedServer`](https://github.com/actions/runner/blob/197ca027b90de199464dee3bb9ff198a1db60967/src/Runner.Sdk/Util/UrlUtil.cs) returns `false` when `GITHUB_ACTIONS_RUNNER_FORCE_GHES` is true. Otherwise it returns `true` for `github.com`, `www.github.com`, `github.localhost`, `*.ghe.localhost` and `*.ghe.com`.
+- [`ConfigurationManager`](https://github.com/actions/runner/blob/197ca027b90de199464dee3bb9ff198a1db60967/src/Runner.Listener/Configuration/ConfigurationManager.cs) registers a hosted server at `{scheme}://api.{host}/actions/runner-registration`, and any other server at `{scheme}://{host}/api/v3/actions/runner-registration`. A stand-in at `github.localhost` that serves only the second route therefore needs `GITHUB_ACTIONS_RUNNER_FORCE_GHES=1` on the runner.
+- [`ActionManager`](https://github.com/actions/runner/blob/197ca027b90de199464dee3bb9ff198a1db60967/src/Runner.Worker/ActionManager.cs) deletes the actions directory at the start of every job, so each job downloads its actions again. When `ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE` names an existing directory, the runner first copies `<owner>_<repo>/<sha>.tar.gz` from it, with `/` and `\` in the owner and repository name replaced by `_`. The runner never writes to that directory.
+- The v2 cache client of toolkit [`0786132e`](https://github.com/actions/toolkit/tree/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src), bundled in that `actions/cache`, makes three calls. [`cacheTwirpClient.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/shared/cacheTwirpClient.ts) posts JSON to `/twirp/github.actions.results.api.v1.CacheService/<Method>` under `ACTIONS_RESULTS_URL` with the runtime token as `Authorization: Bearer`. It parses every answer as JSON, and retries up to five attempts when the body is not JSON or the status is 500, 502, 503 or 504. [`cache.twirp-client.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/generated/results/api/v1/cache.twirp-client.ts) writes proto field names (`restore_keys`, `size_bytes`) and ignores unknown fields in answers.
+- [`cache.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/cache.ts): `restoreCacheV2` sends `GetCacheEntryDownloadURL {key, restore_keys, version}`, treats `ok: false` as a miss and reports a restore-key hit when `matched_key` differs from `key`. `saveCacheV2` sends `CreateCacheEntry {key, version}`; on `ok: false` it logs `Cache reservation failed: <message>` as a warning, then `Failed to save: Unable to reserve cache …` as info, and the step succeeds. It then uploads to `signed_upload_url` with the Azure blob client (128 MiB single-shot limit, 64 MiB blocks, 8 at a time) and sends `FinalizeCacheEntryUpload {key, version, size_bytes}` with the size as a string, reading `entry_id`.
+- The Azure blob client bundled in `actions/cache` `dist/` (`@azure/storage-blob` 12.32.0) accepts only `201` for a whole-blob `PUT` (`x-ms-blob-type: BlockBlob`), a `PUT ?comp=block&blockid=<base64>` and the closing `PUT ?comp=blocklist`, whose XML body lists `<Latest>` block ids in order. For a host that is neither `*.blob.*` nor an IP or `localhost`, `getBlobAndContainerNamesFromUrl` takes the container and blob from the first path segments, so the path needs at least `/<container>/<blob>`.
+- [`cacheHttpClient.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/cacheHttpClient.ts) downloads from a host that does not end in `.blob.core.windows.net` with one plain `GET`. [`downloadUtils.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/downloadUtils.ts) aborts when the socket is idle for `SocketTimeout`, 5000 ms ([`constants.ts`](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/internal/constants.ts)), and fails when the file size differs from `Content-Length`.
+- `runner.server` [`992ccbbb`](https://github.com/ChristopherHX/runner.server/tree/992ccbbbf9afcde477c38c316e053b1af457ad40) signs each job's runtime token with RS256 and puts `repository`, `ref` and `defaultRef` (`refs/heads/` plus the payload's `repository.default_branch`, else `main`) in it ([`MessageController.cs`](https://github.com/ChristopherHX/runner.server/blob/992ccbbbf9afcde477c38c316e053b1af457ad40/src/Runner.Server/Controllers/MessageController.cs)). The key is random per start unless `Runner.Server:RSASignatureKeyPath` names a PEM file ([`Startup.cs`](https://github.com/ChristopherHX/runner.server/blob/992ccbbbf9afcde477c38c316e053b1af457ad40/src/Runner.Server/Startup.cs)). It sets the job's `ResultsServiceUrl` and `CacheServerUrl` to the scheme and `Host` header of the runner's request unless `Runner.Server:ServerUrl` is set ([`VssControllerBase.cs`](https://github.com/ChristopherHX/runner.server/blob/992ccbbbf9afcde477c38c316e053b1af457ad40/src/Runner.Server/Controllers/VssControllerBase.cs)), so a server that owns the runner's host name and forwards the other requests with their `Host` header receives every cache call.
+- In `actions/cache`, `isGhes()` reads the host of `GITHUB_SERVER_URL`. Only `github.com`, `*.ghe.com` and `*.localhost` count as GitHub. For any other host, `getCacheServiceVersion()` returns `v1`. Otherwise it returns `v2` when `ACTIONS_CACHE_SERVICE_V2` is set, and the runner's [`NodeScriptActionHandler`](https://github.com/actions/runner/blob/197ca027b90de199464dee3bb9ff198a1db60967/src/Runner.Worker/Handlers/NodeScriptActionHandler.cs) sets that variable for Node actions when the job variable `actions_uses_cache_service_v2` is true.
 
 ### Workflow YAML sharing
 
@@ -278,6 +293,25 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 
 Service matching and scope rules rely on official documentation, not public service implementation. Require live qualification for same-PR cross-push reuse, service-specific size limits and warning behavior before making acceptance claims. Upgrading an action or toolkit version requires rechecking cache-mode handling, archive flags and failure outcomes; newer-client behavior does not qualify the pinned client.
 
+### 6. REST calls answered by `velnor-local api-stub`
+
+Each fact comes from the GitHub REST documentation: [pull request files](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files), [compare two commits](https://docs.github.com/en/rest/commits/commits#compare-two-commits), [repository content](https://docs.github.com/en/rest/repos/contents#get-repository-content), [Actions caches](https://docs.github.com/en/rest/actions/cache) and [pagination](https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api).
+
+- Pagination: `per_page` defaults to 30 and is at most 100. The `Link` header lists `prev`, `next`, `last` and `first` as `<URL>; rel="..."`, comma separated. A response that is not paginated has no `Link` header.
+- Pull request files: at most 3,000 files. Each entry has `sha`, `filename`, `status` (`added`, `removed`, `modified`, `renamed`, `copied`, `changed`, `unchanged`), `additions`, `deletions`, `changes`, `blob_url`, `raw_url`, `contents_url`, and optionally `patch` and `previous_filename`.
+- Compare: the file list holds at most 300 files and appears only on the first page. Without `per_page` or `page` the commit list holds at most 250 commits. `status` is `diverged`, `ahead`, `behind` or `identical`. Top-level fields: `url`, `html_url`, `permalink_url`, `diff_url`, `patch_url`, `base_commit`, `merge_base_commit`, `status`, `ahead_by`, `behind_by`, `total_commits`, `commits`, `files`.
+- Contents: `ref` is a commit, branch or tag and defaults to the default branch. A file has `type`, `encoding`, `size`, `name`, `path`, `content`, `sha`, `url`, `git_url`, `html_url`, `download_url` and `_links`. A directory is an array of such items. A symlink has `type: "symlink"` and `target`. A submodule has `type: "submodule"`. A blob over 1 MB cannot be fetched with the default media type.
+- Cache list: parameters `per_page`, `page`, `ref`, `key` (prefix), `sort` (`created_at`, `last_accessed_at` by default, `size_in_bytes`) and `direction` (`desc` by default). The body is `{total_count, actions_caches: [{id, ref, key, version, last_accessed_at, created_at, size_in_bytes}]}`. Deleting by id answers 204.
+- Compare, as recorded in the captured responses under `docs/implemented/evidence`: `url`, `html_url`, `diff_url` and `patch_url` keep the refs as requested, `permalink_url` pins `owner:sha...owner:sha`, and `commit.message` has no trailing newline.
+- Contents: a directory lists at most 1,000 entries. A symlink whose target is a normal file in the repository returns that file's object; any other symlink returns `type: "symlink"` with `target`. An omitted `ref` reads the default branch, which the stub takes from `--default-branch`.
+- Compare commits are chronological. Without `per_page` or `page` the list holds the newest 250 commits, so its last commit is the most recent of the comparison, and the stub sends no `Link` header. With either parameter the pages are chronological slices of 30 by default and at most 100.
+- A submodule inside a directory listing has `type: "file"`; asked for directly it has `type: "submodule"`. The stub does the same.
+- Modelled: a submodule entry carries the gitlink sha and no `submodule_git_url`; the stub does not read `.gitmodules`.
+- A removed file's `blob_url`, `raw_url` and `contents_url` use the base sha, and the file name is one percent-encoded segment (`src%2Findex.ts`), as in the captured responses.
+- Not served: `contents/` with no path is the repository root listing on GitHub. The stub answers it with 501 because the helper does not call it; the issue that makes the helper list the root adds it.
+- Modelled, not documented: a diff over the stub's size limit answers 422 with `{"message": "Validation Failed", "errors": [{"resource": "Diff", "code": "too_large"}]}`.
+- Modelled, not documented: the stub answers 404 with `{"message": "Not Found", "documentation_url", "status"}` for a missing resource and 403 with a `too_large` error for a blob over 1 MB. The stub's commit objects carry `sha`, `url`, `html_url`, `commit` (`author`, `committer`, `message`, `tree`) and `parents`, a subset of GitHub's.
+
 ## Native preview publication API boundaries
 
 The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)
@@ -406,6 +440,13 @@ executable job, including CI, qualification, native image, signing, publication,
 recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
 keyword: queued time, environment approval, and successive jobs are separate
 from this per-job execution budget.
+Runner-family production has a 330-minute job budget and a 110-minute build
+command deadline. The remaining 220 minutes cover all other job phases together.
+Discovery uses separate read-only jobs for the CI producer and the qualification
+result, each bounded by a 350-minute wait in a 360-minute job. Qualification
+and publication run in separate jobs with their own budgets.
+These bounds fail closed when scheduling or upstream work takes longer; they do
+not promise completion for every possible queue delay or workflow configuration.
 
 A [reusable-workflow caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)
 allows a restricted set of job keys that excludes `timeout-minutes`. Emit the
@@ -536,6 +577,8 @@ workflow-token authentication and a deadline. Source:
 
 The [workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) identifies reusable workflows through `referenced_workflows`, including their path and resolved `sha`; a SHA-pinned entry can omit `ref`. Bind the resolved workflow identity independently of the caller's source identity and do not require optional fields to establish a SHA-pinned reference.
 
+The official runner's [v2.338.2 `JobContext`](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/JobContext.cs) exposes `check_run_id`, `workflow_ref`, `workflow_sha`, `workflow_repository`, and `workflow_file_path`. Admission matches the current job's check-run ID to the [workflow-jobs API](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) `check_run_url` for the exact attempt, then checks the defining reusable workflow against the run's resolved references. A SHA-pinned private fixture run, `42585338912` attempt 1, confirmed this correlation on 2026-11-09 and confirmed that its reusable reference omitted `ref`. Missing or ambiguous identity fields fail closed. This fixture establishes context compatibility only; it does not establish SDK or runner-image qualification.
+
 A reusable signer's certificate URI can use a branch-qualified ref while its resolved workflow SHA is carried separately. The certificate also identifies the caller workflow and SHA, event, run ID and attempt. Field decoding establishes representation only: admission must verify the signed attestation, trusted issuer and exact workflow/source digests.
 
 ## Commit archive retrieval
@@ -576,3 +619,64 @@ selected `sdk-preview-*` tag policy and the owner reviewer. The stable
 and the [tag-specific deployment policy API](https://docs.github.com/en/rest/deployments/branch-policies#create-a-deployment-branch-policy).
 
 GitHub's [release by tag endpoint](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) returns published releases. Its [release listing endpoint](https://docs.github.com/en/rest/releases/releases#list-releases) includes drafts only for callers with push access. The preview draft job has contents write access and searches a bounded complete release listing before creating a release; the read-only source job does not infer draft absence from a hidden result. Candidate selection and later jobs retain the exact original artifact IDs recorded in the owned draft.
+
+## Workflow run-step length
+
+GitHub limits a single [`jobs.<job_id>.steps[*].run` value](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun) to 21,000 characters. Velnor materializes longer fixed Bash scripts in bounded steps after binding project tool references. It verifies the reconstructed bytes before running the original script. Oversized scripts with GitHub expressions or unsupported runner and shell settings fail generation.
+
+The source preview caller admits only the immutable
+[publication authority](https://github.com/tailrocks/velnor-new/blob/72701af69f6f9b693e639814fcf479409da3295c/.github/workflows/source-preview-publication.yml)
+at commit `72701af69f6f9b693e639814fcf479409da3295c`. The reviewed workflow
+blob has SHA-256 `b157479660663d7241291be5f392f4338e6b60a2063bda61d7aa02f82f94990e`.
+Its source job has a five-minute timeout; draft, attest and publish have
+ten-minute timeouts and depend in order on their predecessors. It has no
+nested reusable workflow calls. Timeout admission uses this fixed authority
+record, not a candidate workflow generated in the caller's checkout.
+
+The image release caller separately admits the immutable
+[Mac proof authority](https://github.com/tailrocks/velnor-new/blob/533d225c08785adc4367340e1db4dc111ee2b5a2/.github/workflows/source-preview-mac-proof.yml)
+at commit `533d225c08785adc4367340e1db4dc111ee2b5a2`. Its reviewed workflow
+blob has SHA-256 `ff3ef47eb0f5ea6e43eedb505c5aea15a1ba2e8f523d81959f81e592034b3f1c`.
+It contains one `verify` job with a 140-minute timeout, no predecessors, and no
+nested reusable workflow calls. This record applies only to the
+`verify-mac-proof` job in `product-release-images.yml`; other external references
+remain rejected.
+
+## Private production Mac runner constraints
+
+GitHub documents repository-scoped runner registration separately from
+organization runner groups in its [runner administration API](https://docs.github.com/en/rest/actions/self-hosted-runners#create-a-registration-token-for-a-repository).
+A repository-scoped runner trusts the repository's reviewed writer/workflow
+surface; it does not imply organization group workflow restrictions.
+The [workflow dispatch API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+accepts a branch or tag ref. Admission must compare the actual run and workflow
+commit to its pin rather than claim that dispatch accepts a raw commit SHA.
+
+The [OIDC reference](https://docs.github.com/en/actions/reference/security/oidc)
+and pinned [Fulcio certificate extensions](https://github.com/sigstore/fulcio/blob/24deee31680022186e823592f8a2d760841fe043/docs/oid-info.md)
+define the identity fields used by the additional Mac proof. Cosign issuer/SAN
+verification alone does not check every repository, workflow and invocation
+extension required by the runner image contract.
+
+The pinned [attest-build-provenance action inputs](https://github.com/actions/attest-build-provenance/blob/4d101475d8b20a2381f78447822ac1eab6504dd8/action.yml#L7-L23)
+accept `subject-digest` in `algorithm:hex_digest` form together with
+`subject-name`. This mode is exclusive with `subject-path` and
+`subject-checksums`. Runner-family final attestation passes the four names and
+digests emitted by the authenticated native verifier, so later local file
+changes cannot select different attestation subjects.
+
+### Artifact download extraction
+
+The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
+records the download action's extraction and digest boundary. Verify artifact
+producer and identity before download; the digest check runs after extraction.
+
+### Hosted macOS source qualification
+
+The [runner image label table](https://github.com/actions/runner-images/blob/main/README.md)
+identifies `macos-15` as ARM64 and `macos-15-intel` as x64. The published
+[ARM64](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md)
+and [Intel](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
+inventories do not list GNU coreutils as a guaranteed tool. Source qualification
+uses the platform `shasum -a 256` command for lock identities instead of relying
+on `sha256sum`.

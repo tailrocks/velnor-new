@@ -23,6 +23,9 @@ use crate::package_release_publish::{
 use crate::package_release_signer::verify_published_manifest_attestation;
 use crate::{OrchestratorError, internal::internal};
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "homebrew_adoption_sdk_binding_assets_memfd_tests.rs"]
+mod memfd_tests;
 #[path = "homebrew_adoption_sdk_binding_assets_temp.rs"]
 mod temp;
 
@@ -117,7 +120,7 @@ fn verify_binary_inventory(
             &record.sha256,
         )?;
     }
-    if host_digest != sha256_current_executable(deadline)? {
+    if host_digest != sha256_current_executable(deadline, MAX_BINARY_BYTES)? {
         return Err(internal("sdk_running_executable_manifest_mismatch"));
     }
     Ok((host_digest, seed_runner_digest))
@@ -308,20 +311,26 @@ pub(super) fn current_release_target() -> Result<ReleaseTarget, OrchestratorErro
     }
 }
 
-pub(super) fn sha256_current_executable(
+pub(crate) fn sha256_current_executable(
     deadline: CheckDeadline,
+    max_bytes: u64,
 ) -> Result<String, OrchestratorError> {
-    let executable = std::env::current_exe()
-        .map_err(|error| OrchestratorError::io("current_exe", error.to_string()))?;
-    let canonical = std::fs::canonicalize(&executable)
-        .map_err(|error| OrchestratorError::io("current_exe", error.to_string()))?;
+    #[cfg(target_os = "linux")]
+    let canonical = std::path::PathBuf::from("/proc/self/exe");
+    #[cfg(not(target_os = "linux"))]
+    let canonical = {
+        let executable = std::env::current_exe()
+            .map_err(|error| OrchestratorError::io("current_exe", error.to_string()))?;
+        std::fs::canonicalize(&executable)
+            .map_err(|error| OrchestratorError::io("current_exe", error.to_string()))?
+    };
     let mut file = File::open(&canonical).map_err(|error| {
         OrchestratorError::io(canonical.display().to_string(), error.to_string())
     })?;
     let metadata = file.metadata().map_err(|error| {
         OrchestratorError::io(canonical.display().to_string(), error.to_string())
     })?;
-    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_BINARY_BYTES {
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max_bytes {
         return Err(internal("sdk_running_executable_invalid"));
     }
     let mut hasher = Sha256::new();
@@ -339,7 +348,7 @@ pub(super) fn sha256_current_executable(
         }
         total = total
             .checked_add(count as u64)
-            .filter(|value| *value <= MAX_BINARY_BYTES)
+            .filter(|value| *value <= max_bytes)
             .ok_or_else(|| internal("sdk_running_executable_invalid"))?;
         hasher.update(&buffer[..count]);
     }
@@ -368,20 +377,6 @@ pub(super) fn write_private_temp_asset(
     file.write_all(bytes)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
     Ok(path)
-}
-
-pub(super) fn compare_stable_versions(
-    left: &str,
-    right: &str,
-) -> Result<std::cmp::Ordering, OrchestratorError> {
-    let parse = |version: &str| -> Result<(u64, u64, u64), OrchestratorError> {
-        let mut parts = version.split('.').map(str::parse::<u64>);
-        match (parts.next(), parts.next(), parts.next(), parts.next()) {
-            (Some(Ok(a)), Some(Ok(b)), Some(Ok(c)), None) => Ok((a, b, c)),
-            _ => Err(internal("sdk_version_invalid")),
-        }
-    };
-    Ok(parse(left)?.cmp(&parse(right)?))
 }
 
 pub(super) fn sha256(bytes: &[u8]) -> String {

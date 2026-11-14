@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{OrchestratorError, internal::internal};
 
-pub(super) const MAX_BUILDX_BYTES: u64 = 100_000_000;
+pub(in crate::image_maintenance) const MAX_BUILDX_BYTES: u64 = 100_000_000;
 pub(super) const DOCKER_ENV: &str = "docker-config";
 
 pub(super) fn verify_buildx_url(url: &str, version: &str) -> Result<(), OrchestratorError> {
@@ -26,7 +26,9 @@ pub(super) fn verify_buildx_url(url: &str, version: &str) -> Result<(), Orchestr
     Ok(())
 }
 
-pub(super) fn owned_directory(path: &Path) -> Result<PathBuf, OrchestratorError> {
+pub(in crate::image_maintenance) fn owned_directory(
+    path: &Path,
+) -> Result<PathBuf, OrchestratorError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
     if !metadata.is_dir()
@@ -75,7 +77,10 @@ pub(in crate::image_maintenance) fn private_subdirectory(
     Ok(path)
 }
 
-pub(super) fn hash_regular(path: &Path, limit: u64) -> Result<String, OrchestratorError> {
+pub(in crate::image_maintenance) fn hash_regular(
+    path: &Path,
+    limit: u64,
+) -> Result<String, OrchestratorError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
     if !metadata.is_file()

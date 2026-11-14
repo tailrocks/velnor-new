@@ -12,6 +12,7 @@ pub(super) fn matches(
     config: &VelnorConfig,
     generated: &BTreeMap<String, GeneratedOwner>,
     sources: &Sources,
+    runner_family_tools: Option<&[crate::verification_jobs::BuildTaskTool]>,
     policy: &WorkflowTaskPolicy,
 ) -> bool {
     match policy {
@@ -42,6 +43,21 @@ pub(super) fn matches(
                 && source(sources, &policy.task.script).and_then(Option::as_ref) == Some(&policy.source_sha256)
         }
         WorkflowTaskPolicy::Image(policy) => config.images.iter().any(|image| matches!((velnor_actions_contract::canonical_json_bytes(image), velnor_actions_contract::canonical_json_bytes(&policy.image)), (Ok(expected), Ok(actual)) if expected == actual)),
+        WorkflowTaskPolicy::RunnerFamily(policy) => config.runner_image_family.is_some()
+            && runner_family_tools == Some(policy.bootstrap.selected_tools.as_slice())
+            && approved_mise(config, ReleaseTarget::LinuxX86_64.triple(), &policy.bootstrap.mise_setup)
+            && policy.bootstrap.task.id == "runner-image-family"
+            && policy.bootstrap.task.mise_task == "check-runner-image-candidate"
+            && policy.bootstrap.task.runner == velnor_actions_contract::VerificationRunner::LinuxX64
+            && policy.bootstrap.runner_label == "ubuntu-26.04"
+            && policy.bootstrap.scale_set_token.is_none()
+            && policy.bootstrap.task.timeout_minutes == 120
+            && policy.bootstrap.task.source.mise_config == "mise.toml"
+            && policy.bootstrap.task.source.working_directory == "."
+            && source(sources, "mise.toml") == Some(&policy.bootstrap.mise_config_sha256)
+            && source(sources, "mise.lock") == Some(&policy.bootstrap.mise_lock_sha256)
+            && source(sources, "rust-toolchain.toml") == Some(&policy.bootstrap.rust_toolchain_sha256)
+            && source(sources, "scripts/check-runner-image-candidate.sh").and_then(Option::as_ref) == Some(&policy.script_sha256),
         WorkflowTaskPolicy::Bun(policy) => generated.get(&policy.id).is_some_and(|owner| owner.kind == GeneratedWorkflowKind::BunMember && owner.member.as_deref() == Some(policy.name.as_str()) && policy.assets == owner.assets),
         WorkflowTaskPolicy::BunSuite(policy) => generated.get(&policy.id).is_some_and(|owner| owner.kind == GeneratedWorkflowKind::BunSuite && owner.member.as_deref() == Some(policy.member.as_str()) && owner.suite.as_deref() == Some(policy.suite.as_str()) && policy.required == owner.required.contains(&policy.id) && policy.report.is_some() == owner.report && policy.assets == owner.assets && policy.job_ids().into_iter().collect::<BTreeSet<_>>() == owner.jobs),
         WorkflowTaskPolicy::BunAssets(policy) => generated.get(&policy.id).is_some_and(|owner| owner.kind == GeneratedWorkflowKind::BunAssets && owner.member.as_deref() == Some(policy.member.as_str())),

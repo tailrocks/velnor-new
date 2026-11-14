@@ -4,7 +4,7 @@
 use crate::{RenderError, render::RenderedFile, schema2::ProductReleasePins, yaml::Yaml};
 
 #[path = "homebrew_adoption_bootstrap.rs"]
-mod bootstrap;
+pub(crate) mod bootstrap;
 #[path = "homebrew_adoption_workflow_jobs.rs"]
 mod jobs;
 

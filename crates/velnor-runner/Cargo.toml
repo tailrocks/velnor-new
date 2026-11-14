@@ -4,8 +4,10 @@
 [workspace]
 members = [
     "crates/velnor-runner-core",
+    "crates/velnor-runner-qualification",
     "crates/velnor-runner-github",
     "crates/velnor-runner-host",
+    "crates/velnor-runner-image-manifest",
     "crates/velnor-runner-cli",
     "crates/velnor-resource-probe",
     "crates/velnor-runner-attestation",
@@ -22,7 +24,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
-rustix = { version = "=1.1.5", default-features = false, features = ["event", "fs", "net", "process", "std"] }
+rustix = { version = "=1.1.6", default-features = false, features = ["event", "fs", "net", "process", "std"] }
 thiserror = { version = "=2.0.21" }
 clap = { version = "=4.6.7", features = ["derive"] }
 tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }

@@ -279,10 +279,8 @@ async fn reconcile_poll(
         ))
         .await?;
     }
-    if outcome.wake_cleanup
-        && let Some(completion) = prepared.completion.as_ref()
-    {
-        completion.notify();
+    if outcome.wake_cleanup {
+        prepared.wake_completion_with_fresh_admin()?;
     }
     Ok(())
 }
@@ -377,7 +375,7 @@ fn positive_poll_context<'a>(context: &ConnectionPollContext<'a>) -> PositivePol
         selected_engine: context.selected_engine,
         worker_images: context.worker_images,
         state: context.state,
-        release_read_secret: context.release_read_secret,
+        image_authority: context.image_authority,
         admission_ready: context.admission_ready,
     }
 }

@@ -81,7 +81,12 @@ def _read_limited_file(path, limit, label):
 
 
 def load_record(path):
-    return _json_bytes(_read_limited_file(path, MAX_RECORD_BYTES, "Candidate record"), "candidate record")
+    return load_record_with_bytes(path)[0]
+
+
+def load_record_with_bytes(path):
+    data = _read_limited_file(path, MAX_RECORD_BYTES, "Candidate record")
+    return _json_bytes(data, "candidate record"), data
 
 
 def validate_record(value):

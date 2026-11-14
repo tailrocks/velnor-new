@@ -85,7 +85,24 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
+    let authorization;
+    let (entry, digest, producer) = if crate::task_producer::is_producer_job(job_id) {
+        let workspace = env::var_os("GITHUB_WORKSPACE")
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| internal("missing_workspace"))?;
+        authorization = crate::task_producer::authorize_producer(
+            &plan,
+            Path::new(&workspace),
+            job_id.ok_or_else(|| internal("missing_github_job"))?,
+            Some(task_id),
+            None,
+            None,
+        )?;
+        (&authorization.entry, authorization.digest, true)
+    } else {
+        let (entry, digest) = entry_and_digest_for_context(&plan, task_id, job_id)?;
+        (entry, digest, false)
+    };
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));
     }
@@ -93,6 +110,17 @@ pub(crate) fn write_task_report_to(
     let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
         .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
+    if producer {
+        let root = runner_temp.join("velnor-producer-reports");
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(runner_temp, &root)?;
+        let isolated = tempfile::Builder::new()
+            .prefix("execution-")
+            .tempdir_in(root)
+            .map_err(|error| OrchestratorError::io("producer_report", error.to_string()))?
+            .keep();
+        write_entry_reports(&isolated, &plan, entry, &task, &matrix)?;
+        return Ok(1);
+    }
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     if let Some(observation) = env::var(UNIT_OBSERVATION_ENV)
         .ok()

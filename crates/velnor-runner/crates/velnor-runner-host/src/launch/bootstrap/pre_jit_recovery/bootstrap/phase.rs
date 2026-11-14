@@ -253,9 +253,12 @@ async fn verify_and_remove_bootstrap_container(
     )
     .await?
     .map_err(|_| HostError::Docker)?;
+    let architecture = crate::config::RunnerPlatform::parse(context.images.platform())
+        .ok_or(HostError::Ownership)?
+        .image_architecture();
     if image_inspect.id.as_deref() != Some(image.runtime_id())
         || image_inspect.os.as_deref() != Some("linux")
-        || image_inspect.architecture.as_deref() != Some("amd64")
+        || image_inspect.architecture.as_deref() != Some(architecture)
     {
         return Err(HostError::Ownership);
     }

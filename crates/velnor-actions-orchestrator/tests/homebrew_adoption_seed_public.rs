@@ -165,11 +165,11 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
     let lock_path = temp.path().join(".velnor/generator.lock");
-    let lock_text = include_str!("../../../.velnor/generator.lock");
+    let lock_text = include_str!("../../test_support/generator_074.lock");
     fs::write(&lock_path, lock_text)?;
     fs::write(
         temp.path().join(".velnor/controller-approvals.json"),
-        include_str!("../../../.velnor/controller-approvals.json"),
+        include_str!("../../test_support/controller_approval_074.json"),
     )?;
     let published_lock: GeneratorLock =
         velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
@@ -307,7 +307,13 @@ fn release_manifest(version: &str, commit: &str, digest: &str) -> String {
     ]
     .map(|target| {
         let triple = target.triple();
-        let sha = if target == ReleaseTarget::LinuxX86_64 {
+        let native_host = match (std::env::consts::OS, std::env::consts::ARCH) {
+            ("linux", "x86_64") => ReleaseTarget::LinuxX86_64,
+            ("macos", "aarch64") => ReleaseTarget::MacosArm64,
+            ("macos", "x86_64") => ReleaseTarget::MacosX86_64,
+            _ => target,
+        };
+        let sha = if target == ReleaseTarget::LinuxX86_64 || target == native_host {
             digest
         } else {
             HOST_SHA

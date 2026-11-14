@@ -38,14 +38,21 @@ async fn measure_acquired(
     let Some(credentials) = prepared.credentials.as_mut() else {
         return Err(HostError::Keychain);
     };
-    let admin = credentials.link.base().to_owned();
+    let refreshed = credentials
+        .link
+        .refresh_admin(&prepared.binding, credentials.github_pat.expose())
+        .is_ok();
+    let admin = credentials.link.admin_origin().to_owned();
     let admin_token = credentials.link.token().to_owned();
+    if refreshed && let Some(completion) = prepared.completion.as_ref() {
+        completion.refresh_admin(&admin, &admin_token)?;
+    }
     let mut lane = crate::launch::HostLane::new(&mut credentials.link, admin, None);
     let scoped_context = crate::launch::scoped_runtime::ScopedHostContext {
         docker: context.docker,
         host: context.journal,
         scoped: &prepared.scope,
-        secret: context.release_read_secret,
+        secret: context.image_authority,
         engine: context.selected_engine,
         images: context.worker_images,
     };
@@ -76,7 +83,7 @@ async fn retain_scoped_channel(
                 docker: context.docker,
                 host: context.journal,
                 scoped: &prepared.scope,
-                secret: context.release_read_secret,
+                secret: context.image_authority,
                 engine: context.selected_engine,
                 images: context.worker_images,
             };

@@ -17,8 +17,7 @@ mod execute;
 mod record;
 
 use super::lifecycle::{Deadline, bind_info, info, same_guest};
-use super::provider::ReleaseImageProvider;
-use super::{ReleaseReadSecret, recover};
+use super::{ImageAuthority, recover};
 
 #[derive(Clone, Copy)]
 pub(in crate::launch) struct CleanupObserverContext<'a> {
@@ -26,7 +25,7 @@ pub(in crate::launch) struct CleanupObserverContext<'a> {
     pub(in crate::launch) journal: &'a Journal,
     pub(in crate::launch) scope: &'a ConnectionJournal,
     pub(in crate::launch) selected: &'a SelectedEngineContext,
-    pub(in crate::launch) release_read_secret: &'a ReleaseReadSecret,
+    pub(in crate::launch) image_authority: &'a ImageAuthority,
 }
 
 pub(in crate::launch) struct VerifiedCleanupObserverRecord {
@@ -65,9 +64,11 @@ pub(in crate::launch) async fn observe_cleanup_binding(
     binding: &CleanupObserverBinding,
     deadline: Instant,
 ) -> Result<VerifiedCleanupObserverRecord, HostError> {
-    let token = context.release_read_secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token, context.journal)
-        .map_err(|_| HostError::Docker)?;
+    let provider = super::image_provider(
+        context.image_authority,
+        context.journal,
+        context.selected.endpoint(),
+    )?;
     observe_cleanup_binding_using(context, reservation_id, binding, deadline, &provider).await
 }
 
@@ -309,7 +310,7 @@ fn verify_selected(
 ) -> Result<(), HostError> {
     if selected.engine_id() == engine_id
         && selected.docker_root_digest() == root.digest()
-        && selected.platform() == "linux/amd64"
+        && crate::config::RunnerPlatform::parse(selected.platform()).is_some()
     {
         Ok(())
     } else {

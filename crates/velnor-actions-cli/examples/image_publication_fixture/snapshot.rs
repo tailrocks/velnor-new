@@ -10,46 +10,109 @@ use std::{
     io::{self, Read, Write},
 };
 
-const TREE: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TARGET: &str = ".velnor/runner.lock";
 
 pub(super) fn tree_api(path: &str, state: &Value) -> Result<Value, Box<dyn Error>> {
+    let (tree, mut entries) = source_tree(state)?;
     if let Some(source) = path.strip_prefix("repos/tailrocks/velnor-new/git/commits/") {
         if state["source_commit"] != source {
             return Err("unknown fixture source".into());
         }
-        return Ok(json!({"sha":source,"tree":{"sha":TREE}}));
+        return Ok(json!({"sha":source,"tree":{"sha":tree}}));
     }
-    if path != format!("repos/tailrocks/velnor-new/git/trees/{TREE}") {
+    if path != format!("repos/tailrocks/velnor-new/git/trees/{tree}") {
         return Err("unknown fixture tree".into());
     }
     let fault = state["snapshot_fault"].as_str().unwrap_or("");
+    for entry in &mut entries {
+        if entry["path"] != TARGET {
+            continue;
+        }
+        if fault == "tree_nonregular" {
+            entry["mode"] = json!("120000");
+        }
+        if fault == "tree_blob_mismatch" {
+            entry["sha"] = json!("c".repeat(40));
+        }
+    }
+    if fault == "absence_parent_non_tree" {
+        entries.retain(|entry| entry["path"] != ".cargo");
+        entries.push(json!({"path":".cargo","mode":"100644","type":"blob","sha":blob_sha(b"not a directory")?}));
+    }
+    if fault == "tree_missing" {
+        entries.retain(|entry| entry["path"] != TARGET);
+    }
+    if fault == "tree_duplicate"
+        && let Some(entry) = entries
+            .iter()
+            .find(|entry| entry["path"] == TARGET)
+            .cloned()
+    {
+        entries.push(entry);
+    }
+    Ok(json!({"sha":tree,"truncated":fault == "tree_truncated","tree":entries}))
+}
+
+fn source_tree(state: &Value) -> Result<(String, Vec<Value>), Box<dyn Error>> {
     let files = state["source_files"]
         .as_object()
         .ok_or("source files missing")?;
     let mut entries = Vec::new();
     for (path, encoded) in files {
-        if path == TARGET && fault == "tree_missing" {
-            continue;
-        }
         let bytes = STANDARD.decode(encoded.as_str().ok_or("bad source encoding")?)?;
-        let mode = if path == TARGET && fault == "tree_nonregular" {
-            "120000"
-        } else {
-            "100644"
-        };
-        let oid = if path == TARGET && fault == "tree_blob_mismatch" {
-            "c".repeat(40)
-        } else {
-            blob_sha(&bytes)?
-        };
-        let entry = json!({"path":path,"mode":mode,"type":"blob","sha":oid});
-        entries.push(entry.clone());
-        if path == TARGET && fault == "tree_duplicate" {
-            entries.push(entry);
+        entries.push(json!({"path":path,"mode":"100644","type":"blob","sha":blob_sha(&bytes)?}));
+    }
+    let mut directories = std::collections::BTreeSet::new();
+    directories.insert(String::new());
+    for path in files.keys() {
+        let mut parent = path.as_str();
+        while let Some((prefix, _)) = parent.rsplit_once('/') {
+            directories.insert(prefix.to_owned());
+            parent = prefix;
         }
     }
-    Ok(json!({"sha":TREE,"truncated":fault == "tree_truncated","tree":entries}))
+    let mut directories: Vec<_> = directories.into_iter().collect();
+    directories.sort_by_key(|path| std::cmp::Reverse(path.len()));
+    let mut root = String::new();
+    for directory in directories {
+        let prefix = if directory.is_empty() {
+            String::new()
+        } else {
+            format!("{directory}/")
+        };
+        let mut children = Vec::new();
+        for entry in &entries {
+            let path = entry["path"].as_str().ok_or("missing path")?;
+            if let Some(name) = path
+                .strip_prefix(&prefix)
+                .filter(|name| !name.contains('/'))
+            {
+                let suffix = if entry["type"] == "tree" { "/" } else { "" };
+                children.push((format!("{name}{suffix}"), name.to_owned(), entry));
+            }
+        }
+        children.sort_by(|left, right| left.0.cmp(&right.0));
+        let mut bytes = Vec::new();
+        for (_, name, entry) in children {
+            let mode = if entry["type"] == "tree" {
+                "40000"
+            } else {
+                "100644"
+            };
+            bytes.extend_from_slice(format!("{mode} {name}\0").as_bytes());
+            let oid = entry["sha"].as_str().ok_or("missing sha")?;
+            for offset in (0..40).step_by(2) {
+                bytes.push(u8::from_str_radix(&oid[offset..offset + 2], 16)?);
+            }
+        }
+        let oid = object_sha("tree", &bytes)?;
+        if directory.is_empty() {
+            root = oid;
+        } else {
+            entries.push(json!({"path":directory,"mode":"040000","type":"tree","sha":oid}));
+        }
+    }
+    Ok((root, entries))
 }
 
 pub(super) fn write_tar(route: &str, state: &Value) -> Result<(), Box<dyn Error>> {
@@ -152,9 +215,13 @@ fn write_headers<W: Write>(
 }
 
 fn blob_sha(bytes: &[u8]) -> Result<String, Box<dyn Error>> {
+    object_sha("blob", bytes)
+}
+
+fn object_sha(kind: &str, bytes: &[u8]) -> Result<String, Box<dyn Error>> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut hash = Sha1::new();
-    hash.update(format!("blob {}\0", bytes.len()).as_bytes());
+    hash.update(format!("{kind} {}\0", bytes.len()).as_bytes());
     hash.update(bytes);
     let result = hash.try_finalize();
     if result.has_collision() {

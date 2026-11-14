@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+#[path = "state/plan.rs"]
+mod plan;
+pub(crate) use plan::digest_id;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ImageRole {
     Runner,
@@ -59,7 +63,9 @@ pub(crate) enum ApiFault {
     DisconnectThenLateContainerCreate,
     NeverSettleContainerCreate,
     OwnedUnsettledDindCreate,
-    OwnedUnsettledDindRemovalFailure,
+    KnownDindRemovalFailure,
+    KnownDindRemovalBadRequest,
+    KnownDindRemovalConflict,
     LoseContainerCreateResponse,
     StallContainerStart,
     StallContainerInspect,
@@ -123,50 +129,6 @@ pub(super) enum HiddenIndexMutation {
     AssumeUnchanged(PathBuf),
 }
 
-impl ApiPlan {
-    pub(crate) fn new(source_sha: &str) -> Self {
-        Self {
-            source_sha: source_sha.to_owned(),
-            runner_id: digest_id('a'),
-            dind_id: digest_id('b'),
-            runner_version: "2.338.0".to_owned(),
-            docker_version: "29.9.1".to_owned(),
-            buildx_version: "0.38.0".to_owned(),
-            compose_version: "5.6.0".to_owned(),
-            node_version: "26.12.0".to_owned(),
-            image_fault: None,
-            version_mismatch: None,
-            readiness_empty_first: true,
-            outer_id: "outer-daemon-id".to_owned(),
-            inner_id: "inner-daemon-id".to_owned(),
-            inner_root: "/var/lib/docker".to_owned(),
-            inner_driver: "vfs".to_owned(),
-            outer_root: "/var/lib/docker".to_owned(),
-            runner_socket_id: None,
-            outer_mutation: OuterMutation::None,
-            mutate_lock_on_first_image_inspect: None,
-            mutate_source_on_first_image_inspect: None,
-            mutate_hidden_index_on_first_image_inspect: None,
-            fault: None,
-            foreign_sentinel: false,
-        }
-    }
-
-    pub(crate) fn mutate_skip_worktree_on_first_image_inspect(&mut self, root: PathBuf) {
-        self.mutate_hidden_index_on_first_image_inspect =
-            Some(HiddenIndexMutation::SkipWorktree(root));
-    }
-
-    pub(crate) fn mutate_assume_unchanged_on_first_image_inspect(&mut self, root: PathBuf) {
-        self.mutate_hidden_index_on_first_image_inspect =
-            Some(HiddenIndexMutation::AssumeUnchanged(root));
-    }
-}
-
-pub(crate) fn digest_id(byte: char) -> String {
-    format!("sha256:{}", byte.to_string().repeat(64))
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct ContainerEvidence {
     pub(crate) id: String,
@@ -195,6 +157,8 @@ pub(crate) struct Snapshot {
     pub(crate) foreign_container_present: bool,
     pub(crate) foreign_volume_present: bool,
     pub(crate) outer_info_calls: usize,
+    pub(crate) failed_delete_id: Option<String>,
+    pub(crate) volume_delete_attempts: Vec<String>,
     pub(crate) pending_mutations: usize,
     pub(crate) pending_identities: Vec<String>,
 }
@@ -248,6 +212,8 @@ pub(super) struct State {
     pub(super) api_requests: usize,
     pub(super) fault_reached: bool,
     pub(super) hidden_index_mutation: Option<Result<(), String>>,
+    pub(super) failed_delete_id: Option<String>,
+    pub(super) volume_delete_attempts: Vec<String>,
     pub(super) pending_mutations: usize,
     pub(super) provisional_missing_responses: usize,
     pub(super) pending_identities: Vec<String>,
@@ -274,6 +240,8 @@ impl State {
             api_requests: 0,
             fault_reached: false,
             hidden_index_mutation: None,
+            failed_delete_id: None,
+            volume_delete_attempts: Vec::new(),
             pending_mutations: 0,
             provisional_missing_responses: 0,
             pending_identities: Vec::new(),
@@ -312,6 +280,8 @@ impl State {
                 .any(|container| container.name == "foreign-sentinel"),
             foreign_volume_present: self.volumes.contains_key("foreign-sentinel"),
             outer_info_calls: self.outer_info_calls,
+            failed_delete_id: self.failed_delete_id.clone(),
+            volume_delete_attempts: self.volume_delete_attempts.clone(),
             pending_mutations: self.pending_mutations,
             pending_identities: self.pending_identities.clone(),
         }

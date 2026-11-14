@@ -5,7 +5,9 @@ use run_identity::RunSource;
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseReceipt};
 use velnor_actions_mise::CheckDeadline;
 
-use crate::{OrchestratorError, internal::internal};
+use crate::{
+    OrchestratorError, internal::internal, package_release_public::HistoricalWorkflowPin,
+};
 
 use super::{GitHubApi, WorkflowMetadata, WorkflowRunResponse, github, run_identity};
 
@@ -14,6 +16,7 @@ pub(crate) fn verify_public_release_runs(
     repository_id: u64,
     default_branch: &str,
     receipt: &PackageReleaseReceipt,
+    workflow_pin: Option<&HistoricalWorkflowPin>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     verify_public_release_runs_inner(
@@ -22,25 +25,26 @@ pub(crate) fn verify_public_release_runs(
         default_branch,
         receipt,
         None,
+        workflow_pin,
         deadline,
     )
 }
 
 pub(crate) fn verify_public_historical_release_recovery(
-    repository: &str,
-    repository_id: u64,
-    default_branch: &str,
-    receipt: &PackageReleaseReceipt,
     plan: &PackageReleasePlan,
+    repository_id: u64,
+    receipt: &PackageReleaseReceipt,
     recovery: &crate::package_release_public::HistoricalPackageReleaseRecovery,
+    workflow_pin: Option<&HistoricalWorkflowPin>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     verify_public_release_runs_inner(
-        repository,
+        &plan.repository,
         repository_id,
-        default_branch,
+        &plan.default_branch,
         receipt,
         Some((plan, recovery)),
+        workflow_pin,
         deadline,
     )
 }
@@ -54,6 +58,7 @@ fn verify_public_release_runs_inner(
         &PackageReleasePlan,
         &crate::package_release_public::HistoricalPackageReleaseRecovery,
     )>,
+    workflow_pin: Option<&HistoricalWorkflowPin>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     if receipt.repository.slug != repository || receipt.repository.id != repository_id {
@@ -61,9 +66,10 @@ fn verify_public_release_runs_inner(
     }
     let api = GitHubApi::new(repository.to_owned()).with_deadline(deadline);
     api.verify_preview_repository_identity(repository_id, default_branch)?;
-    let workflow = api.admitted_workflow(
+    let workflow = api.admitted_workflow_with_historical_pin(
         receipt.channel.workflow_path(),
         receipt.channel.workflow_name(),
+        workflow_pin,
     )?;
     let run = api.workflow_run(receipt.workflow.run_id, receipt.workflow.run_attempt)?;
     if !public_release_workflow_matches(

@@ -23,23 +23,21 @@ use std::time::Duration;
 
 use bollard::Docker;
 use tokio::sync::oneshot;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
+use crate::completion_admin::CompletionAdminClient;
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
-use crate::https::HttpsTransport;
 use crate::journal::ConnectionJournal;
 use crate::launch::SelectedEngineContext;
 use crate::launch::bootstrap::NativeCleanupRuntime;
-use crate::listen::Secret;
 
 const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
 
 pub(super) struct Resources {
     pub(super) journal: journal_ref::CompletionJournal,
     pub(super) docker: Docker,
-    pub(super) transport: HttpsTransport,
-    pub(super) admin: Secret,
+    pub(super) admin: CompletionAdminClient,
     pub(super) diagnostics: diagnostics::DiagnosticsRoot,
     pub(super) native_cleanup: NativeCleanupRuntime,
     pub(super) selected_engine: SelectedEngineContext,
@@ -58,6 +56,7 @@ struct StartWithJournalInput<'a> {
 
 #[derive(Debug)]
 pub struct CompletionWorker {
+    admin: CompletionAdminClient,
     wake: SyncSender<()>,
     stopping: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -82,18 +81,16 @@ impl CompletionWorker {
             .map_err(|_| HostError::Docker)?
             .map_err(|_| HostError::Docker)?;
         let selected = SelectedEngineContext::capture(&engine_context, &info)?;
-        let worker_images = crate::launch::VerifiedWorkerImages::from_journal_for_engine(
-            journal, &bounded, &selected,
-        )
-        .await?;
-        let release_secret = Arc::new(crate::launch::ReleaseReadSecret::parse(release_read_token)?);
+        journal
+            .ensure_image_imports_resolved(selected.engine_id())
+            .await?;
+        let image_authority = Arc::new(crate::launch::ImageAuthority::parse(release_read_token)?);
         let native_cleanup = NativeCleanupRuntime::new(
             bounded.clone(),
             journal.clone(),
             engine_context,
             selected.clone(),
-            worker_images,
-            release_secret,
+            image_authority,
         )?;
         Self::start_scoped(
             scope,
@@ -139,13 +136,8 @@ impl CompletionWorker {
             native_cleanup,
             selected_engine,
         } = input;
-        if admin_token.is_empty() {
-            return Err(HostError::EmptySecret);
-        }
-        let transport = HttpsTransport::new(admin_base)?;
-        let mut token = admin_token;
-        let admin = Secret::new(&token);
-        token.zeroize();
+        let token = Zeroizing::new(admin_token);
+        let admin = CompletionAdminClient::new(admin_base, &token)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -163,8 +155,7 @@ impl CompletionWorker {
             )?,
             journal,
             docker: bounded_docker(docker),
-            transport,
-            admin,
+            admin: admin.clone(),
             native_cleanup,
             selected_engine,
         };
@@ -182,11 +173,20 @@ impl CompletionWorker {
             })
             .map_err(|_| HostError::Journal)?;
         Ok(Self {
+            admin,
             wake,
             stopping,
             thread: Some(thread),
             finished: Some(finished),
         })
+    }
+
+    pub(crate) fn refresh_admin(
+        &self,
+        admin_base: &str,
+        admin_token: &str,
+    ) -> Result<(), HostError> {
+        self.admin.refresh(admin_base, admin_token)
     }
 
     pub fn notify(&self) {

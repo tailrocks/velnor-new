@@ -6,7 +6,7 @@ use bollard::Docker;
 use crate::{
     journal::{ConnectionJournal, Journal},
     launch::{
-        SelectedEngineContext, VerifiedWorkerImages, resource_probe::ReleaseReadSecret,
+        SelectedEngineContext, VerifiedWorkerImages, resource_probe::ImageAuthority,
         steps::ScopedProvisioningOutcome,
     },
 };
@@ -18,12 +18,16 @@ pub(crate) fn prepare_and_bind_scoped<'a>(
     docker: &'a Docker,
     scoped: &'a ConnectionJournal,
     host: &'a Journal,
-    release_secret: &'a ReleaseReadSecret,
+    image_authority: &'a ImageAuthority,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
 ) -> ScopedPrepareFuture<'a> {
     Box::pin(async move {
-        let provider = crate::launch::resource_probe::release_image_provider(release_secret, host)?;
+        let provider = crate::launch::resource_probe::image_provider(
+            image_authority,
+            host,
+            engine.endpoint(),
+        )?;
         prepare_and_bind_scoped_with_provider(
             outcome,
             scoped_prepare_context(docker, scoped, host, &provider, engine, images),

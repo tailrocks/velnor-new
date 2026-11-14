@@ -95,8 +95,15 @@ pub(crate) fn attestation_envelope() -> String {
             "\"githubWorkflowRef\":\"refs/heads/main\",",
             "\"githubWorkflowTrigger\":\"workflow_dispatch\",",
             "\"sourceRepositoryRef\":\"refs/heads/main\",",
-            "\"sourceRepositoryDigest\":\"{source}\"",
-            "}}}}}}}}],\"source\":\"{source}\"}}"
+            "\"sourceRepositoryDigest\":\"{source}\",",
+            "\"runInvocationURI\":\"https://github.com/tailrocks/velnor-new/actions/runs/7/attempts/1\"",
+            "}}}},\"statement\":{{\"subject\":[",
+            "{{\"name\":\"job-image.oci.tar\",\"digest\":{{\"sha256\":\"archive\"}}}},",
+            "{{\"name\":\"job-image-candidate.json\",\"digest\":{{\"sha256\":\"record\"}}}},",
+            "{{\"name\":\"job-image-native-source-closure.json\",\"digest\":{{\"sha256\":\"closure\"}}}}",
+            "]}}}}}}],\"source\":\"{source}\",\"run_id\":7,\"run_attempt\":1,",
+            "\"subjects\":{{\"job-image.oci.tar\":\"archive\",\"job-image-candidate.json\":\"record\",",
+            "\"job-image-native-source-closure.json\":\"closure\"}}}}"
         ),
         source = SOURCE_SHA,
     )

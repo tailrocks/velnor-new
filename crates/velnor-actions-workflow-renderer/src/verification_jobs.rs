@@ -10,6 +10,10 @@ use velnor_actions_contract::{
 
 use crate::{MiseSetup, RenderError};
 
+#[path = "job_image_candidate_execution.rs"]
+mod job_image_candidate_execution;
+pub use job_image_candidate_execution::JobImageCandidateExecution;
+
 #[path = "build_task_jobs.rs"]
 pub(crate) mod build_task_jobs;
 #[path = "build_task_mise.rs"]
@@ -30,6 +34,8 @@ pub(crate) mod bun_registry_step;
 pub(crate) mod bun_suite_jobs;
 #[path = "image_build_jobs.rs"]
 pub(crate) mod image_build_jobs;
+#[path = "managed_tool_guard.rs"]
+pub(crate) mod managed_tool_guard;
 #[path = "mise_task_bootstrap.rs"]
 pub(crate) mod mise_task_bootstrap;
 #[path = "mise_task_suites.rs"]
@@ -38,6 +44,8 @@ pub(crate) mod mise_task_suites;
 pub(crate) mod native_image_jobs;
 #[path = "playwright_install_step.rs"]
 pub(crate) mod playwright_install_step;
+#[path = "runner_family_jobs.rs"]
+pub(crate) mod runner_family_jobs;
 #[path = "stack_jobs.rs"]
 pub(crate) mod stack_jobs;
 #[path = "task_script.rs"]
@@ -78,6 +86,9 @@ pub use playwright_install_step::{
     PLAYWRIGHT_SYSTEM_DEPS_BROWSERS, PLAYWRIGHT_SYSTEM_DEPS_ENV, PLAYWRIGHT_VERSION_ENV,
     playwright_install_step,
 };
+pub use runner_family_jobs::{
+    FAMILY_PREFETCH_SOURCES, RunnerFamilyPolicy, build_runner_family_job,
+};
 pub use stack_jobs::{STACK_RUNNER, StackJobKind, StackJobPolicy, build_stack_job};
 pub use workflow_task_jobs::WorkflowTaskPolicy;
 
@@ -106,10 +117,13 @@ pub(crate) struct MiseTaskBootstrapPolicy {
     pub(crate) root_prefix: &'static str,
     pub(crate) run_step_name: &'static str,
     pub(crate) evidence_input: bool,
+    pub(crate) prepare_rust_target: Option<Vec<String>>,
+    pub(crate) shared_cargo_sources: bool,
+    pub(crate) runner_family_script: bool,
 }
 
 impl MiseTaskBootstrapPolicy {
-    fn from_verification(policy: &VerificationTaskPolicy) -> Self {
+    pub(crate) fn from_verification(policy: &VerificationTaskPolicy) -> Self {
         Self {
             id: policy.task.id.clone(),
             mise_task: policy.task.mise_task.clone(),
@@ -122,6 +136,9 @@ impl MiseTaskBootstrapPolicy {
             root_prefix: "verification",
             run_step_name: RUN_VERIFICATION_TASK_NAME,
             evidence_input: false,
+            prepare_rust_target: None,
+            shared_cargo_sources: false,
+            runner_family_script: false,
         }
     }
 }

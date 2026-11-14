@@ -8,12 +8,11 @@ use bollard::Docker;
 use crate::{
     error::HostError,
     journal::Journal,
-    launch::{ReleaseReadSecret, SelectedEngineContext},
+    launch::{ImageAuthority, SelectedEngineContext},
 };
 
 use super::{
     lifecycle,
-    provider::ReleaseImageProvider,
     sample::{Observation, pressure::FreshPressureSample},
 };
 
@@ -98,11 +97,10 @@ impl From<Observation> for ReadinessSample {
 pub(crate) async fn collect(
     docker: &Docker,
     journal: &Journal,
-    secret: &ReleaseReadSecret,
+    secret: &ImageAuthority,
+    endpoint: &str,
 ) -> Result<Option<ReadinessSample>, HostError> {
-    let provider_token = secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(provider_token, journal)
-        .map_err(|_| HostError::Docker)?;
+    let provider = super::image_provider(secret, journal, endpoint)?;
     Box::pin(collect_with_provider(docker, journal, &provider)).await
 }
 

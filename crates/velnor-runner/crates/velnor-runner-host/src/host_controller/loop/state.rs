@@ -8,6 +8,9 @@ use std::{
 
 use super::PendingAcquiredRecovery;
 use cursor::record_assigned_total;
+#[path = "state/admin_refresh.rs"]
+mod admin_refresh;
+pub(super) use admin_refresh::AdminRefreshSchedule;
 #[path = "state/cleanup.rs"]
 mod cleanup;
 #[path = "state/cursor.rs"]
@@ -21,7 +24,7 @@ use crate::{
     error::HostError,
     journal::{ConnectionJournal, Journal},
     launch::{
-        CompletionWorker, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
+        CompletionWorker, ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
         scoped_runtime::{
             AuthorizedScopedExecution, PendingScopedExecution, RunnerReadyBootstrap,
             RunnerReadyRegistry, ScopedChannelOutcome,
@@ -60,6 +63,7 @@ pub(super) struct PreparedConnection {
     pub(super) unkeyed_authorization: Vec<PendingScopedExecution>,
     pub(super) pending_acquired_recovery: BTreeMap<i64, PendingAcquiredRecovery>,
     pub(super) unkeyed_acquired_recovery: Vec<PendingAcquiredRecovery>,
+    pub(super) admin_refresh: AdminRefreshSchedule,
 }
 
 pub(super) struct PreparedSetup {
@@ -218,7 +222,7 @@ impl PreparedConnection {
                     HostError::Journal,
                 )));
             };
-            let secret = match ReleaseReadSecret::load(&config) {
+            let secret = match ImageAuthority::load(&config) {
                 Ok(secret) => secret,
                 Err(error) => {
                     return Err(Box::new(PendingScopedExecution::Runner(
@@ -285,8 +289,8 @@ impl PreparedConnection {
                     let pending = *pending;
                     let wake_cleanup = pending.requires_cleanup_wake();
                     self.retain_pending(request_id, pending);
-                    if wake_cleanup && let Some(completion) = self.completion.as_ref() {
-                        completion.notify();
+                    if wake_cleanup {
+                        self.wake_completion_with_fresh_admin()?;
                     }
                 }
             }
@@ -313,11 +317,16 @@ impl PreparedConnection {
             }
         }
         self.collect_proven_pending_cleanup().await?;
+        cleanup::refresh_admin_while_cleanup_pending(self);
         Ok(())
     }
 
     pub(super) async fn collect_proven_pending_cleanup(&mut self) -> Result<(), HostError> {
         cleanup::collect_proven_pending_cleanup(self).await
+    }
+
+    pub(super) fn wake_completion_with_fresh_admin(&mut self) -> Result<(), HostError> {
+        cleanup::wake_completion_with_fresh_admin(self)
     }
 
     pub(super) fn retain_pending(&mut self, request_id: i64, pending: PendingScopedExecution) {

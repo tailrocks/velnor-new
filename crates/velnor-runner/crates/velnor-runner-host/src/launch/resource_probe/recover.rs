@@ -4,16 +4,21 @@
 use bollard::{Docker, models::SystemInfo};
 
 use crate::error::HostError;
-use crate::journal::{HostHelperRole, Journal, ProbePhase, ProbeRow, ProbeWork};
+use crate::journal::{Journal, ProbePhase, ProbeRow};
 
 use super::execute::ProbeCleanupEvidence;
 #[path = "recover/dispatch.rs"]
 mod dispatch;
+#[path = "recover/persisted.rs"]
+mod persisted;
+#[path = "recover/unattached.rs"]
+mod unattached;
 use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
-use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
-use dispatch::{ActiveRecoveryTarget, active_recovery_target};
+use super::projection::{DockerRoot, ProbeProjection};
+use dispatch::{ActiveRecoveryTarget, active_recovery_target, supports_stop};
+use persisted::persisted_projection;
 
 pub(super) async fn active(
     docker: &Docker,
@@ -23,7 +28,7 @@ pub(super) async fn active(
     deadline: &Deadline,
     row: ProbeRow,
 ) -> Result<(), HostError> {
-    if row.phase == ProbePhase::Quarantined {
+    if row.phase == ProbePhase::Quarantined && row.container_id.is_some() {
         return Err(HostError::Ownership);
     }
     match active_recovery_target(row.helper_role(), row.work())? {
@@ -52,6 +57,9 @@ pub(super) async fn active(
             .await??;
     }
     let projection = persisted_projection(&row, root)?;
+    if unattached::abort_if_never_created(docker, journal, &row, &projection, deadline).await? {
+        return Ok(());
+    }
     if let Err(error) = cleanup(docker, journal, &row, &projection, deadline).await {
         if matches!(
             error,
@@ -107,7 +115,10 @@ async fn bind_created_by_name(
     projection: &ProbeProjection,
     deadline: &Deadline,
 ) -> Result<ProbeCleanupEvidence, HostError> {
-    if row.phase != ProbePhase::CreateRequested {
+    if !matches!(
+        row.phase,
+        ProbePhase::CreateRequested | ProbePhase::Quarantined
+    ) {
         return quarantine(journal, row, deadline).await;
     }
     let Some(response) = inspect::by_reference(docker, &projection.name, deadline).await? else {
@@ -331,59 +342,6 @@ async fn inspect_pair(
     }
 }
 
-fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjection, HostError> {
-    let ProbeWork::ResourceProbe {
-        purpose,
-        request_sha256,
-        ..
-    } = row.work()
-    else {
-        return Err(HostError::Ownership);
-    };
-    let mut matched = None;
-    for daemon_architecture in ["x86_64", "aarch64"] {
-        let image = VerifiedProbeImage::from_journal(
-            row.runtime_image_id.clone(),
-            daemon_architecture.to_owned(),
-            row.source_revision.clone(),
-            row.image_binding_digest.clone(),
-        )?;
-        let projection = ProbeProjection::build_from_purpose(
-            row.operation_id.clone(),
-            row.instance_id.clone(),
-            row.engine_id.clone(),
-            root.path(),
-            image,
-            *purpose,
-            request_sha256.clone(),
-        )?;
-        if row.projection_digest == projection.projection_digest
-            && matched.replace(projection).is_some()
-        {
-            return Err(HostError::Ownership);
-        }
-    }
-    let projection = matched.ok_or(HostError::Ownership)?;
-    if row.helper_role() != HostHelperRole::ResourceProbe
-        || row.role != "resource-probe"
-        || row.operation_name != projection.name
-        || row.projection_digest != projection.projection_digest
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(projection)
-}
-
-fn supports_stop(phase: ProbePhase) -> bool {
-    matches!(
-        phase,
-        ProbePhase::StartRequested
-            | ProbePhase::Started
-            | ProbePhase::WaitRequested
-            | ProbePhase::StopRequested
-    )
-}
-
 async fn quarantine<T>(
     journal: &Journal,
     row: &ProbeRow,
@@ -396,3 +354,6 @@ async fn quarantine<T>(
     }
     Err(HostError::Ownership)
 }
+
+#[cfg(test)]
+mod tests;

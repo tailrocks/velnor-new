@@ -76,7 +76,9 @@ fn render_workflow_parts(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     validate_final_jobs(ir, &mut jobs, policy, ValidationPhase::BeforeSetup, ctx)?;
-    render_merged(ir, &jobs, ctx, policy, ValidationPhase::BeforeSetup)
+    let mut rendered = render_merged(ir, &jobs, ctx, policy, ValidationPhase::BeforeSetup)?;
+    rendered.source_qualification_plan = None;
+    Ok(rendered)
 }
 
 pub fn render_workflow_ir_strict(
@@ -98,6 +100,24 @@ pub fn render_workflow_ir_strict_shared(
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged(ir, &jobs, ctx, policy, ValidationPhase::Finalized)
+}
+
+pub fn render_workflow_ir_strict_bundle(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+    schema_request: Option<&crate::schema2::Schema2WorkflowRequest>,
+) -> Result<RenderedWorkflow, RenderError> {
+    let mut rendered = render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?;
+    if let Some(request) = schema_request {
+        rendered.schema2_files = crate::schema2::render_schema2_workflows_bound(
+            request,
+            rendered.source_qualification_plan.as_ref(),
+        )?;
+    }
+    Ok(rendered)
 }
 
 pub fn finalize_jobs(
@@ -142,15 +162,21 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2(
-            id,
-            job,
-            &setup,
-            always,
-            target,
-            &ctx.checkout_uses,
-            policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
-        )?;
+        if !ctx
+            .workflow_tasks
+            .iter()
+            .any(|task| task.uses_private_tool_home(id))
+        {
+            cache_p08::ensure_tools_cache_v2(
+                id,
+                job,
+                &setup,
+                always,
+                target,
+                &ctx.checkout_uses,
+                policy == WorkflowPolicy::VelnorRepositoryV1 && id == PLAN_JOB_ID,
+            )?;
+        }
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

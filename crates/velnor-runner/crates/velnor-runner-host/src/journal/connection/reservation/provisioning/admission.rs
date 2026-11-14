@@ -27,8 +27,9 @@ use capacity::{
 };
 
 pub(super) use capacity::{metadata_capacity_fits, sql_i64};
-pub(super) use record::container_role;
-use record::{insert_capacity_reservation, insert_launch_intent, insert_provisioning_rows};
+pub(crate) use record::{
+    container_role, insert_capacity_reservation, insert_launch_intent, insert_provisioning_rows,
+};
 
 pub(super) async fn reserve_in_transaction(
     connection: &turso::Connection,

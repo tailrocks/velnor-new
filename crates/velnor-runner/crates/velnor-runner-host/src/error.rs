@@ -33,6 +33,12 @@ pub enum HostError {
     #[error("invalid config")]
     Config,
 
+    #[error("scale set selector does not match the runner platform")]
+    PlatformSelector,
+
+    #[error("developer images require a binary built without a release identity")]
+    DeveloperImages,
+
     #[error("bad path")]
     Path,
 
@@ -111,6 +117,8 @@ impl HostError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
+            Self::PlatformSelector => "platform_selector",
+            Self::DeveloperImages => "developer_images",
             Self::Path => "path",
             Self::Lock => "lock",
             Self::Journal => "journal",
@@ -135,6 +143,23 @@ impl HostError {
             Self::Endpoint => "endpoint",
             Self::Keychain => "keychain",
             Self::EmptySecret => "empty_secret",
+        }
+    }
+}
+
+impl From<velnor_runner_qualification::QualificationError> for HostError {
+    fn from(error: velnor_runner_qualification::QualificationError) -> Self {
+        use velnor_runner_qualification::QualificationError;
+        match error {
+            QualificationError::Docker => Self::Docker,
+            QualificationError::DockerTimeout => Self::DockerTimeout,
+            QualificationError::Identity => Self::Identity,
+            QualificationError::Ownership => Self::Ownership,
+            QualificationError::Cleanup => Self::Cleanup,
+            QualificationError::ContainerCreateUncertain => Self::ContainerCreateUncertain,
+            QualificationError::VolumeCreateUncertain => Self::VolumeCreateUncertain,
+            QualificationError::DindReadiness => Self::DindReadiness,
+            QualificationError::Frame => Self::Frame,
         }
     }
 }

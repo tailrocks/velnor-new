@@ -4,27 +4,27 @@
   "workflow": ".github/workflows/product-release-generator.yml",
   "active": {
     "repository": "tailrocks/velnor-new",
-    "version": "0.1.74",
-    "commit": "c622bfb187556afb8d3ff3ca917a719e4bb7f32a",
-    "manifest_digest": "sha256:fb43e14dc28afd2535e36bb71c129dbb7199b5a15dd26a853b010cb549b03e07",
+    "version": "0.1.78",
+    "commit": "ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905",
+    "manifest_digest": "sha256:e39214a525d33626ad409b5029fb3deb993b3f0e530709fe732390b29e97d084",
     "binaries": [
       {
         "target": "x86_64-unknown-linux-gnu",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-unknown-linux-gnu",
-        "sha256": "db7480b83238f85a2e4472d26ba57ca4ee4d6822353cbdaad690b1a2b963b26f"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.78/velnor-actions-0.1.78-x86_64-unknown-linux-gnu",
+        "sha256": "3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7"
       },
       {
         "target": "aarch64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-aarch64-apple-darwin",
-        "sha256": "0a97e53bdd5faada42c0e8bedce2c54f710ada669cdd58cc918aaac80df68772"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.78/velnor-actions-0.1.78-aarch64-apple-darwin",
+        "sha256": "c0435f5b4978ae3ecdb030b4870d2a172ea91fecd7ed23e583ecdd1bcd047ef8"
       },
       {
         "target": "x86_64-apple-darwin",
-        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.74/velnor-actions-0.1.74-x86_64-apple-darwin",
-        "sha256": "41d55fe769f40df114ace812a19566d5c188d99143f0a631299dc10ebed4c09c"
+        "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v0.1.78/velnor-actions-0.1.78-x86_64-apple-darwin",
+        "sha256": "bd4099027b21685442d537d6af926336840d917536e4855bfa0d94cbaa735f02"
       }
     ],
-    "gh": "2.103.2",
+    "gh": "2.103.3",
     "mise_bootstrap": {
       "version": "2026.11.1",
       "artifact": "https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64",
@@ -33,21 +33,21 @@
     "mise_runtime": [
       {
         "target": "x86_64-unknown-linux-gnu",
-        "version": "2026.10.19",
-        "sha256": "3162760f40b6b5f706c60641e4ef5ee7322bc6c54f72fc26a7111b337aa18d9d",
-        "bytes": 173449632
+        "version": "2026.11.1",
+        "sha256": "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
+        "bytes": 177907728
       },
       {
         "target": "aarch64-apple-darwin",
-        "version": "2026.10.19",
-        "sha256": "7dc61dfa71abbcda1c40d18440bc556b5d58b80e6042bc4f95fd106fa1bb3c66",
-        "bytes": 138238816
+        "version": "2026.11.1",
+        "sha256": "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627",
+        "bytes": 141426624
       },
       {
         "target": "x86_64-apple-darwin",
-        "version": "2026.10.19",
-        "sha256": "8d5e1591811143f15334f690373cefb58c13bd6cbd0292008748fd777f6c99d8",
-        "bytes": 169788224
+        "version": "2026.11.1",
+        "sha256": "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0",
+        "bytes": 172294368
       }
     ],
     "state": "active"

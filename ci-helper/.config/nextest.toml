@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+[profile.ci]
+retries = 0
+test-threads = "num-cpus"
+status-level = "all"
+final-status-level = "flaky"
+
+[profile.default]
+slow-timeout = { period = "2s", terminate-after = 1 }

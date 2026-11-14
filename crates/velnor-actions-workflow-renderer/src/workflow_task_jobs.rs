@@ -19,6 +19,7 @@ pub enum WorkflowTaskPolicy {
     Build(BuildTaskPolicy),
     NativeImage(NativeImageTaskPolicy),
     Image(ImageBuildPolicy),
+    RunnerFamily(super::runner_family_jobs::RunnerFamilyPolicy),
     Bun(BunMemberPolicy),
     BunSuite(BunSuitePolicy),
     BunAssets(BunAssetsPolicy),
@@ -26,6 +27,9 @@ pub enum WorkflowTaskPolicy {
 }
 
 impl WorkflowTaskPolicy {
+    pub(crate) fn uses_private_tool_home(&self, job_id: &str) -> bool {
+        matches!(self, Self::RunnerFamily(_)) && self.owns_job_id(job_id)
+    }
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
@@ -33,6 +37,7 @@ impl WorkflowTaskPolicy {
             Self::Build(policy) => &policy.task.id,
             Self::NativeImage(policy) => &policy.task.id,
             Self::Image(policy) => &policy.image.id,
+            Self::RunnerFamily(_) => super::runner_family_jobs::RUNNER_FAMILY_POLICY_ID,
             Self::Bun(policy) => &policy.id,
             Self::BunSuite(policy) => &policy.id,
             Self::BunAssets(policy) => &policy.id,
@@ -49,6 +54,9 @@ impl WorkflowTaskPolicy {
             Self::Image(policy) => policy
                 .platform_for_job(job_id)
                 .map(velnor_actions_contract::ImagePlatform::runs_on),
+            Self::RunnerFamily(_) => (job_id
+                == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID)
+                .then_some("ubuntu-26.04"),
             Self::Bun(policy) => {
                 (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
             }
@@ -68,7 +76,11 @@ impl WorkflowTaskPolicy {
     pub fn uses_pinned_tools(&self) -> bool {
         match self {
             Self::Image(policy) => policy.uses_pinned_tools(),
-            Self::Bun(_) | Self::BunSuite(_) | Self::BunAssets(_) | Self::Stack(_) => true,
+            Self::RunnerFamily(_)
+            | Self::Bun(_)
+            | Self::BunSuite(_)
+            | Self::BunAssets(_)
+            | Self::Stack(_) => true,
             _ => false,
         }
     }
@@ -80,6 +92,9 @@ impl WorkflowTaskPolicy {
             Self::Build(policy) => policy.job_id() == job_id,
             Self::NativeImage(policy) => policy.job_id() == job_id,
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
+            Self::RunnerFamily(_) => {
+                job_id == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID
+            }
             Self::Bun(policy) => policy.id == job_id,
             Self::BunSuite(policy) => policy.job_ids().iter().any(|id| id == job_id),
             Self::BunAssets(policy) => policy.id == job_id,
@@ -150,6 +165,9 @@ pub(crate) fn validate_workflow_task_jobs(
                     task,
                     checkout_uses,
                 )?,
+            ),
+            WorkflowTaskPolicy::RunnerFamily(task) => job_ids.extend(
+                super::runner_family_jobs::validate_runner_family_job(jobs, task, checkout_uses)?,
             ),
             WorkflowTaskPolicy::Bun(_)
             | WorkflowTaskPolicy::BunSuite(_)

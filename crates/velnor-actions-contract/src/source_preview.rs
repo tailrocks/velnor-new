@@ -3,11 +3,13 @@
 
 use serde::{Deserialize, Serialize};
 
+pub const RUNTIME_AUTHORITY_SHA: Option<&str> = Some("533d225c08785adc4367340e1db4dc111ee2b5a2");
+pub const PUBLICATION_AUTHORITY_SHA: &str = "72701af69f6f9b693e639814fcf479409da3295c";
+
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SIGNER_WORKFLOW: &str = ".github/workflows/product-release-generator.yml";
 const CI_WORKFLOW: &str = ".github/workflows/ci.yml";
 const QUALIFICATION_WORKFLOW: &str = ".github/workflows/source-qualification.yml";
-const TARGET: &str = "x86_64-unknown-linux-gnu";
 const MAX_RECEIPT_BYTES: usize = 65_536;
 const MAX_PAYLOAD_BYTES: u64 = 268_435_456;
 
@@ -25,9 +27,8 @@ pub struct SourcePreviewReceipt {
     pub signer: SourcePreviewRun,
     pub ci: SourcePreviewRun,
     pub qualification: SourcePreviewRun,
-    pub producer: SourcePreviewProducer,
-    pub candidate: SourcePreviewCandidate,
-    pub payload: SourcePreviewPayload,
+    pub candidate_source_artifact_id: u64,
+    pub targets: SourcePreviewTargets,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,9 +61,18 @@ pub struct SourcePreviewProducer {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SourcePreviewCandidate {
-    pub source_artifact_id: u64,
-    pub payload_artifact_id: u64,
+pub struct SourcePreviewTargets {
+    pub linux: SourcePreviewTarget,
+    pub darwin: SourcePreviewTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourcePreviewTarget {
+    pub producer: SourcePreviewProducer,
+    pub candidate_payload_artifact_id: u64,
+    pub qualification_job_id: u64,
+    pub payload: SourcePreviewPayload,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,7 +96,7 @@ impl SourcePreviewLock {
 
     pub fn validate_shape(&self) -> Result<(), crate::ContractError> {
         let receipt = &self.receipt;
-        if receipt.schema != 2
+        if receipt.schema != 3
             || receipt.repository != REPOSITORY
             || !valid_version(&receipt.version)
             || !lower_hex(&receipt.source_sha, 40)
@@ -105,13 +115,12 @@ impl SourcePreviewLock {
             || receipt.signer.run_attempt > self.publisher_run_attempt
             || self.publisher_run_attempt > 51
             || self.publisher_job_id == 0
-            || receipt.producer.producer_run_id == 0
-            || receipt.producer.producer_run_attempt == 0
-            || receipt.producer.payload_artifact_id == 0
-            || !lower_hex(&receipt.producer.payload_archive_sha256, 64)
-            || receipt.candidate.source_artifact_id == 0
-            || receipt.candidate.payload_artifact_id == 0
-            || receipt.candidate.source_artifact_id == receipt.candidate.payload_artifact_id
+            || receipt.candidate_source_artifact_id == 0
+            || !valid_target(&receipt.targets.linux, "x86_64-unknown-linux-gnu")
+            || !valid_target(&receipt.targets.darwin, "aarch64-apple-darwin")
+            || !distinct_artifacts(receipt)
+            || receipt.targets.linux.qualification_job_id
+                == receipt.targets.darwin.qualification_job_id
             || !valid_run(
                 &receipt.signer,
                 SIGNER_WORKFLOW,
@@ -130,11 +139,6 @@ impl SourcePreviewLock {
                 &receipt.source_sha,
                 "refs/heads/main",
             )
-            || receipt.payload.target != TARGET
-            || receipt.payload.name != "velnor-actions-x86_64-unknown-linux-gnu"
-            || receipt.payload.size == 0
-            || receipt.payload.size > MAX_PAYLOAD_BYTES
-            || !lower_hex(&receipt.payload.sha256, 64)
             || !lower_hex(&self.receipt_sha256, 64)
             || !lower_hex(&self.bundle_sha256, 64)
         {
@@ -157,6 +161,35 @@ impl SourcePreviewLock {
         }
         Ok(())
     }
+}
+
+fn distinct_artifacts(receipt: &SourcePreviewReceipt) -> bool {
+    let ids = [
+        receipt.candidate_source_artifact_id,
+        receipt.targets.linux.producer.payload_artifact_id,
+        receipt.targets.darwin.producer.payload_artifact_id,
+        receipt.targets.linux.candidate_payload_artifact_id,
+        receipt.targets.darwin.candidate_payload_artifact_id,
+    ];
+    ids.iter()
+        .enumerate()
+        .all(|(index, id)| !ids[index + 1..].contains(id))
+}
+
+fn valid_target(target: &SourcePreviewTarget, expected: &str) -> bool {
+    let producer = &target.producer;
+    let payload = &target.payload;
+    producer.producer_run_id != 0
+        && producer.producer_run_attempt != 0
+        && producer.payload_artifact_id != 0
+        && lower_hex(&producer.payload_archive_sha256, 64)
+        && target.candidate_payload_artifact_id != 0
+        && target.qualification_job_id != 0
+        && payload.target == expected
+        && payload.name == format!("velnor-actions-{expected}")
+        && payload.size != 0
+        && payload.size <= MAX_PAYLOAD_BYTES
+        && lower_hex(&payload.sha256, 64)
 }
 
 fn valid_run(run: &SourcePreviewRun, path: &str, source: &str, git_ref: &str) -> bool {

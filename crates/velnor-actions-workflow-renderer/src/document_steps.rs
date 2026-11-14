@@ -142,7 +142,14 @@ fn shell_step_to_yaml(
         return Ok(verifier);
     }
     crate::action_mbx_shell::validate_step_argv(run, step.role)?;
-    if composite {
+    if step.role == Some(velnor_actions_contract::StepRole::RunnerFamilySourcesPrefetch) {
+        if composite {
+            return Err(RenderError::InvalidWorkflow(
+                "runner_family_prefetch_composite".into(),
+            ));
+        }
+        crate::runner_family_sources::validate(run, env)?;
+    } else if composite {
         commands::validate_composite_env(env)?;
     } else {
         commands::validate_env(env)?;

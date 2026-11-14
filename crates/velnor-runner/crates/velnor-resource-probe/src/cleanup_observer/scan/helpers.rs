@@ -15,7 +15,6 @@ use rustix::fs::{AtFlags, Mode, OFlags, StatxFlags, fstatfs, open, statx};
 
 const NSFS_MAGIC: i64 = 0x6e73_6673;
 const TIME_LIMIT: Duration = Duration::from_secs(30);
-const TMPFS_MAGIC: i64 = 0x0102_1994;
 
 pub(super) fn decode_mount_path(value: &str) -> Option<String> {
     let mut output = Vec::with_capacity(value.len());
@@ -100,10 +99,6 @@ pub(super) struct DescriptorObservation {
     pub filesystem_magic: i64,
 }
 
-pub(super) fn tmpfs_magic() -> i64 {
-    TMPFS_MAGIC
-}
-
 pub(super) fn device_pair(value: u64) -> [u32; 2] {
     let major = ((value >> 8) & 0xfff) | ((value >> 32) & !0xfff);
     let minor = (value & 0xff) | ((value >> 12) & !0xff);
@@ -174,4 +169,12 @@ pub(super) fn add_issue(issues: &mut Vec<String>, value: &str) {
     if !issues.iter().any(|issue| issue == value) {
         issues.push(value.to_owned());
     }
+}
+
+pub(super) fn vanished(error: &ProbeError) -> bool {
+    matches!(error, ProbeError::Read(_, source) if io_vanished(source))
+}
+
+pub(super) fn io_vanished(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::NotFound || error.raw_os_error() == Some(3)
 }

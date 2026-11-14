@@ -10,7 +10,7 @@ use crate::verification_jobs::build_task_mise_tools::{
     safe_version, selected_mise_files_for, valid_github_matching_regex,
     valid_rust_toolchain_options, validate_artifact,
 };
-use crate::verification_jobs::task_script::{capture_command, jq_guard, printf_write};
+use crate::verification_jobs::task_script::{jq_guard, printf_write};
 use crate::verification_jobs::{INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskBootstrapPolicy};
 use crate::{RenderError, mise_setup_step, shell_step};
 use velnor_actions_contract::{Step, StepKind, StepRole};
@@ -28,6 +28,11 @@ pub(crate) fn steps(
     compile_bounds: bool,
 ) -> Result<Vec<Step>, RenderError> {
     let mut env = BTreeMap::from([("MISE_CARGO_BINSTALL_ONLY".to_owned(), "1".to_owned())]);
+    if policy.shared_cargo_sources {
+        for key in velnor_actions_contract::HomeKey::ALL {
+            env.insert(key.env_name().to_owned(), key.standard_value().to_owned());
+        }
+    }
     let mut rendered = vec![
         checkout_step(checkout_uses, full_event_sha)?,
         mise_setup_step(mise_setup)?,
@@ -199,6 +204,7 @@ fn install_script(policy: &MiseTaskBootstrapPolicy) -> Result<String, RenderErro
             .selected_tools
             .iter()
             .any(|tool| tool.key == MBX_TOOL_KEY && tool.backend == MBX_BACKEND),
+        policy.runner_family_script,
     )?;
     let root = task_root(policy);
     let mut statements = base_environment(&root);
@@ -208,7 +214,7 @@ fn install_script(policy: &MiseTaskBootstrapPolicy) -> Result<String, RenderErro
         "/bin/mkdir -m 700 \"$task_root\"".to_owned(),
         "/bin/mkdir -m 700 \"$task_root/home\" \"$task_root/home/config\" \"$task_root/home/data\" \"$task_root/home/cache\" \"$task_root/home/state\" \"$task_root/config\" \"$task_root/data\" \"$task_root/cache\" \"$task_root/state\" \"$task_root/cargo\" \"$task_root/rustup\"".to_owned(),
     ]);
-    statements.extend(private_environment());
+    statements.extend(private_environment(policy.shared_cargo_sources));
     statements.extend([
         "export MISE_CEILING_PATHS=\"${task_root%/*}\"".to_owned(),
         "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
@@ -224,6 +230,51 @@ fn install_script(policy: &MiseTaskBootstrapPolicy) -> Result<String, RenderErro
         "mise --no-env --locked --no-hooks install --jobs 2".to_owned(),
     ]);
     Ok(statements.join("; "))
+}
+
+pub(crate) fn prepare_target_step(policy: &MiseTaskBootstrapPolicy) -> Result<Step, RenderError> {
+    let argv = policy
+        .prepare_rust_target
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("runner_family_target_missing".into()))?;
+    let root = task_root(policy);
+    let mut statements = base_environment(&root);
+    statements.extend(private_environment(policy.shared_cargo_sources));
+    statements.extend([
+        "export MISE_CEILING_PATHS=\"${task_root%/*}\"".to_owned(),
+        "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
+        "export MISE_NO_HOOKS=1".to_owned(),
+        "cd -P \"$task_root\"".to_owned(),
+        crate::commands::join_argv_for_run(argv)?,
+    ]);
+    let env = velnor_actions_contract::HomeKey::ALL
+        .into_iter()
+        .map(|key| (key.env_name().to_owned(), key.standard_value().to_owned()))
+        .collect();
+    shell_step(
+        "Install pinned Linux musl target",
+        bash_script(&statements.join("; ")),
+        env,
+    )
+}
+
+pub(crate) fn runner_family_prefetch_script() -> String {
+    let root = "${RUNNER_TEMP}/velnor-verification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-runner-image-family";
+    let mut statements = base_environment(root);
+    statements.extend([
+        "/usr/bin/python3 -c 'import operator,os,stat,sys; p=sys.argv[1]; s=os.lstat(p); sys.exit(not (os.path.isabs(p) and os.path.realpath(p)==p and stat.S_ISDIR(s.st_mode) and s.st_uid==os.geteuid() and operator.and_(s.st_mode,0o022)==0))' \"$RUNNER_TEMP\"".to_owned(),
+    ]);
+    statements.extend(private_environment(true));
+    statements.extend([
+        "export MISE_CEILING_PATHS=\"${task_root%/*}\"".to_owned(),
+        "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
+        "export MISE_NO_CONFIG=1 MISE_NO_HOOKS=1".to_owned(),
+        "cd -P \"$GITHUB_WORKSPACE\"".to_owned(),
+        "/bin/mkdir -m 700 \"$RUNNER_TEMP/source-qualification-artifacts\"".to_owned(),
+        "/bin/mkdir -m 700 \"$RUNNER_TEMP/source-qualification-artifacts/logs\"".to_owned(),
+        "exec bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces".to_owned(),
+    ]);
+    statements.join("; ")
 }
 
 fn run_script(policy: &MiseTaskBootstrapPolicy) -> String {
@@ -254,7 +305,7 @@ fn run_script(policy: &MiseTaskBootstrapPolicy) -> String {
     } else {
         statements.push("test -d \"$task_root\"".to_owned());
     }
-    statements.extend(private_environment());
+    statements.extend(private_environment(policy.shared_cargo_sources));
     statements.extend([
         format!(
             "export MISE_CEILING_PATHS=\"$workspace_root/{}\"",
@@ -282,57 +333,48 @@ fn run_script(policy: &MiseTaskBootstrapPolicy) -> String {
         jq_guard(),
         workspace_config_chain_check(policy),
     ]);
+    statements.extend(selected_tool_guards(policy));
+    if policy.evidence_input {
+        statements.extend(evidence_statements());
+    }
+    statements.push(task_invocation(policy));
+    if policy.runner_family_script {
+        statements.extend(super::managed_tool_guard::recheck(true));
+    }
+    statements.push("exit \"$task_status\"".to_owned());
+    statements.join("; ")
+}
+
+fn selected_tool_guards(policy: &MiseTaskBootstrapPolicy) -> Vec<String> {
+    let mut statements = Vec::new();
     if let Some(mbx) = policy
         .selected_tools
         .iter()
         .find(|tool| tool.key == MBX_TOOL_KEY && tool.backend == MBX_BACKEND)
     {
-        statements.extend(mbx_guard(&mbx.version));
+        if !policy.runner_family_script {
+            return super::managed_tool_guard::ordinary_mbx(&mbx.version);
+        }
+        statements.extend(super::managed_tool_guard::mbx(&mbx.version));
+        if let Some(rust) = policy.selected_tools.iter().find(|tool| tool.key == "rust") {
+            let host = match policy.runner {
+                velnor_actions_contract::VerificationRunner::LinuxX64 => "x86_64-unknown-linux-gnu",
+                _ => "aarch64-apple-darwin",
+            };
+            statements.extend(super::managed_tool_guard::rust(
+                &rust.version,
+                host,
+                policy.shared_cargo_sources,
+            ));
+        }
     }
-    if policy.evidence_input {
-        statements.extend([
-            "evidence_root=\"$workspace_root/.velnor/evidence\"".to_owned(),
-            "test -d \"$evidence_root\" && test ! -L \"$evidence_root\"".to_owned(),
-            "export VELNOR_GITHUB_EVIDENCE_ROOT=\"$evidence_root\"".to_owned(),
-        ]);
-    }
-    let locked = if policy.mise_lock_sha256.is_some() {
-        "--locked "
-    } else {
-        ""
-    };
-    statements.push(format!(
-        "mise --no-env {locked}--no-hooks run --skip-tools {}",
-        policy.mise_task
-    ));
-    statements.join("; ")
-}
-
-fn mbx_guard(mbx_version: &str) -> Vec<String> {
-    vec![
-        capture_command(
-            "mise --no-env --no-hooks which mbx",
-            "$task_root/mbx_path.txt",
-            "mbx_path",
-        ),
-        format!(
-            "case \"$mbx_path\" in \"$MISE_DATA_DIR/installs/mr-boxington/{mbx_version}/\"*) ;; *) exit 1 ;; esac"
-        ),
-        "test -x \"$mbx_path\"".to_owned(),
-        "test ! -L \"$mbx_path\"".to_owned(),
-        "mbx_dir=\"${mbx_path%/*}\"".to_owned(),
-        "cd -P \"$mbx_dir\"".to_owned(),
-        "mbx_parent=\"$PWD\"".to_owned(),
-        "cd -P \"$workspace_root\"".to_owned(),
-        "mbx_base=\"${mbx_path##*/}\"".to_owned(),
-        "test \"$mbx_path\" = \"$mbx_parent/$mbx_base\"".to_owned(),
-        "cd -P \"$task_working_directory\"".to_owned(),
-    ]
+    statements
 }
 
 #[path = "mise_task_bootstrap_environment.rs"]
 mod environment;
 use self::environment::{
-    base_environment, bash_script, platform, private_config_chain_check, private_environment,
-    repository_path_guards, source_hash_check, task_root, workspace_config_chain_check,
+    base_environment, bash_script, evidence_statements, platform, private_config_chain_check,
+    private_environment, repository_path_guards, source_hash_check, task_invocation, task_root,
+    workspace_config_chain_check,
 };

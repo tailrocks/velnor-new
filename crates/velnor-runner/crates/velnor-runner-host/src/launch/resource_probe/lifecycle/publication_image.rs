@@ -43,7 +43,7 @@ async fn verify_publication_image_with_deadline<P: ImageProvider>(
     if engine_id != expected.engine_id()
         || root.digest() != expected.docker_root_digest()
         || architecture != expected.daemon_architecture()
-        || expected.platform() != "linux/amd64"
+        || crate::config::RunnerPlatform::parse(expected.platform()).is_none()
     {
         return Err(HostError::Identity);
     }

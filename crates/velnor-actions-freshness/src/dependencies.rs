@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod lock;
+mod path_dependencies;
 mod workspace;
 
 use std::collections::BTreeMap;

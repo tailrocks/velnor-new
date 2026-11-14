@@ -20,9 +20,40 @@ const CARGO_ARTIFACT_KIND: &str = "crates/velnor-actions-freshness/src/cargo_art
 const REPO_VERIFICATION_DOC: &str = "docs/implemented/ci-maintenance/repo-verification.md";
 const RUST_QUALITY_CONTRACT: &str = "docs/proposed/ci-maintenance/rust-quality-contract.md";
 const BUN_CONTRACT: &str = "docs/proposed/bun-contract.md";
-const REPO_VERIFICATION_NON_INPUT: &str = "docs/implemented/ci-maintenance/**";
-const RUST_QUALITY_NON_INPUT: &str = "docs/proposed/**";
+const DOCUMENTATION_NON_INPUT: &str = "docs/**";
 const FIXTURE_CHECK_SOURCE: &str = "libs/core/src/lib.rs";
+
+#[test]
+fn documentation_outside_maintenance_is_unaffected_and_absent_from_rust_checkout() -> TestResult {
+    let root = repository_root()?;
+    let inputs = maintenance_inputs(&root)?;
+    let non_inputs = maintenance_non_inputs(&root)?;
+    for path in [
+        "docs/reviews/ci-performance.md",
+        "docs/implemented/named-mise-checks.md",
+    ] {
+        assert_planner_skips_documentation(path, "docs/**", &inputs, &non_inputs)?;
+    }
+    for operation in ["rename", "delete"] {
+        let repo = maintenance_fixture(&inputs, &non_inputs)?;
+        let path = "docs/reviews/selection.md";
+        put(repo.root(), path, "before\n")?;
+        let base = commit(repo.root(), "base documentation")?;
+        if operation == "rename" {
+            std::fs::rename(
+                repo.root().join(path),
+                repo.root().join("docs/reviews/renamed.md"),
+            )?;
+        } else {
+            std::fs::remove_file(repo.root().join(path))?;
+        }
+        let head = commit(repo.root(), "change documentation")?;
+        let run = plan(repo.root(), "pull_request", Some(&base), &head)?;
+        assert!(run.with_disposition("run")?.is_empty(), "{operation}");
+    }
+    Ok(())
+}
+
 #[test]
 fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> TestResult {
     let root = repository_root()?;
@@ -41,19 +72,16 @@ fn maintenance_check_inputs_cover_sources_and_schedule_on_exact_changes() -> Tes
     assert!(!inputs.contains(BUN_CONTRACT));
     assert_eq!(
         non_inputs,
-        BTreeSet::from([
-            REPO_VERIFICATION_NON_INPUT.to_owned(),
-            RUST_QUALITY_NON_INPUT.to_owned(),
-        ])
+        BTreeSet::from([DOCUMENTATION_NON_INPUT.to_owned()])
     );
     validation::assert_dedicated_document_directories(&root)?;
     validation::assert_source_closure(&root, &inputs)?;
     validation::assert_metadata_input_closures(&root)?;
 
     for (path, glob) in [
-        (REPO_VERIFICATION_DOC, REPO_VERIFICATION_NON_INPUT),
-        (RUST_QUALITY_CONTRACT, RUST_QUALITY_NON_INPUT),
-        (BUN_CONTRACT, RUST_QUALITY_NON_INPUT),
+        (REPO_VERIFICATION_DOC, DOCUMENTATION_NON_INPUT),
+        (RUST_QUALITY_CONTRACT, DOCUMENTATION_NON_INPUT),
+        (BUN_CONTRACT, DOCUMENTATION_NON_INPUT),
     ] {
         assert_planner_skips_documentation(path, glob, &inputs, &non_inputs)?;
     }

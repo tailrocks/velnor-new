@@ -26,6 +26,8 @@ pub(super) fn receipt_bytes(
     let cursor = Cursor::new(archive);
     let mut zip =
         zip::ZipArchive::new(cursor).map_err(|_| internal("qualification_zip_invalid"))?;
+    zip.validate_header_consistency()
+        .map_err(|_| internal("qualification_zip_invalid"))?;
     if zip.len() != 1 {
         return Err(internal("qualification_zip_member_count"));
     }
@@ -63,3 +65,7 @@ fn sha256(bytes: &[u8]) -> String {
     }
     text
 }
+
+#[cfg(test)]
+#[path = "archive_duplicate_tests.rs"]
+mod duplicate_tests;

@@ -6,6 +6,61 @@ Platform: `linux/amd64`. ARM64 is not the baseline.
 docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
 ```
 
+## linux/arm64 developer build
+
+On an Apple Silicon Mac, the same Dockerfiles build native `linux/arm64`
+runner and DinD images. These images are built locally, are never published,
+and do not go through image qualification. An ARM result is never recorded as
+the amd64 baseline. The runner host accepts only `linux/amd64`, so
+`velnor-runner` does not start these images.
+
+`.velnor/runner.lock` pins the arm64 build. `base_image_arm64_digest` is the
+`linux/arm64/v8` child of the same Ubuntu manifest list as the amd64 base.
+The `*_arm64_sha256` keys hold the checksums of the arm64 downloads, at the
+same versions as the amd64 downloads. The Dockerfile has no default for an
+arm64 checksum, so the build fails unless each checksum is passed from the
+lock. The image publication check fails when an architecture arm of either
+Dockerfile differs from the URLs and checksums in the lock. A named build
+context replaces the pinned amd64 base with the arm64 child. The helper programs are built for `aarch64-unknown-linux-musl`, and
+they are static like the amd64 `x86_64-unknown-linux-musl` helpers.
+
+Run from the repository root.
+
+```sh
+STAGES="$(mktemp -d)"
+lock() { sed -n "s/^$1 = \"\(.*\)\"\$/\1/p" .velnor/runner.lock; }
+docker run --rm --platform linux/arm64 -v "$PWD:/src:ro" -v velnor-arm64-target:/target -v "$STAGES:/out" \
+  -e CARGO_TARGET_DIR=/target rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 \
+  sh -c 'rustup target add aarch64-unknown-linux-musl \
+    && cargo build --locked --release --manifest-path /src/crates/velnor-runner/Cargo.toml --target aarch64-unknown-linux-musl \
+      -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook \
+    && mkdir -p /out/resource-probe /out/storage-init /out/job-start-hook /out/job-started-hook \
+    && cp /target/aarch64-unknown-linux-musl/release/velnor-resource-probe /out/resource-probe/resource-probe \
+    && cp /target/aarch64-unknown-linux-musl/release/velnor-storage-init /out/storage-init/storage-init \
+    && cp /target/aarch64-unknown-linux-musl/release/velnor-job-start-hook /out/job-start-hook/job-start-hook \
+    && printf "#!/bin/sh\nset -eu\nexec /velnor/job-start-hook \"\$@\"\n" > /out/job-started-hook/velnor-job-start-hook.sh \
+    && chmod 0555 /out/*/*'
+base="$(lock base_image)=docker-image://$(lock base_image_name)@$(lock base_image_arm64_digest)"
+docker buildx build --platform linux/arm64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" \
+  --build-context "$base" \
+  --build-arg RUNNER_ARM64_SHA256="$(lock runner_arm64_sha256)" \
+  --build-arg DOCKER_ARM64_SHA256="$(lock docker_arm64_sha256)" \
+  --build-arg COMPOSE_ARM64_SHA256="$(lock compose_arm64_sha256)" \
+  --build-arg BUILDX_ARM64_SHA256="$(lock buildx_arm64_sha256)" \
+  --build-arg NODE_ARM64_SHA256="$(lock node_arm64_sha256)" \
+  --build-context resource_probe="$STAGES/resource-probe" \
+  --build-context storage_init="$STAGES/storage-init" \
+  --build-context job_start_hook="$STAGES/job-start-hook" \
+  --build-context job_started_hook="$STAGES/job-started-hook" \
+  --tag velnor-runner:linux-arm64 --load images/runner/ubuntu-26.04
+docker buildx build --platform linux/arm64 --build-arg VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" \
+  --build-context "$base" \
+  --build-arg DOCKER_ARM64_SHA256="$(lock docker_arm64_sha256)" \
+  --build-context resource_probe="$STAGES/resource-probe" \
+  --tag velnor-dind:linux-arm64 --load images/dind
+docker image inspect --format '{{.Id}} {{.Architecture}}' velnor-runner:linux-arm64 velnor-dind:linux-arm64
+```
+
 Official [actions/runner `2.338.0` release](https://github.com/actions/runner/releases/tag/v2.338.0)
 linux-x64, SHA256
 `af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32`.

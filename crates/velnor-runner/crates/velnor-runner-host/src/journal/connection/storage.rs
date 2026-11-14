@@ -183,7 +183,7 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
     }
     let image_imports = scalar_count(
         connection,
-        "SELECT COUNT(*) FROM image_imports WHERE state IN ('prepared', 'requested', 'uncertain')",
+        "SELECT (SELECT COUNT(*) FROM image_imports WHERE state IN ('prepared', 'requested', 'uncertain')) + (SELECT COUNT(*) FROM image_import_registry WHERE state IN ('prepared', 'requested', 'uncertain'))",
     )
     .await?;
     if image_imports != 0 {

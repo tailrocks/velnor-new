@@ -7,6 +7,50 @@ use crate::{CheckDeadline, MiseError};
 use std::io::Write;
 
 impl IsolatedCommand {
+    pub fn run_files_until(
+        &self,
+        input: std::fs::File,
+        output: &mut std::fs::File,
+        stdout_cap: u64,
+        stderr_cap: usize,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessFileOutput, MiseError> {
+        #[cfg(unix)]
+        {
+            if !input.metadata().is_ok_and(|metadata| metadata.is_file())
+                || !output.metadata().is_ok_and(|metadata| metadata.is_file())
+            {
+                return Err(MiseError::SpawnFailed {
+                    program: self.program.to_string_lossy().into_owned(),
+                    message: "stream_requires_regular_file".to_owned(),
+                });
+            }
+            let mut streams = Streams::file(output, stdout_cap, stderr_cap);
+            streams.input = Some(input);
+            let result = self.run_streams(
+                &mut streams,
+                deadline,
+                &super::CancelHandle::new(),
+                super::SPAWN_DEADLINE_MESSAGE,
+            )?;
+            Ok(ProcessFileOutput {
+                stdout_bytes: streams.stdout_bytes,
+                stderr: result.stderr,
+                code: result.code,
+                signal: result.signal,
+                success: result.success,
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (input, output, stdout_cap, stderr_cap, deadline);
+            Err(MiseError::SpawnFailed {
+                program: self.program.to_string_lossy().into_owned(),
+                message: "cancellable_process_groups_require_unix".to_owned(),
+            })
+        }
+    }
+
     pub fn run_stdout_to_file_until(
         &self,
         output: &mut std::fs::File,
@@ -23,12 +67,14 @@ impl IsolatedCommand {
                 });
             }
             let mut streams = Streams {
+                input: None,
                 stdout: Sink::File(output),
                 stdout_cap,
                 stdout_bytes: 0,
                 stderr_cap,
                 stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
                 progress: None,
+                truncate: false,
             };
             let result = self.run_streams(
                 &mut streams,
@@ -63,24 +109,28 @@ enum Sink<'a> {
 
 #[cfg(unix)]
 pub(super) struct Streams<'a> {
+    pub(super) input: Option<std::fs::File>,
     stdout: Sink<'a>,
     stdout_cap: u64,
     stdout_bytes: u64,
     pub(super) stderr_cap: usize,
     stderr: Vec<u8>,
     progress: Option<super::progress::ProgressSink<'a>>,
+    truncate: bool,
 }
 
 #[cfg(unix)]
 impl<'a> Streams<'a> {
     pub(super) fn file(output: &'a mut std::fs::File, stdout_cap: u64, stderr_cap: usize) -> Self {
         Self {
+            input: None,
             stdout: Sink::File(output),
             stdout_cap,
             stdout_bytes: 0,
             stderr_cap,
             stderr: Vec::with_capacity(stderr_cap.min(64 * 1024)),
             progress: None,
+            truncate: false,
         }
     }
 
@@ -90,13 +140,20 @@ impl<'a> Streams<'a> {
 
     pub(super) fn memory(cap: usize) -> Self {
         Self {
+            input: None,
             stdout: Sink::Memory(Vec::with_capacity(cap.min(64 * 1024))),
             stdout_cap: u64::try_from(cap).unwrap_or(u64::MAX),
             stdout_bytes: 0,
             stderr_cap: cap,
             stderr: Vec::with_capacity(cap.min(64 * 1024)),
             progress: None,
+            truncate: false,
         }
+    }
+
+    pub(super) fn truncate(mut self) -> Self {
+        self.truncate = true;
+        self
     }
 
     pub(super) fn observe(mut self, output: &'a mut dyn Write, deadline: CheckDeadline) -> Self {
@@ -150,7 +207,7 @@ impl<'a> Streams<'a> {
             if let Some(progress) = &mut self.progress {
                 progress.chunk("stdout", prefix)?;
             }
-            if accepted < bytes.len() || next > self.stdout_cap {
+            if !self.truncate && (accepted < bytes.len() || next > self.stdout_cap) {
                 return Err(format!("stdout_limit_exceeded:{}", self.stdout_cap));
             }
             Ok(())
@@ -178,7 +235,7 @@ impl Streams<'_> {
             if let Some(progress) = &mut self.progress {
                 progress.chunk("stderr", prefix)?;
             }
-            if accepted < bytes.len() || next > self.stderr_cap {
+            if !self.truncate && (accepted < bytes.len() || next > self.stderr_cap) {
                 return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));
             }
             Ok(())

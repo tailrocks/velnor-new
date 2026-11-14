@@ -64,5 +64,6 @@ cd "$root"
 /usr/local/bin/wait-docker-sock
 /usr/local/bin/clear-dockerenv
 "${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
+umask 022
 export ACTIONS_RUNNER_HOOK_JOB_STARTED="/usr/local/bin/velnor-job-start-hook.sh"
 ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run

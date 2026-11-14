@@ -8,8 +8,15 @@ FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383
 ARG DOCKER_VERSION=29.9.1
 ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
 ARG DEBIAN_FRONTEND=noninteractive
+ARG TARGETARCH
+ARG DOCKER_ARM64_SHA256
 
-RUN apt-get update \
+RUN case "${TARGETARCH}" in \
+        amd64) docker_url="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" ;; \
+        arm64) docker_url="https://download.docker.com/linux/static/stable/aarch64/docker-${DOCKER_VERSION}.tgz" DOCKER_SHA256="${DOCKER_ARM64_SHA256}" ;; \
+        *) exit 1 ;; \
+    esac \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -22,8 +29,7 @@ RUN apt-get update \
     && mkdir -p /var/lib/docker /run /home/runner/_work \
     && chown 1000:1000 /home/runner/_work \
     && chmod 0755 /home/runner/_work \
-    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
-        "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
+    && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz "${docker_url}" \
     && echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
     && tar -xzf /tmp/docker.tgz --strip-components=1 -C /usr/local/bin \
     && rm -f /tmp/docker.tgz \

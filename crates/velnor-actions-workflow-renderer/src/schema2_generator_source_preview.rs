@@ -9,13 +9,18 @@ use super::{ProductReleasePins, assets, workflow_steps as steps};
 
 const MAIN_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main' && github.workflow_ref == 'tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main' }}";
 const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}";
-const PAYLOAD: &str = "velnor-actions-x86_64-unknown-linux-gnu";
 const METADATA: &str = "${{ runner.temp }}/source-preview-metadata.json";
 pub(super) const AUTHORITY_PATH: &str = ".github/workflows/source-preview-publication.yml";
-const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> = None;
+const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> =
+    Some(velnor_actions_contract::source_preview::PUBLICATION_AUTHORITY_SHA);
 
 pub(super) fn producer_jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
-    Ok(vec![build_job(pins)?, qualify_job(pins)?])
+    Ok(vec![
+        build_job(pins, false)?,
+        qualify_job(pins, false)?,
+        build_job(pins, true)?,
+        qualify_job(pins, true)?,
+    ])
 }
 
 pub(super) fn caller_job() -> Result<Option<(String, Yaml)>, RenderError> {
@@ -135,8 +140,12 @@ fn source_job() -> (String, Yaml) {
                 Yaml::str("${{ steps.upload-source.outputs.artifact-id }}"),
             ),
             (
-                "payload_artifact_id".to_owned(),
-                Yaml::str("${{ steps.upload-payload.outputs.artifact-id }}"),
+                "linux_payload_artifact_id".to_owned(),
+                Yaml::str("${{ steps.upload-linux.outputs.artifact-id }}"),
+            ),
+            (
+                "darwin_payload_artifact_id".to_owned(),
+                Yaml::str("${{ steps.upload-darwin.outputs.artifact-id }}"),
             ),
         ]),
     ));
@@ -155,15 +164,61 @@ fn source_job() -> (String, Yaml) {
                 &[METADATA],
             ),
             upload(
-                "upload-payload",
-                "source-preview-qualified-payload-${{ github.run_attempt }}",
+                "upload-linux",
+                "source-preview-qualified-payload-linux-${{ github.run_attempt }}",
                 &["${{ runner.temp }}/velnor-actions-x86_64-unknown-linux-gnu"],
+            ),
+            upload(
+                "upload-darwin",
+                "source-preview-qualified-payload-darwin-${{ github.run_attempt }}",
+                &["${{ runner.temp }}/velnor-actions-aarch64-apple-darwin"],
             ),
         ],
     )
 }
 
-fn build_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
+fn preview_target(
+    darwin: bool,
+) -> (
+    assets::ProductAsset,
+    ReleaseTarget,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+) {
+    if darwin {
+        (
+            assets::MACOS_ARM64,
+            ReleaseTarget::MacosArm64,
+            "Darwin",
+            "source-preview-build-darwin",
+            "velnor-actions-aarch64-apple-darwin",
+            "source-preview-payload-darwin-${{ github.run_attempt }}",
+            "macos-15",
+        )
+    } else {
+        (
+            assets::LINUX,
+            ReleaseTarget::LinuxX86_64,
+            "Linux",
+            "source-preview-build-linux",
+            "velnor-actions-x86_64-unknown-linux-gnu",
+            "source-preview-payload-linux-${{ github.run_attempt }}",
+            "ubuntu-26.04",
+        )
+    }
+}
+
+fn replace_runner(fields: &mut [(String, Yaml)], runner: &str) {
+    if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "runs-on") {
+        *value = Yaml::str(runner);
+    }
+}
+
+fn build_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), RenderError> {
+    let (product, target, label, id, payload, artifact, runner) = preview_target(darwin);
     let mut action_steps = vec![
         steps::checkout_step(),
         steps::bash_step(
@@ -172,43 +227,66 @@ fn build_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
         ),
     ];
     action_steps.extend(assets::build_steps(
-        assets::LINUX,
-        ReleaseTarget::LinuxX86_64,
-        "Verify preview ELF architecture",
-        &assets::linux_verify(assets::LINUX.binary),
+        product,
+        target,
+        "Verify preview architecture",
+        &if darwin {
+            assets::macos_verify(product.binary, "arm64")
+        } else {
+            assets::linux_verify(product.binary)
+        },
         pins,
+        false,
     )?);
     action_steps.push(steps::bash_step(
         "Name raw preview payload",
         &format!(
-            "set -eu\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ncp '{}' '{PAYLOAD}'",
-            assets::LINUX.binary,
+            "set -eu\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ncp '{}' '{payload}'",
+            product.binary,
         ),
     ));
-    action_steps.push(upload(
-        "upload",
-        "source-preview-payload-${{ github.run_attempt }}",
-        &[PAYLOAD],
-    ));
+    action_steps.push(upload("upload", artifact, &[payload]));
     let mut fields = fields(
-        "Build source preview",
+        &format!("Build source preview {label}"),
         &[],
         steps::perm(&[("contents", "read")]),
         MAIN_PUSH,
-        JobTimeout::PRODUCT_COMPILER,
+        if darwin {
+            JobTimeout::PRODUCT_MACOS_COMPILER
+        } else {
+            JobTimeout::PRODUCT_COMPILER
+        },
     );
     fields.push((
         "env".to_owned(),
-        Yaml::Map(steps::release_build_job_env(ReleaseTarget::LinuxX86_64)),
+        Yaml::Map(steps::release_build_job_env(target)),
     ));
     fields.push(artifact_output());
-    Ok(finish("source-preview-build", fields, action_steps))
+    replace_runner(&mut fields, runner);
+    Ok(finish(id, fields, action_steps))
 }
 
-fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
-    let action_steps = vec![
+fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), RenderError> {
+    let (_, target, label, build_id, payload, _, runner) = preview_target(darwin);
+    let qualify_id = if darwin {
+        "source-preview-qualify-darwin"
+    } else {
+        "source-preview-qualify-linux"
+    };
+    let mut action_steps = vec![
         steps::checkout_step(),
-        steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
+        steps::bash_step(
+            "Prepare private source cache",
+            "set -eu\ncase \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac\nmkdir -p \"$RUNNER_TEMP/velnor\"\nrm -rf -- \"$RUNNER_TEMP/velnor/cargo\"\nmkdir -m 700 \"$RUNNER_TEMP/velnor/cargo\"",
+        ),
+    ];
+    if !darwin {
+        action_steps.extend(super::super::source_qualification::sources_restore_steps(
+            qualify_id, runner,
+        )?);
+    }
+    action_steps.extend(vec![
+        steps::mise_step(pins.setup_for(target))?,
         steps::command_step(
             "Install pinned preview qualification tools",
             &pins.install_qualify_tools_argv,
@@ -216,30 +294,45 @@ fn qualify_job(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError>
         steps::verify_rust_step(pins)?,
         steps::download_step_by_id(
             "Download exact source preview payload",
-            "${{ needs.source-preview-build.outputs.artifact_id }}",
+            &format!("${{{{ needs.{build_id}.outputs.artifact_id }}}}"),
             "source-preview",
         ),
-        steps::bash_step(
+        steps::bash_step_with_env(
             "Qualify exact source preview bytes",
-            &qualification_script(),
+            &qualification_script(pins, payload, darwin),
+            if darwin {
+                vec![]
+            } else {
+                vec![
+                    (
+                        "SOURCES_CACHE_HIT",
+                        "${{ steps.sources-restore.outputs.cache-hit }}",
+                    ),
+                    (
+                        "SOURCES_CACHE_MATCHED_KEY",
+                        "${{ steps.sources-restore.outputs.cache-matched-key }}",
+                    ),
+                ]
+            },
         ),
-    ];
-    Ok(finish(
-        "source-preview-qualify",
-        fields(
-            "Qualify source preview",
-            &["source-preview-build"],
-            steps::perm(&[("contents", "read")]),
-            MAIN_PUSH,
-            JobTimeout::PRODUCT_QUALIFICATION,
-        ),
-        action_steps,
-    ))
+    ]);
+    let mut job_fields = fields(
+        &format!("Qualify source preview {label}"),
+        &[build_id],
+        steps::perm(&[("contents", "read")]),
+        MAIN_PUSH,
+        JobTimeout::PRODUCT_QUALIFICATION,
+    );
+    replace_runner(&mut job_fields, runner);
+    Ok(finish(qualify_id, job_fields, action_steps))
 }
 
-fn qualification_script() -> String {
+fn qualification_script(pins: &ProductReleasePins, payload: &str, darwin: bool) -> String {
+    let sum = if darwin { "shasum -a 256" } else { "sha256sum" };
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest -f source-preview/{PAYLOAD}\ntest ! -L source-preview/{PAYLOAD}\nchmod 0500 source-preview/{PAYLOAD}\ntest \"$(source-preview/{PAYLOAD} --version)\" = 'velnor-actions {}'\nbash scripts/build-owned-archive-guard.sh\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(sha256sum \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/{PAYLOAD}\"",
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nCARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\"\nexport CARGO_HOME\ntest -d \"$CARGO_HOME\"\ntest ! -L \"$CARGO_HOME\"\ntest \"$(cd \"$CARGO_HOME\" && pwd -P)\" = \"$CARGO_HOME\"\nmkdir -p \"$RUNNER_TEMP/source-qualification-artifacts/logs\"\nexport VELNOR_RUST_VERSION='{}' VELNOR_PREFETCH_RUST_ONLY=1\nbash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces\nfor manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do\n  mise --no-config --no-env --no-hooks exec 'rust@{}' -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path \"$GITHUB_WORKSPACE/$manifest\" > /dev/null\ndone\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\ntest -f source-preview/{payload}\ntest ! -L source-preview/{payload}\nchmod 0500 source-preview/{payload}\ntest \"$(source-preview/{payload} --version)\" = 'velnor-actions {}'\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$({sum} \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/{payload}\"",
+        pins.rust_version,
+        pins.rust_version,
         assets::VERSION,
     )
 }

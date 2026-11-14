@@ -201,6 +201,7 @@ authenticated_source_path = Path(sys.argv[6])
 artifact_response_path = Path(sys.argv[7])
 archive_attestation_path = Path(sys.argv[8])
 record_attestation_path = Path(sys.argv[9])
+closure_path = Path(sys.argv[10])
 try:
     expected_run_id = int(os.environ["VELNOR_RUN_ID"])
     expected_run_attempt = int(os.environ["VELNOR_RUN_ATTEMPT"])
@@ -221,7 +222,8 @@ identity = {
     "artifact_id": expected_artifact_id,
 }
 identity = identity_module.validate_identity(identity)
-record = record_module.validate_record(record_module.load_record(record_path))
+record_value, record_raw = record_module.load_record_with_bytes(record_path)
+record = record_module.validate_record(record_value)
 identity_module.validate_candidate_identity(record, identity)
 authenticated_source = _read_limited_json(authenticated_source_path, 1048576, "Authenticated source")
 identity_module.validate_source_inputs(record["source"], authenticated_source)
@@ -229,13 +231,6 @@ artifact_response = _read_limited_json(artifact_response_path, 2097152, "Candida
 identity_module.validate_artifact_record(artifact_response, identity)
 ci_runs = _read_limited_json(ci_runs_path, 2097152, "Canonical CI run response")
 ci = identity_module.select_ci_run(ci_runs, identity["source"])
-for label, attestation_path in (
-    ("Candidate archive", archive_attestation_path),
-    ("Candidate record", record_attestation_path),
-):
-    attestation = _read_limited_json(attestation_path, 1048576, f"{label} attestation")
-    identity_module.validate_attestation_output(attestation, identity["source"])
-verified = oci_module.verify_oci_archive(archive_path)
 hasher = hashlib.sha256()
 archive_size = 0
 with archive_path.open("rb") as archive_stream:
@@ -243,6 +238,24 @@ with archive_path.open("rb") as archive_stream:
         hasher.update(chunk)
         archive_size += len(chunk)
 archive_digest = hasher.hexdigest()
+if closure_path.is_symlink() or not closure_path.is_file() or closure_path.stat().st_size > 1048576:
+    raise publish_module.AuthorityError("Candidate closure must be a bounded regular file.")
+with closure_path.open("rb") as closure_stream:
+    closure_raw = closure_stream.read(1048577)
+if len(closure_raw) > 1048576:
+    raise publish_module.AuthorityError("Candidate closure exceeds its size limit.")
+subjects = {
+    "job-image.oci.tar": archive_digest,
+    "job-image-candidate.json": hashlib.sha256(record_raw).hexdigest(),
+    "job-image-native-source-closure.json": hashlib.sha256(closure_raw).hexdigest(),
+}
+for label, attestation_path in (
+    ("Candidate archive", archive_attestation_path),
+    ("Candidate record", record_attestation_path),
+):
+    attestation = _read_limited_json(attestation_path, identity_module.MAX_ATTESTATION_BYTES, f"{label} attestation")
+    identity_module.validate_attestation_output(attestation, identity, subjects)
+verified = oci_module.verify_oci_archive(archive_path)
 publish_module.check_record_binding(
     record,
     archive_digest,
@@ -267,7 +280,6 @@ with tempfile.TemporaryDirectory(prefix="velnor-image-publish-") as temp:
         os.environ["VELNOR_REGISTRY_TOKEN"],
     )
     proof = publish_module.publish_image(registry_module, transport, token, manifest, blob_paths)
-record_raw = record_path.read_bytes()
 evidence = publish_module.build_evidence(
     identity,
     ci,
@@ -286,19 +298,22 @@ print("fixed authority body assembled the publication evidence")
 "#;
 
 pub(super) const CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-ci-runs.json";
-pub(super) const AUTHENTICATED_SOURCE_PATH: &str = "$RUNNER_TEMP/velnor-authenticated-source.json";
+pub(super) const AUTHENTICATED_SOURCE_FILE: &str = "velnor-authenticated-source.json";
 pub(super) const ARTIFACT_RESPONSE_PATH: &str = "$RUNNER_TEMP/velnor-candidate-artifact.json";
 pub(super) const ARCHIVE_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-archive-attestation.json";
+pub(super) const ATTESTATION_LIMIT: u16 = 1000;
 pub(super) const RECORD_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-record-attestation.json";
 
 pub(super) fn assemble_evidence_step(
     archive: &str,
     record: &str,
+    closure: &str,
     result: &str,
     artifact_id: &str,
 ) -> Yaml {
+    let authenticated_source = format!("$RUNNER_TEMP/{AUTHENTICATED_SOURCE_FILE}");
     let mut run = format!(
-        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{AUTHENTICATED_SOURCE_PATH}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" <<'{EVIDENCE_MARKER}'\n"
+        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nclosure=\"{closure}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{authenticated_source}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" \"$closure\" <<'{EVIDENCE_MARKER}'\n"
     );
     run.push_str(EVIDENCE_PROGRAM);
     run.push_str(EVIDENCE_MARKER);

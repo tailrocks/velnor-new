@@ -1,20 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
-
-use bollard::models::ContainerConfig;
-
-pub(crate) const MAX_WORKER_ARCHIVE_BYTES: u64 =
-    crate::artifact_admission::MAX_WORKER_ARCHIVE_BYTES;
+use std::collections::HashMap;
 pub(super) const MAX_WORKER_ENTRIES: usize = 64;
 pub(super) const MAX_METADATA_BYTES: u64 = 1024 * 1024;
 pub(super) const MAX_ARCHIVE_METADATA_BYTES: u64 = 2 * 1024 * 1024;
-pub(super) const OCI_INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 pub(super) const OCI_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 pub(super) const OCI_CONFIG_MEDIA_TYPE: &str = "application/vnd.oci.image.config.v1+json";
-pub(super) const OCI_GZIP_LAYER_MEDIA_TYPE: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
 pub(super) const IN_TOTO_MEDIA_TYPE: &str = "application/vnd.in-toto+json";
 pub(super) const SLSA_PREDICATE: &str = "https://slsa.dev/provenance/v1";
 pub(super) const BUILD_KIT_TYPE: &str =
@@ -94,51 +86,6 @@ impl WorkerImage {
             Self::Dind => None,
         }
     }
-
-    pub(in crate::launch::resource_probe::provider) fn release_tag(self) -> String {
-        format!("{}:linux-amd64", self.image_name())
-    }
-
-    pub(super) fn docker_image_name(self) -> String {
-        format!("docker.io/library/{}", self.image_name())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(in crate::launch::resource_probe::provider) struct ParsedWorkerArchive {
-    pub(in crate::launch::resource_probe::provider) archive_sha256: String,
-    pub(in crate::launch::resource_probe::provider) archive_index_digest: String,
-    pub(in crate::launch::resource_probe::provider) image_index_digest: String,
-    pub(in crate::launch::resource_probe::provider) image_index_size: u64,
-    pub(in crate::launch::resource_probe::provider) manifest_digest: String,
-    pub(in crate::launch::resource_probe::provider) manifest_size: u64,
-    pub(in crate::launch::resource_probe::provider) config_digest: String,
-    pub(in crate::launch::resource_probe::provider) config: ContainerConfig,
-    pub(in crate::launch::resource_probe::provider) diff_ids: Vec<String>,
-    pub(in crate::launch::resource_probe::provider) repo_tag: String,
-    pub(super) blob_inventory: BTreeMap<String, u64>,
-}
-
-impl ParsedWorkerArchive {
-    pub(super) fn same_image_payload(&self, other: &Self) -> bool {
-        self.image_index_digest == other.image_index_digest
-            && self.image_index_size == other.image_index_size
-            && self.manifest_digest == other.manifest_digest
-            && self.manifest_size == other.manifest_size
-            && self.config_digest == other.config_digest
-            && self.config == other.config
-            && self.diff_ids == other.diff_ids
-            && self.blob_inventory == other.blob_inventory
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(in crate::launch::resource_probe::provider) struct DerivedLoadArchive {
-    pub(in crate::launch::resource_probe::provider) path: PathBuf,
-    pub(in crate::launch::resource_probe::provider) sha256: String,
-    pub(in crate::launch::resource_probe::provider) archive_index_digest: String,
-    pub(in crate::launch::resource_probe::provider) repo_tag: String,
-    pub(in crate::launch::resource_probe::provider) parsed: ParsedWorkerArchive,
 }
 
 pub(super) struct ArchiveFiles {
@@ -147,19 +94,8 @@ pub(super) struct ArchiveFiles {
 }
 
 pub(super) struct Blob {
+    pub(super) offset: Option<u64>,
     pub(super) digest: String,
     pub(super) size: u64,
     pub(super) metadata: Option<Vec<u8>>,
-}
-
-pub(super) struct VerifiedSelection {
-    pub(super) image_index_digest: String,
-    pub(super) image_index_size: u64,
-    pub(super) manifest_digest: String,
-    pub(super) manifest_size: u64,
-    pub(super) config_digest: String,
-    pub(super) config: ContainerConfig,
-    pub(super) diff_ids: Vec<String>,
-    pub(super) repo_tag: String,
-    pub(super) blob_inventory: BTreeMap<String, u64>,
 }

@@ -28,9 +28,7 @@ const QUALIFICATION_ACTIONS: [(&str, &str); 4] = [
 #[test]
 fn generator_release_qualifiers_resolve_and_install_project_bun_before_candidate_checks()
 -> Result<(), Box<dyn Error>> {
-    let repo = super::workflow_configuration_fixture::make_repo(
-        "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nworkflows = [\"generator_release\"]\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n",
-    )?;
+    let repo = super::source_qualification::generator_repo(true)?;
     let mise = include_str!("../../../../mise.toml").replace("bun = \"1.4.4\"", "bun = \"1.5.7\"");
     fs::write(repo.path().join("mise.toml"), mise)?;
     fs::write(
@@ -78,9 +76,7 @@ fn generator_release_qualifiers_resolve_and_install_project_bun_before_candidate
 
 #[test]
 fn generator_release_jobs_have_bounded_qualification_time() -> Result<(), Box<dyn Error>> {
-    let repo = super::workflow_configuration_fixture::make_repo(
-        "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nworkflows = [\"generator_release\"]\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n",
-    )?;
+    let repo = super::source_qualification::generator_repo(true)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let workflow = tree
         .get(".github/workflows/product-release-generator.yml")
@@ -90,8 +86,8 @@ fn generator_release_jobs_have_bounded_qualification_time() -> Result<(), Box<dy
         ("qualify-macos", 20),
         ("qualify-macos-intel", 20),
         ("build-linux", 10),
-        ("build-macos", 10),
-        ("build-macos-intel", 10),
+        ("build-macos", 30),
+        ("build-macos-intel", 30),
         ("qualify-homebrew-macos", 30),
         ("candidate-manifest", 5),
         ("attest-manifest", 5),

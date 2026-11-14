@@ -1,5 +1,8 @@
 .firecrawl/
 /target/
+/generator/target/
+/ci-helper/target/
+/local/target/
 /.velnor/archive-guard/
 .DS_Store
 __pycache__/

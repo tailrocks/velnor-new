@@ -1,0 +1,24 @@
+{
+  "legs": {
+    "pull_request": {
+      "base_branch": {
+        "hit": "true",
+        "matched": "lab-probe-reads-<tag>-base"
+      },
+      "default_branch": {
+        "hit": "true",
+        "matched": "lab-probe-reads-<tag>-default"
+      },
+      "head_branch": {
+        "hit": "",
+        "matched": ""
+      },
+      "same_key_in_base_and_default": {
+        "content": "base",
+        "hit": "true",
+        "matched": "lab-probe-reads-<tag>-collide"
+      }
+    }
+  },
+  "probe": "cache-pr-reads"
+}

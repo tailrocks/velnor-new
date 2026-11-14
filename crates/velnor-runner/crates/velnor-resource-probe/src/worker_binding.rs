@@ -135,7 +135,7 @@ pub(crate) const RUNNER_ATTACHMENTS: [AttachmentSpec; 10] = [
 ];
 
 #[cfg(target_os = "linux")]
-pub(crate) const DIND_ATTACHMENTS: [AttachmentSpec; 7] = [
+pub(crate) const DIND_ATTACHMENTS: [AttachmentSpec; 9] = [
     AttachmentSpec {
         role: AttachmentRole::DindRoot,
         target: "/",
@@ -163,6 +163,14 @@ pub(crate) const DIND_ATTACHMENTS: [AttachmentSpec; 7] = [
     AttachmentSpec {
         role: AttachmentRole::DindShm,
         target: "/dev/shm",
+    },
+    AttachmentSpec {
+        role: AttachmentRole::JobFacts,
+        target: "/opt/velnor/job-facts",
+    },
+    AttachmentSpec {
+        role: AttachmentRole::RuntimeIdentity,
+        target: "/.velnor-runtime-identity",
     },
 ];
 

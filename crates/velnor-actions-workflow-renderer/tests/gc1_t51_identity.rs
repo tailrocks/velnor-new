@@ -339,6 +339,9 @@ fn gc1_t51_evidence_rejects_unbound_identity() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[path = "gc1_t51_attestation.rs"]
+mod gc1_t51_attestation;
+
 #[path = "gc1_t51_evidence.rs"]
 mod gc1_t51_evidence;
 

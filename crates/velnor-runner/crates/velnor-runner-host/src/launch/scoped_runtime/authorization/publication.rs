@@ -19,8 +19,11 @@ pub(crate) async fn prepare_listener(
     guest_image: &crate::worker::guest_image::GuestImageFile,
     deadline: Instant,
 ) -> Result<RunnerReadyBootstrap, PendingScopedExecution> {
-    let provider =
-        crate::launch::resource_probe::release_image_provider(context.secret, context.host);
+    let provider = crate::launch::resource_probe::image_provider(
+        context.secret,
+        context.host,
+        context.engine.endpoint(),
+    );
     let provider = provider.as_ref().map_err(|error| *error);
     Box::pin(prepare_listener_with_provider(
         ready,
@@ -113,26 +116,9 @@ where
         channel: ready.channel(),
         deadline,
     };
-    let proof = crate::launch::resource_probe::publication::publish_job_facts_with_provider(
-        input, provider,
-    )
-    .await;
-    let proof = match proof {
-        Ok(proof) => proof,
-        Err(error) => return Err(error),
-    };
-    if let Err(error) = context
-        .scoped
-        .record_job_facts_published(&claim, &proof)
+    crate::launch::resource_probe::publication::publish_job_facts_with_provider(input, provider)
         .await
-    {
-        context
-            .scoped
-            .mark_job_facts_publication_uncertain(&claim)
-            .await?;
-        return Err(error);
-    }
-    Ok(())
+        .map(|_| ())
 }
 
 async fn publish_challenge_with_provider<P>(
@@ -161,13 +147,14 @@ where
             return Err(error);
         }
     };
-    let receipt = crate::launch::resource_probe::publication::publish_challenge_with_provider(
+    crate::launch::resource_probe::publication::publish_challenge_with_provider(
         crate::launch::resource_probe::publication::ControlPublicationInput {
             docker: context.docker,
             journal: context.host,
+            connection_journal: context.scoped,
             selected: context.engine,
             images: context.images,
-            release_secret: context.secret,
+            image_authority: context.secret,
             metadata: ready.bound().metadata(),
             channel,
             guest_boot_id: ready.bound().guest_boot_id(),
@@ -176,27 +163,6 @@ where
         &claim,
         provider,
     )
-    .await;
-    let receipt = match receipt {
-        Ok(receipt) => receipt,
-        Err(error) => {
-            context
-                .scoped
-                .mark_execution_challenge_uncertain(&claim)
-                .await?;
-            return Err(error);
-        }
-    };
-    if let Err(error) = context
-        .scoped
-        .record_execution_challenge_published(&claim, &receipt)
-        .await
-    {
-        context
-            .scoped
-            .mark_execution_challenge_uncertain(&claim)
-            .await?;
-        return Err(error);
-    }
-    Ok(())
+    .await
+    .map(|_| ())
 }

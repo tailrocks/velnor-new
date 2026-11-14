@@ -117,6 +117,7 @@ impl BinaryReleaseFixture {
         copy_release_inputs(&workspace)?;
 
         let request = Schema2WorkflowRequest {
+            runner_image_family: None,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             hosted_label: "ubuntu-26.04".to_owned(),
             scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

@@ -8,14 +8,10 @@ use super::super::{
 };
 use sha2::Digest;
 
-pub(super) struct Descriptor {
-    pub(super) digest: String,
-    pub(super) size: u64,
-    pub(super) media_type: String,
-}
+pub(super) use velnor_runner_image_manifest::OciDescriptor;
 
-impl From<Descriptor> for LayerDescriptor {
-    fn from(value: Descriptor) -> Self {
+impl From<OciDescriptor> for LayerDescriptor {
+    fn from(value: OciDescriptor) -> Self {
         Self {
             digest: value.digest,
             size: value.size,
@@ -24,49 +20,14 @@ impl From<Descriptor> for LayerDescriptor {
     }
 }
 
-pub(super) fn descriptor(value: &serde_json::Value, strict: bool) -> Result<Descriptor> {
-    let object = value
-        .as_object()
-        .ok_or(OciCandidateError("oci_descriptor_shape"))?;
-    if !["mediaType", "digest", "size"]
-        .iter()
-        .all(|key| object.contains_key(*key))
-    {
-        return Err(OciCandidateError("oci_descriptor_required"));
-    }
-    if strict {
-        reject_unknown(
-            object,
-            &["mediaType", "digest", "size", "platform", "annotations"],
-        )?;
-    }
-    let digest = object
-        .get("digest")
-        .and_then(serde_json::Value::as_str)
-        .and_then(|value| value.strip_prefix("sha256:"))
-        .filter(|value| is_digest(value))
-        .ok_or(OciCandidateError("oci_descriptor_digest"))?
-        .to_owned();
-    let size = object
-        .get("size")
-        .and_then(serde_json::Value::as_u64)
-        .filter(|size| *size > 0)
-        .ok_or(OciCandidateError("oci_descriptor_size"))?;
-    let media_type = object
-        .get("mediaType")
-        .and_then(serde_json::Value::as_str)
-        .ok_or(OciCandidateError("oci_descriptor_media_type"))?
-        .to_owned();
-    Ok(Descriptor {
-        digest,
-        size,
-        media_type,
-    })
+pub(super) fn descriptor(value: &serde_json::Value, strict: bool) -> Result<OciDescriptor> {
+    velnor_runner_image_manifest::parse_oci_descriptor(value, strict)
+        .map_err(|error| OciCandidateError(error.0))
 }
 
 pub(super) fn read_referenced(
     archive: &mut OciArchive,
-    descriptor: &Descriptor,
+    descriptor: &OciDescriptor,
 ) -> Result<Vec<u8>> {
     let blob = archive
         .blobs
@@ -103,27 +64,8 @@ pub(super) fn reject_unknown(
     object: &serde_json::Map<String, serde_json::Value>,
     allowed: &[&str],
 ) -> Result<()> {
-    if object.keys().any(|key| !allowed.contains(&key.as_str())) {
-        return Err(OciCandidateError("oci_unknown_field"));
-    }
-    Ok(())
-}
-
-pub(super) fn is_layer_media_type(value: &str) -> bool {
-    matches!(
-        value,
-        "application/vnd.oci.image.layer.v1.tar"
-            | "application/vnd.oci.image.layer.v1.tar+gzip"
-            | "application/vnd.oci.image.layer.nondistributable.v1.tar"
-            | "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
-    )
-}
-
-fn is_digest(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    velnor_runner_image_manifest::reject_unknown_oci_fields(object, allowed)
+        .map_err(|error| OciCandidateError(error.0))
 }
 
 pub(super) fn sha256(bytes: &[u8]) -> String {

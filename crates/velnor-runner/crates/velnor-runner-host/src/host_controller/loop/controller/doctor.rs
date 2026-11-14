@@ -96,9 +96,13 @@ fn run_doctor_probe_worker(
         .enable_all()
         .build();
     let result = match runtime {
-        Ok(runtime) => match crate::launch::ReleaseReadSecret::load(config) {
+        Ok(runtime) => match crate::launch::ImageAuthority::load(config) {
             Ok(secret) => runtime.block_on(crate::launch::run_doctor_probe(
-                docker, journal, &secret, ticket,
+                docker,
+                journal,
+                &secret,
+                ticket,
+                &config.docker().endpoint,
             )),
             Err(error) => {
                 if let Err(failure) =

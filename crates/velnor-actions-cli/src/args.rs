@@ -7,7 +7,9 @@ use clap::{Parser, Subcommand};
 
 #[path = "args_image_maintenance.rs"]
 mod image_maintenance;
-pub(crate) use image_maintenance::{ImageMaintenanceCommand, ImagePublicationProfileArg};
+pub(crate) use image_maintenance::{
+    ImageMaintenanceCommand, ImagePublicationProfileArg, RunnerFamilyPublicationArgs,
+};
 
 /// Velnor Actions: generate GitHub Actions workflows from repository state.
 #[derive(Debug, Parser)]

@@ -29,6 +29,9 @@ pub(super) fn admit(
             }
         }
     }
+    if config.runner_image_family.is_some() {
+        allowed.insert("scripts/check-runner-image-candidate.sh".to_owned());
+    }
     let mut admitted = BTreeMap::new();
     for fact in facts {
         if !allowed.contains(&fact.path)

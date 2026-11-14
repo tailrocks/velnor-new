@@ -3,7 +3,6 @@
 
 mod archive;
 mod archive_tar_framing;
-mod config;
 mod graph;
 mod json;
 mod layer;
@@ -13,9 +12,17 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_mise::CheckDeadline;
 
-use archive::load_archive;
-pub use config::OciImageConfiguration;
+use archive::{load_archive, load_archive_file};
 use graph::inspect_graph;
+pub use graph::{
+    AttestedProjection, OciRegistryManifest, OciRegistryProjection, UntrustedEnvelopeInspection,
+    inspect_registry_configuration, inspect_registry_manifest, verify_provenance_envelope,
+};
+pub use velnor_runner_image_manifest::UntrustedProvenance;
+pub use velnor_runner_image_manifest::{
+    OciImageConfiguration, admits_image_configuration, has_image_kind, has_image_revision,
+    has_probe_profile,
+};
 
 pub const MAX_OCI_CANDIDATE_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 pub const MAX_OCI_CANDIDATE_ARCHIVE_MEMBERS: usize = 128;
@@ -40,6 +47,9 @@ pub struct OciCandidateEvidence {
 pub struct OciCandidateInspection {
     pub evidence: OciCandidateEvidence,
     pub configuration: OciImageConfiguration,
+    pub manifest_media_type: String,
+    pub diff_ids: Vec<String>,
+    pub index_has_annotations: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +125,25 @@ fn preserve_deadline<T>(result: Result<T>) -> Result<T> {
     })
 }
 
+pub fn encode_provenance_envelope(value: &UntrustedProvenance) -> Result<Vec<u8>> {
+    velnor_runner_image_manifest::encode_provenance_envelope(value)
+        .map_err(|error| OciCandidateError(error.0))
+}
+
+pub fn parse_provenance_envelope(bytes: &[u8]) -> Result<UntrustedProvenance> {
+    velnor_runner_image_manifest::parse_provenance_envelope(bytes)
+        .map_err(|error| OciCandidateError(error.0))
+}
+
+pub fn project_attested_oci_file(
+    source: &std::fs::File,
+    destination: &mut std::fs::File,
+) -> Result<AttestedProjection> {
+    check_deadline()?;
+    let result = graph::project_attested_oci_file(source, destination);
+    preserve_deadline(result.and_then(|projection| check_deadline().map(|()| projection)))
+}
+
 pub fn inspect_oci_candidate(path: &Path) -> Result<OciCandidateEvidence> {
     check_deadline()?;
     let result = (|| inspect_graph(load_archive(path)?))();
@@ -127,6 +156,14 @@ pub fn inspect_oci_candidate_with_config(path: &Path) -> Result<OciCandidateInsp
     preserve_deadline(result.and_then(|inspection| check_deadline().map(|()| inspection)))
 }
 
+pub fn inspect_oci_candidate_file_with_config(
+    file: &std::fs::File,
+) -> Result<OciCandidateInspection> {
+    check_deadline()?;
+    let result = (|| graph::inspect_graph_with_config(load_archive_file(file)?))();
+    preserve_deadline(result.and_then(|inspection| check_deadline().map(|()| inspection)))
+}
+
 pub fn materialize_oci_candidate(
     archive: &Path,
     destination: &Path,
@@ -134,6 +171,22 @@ pub fn materialize_oci_candidate(
 ) -> std::result::Result<OciCandidateEvidence, OciMaterializeError> {
     check_deadline().map_err(OciMaterializeError::from)?;
     let result = materialize::materialize_oci_candidate(archive, destination, expected);
+    materialize_result(result)
+}
+
+pub fn materialize_oci_candidate_file(
+    archive: &std::fs::File,
+    destination: &Path,
+    expected: &OciCandidateEvidence,
+) -> std::result::Result<OciCandidateEvidence, OciMaterializeError> {
+    check_deadline().map_err(OciMaterializeError::from)?;
+    let result = materialize::materialize_oci_candidate_file(archive, destination, expected);
+    materialize_result(result)
+}
+
+fn materialize_result(
+    result: std::result::Result<OciCandidateEvidence, OciMaterializeError>,
+) -> std::result::Result<OciCandidateEvidence, OciMaterializeError> {
     match result {
         Ok(evidence) => Ok(evidence),
         Err(OciMaterializeError::Candidate(error))

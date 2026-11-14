@@ -44,6 +44,22 @@ pub enum ContractError {
     DocumentTooDeep { depth: usize, limit: usize },
 }
 
+impl From<velnor_runner_image_manifest::ImageContractError> for ContractError {
+    fn from(error: velnor_runner_image_manifest::ImageContractError) -> Self {
+        match error {
+            velnor_runner_image_manifest::ImageContractError::CanonicalJson(value) => {
+                Self::CanonicalJson(value)
+            }
+            velnor_runner_image_manifest::ImageContractError::DocumentTooLarge { size, limit } => {
+                Self::DocumentTooLarge { size, limit }
+            }
+            velnor_runner_image_manifest::ImageContractError::DocumentTooDeep { depth, limit } => {
+                Self::DocumentTooDeep { depth, limit }
+            }
+        }
+    }
+}
+
 impl ContractError {
     #[must_use]
     pub fn identity(field: &'static str, problem: impl Into<String>) -> Self {

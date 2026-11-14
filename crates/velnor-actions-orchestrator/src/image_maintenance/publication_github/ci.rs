@@ -17,8 +17,8 @@ const MAX_CI_RUNS: usize = 999;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::image_maintenance) struct CiIdentity {
-    pub(super) id: u64,
-    pub(super) attempt: u32,
+    pub(in crate::image_maintenance) id: u64,
+    pub(in crate::image_maintenance) attempt: u32,
 }
 
 pub(in crate::image_maintenance) fn main_sha(
@@ -55,6 +55,19 @@ pub(in crate::image_maintenance) fn authenticate_source(
     let identity = latest_successful_ci(source, token, deadline)?;
     validate_required_ci_jobs(source, token, identity, deadline)?;
     Ok(identity)
+}
+
+pub(in crate::image_maintenance) fn authenticate_captured(
+    source: &str, id: u64, attempt: u32, token: &str, deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let route = format!("repos/tailrocks/velnor-new/actions/runs/{id}/attempts/{attempt}");
+    let run: WorkflowRun = get_json(&route, token, deadline)?;
+    validate_ci_run_inventory(std::slice::from_ref(&run), source)?;
+    if run.id != id || run.run_attempt != attempt || run.status != "completed"
+        || run.conclusion.as_deref() != Some("success") {
+        return Err(internal("image_publication_ci_captured_not_success"));
+    }
+    validate_required_ci_jobs(source, token, CiIdentity { id, attempt }, deadline)
 }
 
 pub(super) fn revalidate(

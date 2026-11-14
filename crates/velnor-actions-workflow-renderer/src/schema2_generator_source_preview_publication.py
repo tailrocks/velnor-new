@@ -18,7 +18,9 @@ import zipfile
 
 REPOSITORY = "tailrocks/velnor-new"
 WORKFLOW = ".github/workflows/product-release-generator.yml"
-PAYLOAD = "velnor-actions-x86_64-unknown-linux-gnu"
+TARGETS = {"linux": ("x86_64-unknown-linux-gnu", "velnor-actions-x86_64-unknown-linux-gnu"),
+           "darwin": ("aarch64-apple-darwin", "velnor-actions-aarch64-apple-darwin")}
+PAYLOAD_NAMES = {name for _, name in TARGETS.values()}
 RECEIPT = "SDK_PREVIEW_RECEIPT.json"
 BUNDLE = RECEIPT + ".sigstore.jsonl"
 MAX_PAYLOAD = 268435456
@@ -97,17 +99,37 @@ def positive(value):
 
 
 def candidate_marker(source, candidate):
-    require(set(candidate) == {"source_artifact_id", "payload_artifact_id"})
+    require(set(candidate) == {"source_artifact_id", "linux_payload_artifact_id", "darwin_payload_artifact_id"})
     for value in candidate.values():
         positive(value)
-    marker = {"schema": 2, "source_sha": source["source_sha"],
+    marker = {"schema": 3, "source_sha": source["source_sha"],
               "run_id": positive(source["source"]["run_id"]),
-              "producer": source["producer"], "candidate": candidate}
+              "targets": source["targets"], "candidate": candidate}
     return "velnor-source-preview:" + canonical(marker).decode()
 
 
+def payload_identity(key, data):
+    target, name = TARGETS[key]
+    require(len(data) >= 20)
+    if key == "linux":
+        require(data[:7] == b"\x7fELF\x02\x01\x01" and data[18:20] == b"\x3e\x00")
+    else:
+        require(len(data) >= 32 and data[:4] == b"\xcf\xfa\xed\xfe"
+                and data[4:8] == b"\x0c\x00\x00\x01"
+                and data[12:16] == b"\x02\x00\x00\x00")
+    return {"target": target, "name": name, "size": len(data), "sha256": digest(data)}
+
+
+def receipt_targets(source, candidate, payloads):
+    require(set(payloads) == set(TARGETS))
+    return {key: {"producer": source["targets"][key]["producer"],
+                  "qualification_job_id": source["targets"][key]["qualification_job_id"],
+                  "candidate_payload_artifact_id": candidate[key + "_payload_artifact_id"],
+                  "payload": payload_identity(key, payloads[key])} for key in TARGETS}
+
+
 def finalize_receipt(decision, attempt):
-    require(set(decision) == {"source", "candidate", "release_id", "payload", "draft"})
+    require(set(decision) == {"source", "candidate", "release_id", "targets", "draft"})
     source = decision["source"]
     draft = decision["draft"]
     signer = dict(draft, run_attempt=positive(attempt))
@@ -115,19 +137,20 @@ def finalize_receipt(decision, attempt):
     require(all(source["source"][key] == draft[key] for key in ("workflow_path", "workflow_ref", "workflow_sha")))
     require(source["source"]["run_attempt"] <= draft["run_attempt"] <= signer["run_attempt"])
     candidate_marker(source, decision["candidate"])
-    return canonical(dict(source, candidate=decision["candidate"], release_id=positive(decision["release_id"]),
-                          payload=decision["payload"], draft=draft, signer=signer))
+    common = {key: value for key, value in source.items() if key != "targets"}
+    return canonical(dict(common, candidate_source_artifact_id=decision["candidate"]["source_artifact_id"],
+                          release_id=positive(decision["release_id"]), targets=decision["targets"], draft=draft, signer=signer))
 
 
-def select_pair(item, pairs, payload):
+def select_pair(item, pairs, payloads):
     assets = item.get("assets")
-    require(isinstance(assets, list) and len(assets) <= 3)
+    require(isinstance(assets, list) and len(assets) <= 4)
     names = [asset.get("name") for asset in assets]
-    require(len(names) == len(set(names)) and all(name in (RECEIPT, BUNDLE, PAYLOAD) for name in names))
+    require(len(names) == len(set(names)) and all(name in {RECEIPT, BUNDLE} | PAYLOAD_NAMES for name in names))
     require(all(asset.get("state") == "uploaded" for asset in assets))
     compatible = []
     for pair in pairs:
-        expected = {RECEIPT: pair["receipt"], BUNDLE: pair["bundle"], PAYLOAD: payload}
+        expected = {RECEIPT: pair["receipt"], BUNDLE: pair["bundle"], **{TARGETS[key][1]: data for key, data in payloads.items()}}
         if all(asset.get("size") == len(expected[asset["name"]])
                and asset.get("digest") == "sha256:" + digest(expected[asset["name"]]) for asset in assets):
             compatible.append(pair)
@@ -136,7 +159,7 @@ def select_pair(item, pairs, payload):
         matches = [pair for pair in compatible if pair["signer_attempt"] == first]
         require(len(matches) == 1)
         if item.get("draft") is False:
-            require(item.get("immutable") is True and set(names) == {RECEIPT, BUNDLE, PAYLOAD})
+            require(item.get("immutable") is True and set(names) == {RECEIPT, BUNDLE} | PAYLOAD_NAMES)
         else:
             require(item.get("draft") is True)
         return matches[0]
@@ -261,38 +284,40 @@ def find_release(client, tag):
 
 
 def load_candidate(client, current, marker):
-    require(set(marker) == {"schema", "source_sha", "run_id", "producer", "candidate"}
-            and type(marker["schema"]) is int and marker["schema"] == 2
+    require(set(marker) == {"schema", "source_sha", "run_id", "targets", "candidate"}
+            and type(marker["schema"]) is int and marker["schema"] == 3
             and marker["source_sha"] == current["source_sha"]
-            and marker["run_id"] == current["source"]["run_id"] and marker["producer"] == current["producer"])
+            and marker["run_id"] == current["source"]["run_id"] and marker["targets"] == current["targets"])
     candidate = marker["candidate"]
-    require(set(candidate) == {"source_artifact_id", "payload_artifact_id"})
-    items = []
-    for key in ("source_artifact_id", "payload_artifact_id"):
-        identity = positive(candidate[key])
-        artifact = client.api("GET", "/actions/artifacts/" + str(identity))
+    candidate_marker(current, candidate)
+    items = {}
+    for key, identity in candidate.items():
+        artifact = client.api("GET", "/actions/artifacts/" + str(positive(identity)))
         require(artifact.get("id") == identity and artifact.get("expired") is False
                 and artifact.get("workflow_run", {}).get("id") == marker["run_id"]
                 and artifact.get("workflow_run", {}).get("head_sha") == current["source_sha"])
-        items.append(artifact)
-    raw = artifact_files(client, items[0], {"source-preview-metadata.json": 65536})["source-preview-metadata.json"]
+        items[key] = artifact
+    raw = artifact_files(client, items["source_artifact_id"], {"source-preview-metadata.json": 65536})["source-preview-metadata.json"]
     original = metadata(raw)
     attempt = original["source"]["run_attempt"]
-    require(items[0].get("name") == "source-preview-source-" + str(attempt)
-            and items[1].get("name") == "source-preview-qualified-payload-" + str(attempt)
-            and original["producer"] == marker["producer"] and original["version"] == current["version"])
+    require(items["source_artifact_id"].get("name") == "source-preview-source-" + str(attempt)
+            and original["targets"] == marker["targets"] and original["version"] == current["version"])
     successful_job(client, current["source_sha"], marker["run_id"], attempt, "Source preview publication / Admit source preview")
-    payload = artifact_files(client, items[1], {PAYLOAD: MAX_PAYLOAD})[PAYLOAD]
-    require(len(payload) >= 20 and payload[:7] == b"\x7fELF\x02\x01\x01" and payload[18:20] == b"\x3e\x00")
-    return original, candidate, payload
+    payloads = {}
+    for key, (_, name) in TARGETS.items():
+        item = items[key + "_payload_artifact_id"]
+        require(item.get("name") == "source-preview-qualified-payload-" + key + "-" + str(attempt))
+        payloads[key] = artifact_files(client, item, {name: MAX_PAYLOAD})[name]
+        payload_identity(key, payloads[key])
+    return original, candidate, payloads
 
 
-def verify_pair(client, source, candidate, release_id, payload, receipt_bytes, bundle):
+def verify_pair(client, source, candidate, release_id, payloads, receipt_bytes, bundle):
     receipt = parse(receipt_bytes)
-    require(canonical(receipt) == receipt_bytes and set(receipt) == set(source) | {"release_id", "candidate", "payload", "draft", "signer"})
-    require(all(receipt[key] == value for key, value in source.items()))
-    require(receipt["candidate"] == candidate and receipt["release_id"] == release_id)
-    require(receipt["payload"] == {"target": "x86_64-unknown-linux-gnu", "name": PAYLOAD, "size": len(payload), "sha256": digest(payload)})
+    require(canonical(receipt) == receipt_bytes and set(receipt) == (set(source) - {"targets"}) | {"release_id", "candidate_source_artifact_id", "targets", "draft", "signer"})
+    require(all(receipt[key] == value for key, value in source.items() if key != "targets"))
+    require(receipt["candidate_source_artifact_id"] == candidate["source_artifact_id"] and receipt["release_id"] == release_id)
+    require(receipt["targets"] == receipt_targets(source, candidate, payloads))
     origin = source["source"]
     for role in ("draft", "signer"):
         run = receipt[role]
@@ -304,16 +329,16 @@ def verify_pair(client, source, candidate, release_id, payload, receipt_bytes, b
     import source_preview_stage_verify as verifier
     preview = {"source_sha": source["source_sha"], "signer_workflow_path": WORKFLOW,
                "signer_run_id": origin["run_id"], "signer_run_attempt": receipt["signer"]["run_attempt"],
-               "receipt_sha256": digest(receipt_bytes), "payload_name": PAYLOAD, "payload_sha256": digest(payload)}
-    verifier.verify_attestation(os.environ["PREVIEW_GH"], receipt_bytes, bundle, preview, os.environ["RUNNER_TEMP"], preview_authority())
+               "receipt_sha256": digest(receipt_bytes), **{key + "_payload_" + field: receipt["targets"][key]["payload"][field] for key in TARGETS for field in ("name", "sha256")}}
+    verifier.verify_attestation(os.environ["PREVIEW_GH"], receipt_bytes, bundle, preview, os.environ["RUNNER_TEMP"], preview_authority(), client.deadline)
     return {"receipt": receipt_bytes, "bundle": bundle, "signer_attempt": receipt["signer"]["run_attempt"]}
 
 
-def prepare_pair(client, source, decision, payload):
-    require(set(decision) == {"source", "candidate", "release_id", "payload", "draft"} and decision["source"] == source)
+def prepare_pair(client, source, decision, payloads):
+    require(set(decision) == {"source", "candidate", "release_id", "targets", "draft"} and decision["source"] == source)
     candidate = decision["candidate"]
     candidate_marker(source, candidate)
-    require(decision["payload"] == {"target": "x86_64-unknown-linux-gnu", "name": PAYLOAD, "size": len(payload), "sha256": digest(payload)})
+    require(decision["targets"] == receipt_targets(source, candidate, payloads))
     release_id = positive(decision["release_id"])
     item = client.api("GET", "/releases/" + str(release_id))
     require(item.get("id") == release_id and item.get("tag_name") == source["tag"]
@@ -322,7 +347,7 @@ def prepare_pair(client, source, decision, payload):
     pairs = []
     if item["draft"] is False:
         receipt_bytes, bundle = released_pair(item, source)
-        pair = verify_pair(client, source, candidate, release_id, payload, receipt_bytes, bundle)
+        pair = verify_pair(client, source, candidate, release_id, payloads, receipt_bytes, bundle)
         pair["origin"] = "release"
         pairs.append(pair)
     else:
@@ -345,13 +370,13 @@ def prepare_pair(client, source, decision, payload):
             files = artifact_files(client, artifact, {RECEIPT: 65536, BUNDLE: MAX_JSON})
             parsed = parse(files[RECEIPT])
             require(isinstance(parsed, dict) and canonical(parsed) == files[RECEIPT])
-            if parsed.get("candidate") != candidate:
+            if parsed.get("candidate_source_artifact_id") != candidate["source_artifact_id"] or any(parsed.get("targets", {}).get(key, {}).get("candidate_payload_artifact_id") != candidate[key + "_payload_artifact_id"] for key in TARGETS):
                 continue
-            pair = verify_pair(client, source, candidate, release_id, payload, files[RECEIPT], files[BUNDLE])
+            pair = verify_pair(client, source, candidate, release_id, payloads, files[RECEIPT], files[BUNDLE])
             require(pair["signer_attempt"] == attempt)
             pair.update({"origin": "artifact", "artifact_id": artifact["id"]})
             pairs.append(pair)
-    selected = select_pair(item, pairs, payload)
+    selected = select_pair(item, pairs, payloads)
     if selected is None:
         successful_job(client, source["source_sha"], source["source"]["run_id"], source["source"]["run_attempt"], "Source preview publication / Admit source preview")
         return {"sign": True}
@@ -362,8 +387,8 @@ def released_pair(item, source):
     import source_preview_bootstrap as bootstrap
     require(item.get("draft") is False and item.get("immutable") is True)
     entries = item.get("assets")
-    require(isinstance(entries, list) and len(entries) == 3
-            and {entry.get("name") for entry in entries} == {RECEIPT, BUNDLE, PAYLOAD})
+    require(isinstance(entries, list) and len(entries) == 4
+            and {entry.get("name") for entry in entries} == {RECEIPT, BUNDLE} | PAYLOAD_NAMES)
     prefix = "https://github.com/" + REPOSITORY + "/releases/download/" + source["tag"] + "/"
     transport = bootstrap.GitHubTransport("")
     result = []
@@ -382,8 +407,8 @@ def metadata(data):
     require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY and os.environ.get("GITHUB_EVENT_NAME") == "push"
             and os.environ.get("GITHUB_REF") == tag_ref and os.environ.get("GITHUB_WORKFLOW_REF") == REPOSITORY + "/" + WORKFLOW + "@" + tag_ref
             and os.environ.get("GITHUB_WORKFLOW_SHA") == source)
-    require(set(value) == {"schema", "repository", "version", "source_sha", "tag", "source", "ci", "qualification", "producer"})
-    require(type(value["schema"]) is int and value["schema"] == 2 and value["repository"] == REPOSITORY
+    require(set(value) == {"schema", "repository", "version", "source_sha", "tag", "source", "ci", "qualification", "targets"})
+    require(type(value["schema"]) is int and value["schema"] == 3 and value["repository"] == REPOSITORY
             and value["source_sha"] == source and value["tag"] == tag
             and isinstance(value["version"], str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value["version"]))
     for key, path in (("source", WORKFLOW), ("ci", ".github/workflows/ci.yml"), ("qualification", ".github/workflows/source-qualification.yml")):
@@ -395,12 +420,16 @@ def metadata(data):
         positive(run["run_id"]); positive(run["run_attempt"])
     require(value["source"]["run_id"] == positive(int(os.environ["GITHUB_RUN_ID"]))
             and value["source"]["run_attempt"] <= positive(int(os.environ["GITHUB_RUN_ATTEMPT"])) <= 51)
-    producer = value["producer"]
-    require(set(producer) == {"producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256"})
-    for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id"):
-        positive(producer[key])
-    require(isinstance(producer["payload_archive_sha256"], str)
-            and re.fullmatch("[0-9a-f]{64}", producer["payload_archive_sha256"]))
+    require(set(value["targets"]) == set(TARGETS))
+    for target in value["targets"].values():
+        require(set(target) == {"producer", "qualification_job_id"})
+        positive(target["qualification_job_id"])
+        producer = target["producer"]
+        require(set(producer) == {"producer_run_id", "producer_run_attempt", "payload_artifact_id", "payload_archive_sha256"})
+        for key in ("producer_run_id", "producer_run_attempt", "payload_artifact_id"):
+            positive(producer[key])
+        require(isinstance(producer["payload_archive_sha256"], str)
+                and re.fullmatch("[0-9a-f]{64}", producer["payload_archive_sha256"]))
     return value
 
 
@@ -437,7 +466,7 @@ class GitHub:
 
 def release(client, receipt, require_draft=True):
     item = client.api("GET", "/releases/" + str(positive(receipt["release_id"])))
-    marker = candidate_marker(receipt, receipt["candidate"])
+    marker = candidate_marker({**receipt, "targets": {key: {"producer": value["producer"], "qualification_job_id": value["qualification_job_id"]} for key, value in receipt["targets"].items()}}, {"source_artifact_id": receipt["candidate_source_artifact_id"], **{key + "_payload_artifact_id": value["candidate_payload_artifact_id"] for key, value in receipt["targets"].items()}})
     require(item.get("id") == receipt["release_id"] and item.get("tag_name") == receipt["tag"] and item.get("body") == marker and item.get("prerelease") is True)
     require(item.get("draft") is require_draft)
     return item
@@ -445,11 +474,11 @@ def release(client, receipt, require_draft=True):
 
 def existing_assets(item, expected, allow_unknown_bundle=False):
     assets = item.get("assets")
-    require(isinstance(assets, list) and len(assets) <= 3)
+    require(isinstance(assets, list) and len(assets) <= 4)
     result = set()
     for asset in assets:
         name = asset.get("name")
-        require(name in (RECEIPT, BUNDLE, PAYLOAD) and name not in result and asset.get("state") == "uploaded")
+        require(name in {RECEIPT, BUNDLE} | PAYLOAD_NAMES and name not in result and asset.get("state") == "uploaded")
         if name in expected:
             data = expected[name]
             require(asset.get("size") == len(data) and asset.get("digest") == "sha256:" + digest(data))
@@ -473,8 +502,8 @@ def verify_tag(client, source):
     require(comparison.get("status") in ("ahead", "identical") and comparison.get("merge_base_commit", {}).get("sha") == source)
 
 
-def publish_verified(client, source, receipt, receipt_bytes, bundle, payload):
-    expected = {RECEIPT: receipt_bytes, BUNDLE: bundle, PAYLOAD: payload}
+def publish_verified(client, source, receipt, receipt_bytes, bundle, payloads):
+    expected = {RECEIPT: receipt_bytes, BUNDLE: bundle, **{TARGETS[key][1]: data for key, data in payloads.items()}}
     state = client.api("GET", "/releases/" + str(positive(receipt["release_id"])))
     if state.get("draft") is False:
         published = release(client, receipt, False)
@@ -499,13 +528,15 @@ def main():
     signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("preview publication deadline")))
     signal.setitimer(signal.ITIMER_REAL, 180)
     source = metadata(read_file("source-preview-metadata", "source-preview-metadata.json", 65536))
-    payload = read_file("source-preview-payload", PAYLOAD, MAX_PAYLOAD)
+    payloads = {key: read_file("source-preview-payload-" + key, name, MAX_PAYLOAD) for key, (_, name) in TARGETS.items()}
+    for key, data in payloads.items():
+        payload_identity(key, data)
     client = GitHub()
     verify_tag(client, source["source_sha"])
     mode = os.environ["PREVIEW_MODE"]
     if mode == "draft":
         successful_job(client, source["source_sha"], source["source"]["run_id"], source["source"]["run_attempt"], "Source preview publication / Admit source preview")
-        candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), "payload_artifact_id": positive(int(os.environ["PAYLOAD_ARTIFACT_ID"]))}
+        candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), **{key + "_payload_artifact_id": positive(int(os.environ[key.upper() + "_PAYLOAD_ARTIFACT_ID"])) for key in TARGETS}}
         item = find_release(client, source["tag"])
         if item is None:
             marker = candidate_marker(source, candidate)
@@ -518,29 +549,30 @@ def main():
             encoded = body[len(prefix):].encode()
             original_marker = parse(encoded)
             require(canonical(original_marker) == encoded)
-            source, candidate, payload = load_candidate(client, source, original_marker)
+            source, candidate, payloads = load_candidate(client, source, original_marker)
             marker = candidate_marker(source, candidate)
             require(body == marker)
             verify_tag(client, source["source_sha"])
-        decision = {"source": source, "candidate": candidate, "release_id": positive(item.get("id")), "payload": {"target": "x86_64-unknown-linux-gnu", "name": PAYLOAD, "size": len(payload), "sha256": digest(payload)}, "draft": dict(source["source"], run_attempt=positive(int(os.environ["GITHUB_RUN_ATTEMPT"]))) }
+        decision = {"source": source, "candidate": candidate, "release_id": positive(item.get("id")), "targets": receipt_targets(source, candidate, payloads), "draft": dict(source["source"], run_attempt=positive(int(os.environ["GITHUB_RUN_ATTEMPT"]))) }
         current = client.api("GET", "/releases/" + str(decision["release_id"]))
         require(current.get("id") == decision["release_id"] and current.get("tag_name") == source["tag"] and current.get("body") == marker and current.get("prerelease") is True and type(current.get("draft")) is bool)
         require(current.get("draft") is True or current.get("immutable") is True)
         assets = current.get("assets")
-        require(isinstance(assets, list) and len(assets) <= 3)
+        require(isinstance(assets, list) and len(assets) <= 4)
         names = [asset.get("name") for asset in assets]
-        require(len(names) == len(set(names)) and all(name in (RECEIPT, BUNDLE, PAYLOAD) for name in names))
+        require(len(names) == len(set(names)) and all(name in {RECEIPT, BUNDLE} | PAYLOAD_NAMES for name in names))
         for asset in assets:
             require(asset.get("state") == "uploaded")
-            if asset["name"] == PAYLOAD:
-                require(asset.get("size") == len(payload) and asset.get("digest") == "sha256:" + digest(payload))
+            for key, (_, name) in TARGETS.items():
+                if asset["name"] == name:
+                    require(asset.get("size") == len(payloads[key]) and asset.get("digest") == "sha256:" + digest(payloads[key]))
         destination = Path(os.environ["RUNNER_TEMP"]) / "source-preview-decision.json"
         with destination.open("xb") as output:
             output.write(canonical(decision))
-        selected = prepare_pair(client, source, decision, payload)
+        selected = prepare_pair(client, source, decision, payloads)
         verify_tag(client, source["source_sha"])
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-            output.write("source_artifact_id=" + str(candidate["source_artifact_id"]) + "\npayload_artifact_id=" + str(candidate["payload_artifact_id"]) + "\n")
+            output.write("".join(key + "=" + str(value) + "\n" for key, value in sorted(candidate.items())))
             output.write("sign=" + str(selected["sign"]).lower() + "\n")
             if not selected["sign"]:
                 output.write("pair_origin=" + selected["origin"] + "\n")
@@ -551,13 +583,12 @@ def main():
         decision_bytes = read_file("source-preview-decision", "source-preview-decision.json", 65536)
         decision = parse(decision_bytes)
         require(canonical(decision) == decision_bytes)
-        require(set(decision) == {"source", "candidate", "release_id", "payload", "draft"} and decision["source"] == source)
+        require(set(decision) == {"source", "candidate", "release_id", "targets", "draft"} and decision["source"] == source)
         require(set(decision["draft"]) == set(source["source"])
                 and all(decision["draft"][key] == source["source"][key] for key in ("workflow_path", "workflow_ref", "workflow_sha", "run_id"))
                 and source["source"]["run_attempt"] <= positive(decision["draft"]["run_attempt"]) <= positive(int(os.environ["GITHUB_RUN_ATTEMPT"])) <= 51)
-        require(decision["payload"] == {"target": "x86_64-unknown-linux-gnu", "name": PAYLOAD, "size": len(payload), "sha256": digest(payload)})
-        candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), "payload_artifact_id": positive(int(os.environ["PAYLOAD_ARTIFACT_ID"]))}
-        require(decision["candidate"] == candidate)
+        candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), **{key + "_payload_artifact_id": positive(int(os.environ[key.upper() + "_PAYLOAD_ARTIFACT_ID"])) for key in TARGETS}}
+        require(decision["candidate"] == candidate and decision["targets"] == receipt_targets(source, candidate, payloads))
         successful_job(client, source["source_sha"], source["source"]["run_id"], source["source"]["run_attempt"], "Source preview publication / Admit source preview")
         successful_job(client, source["source_sha"], source["source"]["run_id"], decision["draft"]["run_attempt"], "Source preview publication / Draft source preview")
         if os.environ["SIGN"] == "true":
@@ -571,7 +602,7 @@ def main():
                 item = client.api("GET", "/releases/" + str(positive(int(os.environ["PAIR_ID"]))))
                 receipt_bytes, bundle = released_pair(item, source)
             require(digest(receipt_bytes) == os.environ["RECEIPT_SHA256"] and digest(bundle) == os.environ["BUNDLE_SHA256"])
-            selected = verify_pair(client, source, candidate, decision["release_id"], payload, receipt_bytes, bundle)
+            selected = verify_pair(client, source, candidate, decision["release_id"], payloads, receipt_bytes, bundle)
             selected.update({"sign": False, "origin": os.environ["PAIR_ORIGIN"], "artifact_id": positive(int(os.environ["PAIR_ID"]))})
         verify_tag(client, source["source_sha"])
         with (Path(os.environ["RUNNER_TEMP"]) / RECEIPT).open("xb") as output:
@@ -596,9 +627,9 @@ def main():
     receipt = parse(receipt_bytes)
     if os.environ["PAIR_ORIGIN"] == "release":
         require(digest(receipt_bytes) == os.environ["RECEIPT_SHA256"] and digest(bundle) == os.environ["BUNDLE_SHA256"])
-    candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), "payload_artifact_id": positive(int(os.environ["PAYLOAD_ARTIFACT_ID"]))}
-    verify_pair(client, source, candidate, positive(receipt["release_id"]), payload, receipt_bytes, bundle)
-    publish_verified(client, source, receipt, receipt_bytes, bundle, payload)
+    candidate = {"source_artifact_id": positive(int(os.environ["SOURCE_ARTIFACT_ID"])), **{key + "_payload_artifact_id": positive(int(os.environ[key.upper() + "_PAYLOAD_ARTIFACT_ID"])) for key in TARGETS}}
+    verify_pair(client, source, candidate, positive(receipt["release_id"]), payloads, receipt_bytes, bundle)
+    publish_verified(client, source, receipt, receipt_bytes, bundle, payloads)
 
 
 if __name__ == "__main__":

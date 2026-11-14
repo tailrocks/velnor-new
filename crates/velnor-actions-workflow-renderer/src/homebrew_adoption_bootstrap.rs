@@ -7,7 +7,14 @@ use crate::yaml::Yaml;
 
 use super::{MANIFEST_SIGNER, SDK_REPOSITORY};
 
-pub(super) fn bootstrap_script() -> String {
+pub(crate) struct BootstrapEnv<'a> {
+    pub(crate) version: &'a str,
+    pub(crate) source_sha: &'a str,
+    pub(crate) manifest_sha256: &'a str,
+    pub(crate) gh: &'a str,
+}
+
+pub(crate) fn bootstrap_script(env: &BootstrapEnv<'_>) -> String {
     r#"set -euo pipefail
 [[ "$VELNOR_HOMEBREW_ADOPTION_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -41,6 +48,10 @@ install -m 0755 "$asset" "$RUNNER_TEMP/velnor/bin/velnor-actions-${VELNOR_HOMEBR
 "#
     .replace("__MANIFEST_SIGNER__", MANIFEST_SIGNER)
     .replace("__SDK_REPOSITORY__", SDK_REPOSITORY)
+    .replace("VELNOR_HOMEBREW_ADOPTION_MANIFEST_SHA256", env.manifest_sha256)
+    .replace("VELNOR_HOMEBREW_ADOPTION_SOURCE_SHA", env.source_sha)
+    .replace("VELNOR_HOMEBREW_ADOPTION_VERSION", env.version)
+    .replace("VELNOR_ADOPTION_GH", env.gh)
 }
 
 pub(super) fn direct_run(name: &str, script: &str, env: BTreeMap<String, String>) -> Yaml {

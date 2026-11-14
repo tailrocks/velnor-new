@@ -15,12 +15,19 @@ use velnor_actions_contract::{Plan, ReleaseTarget, plan_json_bytes};
 use velnor_actions_mise::current_mise_binary;
 use velnor_actions_orchestrator::plan_internal;
 
-const APPROVALS: &str = include_str!("../../../.velnor/controller-approvals.json");
-const GENERATOR_LOCK: &str = include_str!("../../../.velnor/generator.lock");
+const APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
+const GENERATOR_LOCK: &str = include_str!("../../test_support/generator_074.lock");
 const CHECK_ID: &str = "runtime-fixture";
 const JOB_ID: &str = "check-runtime-fixture";
 const RUN_KEY: &str = "r260001-a1";
 const UNQUALIFIED_MISE: &[u8] = b"unqualified-runtime\n";
+
+#[path = "check_runtime_identity_support.rs"]
+mod identity_support;
+use identity_support::{git, git_output};
+
+#[path = "check_runtime_identity_progress.rs"]
+mod progress;
 
 #[test]
 fn exported_execute_check_binds_current_runtime_and_rejects_stale_plan()
@@ -264,6 +271,12 @@ fn compiled_runtime_approvals() -> Result<String, Box<dyn Error>> {
             .iter_mut()
             .find(|entry| entry["target"].as_str() == Some(target.triple()))
             .ok_or_else(|| io::Error::other("runtime target approval missing"))?;
+        assert!(
+            entry["version"] != pin.version
+                || entry["sha256"] != pin.sha256
+                || entry["bytes"] != pin.bytes,
+            "historical fixture must rotate the runtime identity"
+        );
         entry["version"] = Value::String(pin.version.to_owned());
         entry["sha256"] = Value::String(pin.sha256.to_owned());
         entry["bytes"] = Value::from(pin.bytes);
@@ -354,40 +367,4 @@ fn assert_cli_error(output: Output, marker: &str) -> Result<(), Box<dyn Error>> 
     let expected = format!("velnor-actions: internal request failed: internal: {marker}");
     assert_eq!(stderr.trim(), expected, "unexpected public CLI error");
     Ok(())
-}
-
-fn git(root: &Path, args: &[&str]) -> Result<(), Box<dyn Error>> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!(
-            "git {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-        .into())
-    }
-}
-
-fn git_output(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()?;
-    if output.status.success() {
-        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
-    } else {
-        Err(io::Error::other(format!(
-            "git {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
-        .into())
-    }
 }

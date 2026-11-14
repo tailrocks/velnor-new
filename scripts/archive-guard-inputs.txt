@@ -11,7 +11,12 @@ file crates/velnor-archive-guard/build.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
+file crates/velnor-runner/Cargo.toml
+file crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml
+tree crates/velnor-runner/crates/velnor-runner-image-manifest/src
 file scripts/build-owned-archive-guard.sh
+file scripts/generator-release/cargo-source-handoff.sh
+file scripts/generator-release/cargo-git-handoff.py
 file scripts/archive-guard-build-namespace.sh
 file scripts/check-owned-archive-guard-sources.sh
 tree crates/velnor-archive-guard/src

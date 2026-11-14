@@ -74,6 +74,12 @@ fn validate_expected_attachments<'a>(
                 || !super::super::super::storage_budget::valid_digest(
                     attachment.filesystem_instance_digest(),
                 )
+                || (is_root
+                    && !super::root_backing::root_attachment_matches_backing(
+                        binding,
+                        attachment,
+                        expected_digest,
+                    ))
                 || (!is_root
                     && contract.role != StorageRole::EngineMetadata
                     && attachment.filesystem_instance_digest() != *expected_digest)
@@ -230,7 +236,7 @@ pub(super) async fn validate_cgroups(
     }
     let mut rows = connection
         .query(
-            "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE id = ?1",
+            "SELECT r.cpu_millicores, r.memory_bytes + COALESCE(p.retained_memory_bytes, 0) + COALESCE((SELECT SUM(x.retained_memory_bytes) FROM capacity_reservation_provisioning_roles AS x WHERE x.reservation_id = r.id AND x.role IN ('runner-home', 'runner-work', 'shared-run')), 0) FROM capacity_reservations AS r LEFT JOIN capacity_reservation_provisioning AS p ON p.reservation_id = r.id WHERE r.id = ?1",
             [reservation_id],
         )
         .await
@@ -286,8 +292,8 @@ pub(super) async fn validate_cgroups(
     if seen_roles.len() != 2
         || !seen_roles.contains(&BootstrapContainerRole::Runner)
         || !seen_roles.contains(&BootstrapContainerRole::Dind)
-        || memory_total > memory_limit
-        || cpu_millicores > u128::from(cpu_limit)
+        || memory_total != memory_limit
+        || cpu_millicores != u128::from(cpu_limit)
     {
         return Err(HostError::Journal);
     }

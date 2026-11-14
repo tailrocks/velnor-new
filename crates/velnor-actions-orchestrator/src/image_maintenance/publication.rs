@@ -16,6 +16,17 @@ mod attestation;
 mod authority;
 #[path = "publication_crane.rs"]
 pub(super) mod crane;
+#[path = "publication_family.rs"]
+mod family;
+#[path = "publication_runner.rs"]
+mod runner;
+
+pub(super) fn runner_family(
+    request: &super::PublishRunnerImagesRequest,
+    verify_only: bool,
+) -> Result<(), OrchestratorError> {
+    runner::run(request, verify_only)
+}
 #[path = "publication_github.rs"]
 pub(super) mod github;
 #[path = "publication_qualification.rs"]
@@ -23,6 +34,14 @@ mod qualification;
 
 const RECEIPT_SCHEMA: &str = "velnor.image-publication.v1";
 const PENDING_SCHEMA: &str = "velnor.image-publication-pending.v1";
+
+struct PublishedCandidate {
+    candidate: authority::CandidateRecord,
+    producer: github::AuthenticatedProducer,
+    publication: crane::PublishedImage,
+    qualification_sha256: Option<String>,
+    build_source: Option<velnor_actions_contract::runner_image_manifest::BuildSource>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -43,7 +62,6 @@ struct PendingReceipt<'a> {
     archive_sha256: &'a str,
     record_sha256: &'a str,
 }
-
 
 #[derive(Serialize)]
 struct PublicationReceipt<'a> {
@@ -72,6 +90,12 @@ struct PublicationReceipt<'a> {
 }
 
 pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), OrchestratorError> {
+    publish_verified(request).map(|_| ())
+}
+
+fn publish_verified(
+    request: &PublishImageRequest,
+) -> Result<PublishedCandidate, OrchestratorError> {
     request
         .deadline
         .remaining()
@@ -80,9 +104,13 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
     let candidate = authority::load_candidate(request)?;
     authority::verify_archive_bytes(request, &candidate)?;
     let proof = qualification::load(request, &candidate)?;
-    let (producer, _) =
+    let (producer, source_files) =
         github::authenticate(request, &candidate, proof.as_ref(), request.deadline)?;
-    let evidence = authority::inspect_archive(request, &candidate)?;
+    let family = family::load(request, &candidate, &source_files)?;
+    let evidence = match &family {
+        Some(bound) => bound.evidence().clone(),
+        None => authority::inspect_archive(request, &candidate)?,
+    };
     let repository = authority::repository(request.profile);
     let tag = authority::tag(&request.source_commit);
     let mut receipt_file =
@@ -90,28 +118,13 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
     let mut journal_started = false;
     let result = with_owned_directory(&request.private_scratch, |directory| {
         let layout = directory.join("oci");
-        materialize(request, &evidence, &layout)?;
-        let pending = PendingReceipt {
-            schema: PENDING_SCHEMA,
-            status: ReceiptStatus::Pending,
-            profile: profile_name(request.profile),
-            source_commit: &request.source_commit,
-            repository,
-            tag: &tag,
-            expected_digest: &candidate.oci.platform_manifest_digest,
-            archive_sha256: &candidate.archive.sha256,
-            record_sha256: &candidate.record_sha256,
-        };
-        let pending_bytes = serde_json::to_vec(&pending)
-            .map_err(|_| internal("image_publication_receipt_encode"))?;
-        exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
-        append_receipt(&mut receipt_file, &pending_bytes)?;
+        match &family {
+            Some(bound) => bound.materialize(&layout)?,
+            None => materialize(request, &evidence, &layout)?,
+        }
+        write_pending(request, &candidate, repository, &tag, &mut receipt_file)?;
         journal_started = true;
-        let parent = request.receipt_output.parent().unwrap_or_else(|| Path::new("."));
-        fs::File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|_| internal("image_publication_receipt_unwritable"))?;
-        exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
+        sync_receipt(request, &receipt_file)?;
         let published = crane::publish(
             &layout,
             repository,
@@ -119,27 +132,73 @@ pub(super) fn publish_image(request: &PublishImageRequest) -> Result<(), Orchest
             &candidate.oci,
             request.deadline,
             || {
+                if let Some(bound) = &family {
+                    bound.revalidate()?;
+                }
                 if let Some(proof) = &proof {
                     qualification::unchanged(proof)?;
                 }
                 github::revalidate_before_publish(request, &producer, request.deadline)
             },
         )?;
-        let receipt = make_receipt(request, &candidate, &producer, repository, &tag, published);
+        let receipt = make_receipt(request, &candidate, &producer, repository, &tag, &published);
         let bytes = serde_json::to_vec(&receipt)
             .map_err(|_| internal("image_publication_receipt_encode"))?;
         exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
         append_receipt(&mut receipt_file, &bytes)?;
         exclusive_write::verify_reserved(&receipt_file, &request.receipt_output)?;
-        Ok(())
+        Ok(PublishedCandidate {
+            candidate: candidate.clone(),
+            producer: producer.clone(),
+            publication: published,
+            qualification_sha256: proof.as_ref().map(|proof| proof.sha256.clone()),
+            build_source: family.as_ref().map(|bound| bound.source().clone()),
+        })
     });
-    if result.is_err() && !journal_started
+    if result.is_err()
+        && !journal_started
         && exclusive_write::verify_reserved(&receipt_file, &request.receipt_output).is_ok()
     {
         fs::remove_file(&request.receipt_output)
             .map_err(|_| internal("image_publication_receipt_cleanup"))?;
     }
     result
+}
+
+fn write_pending(
+    request: &PublishImageRequest,
+    candidate: &authority::CandidateRecord,
+    repository: &str,
+    tag: &str,
+    file: &mut fs::File,
+) -> Result<(), OrchestratorError> {
+    let pending = PendingReceipt {
+        schema: PENDING_SCHEMA,
+        status: ReceiptStatus::Pending,
+        profile: profile_name(request.profile),
+        source_commit: &request.source_commit,
+        repository,
+        tag,
+        expected_digest: &candidate.oci.platform_manifest_digest,
+        archive_sha256: &candidate.archive.sha256,
+        record_sha256: &candidate.record_sha256,
+    };
+    let bytes =
+        serde_json::to_vec(&pending).map_err(|_| internal("image_publication_receipt_encode"))?;
+    exclusive_write::verify_reserved(file, &request.receipt_output)?;
+    append_receipt(file, &bytes)
+}
+
+fn sync_receipt(request: &PublishImageRequest, file: &fs::File) -> Result<(), OrchestratorError> {
+    let parent = request
+        .receipt_output
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|_| internal("image_publication_receipt_unwritable"))?;
+    exclusive_write::verify_reserved(file, &request.receipt_output)?;
+    Ok(())
 }
 
 fn append_receipt(file: &mut fs::File, bytes: &[u8]) -> Result<(), OrchestratorError> {
@@ -222,7 +281,7 @@ fn make_receipt<'a>(
     producer: &'a github::AuthenticatedProducer,
     repository: &'a str,
     tag: &str,
-    published: crane::PublishedImage,
+    published: &crane::PublishedImage,
 ) -> PublicationReceipt<'a> {
     let lock_sha = candidate
         .source_inputs
@@ -244,7 +303,7 @@ fn make_receipt<'a>(
         ci_run_attempt: producer.ci_run_attempt,
         repository,
         tag: tag.to_owned(),
-        registry_digest: published.digest,
+        registry_digest: published.digest.clone(),
         platform_manifest_digest: &candidate.oci.platform_manifest_digest,
         image_configuration_digest: &candidate.oci.image_configuration_digest,
         archive_sha256: &candidate.archive.sha256,

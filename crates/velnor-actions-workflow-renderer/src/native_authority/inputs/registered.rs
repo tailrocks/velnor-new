@@ -73,28 +73,7 @@ impl RegisteredSources {
             }
             LogicalJobSource::Gradle { root, project } => self.gradle(fact, root, project),
             LogicalJobSource::Suite { id, phase } => self.suite(fact, id, *phase, input),
-            LogicalJobSource::WorkflowTask { owner } => {
-                let configured = input.config.workflow.tasks.iter().any(|task| {
-                    task.id() == owner
-                        && fact.id
-                            == format!(
-                                "{}{}",
-                                velnor_actions_contract::WORKFLOW_TASK_JOB_PREFIX,
-                                owner
-                            )
-                }) || input.config.images.iter().any(|image| {
-                    image.id == *owner
-                        && image
-                            .platforms
-                            .iter()
-                            .any(|platform| image.build_job_id(*platform) == fact.id)
-                });
-                if !configured {
-                    return Err(invalid("native_workflow_task_identity"));
-                }
-                self.seen_workflow.insert(fact.id.clone());
-                Ok(false)
-            }
+            LogicalJobSource::WorkflowTask { owner } => self.workflow_task(fact, owner, input),
             LogicalJobSource::GeneratedWorkflowTask { owner, kind } => {
                 let source = self
                     .generated
@@ -126,6 +105,38 @@ impl RegisteredSources {
             }
             LogicalJobSource::Task(_) => Err(invalid("native_registered_task_source")),
         }
+    }
+
+    fn workflow_task(
+        &mut self,
+        fact: &LogicalJobFact,
+        owner: &str,
+        input: &NativeAuthorityInput<'_>,
+    ) -> Result<bool, NativeAuthorityError> {
+        let configured = input.config.workflow.tasks.iter().any(|task| {
+            task.id() == owner
+                && fact.id
+                    == format!(
+                        "{}{}",
+                        velnor_actions_contract::WORKFLOW_TASK_JOB_PREFIX,
+                        owner
+                    )
+        }) || input.config.images.iter().any(|image| {
+            image.id == owner
+                && image
+                    .platforms
+                    .iter()
+                    .any(|platform| image.build_job_id(*platform) == fact.id)
+        });
+        let configured = configured
+            || (input.config.runner_image_family.is_some()
+                && owner == "runner-image-family"
+                && fact.id == velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID);
+        if !configured {
+            return Err(invalid("native_workflow_task_identity"));
+        }
+        self.seen_workflow.insert(fact.id.clone());
+        Ok(false)
     }
 
     fn gradle(
@@ -236,6 +247,9 @@ impl RegisteredSources {
                 .iter()
                 .map(|platform| image.build_job_id(*platform))
         }));
+        if input.config.runner_image_family.is_some() {
+            workflow.insert(velnor_actions_contract::config::RUNNER_IMAGE_FAMILY_JOB_ID.to_owned());
+        }
         if self.seen_workflow != workflow {
             return Err(invalid("native_graph_incomplete_workflow_tasks"));
         }

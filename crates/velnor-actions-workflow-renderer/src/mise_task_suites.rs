@@ -194,6 +194,9 @@ fn bootstrap_policy(policy: &MiseTaskSuitePolicy) -> MiseTaskBootstrapPolicy {
         root_prefix: "mise-task-suite",
         run_step_name: mise_task_bootstrap::RUN_MISE_TASK_SUITE_NAME,
         evidence_input: policy.evidence_fetch_spec.is_some(),
+        prepare_rust_target: None,
+        shared_cargo_sources: false,
+        runner_family_script: false,
     }
 }
 

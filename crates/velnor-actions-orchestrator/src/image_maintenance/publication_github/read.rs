@@ -15,6 +15,15 @@ pub(in crate::image_maintenance) fn get_json<T: for<'de> Deserialize<'de>>(
     token: &str,
     deadline: CheckDeadline,
 ) -> Result<T, OrchestratorError> {
+    let bytes = get_bytes(route, token, deadline)?;
+    serde_json::from_slice(&bytes).map_err(|_| internal("image_publication_github_json"))
+}
+
+pub(in crate::image_maintenance) fn get_bytes(
+    route: &str,
+    token: &str,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
     let mut args = vec![OsString::from("api")];
     args.extend(github_authority_read::arguments(route)?);
     let command = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
@@ -27,5 +36,5 @@ pub(in crate::image_maintenance) fn get_json<T: for<'de> Deserialize<'de>>(
     if !output.success {
         return Err(internal("image_publication_github_api"));
     }
-    serde_json::from_slice(&output.stdout).map_err(|_| internal("image_publication_github_json"))
+    Ok(output.stdout)
 }

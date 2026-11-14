@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "velnor-ci"
+version = "0.1.79"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+autotests = false
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[[bin]]
+name = "velnor-ci"
+path = "src/main.rs"
+test = false
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+[dependencies]
+clap = { version = "=4.6.7", features = ["derive", "string"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154" }
+velnor-gen = { version = "=0.1.79", path = "../../../generator/crates/velnor-gen" }
+velnor-model = { version = "=0.0.0", path = "../../../generator/crates/velnor-model" }
+velnor-rust = { version = "=0.0.0", path = "../../../generator/crates/velnor-rust" }
+ureq = { version = "=3.5.2", default-features = false, features = ["rustls"] }

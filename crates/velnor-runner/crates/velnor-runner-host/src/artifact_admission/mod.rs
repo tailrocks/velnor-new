@@ -9,17 +9,21 @@ use reqwest::Client;
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
 
-pub(crate) const MAX_WORKER_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
-
 mod archive;
-mod checksums;
 
 mod github;
 mod hash;
 mod inspection;
 mod manifest;
-mod release;
+mod projection_cache;
+mod registry_projection;
+mod registry_transport;
+pub use registry_transport::{RegistryRequest, RegistryResponse, RegistryTransport};
+mod runner_release;
 mod strict_json;
+
+pub use projection_cache::RegistryProjection;
+pub(crate) use runner_release::VerifiedRunnerRelease;
 
 #[derive(Clone, PartialEq, Eq)]
 struct CacheKey {
@@ -28,12 +32,13 @@ struct CacheKey {
     state_directory: PathBuf,
 }
 
-struct CachedRelease {
-    key: CacheKey,
-    release: Arc<release::VerifiedRelease>,
-}
+static VERIFIED_RUNNER_RELEASE: OnceLock<tokio::sync::Mutex<Option<CachedRunnerRelease>>> =
+    OnceLock::new();
 
-static VERIFIED_RELEASE: OnceLock<tokio::sync::Mutex<Option<CachedRelease>>> = OnceLock::new();
+struct CachedRunnerRelease {
+    key: CacheKey,
+    release: Arc<VerifiedRunnerRelease>,
+}
 
 pub(crate) struct NativeArtifactProvider<'a> {
     client: Client,
@@ -41,21 +46,6 @@ pub(crate) struct NativeArtifactProvider<'a> {
     identity: CompiledReleaseIdentity,
     key: CacheKey,
     state_directory: PathBuf,
-}
-
-pub(crate) struct ProbeReleaseMaterial {
-    pub(crate) source_sha: String,
-    pub(crate) archive: Vec<u8>,
-    pub(crate) manifest: Vec<u8>,
-    pub(crate) checksums: Vec<u8>,
-}
-
-pub(crate) struct WorkerReleaseMaterial {
-    pub(crate) source_sha: String,
-    pub(crate) runner_path: PathBuf,
-    pub(crate) runner_sha256: String,
-    pub(crate) dind_path: PathBuf,
-    pub(crate) dind_sha256: String,
 }
 
 pub(crate) struct ReleaseArchiveIdentity {
@@ -69,10 +59,6 @@ pub(crate) const RELEASE_MANIFEST_LIMIT: usize = manifest::MAX_MANIFEST_BYTES;
 
 pub(crate) fn hash_release_bytes(bytes: &[u8]) -> String {
     hash::lowercase_hex(&hash::sha256(bytes))
-}
-
-pub(crate) fn parse_release_json(bytes: &[u8]) -> Result<serde_json::Value, HostError> {
-    strict_json::parse(bytes)
 }
 
 pub(crate) fn inspect_release_archive(
@@ -146,75 +132,16 @@ impl<'a> NativeArtifactProvider<'a> {
         })
     }
 
-    pub(crate) async fn verified_probe_material(&self) -> Result<ProbeReleaseMaterial, HostError> {
-        let release = self.verified_release().await?;
-        Ok(ProbeReleaseMaterial {
-            source_sha: release.source_sha.clone(),
-            archive: release.archive.clone(),
-            manifest: release.manifest_bytes.clone(),
-            checksums: release.checksum_bytes.clone(),
-        })
-    }
-
-    pub(crate) async fn download_worker_material(
+    pub(crate) async fn verified_runner_release(
         &self,
-        directory: &Path,
-    ) -> Result<WorkerReleaseMaterial, HostError> {
-        let release = self.verified_release().await?;
-        let metadata = std::fs::symlink_metadata(directory).map_err(|_| HostError::Path)?;
-        if !directory.is_absolute()
-            || !metadata.is_dir()
-            || metadata.file_type().is_symlink()
-            || release.runner_asset.name != crate::artifact_admission::manifest::RUNNER_ASSET
-            || release.dind_asset.name != crate::artifact_admission::manifest::DIND_ASSET
-        {
-            return Err(HostError::Identity);
-        }
-        let runner_path = directory.join(&release.runner_asset.name);
-        let dind_path = directory.join(&release.dind_asset.name);
-        github::download_asset_to_path(
-            &self.client,
-            self.pat,
-            &release.runner_asset,
-            &runner_path,
-            MAX_WORKER_ARCHIVE_BYTES,
-        )
-        .await?;
-        github::download_asset_to_path(
-            &self.client,
-            self.pat,
-            &release.dind_asset,
-            &dind_path,
-            MAX_WORKER_ARCHIVE_BYTES,
-        )
-        .await?;
-        Ok(WorkerReleaseMaterial {
-            source_sha: release.source_sha.clone(),
-            runner_path,
-            runner_sha256: release
-                .runner_asset
-                .digest
-                .strip_prefix("sha256:")
-                .ok_or(HostError::Identity)?
-                .to_owned(),
-            dind_path,
-            dind_sha256: release
-                .dind_asset
-                .digest
-                .strip_prefix("sha256:")
-                .ok_or(HostError::Identity)?
-                .to_owned(),
-        })
-    }
-
-    async fn verified_release(&self) -> Result<Arc<release::VerifiedRelease>, HostError> {
-        let cache = VERIFIED_RELEASE.get_or_init(|| tokio::sync::Mutex::new(None));
+    ) -> Result<Arc<VerifiedRunnerRelease>, HostError> {
+        let cache = VERIFIED_RUNNER_RELEASE.get_or_init(|| tokio::sync::Mutex::new(None));
         let mut guard = cache.lock().await;
-        if let Some(release) = cached_release(guard.as_ref(), &self.key) {
-            return Ok(release);
+        if let Some(cached) = guard.as_ref().filter(|cached| cached.key == self.key) {
+            return Ok(Arc::clone(&cached.release));
         }
         let fetched = Arc::new(
-            release::fetch_verified(
+            runner_release::fetch_verified(
                 &self.client,
                 self.pat,
                 &self.identity,
@@ -222,34 +149,54 @@ impl<'a> NativeArtifactProvider<'a> {
             )
             .await?,
         );
-        validate_fetched_release(&self.key, &fetched)?;
-        *guard = Some(CachedRelease {
+        if fetched.source_sha != self.key.source_sha {
+            return Err(HostError::Identity);
+        }
+        *guard = Some(CachedRunnerRelease {
             key: self.key.clone(),
             release: Arc::clone(&fetched),
         });
         Ok(fetched)
     }
-}
 
-fn cached_release(
-    cached: Option<&CachedRelease>,
-    requested: &CacheKey,
-) -> Option<Arc<release::VerifiedRelease>> {
-    cached
-        .filter(|cached| &cached.key == requested)
-        .map(|cached| Arc::clone(&cached.release))
-}
-
-fn validate_fetched_release(
-    key: &CacheKey,
-    fetched: &release::VerifiedRelease,
-) -> Result<(), HostError> {
-    if fetched.source_sha != key.source_sha
-        || fetched.authority_sha != key.source_sha
-        || fetched.archive_sha != fetched.manifest.archive_sha256
-    {
-        Err(HostError::Identity)
-    } else {
-        Ok(())
+    pub(crate) async fn verified_registry_projection(
+        &self,
+        role: velnor_runner_image_manifest::ImageKind,
+    ) -> Result<RegistryProjection, HostError> {
+        let release = self.verified_runner_release().await?;
+        if release.source_sha != self.key.source_sha {
+            return Err(HostError::Identity);
+        }
+        let image = match role {
+            velnor_runner_image_manifest::ImageKind::Runner => &release.manifest.images.runner,
+            velnor_runner_image_manifest::ImageKind::Dind => &release.manifest.images.dind,
+            velnor_runner_image_manifest::ImageKind::ResourceProbe => {
+                &release.manifest.images.resource_probe
+            }
+        };
+        let mut cache = release.projections.lock().await;
+        if let Some(projection) = cache.get(image, role, &release.source_sha) {
+            return Ok(projection);
+        }
+        let projection =
+            registry_projection::verify(&self.client, image, role, &release.source_sha).await?;
+        cache.insert(image, projection.clone());
+        Ok(projection)
     }
+}
+
+pub(crate) fn anonymous_registry_transport()
+-> Result<std::sync::Arc<dyn RegistryTransport>, HostError> {
+    Ok(std::sync::Arc::new(
+        registry_transport::AnonymousRegistryTransport(github::client()?),
+    ))
+}
+
+pub(crate) async fn verify_candidate_registry_projection(
+    transport: &dyn RegistryTransport,
+    image: &velnor_runner_image_manifest::ImageEntry,
+    role: velnor_runner_image_manifest::ImageKind,
+    source: &str,
+) -> Result<RegistryProjection, HostError> {
+    RegistryProjection::fetch(transport, image, role, source).await
 }

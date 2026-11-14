@@ -86,7 +86,7 @@ async fn reconcile_abort(
     journal: &ConnectionJournal,
     claim: &StorageInitializationClaim,
 ) -> Result<(), HostError> {
-    verify_engine(docker, journal, claim).await?;
+    let engine = verify_engine(docker, journal, claim).await?;
     verify_volumes(docker, claim).await?;
     let inspected = inspect_container(docker, claim.helper_name()).await?;
     let Some(inspected) = inspected else {
@@ -97,7 +97,7 @@ async fn reconcile_abort(
         }
         return record_absence(journal, claim).await;
     };
-    let expected_env = verify_image(docker, claim).await?;
+    let expected_env = verify_image(docker, claim, &engine).await?;
     let helper_id = inspected.id.as_deref().ok_or(HostError::Ownership)?;
     if !valid_container_id(helper_id)
         || claim
@@ -146,7 +146,8 @@ async fn remove_abort_helper(
         .force(false)
         .v(false)
         .build();
-    let expected_env = verify_image(docker, claim).await?;
+    let engine = verify_engine(docker, journal, claim).await?;
+    let expected_env = verify_image(docker, claim, &engine).await?;
     for _attempt in 0..32 {
         verify_engine(docker, journal, claim).await?;
         let Some(inspected) = inspect_container(docker, helper_id).await? else {

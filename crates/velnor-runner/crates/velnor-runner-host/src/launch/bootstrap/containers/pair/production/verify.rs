@@ -71,13 +71,54 @@ pub(super) fn verify_observed_spec(
         || host.network_mode != expected_host.network_mode
         || !has_no_published_ports(host)
         || !security_matches(host, expected_host)
-        || host.tmpfs != expected_host.tmpfs
-        || host.mounts != expected_host.mounts
+        || !tmpfs_matches(host.tmpfs.as_ref(), expected_host.tmpfs.as_ref())
+        || !mounts_match(host.mounts.as_deref(), expected_host.mounts.as_deref())
         || host.log_config != expected_host.log_config
     {
         return Err(HostError::Ownership);
     }
     Ok(())
+}
+
+fn tmpfs_matches(
+    actual: Option<&std::collections::HashMap<String, String>>,
+    expected: Option<&std::collections::HashMap<String, String>>,
+) -> bool {
+    let Some((actual, expected)) = actual.zip(expected) else {
+        return actual.is_none() && expected.is_none();
+    };
+    actual.len() == expected.len()
+        && expected.iter().all(|(target, expected_options)| {
+            actual.get(target).is_some_and(|actual_options| {
+                normalize_tmpfs_options(actual_options) == normalize_tmpfs_options(expected_options)
+            })
+        })
+}
+
+fn normalize_tmpfs_options(options: &str) -> &str {
+    options.strip_prefix("rw,").unwrap_or(options)
+}
+
+fn mounts_match(
+    actual: Option<&[bollard::models::Mount]>,
+    expected: Option<&[bollard::models::Mount]>,
+) -> bool {
+    let Some((actual, expected)) = actual.zip(expected) else {
+        return actual.is_none() && expected.is_none();
+    };
+    actual.len() == expected.len()
+        && actual
+            .iter()
+            .zip(expected)
+            .all(|(left, right)| normalize_mount(left) == normalize_mount(right))
+}
+
+fn normalize_mount(mount: &bollard::models::Mount) -> bollard::models::Mount {
+    let mut normalized = mount.clone();
+    if normalized.read_only.is_none() {
+        normalized.read_only = Some(false);
+    }
+    normalized
 }
 
 fn has_no_published_ports(host: &bollard::models::HostConfig) -> bool {
@@ -98,9 +139,15 @@ fn security_matches(
         && canonical_capability_set(actual.cap_add.as_deref())
             .zip(canonical_capability_set(expected.cap_add.as_deref()))
             .is_some_and(|(actual, expected)| actual == expected)
-        && canonical_seccomp(actual.security_opt.as_deref())
-            .zip(canonical_seccomp(expected.security_opt.as_deref()))
-            .is_some_and(|(actual, expected)| actual == expected)
+        && canonical_seccomp(
+            actual.security_opt.as_deref(),
+            actual.privileged == Some(true),
+        )
+        .zip(canonical_seccomp(
+            expected.security_opt.as_deref(),
+            expected.privileged == Some(true),
+        ))
+        .is_some_and(|(actual, expected)| actual == expected)
 }
 
 #[derive(PartialEq)]
@@ -120,10 +167,11 @@ fn canonical_capability_set(values: Option<&[String]>) -> Option<BTreeSet<String
     Some(normalized)
 }
 
-fn canonical_seccomp(values: Option<&[String]>) -> Option<CanonicalSeccomp> {
+fn canonical_seccomp(values: Option<&[String]>, privileged: bool) -> Option<CanonicalSeccomp> {
     let values = values.unwrap_or_default();
     match values {
         [] => Some(CanonicalSeccomp::Absent),
+        [value] if privileged && value == "label=disable" => Some(CanonicalSeccomp::Absent),
         [value] => {
             let (kind, profile) = value.split_once('=')?;
             if kind != "seccomp" {
@@ -146,16 +194,25 @@ fn effective_config_matches(
     let expected_env = merge_environment(image.env.as_deref(), request.env.as_deref())?;
     let expected_cmd = request.cmd.as_ref().or(image.cmd.as_ref());
     let expected_entrypoint = request.entrypoint.as_ref().or(image.entrypoint.as_ref());
-    let expected_user = request.user.as_ref().or(image.user.as_ref());
-    let expected_working_dir = request.working_dir.as_ref().or(image.working_dir.as_ref());
+    let expected_user = non_empty(request.user.as_deref().or(image.user.as_deref()));
+    let expected_working_dir = non_empty(
+        request
+            .working_dir
+            .as_deref()
+            .or(image.working_dir.as_deref()),
+    );
     Ok(actual.labels.clone().unwrap_or_default() == expected_labels
         && merge_environment(actual.env.as_deref(), None)? == expected_env
         && actual.cmd.as_ref() == expected_cmd
         && actual.entrypoint.as_ref() == expected_entrypoint
-        && actual.user.as_ref() == expected_user
-        && actual.working_dir.as_ref() == expected_working_dir
+        && non_empty(actual.user.as_deref()) == expected_user
+        && non_empty(actual.working_dir.as_deref()) == expected_working_dir
         && actual.stdin_once == request.stdin_once
         && actual.open_stdin == request.open_stdin)
+}
+
+fn non_empty(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| !value.is_empty())
 }
 
 fn merge_labels(
