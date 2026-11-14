@@ -43,6 +43,22 @@ pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
 pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
     let rust_roots = rust_roots(view, &config)?;
+    if let Some(package) = config
+        .inputs
+        .iter()
+        .flat_map(|input| &input.packages)
+        .find(|package| {
+            !rust_roots
+                .iter()
+                .flat_map(|root| &root.members)
+                .any(|member| member.name == **package)
+        })
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::UnknownInputPackage(package.to_string()),
+        ));
+    }
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     let helper = view
