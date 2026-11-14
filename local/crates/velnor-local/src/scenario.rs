@@ -42,7 +42,7 @@ pub enum Step {
     WorkflowDispatch {
         branch: String,
         #[serde(default)]
-        inputs: BTreeMap<String, String>,
+        inputs: BTreeMap<String, serde_json::Value>,
     },
 }
 

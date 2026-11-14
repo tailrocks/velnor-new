@@ -321,3 +321,17 @@ fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
     );
     assert_eq!(bump("serde"), None);
 }
+
+#[test]
+fn workflow_dispatch_inputs_keep_their_json_types() {
+    let scenario = br#"{"description": "x", "steps": [{"workflow_dispatch": {"branch": "main", "inputs": {"deploy": false, "count": 3, "tag": "x"}}}]}"#;
+    let scenario = Scenario::parse(scenario).unwrap_or_else(|e| unreachable!("{e}"));
+    let Some(Step::WorkflowDispatch { inputs, .. }) = scenario.steps.first() else {
+        unreachable!("not a workflow_dispatch step")
+    };
+    let payload = REPOSITORY.workflow_dispatch("main", &serde_json::json!(inputs), "ci.yml");
+    assert_eq!(
+        payload["inputs"],
+        serde_json::json!({"deploy": false, "count": 3, "tag": "x"})
+    );
+}

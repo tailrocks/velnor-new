@@ -73,7 +73,7 @@ impl Driver<'_> {
     pub(super) async fn dispatch(
         &mut self,
         branch: &str,
-        inputs: &BTreeMap<String, String>,
+        inputs: &BTreeMap<String, serde_json::Value>,
     ) -> io::Result<()> {
         self.git(&["switch", "-q", branch]).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
