@@ -214,18 +214,6 @@ fn append_outputs(outputs: &str) -> Result<(), CiError> {
     Ok(())
 }
 
-fn append_outputs(outputs: &str) -> Result<(), CiError> {
-    if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(outputs.as_bytes()))
-            .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
-    }
-    Ok(())
-}
-
 pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {
     let mut bytes = Vec::new();
     reader
