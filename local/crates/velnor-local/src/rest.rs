@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 mod caches;
 mod diff;
+pub mod runs;
 mod site;
 
 pub use caches::{cache_list, rfc3339};
@@ -30,6 +31,9 @@ pub enum Api {
     Contents { path: String },
     CacheList,
     CacheDelete { id: u64 },
+    Run { id: u64 },
+    RunJobs { id: u64, attempt: u32 },
+    JobLog { id: u64 },
     NotImplemented,
 }
 
@@ -57,6 +61,7 @@ pub fn route(method: &str, path: &str) -> Api {
             (!path.is_empty()).then_some(Api::Contents { path })
         }
         ("GET", ["repos", _, _, "actions", "caches"]) => Some(Api::CacheList),
+        ("GET", ["repos", _, _, "actions", rest]) => actions(rest),
         ("DELETE", ["repos", _, _, "actions", rest]) => rest
             .strip_prefix("caches/")
             .and_then(|id| id.parse().ok())
@@ -64,6 +69,22 @@ pub fn route(method: &str, path: &str) -> Api {
         _ => None,
     };
     route.unwrap_or(Api::NotImplemented)
+}
+
+fn actions(rest: &str) -> Option<Api> {
+    match rest.split('/').collect::<Vec<_>>().as_slice() {
+        ["runs", id] => Some(Api::Run {
+            id: id.parse().ok()?,
+        }),
+        ["runs", id, "attempts", attempt, "jobs"] => Some(Api::RunJobs {
+            id: id.parse().ok()?,
+            attempt: attempt.parse().ok()?,
+        }),
+        ["jobs", id, "logs"] => Some(Api::JobLog {
+            id: id.parse().ok()?,
+        }),
+        _ => None,
+    }
 }
 
 #[must_use]

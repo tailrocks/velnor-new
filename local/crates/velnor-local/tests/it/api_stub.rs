@@ -150,7 +150,7 @@ async fn any_other_request_gets_501_with_a_json_body_that_names_the_path() {
         ("GET", "/rate_limit"),
         ("DELETE", "/repos/o/r/pulls/1"),
         ("POST", "/repos/o/r/actions/caches"),
-        ("GET", "/repos/o/r/actions/runs/1"),
+        ("GET", "/repos/o/r/actions/workflows"),
     ] {
         let reply = stub.call(method, path).await;
         assert_eq!(reply.status, 501, "{method} {path}");

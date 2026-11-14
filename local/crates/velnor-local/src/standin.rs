@@ -7,44 +7,56 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct Run {
     pub id: u64,
-    pub display_name: String,
+    pub file_name: String,
+    pub display_name: Option<String>,
     pub event_name: Option<String>,
+    pub sha: Option<String>,
     pub result: Option<String>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
+    pub request_id: u64,
     pub time_line_id: Option<String>,
+    pub name: String,
     pub workflowname: String,
+    pub result: Option<String>,
+    pub attempt: u32,
+    pub runid: u64,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Record {
+    pub id: String,
     pub parent_id: Option<String>,
+    pub name: String,
     pub start_time: Option<String>,
+    pub finish_time: Option<String>,
+    pub result: Option<String>,
+    pub log: Option<RecordLog>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RecordLog {
+    pub id: u64,
 }
 
 #[must_use]
-pub fn conclusion(result: Option<&str>) -> &'static str {
-    match result {
-        Some("succeeded" | "succeededWithIssues") => "success",
-        Some("failed") => "failure",
-        Some("skipped") => "skipped",
-        Some("canceled" | "cancelled" | "abandoned") => "cancelled",
-        Some(_) => "neutral",
-        None => "unfinished",
-    }
+pub fn conclusion(result: Option<&str>) -> Option<&'static str> {
+    Some(match result? {
+        "succeeded" | "succeededWithIssues" => "success",
+        "failed" => "failure",
+        "skipped" => "skipped",
+        "canceled" | "cancelled" | "abandoned" => "cancelled",
+        _ => "neutral",
+    })
 }
 
 #[must_use]
-pub fn job_started(records: &[Record]) -> Option<u64> {
-    let root = records.iter().find(|record| record.parent_id.is_none())?;
-    seconds(root.start_time.as_deref()?)
-}
-
-fn seconds(time: &str) -> Option<u64> {
+pub fn seconds(time: &str) -> Option<u64> {
     let number = |range: std::ops::Range<usize>| time.get(range)?.parse::<i64>().ok();
     let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
     let year = if month <= 2 { year - 1 } else { year };
