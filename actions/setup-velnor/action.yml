@@ -47,7 +47,7 @@ runs:
         versions="$RUNNER_TOOL_CACHE/velnor-ci/$VERSION"
         dir="$versions/$arch"
         mkdir -p "$versions"
-        staging="$(mktemp -d "$versions/.download.XXXXXX")"
+        staging="$(mktemp -d "$RUNNER_TEMP/velnor-ci-staging.XXXXXX")"
         trap 'rm -rf "$staging"' EXIT
         sums="$RUNNER_TEMP/velnor-ci.sha256"
         printf '%s  %s\n' "$expected" "$staging/velnor-ci" > "$sums"
@@ -80,7 +80,8 @@ runs:
         else
           chmod +x "$staging/velnor-ci"
           rm -rf "$dir" "$dir.complete"
-          mv "$staging" "$dir"
+          mkdir -p "$dir"
+          cp "$staging/velnor-ci" "$dir/velnor-ci"
           touch "$dir.complete"
           echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
         fi

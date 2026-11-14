@@ -77,6 +77,11 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
+    let script_text = install_script(&action);
+    assert!(
+        !script_text.contains("mktemp -d \"$versions"),
+        "verified bytes are staged inside the shared tool cache"
+    );
     let work = std::env::temp_dir().join(format!("velnor-gen-setup-action-{}", std::process::id()));
     fs::create_dir_all(&work)?;
     let releases = work.join("releases");
@@ -95,7 +100,7 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     fs::create_dir_all(&temp)?;
     let path_file = work.join("path");
     let script = work.join("install.sh");
-    fs::write(&script, install_script(&action))?;
+    fs::write(&script, script_text)?;
     let status = Command::new("bash")
         .arg(&script)
         .env("VERSION", "1.2.3")

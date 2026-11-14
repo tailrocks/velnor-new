@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256 as Hasher};
 use velnor_model::{CommitSha, HelperRelease, HelperVersion, Platform, RepoPath, Sha256};
 
 pub const LOCK_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.lock");
@@ -65,8 +66,10 @@ pub fn commit_url(version: &HelperVersion) -> String {
 
 pub fn pin_lock(version: &str, commit: &str, sums: &str) -> Result<String, LockError> {
     let version = release_version(version)?;
+    let commit_text = commit;
     let commit = release_commit(commit.trim_end())?;
     let listed = listed_sums(sums)?;
+    check_commit_digest(commit_text, &listed)?;
     let lock = Lock {
         version: version.to_string(),
         commit: commit.to_string(),
@@ -74,6 +77,24 @@ pub fn pin_lock(version: &str, commit: &str, sums: &str) -> Result<String, LockE
         generator: digests(GENERATOR, &listed)?,
     };
     toml::to_string(&lock).map_err(|error| LockError(error.to_string()))
+}
+
+fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<(), LockError> {
+    let expected = listed
+        .get("COMMIT")
+        .ok_or_else(|| LockError("SHA256SUMS lists no COMMIT".to_owned()))?;
+    let actual = Hasher::digest(commit.as_bytes())
+        .iter()
+        .flat_map(|byte| [byte >> 4, byte & 15])
+        .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
+        .collect::<String>();
+    if actual == *expected {
+        Ok(())
+    } else {
+        Err(LockError(format!(
+            "COMMIT has SHA-256 {actual} but SHA256SUMS lists {expected}"
+        )))
+    }
 }
 
 fn release_commit(text: &str) -> Result<CommitSha, LockError> {
