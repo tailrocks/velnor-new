@@ -234,7 +234,7 @@ impl Audit<'_> {
         profile: String,
         package: String,
     ) -> Result<(), CiError> {
-        if let Some((source, built)) = self.dep_info(workspace, file)? {
+        if let Some((source, built)) = self.dep_info(workspace, file, Some(&package))? {
             if profile == HOST {
                 self.built[index]
                     .scripts
