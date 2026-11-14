@@ -36,7 +36,7 @@ pub enum Command {
     Run(RunArgs),
 }
 
-#[derive(Debug, Args)]
+#[derive(Clone, Debug, Args)]
 pub struct EnvironmentArgs {
     #[arg(
         long,
@@ -45,6 +45,12 @@ pub struct EnvironmentArgs {
     pub dir: PathBuf,
     #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, at least one")]
     pub runners: u16,
+    #[arg(
+        long,
+        default_value_t = 0,
+        help = "Number of runner containers for untrusted runs, on a network without the API stub; run starts one when a scenario opens a pull request from a fork"
+    )]
+    pub fork_runners: u16,
     #[arg(
         long,
         default_value = "main",
@@ -146,6 +152,8 @@ pub struct ApiStubArgs {
         help = "runner.server as host:port; it answers the workflow run, job and job log endpoints"
     )]
     pub standin: Option<String>,
+    #[command(flatten)]
+    pub control: ControlArgs,
 }
 
 #[derive(Debug, Args)]
@@ -166,4 +174,18 @@ pub struct CacheServerArgs {
     pub token_key: PathBuf,
     #[arg(long, default_value_t = REPOSITORY_LIMIT_BYTES, help = "Cache size limit of one repository in bytes")]
     pub limit_bytes: u64,
+    #[command(flatten)]
+    pub control: ControlArgs,
+}
+
+#[derive(Clone, Debug, Args)]
+pub struct ControlArgs {
+    #[arg(
+        long,
+        requires = "control_token",
+        help = "Second address to listen on, where every request must carry the control token as a bearer token"
+    )]
+    pub control_listen: Option<SocketAddr>,
+    #[arg(long, help = "File that holds the control token")]
+    pub control_token: Option<PathBuf>,
 }

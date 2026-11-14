@@ -17,7 +17,7 @@ use tokio::task::JoinSet;
 
 use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
-use crate::cli::RunArgs;
+use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
 use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
 use crate::standin;
@@ -37,6 +37,7 @@ struct Driver<'a> {
     events: usize,
     outcomes: Vec<Outcome>,
     tag: &'a str,
+    fork: bool,
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
@@ -107,8 +108,12 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
         }
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
+    let mut environment = args.environment.clone();
+    if scenario.has_fork() {
+        environment.fork_runners = environment.fork_runners.max(1);
+    }
     let session = tokio::select! {
-        session = session(args, &env, repo, &scenario, tag) => session,
+        session = session(args, &environment, &env, repo, &scenario, tag) => session,
         _ = tokio::signal::ctrl_c() => Err(io::Error::other("interrupted")),
     };
     let stopped = env.down().await;
@@ -123,6 +128,7 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
 
 async fn session<'a>(
     args: &'a RunArgs,
+    environment: &EnvironmentArgs,
     env: &'a Environment<DockerCli>,
     repo: PathBuf,
     scenario: &Scenario,
@@ -132,7 +138,7 @@ async fn session<'a>(
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
     let clock = Instant::now();
-    let addresses = env.up(&repo, &args.environment).await?;
+    let addresses = env.up(&repo, environment).await?;
     let up_seconds = clock.elapsed().as_secs_f64();
     println!(
         "velnor-local {tag}: {} is up in {up_seconds:.1} s",
@@ -148,6 +154,7 @@ async fn session<'a>(
         events: 0,
         outcomes: Vec::new(),
         tag,
+        fork: false,
     };
     let branches = driver
         .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
@@ -173,7 +180,7 @@ impl Driver<'_> {
                 } => self.commit(branch, append, line).await?,
                 Step::UpdateLock { branch, package } => self.update_lock(branch, package).await?,
                 Step::Push(branch) => self.push(branch).await?,
-                Step::OpenPullRequest { head, base } => self.open(head, base).await?,
+                Step::OpenPullRequest { head, base, fork } => self.open(head, base, *fork).await?,
                 Step::MergePullRequest(head) => self.merge(head).await?,
                 Step::ClosePullRequest(head) => self.close(head).await?,
                 Step::MergeGroup(head) => self.merge_group(head).await?,
@@ -239,7 +246,11 @@ impl Driver<'_> {
     }
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> io::Result<T> {
-        let bytes = request(&self.addresses.cache, "GET", path, "")
+        let proxy = match (&self.addresses.fork, self.fork) {
+            (Some(fork), true) => fork,
+            _ => &self.addresses.cache,
+        };
+        let bytes = request(proxy, "GET", path, "")
             .await
             .ok_or_else(|| io::Error::other(format!("runner.server does not answer {path}")))?;
         serde_json::from_slice(&bytes).map_err(io::Error::other)
@@ -263,6 +274,7 @@ impl Driver<'_> {
         let runs = "/_apis/v1/Message/workflow/runs";
         let known: Vec<standin::Run> = self.get(runs).await?;
         let label = format!("velnor-local={}", self.env.name);
+        let network = self.env.network(self.fork);
         let (repo, events) = (
             format!("{}:/repo", self.repo.display()),
             format!("{dir}/events:/events:ro"),
@@ -273,7 +285,7 @@ impl Driver<'_> {
             "--label",
             &label,
             "--network",
-            &self.env.name,
+            &network,
             "-v",
             &repo,
             "-v",

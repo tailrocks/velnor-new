@@ -21,6 +21,7 @@ pub(super) struct Pull {
     head_sha: String,
     open: bool,
     merged: bool,
+    fork: bool,
 }
 
 impl Driver<'_> {
@@ -83,13 +84,17 @@ impl Driver<'_> {
             before,
             merged: pull.merged,
             merge_commit: &sha,
+            fork: pull.fork,
             closed_at: closed_at.as_deref(),
             changed_files: changed.lines().count(),
         });
-        self.send("pull_request", &payload, &git_ref, &sha).await
+        self.fork = pull.fork;
+        let sent = self.send("pull_request", &payload, &git_ref, &sha).await;
+        self.fork = false;
+        sent
     }
 
-    pub(super) async fn open(&mut self, head: &str, base: &str) -> io::Result<()> {
+    pub(super) async fn open(&mut self, head: &str, base: &str, fork: bool) -> io::Result<()> {
         let number = self.pulls.len() as u64 + 1;
         let registration = json!({"base_branch": base}).to_string();
         let path = format!("/_velnor/pull-requests/{number}");
@@ -104,6 +109,7 @@ impl Driver<'_> {
             head_sha: self.git(&["rev-parse", head]).await?,
             open: true,
             merged: false,
+            fork,
         });
         let head_sha = self.pulls[self.pulls.len() - 1].head_sha.clone();
         self.pushed.insert(head.to_owned(), head_sha);

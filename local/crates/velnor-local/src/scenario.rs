@@ -32,6 +32,8 @@ pub enum Step {
     OpenPullRequest {
         head: String,
         base: String,
+        #[serde(default)]
+        fork: bool,
     },
     MergePullRequest(String),
     ClosePullRequest(String),
@@ -54,7 +56,7 @@ impl Step {
             | Self::ClosePullRequest(branch)
             | Self::MergeGroup(branch)
             | Self::WorkflowDispatch { branch, .. } => vec![branch],
-            Self::OpenPullRequest { head, base } => vec![head, base],
+            Self::OpenPullRequest { head, base, .. } => vec![head, base],
             Self::Schedule(_) => Vec::new(),
         }
     }
@@ -68,7 +70,7 @@ impl Step {
             | Self::WorkflowDispatch { branch, .. } => vec![branch],
             Self::Commit { branch, append, .. } => vec![branch, append],
             Self::UpdateLock { branch, package } => vec![branch, package],
-            Self::OpenPullRequest { head, base } => vec![head, base],
+            Self::OpenPullRequest { head, base, .. } => vec![head, base],
             Self::Schedule(_) => Vec::new(),
         }
     }
@@ -77,6 +79,13 @@ impl Step {
 impl Scenario {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         serde_json::from_slice(bytes).map_err(|e| format!("not a scenario: {e}"))
+    }
+
+    #[must_use]
+    pub fn has_fork(&self) -> bool {
+        self.steps
+            .iter()
+            .any(|step| matches!(step, Step::OpenPullRequest { fork: true, .. }))
     }
 
     #[must_use]
@@ -146,6 +155,7 @@ pub struct Outcome {
     pub started: Option<u64>,
     pub metrics: Result<PathBuf, String>,
     pub caches: Vec<String>,
+    pub trusted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,13 +189,16 @@ pub fn restores(journal: &str, run: u64, jobs: &[crate::standin::Job]) -> Vec<St
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success" && self.metrics.is_ok()
+        self.conclusion == "success" && (self.metrics.is_ok() || !self.trusted)
     }
 
     #[must_use]
     pub fn line(&self) -> String {
         let metrics = match &self.metrics {
             Ok(path) => format!("metrics {}", path.display()),
+            Err(_) if !self.trusted => {
+                "untrusted, so no metrics file: the API stub cannot see its stand-in".to_owned()
+            }
             Err(error) => format!("no metrics file: {error}"),
         };
         format!(

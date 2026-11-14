@@ -96,6 +96,7 @@ fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
         before,
         merged,
         merge_commit: SHA_B,
+        fork: false,
         closed_at,
         changed_files: 1,
     };
@@ -222,6 +223,7 @@ fn the_warm_scenario_follows_the_default_branch_and_unknown_steps_option_values_
             Step::OpenPullRequest {
                 head: "warm".to_owned(),
                 base: "trunk".to_owned(),
+                fork: false,
             },
         ]
     );
@@ -337,4 +339,41 @@ fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
     assert_eq!(next_patch(lock, "fnv").as_deref(), Some("1.0.6"));
     assert_eq!(next_patch(lock, "fnv-other").as_deref(), Some("2.3.10"));
     assert_eq!(next_patch(lock, "serde"), None);
+}
+
+#[test]
+fn a_pull_request_from_a_fork_names_the_fork_as_its_head_repository() {
+    let payload = REPOSITORY.pull_request(&PullRequest {
+        action: "opened",
+        number: 4,
+        base: ("main", SHA_A),
+        head: ("patch", SHA_B),
+        before: None,
+        merged: false,
+        merge_commit: SHA_B,
+        fork: true,
+        closed_at: None,
+        changed_files: 1,
+    });
+    assert_like_github("pull_request", &payload);
+    let head = &payload["pull_request"]["head"];
+    assert_eq!(head["repo"]["fork"], true);
+    assert_eq!(head["repo"]["full_name"], "velnor-local-fork/velnor-lab");
+    assert_eq!(head["label"], "velnor-local-fork:patch");
+    assert_eq!(
+        payload["pull_request"]["base"]["repo"]["full_name"],
+        "tailrocks/velnor-lab"
+    );
+    assert_eq!(payload["repository"]["fork"], false);
+    let fork = br#"{"description": "x", "steps": [{"open_pull_request": {"head": "patch", "base": "main", "fork": true}}]}"#;
+    assert!(
+        Scenario::parse(fork)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .has_fork()
+    );
+    assert!(
+        !Scenario::parse(&read("scenarios/story.json"))
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .has_fork()
+    );
 }
