@@ -278,8 +278,7 @@ fn first_line_matches(
     if first.last() == Some(&b'\r') {
         first.pop();
     }
-    let first = std::str::from_utf8(&first).ok();
-    Ok(first.is_some_and(matches))
+    Ok(matches(&String::from_utf8_lossy(&first)))
 }
 
 fn copy_entry(
