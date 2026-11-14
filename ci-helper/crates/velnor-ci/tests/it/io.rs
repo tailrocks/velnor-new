@@ -32,10 +32,10 @@ fn a_body_over_the_limit_is_an_error_not_a_truncation() {
     );
 }
 
-struct Repo(PathBuf);
+pub(crate) struct Repo(PathBuf);
 
 impl Repo {
-    fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         let root =
             std::env::temp_dir().join(format!("velnor-ci-inputs-{}-{name}", std::process::id()));
         if root.exists() {
@@ -48,7 +48,7 @@ impl Repo {
         repo
     }
 
-    fn git(&self, args: &[&str]) {
+    pub(crate) fn git(&self, args: &[&str]) {
         let status = Command::new("git")
             .arg("-C")
             .arg(&self.0)
@@ -58,7 +58,7 @@ impl Repo {
         assert!(status.success(), "git {args:?}");
     }
 
-    fn write(&self, path: &str, text: &str) {
+    pub(crate) fn write(&self, path: &str, text: &str) {
         let path = self.0.join(path);
         fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -96,7 +96,7 @@ impl Repo {
         self.git(&["add", "--all"]);
     }
 
-    fn set_mtime(&self, path: &str, time: SystemTime) {
+    pub(crate) fn set_mtime(&self, path: &str, time: SystemTime) {
         File::options()
             .write(true)
             .open(self.0.join(path))
@@ -110,7 +110,7 @@ impl Repo {
             .unwrap_or_else(|e| unreachable!("{e}"))
     }
 
-    fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.0
     }
 }

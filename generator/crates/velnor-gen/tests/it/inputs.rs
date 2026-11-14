@@ -28,11 +28,18 @@ fn dependency(
     })
 }
 
-fn target(name: &str, kinds: Vec<TargetKind>, tests: bool) -> Result<Target, Box<dyn Error>> {
+fn target(
+    name: &str,
+    kinds: Vec<TargetKind>,
+    tests: bool,
+    source: Option<&str>,
+) -> Result<Target, Box<dyn Error>> {
     Ok(Target {
         name: TargetName::new(name)?,
         kinds,
         tests,
+        source: source.map(path).transpose()?,
+        requires_features: name == "derive",
     })
 }
 
@@ -53,9 +60,9 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
         ],
         "targets": [
           {"name": "app", "kind": ["bin"], "src_path": "/repo/app/src/main.rs", "test": true},
-          {"name": "derive", "kind": ["proc-macro"], "test": false},
+          {"name": "derive", "kind": ["proc-macro"], "test": false, "required-features": ["macros"]},
           {"name": "build-script-build", "kind": ["custom-build"], "test": false},
-          {"name": "smoke", "kind": ["test"], "test": true}
+          {"name": "smoke", "kind": ["test"], "src_path": "/elsewhere/smoke.rs", "test": true}
         ]
       }]
     }"#;
@@ -74,10 +81,15 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
                 dependency("root", DependencyKind::Build, Some("Cargo.toml"))?,
             ],
             targets: vec![
-                target("app", vec![TargetKind::Bin], true)?,
-                target("derive", vec![TargetKind::ProcMacro], false)?,
-                target("build-script-build", vec![TargetKind::BuildScript], false)?,
-                target("smoke", vec![TargetKind::Test], true)?,
+                target("app", vec![TargetKind::Bin], true, Some("app/src/main.rs"))?,
+                target("derive", vec![TargetKind::ProcMacro], false, None)?,
+                target(
+                    "build-script-build",
+                    vec![TargetKind::BuildScript],
+                    false,
+                    None,
+                )?,
+                target("smoke", vec![TargetKind::Test], true, None)?,
             ],
         }],
     };
