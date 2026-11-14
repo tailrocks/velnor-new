@@ -172,7 +172,9 @@ impl CacheServer {
         if let Some(mut line) = restore {
             line["writer"] = json!(claims.scp);
             line["key"] = json!(body.key);
-            self.journal(&line).await?;
+            if let Err(error) = self.journal(&line).await {
+                eprintln!("cache-server: the restore journal is not writable: {error:?}");
+            }
         }
         for record in gone {
             let _ = fs::remove_file(self.archive(&record.blob)).await;

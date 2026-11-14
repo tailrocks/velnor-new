@@ -19,7 +19,7 @@ use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
-use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
+use crate::scenario::{Outcome, Scenario, Step, overlapping, plan, summary, verdict};
 use crate::standin;
 
 mod outcome;
@@ -40,39 +40,23 @@ struct Driver<'a> {
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
+    let planned = plan(&args.scenario, &args.environment.dir).map_err(io::Error::other)?;
     let args = Arc::new(args);
-    let several = args.scenario.len() > 1;
     let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
     let mut running = JoinSet::new();
-    for name in args.scenario.clone() {
+    for (name, stem, dir) in planned {
         let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
         running.spawn(async move {
             let _slot = slots.acquire().await.map_err(io::Error::other);
-            let stem = Path::new(&name)
-                .file_stem()
-                .map_or_else(|| name.clone(), |stem| stem.to_string_lossy().into_owned());
-            let dir = if several {
-                args.environment.dir.join(&stem)
-            } else {
-                args.environment.dir.clone()
-            };
             let result = run_one(&args, &name, &stem, &dir).await;
-            result.map_err(|error| format!("{stem}: {error}"))
+            (stem, result.map_err(|error| error.to_string()))
         });
     }
-    let mut failed = Vec::new();
+    let mut results = Vec::new();
     while let Some(joined) = running.join_next().await {
-        if let Err(error) = joined
-            .map_err(|error| error.to_string())
-            .and_then(|result| result)
-        {
-            failed.push(error);
-        }
+        results.push(joined.map_err(io::Error::other)?);
     }
-    if failed.is_empty() {
-        return Ok(());
-    }
-    Err(io::Error::other(failed.join("; ")))
+    summary(&results).map_err(io::Error::other)
 }
 
 async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::Result<()> {
@@ -107,14 +91,14 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
         }
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
-    let session = tokio::select! {
+    let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
         session = session(args, &env, repo, &scenario, tag) => session,
-        _ = tokio::signal::ctrl_c() => Err(io::Error::other("interrupted")),
+        _ = tokio::signal::ctrl_c() => (Vec::new(), 0, 0.0, Err(io::Error::other("interrupted"))),
     };
     let stopped = env.down().await;
-    let (outcomes, up_at, up_seconds) = session?;
-    stopped?;
     print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
+    replayed?;
+    stopped?;
     if !outcomes.iter().all(Outcome::passed) {
         return Err(io::Error::other("a run did not succeed"));
     }
@@ -127,12 +111,15 @@ async fn session<'a>(
     repo: PathBuf,
     scenario: &Scenario,
     tag: &'a str,
-) -> io::Result<(Vec<Outcome>, u64, f64)> {
+) -> (Vec<Outcome>, u64, f64, io::Result<()>) {
     let up_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
     let clock = Instant::now();
-    let addresses = env.up(&repo, &args.environment).await?;
+    let addresses = match env.up(&repo, &args.environment).await {
+        Ok(addresses) => addresses,
+        Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
+    };
     let up_seconds = clock.elapsed().as_secs_f64();
     println!(
         "velnor-local {tag}: {} is up in {up_seconds:.1} s",
@@ -149,20 +136,24 @@ async fn session<'a>(
         outcomes: Vec::new(),
         tag,
     };
-    let branches = driver
-        .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
-        .await?;
-    for branch in branches.lines() {
-        let parent = format!("{branch}^");
-        if let Ok(before) = driver.git(&["rev-parse", "--verify", "-q", &parent]).await {
-            driver.pushed.insert(branch.to_owned(), before);
-        }
-    }
-    driver.replay(&scenario.steps).await?;
-    Ok((driver.outcomes, up_at, up_seconds))
+    let replayed = driver.start(&scenario.steps).await;
+    (driver.outcomes, up_at, up_seconds, replayed)
 }
 
 impl Driver<'_> {
+    async fn start(&mut self, steps: &[Step]) -> io::Result<()> {
+        let branches = self
+            .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+            .await?;
+        for branch in branches.lines() {
+            let parent = format!("{branch}^");
+            if let Ok(before) = self.git(&["rev-parse", "--verify", "-q", &parent]).await {
+                self.pushed.insert(branch.to_owned(), before);
+            }
+        }
+        self.replay(steps).await
+    }
+
     async fn replay(&mut self, steps: &[Step]) -> io::Result<()> {
         for step in steps {
             match step {
