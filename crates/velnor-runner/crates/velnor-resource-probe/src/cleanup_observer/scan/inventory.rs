@@ -18,7 +18,7 @@ use super::{
 use crate::cleanup_observer_wire::{descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices};
 
 const PROC: &str = "/proc";
-use crate::mountinfo::MOUNTINFO_LIMIT;
+use crate::mountinfo_io::MOUNTINFO_LIMIT;
 const MAX_PROCESSES: usize = 4096;
 const MAX_TASKS: usize = 16_384;
 const MAX_FDS_PER_TASK: usize = 4096;

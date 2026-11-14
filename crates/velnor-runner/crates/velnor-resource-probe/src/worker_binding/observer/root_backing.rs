@@ -17,7 +17,7 @@ use parser::backing_mount;
 use parser::{parse_overlay_paths, parse_root_mount};
 
 #[cfg(target_os = "linux")]
-use crate::mountinfo::MOUNTINFO_LIMIT;
+use crate::mountinfo_io::MOUNTINFO_LIMIT;
 #[cfg(target_os = "linux")]
 const ROOT_BIND: &str = "/velnor/docker-root";
 

@@ -27,7 +27,7 @@ const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 #[cfg(target_os = "linux")]
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 #[cfg(target_os = "linux")]
-use crate::mountinfo::MOUNTINFO_LIMIT;
+use crate::mountinfo_io::read_mountinfo;
 
 pub(in crate::worker_binding) fn mount_namespace_identity(
     pid: u32,
@@ -46,7 +46,7 @@ pub(super) fn observe(request: &OwnedCgroupRequest) -> Result<OwnedCgroupObserva
 #[cfg(target_os = "linux")]
 fn observe_linux(request: &OwnedCgroupRequest) -> Result<OwnedCgroupObservation, ProbeError> {
     let boot_id = parse_boot_id(&read_bounded(BOOT_ID_PATH, 128, "boot_id")?)?;
-    let mountinfo = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let mountinfo = read_mountinfo(MOUNTINFO_PATH, "mountinfo")?;
     let cgroup_mount = cgroup2_root(&mountinfo)?;
     let engine_metadata = observe_engine_metadata(&mountinfo)?;
     let (daemon_process, docker_root_object) =
@@ -79,7 +79,7 @@ fn observe_linux(request: &OwnedCgroupRequest) -> Result<OwnedCgroupObservation,
         &mountinfo,
         &engine_metadata,
     )?;
-    let mountinfo_after = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let mountinfo_after = read_mountinfo(MOUNTINFO_PATH, "mountinfo")?;
     let engine_metadata_after = observe_engine_metadata(&mountinfo_after)?;
     let (daemon_after, docker_root_object_after) =
         daemon::observe_selected_daemon(&request.docker_root_path, &engine_metadata_after)?;

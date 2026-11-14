@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 use std::fs;
 
 use velnor_resource_probe::ProbeError;
-use velnor_resource_probe::mountinfo::{MOUNTINFO_LIMIT, cgroup2_root, read_mountinfo};
+use velnor_resource_probe::mountinfo_io::{MOUNTINFO_LIMIT, read_mountinfo};
 
 use super::ScopedTempDir;
 
@@ -14,9 +14,9 @@ const CGROUP_LINE: &str =
     "35 25 0:30 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw\n";
 
 fn busy_host_mountinfo(minimum_bytes: usize) -> Result<String, std::fmt::Error> {
-    let mut text = String::from(CGROUP_LINE);
+    let mut text = String::new();
     let mut index = 0;
-    while text.len() < minimum_bytes {
+    while text.len() + CGROUP_LINE.len() < minimum_bytes {
         let id = 1000 + index;
         writeln!(
             text,
@@ -25,6 +25,7 @@ fn busy_host_mountinfo(minimum_bytes: usize) -> Result<String, std::fmt::Error> 
         )?;
         index += 1;
     }
+    text.push_str(CGROUP_LINE);
     Ok(text)
 }
 
@@ -35,8 +36,9 @@ fn probe_reads_mountinfo_of_a_busy_docker_host() -> Result<(), Box<dyn Error>> {
     let dir = ScopedTempDir::new("mountinfo-busy")?;
     let path = dir.path().join("mountinfo");
     fs::write(&path, &text)?;
-    let mount = cgroup2_root(&read_mountinfo(&path)?)?;
-    assert_eq!(mount.filesystem_type, "cgroup2");
+    let bytes = read_mountinfo(path.to_str().ok_or("path")?, "mountinfo")?;
+    assert_eq!(bytes, text.as_bytes());
+    assert!(text.ends_with(CGROUP_LINE));
     Ok(())
 }
 
@@ -45,7 +47,7 @@ fn probe_refuses_mountinfo_over_the_bound() -> Result<(), Box<dyn Error>> {
     let dir = ScopedTempDir::new("mountinfo-huge")?;
     let path = dir.path().join("mountinfo");
     fs::write(&path, busy_host_mountinfo(MOUNTINFO_LIMIT + 1)?)?;
-    match read_mountinfo(&path) {
+    match read_mountinfo(path.to_str().ok_or("path")?, "mountinfo") {
         Err(error @ ProbeError::InputTooLarge("mountinfo")) => {
             assert_eq!(error.to_string(), "mountinfo_too_large");
             Ok(())
