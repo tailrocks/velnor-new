@@ -133,6 +133,9 @@ fn a_mise_configuration_may_not_load_hook_or_alias_anything() -> TestResult {
             )
         ),
         format!("[tool_alias.rust.versions]\nstable = \"1.98.0\"\n\n[tools]\n{nextest}"),
+        format!(
+            "monorepo_root = true\n\n[monorepo]\nconfig_roots = [\"tools\"]\n\n[tools]\n{nextest}"
+        ),
         format!("[tools]\n{nextest}rust = \"1.84.0\"\n\"core:rust\" = \"1.85.0\"\n"),
         format!(
             "[tools]\n{nextest}rust = [{{ version = \"1.84.1\", os = [\"macos\"] }}, {{ version = \"1.95.0\", os = [\"linux\"] }}]\n"

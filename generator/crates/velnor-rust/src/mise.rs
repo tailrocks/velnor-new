@@ -46,6 +46,8 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
             "hooks",
             "tool_alias",
             "alias",
+            "monorepo_root",
+            "monorepo",
         ]
         .into_iter()
         .find(|key| {

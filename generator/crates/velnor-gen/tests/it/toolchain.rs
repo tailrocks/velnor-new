@@ -103,6 +103,22 @@ fn plain_toolchain_cases() -> Vec<ToolchainCase> {
     vec![
         (
             "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"stable\"\ncomponents = [\"rustfmt; touch x\"]\n",
+            Err(Reason::InvalidValue {
+                key: "toolchain.components",
+                value: "rustfmt; touch x".to_owned(),
+            }),
+        ),
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"stable\"\ntargets = [\"$(id)\"]\n",
+            Err(Reason::InvalidValue {
+                key: "toolchain.targets",
+                value: "$(id)".to_owned(),
+            }),
+        ),
+        (
+            "rust-toolchain.toml",
             "[toolchain]\nchannel = \"stable\"\npath = \"/opt/rust\"\n",
             Err(Reason::InvalidValue {
                 key: "toolchain.path",
