@@ -84,7 +84,11 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     let rust_pins = rust_tool(&facts.tools)
         .and_then(|name| facts.tools.tools.get(name))
         .map_or(1, |pin| pin.requested.len());
-    if rust_pins != 1 {
+    let selectors = RUST_TOOLS
+        .iter()
+        .filter(|name| facts.tools.tools.contains_key(**name))
+        .count();
+    if rust_pins != 1 || selectors > 1 {
         return Err(DetectError::invalid(
             facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
             Reason::InvalidValue {

@@ -123,6 +123,7 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         format!("env_path = [\"bin\"]\n\n[tools]\n{nextest}"),
         format!("[settings]\nenv_file = \".env\"\n\n[tools]\n{nextest}"),
         format!("[hooks]\npostinstall = \"echo\"\n\n[tools]\n{nextest}"),
+        format!("[tools]\n{nextest}rust = \"1.84.0\"\n\"core:rust\" = \"1.85.0\"\n"),
         format!(
             "[tools]\n{nextest}rust = [{{ version = \"1.84.1\", os = [\"macos\"] }}, {{ version = \"1.95.0\", os = [\"linux\"] }}]\n"
         ),
