@@ -107,7 +107,7 @@ be green.
 - for each `[private_sources] npm_scopes` entry it adds
   `[install.scopes."@scope"]` with `url = "https://npm.pkg.github.com/"` and
   `token = "$VELNOR_NPM_READ_TOKEN"`. The lifecycle phase uses a second file
-  without the scope section.
+  with the same scope sections, each keeping its `url` and omitting `token`.
 
 ## Generated job
 
@@ -168,7 +168,7 @@ and the job holds `packages: read`:
    `bunfig_registry_override` on a registry, scope, token or certificate, writes
    `$RUNNER_TEMP/velnor/bun/registry.toml` (each scope mapped to
    `https://npm.pkg.github.com/` with `token = "$VELNOR_NPM_READ_TOKEN"`) and
-   `lifecycle.toml` (the same without the scopes), then starts
+   `lifecycle.toml` (the same scopes with their `url` and without the `token`), then starts
    `mise exec bun@<pin> -- bun install --frozen-lockfile --ignore-scripts
    --cwd=<root> --config=<registry.toml>` under the private-fetch policy: a
    cleared environment, `PATH`/`HOME`/`TMPDIR`, the Mise isolation keys,
