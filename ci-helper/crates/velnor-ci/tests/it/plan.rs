@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_ci::plan::outputs;
+use velnor_ci::plan::{explain, outputs};
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection, SelectionReason};
 
 fn path(text: &str) -> RepoPath {
@@ -55,4 +55,29 @@ fn two_roots_whose_output_names_would_collide_are_an_error() {
         (path("a_b/Cargo.toml"), RustSelection::None),
     ]);
     assert!(outputs(&selections).is_err());
+}
+
+#[test]
+fn an_unknown_path_is_explained_once_with_the_lines_that_would_classify_it() {
+    let unknown = AllTrigger::UnknownPath(path("scripts/gen.sh"));
+    let selections = BTreeMap::from([
+        (path("Cargo.toml"), RustSelection::All(unknown.clone())),
+        (path("tools/Cargo.toml"), RustSelection::All(unknown)),
+    ]);
+    let text = explain(&selections);
+    assert_eq!(text.matches("unknown path: scripts/gen.sh").count(), 1);
+    assert!(text.contains("\n    \"scripts/gen.sh\",\n"), "{text}");
+    assert!(
+        text.contains("[[inputs]]\n    glob = \"scripts/gen.sh\"\n"),
+        "{text}"
+    );
+
+    let settled = BTreeMap::from([
+        (path("Cargo.toml"), RustSelection::None),
+        (
+            path("tools/Cargo.toml"),
+            RustSelection::All(AllTrigger::Global(path("Cargo.lock"))),
+        ),
+    ]);
+    assert!(!explain(&settled).contains("unknown path"));
 }

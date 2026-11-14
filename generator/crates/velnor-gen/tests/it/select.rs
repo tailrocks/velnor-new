@@ -4,8 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, RepoFacts, RepoPath,
-    RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason, ToolPins,
+    AllTrigger, ChangeSet, DependencyKind, InputRule, MemberDependency, PackageName, PathGlob,
+    RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason,
+    ToolPins,
 };
 use velnor_rust::select;
 
@@ -79,6 +80,14 @@ fn most(entries: &[(&str, SelectionReason)]) -> RustSelection {
 
 fn unknown(file: &str) -> RustSelection {
     RustSelection::All(AllTrigger::UnknownPath(path(file)))
+}
+
+fn all(trigger: AllTrigger) -> RustSelection {
+    RustSelection::All(trigger)
+}
+
+fn glob(text: &str) -> PathGlob {
+    PathGlob::new(text).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn assert_selects(facts: &RepoFacts, rows: Vec<(&[&str], Vec<RustSelection>)>) {
@@ -206,35 +215,14 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
     ]);
     assert_selects(
         &two_roots(),
-        vec![
-            (
-                &["Cargo.lock"],
-                vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
-            ),
-            (
-                &["rust-toolchain.toml"],
-                vec![
-                    unknown("rust-toolchain.toml"),
-                    unknown("rust-toolchain.toml"),
-                ],
-            ),
-            (
-                &[".cargo/config.toml"],
-                vec![unknown(".cargo/config.toml"), unknown(".cargo/config.toml")],
-            ),
-            (
-                &["helper/README.md"],
-                vec![unknown("helper/README.md"), unknown("helper/README.md")],
-            ),
-        ],
+        vec![(
+            &["helper/README.md"],
+            vec![unknown("helper/README.md"), unknown("helper/README.md")],
+        )],
     );
     assert_selects(
         &facts,
         vec![
-            (
-                &["docs/guide.md"],
-                vec![unknown("docs/guide.md"), unknown("docs/guide.md")],
-            ),
             (
                 &["a/README.md"],
                 vec![unknown("a/README.md"), unknown("a/README.md")],
@@ -296,11 +284,18 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
     rows.extend([
         (
             &["Cargo.lock"][..],
-            vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
+            vec![
+                all(AllTrigger::Global(path("Cargo.lock"))),
+                all(AllTrigger::Global(path("Cargo.lock"))),
+            ],
         ),
+        (&["README.md"], vec![none.clone(), none.clone()]),
         (
-            &["README.md"],
-            vec![unknown("README.md"), unknown("README.md")],
+            &["Cargo.toml"],
+            vec![
+                all(AllTrigger::WorkspaceManifest),
+                all(AllTrigger::WorkspaceManifest),
+            ],
         ),
         (
             &["inner/i1/src/lib.rs"],
@@ -315,4 +310,254 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
         ),
     ]);
     assert_selects(&facts, rows);
+}
+
+type Row = (Vec<&'static str>, Vec<RustSelection>);
+
+fn everywhere(files: &[&'static str], selection: impl Fn(&str) -> RustSelection) -> Vec<Row> {
+    files
+        .iter()
+        .map(|file| (vec![*file], vec![selection(file), selection(file)]))
+        .collect()
+}
+
+fn assert_rows(facts: &RepoFacts, rows: Vec<Row>) {
+    for (files, expected) in rows {
+        assert_selects(facts, vec![(files.as_slice(), expected)]);
+    }
+}
+
+#[test]
+fn a_path_outside_every_package_selects_by_its_class_with_an_empty_config() {
+    let facts = two_roots();
+    let mut rows = Vec::new();
+    for (file, trigger) in [
+        (
+            "rust-toolchain.toml",
+            AllTrigger::ToolchainFile(path("rust-toolchain.toml")),
+        ),
+        (
+            "rust-toolchain",
+            AllTrigger::ToolchainFile(path("rust-toolchain")),
+        ),
+        (
+            "helper/rust-toolchain.toml",
+            AllTrigger::ToolchainFile(path("helper/rust-toolchain.toml")),
+        ),
+        (
+            ".cargo/config.toml",
+            AllTrigger::CargoConfig(path(".cargo/config.toml")),
+        ),
+        (
+            ".cargo/config",
+            AllTrigger::CargoConfig(path(".cargo/config")),
+        ),
+        (
+            "helper/.cargo/config.toml",
+            AllTrigger::CargoConfig(path("helper/.cargo/config.toml")),
+        ),
+        ("Cargo.toml", AllTrigger::WorkspaceManifest),
+        ("helper/Cargo.toml", AllTrigger::WorkspaceManifest),
+        ("mise.toml", AllTrigger::Global(path("mise.toml"))),
+        ("mise.lock", AllTrigger::Global(path("mise.lock"))),
+        ("Cargo.lock", AllTrigger::Global(path("Cargo.lock"))),
+        (
+            ".velnor/rust-ci.toml",
+            AllTrigger::Global(path(".velnor/rust-ci.toml")),
+        ),
+        (
+            ".github/workflows/rust-ci.yml",
+            AllTrigger::GeneratedWorkflow,
+        ),
+    ] {
+        rows.push((vec![file], vec![all(trigger.clone()), all(trigger)]));
+    }
+    rows.extend(everywhere(
+        &[
+            "docs/guide.md",
+            "docs/img/overview.png",
+            "LICENSE",
+            "LICENSE-MIT",
+            "LICENSES/MIT.txt",
+            "NOTICE",
+            "CODEOWNERS",
+            ".github/ISSUE_TEMPLATE/bug.yml",
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            ".github/PULL_REQUEST_TEMPLATE/release.md",
+            "README.md",
+            "CHANGELOG.md",
+        ],
+        |_| RustSelection::None,
+    ));
+    rows.extend(everywhere(
+        &[
+            "helper/README.md",
+            "helper/docs/guide.md",
+            "data/docs/guide.md",
+            "README.txt",
+            "NOTICE.txt",
+            "licenses/MIT.txt",
+            ".github/CODEOWNERS",
+            ".github/workflows/ci.yml",
+            ".github/dependabot.yml",
+            "scripts/build.sh",
+            "build.rs",
+            "mise/tasks.toml",
+        ],
+        unknown,
+    ));
+    assert_rows(&facts, rows);
+}
+
+#[test]
+fn a_docs_looking_file_that_a_package_reads_still_selects_that_package() {
+    let none = RustSelection::None;
+    assert_rows(
+        &two_roots(),
+        vec![
+            (
+                vec!["app/README.md"],
+                vec![some(&[("app", changed("app/README.md"))]), none.clone()],
+            ),
+            (
+                vec!["app/docs/guide.md"],
+                vec![some(&[("app", changed("app/docs/guide.md"))]), none.clone()],
+            ),
+            (
+                vec!["helper/cli/LICENSE"],
+                vec![
+                    none.clone(),
+                    some(&[("cli", changed("helper/cli/LICENSE"))]),
+                ],
+            ),
+        ],
+    );
+
+    let mut mapped = two_roots();
+    mapped.config.inputs = vec![
+        InputRule {
+            glob: glob("docs/api/*"),
+            packages: vec![name("app")],
+        },
+        InputRule {
+            glob: glob("LICENSE"),
+            packages: vec![name("shared")],
+        },
+    ];
+    assert_rows(
+        &mapped,
+        vec![
+            (
+                vec!["docs/api/openapi.yml"],
+                vec![
+                    some(&[("app", SelectionReason::Input(path("docs/api/openapi.yml")))]),
+                    none.clone(),
+                ],
+            ),
+            (
+                vec!["LICENSE"],
+                vec![
+                    some(&[("tool", depends_on("shared"))]),
+                    some(&[("shared", SelectionReason::Input(path("LICENSE")))]),
+                ],
+            ),
+            (vec!["docs/guide.md"], vec![none.clone(), none.clone()]),
+        ],
+    );
+
+    let nested = facts(vec![
+        ("Cargo.toml", vec![member("app", "app", &[])]),
+        (
+            "docs/Cargo.toml",
+            vec![
+                member("site", "docs/site", &[]),
+                member("book", "docs/book", &[]),
+                member("api", "docs/api", &[]),
+            ],
+        ),
+    ]);
+    assert_rows(
+        &nested,
+        vec![
+            (
+                vec!["docs/guide.md"],
+                vec![unknown("docs/guide.md"), unknown("docs/guide.md")],
+            ),
+            (
+                vec!["docs/site/src/lib.rs"],
+                vec![
+                    none.clone(),
+                    some(&[("site", changed("docs/site/src/lib.rs"))]),
+                ],
+            ),
+        ],
+    );
+
+    let vendored = facts(vec![(
+        "Cargo.toml",
+        vec![member("app", "app", &[("patched", "docs/vendor/patched")])],
+    )]);
+    assert_rows(
+        &vendored,
+        vec![(
+            vec!["docs/vendor/patched/README.md"],
+            vec![unknown("docs/vendor/patched/README.md")],
+        )],
+    );
+}
+
+#[test]
+fn user_rules_win_and_default_ignores_can_be_turned_off() {
+    let none = RustSelection::None;
+    let mut ruled = two_roots();
+    ruled.config.non_inputs = vec![
+        glob("data/**"),
+        glob("scripts/*/notes.txt"),
+        glob(".cargo/config.toml"),
+    ];
+    assert_rows(
+        &ruled,
+        vec![
+            (vec!["data/x/y.bin"], vec![none.clone(), none.clone()]),
+            (
+                vec!["scripts/a/notes.txt"],
+                vec![none.clone(), none.clone()],
+            ),
+            (vec![".cargo/config.toml"], vec![none.clone(), none.clone()]),
+            (
+                vec!["scripts/a/run.sh"],
+                vec![unknown("scripts/a/run.sh"), unknown("scripts/a/run.sh")],
+            ),
+            (
+                vec!["scripts/a/b/notes.txt"],
+                vec![
+                    unknown("scripts/a/b/notes.txt"),
+                    unknown("scripts/a/b/notes.txt"),
+                ],
+            ),
+        ],
+    );
+
+    let mut off = two_roots();
+    off.config.default_ignores = false;
+    assert_rows(
+        &off,
+        vec![
+            (
+                vec!["README.md"],
+                vec![unknown("README.md"), unknown("README.md")],
+            ),
+            (
+                vec!["docs/guide.md"],
+                vec![unknown("docs/guide.md"), unknown("docs/guide.md")],
+            ),
+            (
+                vec!["rust-toolchain.toml"],
+                vec![
+                    all(AllTrigger::ToolchainFile(path("rust-toolchain.toml"))),
+                    all(AllTrigger::ToolchainFile(path("rust-toolchain.toml"))),
+                ],
+            ),
+        ],
+    );
 }

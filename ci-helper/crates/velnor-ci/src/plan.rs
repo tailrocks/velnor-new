@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection};
-use velnor_rust::root_slug;
+use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
 
@@ -41,7 +41,11 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
 #[must_use]
 pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
     let mut lines = Vec::new();
+    let mut unknown = BTreeSet::new();
     for (root, selection) in selections {
+        if let RustSelection::All(AllTrigger::UnknownPath(path)) = selection {
+            unknown.insert(path);
+        }
         let (header, packages) = match selection {
             RustSelection::None => ("none".to_owned(), None),
             RustSelection::Some(packages) => ("some".to_owned(), Some(packages)),
@@ -54,6 +58,11 @@ pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
         for (package, reason) in packages.into_iter().flatten() {
             lines.push(format!("  {package} {reason}\n"));
         }
+    }
+    for path in unknown {
+        lines.push(format!(
+            "unknown path: {path}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    \"{path}\",\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = \"{path}\"\n    packages = [\"<package>\"]\n"
+        ));
     }
     lines.concat()
 }

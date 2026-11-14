@@ -596,9 +596,8 @@ fn check_tag_exits_0_for_the_tag_of_its_own_version_and_1_for_any_other() {
     }
 }
 
-#[test]
-fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_request() {
-    let repo = Repo::new("plan");
+fn plan_repo(name: &str) -> Repo {
+    let repo = Repo::new(name);
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     repo.write(
         "Cargo.toml",
@@ -618,6 +617,12 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     repo.write("tools/Cargo.lock", "version = 4\n");
     repo.write("tools/src/main.rs", "fn main() {}\n");
+    repo
+}
+
+#[test]
+fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_request() {
+    let repo = plan_repo("plan");
     let outputs = repo.root().join("github-output");
     fs::write(&outputs, "earlier=kept\n").unwrap_or_else(|e| unreachable!("{e}"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -636,4 +641,40 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
         "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\n"
     );
+}
+
+fn explain(repo: &Repo, changed: &str) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .args(["plan", "--explain", "--changed", changed])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[test]
+fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selects_everything() {
+    let repo = plan_repo("classes");
+    repo.write(".velnor/rust-ci.toml", "");
+    repo.write("README.md", "# readme\n");
+    assert_eq!(
+        explain(&repo, "README.md"),
+        "Cargo.toml: none\ntools/Cargo.toml: none\n"
+    );
+    assert_eq!(
+        explain(&repo, "rust-toolchain.toml"),
+        "Cargo.toml: all:toolchain-file:rust-toolchain.toml\ntools/Cargo.toml: all:toolchain-file:rust-toolchain.toml\n"
+    );
+    let unknown = explain(&repo, "scripts/gen.sh");
+    assert!(
+        unknown.starts_with(
+            "Cargo.toml: all:unknown-path:scripts/gen.sh\ntools/Cargo.toml: all:unknown-path:scripts/gen.sh\n"
+        ),
+        "{unknown}"
+    );
+    assert_eq!(unknown.matches("[[inputs]]").count(), 1, "{unknown}");
+    assert!(unknown.contains("non_inputs"), "{unknown}");
+    assert!(unknown.contains("\"scripts/gen.sh\","), "{unknown}");
+    assert!(unknown.contains("[[inputs]]"), "{unknown}");
 }

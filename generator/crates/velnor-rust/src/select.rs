@@ -3,14 +3,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::classify::{Class, classify};
 use velnor_model::{
-    AllTrigger, ChangeSet, PackageName, RepoFacts, RepoPath, RustRoot, RustSelection,
+    AllTrigger, ChangeSet, PackageName, RepoFacts, RepoPath, RustCiConfig, RustRoot, RustSelection,
     SelectionReason,
 };
 
 #[must_use]
 pub fn select(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, RustSelection> {
-    let graph = Graph::new(&facts.rust_roots);
+    let graph = Graph::new(&facts.rust_roots, &facts.config);
     let mut walk = Walk {
         triggers: vec![None; facts.rust_roots.len()],
         ..Walk::default()
@@ -88,6 +89,7 @@ impl Node<'_> {
 
 struct Graph<'a> {
     roots: &'a [RustRoot],
+    config: &'a RustCiConfig,
     nodes: BTreeMap<&'a RepoPath, Node<'a>>,
     dependents: BTreeMap<&'a RepoPath, Vec<&'a RepoPath>>,
     unowned: Vec<&'a RepoPath>,
@@ -102,9 +104,10 @@ struct Walk<'a> {
 }
 
 impl<'a> Graph<'a> {
-    fn new(roots: &'a [RustRoot]) -> Self {
+    fn new(roots: &'a [RustRoot], config: &'a RustCiConfig) -> Self {
         let mut graph = Self {
             roots,
+            config,
             nodes: BTreeMap::new(),
             dependents: BTreeMap::new(),
             unowned: Vec::new(),
@@ -162,9 +165,34 @@ impl<'a> Graph<'a> {
             .map(|(manifest, _)| *manifest);
         if let Some(manifest) = package {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
-        } else {
-            walk.trigger(path);
+            return;
         }
+        let is_root_manifest = self.roots.iter().any(|root| root.manifest == *path);
+        match classify(
+            self.config,
+            path,
+            is_root_manifest,
+            self.shelters(path, root),
+        ) {
+            Class::Nothing => {}
+            Class::Packages(names) => {
+                for (manifest, node) in &self.nodes {
+                    if node.root.is_some() && names.contains(node.name) {
+                        walk.seed(manifest, SelectionReason::Input(path.clone()));
+                    }
+                }
+            }
+            Class::Global(trigger) => walk.trigger(&trigger),
+            Class::Unknown => walk.trigger(&AllTrigger::UnknownPath(path.clone())),
+        }
+    }
+
+    fn shelters(&self, path: &RepoPath, root: Option<usize>) -> bool {
+        root.is_some_and(|root| self.roots[root].manifest.parent().is_some())
+            || self
+                .nodes
+                .values()
+                .any(|node| node.directory.is_some() && contains(node.directory.as_ref(), path))
     }
 }
 
@@ -180,9 +208,9 @@ impl<'a> Walk<'a> {
         }
     }
 
-    fn trigger(&mut self, path: &RepoPath) {
-        for trigger in &mut self.triggers {
-            trigger.get_or_insert_with(|| AllTrigger::UnknownPath(path.clone()));
+    fn trigger(&mut self, trigger: &AllTrigger) {
+        for slot in &mut self.triggers {
+            slot.get_or_insert_with(|| trigger.clone());
         }
     }
 }
