@@ -9,7 +9,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 #[test]
-fn the_job_installs_the_pinned_rust_and_cargo_nextest_and_needs_a_real_nextest_pin() -> TestResult {
+fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestResult {
     let mut pinned = view(&["Cargo.toml"], None)?;
     let other = RepoPath::new(".mise.toml")?;
     pinned.files.remove(&RepoPath::new("mise.toml")?);
@@ -17,9 +17,9 @@ fn the_job_installs_the_pinned_rust_and_cargo_nextest_and_needs_a_real_nextest_p
     pinned.tracked_paths.insert(other.clone());
     pinned.files.insert(
         other.clone(),
-        b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+        b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\nprotoc = \"31.1\"\n".to_vec(),
     );
-    assert!(workflow(&pinned)?.contains("install_args: 'core:rust cargo:cargo-nextest'\n"));
+    assert!(workflow(&pinned)?.contains("install_args: 'cargo:cargo-nextest core:rust protoc'\n"));
     let mut unpinned = pinned;
     unpinned.files.insert(
         other.clone(),

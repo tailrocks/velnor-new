@@ -93,7 +93,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest rust'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Format
@@ -123,7 +123,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest rust'
       - name: Add Rust components
         working-directory: lab
         run: rustup component add clippy rustfmt

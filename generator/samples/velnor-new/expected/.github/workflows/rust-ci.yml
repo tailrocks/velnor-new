@@ -24,7 +24,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest betterleaks bun cargo-binstall cargo-deny gitleaks hk jactionlint kingfisher mr-boxington opentofu rumdl rust shellcheck'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
@@ -98,7 +98,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest betterleaks bun cargo-binstall cargo-deny gitleaks hk jactionlint kingfisher mr-boxington opentofu rumdl rust shellcheck'
       - name: Add Rust components
         working-directory: ci-helper
         run: rustup component add clippy rustfmt
@@ -140,7 +140,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest betterleaks bun cargo-binstall cargo-deny gitleaks hk jactionlint kingfisher mr-boxington opentofu rumdl rust shellcheck'
       - name: Add Rust components
         working-directory: crates/velnor-runner
         run: rustup component add clippy rustfmt
@@ -210,7 +210,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest betterleaks bun cargo-binstall cargo-deny gitleaks hk jactionlint kingfisher mr-boxington opentofu rumdl rust shellcheck'
       - name: Add Rust components
         working-directory: generator
         run: rustup component add clippy rustfmt
@@ -264,7 +264,7 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+          install_args: 'aqua:nextest-rs/nextest/cargo-nextest betterleaks bun cargo-binstall cargo-deny gitleaks hk jactionlint kingfisher mr-boxington opentofu rumdl rust shellcheck'
       - name: Add Rust components
         working-directory: local
         run: rustup component add clippy rustfmt

@@ -12,7 +12,6 @@ use velnor_model::{
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
-use crate::mise::{nextest_tool, rust_tool};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -91,7 +90,7 @@ fn root_jobs(
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
-            let mut steps = setup(facts, root, true, nextest);
+            let mut steps = setup(facts, root, true);
             steps.extend(cargo(
                 lint.into_iter()
                     .chain(test)
@@ -106,7 +105,7 @@ fn root_jobs(
             }]
         }
         Shape::LintAndTest | Shape::BuildThenGroups => {
-            let mut lint_steps = setup(facts, root, true, false);
+            let mut lint_steps = setup(facts, root, true);
             lint_steps.extend(cargo(
                 lint.into_iter()
                     .chain([CargoCommand::Doc])
@@ -119,7 +118,7 @@ fn root_jobs(
                 ..job(facts, id(LINT_JOB))
             }];
             if !test.is_empty() {
-                let mut test_steps = setup(facts, root, false, nextest);
+                let mut test_steps = setup(facts, root, false);
                 test_steps.extend(cargo(test));
                 jobs.push(Job {
                     steps: test_steps,
@@ -169,14 +168,8 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, tests: bool) -> Vec<Step> {
-    let mut tools: Vec<String> = rust_tool(&facts.tools)
-        .map(str::to_owned)
-        .into_iter()
-        .collect();
-    if tests {
-        tools.extend(nextest_tool(&facts.tools).map(str::to_owned));
-    }
+fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
+    let tools: Vec<String> = facts.tools.tools.keys().cloned().collect();
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
     steps.extend(
         facts

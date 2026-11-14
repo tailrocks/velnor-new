@@ -225,8 +225,8 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         .lines()
         .filter_map(|line| line.trim().strip_prefix("install_args: "))
         .collect();
-    let both = "'rust aqua:nextest-rs/nextest/cargo-nextest'";
-    assert_eq!(installs, [both, "rust", both]);
+    let all = "'aqua:nextest-rs/nextest/cargo-nextest rust'";
+    assert_eq!(installs, [all, all, all]);
     let components: Vec<usize> = ["  rust-root:", "  rust-lint-lab:", "  rust-test-lab:"]
         .iter()
         .map(|job| {
