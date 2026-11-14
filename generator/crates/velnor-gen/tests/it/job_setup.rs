@@ -80,44 +80,59 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&string),
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
+    let mut per_target = string;
+    per_target.files.insert(
+        config.clone(),
+        b"[target.x86_64-unknown-linux-gnu]\nrustdocflags = [\"--cfg\", \"docsrs\"]\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&per_target),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
+    ));
     Ok(())
 }
 
 #[test]
-fn a_path_toolchain_gets_no_component_step_and_a_nested_toolchain_file_needs_no_mise_rust()
--> TestResult {
+fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> TestResult {
     let file = RepoPath::new("rust-toolchain.toml")?;
+    let mise = RepoPath::new("mise.toml")?;
+    let nextest_only = b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
     let mut path_toolchain = view(&["Cargo.toml"], None)?;
     path_toolchain.tracked_paths.insert(file.clone());
     path_toolchain
         .files
         .insert(file, b"[toolchain]\npath = \"/opt/rust\"\n".to_vec());
+    assert_eq!(
+        expected_files(&path_toolchain),
+        Err(GenerateError::Detect(DetectError::ToolchainConflict {
+            file: "path /opt/rust".to_owned(),
+            mise: "1.99.1".to_owned(),
+        }))
+    );
+    path_toolchain
+        .files
+        .insert(mise.clone(), nextest_only.to_vec());
     assert!(!workflow(&path_toolchain)?.contains("rustup component add"));
 
     let nested = RepoPath::new("lab/rust-toolchain.toml")?;
-    let mut pinned = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
-    pinned.tracked_paths.insert(nested.clone());
-    assert_eq!(
-        expected_files(&pinned),
-        Err(GenerateError::Detect(DetectError::NestedToolchain {
-            file: nested
-        }))
-    );
-    let mise = RepoPath::new("mise.toml")?;
-    pinned.files.insert(
-        mise,
-        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
-    );
-    let text = workflow(&pinned)?;
+    let mut two = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    two.files.insert(mise, nextest_only.to_vec());
+    let text = workflow(&two)?;
     assert!(
         text.contains(
             "        working-directory: lab\n        run: rustup component add rustfmt clippy\n"
         ),
         "{text}"
     );
+    two.tracked_paths.insert(nested.clone());
+    assert_eq!(
+        expected_files(&two),
+        Err(GenerateError::Detect(DetectError::NestedToolchain {
+            file: nested
+        }))
+    );
     Ok(())
 }
-
 #[test]
 fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
     assert_eq!(

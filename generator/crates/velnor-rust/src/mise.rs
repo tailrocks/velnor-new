@@ -82,7 +82,11 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
 }
 
 fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
-    let channel = facts.toolchain.as_ref()?.channel.clone()?;
+    let toolchain = facts.toolchain.as_ref()?;
+    let channel = toolchain
+        .channel
+        .clone()
+        .or_else(|| toolchain.path.as_ref().map(|path| format!("path {path}")))?;
     let pinned = facts
         .tools
         .tools

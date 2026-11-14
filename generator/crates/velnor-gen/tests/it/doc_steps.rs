@@ -58,7 +58,7 @@ enum Kind {
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 19] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 22] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -140,6 +140,30 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 19] = [
         false,
         RUN,
         RUN,
+    ),
+    (
+        "code only rustdoc compiles",
+        Kind::Doctested,
+        "#[cfg(doc)]\npub struct OnlyInDocs;\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "a cargo config that includes another",
+        Kind::Doctested,
+        "include = \"ci.toml\"\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "a cfg naming a feature called docs",
+        Kind::Doctested,
+        "#[cfg(feature = \"docs\")]\nfn f() {}\n",
+        false,
+        NO_FENCE,
+        NO_DOCS,
     ),
     (
         "indented code block",

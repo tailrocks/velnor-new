@@ -138,7 +138,15 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     let flags = table
         .get("build")
         .and_then(|build| build.get("rustdocflags"));
-    if flags.is_some_and(toml::Value::is_str) {
+    let per_target = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|targets| {
+            targets
+                .values()
+                .any(|target| target.get("rustdocflags").is_some())
+        });
+    if flags.is_some_and(toml::Value::is_str) || per_target {
         return Err(DetectError::invalid(file, Reason::RustdocflagsString));
     }
     Ok(())

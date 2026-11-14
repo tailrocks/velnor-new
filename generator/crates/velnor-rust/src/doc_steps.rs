@@ -115,7 +115,11 @@ impl Found {
         for line in text.lines().map(str::trim_start) {
             self.docs |= RUSTDOC_SETTINGS
                 .iter()
-                .any(|setting| line.contains(setting));
+                .any(|setting| line.contains(setting))
+                || (line.contains("cfg") && has_word(line, "doc"))
+                || line
+                    .strip_prefix("include")
+                    .is_some_and(|rest| rest.trim_start().starts_with('='));
             if let Some((rest, block)) = doc_comment(line) {
                 self.docs = true;
                 self.fenced |= block || code_block(rest);
@@ -152,6 +156,17 @@ fn doc_comment(line: &str) -> Option<(&str, bool)> {
     } else {
         line.strip_prefix("/*!").map(|rest| (rest, true))
     }
+}
+
+fn has_word(line: &str, word: &str) -> bool {
+    line.match_indices(word).any(|(at, _)| {
+        let identifier = |c: char| c.is_alphanumeric() || c == '_';
+        !line[..at].chars().next_back().is_some_and(identifier)
+            && !line[at + word.len()..]
+                .chars()
+                .next()
+                .is_some_and(identifier)
+    })
 }
 
 fn doc_attribute(line: &str) -> bool {

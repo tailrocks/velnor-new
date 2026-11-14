@@ -121,7 +121,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestRun { filter } => (
             "Test".into(),
             format!(
-                "cargo-nextest nextest run --workspace --locked --no-fail-fast -E '{}'",
+                "cargo-nextest nextest run --workspace --locked --no-fail-fast --no-tests=pass -E '{}'",
                 match filter {
                     FilterRef::All => "all()",
                 }

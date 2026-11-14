@@ -97,7 +97,7 @@ impl fmt::Display for Reason {
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
             ),
             Self::RustdocflagsString => f.write_str(
-                "build.rustdocflags must be an array of strings: the generated documentation step adds -D warnings with --config, and cargo merges only arrays",
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
             Self::InvalidPatch(key) => {
                 write!(
@@ -135,7 +135,7 @@ impl fmt::Display for DetectError {
             ),
             Self::NestedToolchain { file } => write!(
                 f,
-                "{file} names a toolchain for its Cargo root, but mise's rust pin sets RUSTUP_TOOLCHAIN for every job and would override it; pin one Rust version for the repository"
+                "{file} names a toolchain for one Cargo root; the generated jobs set up one toolchain for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }
