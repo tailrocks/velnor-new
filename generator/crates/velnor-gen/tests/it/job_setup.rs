@@ -88,6 +88,20 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&included),
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
+    for kept in [".mise/tasks/test", ".config/nextest.toml"] {
+        let mut fine = view(&["Cargo.toml"], None)?;
+        fine.tracked_paths.insert(RepoPath::new(kept)?);
+        assert!(expected_files(&fine).is_ok(), "{kept}");
+    }
+    let mut capped = string.clone();
+    capped.files.insert(
+        config.clone(),
+        b"[build]\nrustflags = [\"--cap-lints\", \"allow\"]\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&capped),
+        Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == config
+    ));
     let mut per_target = string;
     per_target.files.insert(
         config.clone(),
@@ -109,6 +123,8 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         "RUSTUP_TOOLCHAIN",
         "_.file",
         "_.path",
+        "RUSTDOC",
+        "ANY_NAME",
     ] {
         let mut mise_env = view(&["Cargo.toml"], None)?;
         mise_env.files.insert(
@@ -138,6 +154,8 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
     for other in [
         ".mise/config.toml",
         ".config/mise/conf.d/ci.toml",
+        ".config/mise/mise.toml",
+        "mise.ci.toml",
         ".tool-versions",
     ] {
         let file = RepoPath::new(other)?;

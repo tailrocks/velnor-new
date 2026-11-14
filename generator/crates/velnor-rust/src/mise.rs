@@ -15,7 +15,6 @@ pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
 ];
 pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const OVERRIDING_ENV: [&str; 4] = ["RUSTDOCFLAGS", "RUSTFLAGS", "CARGO_", "RUSTUP_"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
@@ -34,17 +33,13 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
-        let env = parsed.get("env").and_then(Value::as_table);
-        let names = env.into_iter().flat_map(|env| env.keys().cloned());
-        let include = parsed.contains_key("include").then(|| "include".to_owned());
-        if let Some(name) = names.chain(include).find(|name| {
-            name == "_"
-                || name == "include"
-                || OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix))
-        }) {
+        if let Some(name) = ["env", "include"]
+            .into_iter()
+            .find(|key| parsed.contains_key(*key))
+        {
             return Err(DetectError::invalid(
                 config,
-                Reason::MiseOverridesFlags(name),
+                Reason::MiseOverridesFlags(name.to_owned()),
             ));
         }
     }

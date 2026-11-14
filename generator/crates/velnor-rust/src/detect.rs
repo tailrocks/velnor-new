@@ -138,22 +138,22 @@ fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), Det
     Ok(())
 }
 
-const OTHER_MISE_CONFIGS: [&str; 7] = [
-    "mise.local.toml",
-    ".mise.local.toml",
-    ".config/mise.toml",
-    ".config/mise/config.toml",
-    ".mise/config.toml",
-    "mise/config.toml",
-    ".tool-versions",
-];
-const MISE_CONF_FOLDERS: [&str; 3] = [".config/mise/conf.d/", ".mise/conf.d/", "mise/conf.d/"];
+const MISE_FOLDERS: [&str; 3] = [".config/", ".mise/", "mise/"];
 
 fn other_mise_config(path: &RepoPath) -> bool {
-    OTHER_MISE_CONFIGS.contains(&path.as_str())
-        || MISE_CONF_FOLDERS
-            .iter()
-            .any(|folder| path.as_str().starts_with(folder))
+    let text = path.as_str();
+    let toml = std::path::Path::new(text)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"));
+    let named = |name: &str| name.starts_with("mise") || name.starts_with(".mise");
+    let at_root = !text.contains('/') && named(text) && toml;
+    let in_folder = MISE_FOLDERS.iter().any(|folder| {
+        text.strip_prefix(folder)
+            .is_some_and(|rest| toml && (*folder != ".config/" || named(rest)))
+    });
+    text == ".tool-versions"
+        || (at_root && !MISE_CONFIGS.iter().any(|config| config == path))
+        || in_folder
 }
 
 fn unknown_package<'p>(

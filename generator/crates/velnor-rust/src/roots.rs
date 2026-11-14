@@ -158,6 +158,19 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     if table.contains_key("include") {
         return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
     }
+    let build = table.get("build").into_iter();
+    let targets = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|targets| targets.values());
+    let caps = build
+        .chain(targets)
+        .filter_map(|section| section.get("rustflags"))
+        .any(|flags| flags.to_string().contains("cap-lints"));
+    if caps {
+        return Err(DetectError::invalid(file, Reason::CapLints));
+    }
     Ok(())
 }
 

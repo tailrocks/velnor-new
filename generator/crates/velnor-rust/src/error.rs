@@ -52,6 +52,7 @@ pub enum Reason {
     CargoConfigInclude,
     MiseOverridesFlags(String),
     OtherMiseConfig,
+    CapLints,
 }
 
 impl DetectError {
@@ -104,7 +105,10 @@ impl fmt::Display for Reason {
             ),
             Self::MiseOverridesFlags(name) => write!(
                 f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, so it may not set cargo or rustup variables, load or include other files, or change PATH; set cargo and rustup settings in the cargo configuration or the toolchain file"
+                "[{name}] is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::CapLints => f.write_str(
+                "rustflags with --cap-lints would let the lint step pass with warnings; remove it",
             ),
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
