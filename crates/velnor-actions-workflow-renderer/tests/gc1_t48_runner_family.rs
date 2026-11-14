@@ -3,7 +3,8 @@
 
 use super::*;
 
-fn family_files() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
+pub(crate) fn family_files()
+-> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
     let mut request = request()?;
     request.runner_image_family = Some(
         velnor_actions_contract::config::MacRunnerQualificationConfig {
@@ -396,4 +397,17 @@ family_run runner-image-qualification.yml "$deadline" >/dev/null
         "aggregate deadline should expire before qualification"
     );
     Ok(())
+}
+
+#[test]
+fn runner_image_workflows_guard_every_download_by_exact_artifact_id() -> Result<(), Box<dyn Error>>
+{
+    use super::super::gc1_t42::source_preview_artifact_guard_public as guard;
+    let texts = family_files()?
+        .into_iter()
+        .map(|file| (file.path, file.bytes))
+        .collect();
+    let guards = guard::guarded_downloads_in(texts)?;
+    assert!(guards.len() >= 4, "found {} guards", guards.len());
+    guard::assert_guards_reject_bad_ids(guards)
 }

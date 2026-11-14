@@ -382,7 +382,7 @@ mod source_preview_graph;
 mod source_preview_env_yaml_public;
 
 #[path = "source_preview_artifact_guard_public.rs"]
-mod source_preview_artifact_guard_public;
+pub(crate) mod source_preview_artifact_guard_public;
 
 #[path = "stable_source_graph.rs"]
 mod stable_source_graph;

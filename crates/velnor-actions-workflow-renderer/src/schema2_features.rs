@@ -184,7 +184,8 @@ const ARTIFACT_ID_GUARD_RUN: &str = "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\
 
 fn is_guard(step: &Yaml) -> bool {
     matches!(step, Yaml::Map(fields) if fields.iter().any(|(key, value)| key == "name"
-        && matches!(value, Yaml::Str(name) if name.starts_with("Validate ") && name.contains("artifact"))))
+        && matches!(value, Yaml::Str(name) if name == ARTIFACT_ID_GUARD_NAME
+            || name == "Validate producer artifact identity")))
 }
 
 fn artifact_guard(artifact_id: &str, condition: Option<&Yaml>) -> Yaml {
@@ -206,7 +207,7 @@ fn artifact_guard(artifact_id: &str, condition: Option<&Yaml>) -> Yaml {
     Yaml::Map(fields)
 }
 
-pub(super) fn guard_artifact_downloads(steps: Vec<Yaml>) -> Vec<Yaml> {
+pub(in crate::schema2) fn guard_artifact_downloads(steps: Vec<Yaml>) -> Vec<Yaml> {
     let mut guarded: Vec<Yaml> = Vec::with_capacity(steps.len());
     for step in steps {
         if let Yaml::Map(fields) = &step
