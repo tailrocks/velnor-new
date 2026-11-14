@@ -7,6 +7,7 @@ pub mod io;
 pub mod protocol;
 pub mod rest;
 pub mod scenario;
+pub mod side;
 pub mod standin;
 pub mod store;
 pub mod token;

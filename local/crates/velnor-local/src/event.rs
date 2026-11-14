@@ -4,6 +4,7 @@
 use serde_json::{Value, json};
 
 pub const SENDER: &str = "velnor-local";
+pub const FORK_OWNER: &str = "velnor-local-fork";
 pub const NO_COMMIT: &str = "0000000000000000000000000000000000000000";
 
 #[must_use]
@@ -38,6 +39,7 @@ pub struct PullRequest<'a> {
     pub before: Option<&'a str>,
     pub merged: bool,
     pub merge_commit: &'a str,
+    pub fork: bool,
     pub closed_at: Option<&'a str>,
     pub changed_files: usize,
 }
@@ -117,6 +119,14 @@ impl Repository<'_> {
     pub fn pull_request(&self, pull: &PullRequest<'_>) -> Value {
         let side =
             |(name, sha): (&str, &str)| json!({"ref": name, "sha": sha, "repo": self.json()});
+        let mut head = side(pull.head);
+        if pull.fork {
+            let name = self.full_name.split('/').nth(1).unwrap_or_default();
+            head["repo"]["full_name"] = json!(format!("{FORK_OWNER}/{name}"));
+            head["repo"]["owner"]["login"] = json!(FORK_OWNER);
+            head["repo"]["fork"] = json!(true);
+            head["label"] = json!(format!("{FORK_OWNER}:{}", pull.head.0));
+        }
         let mut payload = self.common();
         payload["action"] = json!(pull.action);
         payload["number"] = json!(pull.number);
@@ -137,7 +147,7 @@ impl Repository<'_> {
             "changed_files": pull.changed_files,
             "user": {"login": SENDER},
             "base": side(pull.base),
-            "head": side(pull.head),
+            "head": head,
         });
         payload
     }

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod restore;
+
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -10,16 +12,21 @@ use std::sync::Arc;
 use clap::Parser;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
+use hyper::header::AUTHORIZATION;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use serde_json::json;
 use tokio::fs;
 use tokio::net::TcpListener;
 
+pub use restore::RestoreOnly;
+
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
-use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, UpArgs};
+use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, ControlArgs, UpArgs};
+use crate::protocol::control_only;
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -61,10 +68,19 @@ async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {
         upstream: args.upstream,
         limit_bytes: args.limit_bytes,
     };
+    let restoring = args
+        .restore_only
+        .then(|| Arc::new(RestoreOnly::new(config.token_key.clone())));
     let server = CacheServer::open(config).await?;
-    serve("cache-server", args.listen, move |request| {
-        let server = Arc::clone(&server);
-        async move { server.handle(request).await }
+    serve("cache-server", args.listen, &args.control, move |request| {
+        let (server, restoring) = (Arc::clone(&server), restoring.clone());
+        async move {
+            let handle = |request| async move { server.handle(request).await };
+            match restoring {
+                Some(restoring) => restoring.handle(request, handle).await,
+                None => handle(request).await,
+            }
+        }
     })
     .await
 }
@@ -80,14 +96,69 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
             Arc::new(api_stub::HttpStandIn::new(&address)) as Arc<dyn api_stub::StandIn>
         }),
     }));
-    serve("api-stub", args.listen, move |request| {
+    serve("api-stub", args.listen, &args.control, move |request| {
         let stub = Arc::clone(&stub);
         async move { stub.handle(request).await }
     })
     .await
 }
 
-async fn serve<H, F>(name: &str, listen: SocketAddr, handler: H) -> std::io::Result<()>
+pub async fn guarded<H, F>(token: &str, request: Request<Body>, handler: H) -> Response<Body>
+where
+    H: FnOnce(Request<Body>) -> F,
+    F: Future<Output = Response<Body>>,
+{
+    let expected = format!("Bearer {token}");
+    let presented = request.headers().get(AUTHORIZATION);
+    if presented.is_some_and(|value| value.as_bytes() == expected.as_bytes()) {
+        return handler(request).await;
+    }
+    let refusal = json!({"message": "this port needs the control token as a bearer token"});
+    super::json_response(401, &refusal)
+}
+
+pub async fn open<H, F>(request: Request<Body>, handler: H) -> Response<Body>
+where
+    H: FnOnce(Request<Body>) -> F,
+    F: Future<Output = Response<Body>>,
+{
+    if control_only(request.uri().path()) {
+        let refusal = json!({"message": "this path is served only on the control port"});
+        return super::json_response(403, &refusal);
+    }
+    handler(request).await
+}
+
+async fn serve<H, F>(
+    name: &str,
+    listen: SocketAddr,
+    control: &ControlArgs,
+    handler: H,
+) -> std::io::Result<()>
+where
+    H: Fn(Request<Body>) -> F + Clone + Send + Sync + 'static,
+    F: Future<Output = Response<Body>> + Send + 'static,
+{
+    if let (Some(address), Some(path)) = (control.control_listen, &control.control_token) {
+        let token: Arc<str> = fs::read_to_string(path).await?.trim().into();
+        let inner = handler.clone();
+        let guarded_handler = move |request| {
+            let (token, inner) = (Arc::clone(&token), inner.clone());
+            async move { guarded(&token, request, inner).await }
+        };
+        let control_name = format!("{name} control");
+        tokio::spawn(async move {
+            if let Err(error) = listen_on(&control_name, address, guarded_handler).await {
+                eprintln!("velnor-local {control_name}: {error}");
+            }
+        });
+        let open_handler = move |request| open(request, handler.clone());
+        return listen_on(name, listen, open_handler).await;
+    }
+    listen_on(name, listen, handler).await
+}
+
+async fn listen_on<H, F>(name: &str, listen: SocketAddr, handler: H) -> std::io::Result<()>
 where
     H: Fn(Request<Body>) -> F + Clone + Send + 'static,
     F: Future<Output = Response<Body>> + Send + 'static,

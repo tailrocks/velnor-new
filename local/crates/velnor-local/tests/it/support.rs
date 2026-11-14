@@ -256,6 +256,12 @@ fn fixture() -> Value {
     serde_json::from_str(&text).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+pub(crate) fn token_key() -> Vec<u8> {
+    STANDARD
+        .decode(fixture()["public_key"].as_str().unwrap_or_default())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
 pub(crate) fn token(git_ref: &str) -> String {
     let fixture = fixture();
     let header = fixture["header"].as_str().unwrap_or_default();
