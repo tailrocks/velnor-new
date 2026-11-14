@@ -39,6 +39,7 @@ impl RustSelection {
 pub enum SelectionReason {
     Changed(RepoPath),
     DependsOn(PackageName),
+    DependsOnUnread(PackageName),
     Input(RepoPath),
     Lock(String),
 }
@@ -61,6 +62,7 @@ impl fmt::Display for SelectionReason {
         match self {
             Self::Changed(path) => write!(f, "changed:{path}"),
             Self::DependsOn(package) => write!(f, "depends-on:{package}"),
+            Self::DependsOnUnread(package) => write!(f, "depends-on-unread:{package}"),
             Self::Input(path) => write!(f, "input:{path}"),
             Self::Lock(dependency) => write!(f, "lock:{dependency}"),
         }

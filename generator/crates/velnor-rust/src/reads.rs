@@ -181,17 +181,21 @@ impl<'f> Owners<'f> {
                 }],
             })
             .collect();
+        let owned: BTreeSet<&RepoPath> = members.iter().map(|(m, _)| &m.manifest).collect();
         let mut unowned: BTreeMap<&RepoPath, Unit<'f>> = BTreeMap::new();
         for (member, _) in &members {
-            for dependency in &member.dependencies {
-                if members
-                    .iter()
-                    .any(|(m, _)| m.manifest == dependency.manifest)
-                {
+            let mut pending: Vec<&RepoPath> =
+                member.dependencies.iter().map(|d| &d.manifest).collect();
+            let mut reached = BTreeSet::new();
+            while let Some(manifest) = pending.pop() {
+                if owned.contains(manifest) || !reached.insert(manifest) {
                     continue;
                 }
-                let unit = unowned.entry(&dependency.manifest).or_insert_with(|| Unit {
-                    directory: dependency.manifest.parent(),
+                if let Some(package) = facts.unowned.get(manifest) {
+                    pending.extend(package.dependencies.iter().map(|d| &d.manifest));
+                }
+                let unit = unowned.entry(manifest).or_insert_with(|| Unit {
+                    directory: manifest.parent(),
                     sources: Vec::new(),
                     unowned: true,
                     owners: Vec::new(),
