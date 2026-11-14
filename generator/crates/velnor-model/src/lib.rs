@@ -15,8 +15,8 @@ pub use plan::{
     PermissionScope, Permissions, Platform, Step, StepKind, Triggers, WorkflowPlan,
 };
 pub use repo::{
-    DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts, RepoView,
-    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, ToolPin,
-    ToolPins, Toolchain,
+    CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
+    RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind,
+    ToolPin, ToolPins, Toolchain,
 };
 pub use selection::{AllTrigger, ChangeSet, RustSelection, SelectionReason, WORKFLOW_PATH};

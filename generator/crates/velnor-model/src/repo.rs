@@ -45,6 +45,8 @@ pub struct Target {
     pub name: TargetName,
     pub kinds: Vec<TargetKind>,
     pub tests: bool,
+    pub source: Option<RepoPath>,
+    pub requires_features: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +67,10 @@ pub struct RepoFacts {
     pub tools: ToolPins,
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
+    pub compile_inputs: CompileInputs,
 }
+
+pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {

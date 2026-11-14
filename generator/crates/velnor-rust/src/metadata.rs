@@ -5,6 +5,8 @@ use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
+
+use crate::reads::{Located, locate};
 use velnor_model::{
     DependencyKind, PackageDependency, PackageName, RepoPath, RustMetadata, RustPackage, Target,
     TargetKind, TargetName,
@@ -60,6 +62,9 @@ struct RawTarget {
     kind: Vec<String>,
     #[serde(default)]
     test: bool,
+    src_path: Option<PathBuf>,
+    #[serde(rename = "required-features", default)]
+    required_features: Vec<String>,
 }
 
 pub fn reduce_metadata(
@@ -83,7 +88,7 @@ pub fn reduce_metadata(
                 targets: package
                     .targets
                     .into_iter()
-                    .map(target_of)
+                    .map(|target| target_of(repository, target))
                     .collect::<Result<_, _>>()?,
             })
         })
@@ -111,7 +116,7 @@ fn dependency_of(
     })
 }
 
-fn target_of(target: RawTarget) -> Result<Target, MetadataError> {
+fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataError> {
     let kinds = target
         .kind
         .iter()
@@ -130,6 +135,13 @@ fn target_of(target: RawTarget) -> Result<Target, MetadataError> {
         name: TargetName::new(target.name).map_err(invalid)?,
         kinds,
         tests: target.test,
+        requires_features: !target.required_features.is_empty(),
+        source: target
+            .src_path
+            .and_then(|path| match locate(repository, &path, "") {
+                Located::Inside(source) => Some(source),
+                Located::Repository | Located::Outside => None,
+            }),
     })
 }
 

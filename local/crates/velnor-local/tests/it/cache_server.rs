@@ -354,7 +354,12 @@ async fn every_restore_is_journaled_with_its_job_key_entry_and_scope() {
     let harness = Harness::new("journal", LIMIT).await;
     harness.save(MAIN, "cargo-main", b"archive").await;
     harness.register(1).await;
-    assert_eq!(harness.restore(PULL_1, "cargo-main").await["ok"], true);
+    let fallback = json!({"key": "cargo-mai", "restore_keys": ["cargo-"], "version": "v"});
+    let restored = harness
+        .twirp(PULL_1, "GetCacheEntryDownloadURL", &fallback)
+        .await
+        .json();
+    assert_eq!(restored["ok"], true);
     assert_eq!(harness.restore(MAIN, "cargo-other").await["ok"], false);
     let journal = std::fs::read_to_string(harness.dir().join(RESTORES))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -365,7 +370,7 @@ async fn every_restore_is_journaled_with_its_job_key_entry_and_scope() {
     assert_eq!(
         lines,
         [
-            json!({"writer": "Actions.Results:1:cache", "key": "cargo-main", "matched_key": "cargo-main", "scope": MAIN}),
+            json!({"writer": "Actions.Results:1:cache", "key": "cargo-mai", "matched_key": "cargo-main", "scope": MAIN}),
             json!({"writer": "Actions.Results:1:cache", "key": "cargo-other", "matched_key": null, "scope": null}),
         ]
     );

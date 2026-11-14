@@ -19,7 +19,9 @@ use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
-use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
+use crate::scenario::{
+    Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
+};
 use crate::standin;
 
 mod outcome;
@@ -41,42 +43,61 @@ struct Driver<'a> {
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
-    let args = Arc::new(args);
-    let several = args.scenario.len() > 1;
-    let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
-    let mut running = JoinSet::new();
-    for name in args.scenario.clone() {
-        let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
-        running.spawn(async move {
-            let _slot = slots.acquire().await.map_err(io::Error::other);
-            let stem = Path::new(&name)
-                .file_stem()
-                .map_or_else(|| name.clone(), |stem| stem.to_string_lossy().into_owned());
-            let dir = if several {
-                args.environment.dir.join(&stem)
-            } else {
-                args.environment.dir.clone()
-            };
-            let result = run_one(&args, &name, &stem, &dir).await;
-            result.map_err(|error| format!("{stem}: {error}"))
-        });
+    let mut planned = plan(&args.scenario, &args.environment.dir).map_err(io::Error::other)?;
+    for (_, _, dir) in &mut planned {
+        fs::create_dir_all(&*dir).await?;
+        *dir = fs::canonicalize(&*dir).await?;
     }
-    let mut failed = Vec::new();
-    while let Some(joined) = running.join_next().await {
-        if let Err(error) = joined
-            .map_err(|error| error.to_string())
-            .and_then(|result| result)
-        {
-            failed.push(error);
+    distinct(&planned).map_err(io::Error::other)?;
+    let args = Arc::new(args);
+    let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
+    let closer = Arc::clone(&slots);
+    let interrupt = tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            closer.close();
+        }
+    });
+    let mut running = JoinSet::new();
+    let mut spawned = BTreeMap::new();
+    for (name, stem, dir) in planned {
+        let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
+        let task = (stem.clone(), dir.clone());
+        let handle = running.spawn(async move {
+            let Ok(_slot) = slots.acquire().await else {
+                return (stem, Err("interrupted before it started".to_owned()));
+            };
+            let result = run_one(&args, &name, &stem, &dir, &slots).await;
+            (stem, result.map_err(|error| error.to_string()))
+        });
+        spawned.insert(handle.id(), task);
+    }
+    let mut results = Vec::new();
+    while let Some(joined) = running.join_next_with_id().await {
+        match joined {
+            Ok((_, result)) => results.push(result),
+            Err(error) => {
+                let (stem, dir) = spawned.remove(&error.id()).unwrap_or_default();
+                let teardown = match Environment::at(&dir, DockerCli).await {
+                    Ok(env) => env.down().await,
+                    Err(error) => Err(error),
+                };
+                let teardown =
+                    teardown.map_or_else(|e| format!("; teardown failed: {e}"), |()| String::new());
+                results.push((stem, Err(format!("stopped: {error}{teardown}"))));
+            }
         }
     }
-    if failed.is_empty() {
-        return Ok(());
-    }
-    Err(io::Error::other(failed.join("; ")))
+    interrupt.abort();
+    summary(&results).map_err(io::Error::other)
 }
 
-async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::Result<()> {
+async fn run_one(
+    args: &RunArgs,
+    scenario: &str,
+    tag: &str,
+    dir: &Path,
+    slots: &Semaphore,
+) -> io::Result<()> {
     let path = if Path::new(scenario)
         .extension()
         .is_some_and(|ext| ext == "json")
@@ -93,6 +114,12 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
     let env = Environment::at(dir, DockerCli).await?;
+    if !inside(&fs::canonicalize(&args.environment.dir).await?, &env.dir) {
+        return Err(io::Error::other(format!(
+            "{} leads outside the state directory",
+            dir.display()
+        )));
+    }
     let checkout = fs::canonicalize(&args.repo).await?;
     if overlapping(&env.dir, &checkout) {
         return Err(io::Error::other(
@@ -100,7 +127,7 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
         ));
     }
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
+    copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
     for directory in ["cache", "api", "events", "logs", "metrics"] {
         match fs::remove_dir_all(env.dir.join(directory)).await {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
@@ -112,14 +139,17 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
     if scenario.has_fork() {
         environment.fork_runners = environment.fork_runners.max(1);
     }
-    let session = tokio::select! {
+    if slots.is_closed() {
+        return Err(io::Error::other("interrupted before it started"));
+    }
+    let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
         session = session(args, &environment, &env, repo, &scenario, tag) => session,
-        _ = tokio::signal::ctrl_c() => Err(io::Error::other("interrupted")),
+        _ = tokio::signal::ctrl_c() => (Vec::new(), 0, 0.0, Err(io::Error::other("interrupted"))),
     };
     let stopped = env.down().await;
-    let (outcomes, up_at, up_seconds) = session?;
-    stopped?;
     print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
+    replayed?;
+    stopped?;
     if !outcomes.iter().all(Outcome::passed) {
         return Err(io::Error::other("a run did not succeed"));
     }
@@ -133,12 +163,15 @@ async fn session<'a>(
     repo: PathBuf,
     scenario: &Scenario,
     tag: &'a str,
-) -> io::Result<(Vec<Outcome>, u64, f64)> {
+) -> (Vec<Outcome>, u64, f64, io::Result<()>) {
     let up_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
     let clock = Instant::now();
-    let addresses = env.up(&repo, environment).await?;
+    let addresses = match env.up(&repo, environment).await {
+        Ok(addresses) => addresses,
+        Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
+    };
     let up_seconds = clock.elapsed().as_secs_f64();
     println!(
         "velnor-local {tag}: {} is up in {up_seconds:.1} s",
@@ -156,20 +189,24 @@ async fn session<'a>(
         tag,
         fork: false,
     };
-    let branches = driver
-        .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
-        .await?;
-    for branch in branches.lines() {
-        let parent = format!("{branch}^");
-        if let Ok(before) = driver.git(&["rev-parse", "--verify", "-q", &parent]).await {
-            driver.pushed.insert(branch.to_owned(), before);
-        }
-    }
-    driver.replay(&scenario.steps).await?;
-    Ok((driver.outcomes, up_at, up_seconds))
+    let replayed = driver.start(&scenario.steps).await;
+    (driver.outcomes, up_at, up_seconds, replayed)
 }
 
 impl Driver<'_> {
+    async fn start(&mut self, steps: &[Step]) -> io::Result<()> {
+        let branches = self
+            .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+            .await?;
+        for branch in branches.lines() {
+            let parent = format!("{branch}^");
+            if let Ok(before) = self.git(&["rev-parse", "--verify", "-q", &parent]).await {
+                self.pushed.insert(branch.to_owned(), before);
+            }
+        }
+        self.replay(steps).await
+    }
+
     async fn replay(&mut self, steps: &[Step]) -> io::Result<()> {
         for step in steps {
             match step {
