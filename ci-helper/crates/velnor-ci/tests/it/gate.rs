@@ -16,6 +16,8 @@ pub(crate) const RED: &str = "f4a062683f7e31e3c654c3beebaa6751463f6459";
 pub(crate) const AHEAD: &str = "5839d07cc9d92794a514c686081c83f6c3cf95f7";
 const GREEN_CI: u64 = 43_632_161_397;
 const VERDICT: &str = "Required verdict";
+const ONE_PASSED: &str = "check Required passed\n";
+const BOTH_PASSED: &str = "check Required passed\ncheck Required verdict passed\n";
 
 struct Recorded(BTreeMap<String, Value>);
 
@@ -133,11 +135,10 @@ fn failing(job: &mut Value) {
 
 #[test]
 fn a_commit_on_main_whose_two_required_checks_passed_in_its_push_run_is_ready() {
-    let both_passed = "check Required passed\ncheck Required verdict passed\n";
-    assert_eq!(both().gate(GREEN), Ok(verdict(true, GREEN, both_passed)));
+    assert_eq!(both().gate(GREEN), Ok(verdict(true, GREEN, BOTH_PASSED)));
     assert_eq!(
         Recorded::new().gate(GREEN),
-        Ok(verdict(true, GREEN, "check Required passed\n"))
+        Ok(verdict(true, GREEN, ONE_PASSED))
     );
 }
 
@@ -243,10 +244,14 @@ fn a_required_check_from_a_fork_whose_branch_is_named_main_is_refused() {
 #[test]
 fn a_required_check_the_rules_or_the_protection_tie_to_another_github_app_is_refused() {
     let actions = json!({"context": "Required", "integration_id": 15368});
-    assert_eq!(
-        Recorded::new().requiring(&[actions]).gate(GREEN),
-        Ok(verdict(true, GREEN, "check Required passed\n"))
-    );
+    let any_app = json!([{"context": VERDICT, "app_id": -1}]);
+    let any_app = Recorded::new().protection("main", "everyone", &[VERDICT], &any_app);
+    for (recorded, passed) in [
+        (Recorded::new().requiring(&[actions]), ONE_PASSED),
+        (any_app, BOTH_PASSED),
+    ] {
+        assert_eq!(recorded.gate(GREEN), Ok(verdict(true, GREEN, passed)));
+    }
     let other = json!({"context": "Required", "integration_id": 9426});
     let dco = json!([{"context": "DCO", "app_id": 1861}]);
     for (recorded, check, app) in [
@@ -267,24 +272,29 @@ fn a_required_check_the_rules_or_the_protection_tie_to_another_github_app_is_ref
 }
 
 #[test]
-fn a_commit_ahead_of_the_default_branch_is_refused_even_with_green_checks() {
-    let ahead = json!({"status": "ahead", "ahead_by": 1, "behind_by": 0, "total_commits": 1});
-    let said = both()
-        .set(compare_path(&repo(), "main", GREEN), ahead)
-        .gate(GREEN);
-    let off_main =
-        |sha: &str| format!("commit {sha} is not on the default branch main (comparison: ahead)");
-    assert_eq!(said, Err(off_main(GREEN)));
-    assert_refused(&both().gate(AHEAD), &format!("{}\n", off_main(AHEAD)));
+fn a_commit_ahead_of_or_diverged_from_the_default_branch_is_refused_even_with_green_checks() {
+    let off_main = |sha: &str, status: &str| {
+        format!("commit {sha} is not on the default branch main (comparison: {status})")
+    };
+    for (status, ahead_by, behind_by) in [("ahead", 1, 0), ("diverged", 4, 2)] {
+        let comparison = json!({"status": status, "ahead_by": ahead_by, "behind_by": behind_by});
+        let path = compare_path(&repo(), "main", GREEN);
+        let said = both().set(path, comparison).gate(GREEN);
+        assert_eq!(said, Err(off_main(GREEN, status)));
+    }
+    assert_refused(
+        &both().gate(AHEAD),
+        &format!("{}\n", off_main(AHEAD, "ahead")),
+    );
 }
 
 #[test]
 fn a_check_that_the_rules_or_classic_branch_protection_require_counts_and_none_refuses() {
-    let none = Err(
-        "branch main requires no status check in its rules or its branch protection, so no commit of it can be released"
-            .to_owned(),
+    let none = Recorded::new().requiring(&[]).gate(GREEN);
+    assert_refused(
+        &none,
+        "requires no status check in its rules or its branch protection",
     );
-    assert_eq!(Recorded::new().requiring(&[]).gate(GREEN), none);
     let verdict_check = json!([{"context": VERDICT, "app_id": 15368}]);
     let enforced = Recorded::new()
         .protection("main", "everyone", &[VERDICT], &verdict_check)
@@ -293,7 +303,7 @@ fn a_check_that_the_rules_or_classic_branch_protection_require_counts_and_none_r
     let off = Recorded::new()
         .protection("main", "off", &[VERDICT], &verdict_check)
         .green_job(VERDICT, failing);
-    let only_required = Ok(verdict(true, GREEN, "check Required passed\n"));
+    let only_required = Ok(verdict(true, GREEN, ONE_PASSED));
     assert_eq!(off.gate(GREEN), only_required);
     let classic_only = Recorded::new()
         .rules(vec![json!({"type": "deletion"})])
@@ -341,10 +351,8 @@ fn a_failing_required_check_on_a_later_page_of_rules_runs_or_jobs_is_seen() {
         runs_path(&repo(), GREEN, 2),
         json!({"total_count": 7, "workflow_runs": []}),
     );
-    assert_eq!(
-        short.gate(GREEN),
-        Err("GitHub lists 7 workflow runs and returned 6".to_owned())
-    );
+    let said = short.gate(GREEN);
+    assert_refused(&said, "GitHub lists 7 workflow runs and returned 6");
 }
 
 #[test]
@@ -373,11 +381,12 @@ fn the_default_branch_and_its_rules_are_whatever_the_repository_says() {
             json!({"status": "identical"}),
         )
         .green_run(|run| run["head_branch"] = json!(branch));
+    let report = format!("commit {GREEN} is on {branch}\n{ONE_PASSED}ready=true\n");
     assert_eq!(
         recorded.gate(GREEN),
         Ok(Verdict {
             ready: true,
-            report: format!("commit {GREEN} is on {branch}\ncheck Required passed\nready=true\n"),
+            report
         })
     );
     assert_eq!(
