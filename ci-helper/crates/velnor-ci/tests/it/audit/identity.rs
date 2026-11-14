@@ -95,6 +95,15 @@ fn a_path_dependency_needs_its_build_script_run_and_a_current_unit_wherever_carg
         " for path dependency leaf (vendor/leaf/Cargo.toml, 1 of 2 units);",
     );
     assert!(!lock.exists());
+
+    let compiled = "target/debug/build/leaf-0000000000000008/build_script_build-0000000000000008.d";
+    repo.set_mtime(compiled, UNIX_EPOCH + Duration::from_secs(1_000_000_000));
+    refuses(
+        &audit(&repo, &["--write"]),
+        " for path dependency leaf (vendor/leaf/Cargo.toml, 1 of 2 units);",
+    );
+    assert!(!lock.exists());
+    unit(&repo, compiled, "out.d: vendor/leaf/build.rs\n");
     fs::write(&output, text).unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.write(

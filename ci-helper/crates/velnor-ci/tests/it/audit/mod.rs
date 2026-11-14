@@ -270,7 +270,7 @@ pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
         (
             "build/mid-0000000000000006/build_script_build-0000000000000006.d",
             "vendor/mid/build.rs",
-            "",
+            "mid-0000000000000006/build-script-build-script-build",
         ),
         (
             "deps/leaf-0000000000000007.d",
@@ -280,7 +280,7 @@ pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
         (
             "build/leaf-0000000000000008/build_script_build-0000000000000008.d",
             "vendor/leaf/build.rs",
-            "",
+            "leaf-0000000000000008/build-script-build-script-build",
         ),
         (
             "deps/ext-000000000000000a.d",

@@ -63,6 +63,7 @@ pub struct Built {
     pub units: BTreeSet<Unit>,
     pub libraries: BTreeSet<(String, PackageName)>,
     pub scripts: BTreeSet<RepoPath>,
+    pub builders: BTreeSet<(String, PackageName)>,
     pub orphans: BTreeSet<(String, String, Fingerprint)>,
 }
 
@@ -81,7 +82,7 @@ enum Need<'f> {
         source: &'f RepoPath,
     },
     Library(&'f [Option<RepoPath>], &'f PackageName),
-    Run(&'f [Option<RepoPath>]),
+    Run(&'f [Option<RepoPath>], &'f PackageName),
 }
 
 type Paths<'f> = BTreeMap<&'f PackageName, (Vec<&'f RepoPath>, Vec<Option<RepoPath>>)>;
@@ -184,7 +185,10 @@ fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<'f>> {
         let manifests: Vec<String> = manifests.iter().map(ToString::to_string).collect();
         Group {
             label: format!("path dependency {name} ({}", manifests.join(" or ")),
-            needs: vec![Need::Library(directories, name), Need::Run(directories)],
+            needs: vec![
+                Need::Library(directories, name),
+                Need::Run(directories, name),
+            ],
         }
     }));
     groups
@@ -288,18 +292,26 @@ fn missing(
                     })
                 })
                 .collect(),
-            Need::Run(directories) => built
-                .scripts
-                .iter()
-                .filter(|script| within(script, directories, packages))
-                .map(|script| {
-                    built.units.iter().any(|unit| {
-                        unit.kind == UnitKind::Run
-                            && places.contains(&unit.configuration.as_str())
-                            && unit.source == *script
+            Need::Run(directories, name) => {
+                let scripts: Vec<bool> = built
+                    .scripts
+                    .iter()
+                    .filter(|script| within(script, directories, packages))
+                    .map(|script| {
+                        built.units.iter().any(|unit| {
+                            unit.kind == UnitKind::Run
+                                && places.contains(&unit.configuration.as_str())
+                                && unit.source == *script
+                        })
                     })
-                })
-                .collect(),
+                    .collect();
+                let compiled = built.builders.contains(&(HOST.to_owned(), (*name).clone()));
+                if scripts.is_empty() && compiled {
+                    vec![false]
+                } else {
+                    scripts
+                }
+            }
         };
         wanted += units.len();
         found += units.iter().filter(|present| **present).count();

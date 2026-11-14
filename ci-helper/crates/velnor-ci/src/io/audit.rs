@@ -187,10 +187,12 @@ impl Audit<'_> {
                         (package.clone(), fingerprint),
                     );
                 }
-                if name.starts_with("lib-")
-                    && let Ok(package) = PackageName::new(package)
-                {
-                    self.built[index].libraries.insert((configuration, package));
+                if let Ok(package) = PackageName::new(package) {
+                    if name.starts_with("lib-") {
+                        self.built[index].libraries.insert((configuration, package));
+                    } else if name.starts_with("build-script-") && !name.contains('.') {
+                        self.built[index].builders.insert((configuration, package));
+                    }
                 }
             }
             UnitFile::DepInfo {
