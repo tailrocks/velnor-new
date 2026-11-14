@@ -14,21 +14,21 @@ use velnor_rust::{
 };
 
 use super::units::{UnitFile, Workspace, apart, profile, triples, unit_files, workspace};
-use crate::coverage::{Built, Fingerprint, HOST, Unit, UnitKind, gaps};
+use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 
-struct Audit<'a> {
+pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
-    fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
-    present: BTreeSet<(usize, String, String)>,
-    scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
+    pub(super) present: BTreeSet<(usize, String, String)>,
+    pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
-    built: Vec<Built>,
+    pub(super) built: Vec<Built>,
 }
 
 pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
@@ -249,46 +249,7 @@ impl Audit<'_> {
         Ok(())
     }
 
-    fn script(
-        &mut self,
-        workspace: &Path,
-        index: usize,
-        file: &Path,
-        profile: String,
-        package: String,
-    ) -> Result<(), CiError> {
-        if let Some((source, built)) = self.dep_info(workspace, file)? {
-            if profile == HOST {
-                self.built[index]
-                    .scripts
-                    .insert((package.clone(), source.clone()));
-            }
-            self.scripts
-                .entry((index, profile, package))
-                .or_default()
-                .entry(source)
-                .and_modify(|compiled| *compiled = (*compiled).min(built))
-                .or_insert(built);
-        }
-        Ok(())
-    }
-
-    fn orphans(&mut self) {
-        for ((index, configuration, hash), (package, fingerprint)) in &self.fingerprints {
-            let key = |name: &String| (*index, configuration.clone(), name.clone());
-            if !self.present.contains(&key(hash))
-                && !self.present.contains(&key(&fingerprint.target))
-            {
-                self.built[*index].orphans.insert((
-                    configuration.clone(),
-                    package.clone(),
-                    fingerprint.clone(),
-                ));
-            }
-        }
-    }
-
-    fn dep_info(
+    pub(super) fn dep_info(
         &mut self,
         workspace: &Path,
         file: &Path,

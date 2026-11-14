@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::Output;
+use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
-    audit, own_units, path_dependency_units, path_dependency_units_in,
+    audit, own_units, own_units_in, path_dependency_units, path_dependency_units_in,
     root_package_with_path_dependencies, unit, workspace_below_the_root,
 };
 
@@ -174,4 +174,29 @@ fn a_path_dependency_whose_library_and_build_script_live_outside_its_directory_p
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
+}
+
+#[test]
+fn a_rustc_that_cannot_list_its_targets_makes_the_audit_refuse_and_leaves_the_lock() {
+    let repo = workspace_below_the_root();
+    own_units_in(
+        &repo,
+        "rust/target/debug",
+        "rust/target/x86_64-unknown-linux-gnu/debug",
+        &[],
+    );
+    let listed = "shared/old.txt\tapp\n";
+    repo.write(".velnor/rust-inputs.lock", listed);
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .env("RUSTC", repo.root().join("missing-rustc"))
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    refuses(&output, "cannot run rustc --print target-list");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        listed
+    );
 }

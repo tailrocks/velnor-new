@@ -9,6 +9,8 @@ use std::process::Command;
 use serde::Deserialize;
 use velnor_rust::normalize;
 
+use super::audit::Audit;
+use crate::coverage::HOST;
 use crate::error::CiError;
 
 #[derive(Deserialize)]
@@ -206,7 +208,7 @@ pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
 }
 
 pub(super) fn triples(directory: &Path) -> Result<BTreeSet<String>, CiError> {
-    let output = Command::new("rustc")
+    let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .args(["--print", "target-list"])
         .current_dir(directory)
         .output()
@@ -221,4 +223,45 @@ pub(super) fn triples(directory: &Path) -> Result<BTreeSet<String>, CiError> {
         .lines()
         .map(str::to_owned)
         .collect())
+}
+
+impl Audit<'_> {
+    pub(super) fn script(
+        &mut self,
+        workspace: &Path,
+        index: usize,
+        file: &Path,
+        profile: String,
+        package: String,
+    ) -> Result<(), CiError> {
+        if let Some((source, built)) = self.dep_info(workspace, file)? {
+            if profile == HOST {
+                self.built[index]
+                    .scripts
+                    .insert((package.clone(), source.clone()));
+            }
+            self.scripts
+                .entry((index, profile, package))
+                .or_default()
+                .entry(source)
+                .and_modify(|compiled| *compiled = (*compiled).min(built))
+                .or_insert(built);
+        }
+        Ok(())
+    }
+
+    pub(super) fn orphans(&mut self) {
+        for ((index, configuration, hash), (package, fingerprint)) in &self.fingerprints {
+            let key = |name: &String| (*index, configuration.clone(), name.clone());
+            if !self.present.contains(&key(hash))
+                && !self.present.contains(&key(&fingerprint.target))
+            {
+                self.built[*index].orphans.insert((
+                    configuration.clone(),
+                    package.clone(),
+                    fingerprint.clone(),
+                ));
+            }
+        }
+    }
 }
