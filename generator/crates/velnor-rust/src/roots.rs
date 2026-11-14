@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    MemberDependency, RepoPath, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
-    RustRoot,
+    MemberDependency, PackageName, RepoPath, RepoView, RustCiConfig, RustMember, RustMetadata,
+    RustPackage, RustRoot,
 };
 
 use crate::config::excluded;
@@ -31,6 +31,16 @@ pub(crate) fn rust_roots(
         .iter()
         .flat_map(|(root, metadata)| metadata.members.iter().map(|m| (&m.manifest, *root)))
         .collect();
+    let mut named: BTreeMap<&PackageName, Vec<&RepoPath>> = BTreeMap::new();
+    for package in candidates
+        .iter()
+        .flat_map(|(_, metadata)| &metadata.members)
+    {
+        named
+            .entry(&package.name)
+            .or_default()
+            .push(&package.manifest);
+    }
     candidates
         .iter()
         .map(|(manifest, metadata)| {
@@ -41,7 +51,7 @@ pub(crate) fn rust_roots(
                     manifest: (*manifest).clone(),
                 });
             }
-            Ok(root(manifest, metadata, &owner))
+            Ok(root(manifest, metadata, &owner, &named))
         })
         .collect()
 }
@@ -50,6 +60,7 @@ fn root(
     manifest: &RepoPath,
     metadata: &RustMetadata,
     owner: &BTreeMap<&RepoPath, &RepoPath>,
+    named: &BTreeMap<&PackageName, Vec<&RepoPath>>,
 ) -> RustRoot {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
@@ -59,7 +70,11 @@ fn root(
         .filter(|root| **root != manifest)
         .map(|root| (*root).clone())
         .collect();
-    let mut members: Vec<RustMember> = metadata.members.iter().map(member).collect();
+    let mut members: Vec<RustMember> = metadata
+        .members
+        .iter()
+        .map(|package| member(package, named))
+        .collect();
     members.sort_by(|a, b| a.name.cmp(&b.name));
     RustRoot {
         manifest: manifest.clone(),
@@ -68,7 +83,7 @@ fn root(
     }
 }
 
-fn member(package: &RustPackage) -> RustMember {
+fn member(package: &RustPackage, named: &BTreeMap<&PackageName, Vec<&RepoPath>>) -> RustMember {
     RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
@@ -76,11 +91,20 @@ fn member(package: &RustPackage) -> RustMember {
         dependencies: package
             .dependencies
             .iter()
-            .filter_map(|dependency| {
-                Some(MemberDependency {
+            .flat_map(|dependency| {
+                let manifests: Vec<RepoPath> = match &dependency.manifest {
+                    Some(manifest) => vec![manifest.clone()],
+                    None => named
+                        .get(&dependency.name)
+                        .into_iter()
+                        .flatten()
+                        .map(|manifest| (*manifest).clone())
+                        .collect(),
+                };
+                manifests.into_iter().map(|manifest| MemberDependency {
                     name: dependency.name.clone(),
                     kind: dependency.kind,
-                    manifest: dependency.manifest.clone()?,
+                    manifest,
                 })
             })
             .collect(),

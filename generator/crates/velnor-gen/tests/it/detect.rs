@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{DependencyKind, PathGlob, RepoView, TargetKind};
+use velnor_model::{
+    DependencyKind, PackageDependency, PackageName, PathGlob, RepoView, TargetKind,
+};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
 use crate::facts::{Shape, TestResult, lib, package, path, repo, root, shape};
@@ -150,6 +152,34 @@ fn path_dependencies_are_edges_between_members_and_between_roots() -> TestResult
             "fixture Normal fixtures/fixture/Cargo.toml",
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn a_registry_dependency_named_like_a_repository_package_is_an_edge_to_it() -> TestResult {
+    let mut app = lib("app", "a/app/Cargo.toml")?;
+    for name in ["shared", "serde"] {
+        app.dependencies.push(PackageDependency {
+            name: PackageName::new(name)?,
+            kind: DependencyKind::Normal,
+            manifest: None,
+        });
+    }
+    let view = repo(
+        vec![
+            ("a/Cargo.toml", vec![app]),
+            ("b/Cargo.toml", vec![lib("shared", "b/shared/Cargo.toml")?]),
+        ],
+        &[],
+    )?;
+    let facts = detect(&view)?;
+    let dependencies: Vec<String> = facts.rust_roots[0]
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .map(|d| format!("{} {}", d.name, d.manifest))
+        .collect();
+    assert_eq!(dependencies, ["shared b/shared/Cargo.toml"]);
     Ok(())
 }
 
