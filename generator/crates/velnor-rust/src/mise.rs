@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
+use velnor_model::{RepoFacts, RepoPath, RustMember, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
@@ -53,8 +53,7 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     })
 }
 
-#[must_use]
-pub fn nextest_tool(pins: &ToolPins) -> Option<&str> {
+pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
     pins.tools.keys().map(String::as_str).find(|name| {
         NEXTEST_SELECTORS.iter().any(|selector| {
             name.strip_suffix(selector)
@@ -63,8 +62,26 @@ pub fn nextest_tool(pins: &ToolPins) -> Option<&str> {
     })
 }
 
-#[must_use]
-pub fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
+const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
+
+pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    if let Some((file, mise)) = toolchain_conflict(facts) {
+        return Err(DetectError::ToolchainConflict { file, mise });
+    }
+    let tested = facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .any(RustMember::has_test_target);
+    if tested && nextest_tool(&facts.tools).is_none() {
+        return Err(DetectError::NextestRequired {
+            path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
+    Ok(())
+}
+
+fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
     let channel = facts.toolchain.as_ref()?.channel.clone()?;
     let pinned = facts
         .tools
