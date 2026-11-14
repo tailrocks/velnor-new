@@ -1,26 +1,62 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::future::Future;
+use std::pin::Pin;
+
 use http_body_util::{BodyExt, Empty};
 use hyper::Request;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::{ApiStub, Call};
+use crate::io::proxy::Proxy;
 use crate::io::reply::Reply;
 use crate::rest::{DEFAULT_PER_PAGE, MAX_PER_PAGE, Page, runs};
 use crate::standin;
 
+pub type Answer<'a> = Pin<Box<dyn Future<Output = Option<Vec<u8>>> + Send + 'a>>;
+
+pub trait StandIn: Send + Sync + std::fmt::Debug {
+    fn get<'a>(&'a self, path: &'a str) -> Answer<'a>;
+}
+
+#[derive(Debug)]
+pub struct HttpStandIn(Proxy);
+
+impl HttpStandIn {
+    #[must_use]
+    pub fn new(address: &str) -> Self {
+        Self(Proxy::new(address))
+    }
+}
+
+impl StandIn for HttpStandIn {
+    fn get<'a>(&'a self, path: &'a str) -> Answer<'a> {
+        Box::pin(async move {
+            let request = Request::get(path)
+                .body(Empty::new().map_err(|never| match never {}).boxed_unsync())
+                .ok()?;
+            let response = self.0.forward(request).await.ok()?;
+            if !response.status().is_success() {
+                return None;
+            }
+            Some(
+                response
+                    .into_body()
+                    .collect()
+                    .await
+                    .ok()?
+                    .to_bytes()
+                    .to_vec(),
+            )
+        })
+    }
+}
+
 impl ApiStub {
-    async fn standin_bytes(&self, path: &str) -> Option<bytes::Bytes> {
-        let request = Request::get(path)
-            .body(Empty::new().map_err(|never| match never {}).boxed_unsync())
-            .ok()?;
-        let response = self.standin.as_ref()?.forward(request).await.ok()?;
-        if !response.status().is_success() {
-            return None;
-        }
-        Some(response.into_body().collect().await.ok()?.to_bytes())
+    async fn standin_bytes(&self, path: &str) -> Option<Vec<u8>> {
+        self.config.standin.as_ref()?.get(path).await
     }
 
     async fn standin<T: DeserializeOwned>(&self, path: &str) -> Option<T> {
@@ -52,8 +88,16 @@ impl ApiStub {
         else {
             return Reply::missing();
         };
-        match self.attempt_jobs(id, 1).await {
-            Some(jobs) => Reply::ok(runs::run(&run, &jobs)),
+        let jobs: Option<Vec<standin::Job>> =
+            self.standin(&format!("/_apis/v1/Message?runid={id}")).await;
+        let attempt = jobs
+            .into_iter()
+            .flatten()
+            .map(|job| job.attempt)
+            .max()
+            .unwrap_or(1);
+        match self.attempt_jobs(id, attempt).await {
+            Some(jobs) => Reply::ok(runs::run(&run, attempt, &jobs)),
             None => Reply::missing(),
         }
     }

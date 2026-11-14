@@ -64,7 +64,7 @@ pub fn log_ids(records: &[Record]) -> Vec<u64> {
 }
 
 #[must_use]
-pub fn run(run: &Run, jobs: &[Value]) -> Value {
+pub fn run(run: &Run, attempt: u32, jobs: &[Value]) -> Value {
     let times = |field: &'static str| jobs.iter().filter_map(move |job| job[field].as_str());
     let started = times("started_at").min().map(str::to_owned);
     json!({
@@ -73,7 +73,7 @@ pub fn run(run: &Run, jobs: &[Value]) -> Value {
         "display_title": run.display_name,
         "status": run.status,
         "conclusion": conclusion(run.result.as_deref()),
-        "run_attempt": 1,
+        "run_attempt": attempt,
         "event": run.event_name,
         "head_sha": run.sha,
         "created_at": started.clone().unwrap_or_default(),

@@ -318,6 +318,9 @@ impl Driver<'_> {
             .env("GITHUB_TOKEN", "velnor-local")
             .output()
             .await;
+        let written = fs::metadata(&metrics)
+            .await
+            .is_ok_and(|file| file.len() > 0);
         let path = format!("/repos/{}/actions/runs/{id}", self.args.repository);
         let bytes = request(&self.addresses.stub, "GET", &path, "")
             .await
@@ -330,7 +333,10 @@ impl Driver<'_> {
             conclusion: standin::conclusion(run.result.as_deref()).unwrap_or("unfinished"),
             started: github["run_started_at"].as_str().and_then(standin::seconds),
             metrics: match collected {
-                Ok(done) if done.status.success() => Ok(metrics),
+                Ok(done) if done.status.success() && written => Ok(metrics),
+                Ok(done) if done.status.success() => {
+                    Err(format!("{} wrote no file", metrics.display()))
+                }
                 Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
                 Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
             },

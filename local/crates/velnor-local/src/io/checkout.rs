@@ -48,7 +48,12 @@ pub(super) async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -
     }
     if !changes.is_empty() || !untracked.is_empty() {
         git(copy, &["add", "-A"], None).await?;
-        git(copy, &["commit", "-q", "-m", "Uncommitted changes"], None).await?;
+        if git(copy, &["diff", "--cached", "--quiet"], None)
+            .await
+            .is_err()
+        {
+            git(copy, &["commit", "-q", "-m", "Uncommitted changes"], None).await?;
+        }
     }
     git(copy, &["checkout", "-q", "-B", default], None).await?;
     Ok(())

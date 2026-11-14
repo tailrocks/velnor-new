@@ -76,7 +76,9 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         cache_dir: args.cache_dir,
         default_branch: args.default_branch,
         diff_limit_bytes: args.diff_limit_bytes,
-        standin: args.standin,
+        standin: args.standin.map(|address| {
+            Arc::new(api_stub::HttpStandIn::new(&address)) as Arc<dyn api_stub::StandIn>
+        }),
     }));
     serve("api-stub", args.listen, move |request| {
         let stub = Arc::clone(&stub);

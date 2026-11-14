@@ -11,7 +11,6 @@ use tokio::fs;
 use tokio::sync::Mutex;
 
 use super::git::Git;
-use super::proxy::Proxy;
 use super::reply::{Reply, response, text_response};
 use super::{
     Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
@@ -24,6 +23,8 @@ use crate::rest::{
 
 mod actions;
 
+pub use actions::{Answer, HttpStandIn, StandIn};
+
 const SYMLINK_TARGET_LIMIT: u64 = 4096;
 
 #[derive(Debug)]
@@ -33,14 +34,13 @@ pub struct ApiStubConfig {
     pub cache_dir: PathBuf,
     pub default_branch: String,
     pub diff_limit_bytes: usize,
-    pub standin: Option<String>,
+    pub standin: Option<std::sync::Arc<dyn StandIn>>,
 }
 
 #[derive(Debug)]
 pub struct ApiStub {
     config: ApiStubConfig,
     git: Git,
-    standin: Option<Proxy>,
 }
 
 struct Call<'a> {
@@ -59,7 +59,6 @@ impl ApiStub {
                 diff_limit_bytes: config.diff_limit_bytes,
                 last_diff: Mutex::new(None),
             },
-            standin: config.standin.as_deref().map(Proxy::new),
             config,
         }
     }

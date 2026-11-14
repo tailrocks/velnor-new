@@ -11,7 +11,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::header::HeaderMap;
 use hyper::{Request, Uri};
 use serde_json::{Value, json};
-use velnor_local::io::api_stub::{ApiStub, ApiStubConfig};
+use velnor_local::io::api_stub::{ApiStub, ApiStubConfig, StandIn};
 use velnor_local::io::{Body, CacheServer, Config};
 
 pub(crate) const MAIN: &str = "refs/heads/main";
@@ -183,6 +183,20 @@ impl Stub {
                 default_branch: "main".to_owned(),
                 diff_limit_bytes: 1 << 20,
                 standin: None,
+            }),
+        }
+    }
+
+    pub(crate) fn over_standin(standin: Arc<dyn StandIn>) -> Self {
+        let dir = temp_dir("standin");
+        Self {
+            stub: ApiStub::new(ApiStubConfig {
+                repo: dir.clone(),
+                dir: dir.clone(),
+                cache_dir: dir,
+                default_branch: "main".to_owned(),
+                diff_limit_bytes: 1 << 20,
+                standin: Some(standin),
             }),
         }
     }
