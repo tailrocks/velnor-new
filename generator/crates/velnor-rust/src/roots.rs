@@ -10,10 +10,12 @@ use velnor_model::{
 
 use crate::config::excluded;
 use crate::error::DetectError;
+use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
 
 type Candidate<'a> = (&'a RepoPath, &'a RustMetadata);
+type Targets = BTreeMap<PackageName, BTreeSet<RepoPath>>;
 
 pub(crate) fn rust_roots(
     view: &RepoView,
@@ -31,15 +33,15 @@ pub(crate) fn rust_roots(
         .iter()
         .flat_map(|(root, metadata)| metadata.members.iter().map(|m| (&m.manifest, *root)))
         .collect();
-    let mut named: BTreeMap<&PackageName, Vec<&RepoPath>> = BTreeMap::new();
+    let mut named: Targets = BTreeMap::new();
     for package in candidates
         .iter()
         .flat_map(|(_, metadata)| &metadata.members)
     {
         named
-            .entry(&package.name)
+            .entry(package.name.clone())
             .or_default()
-            .push(&package.manifest);
+            .insert(package.manifest.clone());
     }
     candidates
         .iter()
@@ -51,7 +53,11 @@ pub(crate) fn rust_roots(
                     manifest: (*manifest).clone(),
                 });
             }
-            Ok(root(manifest, metadata, &owner, &named))
+            let mut targets = named.clone();
+            for (name, target) in patches(view.files.get(*manifest), manifest) {
+                targets.entry(name).or_default().insert(target);
+            }
+            Ok(root(manifest, metadata, &owner, &targets))
         })
         .collect()
 }
@@ -60,7 +66,7 @@ fn root(
     manifest: &RepoPath,
     metadata: &RustMetadata,
     owner: &BTreeMap<&RepoPath, &RepoPath>,
-    named: &BTreeMap<&PackageName, Vec<&RepoPath>>,
+    targets: &Targets,
 ) -> RustRoot {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
@@ -73,7 +79,7 @@ fn root(
     let mut members: Vec<RustMember> = metadata
         .members
         .iter()
-        .map(|package| member(package, named))
+        .map(|package| member(package, targets))
         .collect();
     members.sort_by(|a, b| a.name.cmp(&b.name));
     RustRoot {
@@ -83,7 +89,41 @@ fn root(
     }
 }
 
-fn member(package: &RustPackage, named: &BTreeMap<&PackageName, Vec<&RepoPath>>) -> RustMember {
+fn patches(manifest_text: Option<&Vec<u8>>, manifest: &RepoPath) -> Vec<(PackageName, RepoPath)> {
+    let Some(table) = manifest_text.and_then(|bytes| table(bytes).ok()) else {
+        return Vec::new();
+    };
+    table
+        .get("patch")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|sources| sources.values().filter_map(toml::Value::as_table))
+        .flatten()
+        .filter_map(|(name, patch)| {
+            let folder = patch.get("path")?.as_str()?;
+            let target = within(manifest.parent().as_ref(), folder)?;
+            Some((PackageName::new(name.as_str()).ok()?, target))
+        })
+        .collect()
+}
+
+fn within(base: Option<&RepoPath>, relative: &str) -> Option<RepoPath> {
+    let mut segments: Vec<&str> =
+        base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
+    for segment in relative.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop()?;
+            }
+            other => segments.push(other),
+        }
+    }
+    segments.push("Cargo.toml");
+    RepoPath::new(segments.join("/")).ok()
+}
+
+fn member(package: &RustPackage, targets: &Targets) -> RustMember {
     RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
@@ -92,14 +132,9 @@ fn member(package: &RustPackage, named: &BTreeMap<&PackageName, Vec<&RepoPath>>)
             .dependencies
             .iter()
             .flat_map(|dependency| {
-                let manifests: Vec<RepoPath> = match &dependency.manifest {
-                    Some(manifest) => vec![manifest.clone()],
-                    None => named
-                        .get(&dependency.name)
-                        .into_iter()
-                        .flatten()
-                        .map(|manifest| (*manifest).clone())
-                        .collect(),
+                let manifests: BTreeSet<RepoPath> = match &dependency.manifest {
+                    Some(manifest) => BTreeSet::from([manifest.clone()]),
+                    None => targets.get(&dependency.name).cloned().unwrap_or_default(),
                 };
                 manifests.into_iter().map(|manifest| MemberDependency {
                     name: dependency.name.clone(),

@@ -320,6 +320,8 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
         }
         view.rust_metadata.insert(workspace, metadata);
     }
+    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
+    view.files.extend(read_files(root, &roots)?);
     Ok((view, recorded))
 }
 

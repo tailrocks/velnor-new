@@ -156,9 +156,9 @@ fn path_dependencies_are_edges_between_members_and_between_roots() -> TestResult
 }
 
 #[test]
-fn a_registry_dependency_named_like_a_repository_package_is_an_edge_to_it() -> TestResult {
+fn a_registry_dependency_that_the_repository_can_patch_is_an_edge_to_the_patch() -> TestResult {
     let mut app = lib("app", "a/app/Cargo.toml")?;
-    for name in ["shared", "serde"] {
+    for name in ["shared", "serde", "mid"] {
         app.dependencies.push(PackageDependency {
             name: PackageName::new(name)?,
             kind: DependencyKind::Normal,
@@ -170,7 +170,10 @@ fn a_registry_dependency_named_like_a_repository_package_is_an_edge_to_it() -> T
             ("a/Cargo.toml", vec![app]),
             ("b/Cargo.toml", vec![lib("shared", "b/shared/Cargo.toml")?]),
         ],
-        &[],
+        &[(
+            "a/Cargo.toml",
+            "[workspace]\n\n[patch.crates-io]\nmid = { path = \"../vendor/./mid\" }\n",
+        )],
     )?;
     let facts = detect(&view)?;
     let dependencies: Vec<String> = facts.rust_roots[0]
@@ -179,7 +182,10 @@ fn a_registry_dependency_named_like_a_repository_package_is_an_edge_to_it() -> T
         .flat_map(|member| &member.dependencies)
         .map(|d| format!("{} {}", d.name, d.manifest))
         .collect();
-    assert_eq!(dependencies, ["shared b/shared/Cargo.toml"]);
+    assert_eq!(
+        dependencies,
+        ["shared b/shared/Cargo.toml", "mid vendor/mid/Cargo.toml"]
+    );
     Ok(())
 }
 
