@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use velnor_actions_contract::{GithubConfig, UnmanagedPolicy};
 
 use super::preserve::{
-    generated_marked_dco, generated_marked_script, generated_shared_action, generator_owned,
-    retired_marked_lint_config, velnor_gen_owned,
+    generated_marked_dco, generated_marked_script, generated_shared_action, reserved_path,
+    retired_marked_lint_config,
 };
 use crate::OrchestratorError;
 
@@ -64,8 +64,7 @@ fn walk(base: &Path, relative: &Path, found: &mut Vec<PathBuf>) -> Result<bool, 
     let source = base.join(relative);
     let metadata = std::fs::symlink_metadata(&source).map_err(|error| io(&source, &error))?;
     if !relative.as_os_str().is_empty()
-        && (generator_owned(relative, &source, &metadata)?
-            || velnor_gen_owned(relative, &source, &metadata)?
+        && (reserved_path(relative)
             || generated_shared_action(relative, &source, &metadata)?
             || generated_marked_script(relative, &source, &metadata)?
             || generated_marked_dco(relative, &source, &metadata)?

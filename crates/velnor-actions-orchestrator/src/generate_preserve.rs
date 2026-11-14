@@ -162,14 +162,17 @@ pub(super) fn generator_owned(
     source: &Path,
     metadata: &std::fs::Metadata,
 ) -> Result<bool, OrchestratorError> {
+    Ok(reserved_path(relative) && !velnor_gen_owned(relative, source, metadata)?)
+}
+
+pub(super) fn reserved_path(relative: &Path) -> bool {
     if relative.starts_with("workflows") {
-        return Ok(relative != Path::new("workflows")
+        return relative != Path::new("workflows")
             && !HAND_WRITTEN_WORKFLOWS
                 .iter()
-                .any(|path| relative == Path::new(path))
-            && !velnor_gen_owned(relative, source, metadata)?);
+                .any(|path| relative == Path::new(path));
     }
-    Ok(DECLARED_GITHUB_FORMATS
+    DECLARED_GITHUB_FORMATS
         .iter()
         .map(|format| format.path)
         .chain(RELEASE_TREE_PATHS.iter().copied())
@@ -179,7 +182,7 @@ pub(super) fn generator_owned(
             Path::new(path)
                 .strip_prefix(".github")
                 .is_ok_and(|rel| rel == relative)
-        }))
+        })
 }
 
 pub(super) fn velnor_gen_owned(
@@ -187,12 +190,15 @@ pub(super) fn velnor_gen_owned(
     source: &Path,
     metadata: &std::fs::Metadata,
 ) -> Result<bool, OrchestratorError> {
-    if !relative.starts_with("workflows") || !metadata.is_file() {
+    if relative.components().count() != 2
+        || !relative.starts_with("workflows")
+        || !metadata.is_file()
+    {
         return Ok(false);
     }
     first_line_matches(
         source,
-        VELNOR_GEN_MARKER.len() + 1,
+        VELNOR_GEN_MARKER.len() + 2,
         is_velnor_gen_marker_line,
     )
 }
@@ -268,6 +274,9 @@ fn first_line_matches(
             break;
         }
         first.push(byte[0]);
+    }
+    if first.last() == Some(&b'\r') {
+        first.pop();
     }
     let first = std::str::from_utf8(&first).ok();
     Ok(first.is_some_and(matches))
