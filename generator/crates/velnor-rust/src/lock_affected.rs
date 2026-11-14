@@ -107,7 +107,9 @@ pub fn lock_affected(
     base: &str,
     head: &str,
     members: &[PackageName],
+    edited: &BTreeSet<PackageName>,
 ) -> Result<BTreeMap<PackageName, String>, LockError> {
+    let _ = edited;
     let (base, head) = (CargoLock::parse(base)?, CargoLock::parse(head)?);
     if base.format != head.format {
         return Err(LockError::new("the lockfile format differs"));
