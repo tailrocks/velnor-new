@@ -170,6 +170,27 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         .map(|(c, _, _)| c)
         .collect();
     assert!(!commands.contains(&CargoCommand::Doctest), "{commands:?}");
+
+    let untested = RustMember {
+        targets: vec![Target {
+            tests: false,
+            ..target(TargetKind::Bin)
+        }],
+        ..member("untested", "crates/untested", &[])
+    };
+    let mut no_tests = facts(vec![("Cargo.toml", vec![untested])]);
+    let commands: Vec<CargoCommand> = cargo_steps(&no_tests)
+        .into_iter()
+        .map(|(c, _, _)| c)
+        .collect();
+    assert!(
+        !commands
+            .iter()
+            .any(|c| matches!(c, CargoCommand::NextestRun { .. })),
+        "{commands:?}"
+    );
+    no_tests.config.shape = Some(Shape::LintAndTest);
+    assert_eq!(job_ids(&no_tests), ["rust-lint", "required"]);
     Ok(())
 }
 

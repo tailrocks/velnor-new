@@ -7,7 +7,7 @@ pub mod io;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
+use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView, RustMember};
 use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
 use velnor_rust::{DetectError, detect, nextest_tool, plan, toolchain_conflict};
 
@@ -59,7 +59,12 @@ pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Gen
             mise,
         }));
     }
-    if nextest_tool(&facts.tools).is_none() {
+    let tested = facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .any(RustMember::has_test_target);
+    if tested && nextest_tool(&facts.tools).is_none() {
         return Err(GenerateError::Detect(DetectError::NextestRequired {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
         }));

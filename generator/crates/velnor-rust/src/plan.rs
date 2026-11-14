@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, CargoCommand, Concurrency, FilterRef, Job, JobId, PermissionScope, Permissions,
-    RepoFacts, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When,
-    WorkflowPlan,
+    RepoFacts, RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers,
+    When, WorkflowPlan,
 };
 
 use crate::doc_steps::has_doctest_library;
@@ -76,16 +76,20 @@ fn root_jobs(
         CargoCommand::FmtCheck,
         CargoCommand::Clippy { extra: Vec::new() },
     ];
-    let mut test = vec![CargoCommand::NextestRun {
-        filter: FilterRef::All,
-    }];
+    let nextest = root.members.iter().any(RustMember::has_test_target);
+    let mut test = Vec::new();
+    if nextest {
+        test.push(CargoCommand::NextestRun {
+            filter: FilterRef::All,
+        });
+    }
     if has_doctest_library(root) {
         test.push(CargoCommand::Doctest);
     }
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
-            let mut steps = setup(facts, true, true);
+            let mut steps = setup(facts, true, nextest);
             steps.extend(cargo(
                 lint.into_iter()
                     .chain(test)
@@ -107,19 +111,20 @@ fn root_jobs(
                     .chain(alone)
                     .collect(),
             ));
-            let mut test_steps = setup(facts, false, true);
-            test_steps.extend(cargo(test));
-            vec![
-                Job {
-                    comment,
-                    steps: lint_steps,
-                    ..job(facts, id(LINT_JOB))
-                },
-                Job {
+            let mut jobs = vec![Job {
+                comment,
+                steps: lint_steps,
+                ..job(facts, id(LINT_JOB))
+            }];
+            if !test.is_empty() {
+                let mut test_steps = setup(facts, false, nextest);
+                test_steps.extend(cargo(test));
+                jobs.push(Job {
                     steps: test_steps,
                     ..job(facts, id(TEST_JOB))
-                },
-            ]
+                });
+            }
+            jobs
         }
     }
 }

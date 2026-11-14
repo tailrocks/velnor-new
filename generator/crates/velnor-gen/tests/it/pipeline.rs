@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_gen::{GenerateError, expected_files};
-use velnor_model::{PackageName, RepoPath, RepoView, RustMetadata, RustPackage};
+use velnor_model::{
+    PackageName, RepoPath, RepoView, RustMetadata, RustPackage, Target, TargetKind, TargetName,
+};
 use velnor_rust::{CONFIG_PATH, DetectError};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -23,7 +25,14 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
             name: PackageName::new(format!("package-{index}"))?,
             manifest: manifest.clone(),
             dependencies: Vec::new(),
-            targets: Vec::new(),
+            targets: vec![Target {
+                name: TargetName::new("it")?,
+                kinds: vec![TargetKind::Test],
+                tests: true,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            }],
         };
         view.rust_metadata.insert(
             manifest,
