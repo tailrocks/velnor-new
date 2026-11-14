@@ -88,6 +88,17 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&included),
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
+    let mise = RepoPath::new("mise.toml")?;
+    let mut mise_env = view(&["Cargo.toml"], None)?;
+    mise_env.files.insert(
+        mise.clone(),
+        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[env]\nRUSTDOCFLAGS = \"\"\n"
+            .to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&mise_env),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == mise
+    ));
     let mut per_target = string;
     per_target.files.insert(
         config.clone(),

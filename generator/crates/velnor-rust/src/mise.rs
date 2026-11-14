@@ -15,6 +15,7 @@ pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
 ];
 pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
+const OVERRIDING_ENV: [&str; 2] = ["RUSTDOCFLAGS", "CARGO_ENCODED_RUSTDOCFLAGS"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
@@ -32,6 +33,21 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     let mut requested = Versions::new();
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
+        let env = table(bytes)
+            .map_err(|reason| DetectError::invalid(config, reason))?
+            .get("env")
+            .and_then(Value::as_table)
+            .map(|env| env.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        if let Some(name) = env
+            .into_iter()
+            .find(|name| OVERRIDING_ENV.contains(&name.as_str()))
+        {
+            return Err(DetectError::invalid(
+                config,
+                Reason::MiseOverridesFlags(name),
+            ));
+        }
     }
     let mut locked = files
         .get(&MISE_LOCK)

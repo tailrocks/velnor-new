@@ -35,7 +35,7 @@ jobs:
         run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --no-tests=pass -E ''all()'''
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
