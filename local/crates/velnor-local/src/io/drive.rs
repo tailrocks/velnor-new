@@ -237,9 +237,10 @@ impl Driver<'_> {
             after: &after,
         });
         self.pushed.insert(branch.to_owned(), after.clone());
+        let moved = self.retarget(branch, &after).await?;
         self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
             .await?;
-        self.synchronize(branch, &after).await
+        self.synchronize(moved).await
     }
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> io::Result<T> {
