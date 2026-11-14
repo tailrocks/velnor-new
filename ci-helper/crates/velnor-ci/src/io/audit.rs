@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -9,10 +9,10 @@ use std::time::SystemTime;
 
 use serde::Deserialize;
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, RepoFacts, RepoPath};
+use velnor_model::{CompileInputs, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, add_reads, build_script_owners, dep_info_paths, detect,
-    format_inputs_lock, locate, parse_inputs_lock, rerun_if_changed, source_owners, unlisted,
+    INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
+    locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use crate::error::CiError;
@@ -23,15 +23,17 @@ struct Workspace {
     target_directory: PathBuf,
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum UnitFile {
-    DepInfo,
+    DepInfo(Option<String>),
     BuildOutput(String),
 }
 
 struct Audit<'a> {
     repository: &'a Path,
-    facts: &'a RepoFacts,
+    owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
+    scripts: BTreeMap<String, BTreeSet<RepoPath>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
@@ -57,8 +59,9 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .collect::<Result<Vec<_>, _>>()?;
     let mut audit = Audit {
         repository: &checkout.root,
-        facts: &facts,
+        owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
+        scripts: BTreeMap::new(),
         targets: workspaces
             .iter()
             .filter_map(|w| match locate(&checkout.root, &w.target_directory, "") {
@@ -70,12 +73,19 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         units: 0,
         built: BTreeSet::new(),
     };
+    let mut files = Vec::new();
     for workspace in &workspaces {
-        let mut files = Vec::new();
-        unit_files(&workspace.target_directory, &mut files)?;
-        for (file, kind) in files {
-            audit.record(&workspace.workspace_root, &file, &kind)?;
-        }
+        let mut found = Vec::new();
+        unit_files(&workspace.target_directory, &mut found)?;
+        files.extend(
+            found
+                .into_iter()
+                .map(|(file, kind)| (kind, file, &workspace.workspace_root)),
+        );
+    }
+    files.sort();
+    for (kind, file, workspace) in &files {
+        audit.record(workspace, file, kind)?;
     }
     let targets: Vec<String> = workspaces
         .iter()
@@ -143,30 +153,45 @@ impl Audit<'_> {
             .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
         let declared = matches!(kind, UnitFile::BuildOutput(_));
         let readers: Vec<(Owner<'_>, PathBuf, Vec<String>)> = match kind {
-            UnitFile::DepInfo => {
+            UnitFile::DepInfo(script) => {
                 let paths = dep_info_paths(&text);
-                let owners = match paths
+                let Some(Located::Inside(source)) = paths
                     .first()
                     .map(|source| locate(self.repository, workspace, source))
-                {
-                    Some(Located::Inside(source)) => source_owners(self.facts, &source),
-                    _ => Vec::new(),
+                else {
+                    return Ok(());
                 };
-                owners
+                if let Some(package) = script {
+                    self.scripts
+                        .entry(package.clone())
+                        .or_default()
+                        .insert(source.clone());
+                }
+                self.owners
+                    .of(&source)
                     .into_iter()
                     .map(|owner| (owner, workspace.to_path_buf(), paths.clone()))
                     .collect()
             }
-            UnitFile::BuildOutput(package) => build_script_owners(self.facts, package)
-                .into_iter()
-                .map(|owner| {
-                    let base = owner.directory().map_or_else(
-                        || self.repository.to_path_buf(),
-                        |d| self.repository.join(d.as_str()),
-                    );
-                    (owner, base, rerun_if_changed(&text))
-                })
-                .collect(),
+            UnitFile::BuildOutput(package) => {
+                let mut seen = BTreeSet::new();
+                self.scripts
+                    .get(package)
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|source| self.owners.of(source))
+                    .filter(|owner| {
+                        seen.insert((owner.manifest().clone(), owner.directory().cloned()))
+                    })
+                    .map(|owner| {
+                        let base = owner.directory().map_or_else(
+                            || self.repository.to_path_buf(),
+                            |d| self.repository.join(d.as_str()),
+                        );
+                        (owner, base, rerun_if_changed(&text))
+                    })
+                    .collect()
+            }
         };
         let built = modified(file)?;
         if !readers.is_empty() {
@@ -198,7 +223,9 @@ impl Audit<'_> {
                 })
             });
             add_reads(&mut self.found, self.tracked, &owner, &reads, declared);
-            self.built.insert(owner.manifest().clone());
+            if *kind == UnitFile::DepInfo(None) {
+                self.built.insert(owner.manifest().clone());
+            }
         }
         Ok(())
     }
@@ -257,13 +284,17 @@ fn unit_files(directory: &Path, found: &mut Vec<(PathBuf, UnitFile)>) -> Result<
 
 fn unit_file(path: &Path) -> Option<UnitFile> {
     let name = path.file_name()?.to_str()?;
-    if name.strip_suffix(".d").and_then(unit_name).is_some() {
-        return Some(UnitFile::DepInfo);
-    }
     let unit = path.parent()?;
-    let package = unit_name(unit.file_name()?.to_str()?)?;
-    let build = unit.parent()?.file_name()?;
-    (name == "output" && build == "build").then(|| UnitFile::BuildOutput(package.to_owned()))
+    let package = unit
+        .file_name()
+        .and_then(|folder| unit_name(folder.to_str()?))
+        .filter(|_| unit.parent().and_then(Path::file_name) == Some("build".as_ref()));
+    if name.strip_suffix(".d").and_then(unit_name).is_some() {
+        return Some(UnitFile::DepInfo(package.map(str::to_owned)));
+    }
+    (name == "output")
+        .then_some(package)?
+        .map(|package| UnitFile::BuildOutput(package.to_owned()))
 }
 
 fn unit_name(stem: &str) -> Option<&str> {

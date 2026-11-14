@@ -85,6 +85,11 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
     );
     unit(
         &repo,
+        &format!("{target}/build/lib-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: lib/build.rs\n",
+    );
+    unit(
+        &repo,
         &format!("{target}/build/lib-0000000000000005/output"),
         "cargo:rerun-if-changed=build.rs\ncargo::rerun-if-changed=../../shared/build.txt\ncargo:rustc-env=A=b\n",
     );
@@ -125,6 +130,16 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         &format!("{target}/deps/app-0000000000000001.d"),
         "out.d: app/src/lib.rs app/src/../../../shared/greeting.txt\n",
     );
+    unit(
+        &repo,
+        &format!("{target}/build/lib-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: lib/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/lib-0000000000000005/output"),
+        "cargo:rerun-if-changed=../..\n",
+    );
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
     assert!(
@@ -136,8 +151,8 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
 
     unit(
         &repo,
-        &format!("{target}/build/lib-0000000000000005/output"),
-        "cargo:rerun-if-changed=../..\n",
+        &format!("{target}/deps/lib-0000000000000007.d"),
+        "out.d: lib/src/lib.rs\n",
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
@@ -165,23 +180,27 @@ fn a_tracked_path_the_lock_cannot_hold_is_an_error_that_names_it() {
 }
 
 #[test]
-fn audit_credits_path_dependencies_custom_targets_symlink_targets_and_declared_paths() {
+fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_declared_paths() {
     let repo = Repo::new("audit-owners");
     repo.write(".gitignore", "target/\n");
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
-    repo.write(".velnor/rust-ci.toml", "exclude = [\"vendor/mid\"]\n");
+    repo.write(".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     repo.write(
         "Cargo.toml",
         "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
     );
     repo.write(
         "other/Cargo.toml",
-        "[package]\nname = \"other\"\nedition = \"2024\"\n\n[dependencies]\nmid = { path = \"../vendor/mid\" }\n",
+        "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[dependencies]\nmid = { path = \"../vendor/mid\" }\n",
     );
     repo.write("Cargo.lock", "version = 4\n");
     repo.write(
         "vendor/mid/Cargo.toml",
-        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\" }\n",
+    );
+    repo.write(
+        "vendor/leaf/Cargo.toml",
+        "[package]\nname = \"leaf\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
     );
     for file in [
         "src/lib.rs",
@@ -192,6 +211,11 @@ fn audit_credits_path_dependencies_custom_targets_symlink_targets_and_declared_p
         "NOTICE",
         "vendor/mid/src/lib.rs",
         "vendor/mid/build.rs",
+        "vendor/leaf/src/lib.rs",
+        "vendor/leaf/build.rs",
+        "LICENSE",
+        "ext.rs",
+        "data/ext.txt",
     ] {
         repo.write(file, "");
     }
@@ -225,12 +249,37 @@ fn audit_credits_path_dependencies_custom_targets_symlink_targets_and_declared_p
         &format!("{target}/build/mid-0000000000000004/output"),
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
     );
+    unit(
+        &repo,
+        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: vendor/mid/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/deps/leaf-0000000000000007.d"),
+        "out.d: vendor/leaf/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/leaf-0000000000000008/build_script_build-0000000000000008.d"),
+        "out.d: vendor/leaf/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/leaf-0000000000000009/output"),
+        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/deps/ext-000000000000000a.d"),
+        "out.d: ext.rs data/ext.txt\n",
+    );
 
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
-        "NOTICE\tother\nREADME.md\ttop\ndata/qa.txt\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\n"
+        "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/qa.txt\ttop\next.rs\tother\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\n"
     );
 }

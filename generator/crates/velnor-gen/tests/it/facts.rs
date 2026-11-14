@@ -42,6 +42,7 @@ pub(crate) fn package(
                     name: TargetName::new(*name)?,
                     kinds: vec![*kind],
                     tests: *tests,
+                    source: None,
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,

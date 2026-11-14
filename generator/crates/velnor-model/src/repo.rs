@@ -45,6 +45,7 @@ pub struct Target {
     pub name: TargetName,
     pub kinds: Vec<TargetKind>,
     pub tests: bool,
+    pub source: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
