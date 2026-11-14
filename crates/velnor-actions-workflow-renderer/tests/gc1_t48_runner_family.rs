@@ -3,7 +3,8 @@
 
 use super::*;
 
-fn family_files() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
+pub(crate) fn family_files()
+-> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
     let mut request = request()?;
     request.runner_image_family = Some(
         velnor_actions_contract::config::MacRunnerQualificationConfig {

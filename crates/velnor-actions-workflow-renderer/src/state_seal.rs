@@ -35,6 +35,8 @@ const BOUND_OUTPUT: &str = "bound";
 const TOKEN_EXPR: &str = "${{ github.token }}";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
+#[path = "state_seal_artifact_guard.rs"]
+mod artifact_guard;
 #[path = "state_producer_steps.rs"]
 pub mod producer_steps;
 #[path = "state_seal_save.rs"]
@@ -165,6 +167,7 @@ fn seal_job(
         "${{{{ needs.{}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} }}}}",
         root.producer_id
     );
+    let guard = artifact_guard::step(&artifact)?;
     let mut download = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
@@ -232,7 +235,9 @@ fn seal_job(
         services: Vec::new(),
         outputs: BTreeMap::new(),
         env: JobEnv::Unset,
-        steps: vec![download, subject, tip, admit, save, bind, attest, retire],
+        steps: vec![
+            guard, download, subject, tip, admit, save, bind, attest, retire,
+        ],
     })
 }
 

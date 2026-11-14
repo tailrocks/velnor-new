@@ -671,6 +671,15 @@ The [pinned artifact reference](github-actions-artifact-reference.md#artifact-do
 records the download action's extraction and digest boundary. Verify artifact
 producer and identity before download; the digest check runs after extraction.
 
+The pinned [download-artifact source](https://github.com/actions/download-artifact/blob/9000827ccba6bdab643e8b6fd33ac0654aef8333/src/download-artifact.ts#L48-L166)
+(revision `9000827ccba6bdab643e8b6fd33ac0654aef8333`, lines 48-166) picks its
+mode from the truthiness of `artifact-ids` and parses each id with `parseInt`.
+An empty id therefore downloads every artifact of the run, and a malformed id
+is parsed instead of rejected. Generated workflows put a "Validate exact
+artifact ID" step directly before each download. It accepts only a positive
+integer without leading zeros that is at most 9007199254740991, the largest
+exact JavaScript integer. Recheck this guard when the action pin changes.
+
 ### Hosted macOS source qualification
 
 The [runner image label table](https://github.com/actions/runner-images/blob/main/README.md)
