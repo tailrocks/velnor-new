@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
 
@@ -24,10 +25,63 @@ pub enum Step {
         append: String,
         line: String,
     },
+    UpdateLock {
+        branch: String,
+        package: String,
+        #[serde(default)]
+        workspace: String,
+    },
     OpenPullRequest {
         head: String,
         base: String,
     },
+    MergePullRequest(String),
+    ClosePullRequest(String),
+    MergeGroup(String),
+    Schedule(String),
+    WorkflowDispatch {
+        branch: String,
+        #[serde(default)]
+        inputs: BTreeMap<String, serde_json::Value>,
+    },
+}
+
+impl Step {
+    fn branches(&mut self) -> Vec<&mut String> {
+        match self {
+            Self::Push(branch)
+            | Self::Commit { branch, .. }
+            | Self::UpdateLock { branch, .. }
+            | Self::MergePullRequest(branch)
+            | Self::ClosePullRequest(branch)
+            | Self::MergeGroup(branch)
+            | Self::WorkflowDispatch { branch, .. } => vec![branch],
+            Self::OpenPullRequest { head, base } => vec![head, base],
+            Self::Schedule(_) => Vec::new(),
+        }
+    }
+
+    fn arguments(&self) -> Vec<&str> {
+        match self {
+            Self::Push(branch)
+            | Self::MergePullRequest(branch)
+            | Self::ClosePullRequest(branch)
+            | Self::MergeGroup(branch)
+            | Self::WorkflowDispatch { branch, .. } => vec![branch],
+            Self::Commit { branch, append, .. } => vec![branch, append],
+            Self::UpdateLock {
+                branch,
+                package,
+                workspace,
+            } => [branch, package]
+                .into_iter()
+                .chain((!workspace.is_empty()).then_some(workspace))
+                .map(String::as_str)
+                .collect(),
+            Self::OpenPullRequest { head, base } => vec![head, base],
+            Self::Schedule(_) => Vec::new(),
+        }
+    }
 }
 
 impl Scenario {
@@ -38,15 +92,10 @@ impl Scenario {
     #[must_use]
     pub fn on_default_branch(mut self, default: &str) -> Self {
         for step in &mut self.steps {
-            let branches = match step {
-                Step::Push(branch) | Step::Commit { branch, .. } => vec![branch],
-                Step::OpenPullRequest { head, base } => vec![head, base],
-            };
-            for branch in branches
-                .into_iter()
-                .filter(|branch| *branch == DEFAULT_BRANCH)
-            {
-                default.clone_into(branch);
+            for branch in step.branches() {
+                if branch == DEFAULT_BRANCH {
+                    default.clone_into(branch);
+                }
             }
         }
         self
@@ -56,11 +105,20 @@ impl Scenario {
         &'a self,
         values: impl IntoIterator<Item = &'a str>,
     ) -> Result<(), String> {
-        let steps = self.steps.iter().flat_map(|step| match step {
-            Step::Push(branch) => vec![branch.as_str()],
-            Step::Commit { branch, append, .. } => vec![branch.as_str(), append.as_str()],
-            Step::OpenPullRequest { head, base } => vec![head.as_str(), base.as_str()],
-        });
+        let steps = self.steps.iter().flat_map(Step::arguments);
+        for step in &self.steps {
+            if let Step::WorkflowDispatch { inputs, .. } = step {
+                let supported = inputs
+                    .values()
+                    .all(|value| value.is_boolean() || value.is_number() || value.is_string());
+                if inputs.len() > 25 || !supported {
+                    return Err(
+                        "workflow_dispatch inputs are at most 25 booleans, numbers or strings"
+                            .to_owned(),
+                    );
+                }
+            }
+        }
         match values
             .into_iter()
             .chain(steps)
@@ -79,11 +137,45 @@ impl Scenario {
         };
         match self.steps.iter().find_map(|step| match step {
             Step::Commit { append, .. } if !inside(append) => Some(append),
+            Step::UpdateLock { workspace, .. } if !workspace.is_empty() && !inside(workspace) => {
+                Some(workspace)
+            }
             _ => None,
         }) {
             Some(path) => Err(format!("`{path}` is not a path inside the repository")),
             None => Ok(()),
         }
+    }
+}
+
+#[must_use]
+pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
+    let block = lock.split("\n\n").find(|block| {
+        block
+            .lines()
+            .any(|line| line == format!("name = \"{package}\""))
+    })?;
+    let version = block
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \""))?
+        .trim_end_matches('"');
+    let numbers: Vec<u64> = version
+        .split('.')
+        .take(3)
+        .map(|part| part.parse().ok())
+        .collect::<Option<_>>()?;
+    let [major, minor, patch] = numbers[..] else {
+        return None;
+    };
+    let next = format!("{major}.{minor}.{}", patch + 1);
+    Some((format!("{package}@{version}"), next))
+}
+
+#[must_use]
+pub fn with_path(list: Option<&str>, path: &str) -> String {
+    match list {
+        Some(list) if !list.is_empty() => format!("{list}:{path}"),
+        _ => path.to_owned(),
     }
 }
 

@@ -4,9 +4,11 @@
 use std::path::Path;
 
 use serde_json::Value;
-use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
+use velnor_local::event::{
+    Commit, MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin,
+};
 use velnor_local::io::checkout::copy_untracked;
-use velnor_local::scenario::{Scenario, Step, overlapping};
+use velnor_local::scenario::{Scenario, Step, next_patch, overlapping, with_path};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
 const SHA_B: &str = "b151fd5994a1e3e2b2ba84bf7d3c3d1e5a5e4f60";
@@ -87,16 +89,137 @@ fn a_push_payload_has_the_shape_github_sent_in_the_probe() {
 
 #[test]
 fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
-    let payload = REPOSITORY.pull_request(&PullRequest {
+    let pull = |action, before, merged, closed_at| PullRequest {
+        action,
         number: 3,
         base: ("main", SHA_A),
         head: ("warm", SHA_B),
+        before,
+        merged,
+        merge_commit: SHA_B,
+        closed_at,
         changed_files: 1,
+    };
+    let opened = REPOSITORY.pull_request(&pull("opened", None, false, None));
+    assert_like_github("pull_request", &opened);
+    assert_eq!(opened["pull_request"]["base"]["sha"], SHA_A);
+    assert_eq!(opened["pull_request"]["head"]["ref"], "warm");
+    assert_eq!(opened["number"], 3);
+    let pushed = REPOSITORY.pull_request(&pull("synchronize", Some(SHA_A), false, None));
+    assert_eq!(pushed["action"], "synchronize");
+    assert_eq!(
+        (&pushed["before"], &pushed["after"]),
+        (&SHA_A.into(), &SHA_B.into())
+    );
+    assert_eq!(opened["pull_request"]["closed_at"], Value::Null);
+    assert_eq!(opened["pull_request"]["merge_commit_sha"], SHA_B);
+    let at = "2026-11-14T00:00:00Z";
+    let merged = REPOSITORY.pull_request(&pull("closed", None, true, Some(at)));
+    assert_eq!(merged["pull_request"]["state"], "closed");
+    assert_eq!(merged["pull_request"]["merged"], true);
+    assert_eq!(merged["pull_request"]["merged_at"], at);
+    assert_eq!(merged["pull_request"]["closed_at"], at);
+    let closed = REPOSITORY.pull_request(&pull("closed", None, false, Some(at)));
+    assert_eq!(closed["pull_request"]["merged_at"], Value::Null);
+    assert_eq!(closed["pull_request"]["closed_at"], at);
+}
+
+#[test]
+fn schedule_and_workflow_dispatch_payloads_have_the_shape_github_sent_in_the_probe() {
+    let scheduled = REPOSITORY.schedule("25 6 * * 1", ".github/workflows/ci.yml");
+    assert_like_github("schedule", &scheduled);
+    assert_eq!(scheduled["schedule"], "25 6 * * 1");
+    assert!(for_standin(scheduled).get("workflow").is_none());
+    let inputs = serde_json::json!({"tag": "x"});
+    let dispatched = REPOSITORY.workflow_dispatch("main", &inputs, ".github/workflows/ci.yml");
+    assert_like_github("workflow_dispatch", &dispatched);
+    assert_eq!(dispatched["ref"], "refs/heads/main");
+    assert_eq!(dispatched["inputs"]["tag"], "x");
+}
+
+#[test]
+fn a_merge_group_payload_names_the_queue_branch_and_its_base() {
+    let queue = "gh-readonly-queue/main/pr-3-007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
+    let commit = Commit::parse(
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904\u{0}2026-11-14T07:00:00+00:00\u{0}Ann\u{0}ann@example.com\u{0}Bob\u{0}bob@example.com\u{0}Merge patch (#3)\n",
+    )
+    .unwrap_or_else(|| unreachable!("a commit"));
+    let payload = REPOSITORY.merge_group(&MergeGroup {
+        base: ("main", SHA_A),
+        head: (queue, SHA_B),
+        commit: &commit,
     });
-    assert_like_github("pull_request", &payload);
-    assert_eq!(payload["pull_request"]["base"]["sha"], SHA_A);
-    assert_eq!(payload["pull_request"]["head"]["ref"], "warm");
-    assert_eq!(payload["number"], 3);
+    assert_eq!(payload["action"], "checks_requested");
+    let group = &payload["merge_group"];
+    assert_eq!(group["head_ref"], format!("refs/heads/{queue}"));
+    assert_eq!(group["head_sha"], SHA_B);
+    assert_eq!(group["base_ref"], "refs/heads/main");
+    assert_eq!(group["base_sha"], SHA_A);
+    assert_eq!(group["head_commit"]["id"], SHA_B);
+    let head = &group["head_commit"];
+    assert_eq!(head["tree_id"], "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+    assert_eq!(head["message"], "Merge patch (#3)");
+    assert_eq!(head["timestamp"], "2026-11-14T07:00:00+00:00");
+    assert_eq!(
+        head["author"],
+        serde_json::json!({"name": "Ann", "email": "ann@example.com"})
+    );
+    assert_eq!(
+        head["committer"],
+        serde_json::json!({"name": "Bob", "email": "bob@example.com"})
+    );
+}
+
+#[test]
+fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenarios");
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        let scenario = Scenario::parse(&std::fs::read(&path).unwrap_or_default())
+            .unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
+            .on_default_branch("main");
+        assert!(
+            scenario.refuse_options(["main"]).is_ok(),
+            "{}",
+            path.display()
+        );
+        names.extend(
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_owned),
+        );
+    }
+    names.sort();
+    assert_eq!(
+        names,
+        ["cold", "docs", "hub", "leaf", "lock", "story", "warm"]
+    );
+    let story = Scenario::parse(&read("scenarios/story.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("main");
+    let shape: Vec<String> = story
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            Step::OpenPullRequest { head, .. } => Some(format!("open {head}")),
+            Step::MergePullRequest(head) => Some(format!("merge {head}")),
+            Step::ClosePullRequest(head) => Some(format!("close {head}")),
+            Step::Push(head) => Some(format!("push {head}")),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        [
+            "open first",
+            "merge first",
+            "open second",
+            "push second",
+            "open third",
+            "close second"
+        ]
+    );
 }
 
 #[test]
@@ -201,4 +324,74 @@ async fn untracked_files_and_inside_links_are_copied_and_escaping_links_are_refu
             "{escaping}"
         );
     }
+}
+
+#[test]
+fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
+    let lock = "[[package]]\nname = \"fnv-other\"\nversion = \"2.3.9\"\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.5\"\nsource = \"registry\"\n";
+    let bump = |package| next_patch(lock, package);
+    assert_eq!(
+        bump("fnv"),
+        Some(("fnv@1.0.5".to_owned(), "1.0.6".to_owned()))
+    );
+    assert_eq!(
+        bump("fnv-other"),
+        Some(("fnv-other@2.3.9".to_owned(), "2.3.10".to_owned()))
+    );
+    assert_eq!(bump("serde"), None);
+    let unusual = "[[package]]\nname = \"pre\"\nversion = \"1.2.3-alpha.1\"\n\n[[package]]\nname = \"build\"\nversion = \"1.2.3+linux\"\n";
+    assert_eq!(next_patch(unusual, "pre"), None);
+    assert_eq!(next_patch(unusual, "build"), None);
+}
+
+#[test]
+fn workflow_dispatch_inputs_keep_their_json_types() {
+    let scenario = br#"{"description": "x", "steps": [{"workflow_dispatch": {"branch": "main", "inputs": {"deploy": false, "count": 3, "tag": "x"}}}]}"#;
+    let scenario = Scenario::parse(scenario).unwrap_or_else(|e| unreachable!("{e}"));
+    let Some(Step::WorkflowDispatch { inputs, .. }) = scenario.steps.first() else {
+        unreachable!("not a workflow_dispatch step")
+    };
+    let payload = REPOSITORY.workflow_dispatch("main", &serde_json::json!(inputs), "ci.yml");
+    assert_eq!(
+        payload["inputs"],
+        serde_json::json!({"deploy": false, "count": 3, "tag": "x"})
+    );
+}
+
+#[test]
+fn dispatch_inputs_are_limited_to_what_github_accepts() {
+    let step = |inputs: serde_json::Value| {
+        let text = serde_json::json!({"description": "x", "steps": [{"workflow_dispatch": {"branch": "main", "inputs": inputs}}]});
+        Scenario::parse(text.to_string().as_bytes()).unwrap_or_else(|e| unreachable!("{e}"))
+    };
+    assert!(
+        step(serde_json::json!({"a": true, "b": 2, "c": "x"}))
+            .refuse_options(["main"])
+            .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"a": [1]}),
+        serde_json::json!({"a": {"b": 1}}),
+        serde_json::json!({"a": null}),
+    ] {
+        assert!(step(bad.clone()).refuse_options(["main"]).is_err(), "{bad}");
+    }
+    let many: serde_json::Map<String, serde_json::Value> = (0..26)
+        .map(|n| (format!("i{n}"), serde_json::json!(n)))
+        .collect();
+    assert!(
+        step(serde_json::Value::Object(many))
+            .refuse_options(["main"])
+            .is_err()
+    );
+}
+
+#[test]
+fn the_copy_is_added_to_the_mise_ignored_paths_the_user_already_has() {
+    assert_eq!(with_path(None, "/state/repo"), "/state/repo");
+    assert_eq!(with_path(Some(""), "/state/repo"), "/state/repo");
+    assert_eq!(
+        with_path(Some("/home/u/mise.toml"), "/state/repo"),
+        "/home/u/mise.toml:/state/repo"
+    );
 }
