@@ -14,6 +14,11 @@ pub(super) async fn reconcile(
     prepared: &PreparedConnection,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
+    Box::pin(crate::worker::storage_initialization::recover_interrupted(
+        context.docker,
+        &prepared.scope,
+    ))
+    .await?;
     let reservations = prepared.scope.physical_runner_reservations().await?;
     for reservation in reservations {
         if reservation.reservation.state != ReservationState::Uncertain

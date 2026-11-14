@@ -13,7 +13,10 @@ use tokio::time::{Instant, sleep};
 use crate::{
     docker_client::docker_deadline,
     error::HostError,
-    journal::{ConnectionJournal, StorageInitializationClaim},
+    journal::{
+        ConnectionJournal, IntentState, PhysicalRunnerJitState, ReservationState,
+        StorageInitializationClaim,
+    },
 };
 
 use super::bounded_by_deadline;
@@ -23,6 +26,41 @@ use crate::worker::storage_initialization::{
         container_matches_claim, inspect_container, verify_engine, verify_image, verify_volumes,
     },
 };
+
+const INTERRUPTED_RECOVERY_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub(crate) async fn recover_interrupted(
+    docker: &Docker,
+    journal: &ConnectionJournal,
+) -> Result<(), HostError> {
+    for reservation in journal.physical_runner_reservations().await? {
+        if reservation.reservation.state != ReservationState::Uncertain
+            || reservation.intent_state != Some(IntentState::Uncertain)
+            || reservation.jit_state != PhysicalRunnerJitState::Absent
+            || journal
+                .storage_initializer_abort_candidate(reservation.reservation_id)
+                .await?
+                .is_none()
+        {
+            continue;
+        }
+        if let Err(error) = recover_absent(
+            docker,
+            journal,
+            reservation.reservation_id,
+            INTERRUPTED_RECOVERY_TIMEOUT,
+        )
+        .await
+        {
+            eprintln!(
+                "The controller keeps an interrupted storage initializer for recovery. connection={} reservation={} reason={error}",
+                journal.connection_id().as_str(),
+                reservation.reservation_id
+            );
+        }
+    }
+    Ok(())
+}
 
 pub(crate) async fn recover_absent(
     docker: &Docker,
