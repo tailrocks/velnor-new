@@ -218,9 +218,20 @@ impl Driver<'_> {
     async fn commit(&self, branch: &str, append: &str, line: &str) -> io::Result<()> {
         self.on_branch(branch).await?;
         let file = self.repo.join(append);
-        let parent = fs::canonicalize(file.parent().unwrap_or(&self.repo)).await?;
-        if !parent.starts_with(fs::canonicalize(&self.repo).await?) {
-            return Err(io::Error::other(format!("{append} leaves the repository")));
+        let root = fs::canonicalize(&self.repo).await?;
+        let mut dir = self.repo.clone();
+        for part in Path::new(append)
+            .parent()
+            .into_iter()
+            .flat_map(Path::components)
+        {
+            dir.push(part);
+            if fs::symlink_metadata(&dir).await.is_err() {
+                fs::create_dir(&dir).await?;
+            }
+            if !fs::canonicalize(&dir).await?.starts_with(&root) {
+                return Err(io::Error::other(format!("{append} leaves the repository")));
+            }
         }
         let mut bytes = match fs::read(&file).await {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
