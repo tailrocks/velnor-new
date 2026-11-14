@@ -692,3 +692,94 @@ fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selec
     assert!(unknown.contains("\"scripts/gen.sh\","), "{unknown}");
     assert!(unknown.contains("[[inputs]]"), "{unknown}");
 }
+
+fn plan_lock(fnv: &str) -> String {
+    format!(
+        "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"0.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"0.0.0\"\ndependencies = [\"fnv\"]\n\n[[package]]\nname = \"fnv\"\nversion = \"{fnv}\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"sum-{fnv}\"\n"
+    )
+}
+
+fn plan_with_bases(repo: &Repo, changed: &[&str], bases: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .current_dir(repo.root())
+        .args(["plan", "--explain", "--changed"])
+        .args(changed);
+    for (path, text) in bases {
+        let file = repo.root().join(format!("base-{}", path.replace('/', "-")));
+        fs::write(&file, text).unwrap_or_else(|e| unreachable!("{e}"));
+        command
+            .arg("--base-file")
+            .arg(format!("{path}={}", file.display()));
+    }
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn plan_reads_the_old_text_of_a_lockfile_and_selects_only_the_members_whose_dependencies_changed() {
+    let repo = plan_repo("lock");
+    repo.write("Cargo.lock", &plan_lock("1.0.6"));
+    let output = plan_with_bases(
+        &repo,
+        &["Cargo.lock"],
+        &[("Cargo.lock", &plan_lock("1.0.5"))],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Cargo.toml: some\n  b lock:fnv\ntools/Cargo.toml: none\n"
+    );
+    let without_base = plan_with_bases(&repo, &["Cargo.lock"], &[]);
+    assert_eq!(
+        String::from_utf8_lossy(&without_base.stdout),
+        "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
+    let missing = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .args(["plan", "--changed", "Cargo.lock", "--base-file"])
+        .arg("Cargo.lock=/nonexistent/old-lock")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!missing.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing.stderr).contains("cannot read /nonexistent/old-lock"),
+        "{missing:?}"
+    );
+}
+
+#[test]
+fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lockfile() {
+    let repo = plan_repo("manifest");
+    let manifest = |version: &str| {
+        format!(
+            "[workspace]\nmembers = [\"a\", \"b\"]\nexclude = [\"tools\"]\nresolver = \"3\"\n\n[workspace.dependencies]\nfnv = \"{version}\"\n"
+        )
+    };
+    repo.write("Cargo.toml", &manifest("1.0.6"));
+    repo.write("Cargo.lock", &plan_lock("1.0.5"));
+    let bases = [
+        ("Cargo.toml", manifest("1.0.5")),
+        ("Cargo.lock", plan_lock("1.0.5")),
+    ];
+    let bases: Vec<(&str, &str)> = bases.iter().map(|(p, t)| (*p, t.as_str())).collect();
+    let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Cargo.toml: none\ntools/Cargo.toml: none\n"
+    );
+    let alone = plan_with_bases(&repo, &["Cargo.toml"], &bases[..1]);
+    assert_eq!(
+        String::from_utf8_lossy(&alone.stdout),
+        "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
+    repo.write(
+        "Cargo.toml",
+        &manifest("1.0.6").replace("resolver = \"3\"", "resolver = \"2\""),
+    );
+    let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
+}

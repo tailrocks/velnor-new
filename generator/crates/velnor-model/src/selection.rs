@@ -12,6 +12,7 @@ pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rus
 pub struct ChangeSet {
     pub paths: BTreeSet<RepoPath>,
     pub base_files: BTreeMap<RepoPath, String>,
+    pub head_files: BTreeMap<RepoPath, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
