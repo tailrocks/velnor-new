@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod audit;
 mod http;
 mod inputs;
 
@@ -11,13 +12,15 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
+use velnor_gen::io::read_checkout;
 use velnor_model::ChangeSet;
-use velnor_rust::{select, unknown_paths};
+use velnor_rust::{detect, select, unknown_paths};
 
+pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
-    BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand, PlanArgs,
-    ReleaseGateArgs,
+    AuditArgs, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
+    PlanArgs, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
@@ -77,6 +80,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
         Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
+            audit_inputs(&current_dir()?, write)
+        }
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Plan(args) => run_plan(&args),
@@ -84,8 +90,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
 }
 
 fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
-    let facts =
-        velnor_gen::io::read_facts(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
+    let checkout = read_checkout(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
+    let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let changes = ChangeSet {
         paths: args.changed.iter().cloned().collect(),
         base_files: BTreeMap::new(),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod classify;
+mod compile_inputs;
 mod detect;
 mod drift;
 mod facts;

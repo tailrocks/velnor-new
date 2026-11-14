@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::classify::{Class, classify};
 use velnor_model::{
-    AllTrigger, ChangeSet, PackageName, RepoFacts, RepoPath, RustCiConfig, RustRoot, RustSelection,
-    SelectionReason,
+    AllTrigger, ChangeSet, CompileInputs, PackageName, RepoFacts, RepoPath, RustCiConfig, RustRoot,
+    RustSelection, SelectionReason,
 };
 
 #[must_use]
@@ -41,7 +41,7 @@ pub fn unknown_paths(facts: &RepoFacts, changes: &ChangeSet) -> BTreeSet<RepoPat
 }
 
 fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
-    let graph = Graph::new(&facts.rust_roots, &facts.config);
+    let graph = Graph::new(facts);
     let mut walk = Walk {
         triggers: vec![None; facts.rust_roots.len()],
         ..Walk::default()
@@ -87,19 +87,16 @@ struct Node<'a> {
     whole: bool,
 }
 
-impl Node<'_> {
-    fn claims(&self, path: &RepoPath) -> bool {
-        relative(self.directory.as_ref(), path).is_some_and(|rest| {
-            self.whole
-                || rest == BUILD_SCRIPT
-                || OWN_FOLDERS.iter().any(|folder| rest.starts_with(folder))
-        })
-    }
+pub(crate) fn claims(directory: Option<&RepoPath>, whole: bool, path: &RepoPath) -> bool {
+    relative(directory, path).is_some_and(|rest| {
+        whole || rest == BUILD_SCRIPT || OWN_FOLDERS.iter().any(|folder| rest.starts_with(folder))
+    })
 }
 
 struct Graph<'a> {
     roots: &'a [RustRoot],
     config: &'a RustCiConfig,
+    inputs: &'a CompileInputs,
     nodes: BTreeMap<&'a RepoPath, Node<'a>>,
     dependents: BTreeMap<&'a RepoPath, Vec<&'a RepoPath>>,
     unowned: Vec<&'a RepoPath>,
@@ -115,10 +112,12 @@ struct Walk<'a> {
 }
 
 impl<'a> Graph<'a> {
-    fn new(roots: &'a [RustRoot], config: &'a RustCiConfig) -> Self {
+    fn new(facts: &'a RepoFacts) -> Self {
+        let roots = &facts.rust_roots;
         let mut graph = Self {
             roots,
-            config,
+            config: &facts.config,
+            inputs: &facts.compile_inputs,
             nodes: BTreeMap::new(),
             dependents: BTreeMap::new(),
             unowned: Vec::new(),
@@ -161,6 +160,17 @@ impl<'a> Graph<'a> {
     }
 
     fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>) {
+        let text = path.as_str();
+        let locked: Vec<&PackageName> = text
+            .match_indices('/')
+            .map(|(at, _)| &text[..at])
+            .chain([text])
+            .filter_map(|prefix| self.inputs.get(&Some(RepoPath::new(prefix).ok()?)))
+            .flatten()
+            .collect();
+        self.seed_named(&locked, path, walk);
+        let everywhere: Vec<&PackageName> = self.inputs.get(&None).into_iter().flatten().collect();
+        self.seed_named(&everywhere, path, walk);
         let root = self
             .roots
             .iter()
@@ -171,7 +181,11 @@ impl<'a> Graph<'a> {
         let package = self
             .nodes
             .iter()
-            .filter(|(_, node)| root.is_some() && node.root == root && node.claims(path))
+            .filter(|(_, node)| {
+                root.is_some()
+                    && node.root == root
+                    && claims(node.directory.as_ref(), node.whole, path)
+            })
             .max_by_key(|(_, node)| depth(node.directory.as_ref()))
             .map(|(manifest, _)| *manifest);
         if let Some(manifest) = package {
@@ -186,17 +200,20 @@ impl<'a> Graph<'a> {
             self.shelters(path, root),
         ) {
             Class::Nothing => {}
-            Class::Packages(names) => {
-                for (manifest, node) in &self.nodes {
-                    if node.root.is_some() && names.contains(&node.name) {
-                        walk.seed(manifest, SelectionReason::Input(path.clone()));
-                    }
-                }
-            }
+            Class::Packages(names) => self.seed_named(&names, path, walk),
             Class::Global(trigger) => walk.trigger(&trigger),
+            Class::Unknown if !locked.is_empty() => {}
             Class::Unknown => {
                 walk.unknown.insert(path);
                 walk.trigger(&AllTrigger::UnknownPath(path.clone()));
+            }
+        }
+    }
+
+    fn seed_named(&self, names: &[&PackageName], path: &RepoPath, walk: &mut Walk<'a>) {
+        for (manifest, node) in &self.nodes {
+            if node.root.is_some() && names.contains(&node.name) {
+                walk.seed(manifest, SelectionReason::Input(path.clone()));
             }
         }
     }
@@ -233,7 +250,7 @@ fn depth(directory: Option<&RepoPath>) -> usize {
     directory.map_or(0, |directory| directory.as_str().len())
 }
 
-fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
+pub(crate) fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
     match directory {
         None => Some(path.as_str()),
         Some(directory) => path
