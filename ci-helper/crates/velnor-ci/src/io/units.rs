@@ -1,10 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use serde::Deserialize;
+use velnor_rust::normalize;
 
 use crate::error::CiError;
+
+#[derive(Deserialize)]
+pub(super) struct Workspace {
+    pub(super) workspace_root: PathBuf,
+    pub(super) target_directory: PathBuf,
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum UnitFile {
@@ -133,4 +144,69 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
+}
+
+pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
+    let directories: Vec<PathBuf> = workspaces
+        .iter()
+        .map(|w| {
+            fs::canonicalize(&w.target_directory).unwrap_or_else(|_| normalize(&w.target_directory))
+        })
+        .collect();
+    for (outer, holder) in directories.iter().enumerate() {
+        for (inner, held) in directories.iter().enumerate() {
+            if outer != inner && held.starts_with(holder) {
+                return Err(CiError::new(format!(
+                    "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
+                    holder.display(),
+                    workspaces[outer].workspace_root.display(),
+                    held.display(),
+                    workspaces[inner].workspace_root.display()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
+    let output = Command::new("cargo")
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--offline",
+        ])
+        .arg("--manifest-path")
+        .arg(manifest)
+        .current_dir(manifest.parent().unwrap_or(manifest))
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "cargo metadata failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
+}
+
+pub(super) fn triples(directory: &Path) -> Result<BTreeSet<String>, CiError> {
+    let output = Command::new("rustc")
+        .args(["--print", "target-list"])
+        .current_dir(directory)
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run rustc --print target-list: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "rustc --print target-list failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect())
 }

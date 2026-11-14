@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod guards;
+mod identity;
 mod reads;
 
 use std::fs;
@@ -231,7 +232,10 @@ pub(super) fn root_package_with_path_dependencies() -> Repo {
 }
 
 pub(super) fn path_dependency_units(repo: &Repo) {
-    let target = "target/debug";
+    path_dependency_units_in(repo, "target/debug");
+}
+
+pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
     for (file, text, fingerprint) in [
         (
             "deps/top-0000000000000001.d",
@@ -282,6 +286,11 @@ pub(super) fn path_dependency_units(repo: &Repo) {
             "deps/ext-000000000000000a.d",
             "ext.rs data/ext.txt",
             "top-000000000000000a/test-integration-test-ext",
+        ),
+        (
+            "deps/ext-000000000000000b.d",
+            "ext.rs data/ext.txt",
+            "other-000000000000000b/test-integration-test-ext",
         ),
     ] {
         unit(

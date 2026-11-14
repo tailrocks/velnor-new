@@ -3,33 +3,27 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::time::SystemTime;
 
-use serde::Deserialize;
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, PackageName, RepoPath};
+use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, normalize, parse_inputs_lock, rerun_if_changed, unlisted,
+    locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, profile, unit_files};
-use crate::coverage::{Built, Unit, UnitKind, gap};
+use super::units::{UnitFile, Workspace, apart, profile, triples, unit_files, workspace};
+use crate::coverage::{Built, Fingerprint, HOST, Unit, UnitKind, gaps};
 use crate::error::CiError;
-
-#[derive(Deserialize)]
-struct Workspace {
-    workspace_root: PathBuf,
-    target_directory: PathBuf,
-}
 
 struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
-    kinds: BTreeMap<(usize, String, String), UnitKind>,
+    fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    present: BTreeSet<(usize, String, String)>,
     scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
@@ -55,11 +49,14 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
+    let triples = triples(&checkout.root)?;
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
-        kinds: BTreeMap::new(),
+        fingerprints: BTreeMap::new(),
+        names: BTreeMap::new(),
+        present: BTreeSet::new(),
         scripts: BTreeMap::new(),
         targets: workspaces
             .iter()
@@ -84,29 +81,8 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     for (unit, file, index) in files {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
-    let gaps: Vec<String> = facts
-        .rust_roots
-        .iter()
-        .zip(&workspaces)
-        .zip(&audit.built)
-        .filter_map(|((root, workspace), built)| {
-            let gap = gap(root, &facts.unowned, built)?;
-            Some(format!(
-                "in {} for {}",
-                workspace
-                    .target_directory
-                    .join(&gap.configuration)
-                    .display(),
-                gap.missing.join(", ")
-            ))
-        })
-        .collect();
-    if !gaps.is_empty() {
-        return Err(CiError::new(format!(
-            "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root",
-            gaps.join("; ")
-        )));
-    }
+    audit.orphans();
+    complete(&facts, &workspaces, &audit.built, &triples)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -116,27 +92,39 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     compare(&audit.found, &listed, &summary)
 }
 
-fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
-    let directories: Vec<PathBuf> = workspaces
+fn complete(
+    facts: &RepoFacts,
+    workspaces: &[Workspace],
+    built: &[Built],
+    triples: &BTreeSet<String>,
+) -> Result<(), CiError> {
+    let gaps: Vec<String> = facts
+        .rust_roots
         .iter()
-        .map(|w| {
-            fs::canonicalize(&w.target_directory).unwrap_or_else(|_| normalize(&w.target_directory))
+        .zip(workspaces)
+        .zip(built)
+        .flat_map(|((root, workspace), built)| {
+            gaps(root, &facts.unowned, built, triples)
+                .into_iter()
+                .map(|gap| {
+                    format!(
+                        "in {} for {}",
+                        workspace
+                            .target_directory
+                            .join(&gap.configuration)
+                            .display(),
+                        gap.missing.join(", ")
+                    )
+                })
         })
         .collect();
-    for (outer, holder) in directories.iter().enumerate() {
-        for (inner, held) in directories.iter().enumerate() {
-            if outer != inner && held.starts_with(holder) {
-                return Err(CiError::new(format!(
-                    "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
-                    holder.display(),
-                    workspaces[outer].workspace_root.display(),
-                    held.display(),
-                    workspaces[inner].workspace_root.display()
-                )));
-            }
-        }
+    if gaps.is_empty() {
+        return Ok(());
     }
-    Ok(())
+    Err(CiError::new(format!(
+        "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        gaps.join("; ")
+    )))
 }
 
 fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
@@ -187,13 +175,17 @@ impl Audit<'_> {
                 hash,
                 name,
             } => {
-                if let Some(kind) = UnitKind::of_fingerprint(&name) {
-                    if kind == UnitKind::Normal {
-                        self.kinds
-                            .insert((index, configuration.clone(), name.clone()), kind);
+                if let Some(fingerprint) = Fingerprint::parse(&name) {
+                    if fingerprint.kind == UnitKind::Normal {
+                        self.names.insert(
+                            (index, configuration.clone(), fingerprint.target.clone()),
+                            (package.clone(), fingerprint.clone()),
+                        );
                     }
-                    self.kinds
-                        .insert((index, configuration.clone(), hash), kind);
+                    self.fingerprints.insert(
+                        (index, configuration.clone(), hash),
+                        (package.clone(), fingerprint),
+                    );
                 }
                 if name.starts_with("lib-")
                     && let Ok(package) = PackageName::new(package)
@@ -206,35 +198,42 @@ impl Audit<'_> {
                 hash,
                 stem,
             } => {
-                let kind = configuration.as_ref().and_then(|configuration| {
-                    let names = match &hash {
-                        Some(hash) => vec![hash.clone()],
-                        None => ["lib-", "bin-"]
-                            .iter()
-                            .map(|prefix| format!("{prefix}{stem}"))
-                            .collect(),
-                    };
-                    names
-                        .into_iter()
-                        .find_map(|name| self.kinds.get(&(index, configuration.clone(), name)))
-                        .copied()
+                let identity = configuration.as_ref().and_then(|configuration| {
+                    let key = (
+                        index,
+                        configuration.clone(),
+                        hash.clone().unwrap_or_else(|| stem.clone()),
+                    );
+                    self.present.insert(key.clone());
+                    match hash {
+                        Some(_) => self.fingerprints.get(&key),
+                        None => self.names.get(&key),
+                    }
+                    .cloned()
                 });
-                if hash.is_none() && kind.is_none() {
+                if hash.is_none() && identity.is_none() {
                     return Ok(());
                 }
                 let Some((source, _)) = self.dep_info(workspace, file)? else {
                     return Ok(());
                 };
-                if let (Some(configuration), Some(kind)) = (configuration, kind) {
+                if let (Some(configuration), Some((package, fingerprint))) =
+                    (configuration, identity)
+                {
                     self.built[index].units.insert(Unit {
                         configuration,
-                        kind,
+                        kind: fingerprint.kind,
+                        package,
+                        target: fingerprint.target,
                         source,
                     });
                 }
             }
             UnitFile::Script { profile, package } => {
                 if let Some((source, built)) = self.dep_info(workspace, file)? {
+                    if profile == HOST {
+                        self.built[index].scripts.insert(source.clone());
+                    }
                     self.scripts
                         .entry((index, profile, package))
                         .or_default()
@@ -247,6 +246,21 @@ impl Audit<'_> {
             } => self.build_output(index, file, &configuration, &package)?,
         }
         Ok(())
+    }
+
+    fn orphans(&mut self) {
+        for ((index, configuration, hash), (package, fingerprint)) in &self.fingerprints {
+            let key = |name: &String| (*index, configuration.clone(), name.clone());
+            if !self.present.contains(&key(hash))
+                && !self.present.contains(&key(&fingerprint.target))
+            {
+                self.built[*index].orphans.insert((
+                    configuration.clone(),
+                    package.clone(),
+                    fingerprint.clone(),
+                ));
+            }
+        }
     }
 
     fn dep_info(
@@ -312,6 +326,8 @@ impl Audit<'_> {
                 self.built[index].units.insert(Unit {
                     configuration: configuration.to_owned(),
                     kind: UnitKind::Run,
+                    package: package.to_owned(),
+                    target: String::new(),
                     source,
                 });
             }
@@ -348,30 +364,6 @@ fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
     paths
         .iter()
         .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
-}
-
-fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
-    let output = Command::new("cargo")
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-        ])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .current_dir(manifest.parent().unwrap_or(manifest))
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
 }
 
 fn read(file: &Path) -> Result<String, CiError> {

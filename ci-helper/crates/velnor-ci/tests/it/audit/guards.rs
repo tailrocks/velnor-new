@@ -181,10 +181,12 @@ fn a_unit_of_another_profile_triple_or_kind_does_not_stand_in_for_a_missing_test
     let repo = workspace_below_the_root();
     let target = "rust/target/debug";
     own_units(&repo, target, &[]);
-    let harness = repo
-        .root()
-        .join(format!("{target}/deps/lib-f00000000000000a.d"));
-    fs::remove_file(&harness).unwrap_or_else(|e| unreachable!("{e}"));
+    for unbuilt in [
+        format!("{target}/deps/lib-f00000000000000a.d"),
+        format!("{target}/.fingerprint/lib-f00000000000000a/test-lib-lib"),
+    ] {
+        fs::remove_file(repo.root().join(unbuilt)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     let stand_ins = [
         ("rust/target/release", "test-lib-lib"),
@@ -223,18 +225,27 @@ fn a_unit_of_another_profile_triple_or_kind_does_not_stand_in_for_a_missing_test
             "",
         );
     }
-    unit(
-        &repo,
-        &format!("{target}/deps/lib-f00000000000000a.d"),
-        "out.d: lib/src/lib.rs\n",
+    own_units(&repo, target, &[]);
+    let partial_triple = audit(&repo, &["--write"]);
+    assert_eq!(partial_triple.status.code(), Some(1), "{partial_triple:?}");
+    assert!(
+        String::from_utf8_lossy(&partial_triple.stderr).contains(
+            "/rust/target/x86_64-unknown-linux-gnu/debug for app (rust/app/Cargo.toml) target app (rust/app/src/lib.rs, 0 of 2 units)"
+        ),
+        "{partial_triple:?}"
     );
+    assert!(!lock.exists());
+
+    fs::remove_dir_all(repo.root().join("rust/target/x86_64-unknown-linux-gnu"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
     assert!(lock.exists());
 }
 
 #[test]
-fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_target_passes() {
+fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_target_passes_unless_a_partial_debug_build_remains()
+ {
     let repo = workspace_below_the_root();
     repo.write(
         "rust/lib/Cargo.toml",
@@ -249,13 +260,48 @@ fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_targe
         repo.root().join(format!("{target}/deps/lib.d")),
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
-        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
+        fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
         ""
     );
+
+    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(
+        &repo,
+        "rust/target/check/debug/deps/lib-f00000000000000e.d",
+        "out.d: lib/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        "rust/target/check/debug/.fingerprint/lib-f00000000000000e/test-lib-lib",
+        "",
+    );
+    let nested_tool = audit(&repo, &["--write"]);
+    assert!(nested_tool.status.success(), "{nested_tool:?}");
+
+    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(
+        &repo,
+        "rust/target/debug/deps/lib-f00000000000000e.d",
+        "out.d: lib/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        "rust/target/debug/.fingerprint/lib-f00000000000000e/test-lib-lib",
+        "",
+    );
+    let leftover = audit(&repo, &["--write"]);
+    assert_eq!(leftover.status.code(), Some(1), "{leftover:?}");
+    assert!(
+        String::from_utf8_lossy(&leftover.stderr).contains(
+            "/rust/target/debug for app (rust/app/Cargo.toml) target app (rust/app/src/lib.rs, 0 of 2 units)"
+        ),
+        "{leftover:?}"
+    );
+    assert!(!lock.exists());
 }
 
 #[test]
@@ -271,7 +317,7 @@ fn a_reachable_path_dependency_built_without_its_dep_info_makes_the_audit_refuse
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
     assert!(
         String::from_utf8_lossy(&partial.stderr)
-            .contains(" for path dependency leaf (vendor/leaf/Cargo.toml, 0 of 1 units);"),
+            .contains(" for path dependency leaf (vendor/leaf/Cargo.toml, 1 of 2 units), leaf target leaf (normal unit with a cargo fingerprint and no dep-info);"),
         "{partial:?}"
     );
     let lock = repo.root().join(".velnor/rust-inputs.lock");
