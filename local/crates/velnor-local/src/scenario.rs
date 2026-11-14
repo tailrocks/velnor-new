@@ -187,6 +187,35 @@ pub struct Outcome {
     pub conclusion: &'static str,
     pub started: Option<u64>,
     pub metrics: Result<PathBuf, String>,
+    pub caches: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Restore {
+    writer: String,
+    key: String,
+    matched_key: Option<String>,
+    scope: Option<String>,
+}
+
+#[must_use]
+pub fn restores(journal: &str, run: u64, jobs: &[crate::standin::Job]) -> Vec<String> {
+    let prefix = format!("Actions.Results:{run}:");
+    journal
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Restore>(line).ok())
+        .filter_map(|restore| {
+            let job_id = restore.writer.strip_prefix(&prefix)?;
+            let job = jobs.iter().find(|job| job.job_id == job_id)?;
+            Some(match (restore.matched_key, restore.scope) {
+                (Some(matched), Some(scope)) => format!(
+                    "job {}: key {} restored {matched} from {scope}",
+                    job.name, restore.key
+                ),
+                _ => format!("job {}: key {} found no entry", job.name, restore.key),
+            })
+        })
+        .collect()
 }
 
 impl Outcome {
@@ -228,26 +257,92 @@ pub fn overlapping(state: &Path, checkout: &Path) -> bool {
 }
 
 #[must_use]
+pub fn inside(root: &Path, dir: &Path) -> bool {
+    dir.starts_with(root)
+}
+
+pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, PathBuf)>, String> {
+    let mut planned: Vec<(String, String, PathBuf)> = Vec::new();
+    for scenario in scenarios {
+        let path = Path::new(scenario);
+        let stem = match (path.extension(), path.file_stem()) {
+            (Some(extension), Some(stem)) if extension == "json" => {
+                stem.to_string_lossy().into_owned()
+            }
+            _ => scenario.clone(),
+        };
+        let mut parts = Path::new(&stem).components();
+        if !matches!(
+            (parts.next(), parts.next()),
+            (Some(Component::Normal(_)), None)
+        ) {
+            return Err(format!(
+                "{scenario} has no name that can be a directory inside the state directory"
+            ));
+        }
+        if let Some((other, ..)) = planned.iter().find(|(_, taken, _)| *taken == stem) {
+            return Err(format!(
+                "{other} and {scenario} would share the environment {stem}; give each scenario its own name"
+            ));
+        }
+        let dir = if scenarios.len() > 1 {
+            dir.join(&stem)
+        } else {
+            dir.to_owned()
+        };
+        planned.push((scenario.clone(), stem, dir));
+    }
+    Ok(planned)
+}
+
+pub fn distinct(planned: &[(String, String, PathBuf)]) -> Result<(), String> {
+    for (index, (scenario, _, dir)) in planned.iter().enumerate() {
+        if let Some((other, ..)) = planned[..index].iter().find(|(_, _, taken)| taken == dir) {
+            return Err(format!(
+                "{other} and {scenario} would share the environment {}; give each scenario its own directory",
+                dir.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {
+    let failed: Vec<String> = results
+        .iter()
+        .filter_map(|(name, result)| {
+            result
+                .as_ref()
+                .err()
+                .map(|error| format!("{name}: {error}"))
+        })
+        .collect();
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(failed.join("; "))
+    }
+}
+
+#[must_use]
 pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64) -> String {
-    let mut text = format!("\nVerdict of scenario {scenario}\n");
+    let mut lines = vec![format!("Verdict of scenario {scenario}")];
     for outcome in outcomes {
-        let _ = writeln!(text, "  {}", outcome.line());
+        lines.push(format!("  {}", outcome.line()));
+        lines.extend(outcome.caches.iter().map(|cache| format!("    {cache}")));
     }
     let first = outcomes.iter().filter_map(|outcome| outcome.started).min();
-    let _ = writeln!(
-        text,
+    lines.push(format!(
         "Timing: up in {up_seconds:.1} s, first job started {} after up began.",
         first.map_or_else(
             || "never".to_owned(),
             |at| format!("{} s", at.saturating_sub(up_at))
         )
-    );
-    text.push_str(
-        "Executed: every step of every job above except actions/checkout, by GitHub's official runner \
-         in linux/arm64 containers.\n\
-         Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; \
-         the cache server decided every cache hit, miss and refusal with velnor-cache-rules; \
-         the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.\n",
-    );
-    text
+    ));
+    lines.push("Executed: every step of every job above except actions/checkout, by GitHub's official runner in linux/arm64 containers.".to_owned());
+    lines.push("Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.".to_owned());
+    lines.iter().fold(String::new(), |mut text, line| {
+        let _ = writeln!(text, "velnor-local {scenario}: {line}");
+        text
+    })
 }
