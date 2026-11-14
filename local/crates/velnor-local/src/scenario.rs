@@ -256,6 +256,11 @@ pub fn overlapping(state: &Path, checkout: &Path) -> bool {
     state.starts_with(checkout) || checkout.starts_with(state)
 }
 
+#[must_use]
+pub fn inside(root: &Path, dir: &Path) -> bool {
+    dir.starts_with(root)
+}
+
 pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, PathBuf)>, String> {
     let mut planned: Vec<(String, String, PathBuf)> = Vec::new();
     for scenario in scenarios {

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use velnor_local::scenario::{Outcome, plan, restores, summary, verdict};
+use velnor_local::scenario::{Outcome, inside, plan, restores, summary, verdict};
 use velnor_local::standin::Job;
 
 #[test]
@@ -63,6 +63,16 @@ fn each_scenario_gets_its_own_environment_and_a_shared_one_is_refused() {
     ] {
         assert!(plan(&names(escaping), root).is_err(), "{escaping:?}");
     }
+}
+
+#[test]
+fn a_scenario_directory_that_resolves_outside_the_state_directory_is_refused() {
+    let root = Path::new("/state");
+    assert!(inside(root, root));
+    assert!(inside(root, Path::new("/state/docs")));
+    assert!(!inside(root, Path::new("/elsewhere/docs")));
+    assert!(!inside(root, Path::new("/")));
+    assert!(!inside(root, Path::new("/statement/docs")));
 }
 
 #[test]

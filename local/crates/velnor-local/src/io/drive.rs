@@ -19,7 +19,7 @@ use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
-use crate::scenario::{Outcome, Scenario, Step, overlapping, plan, summary, verdict};
+use crate::scenario::{Outcome, Scenario, Step, inside, overlapping, plan, summary, verdict};
 use crate::standin;
 
 mod outcome;
@@ -50,23 +50,34 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
         }
     });
     let mut running = JoinSet::new();
+    let mut spawned = BTreeMap::new();
     for (name, stem, dir) in planned {
         let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
-        running.spawn(async move {
+        let task = (stem.clone(), dir.clone());
+        let handle = running.spawn(async move {
             let Ok(_slot) = slots.acquire().await else {
                 return (stem, Err("interrupted before it started".to_owned()));
             };
             let result = run_one(&args, &name, &stem, &dir, &slots).await;
             (stem, result.map_err(|error| error.to_string()))
         });
+        spawned.insert(handle.id(), task);
     }
     let mut results = Vec::new();
-    while let Some(joined) = running.join_next().await {
-        results.push(
-            joined.unwrap_or_else(|error| {
-                ("a scenario".to_owned(), Err(format!("stopped: {error}")))
-            }),
-        );
+    while let Some(joined) = running.join_next_with_id().await {
+        match joined {
+            Ok((_, result)) => results.push(result),
+            Err(error) => {
+                let (stem, dir) = spawned.remove(&error.id()).unwrap_or_default();
+                let teardown = match Environment::at(&dir, DockerCli).await {
+                    Ok(env) => env.down().await,
+                    Err(error) => Err(error),
+                };
+                let teardown =
+                    teardown.map_or_else(|e| format!("; teardown failed: {e}"), |()| String::new());
+                results.push((stem, Err(format!("stopped: {error}{teardown}"))));
+            }
+        }
     }
     interrupt.abort();
     summary(&results).map_err(io::Error::other)
@@ -95,6 +106,12 @@ async fn run_one(
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
     let env = Environment::at(dir, DockerCli).await?;
+    if !inside(&fs::canonicalize(&args.environment.dir).await?, &env.dir) {
+        return Err(io::Error::other(format!(
+            "{} leads outside the state directory",
+            dir.display()
+        )));
+    }
     let checkout = fs::canonicalize(&args.repo).await?;
     if overlapping(&env.dir, &checkout) {
         return Err(io::Error::other(
