@@ -27,7 +27,7 @@ const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 #[cfg(target_os = "linux")]
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 #[cfg(target_os = "linux")]
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 
 pub(in crate::worker_binding) fn mount_namespace_identity(
     pid: u32,

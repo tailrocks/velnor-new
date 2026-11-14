@@ -1,19 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{fs::File, io::Read, path::Path};
+
 use crate::{ProbeError, units::digits};
 
 #[cfg(target_os = "linux")]
 const TARGET: &str = "/velnor/docker-root";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+pub const MOUNTINFO_LIMIT: usize = 1024 * 1024;
+
+pub fn read_mountinfo(path: &Path) -> Result<Vec<u8>, ProbeError> {
+    let file = File::open(path).map_err(|error| ProbeError::Read("mountinfo", error))?;
+    let mut bytes = Vec::with_capacity(4096);
+    file.take(u64::try_from(MOUNTINFO_LIMIT + 1).map_err(|_| ProbeError::Overflow("input_limit"))?)
+        .read_to_end(&mut bytes)
+        .map_err(|error| ProbeError::Read("mountinfo", error))?;
+    if bytes.len() > MOUNTINFO_LIMIT {
+        return Err(ProbeError::InputTooLarge("mountinfo"));
+    }
+    Ok(bytes)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct MountEntry {
+pub struct MountEntry {
     pub(crate) mount_id: u64,
     pub(crate) device_major: u32,
     pub(crate) device_minor: u32,
     pub(crate) root: String,
-    pub(crate) filesystem_type: String,
+    pub filesystem_type: String,
     pub(crate) read_only: bool,
     pub(crate) executable: bool,
 }
@@ -91,7 +105,7 @@ pub(crate) fn attachment_mount_source(_input: &[u8], _target: &str) -> Result<St
     Err(ProbeError::Invalid("linux_guest_required"))
 }
 
-pub(crate) fn cgroup2_root(input: &[u8]) -> Result<MountEntry, ProbeError> {
+pub fn cgroup2_root(input: &[u8]) -> Result<MountEntry, ProbeError> {
     unique_mount(
         input,
         "/sys/fs/cgroup",

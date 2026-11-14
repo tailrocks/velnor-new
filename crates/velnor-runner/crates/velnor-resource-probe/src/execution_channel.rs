@@ -27,7 +27,7 @@ const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const CONTROL_OWNER: (u32, u32) = (0, 0);
 const CONTROL_MODE: u32 = 0o555;
 const RUNNER_OWNER: (u32, u32) = (1000, 1000);

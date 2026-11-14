@@ -41,7 +41,7 @@ use super::{
 const PUBLISHER_ROOT: &str = "/opt/velnor";
 const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const CONTROL_UID: u32 = 0;
 const CONTROL_GID: u32 = 0;
 const CONTROL_DIRECTORY_MODE: u32 = 0o555;

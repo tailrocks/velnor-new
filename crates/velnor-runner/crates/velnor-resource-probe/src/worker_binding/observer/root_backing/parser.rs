@@ -5,7 +5,7 @@ use crate::ProbeError;
 
 pub(super) const ROOT_PATH_LIMIT: usize = 4096;
 #[cfg(target_os = "linux")]
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 #[cfg(target_os = "linux")]
 const MAX_LOWER_DIRS: usize = 128;
 #[cfg(target_os = "linux")]

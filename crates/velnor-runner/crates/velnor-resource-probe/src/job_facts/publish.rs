@@ -23,7 +23,7 @@ const RUNTIME_DIRECTORY_TARGET: &str = "/opt/velnor/runtime-identity";
 const GUEST_IMAGE_NAME: &str = "guest-image.json";
 const GUEST_IMAGE_PATH: &str = "/opt/velnor/runtime-identity/guest-image.json";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const PAYLOAD_LIMIT: usize = 64 * 1024;
 const GUEST_IMAGE_LIMIT: usize = 16 * 1024;
 const ROOT_UID: u32 = 0;

@@ -32,7 +32,7 @@ pub mod job_facts_wire;
 pub mod job_hook;
 mod load;
 mod memory;
-mod mountinfo;
+pub mod mountinfo;
 mod pressure;
 mod record;
 mod sample;

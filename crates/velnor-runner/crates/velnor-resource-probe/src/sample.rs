@@ -24,7 +24,7 @@ const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const MEMINFO_LIMIT: usize = 16 * 1024;
 const LOADAVG_LIMIT: usize = 256;
 const PRESSURE_LIMIT: usize = 4096;
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const SMALL_LIMIT: usize = 4096;
 
 pub fn sample() -> Result<ProbeRecord, ProbeError> {

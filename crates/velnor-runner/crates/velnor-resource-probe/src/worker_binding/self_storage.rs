@@ -17,7 +17,7 @@ const CGROUP_PATH: &str = "/proc/self/cgroup";
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const PROC_LIMIT: usize = 4096;
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const CGROUP_FILE_LIMIT: usize = 4096;
 
 pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservation, ProbeError> {

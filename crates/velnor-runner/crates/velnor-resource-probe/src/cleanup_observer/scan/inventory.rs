@@ -18,7 +18,7 @@ use super::{
 use crate::cleanup_observer_wire::{descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices};
 
 const PROC: &str = "/proc";
-const SELF_MOUNTINFO_LIMIT: usize = 1_048_576;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const MAX_PROCESSES: usize = 4096;
 const MAX_TASKS: usize = 16_384;
 const MAX_FDS_PER_TASK: usize = 4096;
@@ -88,7 +88,7 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
     let observer_namespace = namespace_identity("/proc/self/ns/mnt").ok();
     let self_mountinfo = read_bounded(
         "/proc/self/mountinfo",
-        SELF_MOUNTINFO_LIMIT,
+        MOUNTINFO_LIMIT,
         "cleanup_self_mountinfo",
     )
     .unwrap_or_default();

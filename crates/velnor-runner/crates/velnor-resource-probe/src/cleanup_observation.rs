@@ -18,7 +18,7 @@ use crate::{
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo::MOUNTINFO_LIMIT;
 const BOOT_ID_LIMIT: usize = 128;
 const MAX_PATH_BYTES: usize = 256;
 
