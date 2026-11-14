@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AllTrigger, RustSelection};
+use velnor_model::{AllTrigger, RustMember, RustSelection};
 
 use crate::cargo_lock::{change, lock, manifest, selected, two_workspaces};
 use crate::lock_affected::{
-    Pkg, affected, affected_with, krate, member, render, replaced, workspace,
+    Pkg, affected, affected_with, krate, member as member_pkg, render, replaced, workspace,
 };
-use crate::select::{all, changed, depends_on, some};
+use crate::select::{all, changed, depends_on, facts, member, path, some};
 
 #[test]
 fn a_lock_only_change_of_a_members_version_is_an_error_so_that_everything_runs() {
@@ -22,7 +22,10 @@ fn a_lock_only_change_of_a_members_version_is_an_error_so_that_everything_runs()
         };
         render(
             4,
-            &replaced(&base, member(member_name, dependencies).version("0.1.0")),
+            &replaced(
+                &base,
+                member_pkg(member_name, dependencies).version("0.1.0"),
+            ),
             "",
         )
     };
@@ -123,7 +126,7 @@ fn a_members_version_that_only_the_lockfile_changes_selects_everything() {
     ];
     let lib_bumped = lock(&replaced(
         &workspace(),
-        member("lib", &["core", "hex"]).version("0.1.0"),
+        member_pkg("lib", &["core", "hex"]).version("0.1.0"),
     ));
     assert_eq!(
         selected(&facts, &change(&[("Cargo.lock", &before, &lib_bumped)])),
@@ -192,4 +195,56 @@ fn a_changed_version_of_a_dependency_with_a_path_or_git_source_selects_everythin
             "{new}"
         );
     }
+}
+
+#[test]
+fn a_root_packages_version_that_only_the_lockfile_changes_selects_everything_beside_a_version_only_manifest_edit()
+ {
+    let facts = facts(vec![(
+        "Cargo.toml",
+        vec![
+            RustMember {
+                manifest: path("Cargo.toml"),
+                directory: None,
+                ..member("app", "app", &[("lib", "lib")])
+            },
+            member("core", "core", &[]),
+            member("lib", "lib", &[("core", "core")]),
+            member("tool", "tool", &[]),
+        ],
+    )]);
+    let before = lock(&workspace());
+    let root_bumped = lock(&replaced(
+        &workspace(),
+        member_pkg("app", &["lib"]).version("0.1.0"),
+    ));
+    let lib_bumped = lock(&replaced(
+        &workspace(),
+        member_pkg("lib", &["core", "hex"]).version("0.1.0"),
+    ));
+    let (old, new) = (
+        manifest("serde = \"1\"\n", ""),
+        manifest("serde = \"2\"\n", ""),
+    );
+    let edit = |head_lock: &str, members: &[&str]| {
+        let mut files = vec![
+            ("Cargo.toml", old.as_str(), new.as_str()),
+            ("Cargo.lock", before.as_str(), head_lock),
+        ];
+        files.extend(members.iter().map(|path| (*path, "", "")));
+        selected(&facts, &change(&files))
+    };
+    assert_eq!(
+        edit(&root_bumped, &[]),
+        vec![all(AllTrigger::WorkspaceManifest)],
+        "the root package alone"
+    );
+    assert_eq!(
+        edit(&lib_bumped, &["lib/Cargo.toml"]),
+        vec![some(&[
+            ("lib", changed("lib/Cargo.toml")),
+            ("app", depends_on("lib"))
+        ])],
+        "a member with its manifest, beside the same manifest edit"
+    );
 }
