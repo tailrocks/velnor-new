@@ -223,7 +223,8 @@ impl Audit<'_> {
                 if hash.is_none() && identity.is_none() {
                     return Ok(());
                 }
-                let Some((source, _)) = self.dep_info(workspace, file)? else {
+                let package = identity.as_ref().map(|(package, _)| package.as_str());
+                let Some((source, _)) = self.dep_info(workspace, file, package)? else {
                     return Ok(());
                 };
                 if let (Some(configuration), Some((package, fingerprint))) =
@@ -253,6 +254,7 @@ impl Audit<'_> {
         &mut self,
         workspace: &Path,
         file: &Path,
+        package: Option<&str>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
         let text = read(file)?;
         let built = modified(file)?;
@@ -266,7 +268,7 @@ impl Audit<'_> {
         if changed_since(workspace, &paths, built) {
             return Ok(None);
         }
-        for owner in self.owners.of(&source) {
+        for owner in self.owners.of(package, &source) {
             self.credit(&owner, workspace, &paths, false);
         }
         self.units += 1;
@@ -294,7 +296,7 @@ impl Audit<'_> {
         let mut seen = BTreeSet::new();
         for source in scripts {
             let mut ran = false;
-            for owner in self.owners.of(&source) {
+            for owner in self.owners.of(Some(package), &source) {
                 let base = owner.directory().map_or_else(
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
