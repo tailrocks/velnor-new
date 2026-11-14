@@ -6,14 +6,15 @@ mod plan;
 mod repo;
 
 pub use ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
-    TargetName,
+    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
+    Sha256, TargetName,
 };
 pub use plan::{
     Access, CargoCommand, Concurrency, HelperBinary, HelperCommand, HelperRelease, Job,
     PermissionScope, Permissions, Platform, Step, StepKind, Triggers, WorkflowPlan,
 };
 pub use repo::{
-    DependencyKind, PackageDependency, RepoFacts, RepoView, RustCiConfig, RustMetadata,
-    RustPackage, RustRoot, Target, TargetKind, ToolPins,
+    DependencyKind, MemberDependency, PackageDependency, RepoFacts, RepoView, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, ToolPin, ToolPins,
+    Toolchain,
 };

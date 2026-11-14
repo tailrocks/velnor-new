@@ -247,6 +247,10 @@ fn replace(file: &Path, content: &[u8]) -> Result<(), Error> {
 }
 
 pub fn manifest_file(root: &Path, manifest: &RepoPath) -> Result<PathBuf, Error> {
+    regular_file(
+        root,
+        &manifest.sibling(&RepoPath::from_static("Cargo.lock")),
+    )?;
     regular_file(root, manifest)?.ok_or_else(|| Error::NotRegular(manifest.clone()))
 }
 

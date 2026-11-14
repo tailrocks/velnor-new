@@ -941,6 +941,7 @@ inputs = [
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",
   "generator/samples/two-roots/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml",
   "mise.toml",
 ]
 tools = ["jactionlint-linux-x64"]

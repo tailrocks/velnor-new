@@ -7,7 +7,7 @@ use std::path::Path;
 
 use velnor_gen::{COMPATIBLE_HELPER_SERIES, GenerateError, expected_files};
 use velnor_model::{HelperVersion, RepoView};
-use velnor_rust::{DetectError, LOCK_PATH, pin_lock};
+use velnor_rust::{DetectError, LOCK_PATH, Reason, pin_lock};
 
 use crate::pipeline::{view, workflow};
 
@@ -117,7 +117,13 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
     for lock in cases {
         let result = expected_files(&with_lock(&lock)?);
         assert!(
-            matches!(result, Err(GenerateError::Detect(DetectError::Lock(_)))),
+            matches!(
+                result,
+                Err(GenerateError::Detect(DetectError::Invalid {
+                    reason: Reason::HelperLock(_),
+                    ..
+                }))
+            ),
             "{lock} gave {result:?}"
         );
     }
@@ -125,7 +131,10 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
     binary.files.insert(LOCK_PATH, vec![0xff, 0xfe]);
     assert!(matches!(
         expected_files(&binary),
-        Err(GenerateError::Detect(DetectError::Lock(_)))
+        Err(GenerateError::Detect(DetectError::Invalid {
+            reason: Reason::HelperLock(_),
+            ..
+        }))
     ));
     Ok(())
 }

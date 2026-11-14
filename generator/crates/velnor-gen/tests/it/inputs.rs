@@ -28,10 +28,11 @@ fn dependency(
     })
 }
 
-fn target(name: &str, kinds: Vec<TargetKind>) -> Result<Target, Box<dyn Error>> {
+fn target(name: &str, kinds: Vec<TargetKind>, tests: bool) -> Result<Target, Box<dyn Error>> {
     Ok(Target {
         name: TargetName::new(name)?,
         kinds,
+        tests,
     })
 }
 
@@ -51,10 +52,10 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
           {"name": "root", "kind": "build", "path": "/repo"}
         ],
         "targets": [
-          {"name": "app", "kind": ["bin"], "src_path": "/repo/app/src/main.rs"},
-          {"name": "derive", "kind": ["proc-macro"]},
-          {"name": "build-script-build", "kind": ["custom-build"]},
-          {"name": "smoke", "kind": ["test"]}
+          {"name": "app", "kind": ["bin"], "src_path": "/repo/app/src/main.rs", "test": true},
+          {"name": "derive", "kind": ["proc-macro"], "test": false},
+          {"name": "build-script-build", "kind": ["custom-build"], "test": false},
+          {"name": "smoke", "kind": ["test"], "test": true}
         ]
       }]
     }"#;
@@ -73,10 +74,10 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
                 dependency("root", DependencyKind::Build, Some("Cargo.toml"))?,
             ],
             targets: vec![
-                target("app", vec![TargetKind::Bin])?,
-                target("derive", vec![TargetKind::Lib])?,
-                target("build-script-build", vec![TargetKind::BuildScript])?,
-                target("smoke", vec![TargetKind::Test])?,
+                target("app", vec![TargetKind::Bin], true)?,
+                target("derive", vec![TargetKind::ProcMacro], false)?,
+                target("build-script-build", vec![TargetKind::BuildScript], false)?,
+                target("smoke", vec![TargetKind::Test], true)?,
             ],
         }],
     };

@@ -338,8 +338,15 @@ fn cargo_metadata_is_run_only_on_a_real_manifest_inside_the_repository() -> Test
     let directory_link = Scratch::new("manifest-directory-link")?;
     write(&directory_link.outside().join("Cargo.toml"), "[package]\n")?;
     directory_link.link("crates/a", &directory_link.outside())?;
+    let lock_link = Scratch::new("manifest-lock-link")?;
+    write(&lock_link.repo().join(manifest.as_str()), "[package]\n")?;
+    write(&lock_link.outside().join("Cargo.lock"), "version = 4\n")?;
+    lock_link.link(
+        "crates/a/Cargo.lock",
+        &lock_link.outside().join("Cargo.lock"),
+    )?;
     let missing = Scratch::new("manifest-missing")?;
-    for scratch in [&file_link, &directory_link, &missing] {
+    for scratch in [&file_link, &directory_link, &lock_link, &missing] {
         let result = manifest_file(&scratch.repo(), &manifest);
         assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     }

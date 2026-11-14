@@ -57,6 +57,7 @@ macro_rules! id {
 }
 
 id!(RepoPath, repo_path);
+id!(PathGlob, repo_path);
 id!(PackageName, text);
 id!(TargetName, text);
 id!(RunnerLabel, text);
@@ -74,13 +75,63 @@ impl RepoPath {
     }
 
     #[must_use]
-    pub fn is_within(&self, ancestor: &Self) -> bool {
-        self == ancestor
-            || self
-                .0
-                .strip_prefix(ancestor.as_str())
-                .is_some_and(|rest| rest.starts_with('/'))
+    pub fn sibling(&self, name: &Self) -> Self {
+        match self.parent() {
+            Some(parent) => Self(Cow::Owned(format!("{parent}/{name}"))),
+            None => name.clone(),
+        }
     }
+}
+
+impl PathGlob {
+    #[must_use]
+    pub fn matches(&self, path: &RepoPath) -> bool {
+        let pattern: Vec<&str> = self.as_str().split('/').collect();
+        let segments: Vec<&str> = path.as_str().split('/').collect();
+        reachable(&pattern, &segments)[1..]
+            .iter()
+            .any(|reached| *reached)
+    }
+}
+
+fn reachable(pattern: &[&str], path: &[&str]) -> Vec<bool> {
+    let mut row = vec![false; path.len() + 1];
+    row[0] = true;
+    for segment in pattern {
+        let mut next = vec![false; path.len() + 1];
+        if *segment == "**" {
+            let mut any = false;
+            for (reached, slot) in row.iter().zip(next.iter_mut()) {
+                any |= *reached;
+                *slot = any;
+            }
+        } else {
+            for (index, text) in path.iter().enumerate() {
+                next[index + 1] = row[index] && wildcard(segment, text);
+            }
+        }
+        row = next;
+    }
+    row
+}
+
+fn wildcard(pattern: &str, text: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = text.strip_prefix(first) else {
+        return false;
+    };
+    let mut parts: Vec<&str> = parts.collect();
+    let Some(last) = parts.pop() else {
+        return rest.is_empty();
+    };
+    for part in parts {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.ends_with(last)
 }
 
 impl HelperVersion {

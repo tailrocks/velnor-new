@@ -6,7 +6,7 @@ use std::error::Error;
 
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{PackageName, RepoPath, RepoView, RustMetadata, RustPackage};
-use velnor_rust::DetectError;
+use velnor_rust::{CONFIG_PATH, DetectError};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -16,6 +16,8 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     let mut view = RepoView::default();
     for (index, root) in roots.iter().enumerate() {
         let manifest = RepoPath::new(*root)?;
+        view.tracked_paths
+            .insert(manifest.sibling(&RepoPath::new("Cargo.lock")?));
         view.tracked_paths.insert(manifest.clone());
         let member = RustPackage {
             name: PackageName::new(format!("package-{index}"))?,
@@ -30,6 +32,10 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
             },
         );
     }
+    let mise = RepoPath::new("mise.toml")?;
+    view.tracked_paths.insert(mise.clone());
+    view.files
+        .insert(mise, b"[tools]\nrust = \"1.99.1\"\n".to_vec());
     if let Some(bytes) = config {
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
@@ -151,7 +157,10 @@ fn an_invalid_config_is_rejected() -> TestResult {
     for config in cases {
         let result = expected_files(&view(&["Cargo.toml"], Some(config))?);
         assert!(
-            matches!(result, Err(GenerateError::Detect(DetectError::Config(_)))),
+            matches!(
+                &result,
+                Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if *path == CONFIG_PATH
+            ),
             "{:?} gave {result:?}",
             String::from_utf8_lossy(config)
         );

@@ -44,6 +44,20 @@
           "source": "registry+https://github.com/rust-lang/crates.io-index",
           "target": null,
           "uses_default_features": true
+        },
+        {
+          "features": [
+            "deflate"
+          ],
+          "kind": null,
+          "name": "zip",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
         }
       ],
       "description": null,
