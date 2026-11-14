@@ -74,7 +74,12 @@ fn each_root_gets_its_mode_its_packages_and_a_nextest_filter_never_cargo_argumen
          rust_crates_velnor_runner_doctests=skip\n\
          rust_crates_velnor_runner_docs=skip\n"
     );
-    let text = explain(&selections, &three_roots(), &BTreeSet::new());
+    let text = explain(
+        &selections,
+        &three_roots(),
+        &BTreeSet::new(),
+        &BTreeMap::new(),
+    );
     assert_eq!(
         text,
         "Cargo.toml: all:unknown-path:docs/goals.md\n\
@@ -109,7 +114,7 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
         ),
     ]);
     let unknown = BTreeSet::from([path("scripts/gen.sh"), path("docs/a\"b.txt")]);
-    let text = explain(&selections, &Steps::new(), &unknown);
+    let text = explain(&selections, &Steps::new(), &unknown, &BTreeMap::new());
     assert_eq!(text.matches("unknown path: scripts/gen.sh").count(), 1);
     assert!(text.contains("\n    \"scripts/gen.sh\",\n"), "{text}");
     assert!(
@@ -118,12 +123,21 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     );
     assert!(text.contains("\n    \"docs/a\\\"b.txt\",\n"), "{text}");
 
-    assert!(!explain(&selections, &Steps::new(), &BTreeSet::new()).contains("unknown path"));
+    assert!(
+        !explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::new(),
+            &BTreeMap::new()
+        )
+        .contains("unknown path")
+    );
 
     let starred = explain(
         &selections,
         &Steps::new(),
         &BTreeSet::from([path("scripts/a*b")]),
+        &BTreeMap::new(),
     );
     assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
     assert!(!starred.contains("glob = "), "{starred}");

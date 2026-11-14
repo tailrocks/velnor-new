@@ -15,12 +15,12 @@ use crate::toml_file::table;
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
 
 type Candidate<'a> = (&'a RepoPath, &'a RustMetadata);
-type Targets = BTreeMap<PackageName, BTreeSet<RepoPath>>;
+pub(crate) type Targets = BTreeMap<PackageName, BTreeSet<RepoPath>>;
 
 pub(crate) fn rust_roots(
     view: &RepoView,
     config: &RustCiConfig,
-) -> Result<Vec<RustRoot>, DetectError> {
+) -> Result<(Vec<RustRoot>, Targets), DetectError> {
     let candidates: Vec<Candidate<'_>> = view
         .rust_metadata
         .iter()
@@ -43,7 +43,8 @@ pub(crate) fn rust_roots(
             .or_default()
             .insert(package.manifest.clone());
     }
-    candidates
+    let mut every = named.clone();
+    let roots = candidates
         .iter()
         .map(|(manifest, metadata)| {
             let lockfile = manifest.sibling(&CARGO_LOCK);
@@ -59,12 +60,17 @@ pub(crate) fn rust_roots(
                     rustdocflags_list(bytes, file)?;
                 }
                 for (name, target) in patches(bytes, file, base.as_ref())? {
+                    every
+                        .entry(name.clone())
+                        .or_default()
+                        .insert(target.clone());
                     targets.entry(name).or_default().insert(target);
                 }
             }
             Ok(root(manifest, metadata, &owner, &targets))
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    Ok((roots, every))
 }
 
 fn root(
@@ -193,7 +199,7 @@ fn patches(
     Ok(found)
 }
 
-fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
+pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {

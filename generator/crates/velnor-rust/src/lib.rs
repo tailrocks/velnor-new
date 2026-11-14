@@ -20,9 +20,10 @@ mod shape;
 mod timings;
 mod toml_file;
 mod toolchain;
+mod unowned;
 
 pub use config::CONFIG_PATH;
-pub use detect::{cargo_files, detect, metadata_roots, wanted_files};
+pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{optional_steps, root_sources};
 pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
@@ -34,6 +35,6 @@ pub use reads::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, format_inputs_lock, locate,
     normalize, parse_inputs_lock, rerun_if_changed, unlisted,
 };
-pub use select::{root_slug, select, unknown_paths};
+pub use select::{root_slug, select, unknown_paths, unread_packages};
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::TIMINGS_PATH;

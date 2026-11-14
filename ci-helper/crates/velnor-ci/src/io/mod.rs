@@ -14,7 +14,9 @@ use std::process::ExitCode;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_gen::io::{Checkout, Error as GenError, read_checkout, read_files};
 use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
-use velnor_rust::{cargo_files, detect, optional_steps, root_sources, select, unknown_paths};
+use velnor_rust::{
+    cargo_files, detect, optional_steps, root_sources, select, unknown_paths, unread_packages,
+};
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
@@ -133,7 +135,12 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
     }
     Ok(if args.explain {
-        explain(&selections, &steps, &unknown_paths(&facts, &changes))
+        explain(
+            &selections,
+            &steps,
+            &unknown_paths(&facts, &changes),
+            &unread_packages(&facts, &changes),
+        )
     } else {
         outputs
     })

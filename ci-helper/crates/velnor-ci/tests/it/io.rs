@@ -620,7 +620,7 @@ fn plan_repo(name: &str) -> Repo {
     repo
 }
 
-fn plan_command(repo: &Repo) -> Command {
+pub(crate) fn plan_command(repo: &Repo) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .current_dir(repo.root())
@@ -629,7 +629,7 @@ fn plan_command(repo: &Repo) -> Command {
     command
 }
 
-fn selected(output: &Output) -> String {
+pub(crate) fn selected(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter(|line| !line.starts_with("  left out: "))

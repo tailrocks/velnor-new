@@ -14,6 +14,7 @@ use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::select::root_slug;
 use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
+use crate::unowned::unowned;
 
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
@@ -47,7 +48,8 @@ pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
 
 pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
-    let rust_roots = rust_roots(view, &config)?;
+    let (rust_roots, targets) = rust_roots(view, &config)?;
+    let unowned = unowned(view, &rust_roots, &targets);
     let mut slugs = BTreeMap::new();
     for root in &rust_roots {
         if let Some(first) = slugs.insert(root_slug(&root.manifest), &root.manifest) {
@@ -120,6 +122,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         config,
         helper,
         compile_inputs,
+        unowned,
     })
 }
 
@@ -163,6 +166,11 @@ pub fn cargo_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         .filter(|path| is_named(path, CARGO_MANIFEST) || is_named(path, CARGO_LOCK.as_str()))
         .cloned()
         .collect()
+}
+
+#[must_use]
+pub fn manifests(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
+    tracked_manifests(tracked).cloned().collect()
 }
 
 fn tracked_manifests(tracked: &BTreeSet<RepoPath>) -> impl Iterator<Item = &RepoPath> {

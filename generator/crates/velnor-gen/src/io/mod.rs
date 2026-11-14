@@ -15,8 +15,8 @@ use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_render::OWNED_PATHS;
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, metadata_roots, pin_lock, reduce_metadata,
-    release_version, sums_url, wanted_files,
+    DetectError, LOCK_PATH, LockError, MetadataError, manifests, metadata_roots, pin_lock,
+    reduce_metadata, release_version, sums_url, wanted_files,
 };
 
 mod sample;
@@ -330,6 +330,13 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
+    for manifest in manifests(&view.tracked_paths) {
+        if let Ok(Some(file)) = regular_file(root, &manifest)
+            && let Ok(bytes) = fs::read(&file)
+        {
+            view.files.entry(manifest).or_insert(bytes);
+        }
+    }
     Ok((view, recorded))
 }
 
