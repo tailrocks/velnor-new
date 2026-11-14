@@ -13,4 +13,6 @@ pub mod io;
 pub mod logscan;
 pub mod metrics;
 pub mod plan;
+pub mod publish;
+pub mod release;
 pub mod time;

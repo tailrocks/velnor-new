@@ -6,6 +6,9 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_model::{InvalidId, RepoPath};
 
+use crate::error::CiError;
+use crate::release::PlainName;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-ci",
@@ -31,6 +34,11 @@ pub enum Command {
     ReleaseGate(ReleaseGateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
     CheckTag(CheckTagArgs),
+    #[command(
+        subcommand,
+        about = "Record what release-plz released, and publish a release's draft"
+    )]
+    Release(ReleaseCommand),
     #[command(
         about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
     )]
@@ -92,6 +100,65 @@ pub struct ReleaseGateArgs {
     pub repo: String,
     #[arg(long, help = "Full SHA of the commit that is about to be released")]
     pub sha: String,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReleaseCommand {
+    #[command(
+        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released; exit 1 when a package or a tag appears twice, or a package or tag holds anything but ASCII letters, digits, '.', '_' and '-'"
+    )]
+    Record(RecordArgs),
+    #[command(
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+    )]
+    Publish(PublishArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RecordArgs {
+    #[arg(
+        required = true,
+        help = "Files that hold the JSON release-plz release -o json printed"
+    )]
+    pub outputs: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct PublishArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(long, value_parser = tag, help = "Tag of the draft release")]
+    pub tag: PlainName,
+    #[arg(
+        long,
+        value_parser = app,
+        help = "Slug of the GitHub App whose bot, <slug>[bot], created the draft release"
+    )]
+    pub app: PlainName,
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Directory that holds the files and SHA256SUMS"
+    )]
+    pub dir: PathBuf,
+    #[arg(
+        required = true,
+        value_parser = file_name,
+        help = "Exact names of the files to publish besides SHA256SUMS"
+    )]
+    pub files: Vec<PlainName>,
+}
+
+fn tag(text: &str) -> Result<PlainName, CiError> {
+    PlainName::new("tag", text)
+}
+
+fn app(text: &str) -> Result<PlainName, CiError> {
+    PlainName::new("App slug", text)
+}
+
+fn file_name(text: &str) -> Result<PlainName, CiError> {
+    PlainName::new("file", text)
 }
 
 #[derive(Debug, Subcommand)]
