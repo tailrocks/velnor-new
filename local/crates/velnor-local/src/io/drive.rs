@@ -15,7 +15,7 @@ use tokio::process::Command;
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, program, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, PullRequest, Push, Repository};
-use crate::scenario::{Outcome, Scenario, Step, verdict};
+use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
 use crate::standin;
 
 const GIT_CONFIG: &str =
@@ -50,6 +50,12 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
     let env = Environment::at(&args.environment.dir, DockerCli).await?;
+    let checkout = fs::canonicalize(&args.repo).await?;
+    if overlapping(&env.dir, &checkout) {
+        return Err(io::Error::other(
+            "the state directory and the checkout overlap",
+        ));
+    }
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
     for directory in ["cache", "api", "events", "logs"] {
@@ -163,8 +169,12 @@ impl Driver<'_> {
         if !parent.starts_with(fs::canonicalize(&self.repo).await?) {
             return Err(io::Error::other(format!("{append} leaves the repository")));
         }
-        let text = fs::read_to_string(&file).await.unwrap_or_default();
-        fs::write(&file, format!("{text}{line}\n")).await?;
+        let mut bytes = match fs::read(&file).await {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+            read => read?,
+        };
+        bytes.extend_from_slice(format!("{line}\n").as_bytes());
+        fs::write(&file, bytes).await?;
         let message = format!("Append to {append}");
         self.git(&["add", "-A"]).await?;
         self.git(&["commit", "-q", "-m", &message]).await?;
@@ -195,6 +205,11 @@ impl Driver<'_> {
         self.git(&["merge", "-q", "--no-ff", "--no-edit", &head_sha])
             .await?;
         let merge = self.git(&["rev-parse", "HEAD"]).await?;
+        let pull = format!("refs/pull/{number}");
+        self.git(&["update-ref", &format!("{pull}/merge"), &merge])
+            .await?;
+        self.git(&["update-ref", &format!("{pull}/head"), &head_sha])
+            .await?;
         self.pulls.push(json!({
             "number": number,
             "state": "open",

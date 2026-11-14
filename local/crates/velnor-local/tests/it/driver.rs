@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
-use velnor_local::scenario::{Scenario, Step};
+use velnor_local::scenario::{Scenario, Step, overlapping};
 use velnor_local::standin::{self, Record, Run};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -148,4 +148,14 @@ fn a_recorded_stand_in_run_gives_its_conclusion_and_when_its_job_started() {
         serde_json::from_slice(&read("testdata/runner-server/timeline.json"))
             .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(standin::job_started(&records), Some(1_794_609_159));
+}
+
+#[test]
+fn a_state_directory_that_overlaps_the_checkout_is_refused() {
+    let checkout = Path::new("/work/lab");
+    assert!(overlapping(Path::new("/work/lab/state"), checkout));
+    assert!(overlapping(Path::new("/work"), checkout));
+    assert!(overlapping(checkout, checkout));
+    assert!(!overlapping(Path::new("/work/lab-state"), checkout));
+    assert!(!overlapping(Path::new("/tmp/state"), checkout));
 }

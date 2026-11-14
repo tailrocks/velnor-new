@@ -92,7 +92,7 @@ async fn an_environment_that_fails_to_start_leaves_no_container_or_network() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let args = EnvironmentArgs {
         dir: dir.clone(),
-        runners: 2,
+        runners: 2_u16,
         default_branch: "main".to_owned(),
     };
     let started = env.up(&dir, &args).await;

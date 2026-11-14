@@ -223,7 +223,7 @@ impl<E: Engine> Environment<E> {
             .ok_or_else(|| io::Error::other(format!("{role} publishes no port: {ports}")))
     }
 
-    async fn ready(&self, runners: usize) -> io::Result<Addresses> {
+    async fn ready(&self, runners: u16) -> io::Result<Addresses> {
         let stub = self.published("api").await?;
         let addresses = Addresses {
             cache: Proxy::new(&self.published("cache").await?),

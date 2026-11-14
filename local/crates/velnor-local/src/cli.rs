@@ -43,8 +43,8 @@ pub struct EnvironmentArgs {
         help = "State directory of this environment: keys, cache, API stub state, events and logs"
     )]
     pub dir: PathBuf,
-    #[arg(long, default_value_t = 2, help = "Number of runner containers")]
-    pub runners: usize,
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, at least one")]
+    pub runners: u16,
     #[arg(
         long,
         default_value = "main",

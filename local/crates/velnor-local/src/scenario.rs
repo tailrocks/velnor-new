@@ -112,6 +112,11 @@ impl Outcome {
 }
 
 #[must_use]
+pub fn overlapping(state: &Path, checkout: &Path) -> bool {
+    state.starts_with(checkout) || checkout.starts_with(state)
+}
+
+#[must_use]
 pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64) -> String {
     let mut text = format!("\nVerdict of scenario {scenario}\n");
     for outcome in outcomes {
