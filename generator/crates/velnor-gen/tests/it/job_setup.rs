@@ -89,16 +89,27 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
     let mise = RepoPath::new("mise.toml")?;
-    let mut mise_env = view(&["Cargo.toml"], None)?;
-    mise_env.files.insert(
-        mise.clone(),
-        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[env]\nRUSTDOCFLAGS = \"\"\n"
-            .to_vec(),
-    );
-    assert!(matches!(
-        expected_files(&mise_env),
-        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == mise
-    ));
+    for variable in [
+        "RUSTDOCFLAGS",
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTDOCFLAGS",
+        "RUSTUP_TOOLCHAIN",
+    ] {
+        let mut mise_env = view(&["Cargo.toml"], None)?;
+        mise_env.files.insert(
+            mise.clone(),
+            format!(
+                "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[env]\n{variable} = \"x\"\n"
+            )
+            .into_bytes(),
+        );
+        assert!(
+            matches!(
+                expected_files(&mise_env),
+                Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == mise
+            ),
+            "{variable}"
+        );
+    }
     let mut per_target = string;
     per_target.files.insert(
         config.clone(),
@@ -148,6 +159,15 @@ fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> Te
         expected_files(&two),
         Err(GenerateError::Detect(DetectError::NestedToolchain {
             file: nested
+        }))
+    );
+    let nested_mise = RepoPath::new("lab/mise.toml")?;
+    let mut with_mise = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    with_mise.tracked_paths.insert(nested_mise.clone());
+    assert_eq!(
+        expected_files(&with_mise),
+        Err(GenerateError::Detect(DetectError::NestedToolchain {
+            file: nested_mise
         }))
     );
     let ancestor = RepoPath::new("projects/rust-toolchain.toml")?;

@@ -103,7 +103,7 @@ impl fmt::Display for Reason {
             ),
             Self::MiseOverridesFlags(name) => write!(
                 f,
-                "[env] sets {name}, which mise-action exports to every step and which overrides the -D warnings of the documentation step; set rustdoc flags in build.rustdocflags instead"
+                "[env] sets {name}, which mise-action exports to every step, where it changes how cargo or rustup build the checks; set it in the cargo configuration or the toolchain file instead"
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -144,7 +144,7 @@ impl fmt::Display for DetectError {
             ),
             Self::NestedToolchain { file } => write!(
                 f,
-                "{file} names a toolchain for one Cargo root; the generated jobs set up one toolchain for the repository, so move it to the repository root"
+                "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

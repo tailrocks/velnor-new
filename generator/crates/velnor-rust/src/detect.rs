@@ -85,7 +85,9 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
             .flat_map(|folder| {
                 [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
-                    .map(|file| RepoPath::new(format!("{folder}/{file}")))
+                    .into_iter()
+                    .chain(MISE_CONFIGS.iter().cloned())
+                    .map(move |file| RepoPath::new(format!("{folder}/{file}")))
             })
             .flatten()
             .find(|file| view.tracked_paths.contains(file));

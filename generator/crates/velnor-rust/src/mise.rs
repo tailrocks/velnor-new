@@ -15,7 +15,7 @@ pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
 ];
 pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const OVERRIDING_ENV: [&str; 2] = ["RUSTDOCFLAGS", "CARGO_ENCODED_RUSTDOCFLAGS"];
+const OVERRIDING_ENV: [&str; 4] = ["RUSTDOCFLAGS", "RUSTFLAGS", "CARGO_", "RUSTUP_"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
@@ -41,7 +41,7 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
             .unwrap_or_default();
         if let Some(name) = env
             .into_iter()
-            .find(|name| OVERRIDING_ENV.contains(&name.as_str()))
+            .find(|name| OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix)))
         {
             return Err(DetectError::invalid(
                 config,
