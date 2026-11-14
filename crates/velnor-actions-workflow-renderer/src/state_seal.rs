@@ -33,9 +33,10 @@ const JOB_MINUTES: u32 = 15;
 const SEALED_OUTPUT: &str = "sealed";
 const BOUND_OUTPUT: &str = "bound";
 const TOKEN_EXPR: &str = "${{ github.token }}";
-const ARTIFACT_ID_GUARD: &str = "set -eu; case \"$VELNOR_EVIDENCE_ARTIFACT_ID\" in ''|*[!0-9]*|0*) exit 1;; esac; [ \"${#VELNOR_EVIDENCE_ARTIFACT_ID}\" -le 16 ] || exit 1; if [ \"${#VELNOR_EVIDENCE_ARTIFACT_ID}\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi";
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
+#[path = "state_seal_artifact_guard.rs"]
+mod artifact_guard;
 #[path = "state_producer_steps.rs"]
 pub mod producer_steps;
 #[path = "state_seal_save.rs"]
@@ -166,7 +167,7 @@ fn seal_job(
         "${{{{ needs.{}.outputs.{STATE_PRODUCER_ARTIFACT_OUTPUT} }}}}",
         root.producer_id
     );
-    let guard = state_seal_artifact_guard_step(&artifact)?;
+    let guard = artifact_guard::step(&artifact)?;
     let mut download = action_step(
         "Download sealed payload",
         DOWNLOAD_ARTIFACT_USES,
@@ -238,23 +239,6 @@ fn seal_job(
             guard, download, subject, tip, admit, save, bind, attest, retire,
         ],
     })
-}
-
-fn state_seal_artifact_guard_step(artifact: &str) -> Result<Step, RenderError> {
-    let mut guard = shell_step(
-        "Validate exact artifact ID",
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            ARTIFACT_ID_GUARD.to_owned(),
-        ],
-        BTreeMap::from([(
-            "VELNOR_EVIDENCE_ARTIFACT_ID".to_owned(),
-            artifact.to_owned(),
-        )]),
-    )?;
-    guard.role = Some(StepRole::StateSealArtifactGuard);
-    Ok(guard)
 }
 
 fn transport_dir() -> Result<String, RenderError> {
