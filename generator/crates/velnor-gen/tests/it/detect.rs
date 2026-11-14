@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{
-    DependencyKind, PackageDependency, PackageName, PathGlob, RepoView, TargetKind,
-};
+use velnor_model::{DependencyKind, PathGlob, RepoView, TargetKind};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
 use crate::facts::{Shape, TestResult, lib, package, path, repo, root, shape};
@@ -152,92 +150,6 @@ fn path_dependencies_are_edges_between_members_and_between_roots() -> TestResult
             "fixture Normal fixtures/fixture/Cargo.toml",
         ]
     );
-    Ok(())
-}
-
-#[test]
-fn a_registry_dependency_that_the_repository_can_patch_is_an_edge_to_the_patch() -> TestResult {
-    let mut app = lib("app", "a/app/Cargo.toml")?;
-    for name in ["shared", "serde", "mid"] {
-        app.dependencies.push(PackageDependency {
-            name: PackageName::new(name)?,
-            kind: DependencyKind::Normal,
-            manifest: None,
-        });
-    }
-    let view = repo(
-        vec![
-            ("a/Cargo.toml", vec![app]),
-            ("b/Cargo.toml", vec![lib("shared", "b/shared/Cargo.toml")?]),
-        ],
-        &[(
-            "a/Cargo.toml",
-            "[workspace]\n\n[patch.crates-io]\nmid = { path = \"../vendor/./mid\" }\n",
-        )],
-    )?;
-    let facts = detect(&view)?;
-    let dependencies: Vec<String> = facts.rust_roots[0]
-        .members
-        .iter()
-        .flat_map(|member| &member.dependencies)
-        .map(|d| format!("{} {}", d.name, d.manifest))
-        .collect();
-    assert_eq!(
-        dependencies,
-        ["shared b/shared/Cargo.toml", "mid vendor/mid/Cargo.toml"]
-    );
-    Ok(())
-}
-
-#[test]
-fn a_malformed_patch_table_is_an_error_naming_the_manifest_and_the_key() -> TestResult {
-    let cases = [
-        ("patch = 1\n", Some("patch")),
-        ("[patch]\ncrates-io = 1\n", Some("patch.crates-io")),
-        (
-            "[patch.crates-io]\nmid = \"1.0\"\n",
-            Some("patch.crates-io.mid"),
-        ),
-        (
-            "[patch.crates-io]\nmid = { path = 1 }\n",
-            Some("patch.crates-io.mid"),
-        ),
-        (
-            "[patch.crates-io]\n\"mi\\td\" = { path = \"mid\" }\n",
-            Some("patch.crates-io.mi\td"),
-        ),
-        (
-            "[patch.crates-io]\nmid = { path = \"m\\\\id\" }\n",
-            Some("patch.crates-io.mid"),
-        ),
-        ("[patch.crates-io\n", None),
-    ];
-    for (text, key) in cases {
-        let view = repo(
-            vec![("a/Cargo.toml", vec![lib("app", "a/app/Cargo.toml")?])],
-            &[("a/Cargo.toml", text)],
-        )?;
-        let result = detect(&view);
-        let reason = match &result {
-            Err(DetectError::Invalid { path, reason }) if path.as_str() == "a/Cargo.toml" => reason,
-            other => return Err(format!("{text:?}: {other:?}").into()),
-        };
-        match (key, reason) {
-            (Some(key), Reason::InvalidPatch(found)) => assert_eq!(found, key, "{text:?}"),
-            (None, Reason::Syntax(_)) => {}
-            (_, other) => return Err(format!("{text:?}: {other:?}").into()),
-        }
-    }
-    for text in [
-        "[patch.crates-io]\nmid = { git = \"https://example.com/mid\" }\n",
-        "[patch.crates-io]\nmid = { path = \"../../outside\" }\n",
-    ] {
-        let view = repo(
-            vec![("a/Cargo.toml", vec![lib("app", "a/app/Cargo.toml")?])],
-            &[("a/Cargo.toml", text)],
-        )?;
-        detect(&view)?;
-    }
     Ok(())
 }
 

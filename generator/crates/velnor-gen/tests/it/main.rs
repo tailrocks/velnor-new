@@ -8,6 +8,7 @@ mod golden;
 mod inputs;
 mod io;
 mod lock;
+mod patch;
 mod pipeline;
 mod release_workflow;
 mod repo_sample;

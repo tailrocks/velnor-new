@@ -54,8 +54,10 @@ pub(crate) fn rust_roots(
                 });
             }
             let mut targets = named.clone();
-            for (name, target) in patches(view.files.get(*manifest), manifest)? {
-                targets.entry(name).or_default().insert(target);
+            for (file, bytes, base) in patch_files(view, manifest) {
+                for (name, target) in patches(bytes, file, base.as_ref())? {
+                    targets.entry(name).or_default().insert(target);
+                }
             }
             Ok(root(manifest, metadata, &owner, &targets))
         })
@@ -89,14 +91,51 @@ fn root(
     }
 }
 
-fn patches(
-    text: Option<&Vec<u8>>,
+const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
+
+pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
+    CARGO_CONFIGS.iter().any(|name| {
+        path.as_str() == *name
+            || path
+                .as_str()
+                .strip_suffix(name)
+                .is_some_and(|rest| rest.ends_with('/'))
+    })
+}
+
+fn patch_files<'v>(
+    view: &'v RepoView,
     manifest: &RepoPath,
+) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
+    let folder = manifest.parent();
+    view.files
+        .iter()
+        .filter_map(|(file, bytes)| {
+            if file == manifest {
+                return Some((file, bytes.as_slice(), folder.clone()));
+            }
+            if !is_cargo_config(file) {
+                return None;
+            }
+            let base = file.parent().and_then(|cargo| cargo.parent());
+            let applies = match (&base, &folder) {
+                (None, _) => true,
+                (Some(_), None) => false,
+                (Some(base), Some(folder)) => {
+                    folder == base || folder.as_str().starts_with(&format!("{base}/"))
+                }
+            };
+            applies.then_some((file, bytes.as_slice(), base))
+        })
+        .collect()
+}
+
+fn patches(
+    bytes: &[u8],
+    manifest: &RepoPath,
+    base: Option<&RepoPath>,
 ) -> Result<Vec<(PackageName, RepoPath)>, DetectError> {
     let invalid = |key: String| DetectError::invalid(manifest, Reason::InvalidPatch(key));
-    let Some(bytes) = text else {
-        return Ok(Vec::new());
-    };
     let table = table(bytes).map_err(|reason| DetectError::invalid(manifest, reason))?;
     let Some(patch) = table.get("patch") else {
         return Ok(Vec::new());
@@ -116,8 +155,12 @@ fn patches(
                 continue;
             };
             let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
-            let name = PackageName::new(name.as_str()).map_err(|_| invalid(key.clone()))?;
-            if let Some(target) = within(manifest.parent().as_ref(), folder) {
+            let package = match entry.get("package") {
+                Some(package) => package.as_str().ok_or_else(|| invalid(key.clone()))?,
+                None => name.as_str(),
+            };
+            let name = PackageName::new(package).map_err(|_| invalid(key.clone()))?;
+            if let Some(target) = within(base, folder) {
                 found.push((name, RepoPath::new(target).map_err(|_| invalid(key))?));
             }
         }
