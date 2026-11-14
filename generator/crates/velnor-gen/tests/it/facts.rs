@@ -42,6 +42,7 @@ pub(crate) fn package(
                     name: TargetName::new(*name)?,
                     kinds: vec![*kind],
                     tests: *tests,
+                    doctest: true,
                     source: None,
                     requires_features: false,
                 })

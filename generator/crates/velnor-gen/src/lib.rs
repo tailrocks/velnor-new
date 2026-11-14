@@ -9,7 +9,7 @@ use std::fmt;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
-use velnor_rust::{DetectError, detect, plan};
+use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
@@ -51,7 +51,10 @@ impl From<DetectError> for GenerateError {
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     let facts = detect(view)?;
     check_helper(&facts)?;
-    render(&plan(&facts)).map_err(GenerateError::Rules)
+    check_tools(&facts)?;
+    let plan = plan(&facts);
+    check_required_check(&facts, &plan)?;
+    render(&plan).map_err(GenerateError::Rules)
 }
 
 fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {

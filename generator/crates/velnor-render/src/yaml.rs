@@ -12,6 +12,7 @@ pub(crate) enum Yaml {
     Bool(bool),
     Seq(Vec<Yaml>),
     Map(Vec<(String, Yaml)>),
+    Noted(String, Box<Yaml>),
 }
 
 pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
@@ -22,6 +23,18 @@ pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
 
 fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
     for (key, value) in items {
+        let value = match value {
+            Yaml::Noted(note, inner) => {
+                for line in note.lines() {
+                    out.push_str(&" ".repeat(indent));
+                    out.push_str("# ");
+                    out.push_str(line);
+                    out.push('\n');
+                }
+                inner
+            }
+            other => other,
+        };
         if matches!(value, Yaml::Selected(_)) {
             out.push_str(&" ".repeat(indent));
             out.push_str(SELECTED_IGNORE);
@@ -80,6 +93,7 @@ fn inline(value: &Yaml) -> String {
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),
         Yaml::Map(_) => "{}".to_owned(),
+        Yaml::Noted(_, inner) => inline(inner),
     }
 }
 
