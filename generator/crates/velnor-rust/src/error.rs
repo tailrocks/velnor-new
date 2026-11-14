@@ -51,6 +51,7 @@ pub enum Reason {
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
+    OtherMiseConfig,
 }
 
 impl DetectError {
@@ -104,6 +105,9 @@ impl fmt::Display for Reason {
             Self::MiseOverridesFlags(name) => write!(
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, so it may not set cargo or rustup variables, load or include other files, or change PATH; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::OtherMiseConfig => f.write_str(
+                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",

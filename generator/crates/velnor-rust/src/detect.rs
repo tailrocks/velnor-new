@@ -78,23 +78,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
-    {
-        let nested = rust_roots
-            .iter()
-            .filter_map(|root| root.manifest.parent())
-            .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
-            .flat_map(|folder| {
-                [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
-                    .into_iter()
-                    .chain(MISE_CONFIGS.iter().cloned())
-                    .map(move |file| RepoPath::new(format!("{folder}/{file}")))
-            })
-            .flatten()
-            .find(|file| view.tracked_paths.contains(file));
-        if let Some(file) = nested {
-            return Err(DetectError::NestedToolchain { file });
-        }
-    }
+    check_setup_files(view, &rust_roots)?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -126,6 +110,50 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
+    if let Some(file) = view
+        .tracked_paths
+        .iter()
+        .find(|path| other_mise_config(path))
+    {
+        return Err(DetectError::invalid(file, Reason::OtherMiseConfig));
+    }
+    let nested = rust_roots
+        .iter()
+        .filter_map(|root| root.manifest.parent())
+        .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
+        .flat_map(|folder| {
+            [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
+                .into_iter()
+                .chain(MISE_CONFIGS.iter().cloned())
+                .map(move |file| RepoPath::new(format!("{folder}/{file}")))
+        })
+        .flatten()
+        .find(|file| view.tracked_paths.contains(file));
+    if let Some(file) = nested {
+        return Err(DetectError::NestedToolchain { file });
+    }
+    Ok(())
+}
+
+const OTHER_MISE_CONFIGS: [&str; 7] = [
+    "mise.local.toml",
+    ".mise.local.toml",
+    ".config/mise.toml",
+    ".config/mise/config.toml",
+    ".mise/config.toml",
+    "mise/config.toml",
+    ".tool-versions",
+];
+const MISE_CONF_FOLDERS: [&str; 3] = [".config/mise/conf.d/", ".mise/conf.d/", "mise/conf.d/"];
+
+fn other_mise_config(path: &RepoPath) -> bool {
+    OTHER_MISE_CONFIGS.contains(&path.as_str())
+        || MISE_CONF_FOLDERS
+            .iter()
+            .any(|folder| path.as_str().starts_with(folder))
 }
 
 fn unknown_package<'p>(

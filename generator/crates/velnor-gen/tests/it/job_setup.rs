@@ -88,6 +88,20 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&included),
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
+    let mut per_target = string;
+    per_target.files.insert(
+        config.clone(),
+        b"[target.x86_64-unknown-linux-gnu]\nrustdocflags = [\"--cfg\", \"docsrs\"]\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&per_target),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
     let mise = RepoPath::new("mise.toml")?;
     for variable in [
         "RUSTDOCFLAGS",
@@ -121,15 +135,22 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&mise_include),
         Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == mise
     ));
-    let mut per_target = string;
-    per_target.files.insert(
-        config.clone(),
-        b"[target.x86_64-unknown-linux-gnu]\nrustdocflags = [\"--cfg\", \"docsrs\"]\n".to_vec(),
-    );
-    assert!(matches!(
-        expected_files(&per_target),
-        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
-    ));
+    for other in [
+        ".mise/config.toml",
+        ".config/mise/conf.d/ci.toml",
+        ".tool-versions",
+    ] {
+        let file = RepoPath::new(other)?;
+        let mut more = view(&["Cargo.toml"], None)?;
+        more.tracked_paths.insert(file.clone());
+        assert!(
+            matches!(
+                expected_files(&more),
+                Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == file
+            ),
+            "{other}"
+        );
+    }
     Ok(())
 }
 
