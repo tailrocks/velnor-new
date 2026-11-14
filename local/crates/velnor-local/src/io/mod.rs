@@ -3,7 +3,7 @@
 
 pub mod api_stub;
 mod drive;
-mod env;
+pub mod env;
 mod git;
 mod index_file;
 mod proxy;

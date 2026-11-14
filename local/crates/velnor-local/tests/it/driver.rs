@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
-use velnor_local::scenario::{Scenario, Step};
+use velnor_local::scenario::{Scenario, Step, overlapping};
 use velnor_local::standin::{self, Record, Run};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -100,13 +100,15 @@ fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
 }
 
 #[test]
-fn the_warm_scenario_is_a_default_branch_run_then_a_pull_request_and_unknown_steps_are_refused() {
-    let warm =
-        Scenario::parse(&read("scenarios/warm.json")).unwrap_or_else(|e| unreachable!("{e}"));
+fn the_warm_scenario_follows_the_default_branch_and_unknown_steps_option_values_and_escaping_paths_are_refused()
+ {
+    let warm = Scenario::parse(&read("scenarios/warm.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("trunk");
     assert_eq!(
         warm.steps,
         [
-            Step::Push("main".to_owned()),
+            Step::Push("trunk".to_owned()),
             Step::Commit {
                 branch: "warm".to_owned(),
                 append: "rust-toolchain.toml".to_owned(),
@@ -114,12 +116,23 @@ fn the_warm_scenario_is_a_default_branch_run_then_a_pull_request_and_unknown_ste
             },
             Step::OpenPullRequest {
                 head: "warm".to_owned(),
-                base: "main".to_owned(),
+                base: "trunk".to_owned(),
             },
         ]
     );
     let unknown = br#"{"description": "x", "steps": [{"rebase": "main"}]}"#;
     assert!(Scenario::parse(unknown).is_err());
+    assert!(
+        warm.refuse_options(["tailrocks/velnor-lab", "main"])
+            .is_ok()
+    );
+    assert!(warm.refuse_options(["--default-branch=x"]).is_err());
+    let option = br#"{"description": "x", "steps": [{"push": "--upload-pack=x"}]}"#;
+    let option = Scenario::parse(option).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(option.refuse_options(["main"]).is_err());
+    let escape = br#"{"description": "x", "steps": [{"commit": {"branch": "b", "append": "../outside", "line": "x"}}]}"#;
+    let escape = Scenario::parse(escape).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(escape.refuse_options(["main"]).is_err());
 }
 
 #[test]
@@ -135,4 +148,14 @@ fn a_recorded_stand_in_run_gives_its_conclusion_and_when_its_job_started() {
         serde_json::from_slice(&read("testdata/runner-server/timeline.json"))
             .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(standin::job_started(&records), Some(1_794_609_159));
+}
+
+#[test]
+fn a_state_directory_that_overlaps_the_checkout_is_refused() {
+    let checkout = Path::new("/work/lab");
+    assert!(overlapping(Path::new("/work/lab/state"), checkout));
+    assert!(overlapping(Path::new("/work"), checkout));
+    assert!(overlapping(checkout, checkout));
+    assert!(!overlapping(Path::new("/work/lab-state"), checkout));
+    assert!(!overlapping(Path::new("/tmp/state"), checkout));
 }

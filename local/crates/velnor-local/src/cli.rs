@@ -43,8 +43,8 @@ pub struct EnvironmentArgs {
         help = "State directory of this environment: keys, cache, API stub state, events and logs"
     )]
     pub dir: PathBuf,
-    #[arg(long, default_value_t = 2, help = "Number of runner containers")]
-    pub runners: usize,
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, at least one")]
+    pub runners: u16,
     #[arg(
         long,
         default_value = "main",
@@ -95,12 +95,6 @@ pub struct RunArgs {
         help = "Repository as owner/name, as github.repository reports it"
     )]
     pub repository: String,
-    #[arg(
-        long,
-        default_value = "velnor-ci",
-        help = "velnor-ci program that writes the metrics file of each run"
-    )]
-    pub velnor_ci: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -131,11 +125,6 @@ pub struct ApiStubArgs {
         help = "Largest diff in bytes that pull request files and compare read; a larger one is a 422"
     )]
     pub diff_limit_bytes: usize,
-    #[arg(
-        long,
-        help = "runner.server as host:port; it answers the workflow run, job and job log endpoints"
-    )]
-    pub standin: Option<String>,
 }
 
 #[derive(Debug, Args)]

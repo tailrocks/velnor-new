@@ -17,7 +17,7 @@ use hyper_util::rt::TokioIo;
 use tokio::fs;
 use tokio::net::TcpListener;
 
-use super::env::Environment;
+use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
 use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, UpArgs};
 
@@ -38,13 +38,13 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::CacheServer(args) => run_cache_server(args).await,
         Command::ApiStub(args) => run_api_stub(args).await,
         Command::Up(args) => up(args).await,
-        Command::Down(args) => Environment::at(&args.dir).await?.down().await,
+        Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
         Command::Run(args) => drive::run(args).await,
     }
 }
 
 async fn up(args: UpArgs) -> std::io::Result<()> {
-    let env = Environment::at(&args.environment.dir).await?;
+    let env = Environment::at(&args.environment.dir, DockerCli).await?;
     let repo = fs::canonicalize(&args.repo).await?;
     let addresses = env.up(&repo, &args.environment).await?;
     println!(
@@ -76,7 +76,6 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         cache_dir: args.cache_dir,
         default_branch: args.default_branch,
         diff_limit_bytes: args.diff_limit_bytes,
-        standin: args.standin,
     }));
     serve("api-stub", args.listen, move |request| {
         let stub = Arc::clone(&stub);

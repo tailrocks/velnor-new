@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Component, Path};
 
 use serde::Deserialize;
+
+pub const DEFAULT_BRANCH: &str = "{default}";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +34,57 @@ impl Scenario {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         serde_json::from_slice(bytes).map_err(|e| format!("not a scenario: {e}"))
     }
+
+    #[must_use]
+    pub fn on_default_branch(mut self, default: &str) -> Self {
+        for step in &mut self.steps {
+            let branches = match step {
+                Step::Push(branch) | Step::Commit { branch, .. } => vec![branch],
+                Step::OpenPullRequest { head, base } => vec![head, base],
+            };
+            for branch in branches
+                .into_iter()
+                .filter(|branch| *branch == DEFAULT_BRANCH)
+            {
+                default.clone_into(branch);
+            }
+        }
+        self
+    }
+
+    pub fn refuse_options<'a>(
+        &'a self,
+        values: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), String> {
+        let steps = self.steps.iter().flat_map(|step| match step {
+            Step::Push(branch) => vec![branch.as_str()],
+            Step::Commit { branch, append, .. } => vec![branch.as_str(), append.as_str()],
+            Step::OpenPullRequest { head, base } => vec![head.as_str(), base.as_str()],
+        });
+        match values
+            .into_iter()
+            .chain(steps)
+            .find(|value| value.is_empty() || value.starts_with('-'))
+        {
+            Some(value) => Err(format!("`{value}` is empty or starts with `-`")),
+            None => self.refuse_escaping_paths(),
+        }
+    }
+
+    fn refuse_escaping_paths(&self) -> Result<(), String> {
+        let inside = |path: &str| {
+            Path::new(path)
+                .components()
+                .all(|part| matches!(part, Component::Normal(_)))
+        };
+        match self.steps.iter().find_map(|step| match step {
+            Step::Commit { append, .. } if !inside(append) => Some(append),
+            _ => None,
+        }) {
+            Some(path) => Err(format!("`{path}` is not a path inside the repository")),
+            None => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -41,13 +94,12 @@ pub struct Outcome {
     pub event: String,
     pub conclusion: &'static str,
     pub started: Option<u64>,
-    pub metrics: Result<PathBuf, String>,
 }
 
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success" && self.metrics.is_ok()
+        self.conclusion == "success"
     }
 
     #[must_use]
@@ -57,6 +109,11 @@ impl Outcome {
             self.id, self.workflow, self.event, self.conclusion
         )
     }
+}
+
+#[must_use]
+pub fn overlapping(state: &Path, checkout: &Path) -> bool {
+    state.starts_with(checkout) || checkout.starts_with(state)
 }
 
 #[must_use]
@@ -75,10 +132,11 @@ pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64
         )
     );
     text.push_str(
-        "Executed: every step of every job above, by GitHub's official runner in linux/arm64 containers.\n\
-         Stood in: runner.server queued the jobs and checked out the local copy of the repository; \
+        "Executed: every step of every job above except actions/checkout, by GitHub's official runner \
+         in linux/arm64 containers.\n\
+         Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; \
          the cache server decided every cache hit, miss and refusal with velnor-cache-rules; \
-         the API stub answered GITHUB_API_URL.\n",
+         the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.\n",
     );
     text
 }
