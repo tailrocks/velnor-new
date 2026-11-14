@@ -255,10 +255,11 @@ impl<'a> Graph<'a> {
     }
 
     fn only_dependency_versions_differ(&self, manifest: &RepoPath) -> bool {
-        matches!(
-            (self.changes.base_files.get(manifest), self.changes.head_files.get(manifest)),
-            (Some(base), Some(head)) if only_dependency_versions_differ(base, head)
-        )
+        self.changes.paths.contains(&manifest.sibling(&CARGO_LOCK))
+            && matches!(
+                (self.changes.base_files.get(manifest), self.changes.head_files.get(manifest)),
+                (Some(base), Some(head)) if only_dependency_versions_differ(base, head)
+            )
     }
 
     fn seed_named(&self, names: &[&PackageName], path: &RepoPath, walk: &mut Walk<'a>) {

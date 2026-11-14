@@ -756,25 +756,28 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
         )
     };
     repo.write("Cargo.toml", &manifest("1.0.6"));
-    let output = plan_with_bases(
-        &repo,
-        &["Cargo.toml"],
-        &[("Cargo.toml", &manifest("1.0.5"))],
-    );
+    repo.write("Cargo.lock", &plan_lock("1.0.5"));
+    let bases = [
+        ("Cargo.toml", manifest("1.0.5")),
+        ("Cargo.lock", plan_lock("1.0.5")),
+    ];
+    let bases: Vec<(&str, &str)> = bases.iter().map(|(p, t)| (*p, t.as_str())).collect();
+    let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "Cargo.toml: none\ntools/Cargo.toml: none\n"
     );
+    let alone = plan_with_bases(&repo, &["Cargo.toml"], &bases[..1]);
+    assert_eq!(
+        String::from_utf8_lossy(&alone.stdout),
+        "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
     repo.write(
         "Cargo.toml",
         &manifest("1.0.6").replace("resolver = \"3\"", "resolver = \"2\""),
     );
-    let output = plan_with_bases(
-        &repo,
-        &["Cargo.toml"],
-        &[("Cargo.toml", &manifest("1.0.5"))],
-    );
+    let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"

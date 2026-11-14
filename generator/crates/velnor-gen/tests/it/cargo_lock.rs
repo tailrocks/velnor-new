@@ -162,16 +162,30 @@ fn a_root_manifest_changing_only_dependency_versions_leaves_the_decision_to_the_
             "",
         ),
     ];
+    let locks = (
+        lock(&workspace()),
+        lock(&replaced(&workspace(), krate("fnv", "1.0.6", &[]))),
+    );
     for head in &exempt {
         assert_eq!(
-            selected(&facts, &change(&[("Cargo.toml", &base, head)])),
+            selected(
+                &facts,
+                &change(&[
+                    ("Cargo.toml", &base, head),
+                    ("Cargo.lock", &locks.0, &locks.0)
+                ])
+            ),
             vec![RustSelection::None, RustSelection::None],
             "{head}"
         );
     }
-    let locks = (
-        lock(&workspace()),
-        lock(&replaced(&workspace(), krate("fnv", "1.0.6", &[]))),
+    assert_eq!(
+        selected(&facts, &change(&[("Cargo.toml", &base, &exempt[0])])),
+        vec![
+            all(AllTrigger::WorkspaceManifest),
+            all(AllTrigger::WorkspaceManifest)
+        ],
+        "a manifest change with no lockfile change"
     );
     assert_eq!(
         selected(
@@ -227,9 +241,16 @@ fn any_other_root_manifest_change_selects_everything() {
         ),
         "not toml [".to_owned(),
     ];
+    let unchanged_lock = lock(&workspace());
     for head in &global {
         assert_eq!(
-            selected(&facts, &change(&[("Cargo.toml", &base, head)])),
+            selected(
+                &facts,
+                &change(&[
+                    ("Cargo.toml", &base, head),
+                    ("Cargo.lock", &unchanged_lock, &unchanged_lock)
+                ])
+            ),
             vec![
                 all(AllTrigger::WorkspaceManifest),
                 all(AllTrigger::WorkspaceManifest)
@@ -241,10 +262,17 @@ fn any_other_root_manifest_change_selects_everything() {
         "serde = \"2\"\nfnv = { version = \"1.0.5\", features = [\"std\"] }\n",
         "",
     );
-    let mut no_base = change(&[("Cargo.toml", &base, &versions_only)]);
-    no_base.base_files.clear();
-    let mut no_head = change(&[("Cargo.toml", &base, &versions_only)]);
-    no_head.head_files.clear();
+    let both = |lock: &str| {
+        change(&[
+            ("Cargo.toml", &base, &versions_only),
+            ("Cargo.lock", lock, lock),
+        ])
+    };
+    let before = lock(&workspace());
+    let mut no_base = both(&before);
+    no_base.base_files.remove(&path("Cargo.toml"));
+    let mut no_head = both(&before);
+    no_head.head_files.remove(&path("Cargo.toml"));
     for changes in [no_base, no_head] {
         assert_eq!(
             selected(&facts, &changes),

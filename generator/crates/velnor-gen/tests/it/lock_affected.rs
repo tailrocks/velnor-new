@@ -241,7 +241,7 @@ fn a_members_own_version_alone_names_nothing_and_with_a_changed_dependency_names
 }
 
 #[test]
-fn anything_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
+fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
     let base = workspace();
     let before = render(4, &base, "");
     let git = "git+https://example.com/repo?rev=abc#abc";
@@ -292,23 +292,6 @@ fn anything_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() 
     for (label, head) in heads {
         assert_eq!(affected(&before, &head), None, "{label}");
     }
-    assert_eq!(affected("not toml [", &before), None, "unparsable base");
-    assert_eq!(affected("", &before), None, "empty base");
-    assert_eq!(
-        affected(&render(3, &base, ""), &render(3, &base, "")),
-        Some(found(&[])),
-        "same format 3"
-    );
-    for format in [1, 2, 5] {
-        let same = render(format, &base, "");
-        assert_eq!(affected(&same, &same), None, "format {format}");
-    }
-    let unversioned = before.replacen("version = 4\n", "", 1);
-    assert_eq!(
-        affected(&unversioned, &unversioned),
-        None,
-        "no format version"
-    );
     let git_before = with(&replaced(&base, krate("fnv", "1.0.5", &[]).source(git)));
     assert_eq!(
         affected(&git_before, &git_before),
@@ -331,4 +314,27 @@ fn anything_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() 
         .cloned()
         .collect();
     assert_eq!(affected(&before, &with(&removed)), None, "member left out");
+}
+
+#[test]
+fn a_lockfile_text_or_format_the_function_cannot_read_is_an_error_so_that_everything_runs() {
+    let base = workspace();
+    let before = render(4, &base, "");
+    assert_eq!(affected("not toml [", &before), None, "unparsable base");
+    assert_eq!(affected("", &before), None, "empty base");
+    assert_eq!(
+        affected(&render(3, &base, ""), &render(3, &base, "")),
+        Some(found(&[])),
+        "same format 3"
+    );
+    for format in [1, 2, 5] {
+        let same = render(format, &base, "");
+        assert_eq!(affected(&same, &same), None, "format {format}");
+    }
+    let unversioned = before.replacen("version = 4\n", "", 1);
+    assert_eq!(
+        affected(&unversioned, &unversioned),
+        None,
+        "no format version"
+    );
 }
