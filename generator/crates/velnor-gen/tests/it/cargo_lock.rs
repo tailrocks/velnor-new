@@ -9,9 +9,9 @@ use velnor_model::{
 use velnor_rust::select;
 
 use crate::lock_affected::{Pkg, krate, member as locked_member, render, replaced, workspace};
-use crate::select::{all, changed, depends_on, facts, glob, member, name, path, some};
+use crate::select::{all, depends_on, facts, glob, member, name, path, some};
 
-fn two_workspaces() -> RepoFacts {
+pub(crate) fn two_workspaces() -> RepoFacts {
     facts(vec![
         (
             "Cargo.toml",
@@ -33,11 +33,11 @@ fn two_workspaces() -> RepoFacts {
     ])
 }
 
-fn lock(packages: &[Pkg]) -> String {
+pub(crate) fn lock(packages: &[Pkg]) -> String {
     render(4, packages, "")
 }
 
-fn change(files: &[(&str, &str, &str)]) -> ChangeSet {
+pub(crate) fn change(files: &[(&str, &str, &str)]) -> ChangeSet {
     let text = |index: usize| -> BTreeMap<RepoPath, String> {
         files
             .iter()
@@ -58,7 +58,7 @@ fn lock_reason(package: &str) -> SelectionReason {
     SelectionReason::Lock(package.to_owned())
 }
 
-fn selected(facts: &RepoFacts, changes: &ChangeSet) -> Vec<RustSelection> {
+pub(crate) fn selected(facts: &RepoFacts, changes: &ChangeSet) -> Vec<RustSelection> {
     select(facts, changes).into_values().collect()
 }
 
@@ -137,7 +137,7 @@ fn a_lockfile_change_without_a_usable_base_selects_everything() {
     );
 }
 
-fn manifest(dependencies: &str, extra: &str) -> String {
+pub(crate) fn manifest(dependencies: &str, extra: &str) -> String {
     format!(
         "[workspace]\nmembers = [\"app\", \"core\"]\n{extra}\n[workspace.dependencies]\n{dependencies}"
     )
@@ -282,104 +282,6 @@ fn any_other_root_manifest_change_selects_everything() {
                 all(AllTrigger::WorkspaceManifest),
                 all(AllTrigger::WorkspaceManifest)
             ]
-        );
-    }
-}
-
-#[test]
-fn a_lockfile_entry_that_no_member_reaches_selects_everything() {
-    let facts = two_workspaces();
-    let base = workspace();
-    let before = lock(&base);
-    let mut orphan = base.clone();
-    orphan.push(krate("orphan", "1.0.0", &[]));
-    assert_eq!(
-        selected(&facts, &change(&[("Cargo.lock", &before, &lock(&orphan))])),
-        vec![
-            all(AllTrigger::WorkspaceManifest),
-            all(AllTrigger::WorkspaceManifest),
-        ],
-        "an orphan package"
-    );
-}
-
-#[test]
-fn a_members_version_that_only_the_lockfile_changes_selects_everything() {
-    let facts = two_workspaces();
-    let before = lock(&workspace());
-    let everything = vec![
-        all(AllTrigger::WorkspaceManifest),
-        all(AllTrigger::WorkspaceManifest),
-    ];
-    let lib_bumped = lock(&replaced(
-        &workspace(),
-        locked_member("lib", &["core", "hex"]).version("0.1.0"),
-    ));
-    assert_eq!(
-        selected(&facts, &change(&[("Cargo.lock", &before, &lib_bumped)])),
-        everything,
-        "a member version in the lockfile alone"
-    );
-    assert_eq!(
-        selected(
-            &facts,
-            &change(&[
-                ("Cargo.lock", &before, &lib_bumped),
-                ("lib/Cargo.toml", "", "")
-            ])
-        ),
-        vec![
-            some(&[
-                ("lib", changed("lib/Cargo.toml")),
-                ("app", depends_on("lib"))
-            ]),
-            RustSelection::None
-        ],
-        "a member version in the lockfile and its manifest"
-    );
-}
-
-#[test]
-fn a_changed_version_of_a_dependency_with_a_path_or_git_source_selects_everything() {
-    let facts = two_workspaces();
-    let before = lock(&workspace());
-    let everything = vec![
-        all(AllTrigger::WorkspaceManifest),
-        all(AllTrigger::WorkspaceManifest),
-    ];
-    let rows = [
-        (
-            "fnv = { path = \"fnv\", version = \"1.0.5\" }\n",
-            "fnv = { path = \"fnv\", version = \"2\" }\n",
-            everything.clone(),
-        ),
-        (
-            "fnv = { version = \"1.0.5\", path = \"fnv\", features = [\"std\"] }\n",
-            "fnv = { version = \"2\", path = \"fnv\", features = [\"std\"] }\n",
-            everything.clone(),
-        ),
-        (
-            "fnv = { git = \"https://example.com/fnv\", version = \"1.0.5\" }\n",
-            "fnv = { git = \"https://example.com/fnv\", version = \"2\" }\n",
-            everything,
-        ),
-        (
-            "fnv = { path = \"fnv\", version = \"1.0.5\" }\nserde = \"1\"\n",
-            "fnv = { path = \"fnv\", version = \"1.0.5\" }\nserde = \"2\"\n",
-            vec![RustSelection::None, RustSelection::None],
-        ),
-    ];
-    for (old, new, expected) in rows {
-        assert_eq!(
-            selected(
-                &facts,
-                &change(&[
-                    ("Cargo.toml", &manifest(old, ""), &manifest(new, "")),
-                    ("Cargo.lock", &before, &before),
-                ])
-            ),
-            expected,
-            "{new}"
         );
     }
 }

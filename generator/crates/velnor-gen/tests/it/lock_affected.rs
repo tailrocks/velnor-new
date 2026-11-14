@@ -119,11 +119,15 @@ pub(crate) fn names() -> Vec<PackageName> {
     ["app", "core", "lib", "tool"].map(name).to_vec()
 }
 
-fn affected(base: &str, head: &str) -> Option<BTreeMap<String, String>> {
+pub(crate) fn affected(base: &str, head: &str) -> Option<BTreeMap<String, String>> {
     affected_with(base, head, &[])
 }
 
-fn affected_with(base: &str, head: &str, edited: &[&str]) -> Option<BTreeMap<String, String>> {
+pub(crate) fn affected_with(
+    base: &str,
+    head: &str,
+    edited: &[&str],
+) -> Option<BTreeMap<String, String>> {
     let edited: BTreeSet<PackageName> = edited.iter().copied().map(name).collect();
     lock_affected(base, head, &names(), &edited)
         .ok()
@@ -249,93 +253,6 @@ fn a_members_own_version_with_an_edited_manifest_names_nothing_and_with_a_change
         affected_with(&before, &render(4, &both, ""), &["lib"]),
         Some(found(&[("tool", "fnv")]))
     );
-}
-
-#[test]
-fn a_lock_only_change_of_a_members_version_is_an_error_so_that_everything_runs() {
-    let base = workspace();
-    let before = render(4, &base, "");
-    let bumped = |member_name: &'static str| {
-        let dependencies: &[&str] = match member_name {
-            "app" => &["lib"],
-            "core" => &["serde"],
-            "lib" => &["core", "hex"],
-            _ => &["fnv", "hex"],
-        };
-        render(
-            4,
-            &replaced(&base, member(member_name, dependencies).version("0.1.0")),
-            "",
-        )
-    };
-    let rows: [(&str, &[&str], bool); 5] = [
-        ("lib", &[], false),
-        ("lib", &["app"], false),
-        ("lib", &["lib"], true),
-        ("lib", &["lib", "app"], true),
-        ("tool", &["lib"], false),
-    ];
-    for (changed, edited, vouched) in rows {
-        assert_eq!(
-            affected_with(&before, &bumped(changed), edited).is_some(),
-            vouched,
-            "{changed} with {edited:?}"
-        );
-    }
-}
-
-#[test]
-fn a_changed_lock_entry_that_no_member_reaches_is_an_error_so_that_everything_runs() {
-    let base = workspace();
-    let with_orphan = |orphan: Pkg| {
-        let mut packages = base.clone();
-        packages.push(orphan);
-        render(4, &packages, "")
-    };
-    let orphan = |version: &str, dependencies: &[&str]| krate("orphan", version, dependencies);
-    let before = render(4, &base, "");
-    let kept = with_orphan(orphan("1.0.0", &["fnv"]));
-    let rows: [(&str, String, String, bool); 7] = [
-        (
-            "added",
-            before.clone(),
-            with_orphan(orphan("1.0.0", &[])),
-            false,
-        ),
-        (
-            "added with a dependency that members reach",
-            before.clone(),
-            with_orphan(orphan("1.0.0", &["fnv"])),
-            false,
-        ),
-        (
-            "version changed",
-            kept.clone(),
-            with_orphan(orphan("1.0.1", &["fnv"])),
-            false,
-        ),
-        (
-            "dependencies changed",
-            kept.clone(),
-            with_orphan(orphan("1.0.0", &["hex"])),
-            false,
-        ),
-        ("unchanged", kept.clone(), kept.clone(), true),
-        ("removed", kept.clone(), before.clone(), true),
-        (
-            "rewired by a bump that members reach",
-            kept.clone(),
-            {
-                let mut packages = replaced(&base, krate("fnv", "1.0.6", &[]));
-                packages.push(orphan("1.0.0", &["fnv"]));
-                render(4, &packages, "")
-            },
-            false,
-        ),
-    ];
-    for (label, base, head, vouched) in rows {
-        assert_eq!(affected(&base, &head).is_some(), vouched, "{label}");
-    }
 }
 
 const GIT: &str = "git+https://example.com/repo?rev=abc#abc";
