@@ -11,7 +11,7 @@ use velnor_rust::select;
 use crate::lock_affected::{Pkg, krate, member as locked_member, render, replaced, workspace};
 use crate::select::{all, depends_on, facts, glob, member, name, path, some};
 
-fn two_workspaces() -> RepoFacts {
+pub(crate) fn two_workspaces() -> RepoFacts {
     facts(vec![
         (
             "Cargo.toml",
@@ -33,11 +33,11 @@ fn two_workspaces() -> RepoFacts {
     ])
 }
 
-fn lock(packages: &[Pkg]) -> String {
+pub(crate) fn lock(packages: &[Pkg]) -> String {
     render(4, packages, "")
 }
 
-fn change(files: &[(&str, &str, &str)]) -> ChangeSet {
+pub(crate) fn change(files: &[(&str, &str, &str)]) -> ChangeSet {
     let text = |index: usize| -> BTreeMap<RepoPath, String> {
         files
             .iter()
@@ -58,7 +58,7 @@ fn lock_reason(package: &str) -> SelectionReason {
     SelectionReason::Lock(package.to_owned())
 }
 
-fn selected(facts: &RepoFacts, changes: &ChangeSet) -> Vec<RustSelection> {
+pub(crate) fn selected(facts: &RepoFacts, changes: &ChangeSet) -> Vec<RustSelection> {
     select(facts, changes).into_values().collect()
 }
 
@@ -137,7 +137,7 @@ fn a_lockfile_change_without_a_usable_base_selects_everything() {
     );
 }
 
-fn manifest(dependencies: &str, extra: &str) -> String {
+pub(crate) fn manifest(dependencies: &str, extra: &str) -> String {
     format!(
         "[workspace]\nmembers = [\"app\", \"core\"]\n{extra}\n[workspace.dependencies]\n{dependencies}"
     )

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::PackageName;
 use velnor_rust::lock_affected;
@@ -54,7 +54,7 @@ impl Pkg {
         self
     }
 
-    fn version(mut self, version: &str) -> Self {
+    pub(crate) fn version(mut self, version: &str) -> Self {
         version.clone_into(&mut self.version);
         self
     }
@@ -119,13 +119,24 @@ pub(crate) fn names() -> Vec<PackageName> {
     ["app", "core", "lib", "tool"].map(name).to_vec()
 }
 
-fn affected(base: &str, head: &str) -> Option<BTreeMap<String, String>> {
-    lock_affected(base, head, &names()).ok().map(|found| {
-        found
-            .into_iter()
-            .map(|(member, cause)| (member.to_string(), cause))
-            .collect()
-    })
+pub(crate) fn affected(base: &str, head: &str) -> Option<BTreeMap<String, String>> {
+    affected_with(base, head, &[])
+}
+
+pub(crate) fn affected_with(
+    base: &str,
+    head: &str,
+    edited: &[&str],
+) -> Option<BTreeMap<String, String>> {
+    let edited: BTreeSet<PackageName> = edited.iter().copied().map(name).collect();
+    lock_affected(base, head, &names(), &edited)
+        .ok()
+        .map(|found| {
+            found
+                .into_iter()
+                .map(|(member, cause)| (member.to_string(), cause))
+                .collect()
+        })
 }
 
 fn found(rows: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -228,14 +239,18 @@ fn two_versions_of_one_crate_are_told_apart() {
 }
 
 #[test]
-fn a_members_own_version_alone_names_nothing_and_with_a_changed_dependency_names_that_dependency() {
+fn a_members_own_version_with_an_edited_manifest_names_nothing_and_with_a_changed_dependency_names_that_dependency()
+ {
     let base = workspace();
     let before = render(4, &base, "");
     let bumped = replaced(&base, member("lib", &["core", "hex"]).version("0.1.0"));
-    assert_eq!(affected(&before, &render(4, &bumped, "")), Some(found(&[])));
+    assert_eq!(
+        affected_with(&before, &render(4, &bumped, ""), &["lib"]),
+        Some(found(&[]))
+    );
     let both = replaced(&bumped, krate("fnv", "1.0.6", &[]));
     assert_eq!(
-        affected(&before, &render(4, &both, "")),
+        affected_with(&before, &render(4, &both, ""), &["lib"]),
         Some(found(&[("tool", "fnv")]))
     );
 }
@@ -326,7 +341,7 @@ fn a_head_the_function_cannot_vouch_for_is_an_error_so_that_everything_runs() {
     );
     let ghosts = [names(), vec![name("ghost")]].concat();
     assert!(
-        lock_affected(&before, &before, &ghosts).is_err(),
+        lock_affected(&before, &before, &ghosts, &BTreeSet::new()).is_err(),
         "member in no lockfile"
     );
     let removed: Vec<Pkg> = base
