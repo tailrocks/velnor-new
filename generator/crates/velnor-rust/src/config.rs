@@ -2,20 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig};
+use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 6] = [
+const KEYS: [&str; 8] = [
     "runner",
     "timeout_minutes",
     "exclude",
     "non_inputs",
     "inputs",
     "default_ignores",
+    "shape",
+    "required_check",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -30,6 +32,8 @@ struct RawConfig {
     #[serde(default)]
     inputs: Vec<RawInput>,
     default_ignores: Option<bool>,
+    shape: Option<String>,
+    required_check: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -59,7 +63,31 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         }));
     }
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
+    let shape = match raw.shape.as_deref() {
+        None | Some("auto") => None,
+        Some("one-job") => Some(Shape::OneJob),
+        Some("lint-test") => Some(Shape::LintAndTest),
+        Some("groups") => Some(Shape::BuildThenGroups),
+        Some(other) => {
+            return Err(invalid(Reason::InvalidValue {
+                key: "shape",
+                value: other.to_owned(),
+            }));
+        }
+    };
+    let required_check = match raw.required_check {
+        None => defaults.required_check,
+        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
+        Some(name) => {
+            return Err(invalid(Reason::InvalidValue {
+                key: "required_check",
+                value: name,
+            }));
+        }
+    };
     Ok(RustCiConfig {
+        shape,
+        required_check,
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),

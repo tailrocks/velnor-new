@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::process::Command;
-
 use crate::io::Repo;
+use crate::io_plan::{plan_command, selected};
 
 #[test]
 fn plan_follows_the_edges_of_unowned_packages_and_explains_a_package_it_cannot_read() {
@@ -41,14 +40,13 @@ fn plan_follows_the_edges_of_unowned_packages_and_explains_a_package_it_cannot_r
     for package in ["mid", "remote"] {
         repo.write(&format!("vendor/{package}/src/lib.rs"), "");
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root())
+    let output = plan_command(&repo)
         .args(["plan", "--explain", "--changed", "c/src/lib.rs"])
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        selected(&output),
         "Cargo.toml: some\n  b depends-on-unread:remote\n  c changed:c/src/lib.rs\nunread package: vendor/remote/Cargo.toml\n  it has the git dependency far, so Velnor cannot follow its dependencies and a change to any package selects every package that depends on it\n"
     );
 }

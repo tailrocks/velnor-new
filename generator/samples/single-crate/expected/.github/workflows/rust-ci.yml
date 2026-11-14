@@ -9,7 +9,8 @@ concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
-  format:
+  # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  rust:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -18,5 +19,36 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Format Cargo.toml
+      - name: Install tools
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          cache: false
+      - name: Add Rust components
+        run: rustup component add clippy rustfmt
+      - name: Format
+        if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
+      - name: Lint
+        if: '${{ !cancelled() }}'
+        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: '${{ !cancelled() }}'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: Documentation
+        if: '${{ !cancelled() }}'
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+      - name: Check single-crate alone
+        if: '${{ !cancelled() }}'
+        run: cargo check -p single-crate --locked
+  required:
+    name: Required
+    needs:
+      - rust
+    if: '${{ !cancelled() }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Fail when a Rust job failed or was cancelled
+        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
+        run: exit 1

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoPath, ToolPin, ToolPins};
+use velnor_model::{RepoFacts, RepoPath, RustMember, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
@@ -14,6 +14,8 @@ pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static(".mise.toml"),
 ];
 pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
+const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
+const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
 
@@ -30,6 +32,32 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     let mut requested = Versions::new();
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
+        let settings = parsed.get("settings").and_then(Value::as_table);
+        let postinstall = parsed
+            .get("tools")
+            .and_then(Value::as_table)
+            .is_some_and(|tools| tools.values().any(runs_a_command));
+        if let Some(name) = [
+            "env",
+            "include",
+            "env_file",
+            "env_path",
+            "hooks",
+            "tool_alias",
+            "alias",
+        ]
+        .into_iter()
+        .find(|key| {
+            parsed.contains_key(*key) || settings.is_some_and(|table| table.contains_key(*key))
+        })
+        .or(postinstall.then_some("tools.postinstall"))
+        {
+            return Err(DetectError::invalid(
+                config,
+                Reason::MiseOverridesFlags(name.to_owned()),
+            ));
+        }
     }
     let mut locked = files
         .get(&MISE_LOCK)
@@ -49,6 +77,79 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
             })
             .collect(),
     })
+}
+
+pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
+    pins.tools.keys().map(String::as_str).find(|name| {
+        NEXTEST_SELECTORS.iter().any(|selector| {
+            name.strip_suffix(selector)
+                .is_some_and(|rest| rest.is_empty() || rest.ends_with([':', '/']))
+        })
+    })
+}
+
+const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
+
+pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    if let Some((file, mise)) = toolchain_conflict(facts) {
+        return Err(DetectError::ToolchainConflict { file, mise });
+    }
+    let rust_pins = rust_tool(&facts.tools)
+        .and_then(|name| facts.tools.tools.get(name))
+        .map_or(1, |pin| pin.requested.len());
+    let selectors = RUST_TOOLS
+        .iter()
+        .filter(|name| facts.tools.tools.contains_key(**name))
+        .count();
+    if rust_pins != 1 || selectors > 1 {
+        return Err(DetectError::invalid(
+            facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
+            Reason::InvalidValue {
+                key: "tools.rust",
+                value: "one version, without os filters or alternatives".to_owned(),
+            },
+        ));
+    }
+    let tested = facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .any(RustMember::has_test_target);
+    if tested && nextest_tool(&facts.tools).is_none() {
+        return Err(DetectError::NextestRequired {
+            path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
+    Ok(())
+}
+
+fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
+    let toolchain = facts.toolchain.as_ref()?;
+    let channel = toolchain
+        .channel
+        .clone()
+        .or_else(|| toolchain.path.as_ref().map(|path| format!("path {path}")))?;
+    let pinned = facts
+        .tools
+        .tools
+        .get(rust_tool(&facts.tools)?)?
+        .requested
+        .first()?;
+    (*pinned != channel).then(|| (channel, pinned.clone()))
+}
+
+pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
+    RUST_TOOLS
+        .into_iter()
+        .find(|name| pins.tools.contains_key(*name))
+}
+
+fn runs_a_command(value: &Value) -> bool {
+    match value {
+        Value::Table(entry) => entry.contains_key("postinstall"),
+        Value::Array(items) => items.iter().any(runs_a_command),
+        _ => false,
+    }
 }
 
 fn versions(bytes: &[u8]) -> Result<Versions, Reason> {

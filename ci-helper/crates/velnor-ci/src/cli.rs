@@ -32,7 +32,7 @@ pub enum Command {
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
     CheckTag(CheckTagArgs),
     #[command(
-        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages and rust_<root>_test_filter for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
+        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
     )]
     Plan(PlanArgs),
 }

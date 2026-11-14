@@ -62,6 +62,8 @@ struct RawTarget {
     kind: Vec<String>,
     #[serde(default)]
     test: bool,
+    #[serde(default = "enabled")]
+    doctest: bool,
     src_path: Option<PathBuf>,
     #[serde(rename = "required-features", default)]
     required_features: Vec<String>,
@@ -135,6 +137,7 @@ fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataErr
         name: TargetName::new(target.name).map_err(invalid)?,
         kinds,
         tests: target.test,
+        doctest: target.doctest,
         requires_features: !target.required_features.is_empty(),
         source: target
             .src_path
@@ -143,6 +146,10 @@ fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataErr
                 Located::Repository | Located::Outside => None,
             }),
     })
+}
+
+const fn enabled() -> bool {
+    true
 }
 
 fn repo_path(repository: &Path, path: &Path) -> Result<RepoPath, MetadataError> {

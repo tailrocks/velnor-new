@@ -13,6 +13,10 @@ pub enum DetectError {
     Invalid { path: RepoPath, reason: Reason },
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
+    NextestRequired { path: RepoPath },
+    SameSlug { first: RepoPath, second: RepoPath },
+    ToolchainConflict { file: String, mise: String },
+    NestedToolchain { file: RepoPath },
     NoRustRoot,
 }
 
@@ -43,6 +47,14 @@ pub enum Reason {
     UnknownInputPackage(String),
     LockLine(usize),
     UnknownLockedPackage(String),
+    UnknownRoot(RepoPath),
+    RustdocflagsString,
+    CargoConfigInclude,
+    MiseOverridesFlags(String),
+    OtherMiseConfig,
+    CapLints,
+    CargoEnv(String),
+    UndeclaredTarget(String),
 }
 
 impl DetectError {
@@ -86,6 +98,34 @@ impl fmt::Display for Reason {
                 f,
                 "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"
             ),
+            Self::UnknownRoot(root) => write!(
+                f,
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
+            ),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
+            ),
+            Self::MiseOverridesFlags(name) => write!(
+                f,
+                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::UndeclaredTarget(target) => write!(
+                f,
+                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
+            ),
+            Self::CargoEnv(name) => write!(
+                f,
+                "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
+            ),
+            Self::CapLints => f.write_str(
+                "rustflags with --cap-lints would let the lint step pass with warnings; remove it",
+            ),
+            Self::OtherMiseConfig => f.write_str(
+                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
+            ),
+            Self::CargoConfigInclude => f.write_str(
+                "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
+            ),
             Self::InvalidPatch(key) => {
                 write!(
                     f,
@@ -107,6 +147,22 @@ impl fmt::Display for DetectError {
             Self::MiseRequired { path } => write!(
                 f,
                 "a mise configuration is required; commit {path} with the tool versions the project uses"
+            ),
+            Self::NextestRequired { path } => write!(
+                f,
+                "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::SameSlug { first, second } => write!(
+                f,
+                "the Cargo roots {first} and {second} get the same job and output names; rename one of their folders or add one to exclude in {CONFIG_PATH}"
+            ),
+            Self::ToolchainConflict { file, mise } => write!(
+                f,
+                "the Rust toolchain file names {file} and mise pins rust {mise}; mise's pin wins in the generated job, so make them the same"
+            ),
+            Self::NestedToolchain { file } => write!(
+                f,
+                "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

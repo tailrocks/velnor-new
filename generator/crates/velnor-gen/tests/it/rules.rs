@@ -9,7 +9,7 @@ use std::path::Path;
 use velnor_model::{
     Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease, HelperVersion, Job,
     JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
-    WorkflowPlan,
+    When, WorkflowPlan,
 };
 use velnor_render::{
     FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -27,6 +27,7 @@ fn workflow(step: RenderedStep) -> RenderedWorkflow {
             runs_on: "ubuntu-latest".to_owned(),
             timeout_minutes: 10,
             steps: vec![step],
+            ..RenderedJob::default()
         }],
     }
 }
@@ -83,9 +84,20 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
         permissions: Permissions::default(),
         jobs: vec![Job {
             id: JobId::new("format")?,
+            name: None,
+            comment: None,
+            needs: Vec::new(),
+            when: When::Success,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             timeout_minutes: 10,
-            steps: kinds.into_iter().map(|kind| Step { kind }).collect(),
+            steps: kinds
+                .into_iter()
+                .map(|kind| Step {
+                    kind,
+                    directory: None,
+                    when: When::Success,
+                })
+                .collect(),
         }],
     })
 }

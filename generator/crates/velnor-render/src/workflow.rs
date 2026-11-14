@@ -5,18 +5,38 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
-    Yaml::Map(vec![
+    let mut items = Vec::new();
+    if let Some(name) = &job.name {
+        items.push(entry("name", text(name)));
+    }
+    if !job.needs.is_empty() {
+        items.push(entry(
+            "needs",
+            Yaml::Seq(job.needs.iter().map(|need| text(need)).collect()),
+        ));
+    }
+    if let Some(condition) = &job.condition {
+        items.push(entry("if", Yaml::Expr(condition.clone())));
+    }
+    items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
         entry(
             "steps",
             Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
         ),
-    ])
+    ]);
+    match &job.comment {
+        Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
+        None => Yaml::Map(items),
+    }
 }
 
 fn yaml_step(step: &RenderedStep) -> Yaml {
     let mut items = vec![entry("name", text(&step.name))];
+    if let Some(condition) = &step.condition {
+        items.push(entry("if", Yaml::Expr(condition.clone())));
+    }
     if let Some(uses) = &step.uses {
         items.push(entry("uses", text(uses)));
     }

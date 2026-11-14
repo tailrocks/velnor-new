@@ -56,6 +56,9 @@ pub(crate) fn rust_roots(
             }
             let mut targets = named.clone();
             for (file, bytes, base) in patch_files(view, manifest) {
+                if file != *manifest {
+                    rustdocflags_list(bytes, file)?;
+                }
                 for (name, target) in patches(bytes, file, base.as_ref())? {
                     every
                         .entry(name.clone())
@@ -135,6 +138,55 @@ fn patch_files<'v>(
         })
         .collect()
 }
+
+fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
+    let table = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+    let flags = table
+        .get("build")
+        .and_then(|build| build.get("rustdocflags"));
+    let per_target = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|targets| {
+            targets
+                .values()
+                .any(|target| target.get("rustdocflags").is_some())
+        });
+    if flags.is_some_and(toml::Value::is_str) || per_target {
+        return Err(DetectError::invalid(file, Reason::RustdocflagsString));
+    }
+    if table.contains_key("include") {
+        return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+    }
+    let build = table.get("build").into_iter();
+    let targets = table
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|targets| targets.values());
+    let caps = build
+        .chain(targets)
+        .flat_map(|section| [section.get("rustflags"), section.get("rustdocflags")])
+        .flatten()
+        .any(|flags| flags.to_string().contains("cap-lints"));
+    if caps {
+        return Err(DetectError::invalid(file, Reason::CapLints));
+    }
+    let env = table.get("env").and_then(toml::Value::as_table);
+    if let Some(name) = env.into_iter().flatten().find_map(|(name, value)| {
+        let forced = value
+            .get("force")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        let checked = CHECKED_ENV.iter().any(|prefix| name.starts_with(prefix));
+        (forced || checked).then(|| name.clone())
+    }) {
+        return Err(DetectError::invalid(file, Reason::CargoEnv(name)));
+    }
+    Ok(())
+}
+
+const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
 
 fn patches(
     bytes: &[u8],

@@ -3,7 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot};
+use crate::toml_file::table;
+use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
@@ -11,6 +12,8 @@ use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::select::root_slug;
+use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
 
@@ -22,6 +25,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
+        TIMINGS_PATH,
         MISE_LOCK,
         TOOLCHAIN_PLAIN,
         TOOLCHAIN_TOML,
@@ -47,6 +51,15 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
     let (rust_roots, targets) = rust_roots(view, &config)?;
     let unowned = unowned(view, &rust_roots, &targets);
+    let mut slugs = BTreeMap::new();
+    for root in &rust_roots {
+        if let Some(first) = slugs.insert(root_slug(&root.manifest), &root.manifest) {
+            return Err(DetectError::SameSlug {
+                first: first.clone(),
+                second: root.manifest.clone(),
+            });
+        }
+    }
     let compile_inputs = view
         .files
         .get(&INPUTS_LOCK)
@@ -66,6 +79,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
+    check_setup_files(view, &rust_roots)?;
+    check_build_targets(view, toolchain.as_ref())?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -74,7 +89,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    let timings = view
+        .files
+        .get(&TIMINGS_PATH)
+        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_timings(bytes))?;
+    if let Some(root) = timings
+        .keys()
+        .find(|root| !rust_roots.iter().any(|known| known.manifest == **root))
+    {
+        return Err(DetectError::invalid(
+            &TIMINGS_PATH,
+            Reason::UnknownRoot(root.clone()),
+        ));
+    }
     Ok(RepoFacts {
+        timings,
         rust_roots,
         toolchain,
         tools,
@@ -83,6 +112,83 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
+    let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
+    for (file, bytes) in view.files.iter().filter(|(path, _)| is_cargo_config(path)) {
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        let target = parsed.get("build").and_then(|build| build.get("target"));
+        let named: Vec<String> = match target {
+            Some(toml::Value::String(one)) => vec![one.clone()],
+            Some(toml::Value::Array(many)) => many
+                .iter()
+                .map(|item| item.as_str().unwrap_or_default().to_owned())
+                .collect(),
+            _ => Vec::new(),
+        };
+        if let Some(missing) = named.into_iter().find(|name| !declared.contains(&name)) {
+            return Err(DetectError::invalid(
+                file,
+                Reason::UndeclaredTarget(missing),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
+    if let Some(file) = view
+        .tracked_paths
+        .iter()
+        .find(|path| other_mise_config(path))
+    {
+        return Err(DetectError::invalid(file, Reason::OtherMiseConfig));
+    }
+    let folders: Vec<RepoPath> = rust_roots
+        .iter()
+        .filter_map(|root| root.manifest.parent())
+        .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
+        .collect();
+    let nested = view
+        .tracked_paths
+        .iter()
+        .find(|path| {
+            folders.iter().any(|folder| {
+                path.as_str()
+                    .strip_prefix(&format!("{folder}/"))
+                    .and_then(|rest| RepoPath::new(rest).ok())
+                    .is_some_and(|rest| {
+                        other_mise_config(&rest)
+                            || MISE_CONFIGS.contains(&rest)
+                            || rest == TOOLCHAIN_PLAIN
+                            || rest == TOOLCHAIN_TOML
+                    })
+            })
+        })
+        .cloned();
+    if let Some(file) = nested {
+        return Err(DetectError::NestedToolchain { file });
+    }
+    Ok(())
+}
+
+const MISE_FOLDERS: [&str; 3] = [".config/", ".mise/", "mise/"];
+
+fn other_mise_config(path: &RepoPath) -> bool {
+    let text = path.as_str();
+    let toml = std::path::Path::new(text)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"));
+    let named = |name: &str| name.starts_with("mise") || name.starts_with(".mise");
+    let at_root = !text.contains('/') && named(text) && toml;
+    let in_folder = MISE_FOLDERS.iter().any(|folder| {
+        text.strip_prefix(folder)
+            .is_some_and(|rest| toml && (*folder != ".config/" || named(rest)))
+    });
+    text == ".tool-versions"
+        || (at_root && !MISE_CONFIGS.iter().any(|config| config == path))
+        || in_folder
 }
 
 fn unknown_package<'p>(
