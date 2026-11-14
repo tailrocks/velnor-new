@@ -10,7 +10,7 @@ use velnor_model::{
 };
 
 use crate::doc_steps::has_doctest_library;
-use crate::mise::{RUST_TOOL, nextest_tool};
+use crate::mise::{nextest_tool, rust_tool};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -144,10 +144,10 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
 }
 
 fn setup(facts: &RepoFacts, tests: bool) -> Vec<Step> {
-    let mut tools: Vec<String> = Vec::new();
-    if facts.tools.tools.contains_key(RUST_TOOL) {
-        tools.push(RUST_TOOL.to_owned());
-    }
+    let mut tools: Vec<String> = rust_tool(&facts.tools)
+        .map(str::to_owned)
+        .into_iter()
+        .collect();
     if tests {
         tools.extend(nextest_tool(&facts.tools).map(str::to_owned));
     }

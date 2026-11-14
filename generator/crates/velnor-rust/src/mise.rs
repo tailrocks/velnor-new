@@ -14,8 +14,8 @@ pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static(".mise.toml"),
 ];
 pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
-pub(crate) const RUST_TOOL: &str = "rust";
-const NEXTEST: &str = "nextest";
+const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
+const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
 
@@ -55,10 +55,18 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
 
 #[must_use]
 pub fn nextest_tool(pins: &ToolPins) -> Option<&str> {
-    pins.tools
-        .keys()
-        .map(String::as_str)
-        .find(|name| name.contains(NEXTEST))
+    pins.tools.keys().map(String::as_str).find(|name| {
+        NEXTEST_SELECTORS.iter().any(|selector| {
+            name.strip_suffix(selector)
+                .is_some_and(|rest| rest.is_empty() || rest.ends_with([':', '/']))
+        })
+    })
+}
+
+pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
+    RUST_TOOLS
+        .into_iter()
+        .find(|name| pins.tools.contains_key(*name))
 }
 
 fn versions(bytes: &[u8]) -> Result<Versions, Reason> {

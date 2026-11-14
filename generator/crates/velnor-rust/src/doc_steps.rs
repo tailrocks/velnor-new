@@ -35,20 +35,30 @@ pub fn root_sources(
         .filter(|(_, packages)| packages.iter().any(|package| names.contains(package)))
         .map(|(path, _)| path)
         .collect();
+    let manifests: BTreeSet<&RepoPath> = root
+        .members
+        .iter()
+        .map(|member| &member.manifest)
+        .chain([&root.manifest])
+        .collect();
     tracked
         .iter()
         .filter(|path| {
-            Path::new(path.as_str())
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+            manifests.contains(path)
+                || Path::new(path.as_str())
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
         })
         .filter(|path| {
-            let under = |directory: &Option<RepoPath>| relative(directory.as_ref(), path).is_some();
-            (under(&own) && !nested.iter().any(under))
-                || members.iter().any(under)
-                || read
-                    .iter()
-                    .any(|input| under(input) || input.as_ref() == Some(*path))
+            manifests.contains(path) || {
+                let under =
+                    |directory: &Option<RepoPath>| relative(directory.as_ref(), path).is_some();
+                (under(&own) && !nested.iter().any(under))
+                    || members.iter().any(under)
+                    || read
+                        .iter()
+                        .any(|input| under(input) || input.as_ref() == Some(*path))
+            }
         })
         .cloned()
         .collect()
@@ -101,24 +111,36 @@ struct Found {
 
 impl Found {
     fn scan(&mut self, text: &str) {
-        let mut in_block = false;
+        let mut attribute_depth = 0_usize;
         for line in text.lines().map(str::trim_start) {
-            let doc_text = if in_block {
-                Some((line, true))
-            } else {
-                doc_comment(line)
-            };
-            if let Some((rest, block)) = doc_text {
+            self.docs |= RUSTDOC_SETTINGS
+                .iter()
+                .any(|setting| line.contains(setting));
+            if let Some((rest, block)) = doc_comment(line) {
                 self.docs = true;
-                in_block = block && !rest.contains("*/");
-                let rest = rest.trim_start().trim_start_matches('*').trim_start();
-                self.fenced |= rest.starts_with("```") || rest.starts_with("~~~");
-            } else if doc_attribute(line) {
-                self.docs = true;
-                self.fenced = true;
+                self.fenced |= block || code_block(rest);
+            } else if attribute_depth > 0 || line.starts_with("#[") || line.starts_with("#![") {
+                let opened = line.matches('[').count();
+                let closed = line.matches(']').count();
+                attribute_depth = (attribute_depth + opened).saturating_sub(closed);
+                if doc_attribute(line) {
+                    self.docs = true;
+                    self.fenced = true;
+                }
             }
         }
     }
+}
+
+const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
+
+fn code_block(rest: &str) -> bool {
+    let text = rest.strip_prefix(' ').unwrap_or(rest);
+    let trimmed = text.trim_start();
+    trimmed.starts_with("```")
+        || trimmed.starts_with("~~~")
+        || text.starts_with("    ")
+        || text.starts_with('\t')
 }
 
 fn doc_comment(line: &str) -> Option<(&str, bool)> {

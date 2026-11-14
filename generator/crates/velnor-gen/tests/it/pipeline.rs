@@ -160,7 +160,7 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
 }
 
 #[test]
-fn the_generated_job_needs_cargo_nextest_pinned_in_mise() -> TestResult {
+fn the_job_installs_the_pinned_rust_and_cargo_nextest_and_needs_a_real_nextest_pin() -> TestResult {
     let mut pinned = view(&["Cargo.toml"], None)?;
     let other = RepoPath::new(".mise.toml")?;
     pinned.files.remove(&RepoPath::new("mise.toml")?);
@@ -168,17 +168,30 @@ fn the_generated_job_needs_cargo_nextest_pinned_in_mise() -> TestResult {
     pinned.tracked_paths.insert(other.clone());
     pinned.files.insert(
         other.clone(),
-        b"[tools]\n\"cargo:cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+        b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\n".to_vec(),
     );
-    assert!(workflow(&pinned)?.contains("install_args: 'cargo:cargo-nextest'\n"));
+    assert!(workflow(&pinned)?.contains("install_args: 'core:rust cargo:cargo-nextest'\n"));
     let mut unpinned = pinned;
-    unpinned
-        .files
-        .insert(other.clone(), b"[tools]\nrust = \"1.99.1\"\n".to_vec());
+    unpinned.files.insert(
+        other.clone(),
+        b"[tools]\nrust = \"1.99.1\"\nnextest-helper = \"1\"\n".to_vec(),
+    );
     assert_eq!(
         expected_files(&unpinned),
         Err(GenerateError::Detect(DetectError::NextestRequired {
             path: other
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
+    assert_eq!(
+        expected_files(&view(&["a-b/Cargo.toml", "a_b/Cargo.toml"], None)?),
+        Err(GenerateError::Detect(DetectError::SameSlug {
+            first: RepoPath::new("a-b/Cargo.toml")?,
+            second: RepoPath::new("a_b/Cargo.toml")?,
         }))
     );
     Ok(())

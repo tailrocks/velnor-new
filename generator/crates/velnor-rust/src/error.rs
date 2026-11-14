@@ -14,6 +14,7 @@ pub enum DetectError {
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
     NextestRequired { path: RepoPath },
+    SameSlug { first: RepoPath, second: RepoPath },
     NoRustRoot,
 }
 
@@ -117,6 +118,10 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::SameSlug { first, second } => write!(
+                f,
+                "the Cargo roots {first} and {second} get the same job and output names; rename one of their folders or add one to exclude in {CONFIG_PATH}"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

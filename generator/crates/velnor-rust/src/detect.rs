@@ -11,6 +11,7 @@ use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::select::root_slug;
 use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 
@@ -47,6 +48,15 @@ pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
 pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
     let rust_roots = rust_roots(view, &config)?;
+    let mut slugs = BTreeMap::new();
+    for root in &rust_roots {
+        if let Some(first) = slugs.insert(root_slug(&root.manifest), &root.manifest) {
+            return Err(DetectError::SameSlug {
+                first: first.clone(),
+                second: root.manifest.clone(),
+            });
+        }
+    }
     let compile_inputs = view
         .files
         .get(&INPUTS_LOCK)

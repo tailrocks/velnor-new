@@ -58,7 +58,7 @@ enum Kind {
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 13] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 18] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -126,9 +126,49 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 13] = [
         NO_DOCS,
     ),
     (
-        "block doc closed, then code",
+        "a block doc may hold an example",
         Kind::Doctested,
-        "/** x */\nconst S: &str = \"\n```\";\n",
+        "/** x */\nfn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "indented code block",
+        Kind::Doctested,
+        "/// Adds.\n///\n///     assert!(true);\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "assignment named doc",
+        Kind::Doctested,
+        "fn f() {\n    let doc = 1;\n}\n",
+        false,
+        NO_FENCE,
+        NO_DOCS,
+    ),
+    (
+        "multi-line cfg_attr doc",
+        Kind::Doctested,
+        "#[cfg_attr(\n    docsrs,\n    doc = \"x\"\n)]\nfn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "rustdoc lint",
+        Kind::Doctested,
+        "#![deny(rustdoc::broken_intra_doc_links)]\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "missing_docs in a manifest",
+        Kind::Doctested,
+        "[lints.rust]\nmissing_docs = \"deny\"\n",
         false,
         NO_FENCE,
         RUN,
@@ -184,6 +224,12 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         "other/only.rs",
         "tools/tool/src/main.rs",
         "build.RS",
+        "Cargo.toml",
+        "app/Cargo.toml",
+        "tools/Cargo.toml",
+        "tools/tool/Cargo.toml",
+        "vendor/ext/Cargo.toml",
+        "other/Cargo.toml",
     ]
     .into_iter()
     .map(path)
@@ -197,6 +243,8 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     assert_eq!(
         sources(0),
         [
+            "Cargo.toml",
+            "app/Cargo.toml",
             "app/src/main.rs",
             "build.RS",
             "macros/x.rs",
@@ -210,7 +258,10 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         [
             "macros/x.rs",
             "shared/gen.rs",
+            "tools/Cargo.toml",
+            "tools/tool/Cargo.toml",
             "tools/tool/src/main.rs",
+            "vendor/ext/Cargo.toml",
             "vendor/ext/src/lib.rs",
         ]
     );
