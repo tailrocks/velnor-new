@@ -163,9 +163,7 @@ impl<'a> Graph<'a> {
         if let Some(manifest) = package {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
         } else {
-            for (index, candidate) in self.roots.iter().enumerate() {
-                walk.trigger(candidate, index, path);
-            }
+            walk.trigger(path);
         }
     }
 }
@@ -182,10 +180,9 @@ impl<'a> Walk<'a> {
         }
     }
 
-    fn trigger(&mut self, root: &'a RustRoot, index: usize, path: &RepoPath) {
-        self.triggers[index].get_or_insert_with(|| AllTrigger::UnknownPath(path.clone()));
-        for member in &root.members {
-            self.reach(&member.manifest);
+    fn trigger(&mut self, path: &RepoPath) {
+        for trigger in &mut self.triggers {
+            trigger.get_or_insert_with(|| AllTrigger::UnknownPath(path.clone()));
         }
     }
 }
