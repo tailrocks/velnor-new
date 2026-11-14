@@ -1,0 +1,14 @@
+{
+  "description": "The cache-save-existing probe of the lab: one dispatch on the default branch.",
+  "steps": [
+    {
+      "workflow_dispatch": {
+        "branch": "{default}",
+        "inputs": {
+          "tag": "7303",
+          "role": "manual"
+        }
+      }
+    }
+  ]
+}

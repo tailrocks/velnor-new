@@ -1,0 +1,14 @@
+{
+  "description": "The needs-result probe of the lab: one dispatch on the default branch.",
+  "steps": [
+    {
+      "workflow_dispatch": {
+        "branch": "{default}",
+        "inputs": {
+          "tag": "7305",
+          "role": "manual"
+        }
+      }
+    }
+  ]
+}

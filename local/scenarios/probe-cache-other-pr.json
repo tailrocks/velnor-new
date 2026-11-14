@@ -1,0 +1,31 @@
+{
+  "description": "The cache-other-pr probe of the lab: two pull requests into the default branch, one after the other.",
+  "steps": [
+    {
+      "commit": {
+        "branch": "probe-7307-a",
+        "append": "probes/cache-other-pr/runs/probe-7307-a.txt",
+        "line": "first"
+      }
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7307-a",
+        "base": "{default}"
+      }
+    },
+    {
+      "commit": {
+        "branch": "probe-7307-b",
+        "append": "probes/cache-other-pr/runs/probe-7307-b.txt",
+        "line": "first"
+      }
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7307-b",
+        "base": "{default}"
+      }
+    }
+  ]
+}

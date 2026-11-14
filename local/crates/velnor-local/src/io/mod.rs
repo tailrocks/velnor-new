@@ -153,13 +153,7 @@ impl CacheServer {
                     json!({"ok": true, "signed_upload_url": archive_url(&host, &record.blob)}),
                     replaced,
                 ),
-                Err(AlreadyExists(existing)) => (
-                    json!({
-                        "ok": false,
-                        "message": format!("the entry {} already exists in {}", existing.key, existing.scope.0),
-                    }),
-                    Vec::new(),
-                ),
+                Err(AlreadyExists(_)) => (json!({"ok": false}), Vec::new()),
             },
             "FinalizeCacheEntryUpload" => {
                 self.finalize(&mut index, &at, &body.size_bytes, now)

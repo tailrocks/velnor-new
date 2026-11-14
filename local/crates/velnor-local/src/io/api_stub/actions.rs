@@ -70,10 +70,13 @@ impl ApiStub {
         }
     }
 
-    async fn attempt_jobs(&self, id: u64, attempt: u32) -> Option<Vec<Value>> {
+    async fn attempt_jobs(&self, id: u64, attempt: Option<u32>) -> Option<Vec<Value>> {
         let jobs: Vec<standin::Job> = self
             .standin(&format!("/_apis/v1/Message?runid={id}"))
             .await?;
+        let Some(attempt) = attempt.or_else(|| jobs.iter().map(|job| job.attempt).max()) else {
+            return Some(Vec::new());
+        };
         let mut listed = Vec::new();
         for job in jobs.iter().filter(|job| job.attempt == attempt) {
             listed.push(runs::job(job, &self.records(job).await?));
@@ -96,13 +99,13 @@ impl ApiStub {
             .map(|job| job.attempt)
             .max()
             .unwrap_or(1);
-        match self.attempt_jobs(id, attempt).await {
+        match self.attempt_jobs(id, Some(attempt)).await {
             Some(jobs) => Reply::ok(runs::run(&run, attempt, &jobs)),
             None => Reply::missing(),
         }
     }
 
-    pub(super) async fn run_jobs(&self, call: &Call<'_>, id: u64, attempt: u32) -> Reply {
+    pub(super) async fn run_jobs(&self, call: &Call<'_>, id: u64, attempt: Option<u32>) -> Reply {
         let Some(jobs) = self.attempt_jobs(id, attempt).await else {
             return Reply::missing();
         };

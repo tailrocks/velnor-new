@@ -4,9 +4,7 @@
 use std::path::Path;
 
 use serde_json::Value;
-use velnor_local::event::{
-    Commit, MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin,
-};
+use velnor_local::event::{Commit, MergeGroup, NO_COMMIT, PullRequest, Push, Repository};
 use velnor_local::scenario::{Scenario, Step, next_patch, with_path};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -80,6 +78,7 @@ fn a_push_payload_has_the_shape_github_sent_in_the_probe() {
         branch: "main",
         before: NO_COMMIT,
         after: SHA_A,
+        commits: &[],
     });
     assert_like_github("push", &payload);
     assert_eq!(payload["ref"], "refs/heads/main");
@@ -129,7 +128,7 @@ fn schedule_and_workflow_dispatch_payloads_have_the_shape_github_sent_in_the_pro
     let scheduled = REPOSITORY.schedule("25 6 * * 1", ".github/workflows/ci.yml");
     assert_like_github("schedule", &scheduled);
     assert_eq!(scheduled["schedule"], "25 6 * * 1");
-    assert!(for_standin(scheduled).get("workflow").is_none());
+    assert_eq!(scheduled["workflow"], ".github/workflows/ci.yml");
     let inputs = serde_json::json!({"tag": "x"});
     let dispatched = REPOSITORY.workflow_dispatch("main", &inputs, ".github/workflows/ci.yml");
     assert_like_github("workflow_dispatch", &dispatched);
@@ -193,7 +192,23 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
     names.sort();
     assert_eq!(
         names,
-        ["cold", "docs", "hub", "leaf", "lock", "story", "warm"]
+        [
+            "cold",
+            "docs",
+            "hub",
+            "leaf",
+            "lock",
+            "probe-cache-other-pr",
+            "probe-cache-own-pr",
+            "probe-cache-pr-reads",
+            "probe-cache-restore-keys",
+            "probe-cache-save-existing",
+            "probe-event-payload",
+            "probe-needs-result",
+            "probe-token",
+            "story",
+            "warm"
+        ]
     );
     let story = Scenario::parse(&read("scenarios/story.json"))
         .unwrap_or_else(|e| unreachable!("{e}"))
