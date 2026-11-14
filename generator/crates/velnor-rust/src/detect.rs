@@ -180,7 +180,11 @@ fn other_mise_config(path: &RepoPath) -> bool {
     let toml = std::path::Path::new(text)
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"));
-    let named = |name: &str| name.starts_with("mise") || name.starts_with(".mise");
+    let named = |name: &str| {
+        ["mise", ".mise", "rtx", ".rtx"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+    };
     let at_root = !text.contains('/') && named(text) && toml;
     let in_folder = MISE_FOLDERS.iter().any(|folder| {
         text.strip_prefix(folder)

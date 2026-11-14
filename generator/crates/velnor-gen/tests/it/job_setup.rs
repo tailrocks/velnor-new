@@ -193,6 +193,7 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         ".config/mise/conf.d/ci.toml",
         ".config/mise/mise.toml",
         "mise.ci.toml",
+        ".rtx.toml",
         ".tool-versions",
     ] {
         let file = RepoPath::new(other)?;
@@ -333,6 +334,9 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[env]\nCARGO_BUILD_RUSTDOCFLAGS = \"\"\n",
         "[build]\nrustdocflags = [\"--cap-lints\", \"allow\"]\n",
         "[build]\ntarget = \"wasm32-unknown-unknown\"\n",
+        "[build]\nrustflags = [\"@rustflags.args\"]\n",
+        "[build]\nrustdoc = \"/bin/true\"\n",
+        "[build]\nrustc-wrapper = \"/bin/true\"\n",
     ];
     let accepted = [
         "[env]\nANY_NAME = \"x\"\n",

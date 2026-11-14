@@ -168,9 +168,18 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .chain(targets)
         .flat_map(|section| [section.get("rustflags"), section.get("rustdocflags")])
         .flatten()
-        .any(|flags| flags.to_string().contains("cap-lints"));
+        .any(|flags| {
+            let text = flags.to_string();
+            text.contains("cap-lints") || text.contains("\"@")
+        });
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));
+    }
+    let overrides = table
+        .get("build")
+        .is_some_and(|build| EXECUTABLES.iter().any(|key| build.get(*key).is_some()));
+    if overrides {
+        return Err(DetectError::invalid(file, Reason::BuildExecutable));
     }
     let env = table.get("env").and_then(toml::Value::as_table);
     if let Some(name) = env.into_iter().flatten().find_map(|(name, value)| {
@@ -187,6 +196,12 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
 }
 
 const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
+const EXECUTABLES: [&str; 4] = [
+    "rustc",
+    "rustdoc",
+    "rustc-wrapper",
+    "rustc-workspace-wrapper",
+];
 
 fn patches(
     bytes: &[u8],
