@@ -3,7 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot};
+use crate::toml_file::table;
+use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
@@ -79,6 +80,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
+    check_build_targets(view, toolchain.as_ref())?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -110,6 +112,29 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
+    let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
+    for (file, bytes) in view.files.iter().filter(|(path, _)| is_cargo_config(path)) {
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        let target = parsed.get("build").and_then(|build| build.get("target"));
+        let named: Vec<String> = match target {
+            Some(toml::Value::String(one)) => vec![one.clone()],
+            Some(toml::Value::Array(many)) => many
+                .iter()
+                .map(|item| item.as_str().unwrap_or_default().to_owned())
+                .collect(),
+            _ => Vec::new(),
+        };
+        if let Some(missing) = named.into_iter().find(|name| !declared.contains(&name)) {
+            return Err(DetectError::invalid(
+                file,
+                Reason::UndeclaredTarget(missing),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

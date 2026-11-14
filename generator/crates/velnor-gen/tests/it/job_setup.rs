@@ -122,6 +122,7 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         format!("env_file = \".env\"\n\n[tools]\n{nextest}"),
         format!("env_path = [\"bin\"]\n\n[tools]\n{nextest}"),
         format!("[settings]\nenv_file = \".env\"\n\n[tools]\n{nextest}"),
+        format!("[hooks]\npostinstall = \"echo\"\n\n[tools]\n{nextest}"),
         format!(
             "[tools]\n{nextest}rust = [{{ version = \"1.84.1\", os = [\"macos\"] }}, {{ version = \"1.95.0\", os = [\"linux\"] }}]\n"
         ),
@@ -270,6 +271,12 @@ fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> Te
         b"[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"llvm-tools\"]\ntargets = [\"wasm32-unknown-unknown\"]\n"
             .to_vec(),
     );
+    let cargo_config = RepoPath::new(".cargo/config.toml")?;
+    declared.tracked_paths.insert(cargo_config.clone());
+    declared.files.insert(
+        cargo_config,
+        b"[build]\ntarget = \"wasm32-unknown-unknown\"\n".to_vec(),
+    );
     let text = workflow(&declared)?;
     let runs: Vec<&str> = text
         .lines()
@@ -308,6 +315,7 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[env]\nRUSTFLAGS = \"--cap-lints allow\"\n",
         "[env]\nCARGO_BUILD_RUSTDOCFLAGS = \"\"\n",
         "[build]\nrustdocflags = [\"--cap-lints\", \"allow\"]\n",
+        "[build]\ntarget = \"wasm32-unknown-unknown\"\n",
     ];
     let accepted = [
         "[env]\nANY_NAME = \"x\"\n",

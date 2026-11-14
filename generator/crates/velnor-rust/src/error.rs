@@ -54,6 +54,7 @@ pub enum Reason {
     OtherMiseConfig,
     CapLints,
     CargoEnv(String),
+    UndeclaredTarget(String),
 }
 
 impl DetectError {
@@ -107,6 +108,10 @@ impl fmt::Display for Reason {
             Self::MiseOverridesFlags(name) => write!(
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::UndeclaredTarget(target) => write!(
+                f,
+                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
             ),
             Self::CargoEnv(name) => write!(
                 f,
