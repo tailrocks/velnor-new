@@ -75,6 +75,17 @@ fn toolchain_cases() -> Vec<ToolchainCase> {
         (
             "rust-toolchain.toml",
             "[toolchain]\ncomponents = [\"clippy\"]\n",
+            Ok(Toolchain {
+                channel: None,
+                path: None,
+                components: vec!["clippy".to_owned()],
+                targets: Vec::new(),
+                profile: None,
+            }),
+        ),
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\n",
             Err(Reason::MissingKey("toolchain.channel")),
         ),
         (

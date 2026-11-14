@@ -74,7 +74,9 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
         .map(|value| text(value, "toolchain.path"))
         .transpose()?;
     match (&channel, &path) {
-        (None, None) => return Err(Reason::MissingKey("toolchain.channel")),
+        (None, None) if section.is_empty() => {
+            return Err(Reason::MissingKey("toolchain.channel"));
+        }
         (Some(_), Some(path)) => {
             return Err(Reason::InvalidValue {
                 key: "toolchain.path",
