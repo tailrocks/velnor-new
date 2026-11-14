@@ -23,6 +23,6 @@ pub use metadata::{MetadataError, reduce_metadata};
 pub use plan::plan;
 pub use reads::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, format_inputs_lock, locate,
-    parse_inputs_lock, rerun_if_changed, unlisted,
+    normalize, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 pub use select::{root_slug, select, unknown_paths};

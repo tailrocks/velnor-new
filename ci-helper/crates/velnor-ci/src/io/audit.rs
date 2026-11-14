@@ -9,10 +9,10 @@ use std::time::SystemTime;
 
 use serde::Deserialize;
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, RepoFacts, RepoPath};
+use velnor_model::{CompileInputs, RepoFacts, RepoPath, TargetKind};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, parse_inputs_lock, rerun_if_changed, unlisted,
+    locate, normalize, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use crate::error::CiError;
@@ -37,7 +37,7 @@ struct Audit<'a> {
     targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
-    covered: BTreeSet<RepoPath>,
+    covered: BTreeMap<RepoPath, usize>,
 }
 
 pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
@@ -57,6 +57,16 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .iter()
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
         .collect::<Result<Vec<_>, _>>()?;
+    let mut directories = BTreeSet::new();
+    if let Some(shared) = workspaces
+        .iter()
+        .find(|w| !directories.insert(normalize(&w.target_directory)))
+    {
+        return Err(CiError::new(format!(
+            "two Cargo roots share the target directory {}, so its units cannot be told apart; give each Cargo root its own target directory",
+            shared.target_directory.display()
+        )));
+    }
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
@@ -71,7 +81,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             .collect(),
         found: CompileInputs::new(),
         units: 0,
-        covered: BTreeSet::new(),
+        covered: BTreeMap::new(),
     };
     let mut files = Vec::new();
     for workspace in &workspaces {
@@ -108,7 +118,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     compare(&audit.found, &listed, &summary)
 }
 
-fn uncovered(facts: &RepoFacts, covered: &BTreeSet<RepoPath>) -> Vec<String> {
+fn uncovered(facts: &RepoFacts, covered: &BTreeMap<RepoPath, usize>) -> Vec<String> {
     facts
         .rust_roots
         .iter()
@@ -120,9 +130,18 @@ fn uncovered(facts: &RepoFacts, covered: &BTreeSet<RepoPath>) -> Vec<String> {
                 .filter(|target| !target.requires_features)
                 .filter_map(|target| {
                     let source = target.source.as_ref()?;
-                    (!covered.contains(source)).then(|| {
+                    let harness = target.tests
+                        && target.kinds.iter().any(|kind| {
+                            matches!(
+                                kind,
+                                TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
+                            )
+                        });
+                    let expected = 1 + usize::from(harness);
+                    let current = covered.get(source).copied().unwrap_or_default();
+                    (current < expected).then(|| {
                         format!(
-                            "{} ({}) target {} ({source})",
+                            "{} ({}) target {} ({source}, {current} of {expected} units)",
                             member.name, member.manifest, target.name
                         )
                     })
@@ -188,9 +207,7 @@ impl Audit<'_> {
                             .or_default()
                             .insert(source.clone(), built);
                     }
-                    None => {
-                        self.covered.insert(source.clone());
-                    }
+                    None => *self.covered.entry(source.clone()).or_default() += 1,
                 }
                 for owner in self.owners.of(&source) {
                     self.credit(&owner, workspace, &paths, false);
@@ -209,6 +226,7 @@ impl Audit<'_> {
                     .collect();
                 let mut seen = BTreeSet::new();
                 for source in scripts {
+                    let mut ran = false;
                     for owner in self.owners.of(&source) {
                         let base = owner.directory().map_or_else(
                             || self.repository.to_path_buf(),
@@ -217,11 +235,14 @@ impl Audit<'_> {
                         if changed_since(&base, &paths, built) {
                             continue;
                         }
-                        self.covered.insert(source.clone());
+                        ran = true;
                         if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
                             self.credit(&owner, &base, &paths, true);
                             self.units += 1;
                         }
+                    }
+                    if ran {
+                        *self.covered.entry(source).or_default() += 1;
                     }
                 }
             }

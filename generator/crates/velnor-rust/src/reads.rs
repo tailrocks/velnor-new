@@ -75,16 +75,7 @@ pub enum Located {
 
 #[must_use]
 pub fn locate(repository: &Path, base: &Path, raw: &str) -> Located {
-    let mut full = PathBuf::new();
-    for component in base.join(raw).components() {
-        match component {
-            Component::ParentDir => {
-                full.pop();
-            }
-            Component::CurDir => {}
-            other => full.push(other),
-        }
-    }
+    let full = normalize(&base.join(raw));
     match full.strip_prefix(repository) {
         Ok(inside) if inside.as_os_str().is_empty() => Located::Repository,
         Ok(inside) => inside
@@ -93,6 +84,21 @@ pub fn locate(repository: &Path, base: &Path, raw: &str) -> Located {
             .map_or(Located::Outside, Located::Inside),
         Err(_) => Located::Outside,
     }
+}
+
+#[must_use]
+pub fn normalize(path: &Path) -> PathBuf {
+    let mut full = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                full.pop();
+            }
+            Component::CurDir => {}
+            other => full.push(other),
+        }
+    }
+    full
 }
 
 #[derive(Debug, Clone)]
