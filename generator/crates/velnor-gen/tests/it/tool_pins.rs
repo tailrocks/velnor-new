@@ -21,7 +21,6 @@ fn mise_files_become_the_requested_and_locked_versions_of_each_tool() -> TestRes
 rust = { version = \"1.99.1\", profile = \"minimal\" }
 \"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"
 node = [\"20\", \"22\"]
-local = { path = \"tools/local\" }
 ";
     let lock = "\
 lockfile_version = 3
@@ -54,7 +53,6 @@ version = \"0.9.151\"
                 "aqua:nextest-rs/nextest/cargo-nextest",
                 &pin(&["0.9.151"], &["0.9.151"])
             ),
-            ("local", &pin(&[], &[])),
             ("node", &pin(&["20", "22"], &[])),
             ("rust", &pin(&["1.99.1"], &["1.99.1"])),
         ]
@@ -103,6 +101,11 @@ fn a_malformed_mise_file_is_an_error_naming_that_file() -> TestResult {
     let cases = [
         ("mise.toml", "tools = 3\n", value("tools", "3")),
         ("mise.toml", "[tools]\nbad = 1\n", value("tools", "bad")),
+        (
+            "mise.toml",
+            "[tools]\nlocal = { path = \"x\" }\n",
+            value("tools", "local"),
+        ),
     ];
     for (file, text, reason) in cases {
         let view = repo(

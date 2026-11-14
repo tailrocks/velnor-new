@@ -68,6 +68,11 @@ fn toolchain_cases() -> Vec<ToolchainCase> {
         ),
         (
             "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"stable\"\ntarget = [\"wasm32-unknown-unknown\"]\n",
+            Err(Reason::UnknownKey("target".to_owned())),
+        ),
+        (
+            "rust-toolchain.toml",
             "[toolchain]\ncomponents = [\"clippy\"]\n",
             Err(Reason::MissingKey("toolchain.channel")),
         ),
@@ -98,6 +103,14 @@ fn plain_toolchain_cases() -> Vec<ToolchainCase> {
             "rust-toolchain",
             "[toolchain]\nchannel = \"1.99.1\"\n",
             Ok(toolchain("1.99.1", &[], &[], None)),
+        ),
+        (
+            "rust-toolchain",
+            "[toolchain]\n",
+            Err(Reason::InvalidValue {
+                key: "toolchain.channel",
+                value: "[toolchain]".to_owned(),
+            }),
         ),
         (
             "rust-toolchain",

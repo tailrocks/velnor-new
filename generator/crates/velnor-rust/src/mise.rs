@@ -80,7 +80,7 @@ fn version_list(value: &Value) -> Option<Vec<String>> {
             .map(version_list)
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
-        Value::Table(entry) => entry.get("version").map_or(Some(Vec::new()), version_list),
+        Value::Table(entry) => entry.get("version").and_then(version_list),
         _ => None,
     }
 }

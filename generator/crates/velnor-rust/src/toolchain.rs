@@ -9,6 +9,8 @@ use velnor_model::{RepoPath, Toolchain};
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
+const KEYS: [&str; 5] = ["channel", "path", "components", "targets", "profile"];
+
 pub(crate) const TOOLCHAIN_TOML: RepoPath = RepoPath::from_static("rust-toolchain.toml");
 pub(crate) const TOOLCHAIN_PLAIN: RepoPath = RepoPath::from_static("rust-toolchain");
 
@@ -40,7 +42,11 @@ fn parse(bytes: &[u8], bare_channel_allowed: bool) -> Result<Toolchain, Reason> 
 }
 
 fn channel(text: &str) -> Result<String, Reason> {
-    if text.is_empty() || text.contains(char::is_whitespace) {
+    if text.is_empty()
+        || !text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '+'))
+    {
         return Err(Reason::InvalidValue {
             key: "toolchain.channel",
             value: text.to_owned(),
@@ -55,6 +61,9 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
         .get("toolchain")
         .and_then(Value::as_table)
         .ok_or(Reason::MissingTable("toolchain"))?;
+    if let Some(key) = section.keys().find(|key| !KEYS.contains(&key.as_str())) {
+        return Err(Reason::UnknownKey(key.clone()));
+    }
     let name = section
         .get("channel")
         .and_then(Value::as_str)
