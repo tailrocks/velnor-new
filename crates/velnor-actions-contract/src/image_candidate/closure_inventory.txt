@@ -1575,6 +1575,7 @@ crates/velnor-actions-workflow-renderer/src/state_fragments.rs
 crates/velnor-actions-workflow-renderer/src/state_producer_steps.rs
 crates/velnor-actions-workflow-renderer/src/state_script.rs
 crates/velnor-actions-workflow-renderer/src/state_seal.rs
+crates/velnor-actions-workflow-renderer/src/state_seal_artifact_guard.rs
 crates/velnor-actions-workflow-renderer/src/state_seal_save.rs
 crates/velnor-actions-workflow-renderer/src/state_seal_tip.rs
 crates/velnor-actions-workflow-renderer/src/state_skeleton.rs
