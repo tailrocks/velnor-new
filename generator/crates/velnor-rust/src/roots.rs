@@ -170,7 +170,7 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .flatten()
         .any(|flags| {
             let text = flags.to_string();
-            text.contains("cap-lints") || text.contains("\"@")
+            text.contains("cap-lints") || text.contains("force-warn") || text.contains("\"@")
         });
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));

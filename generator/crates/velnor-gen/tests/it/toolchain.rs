@@ -111,10 +111,10 @@ fn plain_toolchain_cases() -> Vec<ToolchainCase> {
         ),
         (
             "rust-toolchain.toml",
-            "[toolchain]\nchannel = \"stable\"\ntargets = [\"$(id)\"]\n",
+            "[toolchain]\nchannel = \"stable\"\ntargets = [\"--help\"]\n",
             Err(Reason::InvalidValue {
                 key: "toolchain.targets",
-                value: "$(id)".to_owned(),
+                value: "--help".to_owned(),
             }),
         ),
         (

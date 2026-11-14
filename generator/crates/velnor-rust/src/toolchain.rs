@@ -107,6 +107,7 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
 fn names(items: Vec<String>, key: &'static str) -> Result<Vec<String>, Reason> {
     match items.iter().find(|name| {
         name.is_empty()
+            || name.starts_with('-')
             || !name
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))

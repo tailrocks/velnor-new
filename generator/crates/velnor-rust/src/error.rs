@@ -122,7 +122,7 @@ impl fmt::Display for Reason {
                 "build.rustc, build.rustdoc and the build wrappers replace the programs the checks run; remove them",
             ),
             Self::CapLints => f.write_str(
-                "rustflags or rustdocflags with --cap-lints or an @file argument could let the lint or documentation step pass with warnings; remove it",
+                "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
             ),
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",

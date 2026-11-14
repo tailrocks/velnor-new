@@ -123,6 +123,7 @@ fn a_mise_configuration_may_not_load_hook_or_alias_anything() -> TestResult {
     for text in [
         format!("env_file = \".env\"\n\n[tools]\n{nextest}"),
         format!("env_path = [\"bin\"]\n\n[tools]\n{nextest}"),
+        format!("dotenv = \".env\"\n\n[tools]\n{nextest}"),
         format!("[settings]\nenv_file = \".env\"\n\n[tools]\n{nextest}"),
         format!("[hooks]\npostinstall = \"echo\"\n\n[tools]\n{nextest}"),
         format!(
@@ -338,6 +339,7 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[build]\nrustdocflags = [\"--cap-lints\", \"allow\"]\n",
         "[build]\ntarget = \"wasm32-unknown-unknown\"\n",
         "[build]\nrustflags = [\"@rustflags.args\"]\n",
+        "[build]\nrustflags = [\"--force-warn\", \"unused-variables\"]\n",
         "[build]\nrustdoc = \"/bin/true\"\n",
         "[build]\nrustc-wrapper = \"/bin/true\"\n",
     ];
