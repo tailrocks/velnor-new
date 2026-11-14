@@ -70,3 +70,38 @@ pub fn seconds(time: &str) -> Option<u64> {
     let clock = number(11..13)? * 3600 + number(14..16)? * 60 + number(17..19)?;
     u64::try_from(days * 86_400 + clock).ok()
 }
+
+#[derive(Debug)]
+pub struct ClientCall<'a> {
+    pub event: &'a str,
+    pub payload: &'a str,
+    pub git_ref: &'a str,
+    pub sha: &'a str,
+    pub repository: &'a str,
+    pub workflow: Option<&'a str>,
+}
+
+impl<'a> ClientCall<'a> {
+    #[must_use]
+    pub fn args(&self) -> Vec<&'a str> {
+        let mut args = vec![
+            "/opt/runner.server/Runner.Client.dll",
+            "--server",
+            "http://runner-server",
+            "--event",
+            self.event,
+            "--payload",
+            self.payload,
+            "--ref",
+            self.git_ref,
+            "--sha",
+            self.sha,
+            "--repository",
+            self.repository,
+        ];
+        if let Some(workflow) = self.workflow {
+            args.extend(["-W", workflow]);
+        }
+        args
+    }
+}

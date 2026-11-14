@@ -11,6 +11,8 @@ mod proxy;
 mod reply;
 mod run;
 
+pub use run::{RestoreOnly, guarded, open};
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};

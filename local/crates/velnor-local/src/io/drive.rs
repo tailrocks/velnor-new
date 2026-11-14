@@ -1,27 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::fs;
-use tokio::process::Command;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
-use crate::cli::RunArgs;
+use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository, for_standin};
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
 };
+use crate::side::{Side, fork_heads, push_event, refuse_fork_branches};
 use crate::standin;
 
 mod outcome;
@@ -39,6 +38,7 @@ struct Driver<'a> {
     events: usize,
     outcomes: Vec<Outcome>,
     tag: &'a str,
+    fork_heads: BTreeSet<String>,
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
@@ -112,6 +112,8 @@ async fn run_one(
     scenario
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
+    refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
+        .map_err(io::Error::other)?;
     let env = Environment::at(dir, DockerCli).await?;
     if !inside(&fs::canonicalize(&args.environment.dir).await?, &env.dir) {
         return Err(io::Error::other(format!(
@@ -134,11 +136,15 @@ async fn run_one(
         }
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
+    let mut environment = args.environment.clone();
+    if scenario.has_fork() {
+        environment.fork_runners = environment.fork_runners.max(1);
+    }
     if slots.is_closed() {
         return Err(io::Error::other("interrupted before it started"));
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
-        session = session(args, &env, repo, &scenario, tag) => session,
+        session = session(args, &environment, &env, repo, &scenario, tag) => session,
         _ = tokio::signal::ctrl_c() => (Vec::new(), 0, 0.0, Err(io::Error::other("interrupted"))),
     };
     let stopped = env.down().await;
@@ -153,6 +159,7 @@ async fn run_one(
 
 async fn session<'a>(
     args: &'a RunArgs,
+    environment: &EnvironmentArgs,
     env: &'a Environment<DockerCli>,
     repo: PathBuf,
     scenario: &Scenario,
@@ -162,7 +169,7 @@ async fn session<'a>(
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
     let clock = Instant::now();
-    let addresses = match env.up(&repo, &args.environment).await {
+    let addresses = match env.up(&repo, environment).await {
         Ok(addresses) => addresses,
         Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
     };
@@ -181,6 +188,7 @@ async fn session<'a>(
         events: 0,
         outcomes: Vec::new(),
         tag,
+        fork_heads: fork_heads(&scenario.steps),
     };
     let replayed = driver.start(&scenario.steps).await;
     (driver.outcomes, up_at, up_seconds, replayed)
@@ -214,7 +222,7 @@ impl Driver<'_> {
                     workspace,
                 } => self.update_lock(branch, package, workspace).await?,
                 Step::Push(branch) => self.push(branch).await?,
-                Step::OpenPullRequest { head, base } => self.open(head, base).await?,
+                Step::OpenPullRequest { head, base, fork } => self.open(head, base, *fork).await?,
                 Step::MergePullRequest(head) => self.merge(head).await?,
                 Step::ClosePullRequest(head) => self.close(head).await?,
                 Step::MergeGroup(head) => self.merge_group(head).await?,
@@ -248,9 +256,20 @@ impl Driver<'_> {
     async fn commit(&self, branch: &str, append: &str, line: &str) -> io::Result<()> {
         self.on_branch(branch).await?;
         let file = self.repo.join(append);
-        let parent = fs::canonicalize(file.parent().unwrap_or(&self.repo)).await?;
-        if !parent.starts_with(fs::canonicalize(&self.repo).await?) {
-            return Err(io::Error::other(format!("{append} leaves the repository")));
+        let root = fs::canonicalize(&self.repo).await?;
+        let mut dir = self.repo.clone();
+        for part in Path::new(append)
+            .parent()
+            .into_iter()
+            .flat_map(Path::components)
+        {
+            dir.push(part);
+            if fs::symlink_metadata(&dir).await.is_err() {
+                fs::create_dir(&dir).await?;
+            }
+            if !fs::canonicalize(&dir).await?.starts_with(&root) {
+                return Err(io::Error::other(format!("{append} leaves the repository")));
+            }
         }
         let mut bytes = match fs::read(&file).await {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
@@ -268,20 +287,29 @@ impl Driver<'_> {
         self.git(&["switch", "-q", branch]).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
-        let payload = self.repository().push(&Push {
+        let push = Push {
             branch,
             before,
             after: &after,
-        });
+        };
+        let payload = push_event(&self.repository(), &push, &self.fork_heads);
         self.pushed.insert(branch.to_owned(), after.clone());
         let moved = self.retarget(branch, &after).await?;
-        self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
-            .await?;
+        if let Some(payload) = payload {
+            self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
+                .await?;
+        } else {
+            println!(
+                "velnor-local {}: {branch} is a fork's branch, so the push reaches only its pull request",
+                self.tag
+            );
+        }
         self.synchronize(moved).await
     }
 
-    async fn get<T: DeserializeOwned>(&self, path: &str) -> io::Result<T> {
-        let bytes = request(&self.addresses.cache, "GET", path, "")
+    async fn get<T: DeserializeOwned>(&self, side: Side, path: &str) -> io::Result<T> {
+        let proxy = self.addresses.standin(side)?;
+        let bytes = request(proxy, "GET", path, "")
             .await
             .ok_or_else(|| io::Error::other(format!("runner.server does not answer {path}")))?;
         serde_json::from_slice(&bytes).map_err(io::Error::other)
@@ -303,53 +331,29 @@ impl Driver<'_> {
         )
         .await?;
         let runs = "/_apis/v1/Message/workflow/runs";
-        let known: Vec<standin::Run> = self.get(runs).await?;
-        let label = format!("velnor-local={}", self.env.name);
+        let side = Side::of(payload);
+        let known: Vec<standin::Run> = self.get(side, runs).await?;
         let (repo, events) = (
             format!("{}:/repo", self.repo.display()),
             format!("{dir}/events:/events:ro"),
         );
         let payload_path = format!("/events/{name}.json");
-        let mut client = words("run --rm -w /repo --entrypoint dotnet");
-        client.extend([
-            "--label",
-            &label,
-            "--network",
-            &self.env.name,
-            "-v",
-            &repo,
-            "-v",
-            &events,
-        ]);
+        let mut client = words("-w /repo --entrypoint dotnet");
+        client.extend(["-v", &repo, "-v", &events]);
         client.push(STANDIN_IMAGE);
-        client.extend(words(
-            "/opt/runner.server/Runner.Client.dll --server http://runner-server",
-        ));
-        client.extend([
-            "--event",
+        let call = standin::ClientCall {
             event,
-            "--payload",
-            &payload_path,
-            "--ref",
+            payload: &payload_path,
             git_ref,
-            "--sha",
             sha,
-        ]);
-        client.extend(["--repository", &self.args.repository]);
-        if let Some(workflow) = &self.args.workflow {
-            client.extend(["-W", workflow]);
-        }
-        let log = std::fs::File::create(format!("{dir}/logs/{name}.log"))?;
-        let status = Command::new("docker")
-            .args(&client)
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(log.try_clone()?)
-            .stderr(log)
-            .status()
-            .await?;
+            repository: &self.args.repository,
+            workflow: self.args.workflow.as_deref(),
+        };
+        client.extend(call.args());
+        let log = self.env.dir.join(format!("logs/{name}.log"));
+        let succeeded = self.env.client(payload, &client, &log).await?;
         let mut created = false;
-        for run in self.get::<Vec<standin::Run>>(runs).await? {
+        for run in self.get::<Vec<standin::Run>>(side, runs).await? {
             if known.iter().any(|old| old.id == run.id) {
                 continue;
             }
@@ -361,11 +365,11 @@ impl Driver<'_> {
                 );
                 continue;
             }
-            let outcome = self.outcome(run).await?;
+            let outcome = self.outcome(run, side).await?;
             println!("velnor-local {}: {}", self.tag, outcome.line());
             self.outcomes.push(outcome);
         }
-        if !status.success() && !created {
+        if !succeeded && !created {
             return Err(io::Error::other(format!(
                 "Runner.Client failed; see logs/{name}.log"
             )));
