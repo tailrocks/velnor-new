@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use crate::standin::{Job, Record, Run, conclusion};
 
 fn second(time: Option<&String>) -> Option<String> {
-    time.map(|time| format!("{}Z", &time[..time.len().min(19)]))
+    time.map(|time| format!("{}Z", time.get(..19).unwrap_or(time).trim_end_matches('Z')))
 }
 
 fn steps<'a>(job: &Record, records: &'a [Record]) -> Vec<&'a Record> {

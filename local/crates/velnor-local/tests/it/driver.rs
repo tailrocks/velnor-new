@@ -6,7 +6,7 @@ use std::path::Path;
 use serde_json::Value;
 use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
 use velnor_local::rest::runs;
-use velnor_local::scenario::{Scenario, Step, overlapping};
+use velnor_local::scenario::{Scenario, Step, link_inside, overlapping};
 use velnor_local::standin::{self, Job, Record, Run};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -182,6 +182,12 @@ fn a_recorded_stand_in_run_reads_as_the_github_run_jobs_and_log_velnor_ci_collec
     let invalid = runs::run(&invalid, &[]);
     assert_eq!(invalid["name"], ".github/workflows/broken.yml");
     assert_eq!(invalid["conclusion"], "failure");
+    let wide: Vec<Record> = serde_json::from_value(serde_json::json!([
+        {"id": "j", "parentId": null, "name": "ci", "startTime": "2026-11-13T22:32:3é"}
+    ]))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let wide = runs::job(&jobs[0], &wide);
+    assert_eq!(wide["started_at"], "2026-11-13T22:32:3éZ");
     let run = runs::run(&runs[0], &[job]);
     assert_eq!(run["name"], "mbx default");
     assert_eq!(run["conclusion"], "success");
@@ -207,4 +213,26 @@ fn a_state_directory_that_overlaps_the_checkout_is_refused() {
     assert!(overlapping(checkout, checkout));
     assert!(!overlapping(Path::new("/work/lab-state"), checkout));
     assert!(!overlapping(Path::new("/tmp/state"), checkout));
+}
+
+#[test]
+fn an_untracked_link_is_copied_only_when_it_stays_inside_the_checkout() {
+    assert!(link_inside(
+        Path::new("docs/latest.md"),
+        Path::new("v2/notes.md")
+    ));
+    assert!(link_inside(
+        Path::new("docs/latest.md"),
+        Path::new("../README.md")
+    ));
+    assert!(link_inside(Path::new("a/b/c"), Path::new("./../../d")));
+    assert!(!link_inside(
+        Path::new("outside-link"),
+        Path::new("../outside.txt")
+    ));
+    assert!(!link_inside(
+        Path::new("docs/x"),
+        Path::new("../../etc/passwd")
+    ));
+    assert!(!link_inside(Path::new("x"), Path::new("/etc/passwd")));
 }

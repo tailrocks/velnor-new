@@ -16,7 +16,7 @@ use tokio::process::Command;
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, program, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, PullRequest, Push, Repository};
-use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
+use crate::scenario::{Outcome, Scenario, Step, link_inside, overlapping, verdict};
 use crate::standin;
 
 const GIT_CONFIG: &str =
@@ -147,11 +147,7 @@ async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Resul
         .filter(|path| !path.is_empty())
     {
         let path = Path::new(std::ffi::OsStr::from_bytes(path));
-        let target = copy.join(path);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-        fs::copy(checkout.join(path), target).await?;
+        copy_untracked(checkout, copy, path).await?;
     }
     if !changes.is_empty() || !untracked.is_empty() {
         git(copy, &["add", "-A"], None).await?;
@@ -159,6 +155,33 @@ async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Resul
     }
     git(copy, &["checkout", "-q", "-B", default], None).await?;
     Ok(())
+}
+
+async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Result<()> {
+    let (source, target) = (checkout.join(path), copy.join(path));
+    if path.as_os_str().as_bytes().ends_with(b"/") {
+        eprintln!(
+            "velnor-local: {} is a nested git repository; it is left out, as git add leaves it out",
+            path.display()
+        );
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).await?;
+    }
+    if !fs::symlink_metadata(&source).await?.is_symlink() {
+        fs::copy(&source, &target).await?;
+        return Ok(());
+    }
+    let link = fs::read_link(&source).await?;
+    if !link_inside(path, &link) {
+        return Err(io::Error::other(format!(
+            "{} is a link to {}, which leaves the checkout",
+            path.display(),
+            link.display()
+        )));
+    }
+    fs::symlink(&link, &target).await
 }
 
 impl Driver<'_> {
