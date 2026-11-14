@@ -70,6 +70,11 @@ runs:
           echo "::warning title=setup-velnor::the $source copy of velnor-ci $VERSION does not match the SHA-256 $expected"
         done
         [ -n "$verified" ] || fail "SHA-256 mismatch for velnor-ci $VERSION $platform: expected $expected, downloaded $(digest "$staging/velnor-ci"). velnor-ci was not installed"
+        bin="$RUNNER_TEMP/velnor-ci-bin"
+        rm -rf "$bin"
+        mkdir -p "$bin"
+        cp "$staging/velnor-ci" "$bin/velnor-ci"
+        chmod +x "$bin/velnor-ci"
         if [ "$verified" = cache ]; then
           echo "velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
@@ -79,6 +84,4 @@ runs:
           touch "$dir.complete"
           echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
         fi
-        mkdir -p "$RUNNER_TEMP/velnor-ci-bin"
-        ln -sf "$dir/velnor-ci" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci"
-        echo "$RUNNER_TEMP/velnor-ci-bin" >> "$GITHUB_PATH"
+        echo "$bin" >> "$GITHUB_PATH"

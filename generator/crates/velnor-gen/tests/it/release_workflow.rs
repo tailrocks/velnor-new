@@ -194,10 +194,25 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
     let published = runs[publish].matches(" dist/").count();
     assert_eq!(published, 8);
     assert!(runs[publish].contains(" dist/COMMIT "));
-    let record = runs
+    assert!(
+        !runs
+            .iter()
+            .any(|run| run.contains("dist/COMMIT >") || run.contains("> dist/COMMIT"))
+    );
+    let checksums = jobs
+        .iter()
+        .find(|(id, _)| id == "checksums")
+        .ok_or("no checksums job")?;
+    let checksum_runs = values(&checksums.1, "run");
+    let record = checksum_runs
         .iter()
         .position(|run| *run == "echo \"$GITHUB_SHA\" > dist/COMMIT")
-        .ok_or("the writing job never records the commit of the release")?;
-    assert!(verify < record && record < publish);
+        .ok_or("the checksums job never records the commit of the release")?;
+    let sums = checksum_runs
+        .iter()
+        .position(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
+        .ok_or("the checksums job never writes SHA256SUMS")?;
+    assert!(record < sums);
+    assert!(checksum_runs[sums].contains(" COMMIT "));
     Ok(())
 }
