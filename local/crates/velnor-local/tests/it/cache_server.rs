@@ -8,6 +8,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bytes::Bytes;
 use hyper::Uri;
 use serde_json::{Value, json};
+use velnor_local::io::RESTORES;
 
 use crate::support::{Harness, MAIN, PULL_1, PULL_2, Reply, recorded, token};
 
@@ -346,4 +347,31 @@ async fn the_index_survives_a_restart() {
         .get(hit["signed_download_url"].as_str().unwrap_or_default())
         .await;
     assert_eq!(downloaded.body, Bytes::from_static(b"kept on disk"));
+}
+
+#[tokio::test]
+async fn every_restore_is_journaled_with_its_job_key_entry_and_scope() {
+    let harness = Harness::new("journal", LIMIT).await;
+    harness.save(MAIN, "cargo-main", b"archive").await;
+    harness.register(1).await;
+    let fallback = json!({"key": "cargo-mai", "restore_keys": ["cargo-"], "version": "v"});
+    let restored = harness
+        .twirp(PULL_1, "GetCacheEntryDownloadURL", &fallback)
+        .await
+        .json();
+    assert_eq!(restored["ok"], true);
+    assert_eq!(harness.restore(MAIN, "cargo-other").await["ok"], false);
+    let journal = std::fs::read_to_string(harness.dir().join(RESTORES))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let lines: Vec<Value> = journal
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap_or_else(|e| unreachable!("{e}")))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            json!({"writer": "Actions.Results:1:cache", "key": "cargo-mai", "matched_key": "cargo-main", "scope": MAIN}),
+            json!({"writer": "Actions.Results:1:cache", "key": "cargo-other", "matched_key": null, "scope": null}),
+        ]
+    );
 }

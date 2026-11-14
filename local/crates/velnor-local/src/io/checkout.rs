@@ -19,7 +19,12 @@ pub(super) async fn git(repo: &Path, args: &[&str], input: Option<&[u8]>) -> io:
     program("git", &[&head[..], args].concat(), input).await
 }
 
-pub(super) async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Result<()> {
+pub(super) async fn copy_checkout(
+    checkout: &Path,
+    copy: &Path,
+    default: &str,
+    tag: &str,
+) -> io::Result<()> {
     if fs::metadata(copy).await.is_ok() {
         fs::remove_dir_all(copy).await?;
     }
@@ -44,7 +49,9 @@ pub(super) async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -
         .filter(|path| !path.is_empty())
     {
         let path = Path::new(std::ffi::OsStr::from_bytes(path));
-        copy_untracked(checkout, copy, path).await?;
+        if let Some(skipped) = copy_untracked(checkout, copy, path).await? {
+            println!("velnor-local {tag}: {skipped}");
+        }
     }
     if !changes.is_empty() || !untracked.is_empty() {
         git(copy, &["add", "-A"], None).await?;
@@ -59,21 +66,24 @@ pub(super) async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -
     Ok(())
 }
 
-pub async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Result<()> {
+pub async fn copy_untracked(
+    checkout: &Path,
+    copy: &Path,
+    path: &Path,
+) -> io::Result<Option<String>> {
     let (source, target) = (checkout.join(path), copy.join(path));
     if path.as_os_str().as_bytes().ends_with(b"/") {
-        eprintln!(
-            "velnor-local: {} is a nested git repository; it is left out, as git add leaves it out",
+        return Ok(Some(format!(
+            "{} is a nested git repository; it is left out, as git add leaves it out",
             path.display()
-        );
-        return Ok(());
+        )));
     }
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).await?;
     }
     if !fs::symlink_metadata(&source).await?.is_symlink() {
         fs::copy(&source, &target).await?;
-        return Ok(());
+        return Ok(None);
     }
     let link = fs::read_link(&source).await?;
     let resolved = match fs::canonicalize(&source).await {
@@ -87,5 +97,6 @@ pub async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Re
             link.display()
         )));
     }
-    fs::symlink(&link, &target).await
+    fs::symlink(&link, &target).await?;
+    Ok(None)
 }
