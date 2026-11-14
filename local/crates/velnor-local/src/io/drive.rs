@@ -56,19 +56,29 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
             let Ok(_slot) = slots.acquire().await else {
                 return (stem, Err("interrupted before it started".to_owned()));
             };
-            let result = run_one(&args, &name, &stem, &dir).await;
+            let result = run_one(&args, &name, &stem, &dir, &slots).await;
             (stem, result.map_err(|error| error.to_string()))
         });
     }
     let mut results = Vec::new();
     while let Some(joined) = running.join_next().await {
-        results.push(joined.map_err(io::Error::other)?);
+        results.push(
+            joined.unwrap_or_else(|error| {
+                ("a scenario".to_owned(), Err(format!("stopped: {error}")))
+            }),
+        );
     }
     interrupt.abort();
     summary(&results).map_err(io::Error::other)
 }
 
-async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::Result<()> {
+async fn run_one(
+    args: &RunArgs,
+    scenario: &str,
+    tag: &str,
+    dir: &Path,
+    slots: &Semaphore,
+) -> io::Result<()> {
     let path = if Path::new(scenario)
         .extension()
         .is_some_and(|ext| ext == "json")
@@ -92,13 +102,16 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
         ));
     }
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
+    copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
     for directory in ["cache", "api", "events", "logs", "metrics"] {
         match fs::remove_dir_all(env.dir.join(directory)).await {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
             _ => {}
         }
         fs::create_dir_all(env.dir.join(directory)).await?;
+    }
+    if slots.is_closed() {
+        return Err(io::Error::other("interrupted before it started"));
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
         session = session(args, &env, repo, &scenario, tag) => session,

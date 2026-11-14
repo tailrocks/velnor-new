@@ -55,6 +55,14 @@ fn each_scenario_gets_its_own_environment_and_a_shared_one_is_refused() {
     ] {
         assert!(plan(&names(shared), root).is_err(), "{shared:?}");
     }
+    for escaping in [
+        &["docs", ".."][..],
+        &["docs", "/"],
+        &["docs", "/tmp/...json"],
+        &["docs", "x/..json"],
+    ] {
+        assert!(plan(&names(escaping), root).is_err(), "{escaping:?}");
+    }
 }
 
 #[test]

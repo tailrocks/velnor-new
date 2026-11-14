@@ -263,6 +263,15 @@ pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, Pat
             || scenario.clone(),
             |stem| stem.to_string_lossy().into_owned(),
         );
+        let mut parts = Path::new(&stem).components();
+        if !matches!(
+            (parts.next(), parts.next()),
+            (Some(Component::Normal(_)), None)
+        ) {
+            return Err(format!(
+                "{scenario} has no name that can be a directory inside the state directory"
+            ));
+        }
         if let Some((other, ..)) = planned.iter().find(|(_, taken, _)| *taken == stem) {
             return Err(format!(
                 "{other} and {scenario} would share the environment {stem}; give each scenario its own name"
