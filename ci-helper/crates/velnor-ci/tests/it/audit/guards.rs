@@ -5,7 +5,8 @@ use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
-    audit, own_units, root_package_with_path_dependencies, unit, workspace_below_the_root,
+    audit, own_units, own_units_in, path_dependency_units, root_package_with_path_dependencies,
+    unit, workspace_below_the_root,
 };
 
 #[test]
@@ -140,8 +141,7 @@ fn a_library_without_its_test_harness_unit_or_a_shared_target_directory_makes_th
     let shared = audit(&repo, &["--write"]);
     assert_eq!(shared.status.code(), Some(1), "{shared:?}");
     assert!(
-        String::from_utf8_lossy(&shared.stderr)
-            .contains("two Cargo roots share the target directory"),
+        String::from_utf8_lossy(&shared.stderr).contains("so their units cannot be told apart"),
         "{shared:?}"
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
@@ -174,4 +174,161 @@ fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_unc
         ),
         "{changed:?}"
     );
+}
+
+#[test]
+fn a_unit_of_another_profile_triple_or_kind_does_not_stand_in_for_a_missing_test_harness_unit() {
+    let repo = workspace_below_the_root();
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    let harness = repo
+        .root()
+        .join(format!("{target}/deps/lib-f00000000000000a.d"));
+    fs::remove_file(&harness).unwrap_or_else(|e| unreachable!("{e}"));
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    let stand_ins = [
+        ("rust/target/release", "test-lib-lib"),
+        ("rust/target/x86_64-unknown-linux-gnu/debug", "test-lib-lib"),
+        (target, "lib-lib"),
+    ];
+    for (configuration, fingerprint) in stand_ins {
+        let stand_in = format!("{configuration}/deps/lib-f00000000000000d.d");
+        unit(&repo, &stand_in, "out.d: lib/src/lib.rs\n");
+        let fingerprint =
+            format!("{configuration}/.fingerprint/lib-f00000000000000d/{fingerprint}");
+        unit(&repo, &fingerprint, "");
+        let partial = audit(&repo, &["--write"]);
+        assert_eq!(partial.status.code(), Some(1), "{stand_in}: {partial:?}");
+        assert!(
+            String::from_utf8_lossy(&partial.stderr).contains(
+                " for lib (rust/lib/Cargo.toml) target lib (rust/lib/src/lib.rs, 1 of 2 units);"
+            ),
+            "{stand_in}: {partial:?}"
+        );
+        assert!(!lock.exists());
+        for file in [stand_in, fingerprint] {
+            fs::remove_file(repo.root().join(file)).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
+
+    for (configuration, fingerprint) in stand_ins {
+        unit(
+            &repo,
+            &format!("{configuration}/deps/lib-f00000000000000d.d"),
+            "out.d: lib/src/lib.rs\n",
+        );
+        unit(
+            &repo,
+            &format!("{configuration}/.fingerprint/lib-f00000000000000d/{fingerprint}"),
+            "",
+        );
+    }
+    unit(
+        &repo,
+        &format!("{target}/deps/lib-f00000000000000a.d"),
+        "out.d: lib/src/lib.rs\n",
+    );
+    let complete = audit(&repo, &["--write"]);
+    assert!(complete.status.success(), "{complete:?}");
+    assert!(lock.exists());
+}
+
+#[test]
+fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_target_passes() {
+    let repo = workspace_below_the_root();
+    repo.write(
+        "rust/lib/Cargo.toml",
+        "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n[[test]]\nname = \"skipped\"\npath = \"tests/skipped.rs\"\ntest = false\n",
+    );
+    repo.write("rust/lib/tests/skipped.rs", "");
+    let target = "rust/target/x86_64-unknown-linux-gnu/debug";
+    own_units_in(&repo, "rust/target/debug", target, &[]);
+    fs::rename(
+        repo.root()
+            .join(format!("{target}/deps/lib-f000000000000005.d")),
+        repo.root().join(format!("{target}/deps/lib.d")),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        ""
+    );
+}
+
+#[test]
+fn a_reachable_path_dependency_built_without_its_dep_info_makes_the_audit_refuse() {
+    let repo = root_package_with_path_dependencies();
+    path_dependency_units(&repo);
+    let leaf = repo
+        .root()
+        .join("target/debug/deps/leaf-0000000000000007.d");
+    let text = fs::read_to_string(&leaf).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_file(&leaf).unwrap_or_else(|e| unreachable!("{e}"));
+    let partial = audit(&repo, &["--write"]);
+    assert_eq!(partial.status.code(), Some(1), "{partial:?}");
+    assert!(
+        String::from_utf8_lossy(&partial.stderr)
+            .contains(" for path dependency leaf (vendor/leaf/Cargo.toml, 0 of 1 units);"),
+        "{partial:?}"
+    );
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    assert!(!lock.exists());
+
+    fs::write(&leaf, text).unwrap_or_else(|e| unreachable!("{e}"));
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert!(lock.exists());
+}
+
+#[test]
+fn a_target_directory_inside_another_roots_target_directory_makes_the_audit_refuse() {
+    let repo = workspace_below_the_root();
+    repo.write(".gitignore", "target/\ntarget-tools/\n");
+    own_units(&repo, "rust/target/debug", &[]);
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"tools\"\nedition = \"2024\"\n",
+    );
+    repo.write("tools/Cargo.lock", "version = 4\n");
+    repo.write("tools/src/main.rs", "fn main() {}\n");
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    for (directory, holds) in [("rust/target/tools", true), ("rust/target-tools", false)] {
+        repo.write(
+            "tools/.cargo/config.toml",
+            &format!("[build]\ntarget-dir = \"../{directory}\"\n"),
+        );
+        for (hash, fingerprint) in [
+            ("f0000000000000d1", "bin-tools"),
+            ("f0000000000000d2", "test-bin-tools"),
+        ] {
+            unit(
+                &repo,
+                &format!("{directory}/debug/deps/tools-{hash}.d"),
+                "out.d: src/main.rs\n",
+            );
+            unit(
+                &repo,
+                &format!("{directory}/debug/.fingerprint/tools-{hash}/{fingerprint}"),
+                "",
+            );
+        }
+        let result = audit(&repo, &["--write"]);
+        if holds {
+            assert_eq!(result.status.code(), Some(1), "{result:?}");
+            let complaint = String::from_utf8_lossy(&result.stderr);
+            assert!(
+                complaint.contains("/rust/target of the Cargo root ")
+                    && complaint.contains("holds the target directory ")
+                    && complaint.contains("/rust/target/tools of the Cargo root "),
+                "{complaint}"
+            );
+            assert!(!lock.exists());
+        } else {
+            assert!(result.status.success(), "{result:?}");
+            assert!(lock.exists());
+        }
+    }
 }

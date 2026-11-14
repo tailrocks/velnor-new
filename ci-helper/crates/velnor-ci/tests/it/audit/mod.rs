@@ -31,7 +31,7 @@ pub(super) fn workspace_below_the_root() -> Repo {
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     repo.write(
         "rust/Cargo.toml",
-        "[workspace]\nmembers = [\"app\", \"lib\"]\nresolver = \"3\"\n",
+        "[workspace]\nmembers = [\"app\", \"lib\", \"macros\"]\nresolver = \"3\"\n",
     );
     repo.write("rust/Cargo.lock", "version = 4\n");
     for (package, extra) in [
@@ -48,6 +48,11 @@ pub(super) fn workspace_below_the_root() -> Repo {
         repo.write(&format!("rust/{package}/src/lib.rs"), "");
         repo.write(&format!("rust/{package}/tests/it.rs"), "");
     }
+    repo.write(
+        "rust/macros/Cargo.toml",
+        "[package]\nname = \"macros\"\nedition = \"2024\"\n\n[lib]\nproc-macro = true\n",
+    );
+    repo.write("rust/macros/src/lib.rs", "");
     repo.write("rust/lib/build.rs", "fn main() {}\n");
     repo.write("rust/app/build.rs", "fn main() {}\n");
     repo.write("rust/app/src/extra.rs", "fn main() {}\n");
@@ -66,52 +71,110 @@ pub(super) fn workspace_below_the_root() -> Repo {
 }
 
 pub(super) fn own_units(repo: &Repo, target: &str, left_out: &[&str]) {
-    for (key, file, text) in [
-        (
-            "app",
-            "deps/app-f000000000000001.d",
-            "out.d: app/src/lib.rs\n",
-        ),
-        (
-            "app",
-            "deps/app-f000000000000009.d",
-            "out.d: app/src/lib.rs\n",
-        ),
-        (
-            "app-it",
-            "deps/it-f000000000000002.d",
-            "out.d: app/tests/it.rs\n",
-        ),
-        (
-            "app-build",
-            "build/app-f000000000000003/build_script_build-f000000000000003.d",
-            "out.d: app/build.rs\n",
-        ),
-        ("app-build", "build/app-f000000000000004/output", ""),
-        (
-            "lib",
-            "deps/lib-f000000000000005.d",
-            "out.d: lib/src/lib.rs\n",
-        ),
-        (
-            "lib",
-            "deps/lib-f00000000000000a.d",
-            "out.d: lib/src/lib.rs\n",
-        ),
-        (
-            "lib-it",
-            "deps/it-f000000000000006.d",
-            "out.d: lib/tests/it.rs\n",
-        ),
-        (
-            "lib-build",
-            "build/lib-f000000000000007/build_script_build-f000000000000007.d",
-            "out.d: lib/build.rs\n",
-        ),
-        ("lib-build", "build/lib-f000000000000008/output", ""),
-    ] {
-        if !left_out.contains(&key) {
-            unit(repo, &format!("{target}/{file}"), text);
+    own_units_in(repo, target, target, left_out);
+}
+
+const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
+    (
+        "app",
+        false,
+        "deps/app-f000000000000001.d",
+        "app/src/lib.rs",
+        "app-f000000000000001/lib-app",
+    ),
+    (
+        "app",
+        false,
+        "deps/app-f000000000000009.d",
+        "app/src/lib.rs",
+        "app-f000000000000009/test-lib-app",
+    ),
+    (
+        "app-it",
+        false,
+        "deps/it-f000000000000002.d",
+        "app/tests/it.rs",
+        "app-f000000000000002/test-integration-test-it",
+    ),
+    (
+        "app-build",
+        true,
+        "build/app-f000000000000003/build_script_build-f000000000000003.d",
+        "app/build.rs",
+        "",
+    ),
+    (
+        "app-build",
+        false,
+        "build/app-f000000000000004/output",
+        "",
+        "",
+    ),
+    (
+        "lib",
+        false,
+        "deps/lib-f000000000000005.d",
+        "lib/src/lib.rs",
+        "lib-f000000000000005/lib-lib",
+    ),
+    (
+        "lib",
+        false,
+        "deps/lib-f00000000000000a.d",
+        "lib/src/lib.rs",
+        "lib-f00000000000000a/test-lib-lib",
+    ),
+    (
+        "lib-it",
+        false,
+        "deps/it-f000000000000006.d",
+        "lib/tests/it.rs",
+        "lib-f000000000000006/test-integration-test-it",
+    ),
+    (
+        "lib-build",
+        true,
+        "build/lib-f000000000000007/build_script_build-f000000000000007.d",
+        "lib/build.rs",
+        "",
+    ),
+    (
+        "lib-build",
+        false,
+        "build/lib-f000000000000008/output",
+        "",
+        "",
+    ),
+    (
+        "macros",
+        true,
+        "deps/macros-f00000000000000b.d",
+        "macros/src/lib.rs",
+        "macros-f00000000000000b/lib-macros",
+    ),
+    (
+        "macros",
+        true,
+        "deps/macros-f00000000000000c.d",
+        "macros/src/lib.rs",
+        "macros-f00000000000000c/test-lib-macros",
+    ),
+];
+
+pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&str]) {
+    for (key, on_host, file, text, fingerprint) in OWN_UNITS {
+        if left_out.contains(&key) {
+            continue;
+        }
+        let directory = if on_host { host } else { target };
+        let text = if text.is_empty() {
+            String::new()
+        } else {
+            format!("out.d: {text}\n")
+        };
+        unit(repo, &format!("{directory}/{file}"), &text);
+        if !fingerprint.is_empty() {
+            unit(repo, &format!("{directory}/.fingerprint/{fingerprint}"), "");
         }
     }
 }
@@ -169,41 +232,67 @@ pub(super) fn root_package_with_path_dependencies() -> Repo {
 
 pub(super) fn path_dependency_units(repo: &Repo) {
     let target = "target/debug";
-    unit(
-        repo,
-        &format!("{target}/deps/top-0000000000000001.d"),
-        "out.d: src/lib.rs shared/link.txt\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/other-0000000000000005.d"),
-        "out.d: other/src/lib.rs\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/other-000000000000000c.d"),
-        "out.d: other/src/lib.rs\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/top-000000000000000d.d"),
-        "out.d: src/lib.rs\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/qa-0000000000000002.d"),
-        "out.d: qa.rs data/qa.txt\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/mid-0000000000000003.d"),
-        "out.d: vendor/mid/src/lib.rs vendor/mid/src/../../../NOTICE\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
-        "out.d: vendor/mid/build.rs\n",
-    );
+    for (file, text, fingerprint) in [
+        (
+            "deps/top-0000000000000001.d",
+            "src/lib.rs shared/link.txt",
+            "top-0000000000000001/lib-top",
+        ),
+        (
+            "deps/other-0000000000000005.d",
+            "other/src/lib.rs",
+            "other-0000000000000005/lib-other",
+        ),
+        (
+            "deps/other-000000000000000c.d",
+            "other/src/lib.rs",
+            "other-000000000000000c/test-lib-other",
+        ),
+        (
+            "deps/top-000000000000000d.d",
+            "src/lib.rs",
+            "top-000000000000000d/test-lib-top",
+        ),
+        (
+            "deps/qa-0000000000000002.d",
+            "qa.rs data/qa.txt",
+            "top-0000000000000002/test-integration-test-qa",
+        ),
+        (
+            "deps/mid-0000000000000003.d",
+            "vendor/mid/src/lib.rs vendor/mid/src/../../../NOTICE",
+            "mid-0000000000000003/lib-mid",
+        ),
+        (
+            "build/mid-0000000000000006/build_script_build-0000000000000006.d",
+            "vendor/mid/build.rs",
+            "",
+        ),
+        (
+            "deps/leaf-0000000000000007.d",
+            "vendor/leaf/src/lib.rs",
+            "leaf-0000000000000007/lib-leaf",
+        ),
+        (
+            "build/leaf-0000000000000008/build_script_build-0000000000000008.d",
+            "vendor/leaf/build.rs",
+            "",
+        ),
+        (
+            "deps/ext-000000000000000a.d",
+            "ext.rs data/ext.txt",
+            "top-000000000000000a/test-integration-test-ext",
+        ),
+    ] {
+        unit(
+            repo,
+            &format!("{target}/{file}"),
+            &format!("out.d: {text}\n"),
+        );
+        if !fingerprint.is_empty() {
+            unit(repo, &format!("{target}/.fingerprint/{fingerprint}"), "");
+        }
+    }
     unit(
         repo,
         &format!("{target}/build/mid-0000000000000004/output"),
@@ -211,22 +300,7 @@ pub(super) fn path_dependency_units(repo: &Repo) {
     );
     unit(
         repo,
-        &format!("{target}/deps/leaf-0000000000000007.d"),
-        "out.d: vendor/leaf/src/lib.rs\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/build/leaf-0000000000000008/build_script_build-0000000000000008.d"),
-        "out.d: vendor/leaf/build.rs\n",
-    );
-    unit(
-        repo,
         &format!("{target}/build/leaf-0000000000000009/output"),
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
-    );
-    unit(
-        repo,
-        &format!("{target}/deps/ext-000000000000000a.d"),
-        "out.d: ext.rs data/ext.txt\n",
     );
 }

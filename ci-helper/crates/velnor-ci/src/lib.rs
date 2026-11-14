@@ -4,6 +4,7 @@
 pub mod cli;
 pub mod collect;
 pub mod compare;
+pub mod coverage;
 pub mod error;
 pub mod gate;
 pub mod github;

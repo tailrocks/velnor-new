@@ -4,6 +4,7 @@
 mod audit;
 mod http;
 mod inputs;
+mod units;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
