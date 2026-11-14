@@ -98,6 +98,7 @@ impl<'a> ClientCall<'a> {
             self.sha,
             "--repository",
             self.repository,
+            "--no-default-payload",
         ];
         if let Some(workflow) = self.workflow {
             args.extend(["-W", workflow]);

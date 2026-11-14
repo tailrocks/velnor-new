@@ -164,6 +164,11 @@ async fn a_run_is_reported_with_its_latest_attempt_and_a_broken_workflow_by_its_
     assert_eq!(latest["total_count"], 1);
     assert_eq!(latest["jobs"][0]["id"], 3);
     assert_eq!(latest["jobs"][0]["conclusion"], "failure");
+    let listed = stub
+        .call("GET", "/repos/tailrocks/velnor-lab/actions/runs/2/jobs")
+        .await
+        .json();
+    assert_eq!(listed, latest);
     let broken = stub
         .call("GET", "/repos/tailrocks/velnor-lab/actions/runs/3")
         .await

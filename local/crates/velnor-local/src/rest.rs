@@ -32,7 +32,7 @@ pub enum Api {
     CacheList,
     CacheDelete { id: u64 },
     Run { id: u64 },
-    RunJobs { id: u64, attempt: u32 },
+    RunJobs { id: u64, attempt: Option<u32> },
     JobLog { id: u64 },
     NotImplemented,
 }
@@ -78,7 +78,11 @@ fn actions(rest: &str) -> Option<Api> {
         }),
         ["runs", id, "attempts", attempt, "jobs"] => Some(Api::RunJobs {
             id: id.parse().ok()?,
-            attempt: attempt.parse().ok()?,
+            attempt: Some(attempt.parse().ok()?),
+        }),
+        ["runs", id, "jobs"] => Some(Api::RunJobs {
+            id: id.parse().ok()?,
+            attempt: None,
         }),
         ["jobs", id, "logs"] => Some(Api::JobLog {
             id: id.parse().ok()?,

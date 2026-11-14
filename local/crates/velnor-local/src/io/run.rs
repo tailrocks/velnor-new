@@ -25,7 +25,9 @@ pub use restore::RestoreOnly;
 
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
-use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, ControlArgs, UpArgs};
+use crate::cli::{
+    ApiStubArgs, CacheServerArgs, Cli, Command, ConformanceArgs, ControlArgs, UpArgs,
+};
 use crate::protocol::control_only;
 
 #[must_use]
@@ -47,7 +49,32 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::Up(args) => up(args).await,
         Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
         Command::Run(args) => drive::run(args).await,
+        Command::Conformance(args) => conformance(args).await,
     }
+}
+
+async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
+    let mut logs = Vec::new();
+    let mut entries = fs::read_dir(args.dir.join("logs")).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        logs.push((name, fs::read_to_string(entry.path()).await?));
+    }
+    logs.sort();
+    let stored = |probe: &str| {
+        let text = std::fs::read_to_string(args.conformance.join(format!("{probe}.json"))).ok()?;
+        serde_json::from_str(&text).ok()
+    };
+    let (lines, reproduced) = crate::conformance::report(&logs, &stored);
+    for line in &lines {
+        println!("velnor-local: {line}");
+    }
+    if lines.is_empty() || !reproduced {
+        return Err(std::io::Error::other(
+            "the run does not reproduce every stored probe result",
+        ));
+    }
+    Ok(())
 }
 
 async fn up(args: UpArgs) -> std::io::Result<()> {

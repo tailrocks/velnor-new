@@ -9,9 +9,48 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::Driver;
+use crate::event::{Changes, NO_COMMIT};
 use crate::scenario::{next_patch, with_path};
 
 impl Driver<'_> {
+    pub(super) async fn changes(
+        &self,
+        branch: &str,
+        before: &str,
+        after: &str,
+    ) -> io::Result<Vec<Changes>> {
+        let others = format!("--exclude={branch}");
+        let range = format!("{before}..{after}");
+        let listed = if before == NO_COMMIT {
+            let args = [
+                "rev-list",
+                "--reverse",
+                after,
+                "--not",
+                &others,
+                "--branches",
+            ];
+            self.git(&args).await?
+        } else {
+            self.git(&["rev-list", "--reverse", &range]).await?
+        };
+        let mut commits = Vec::new();
+        for id in listed.lines() {
+            let args = [
+                "diff-tree",
+                "-z",
+                "--no-commit-id",
+                "--name-status",
+                "--no-renames",
+                "-r",
+                "--root",
+                id,
+            ];
+            commits.push(Changes::parse(id, &self.git(&args).await?));
+        }
+        Ok(commits)
+    }
+
     pub(super) async fn update_lock(
         &self,
         branch: &str,
