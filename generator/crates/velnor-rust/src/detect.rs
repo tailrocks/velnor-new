@@ -120,18 +120,28 @@ fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), Det
     {
         return Err(DetectError::invalid(file, Reason::OtherMiseConfig));
     }
-    let nested = rust_roots
+    let folders: Vec<RepoPath> = rust_roots
         .iter()
         .filter_map(|root| root.manifest.parent())
         .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
-        .flat_map(|folder| {
-            [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
-                .into_iter()
-                .chain(MISE_CONFIGS.iter().cloned())
-                .map(move |file| RepoPath::new(format!("{folder}/{file}")))
+        .collect();
+    let nested = view
+        .tracked_paths
+        .iter()
+        .find(|path| {
+            folders.iter().any(|folder| {
+                path.as_str()
+                    .strip_prefix(&format!("{folder}/"))
+                    .and_then(|rest| RepoPath::new(rest).ok())
+                    .is_some_and(|rest| {
+                        other_mise_config(&rest)
+                            || MISE_CONFIGS.contains(&rest)
+                            || rest == TOOLCHAIN_PLAIN
+                            || rest == TOOLCHAIN_TOML
+                    })
+            })
         })
-        .flatten()
-        .find(|file| view.tracked_paths.contains(file));
+        .cloned();
     if let Some(file) = nested {
         return Err(DetectError::NestedToolchain { file });
     }

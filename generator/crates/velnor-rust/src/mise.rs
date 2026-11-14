@@ -33,9 +33,12 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
-        if let Some(name) = ["env", "include"]
+        let settings = parsed.get("settings").and_then(Value::as_table);
+        if let Some(name) = ["env", "include", "env_file", "env_path"]
             .into_iter()
-            .find(|key| parsed.contains_key(*key))
+            .find(|key| {
+                parsed.contains_key(*key) || settings.is_some_and(|table| table.contains_key(*key))
+            })
         {
             return Err(DetectError::invalid(
                 config,
@@ -77,6 +80,18 @@ const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if let Some((file, mise)) = toolchain_conflict(facts) {
         return Err(DetectError::ToolchainConflict { file, mise });
+    }
+    let rust_pins = rust_tool(&facts.tools)
+        .and_then(|name| facts.tools.tools.get(name))
+        .map_or(1, |pin| pin.requested.len());
+    if rust_pins != 1 {
+        return Err(DetectError::invalid(
+            facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
+            Reason::InvalidValue {
+                key: "tools.rust",
+                value: "one version, without os filters or alternatives".to_owned(),
+            },
+        ));
     }
     let tested = facts
         .rust_roots

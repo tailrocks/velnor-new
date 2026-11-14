@@ -166,7 +166,8 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .flat_map(|targets| targets.values());
     let caps = build
         .chain(targets)
-        .filter_map(|section| section.get("rustflags"))
+        .flat_map(|section| [section.get("rustflags"), section.get("rustdocflags")])
+        .flatten()
         .any(|flags| flags.to_string().contains("cap-lints"));
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));

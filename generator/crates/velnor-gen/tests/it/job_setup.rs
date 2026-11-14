@@ -117,6 +117,25 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
 #[test]
 fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
     let mise = RepoPath::new("mise.toml")?;
+    let nextest = "\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+    for text in [
+        format!("env_file = \".env\"\n\n[tools]\n{nextest}"),
+        format!("env_path = [\"bin\"]\n\n[tools]\n{nextest}"),
+        format!("[settings]\nenv_file = \".env\"\n\n[tools]\n{nextest}"),
+        format!(
+            "[tools]\n{nextest}rust = [{{ version = \"1.84.1\", os = [\"macos\"] }}, {{ version = \"1.95.0\", os = [\"linux\"] }}]\n"
+        ),
+    ] {
+        let mut repo = view(&["Cargo.toml"], None)?;
+        repo.files.insert(mise.clone(), text.clone().into_bytes());
+        assert!(
+            matches!(
+                expected_files(&repo),
+                Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == mise
+            ),
+            "{text}"
+        );
+    }
     for variable in [
         "RUSTDOCFLAGS",
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTDOCFLAGS",
@@ -211,6 +230,15 @@ fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> Te
             file: nested
         }))
     );
+    let nested_versions = RepoPath::new("lab/.tool-versions")?;
+    let mut with_versions = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    with_versions.tracked_paths.insert(nested_versions.clone());
+    assert_eq!(
+        expected_files(&with_versions),
+        Err(GenerateError::Detect(DetectError::NestedToolchain {
+            file: nested_versions
+        }))
+    );
     let nested_mise = RepoPath::new("lab/mise.toml")?;
     let mut with_mise = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     with_mise.tracked_paths.insert(nested_mise.clone());
@@ -279,6 +307,7 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[env]\nANY_NAME = { value = \"x\", force = true }\n",
         "[env]\nRUSTFLAGS = \"--cap-lints allow\"\n",
         "[env]\nCARGO_BUILD_RUSTDOCFLAGS = \"\"\n",
+        "[build]\nrustdocflags = [\"--cap-lints\", \"allow\"]\n",
     ];
     let accepted = [
         "[env]\nANY_NAME = \"x\"\n",
