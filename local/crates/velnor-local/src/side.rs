@@ -45,6 +45,15 @@ impl Side {
 }
 
 #[must_use]
+pub fn registered_on(fork: bool) -> &'static [Side] {
+    if fork {
+        &[Side::Trusted, Side::Untrusted]
+    } else {
+        &[Side::Trusted]
+    }
+}
+
+#[must_use]
 pub fn fork_may_restore(git_ref: &str, forks: &BTreeSet<u64>) -> bool {
     git_ref
         .strip_prefix("refs/pull/")

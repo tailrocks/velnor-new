@@ -3,7 +3,7 @@
 
 use velnor_local::event::{PullRequest, Push, Repository};
 use velnor_local::scenario::Scenario;
-use velnor_local::side::{Side, fork_heads, push_event, refuse_fork_branches};
+use velnor_local::side::{Side, fork_heads, push_event, refuse_fork_branches, registered_on};
 use velnor_local::standin::ClientCall;
 
 const SHA: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -138,4 +138,10 @@ fn a_job_gets_no_secrets_variables_or_token_from_the_client() {
                 && !arg.to_lowercase().contains("secret")),
         "{args:?}"
     );
+}
+
+#[test]
+fn a_fork_pull_request_is_registered_with_both_cache_servers() {
+    assert_eq!(registered_on(true), [Side::Trusted, Side::Untrusted]);
+    assert_eq!(registered_on(false), [Side::Trusted]);
 }

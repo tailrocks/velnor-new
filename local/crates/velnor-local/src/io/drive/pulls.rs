@@ -11,7 +11,7 @@ use crate::event::{Commit, MergeGroup, PullRequest};
 use crate::io::env::request;
 use crate::io::now;
 use crate::rest::rfc3339;
-use crate::side::Side;
+use crate::side::registered_on;
 
 #[derive(Debug)]
 pub(super) struct Pull {
@@ -83,11 +83,8 @@ impl Driver<'_> {
         let number = self.pulls.len() as u64 + 1;
         let registration = json!({"base_branch": base}).to_string();
         let path = format!("/_velnor/pull-requests/{number}");
-        let mut servers = vec![&self.addresses.cache];
-        if fork {
-            servers.push(self.addresses.standin(Side::Untrusted)?);
-        }
-        for server in servers {
+        for side in registered_on(fork) {
+            let server = self.addresses.standin(*side)?;
             request(server, "PUT", &path, &registration)
                 .await
                 .ok_or_else(|| {
