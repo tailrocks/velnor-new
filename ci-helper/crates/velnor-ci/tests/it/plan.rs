@@ -80,4 +80,9 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     assert!(text.contains("\n    \"docs/a\\\"b.txt\",\n"), "{text}");
 
     assert!(!explain(&selections, &BTreeSet::new()).contains("unknown path"));
+
+    let starred = explain(&selections, &BTreeSet::from([path("scripts/a*b")]));
+    assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
+    assert!(!starred.contains("glob = "), "{starred}");
+    assert!(!starred.contains("\"scripts/a*b\""), "{starred}");
 }
