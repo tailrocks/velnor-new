@@ -7,22 +7,35 @@ use serde_json::Value;
 use std::error::Error;
 use std::process::Command;
 
-use super::{find_file, rendered};
+use super::rendered;
 
-const WORKFLOWS: [&str; 2] = [
-    ".github/workflows/product-release-generator.yml",
-    ".github/workflows/source-preview-publication.yml",
-];
+fn workflow_texts() -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    let mut texts: Vec<(String, String)> = rendered()?
+        .into_iter()
+        .filter(|file| file.path.starts_with(".github/workflows/"))
+        .map(|file| (file.path, file.bytes))
+        .collect();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|ext| ext == "yml") {
+            texts.push((
+                format!("disk:{}", path.display()),
+                std::fs::read_to_string(&path)?,
+            ));
+        }
+    }
+    Ok(texts)
+}
 
 fn guarded_downloads() -> Result<Vec<(String, String, String)>, Box<dyn Error>> {
-    let files = rendered()?;
     let mut found = Vec::new();
-    for path in WORKFLOWS {
-        let workflow: Value = serde_saphyr::from_str(find_file(&files, path)?)?;
-        for (job, body) in workflow["jobs"].as_object().ok_or("jobs")? {
-            if !job.starts_with("source-preview-") {
-                continue;
-            }
+    for (path, text) in workflow_texts()? {
+        let workflow: Value = serde_saphyr::from_str_with_options(
+            &text,
+            serde_saphyr::options! { budget: serde_saphyr::budget! { enforce_alias_anchor_ratio: false } },
+        )?;
+        for (job, body) in workflow["jobs"].as_object().into_iter().flatten() {
             let steps = body["steps"].as_array().map_or(&[][..], Vec::as_slice);
             for (index, step) in steps.iter().enumerate() {
                 let Some(id) = step["with"]["artifact-ids"].as_str() else {
@@ -32,14 +45,22 @@ fn guarded_downloads() -> Result<Vec<(String, String, String)>, Box<dyn Error>> 
                     .checked_sub(1)
                     .and_then(|previous| steps.get(previous))
                     .ok_or_else(|| format!("{path} {job}: download {id} has no guard step"))?;
-                assert_eq!(
-                    guard["name"], "Validate exact artifact ID",
-                    "{path} {job}: download {id} is not preceded by the guard"
+                let env = guard["env"].as_object().ok_or_else(|| {
+                    format!("{path} {job}: download {id} is not preceded by a guard")
+                })?;
+                let by_env = id
+                    .strip_prefix("${{ env.")
+                    .and_then(|name| name.strip_suffix(" }}"))
+                    .is_some_and(|name| env.contains_key(name));
+                assert!(
+                    by_env || env.values().any(|value| value == id),
+                    "{path} {job}: step before download {id} does not check that id"
                 );
-                assert_eq!(guard["env"]["VELNOR_EVIDENCE_ARTIFACT_ID"], id);
                 assert_eq!(guard.get("if"), step.get("if"));
-                let run = guard["run"].as_str().ok_or("guard run")?;
-                found.push((path.to_owned(), job.clone(), run.to_owned()));
+                if env.contains_key("VELNOR_EVIDENCE_ARTIFACT_ID") {
+                    let run = guard["run"].as_str().ok_or("guard run")?;
+                    found.push((path.clone(), job.clone(), run.to_owned()));
+                }
             }
         }
     }
@@ -58,7 +79,7 @@ fn run_guard(run: &str, id: &str) -> Result<bool, Box<dyn Error>> {
 #[test]
 fn every_download_by_id_is_preceded_by_a_guard_in_the_same_job() -> Result<(), Box<dyn Error>> {
     let found = guarded_downloads()?;
-    assert!(found.len() >= 10, "found {} guarded downloads", found.len());
+    assert!(found.len() >= 40, "found {} guarded downloads", found.len());
     Ok(())
 }
 
@@ -66,13 +87,13 @@ fn every_download_by_id_is_preceded_by_a_guard_in_the_same_job() -> Result<(), B
 fn guard_step_fails_for_empty_and_non_numeric_ids_and_passes_for_positive_integers()
 -> Result<(), Box<dyn Error>> {
     for (path, job, run) in guarded_downloads()? {
-        for bad in ["", "abc", "0", "-1", "1 2", "01", "1a", "1\n2"] {
+        for bad in ["", "abc", "0", "-1", "1 2", "01", "1a", "1\n2", "9007199254740992", "12345678901234567"] {
             assert!(
                 !run_guard(&run, bad)?,
                 "{path} {job}: guard accepted {bad:?}"
             );
         }
-        for good in ["1", "42", "9876543210"] {
+        for good in ["1", "42", "9876543210", "9007199254740991"] {
             assert!(
                 run_guard(&run, good)?,
                 "{path} {job}: guard rejected {good:?}"

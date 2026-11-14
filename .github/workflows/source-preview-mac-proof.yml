@@ -84,6 +84,11 @@ jobs:
         shell: bash
         run: "/usr/bin/python3 -I -S -c 'import hashlib,sys; sys.exit(hashlib.sha256(open(sys.argv[1], \"rb\").read()).hexdigest() != sys.argv[2])' \"$VELNOR_FIXED_SCRIPT_DIR/script.sh\" '1cabac46a8befa7e5e3a634cbe8451dcbcb9e17e798e49ef2987a8163a4b6fbf'\nexec \"$BASH\" --noprofile --norc -e -o pipefail \"$VELNOR_FIXED_SCRIPT_DIR/script.sh\""
         id: verify
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ inputs.publisher_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact release assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:

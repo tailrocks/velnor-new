@@ -85,7 +85,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.source_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -95,7 +95,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.linux_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -105,7 +105,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.darwin_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -190,7 +190,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -200,7 +200,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -210,7 +210,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -220,7 +220,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download draft decision
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -230,7 +230,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.pair_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
         if: ${{ needs.source-preview-draft.outputs.sign == 'false' && needs.source-preview-draft.outputs.pair_origin == 'artifact' }}
       - name: Download retained signed pair
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -328,7 +328,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -338,7 +338,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -348,7 +348,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -358,7 +358,7 @@ jobs:
         env:
           VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-attest.outputs.pair_id }}
         shell: bash
-        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi"
         if: ${{ needs.source-preview-attest.outputs.pair_origin == 'artifact' }}
       - name: Download exact signed pair
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333

@@ -95,7 +95,8 @@ pub(super) fn state_producer_role(role: StepRole) -> bool {
 pub(super) fn state_seal_role(role: StepRole) -> bool {
     matches!(
         role,
-        StepRole::StateSealDownload
+        StepRole::StateSealArtifactGuard
+            | StepRole::StateSealDownload
             | StepRole::StateSealSubject
             | StepRole::StateSealAdmit
             | StepRole::StateSealBind

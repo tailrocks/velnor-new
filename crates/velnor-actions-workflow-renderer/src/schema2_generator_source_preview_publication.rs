@@ -112,7 +112,7 @@ fn draft(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     Ok(finish(
         "source-preview-draft",
         job,
-        steps::guard_artifact_downloads(vec![
+        vec![
             steps::download_step_by_id(
                 "Download admitted source metadata",
                 FRESH_SOURCE_ID,
@@ -145,7 +145,7 @@ fn draft(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
                 "source-preview-decision-${{ github.run_attempt }}",
                 &["${{ runner.temp }}/source-preview-decision.json"],
             ),
-        ]),
+        ],
     ))
 }
 
@@ -172,7 +172,7 @@ fn attest(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     Ok(finish(
         "source-preview-attest",
         job,
-        steps::guard_artifact_downloads(vec![
+        vec![
             source(),
             payload(LINUX_ID, "linux"),
             payload(DARWIN_ID, "darwin"),
@@ -220,7 +220,7 @@ fn attest(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
                 ),
                 sign,
             ),
-        ]),
+        ],
     ))
 }
 
@@ -255,7 +255,7 @@ fn publish(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     Ok(finish(
         "source-preview-publish",
         job,
-        steps::guard_artifact_downloads(vec![
+        vec![
             source(),
             payload(LINUX_ID, "linux"),
             payload(DARWIN_ID, "darwin"),
@@ -274,7 +274,7 @@ fn publish(pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
                 &supported_script(pins, "publish"),
                 variables,
             ),
-        ]),
+        ],
     ))
 }
 
