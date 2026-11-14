@@ -42,6 +42,8 @@ pub(crate) enum Moment {
 pub(crate) enum Intrusion {
     Add(&'static str),
     Swap(&'static str),
+    Remove(&'static str),
+    KeepDraft,
 }
 
 #[derive(Debug)]
@@ -114,7 +116,11 @@ impl State {
         asset
     }
 
-    fn intrude(&mut self, id: u64, moment: Moment) {
+    fn assets_of(&mut self, id: u64) -> Option<&mut Vec<Value>> {
+        self.release(id).ok()?["assets"].as_array_mut()
+    }
+
+    fn intrude(&mut self, id: u64, moment: Moment) -> bool {
         let due: Vec<Intrusion> = self
             .intrusions
             .iter()
@@ -122,22 +128,28 @@ impl State {
             .map(|(_, intrusion)| *intrusion)
             .collect();
         self.intrusions.retain(|(when, _)| *when != moment);
+        let mut keep_draft = false;
         for intrusion in due {
             match intrusion {
                 Intrusion::Add(name) => {
                     self.add_asset(id, name, b"planted", INTRUDER);
                 }
                 Intrusion::Swap(name) => {
-                    if let Ok(release) = self.release(id)
-                        && let Some(assets) = release["assets"].as_array_mut()
-                    {
-                        for asset in assets.iter_mut().filter(|asset| asset["name"] == name) {
+                    for asset in self.assets_of(id).into_iter().flatten() {
+                        if asset["name"] == name {
                             asset["digest"] = format!("sha256:{}", sha256(b"planted")).into();
                         }
                     }
                 }
+                Intrusion::Remove(name) => {
+                    if let Some(assets) = self.assets_of(id) {
+                        assets.retain(|asset| asset["name"] != name);
+                    }
+                }
+                Intrusion::KeepDraft => keep_draft = true,
             }
         }
+        keep_draft
     }
 }
 
@@ -202,6 +214,14 @@ impl FakeReleases {
         self.state().add_asset(id, name, bytes, INTRUDER)["id"]
             .as_u64()
             .unwrap_or_default()
+    }
+
+    pub(crate) fn upload_into(&self, id: u64, other: u64) {
+        let uploads = &self.uploads;
+        if let Ok(release) = self.state().release(id) {
+            release["upload_url"] =
+                format!("{uploads}/repos/{REPO}/releases/{other}/assets{{?name,label}}").into();
+        }
     }
 
     pub(crate) fn intrude(&self, moment: Moment, intrusion: Intrusion) {
@@ -281,7 +301,7 @@ impl GitHubWrite for FakeReleases {
             )));
         }
         let asset = state.add_asset(id, name, bytes, BOT);
-        state.intrude(id, Moment::FirstUpload);
+        let _keep_draft = state.intrude(id, Moment::FirstUpload);
         Ok(asset.to_string())
     }
 
@@ -294,9 +314,9 @@ impl GitHubWrite for FakeReleases {
             .and_then(number)?;
         let body: Value = serde_json::from_str(json)
             .map_err(|e| CiError::new(format!("400 Bad Request: {e}")))?;
-        state.intrude(id, Moment::Publish);
+        let keep_draft = state.intrude(id, Moment::Publish);
         let release = state.release(id)?;
-        if let Some(draft) = body.get("draft") {
+        if let Some(draft) = body.get("draft").filter(|_| !keep_draft) {
             release["draft"] = draft.clone();
         }
         Ok(release.to_string())

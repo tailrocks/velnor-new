@@ -101,6 +101,9 @@ fn release_publish_refuses_a_draft_that_the_app_did_not_create() {
         (INTRUDER, "User"),
         ("github-actions[bot]", "Bot"),
         (BOT, "User"),
+        ("velnor-release-evil[bot]", "Bot"),
+        ("other-velnor-release[bot]", "Bot"),
+        ("velnor-releas[bot]", "Bot"),
     ] {
         let fake = FakeReleases::new();
         let id = fake.release(TAG, true, login, kind);
@@ -259,6 +262,10 @@ fn release_publish_reads_sha256sums_as_strictly_as_sha256sum_check_strict() {
         ),
         (SUMS.trim_end().to_owned(), "does not end with a newline"),
         (String::new(), "is empty"),
+        (
+            format!("{first}\n{SUMS}"),
+            "lists velnor-ci-linux-x64 twice",
+        ),
     ];
     for (text, said) in malformed {
         let fake = FakeReleases::new();
