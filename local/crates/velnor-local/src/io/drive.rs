@@ -178,7 +178,11 @@ impl Driver<'_> {
                     append,
                     line,
                 } => self.commit(branch, append, line).await?,
-                Step::UpdateLock { branch, package } => self.update_lock(branch, package).await?,
+                Step::UpdateLock {
+                    branch,
+                    package,
+                    workspace,
+                } => self.update_lock(branch, package, workspace).await?,
                 Step::Push(branch) => self.push(branch).await?,
                 Step::OpenPullRequest { head, base, fork } => self.open(head, base, *fork).await?,
                 Step::MergePullRequest(head) => self.merge(head).await?,

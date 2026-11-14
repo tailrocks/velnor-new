@@ -48,6 +48,9 @@ impl Driver<'_> {
             let base = format!("refs/heads/{}", pull.base);
             let sha = self.git(&["rev-parse", &base]).await?;
             (base, sha)
+        } else if action == "closed" {
+            let merge = self.git(&["rev-parse", &format!("{refs}/merge")]).await?;
+            (format!("{refs}/merge"), merge)
         } else {
             let merge = self.merge_commit(&pull.base_sha, &pull.head_sha).await?;
             let head = &self.pulls[at].head_sha;
@@ -117,12 +120,24 @@ impl Driver<'_> {
     }
 
     pub(super) async fn synchronize(&mut self, branch: &str, after: &str) -> io::Result<()> {
-        let Ok(at) = self.pull(branch) else {
-            return Ok(());
-        };
-        let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
-        self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
-        self.announce(at, "synchronize", Some(&before)).await
+        let open: Vec<usize> = (0..self.pulls.len())
+            .filter(|at| self.pulls[*at].open && self.pulls[*at].head == branch)
+            .collect();
+        for at in open {
+            let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
+            self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
+            let (base_sha, number) = (self.pulls[at].base_sha.clone(), self.pulls[at].number);
+            if self.merge_commit(&base_sha, after).await.is_err() {
+                let _ = self.git(&["merge", "--abort"]).await;
+                println!(
+                    "velnor-local {}: pull request {number} has a merge conflict, so no pull_request event",
+                    self.tag
+                );
+                continue;
+            }
+            self.announce(at, "synchronize", Some(&before)).await?;
+        }
+        Ok(())
     }
 
     pub(super) async fn close(&mut self, head: &str) -> io::Result<()> {
