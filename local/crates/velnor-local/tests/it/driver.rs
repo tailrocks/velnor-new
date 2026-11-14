@@ -6,7 +6,8 @@ use std::path::Path;
 use serde_json::Value;
 use velnor_local::event::{MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin};
 use velnor_local::io::checkout::copy_untracked;
-use velnor_local::scenario::{Scenario, Step, overlapping};
+use velnor_local::scenario::{Scenario, Step, overlapping, restores};
+use velnor_local::standin::Job;
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
 const SHA_B: &str = "b151fd5994a1e3e2b2ba84bf7d3c3d1e5a5e4f60";
@@ -295,4 +296,27 @@ async fn untracked_files_and_inside_links_are_copied_and_escaping_links_are_refu
             "{escaping}"
         );
     }
+}
+
+#[test]
+fn the_report_names_each_job_with_its_key_the_entry_it_restored_and_its_scope() {
+    let journal = [
+        r#"{"writer":"Actions.Results:7:aaa","key":"cargo-x","matched_key":"cargo-x","scope":"refs/heads/main"}"#,
+        r#"{"writer":"Actions.Results:7:bbb","key":"mise-y","matched_key":null,"scope":null}"#,
+        r#"{"writer":"Actions.Results:8:aaa","key":"other-run","matched_key":"other-run","scope":"refs/heads/main"}"#,
+        "not json",
+    ]
+    .join("\n");
+    let jobs: Vec<Job> = serde_json::from_value(serde_json::json!([
+        {"requestId": 1, "jobId": "aaa", "timeLineId": null, "name": "lint", "workflowname": "ci", "result": "succeeded", "attempt": 1, "runid": 7},
+        {"requestId": 2, "jobId": "bbb", "timeLineId": null, "name": "test", "workflowname": "ci", "result": "succeeded", "attempt": 1, "runid": 7},
+    ]))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        restores(&journal, 7, &jobs),
+        [
+            "job lint: key cargo-x restored cargo-x from refs/heads/main",
+            "job test: key mise-y found no entry",
+        ]
+    );
 }

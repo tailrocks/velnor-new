@@ -135,6 +135,35 @@ pub struct Outcome {
     pub conclusion: &'static str,
     pub started: Option<u64>,
     pub metrics: Result<PathBuf, String>,
+    pub caches: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Restore {
+    writer: String,
+    key: String,
+    matched_key: Option<String>,
+    scope: Option<String>,
+}
+
+#[must_use]
+pub fn restores(journal: &str, run: u64, jobs: &[crate::standin::Job]) -> Vec<String> {
+    let prefix = format!("Actions.Results:{run}:");
+    journal
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Restore>(line).ok())
+        .filter_map(|restore| {
+            let job_id = restore.writer.strip_prefix(&prefix)?;
+            let job = jobs.iter().find(|job| job.job_id == job_id)?;
+            Some(match (restore.matched_key, restore.scope) {
+                (Some(matched), Some(scope)) => format!(
+                    "job {}: key {} restored {matched} from {scope}",
+                    job.name, restore.key
+                ),
+                _ => format!("job {}: key {} found no entry", job.name, restore.key),
+            })
+        })
+        .collect()
 }
 
 impl Outcome {
@@ -180,6 +209,9 @@ pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64
     let mut text = format!("\nVerdict of scenario {scenario}\n");
     for outcome in outcomes {
         let _ = writeln!(text, "  {}", outcome.line());
+        for cache in &outcome.caches {
+            let _ = writeln!(text, "    {cache}");
+        }
     }
     let first = outcomes.iter().filter_map(|outcome| outcome.started).min();
     let _ = writeln!(

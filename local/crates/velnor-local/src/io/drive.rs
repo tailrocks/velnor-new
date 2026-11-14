@@ -5,12 +5,15 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::fs;
 use tokio::process::Command;
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
@@ -19,6 +22,7 @@ use crate::event::{NO_COMMIT, Push, Repository, for_standin};
 use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
 use crate::standin;
 
+mod outcome;
 mod pulls;
 
 #[derive(Debug)]
@@ -31,16 +35,53 @@ struct Driver<'a> {
     pulls: Vec<pulls::Pull>,
     events: usize,
     outcomes: Vec<Outcome>,
+    tag: &'a str,
 }
 
 pub(super) async fn run(args: RunArgs) -> io::Result<()> {
-    let path = if Path::new(&args.scenario)
+    let args = Arc::new(args);
+    let several = args.scenario.len() > 1;
+    let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
+    let mut running = JoinSet::new();
+    for name in args.scenario.clone() {
+        let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
+        running.spawn(async move {
+            let _slot = slots.acquire().await.map_err(io::Error::other);
+            let stem = Path::new(&name)
+                .file_stem()
+                .map_or_else(|| name.clone(), |stem| stem.to_string_lossy().into_owned());
+            let dir = if several {
+                args.environment.dir.join(&stem)
+            } else {
+                args.environment.dir.clone()
+            };
+            let result = run_one(&args, &name, &stem, &dir).await;
+            result.map_err(|error| format!("{stem}: {error}"))
+        });
+    }
+    let mut failed = Vec::new();
+    while let Some(joined) = running.join_next().await {
+        if let Err(error) = joined
+            .map_err(|error| error.to_string())
+            .and_then(|result| result)
+        {
+            failed.push(error);
+        }
+    }
+    if failed.is_empty() {
+        return Ok(());
+    }
+    Err(io::Error::other(failed.join("; ")))
+}
+
+async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::Result<()> {
+    let path = if Path::new(scenario)
         .extension()
         .is_some_and(|ext| ext == "json")
     {
-        PathBuf::from(&args.scenario)
+        PathBuf::from(scenario)
     } else {
-        args.scenarios.join(format!("{}.json", args.scenario))
+        args.scenarios.join(format!("{scenario}.json"))
     };
     let scenario = Scenario::parse(&fs::read(&path).await?)
         .map_err(io::Error::other)?
@@ -49,7 +90,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     scenario
         .refuse_options(values.into_iter().chain(args.workflow.as_deref()))
         .map_err(io::Error::other)?;
-    let env = Environment::at(&args.environment.dir, DockerCli).await?;
+    let env = Environment::at(dir, DockerCli).await?;
     let checkout = fs::canonicalize(&args.repo).await?;
     if overlapping(&env.dir, &checkout) {
         return Err(io::Error::other(
@@ -66,24 +107,25 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
         fs::create_dir_all(env.dir.join(directory)).await?;
     }
     let session = tokio::select! {
-        session = session(&args, &env, repo, &scenario) => session,
+        session = session(args, &env, repo, &scenario, tag) => session,
         _ = tokio::signal::ctrl_c() => Err(io::Error::other("interrupted")),
     };
     let stopped = env.down().await;
     let (outcomes, up_at, up_seconds) = session?;
     stopped?;
-    print!("{}", verdict(&args.scenario, &outcomes, up_at, up_seconds));
+    print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
     if outcomes.is_empty() || !outcomes.iter().all(Outcome::passed) {
         return Err(io::Error::other("a run did not succeed"));
     }
     Ok(())
 }
 
-async fn session(
-    args: &RunArgs,
-    env: &Environment<DockerCli>,
+async fn session<'a>(
+    args: &'a RunArgs,
+    env: &'a Environment<DockerCli>,
     repo: PathBuf,
     scenario: &Scenario,
+    tag: &'a str,
 ) -> io::Result<(Vec<Outcome>, u64, f64)> {
     let up_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -91,7 +133,10 @@ async fn session(
     let clock = Instant::now();
     let addresses = env.up(&repo, &args.environment).await?;
     let up_seconds = clock.elapsed().as_secs_f64();
-    println!("velnor-local: {} is up in {up_seconds:.1} s", env.name);
+    println!(
+        "velnor-local {tag}: {} is up in {up_seconds:.1} s",
+        env.name
+    );
     let mut driver = Driver {
         args,
         env,
@@ -101,6 +146,7 @@ async fn session(
         pulls: Vec::new(),
         events: 0,
         outcomes: Vec::new(),
+        tag,
     };
     let branches = driver
         .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
@@ -328,11 +374,14 @@ impl Driver<'_> {
             }
             created = true;
             if standin::conclusion(run.result.as_deref()) == Some("skipped") {
-                println!("velnor-local: {event} does not trigger {}", run.file_name);
+                println!(
+                    "velnor-local {}: {event} does not trigger {}",
+                    self.tag, run.file_name
+                );
                 continue;
             }
             let outcome = self.outcome(run).await?;
-            println!("velnor-local: {}", outcome.line());
+            println!("velnor-local {}: {}", self.tag, outcome.line());
             self.outcomes.push(outcome);
         }
         if !status.success() && !created {
@@ -341,51 +390,5 @@ impl Driver<'_> {
             )));
         }
         Ok(())
-    }
-
-    async fn outcome(&self, run: standin::Run) -> io::Result<Outcome> {
-        let metrics = self.env.dir.join(format!("metrics/{}.json", run.id));
-        let id = run.id.to_string();
-        let collect = [
-            "bench",
-            "collect",
-            &id,
-            "--repo",
-            &self.args.repository,
-            "-o",
-        ];
-        let collected = Command::new(&self.args.velnor_ci)
-            .kill_on_drop(true)
-            .args(collect)
-            .arg(&metrics)
-            .env("GITHUB_API_URL", &self.addresses.stub_url)
-            .env("GITHUB_TOKEN", "velnor-local")
-            .output()
-            .await;
-        let written = fs::metadata(&metrics)
-            .await
-            .is_ok_and(|file| file.len() > 0);
-        let path = format!("/repos/{}/actions/runs/{id}", self.args.repository);
-        let bytes = request(&self.addresses.stub, "GET", &path, "")
-            .await
-            .ok_or_else(|| io::Error::other(format!("the API stub does not answer {path}")))?;
-        let github: Value = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
-        Ok(Outcome {
-            id: run.id,
-            workflow: github["name"].as_str().unwrap_or(&run.file_name).to_owned(),
-            event: run.event_name.unwrap_or_default(),
-            conclusion: standin::conclusion(run.result.as_deref()).unwrap_or("unfinished"),
-            started: github["run_started_at"].as_str().and_then(standin::seconds),
-            metrics: match collected {
-                Ok(done) if done.status.success() && written => Ok(metrics),
-                Ok(done) if done.status.success() => Err(format!(
-                    "{} exited 0 but wrote no {}",
-                    self.args.velnor_ci.display(),
-                    metrics.display()
-                )),
-                Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
-                Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
-            },
-        })
     }
 }
