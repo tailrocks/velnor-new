@@ -50,8 +50,10 @@ fn the_shape_follows_the_config_and_otherwise_the_shorter_of_the_two_builds() {
 
 #[test]
 fn without_a_measured_shard_threshold_long_tests_stay_in_the_shared_job() {
-    let decision = decide_shape(None, Some(&timings(2, 2, 100_000)));
-    assert_eq!(decision.shape, Shape::OneJob);
+    for (lint, test, shape) in [(2, 2, Shape::OneJob), (30, 30, Shape::LintAndTest)] {
+        let decision = decide_shape(None, Some(&timings(lint, test, 100_000)));
+        assert_eq!(decision.shape, shape);
+    }
 }
 
 fn target(kind: TargetKind) -> Target {
