@@ -7,7 +7,7 @@ use velnor_model::{
     AllTrigger, ChangeSet, DependencyKind, PackageDependency, PackageName, RepoView, RustPackage,
     RustSelection, SelectionReason,
 };
-use velnor_rust::{DetectError, Reason, detect, select};
+use velnor_rust::{DetectError, Reason, detect, select, wanted_files};
 
 use crate::facts::{TestResult, lib, path, repo};
 
@@ -174,5 +174,25 @@ fn a_malformed_patch_table_is_an_error_naming_the_file_and_the_key() -> TestResu
     ] {
         detect(&two_roots(&[("a/Cargo.toml", text)])?)?;
     }
+    Ok(())
+}
+
+#[test]
+fn the_generator_reads_every_tracked_cargo_configuration() -> TestResult {
+    let tracked: BTreeSet<_> = [
+        ".cargo/config.toml",
+        "a/.cargo/config",
+        "a/cargo/config",
+        "a/.cargo/config.json",
+        "Cargo.toml",
+    ]
+    .into_iter()
+    .map(path)
+    .collect::<Result<_, _>>()?;
+    let wanted: Vec<String> = wanted_files(&tracked)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(wanted, [".cargo/config.toml", "a/.cargo/config"]);
     Ok(())
 }
