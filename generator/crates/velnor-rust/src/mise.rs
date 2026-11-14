@@ -33,26 +33,14 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
     let mut requested = Versions::new();
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
-        let env = table(bytes)
-            .map_err(|reason| DetectError::invalid(config, reason))?
-            .get("env")
-            .and_then(Value::as_table)
-            .map(|env| {
-                env.iter()
-                    .flat_map(|(name, value)| {
-                        let loads = value.as_table().into_iter().flat_map(|directives| {
-                            ["file", "source"]
-                                .into_iter()
-                                .filter(|key| directives.contains_key(*key))
-                                .map(|key| format!("{name}.{key}"))
-                        });
-                        std::iter::once(name.clone()).chain(loads.collect::<Vec<_>>())
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        if let Some(name) = env.into_iter().find(|name| {
-            OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix)) || name.starts_with("_.")
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
+        let env = parsed.get("env").and_then(Value::as_table);
+        let names = env.into_iter().flat_map(|env| env.keys().cloned());
+        let include = parsed.contains_key("include").then(|| "include".to_owned());
+        if let Some(name) = names.chain(include).find(|name| {
+            name == "_"
+                || name == "include"
+                || OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix))
         }) {
             return Err(DetectError::invalid(
                 config,

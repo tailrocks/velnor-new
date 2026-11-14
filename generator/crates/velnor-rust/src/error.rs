@@ -103,7 +103,7 @@ impl fmt::Display for Reason {
             ),
             Self::MiseOverridesFlags(name) => write!(
                 f,
-                "[env] sets {name}, which mise-action exports to every step, where it changes how cargo or rustup build the checks; set it in the cargo configuration or the toolchain file instead"
+                "{name} is not supported: mise-action exports this configuration's environment to every step, so it may not set cargo or rustup variables, load or include other files, or change PATH; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",

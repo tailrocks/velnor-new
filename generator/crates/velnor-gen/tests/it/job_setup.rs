@@ -94,6 +94,7 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTDOCFLAGS",
         "RUSTUP_TOOLCHAIN",
         "_.file",
+        "_.path",
     ] {
         let mut mise_env = view(&["Cargo.toml"], None)?;
         mise_env.files.insert(
@@ -111,6 +112,15 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
             "{variable}"
         );
     }
+    let mut mise_include = view(&["Cargo.toml"], None)?;
+    mise_include.files.insert(
+        mise.clone(),
+        b"include = [\"ci.toml\"]\n\n[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&mise_include),
+        Err(GenerateError::Detect(DetectError::Invalid { ref path, .. })) if *path == mise
+    ));
     let mut per_target = string;
     per_target.files.insert(
         config.clone(),
