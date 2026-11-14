@@ -222,7 +222,7 @@ fn reads_of_a_path_dependency_whose_sources_lie_outside_its_directory_go_to_the_
 }
 
 #[test]
-fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
+fn a_package_name_that_several_packages_share_credits_their_reads_to_the_dependents_of_each() {
     let repo = root_package_with_path_dependencies();
     repo.write(
         "Cargo.toml",
@@ -237,6 +237,10 @@ fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
         "[package]\nname = \"leaf\"\nversion = \"0.2.0\"\nedition = \"2024\"\n",
     );
     repo.write(
+        "vendor/leaf/Cargo.toml",
+        "[package]\nname = \"leaf\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[lib]\npath = \"../../shared/leaf.rs\"\n",
+    );
+    repo.write(
         "vendor/registry/mid/Cargo.toml",
         "[package]\nname = \"mid\"\nversion = \"1.0.0\"\nedition = \"2024\"\n",
     );
@@ -244,6 +248,8 @@ fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
         "vendor/alt/src/lib.rs",
         "vendor/registry/mid/src/lib.rs",
         "shared/alt.txt",
+        "shared/leaf.rs",
+        "shared/leaf.txt",
         "shared/other.txt",
         "shared/third.txt",
     ] {
@@ -253,6 +259,7 @@ fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
     for (hash, package, text) in [
         ("5", "other", "other/src/lib.rs shared/other.txt"),
         ("a1", "leaf", "vendor/alt/src/lib.rs shared/alt.txt"),
+        ("7", "leaf", "shared/leaf.rs shared/leaf.txt"),
         (
             "c1",
             "mid",
@@ -271,6 +278,6 @@ fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
     }
     assert_eq!(
         written_lock(&repo),
-        "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/alt.txt\ttop\nshared/link.txt\ttop\nshared/other.txt\tother\nshared/third.txt\tother\nshared/third.txt\ttop\n"
+        "LICENSE\tother\nLICENSE\ttop\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nother/src/lib.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/alt.txt\tother\nshared/alt.txt\ttop\nshared/leaf.rs\tother\nshared/leaf.rs\ttop\nshared/leaf.txt\tother\nshared/leaf.txt\ttop\nshared/link.txt\ttop\nshared/other.txt\tother\nshared/other.txt\ttop\nshared/third.txt\tother\nshared/third.txt\ttop\nvendor/alt/src/lib.rs\tother\nvendor/leaf/build.rs\ttop\n"
     );
 }

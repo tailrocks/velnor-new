@@ -124,8 +124,9 @@ impl<'f> Owners<'f> {
 
     #[must_use]
     pub fn of(&self, package: Option<&str>, source: &RepoPath) -> Vec<Owner<'f>> {
-        if let Some(unit) = package.and_then(|name| self.named(name, source)) {
-            return unit.owners.clone();
+        let named = package.map_or_else(Vec::new, |name| self.named(name, source));
+        if !named.is_empty() {
+            return named;
         }
         let targets: Vec<Owner<'f>> = self
             .units
@@ -161,15 +162,7 @@ impl<'f> Owners<'f> {
         }
     }
 
-    fn named(&self, name: &str, source: &RepoPath) -> Option<&Unit<'f>> {
-        let named: Vec<&Unit<'f>> = self
-            .units
-            .iter()
-            .filter(|unit| unit.name.is_some_and(|own| own.as_str() == name))
-            .collect();
-        let [unit] = named[..] else {
-            return None;
-        };
+    fn named(&self, name: &str, source: &RepoPath) -> Vec<Owner<'f>> {
         let foreign = match self.package(source) {
             Some(Package::Folder(folder)) => !self
                 .units
@@ -177,7 +170,11 @@ impl<'f> Owners<'f> {
                 .any(|unit| unit.directory.as_ref() == Some(&folder)),
             Some(Package::Root) | None => false,
         };
-        (unit.unowned && !foreign).then_some(unit)
+        self.units
+            .iter()
+            .filter(|unit| !foreign && unit.name.is_some_and(|own| own.as_str() == name))
+            .flat_map(|unit| unit.owners.iter().cloned())
+            .collect()
     }
 
     fn package(&self, source: &RepoPath) -> Option<Package> {
