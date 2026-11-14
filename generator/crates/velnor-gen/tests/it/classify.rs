@@ -75,6 +75,10 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
             AllTrigger::Global(path(".velnor/rust-ci.toml")),
         ),
         (
+            ".velnor/rust-inputs.lock",
+            AllTrigger::Global(path(".velnor/rust-inputs.lock")),
+        ),
+        (
             ".github/workflows/rust-ci.yml",
             AllTrigger::GeneratedWorkflow,
         ),
