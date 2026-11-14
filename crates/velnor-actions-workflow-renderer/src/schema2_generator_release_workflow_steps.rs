@@ -237,6 +237,35 @@ pub(super) fn release_compiler_output_dir(target: ReleaseTarget) -> String {
     }
 }
 
+pub(super) fn validate_artifact_id(value: &str) -> Yaml {
+    bash_step_with_env(
+        "Validate exact artifact ID",
+        "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]",
+        vec![("VELNOR_EVIDENCE_ARTIFACT_ID", value)],
+    )
+}
+
+pub(super) fn guard_artifact_downloads(steps: Vec<Yaml>) -> Vec<Yaml> {
+    let mut guarded = Vec::with_capacity(steps.len());
+    for step in steps {
+        if let Yaml::Map(fields) = &step
+            && let Some((_, Yaml::Map(inputs))) = fields.iter().find(|(key, _)| key == "with")
+            && let Some((_, Yaml::Str(artifact_id))) =
+                inputs.iter().find(|(key, _)| key == "artifact-ids")
+        {
+            let mut guard = validate_artifact_id(artifact_id);
+            if let Some((_, condition)) = fields.iter().find(|(key, _)| key == "if")
+                && let Yaml::Map(guard_fields) = &mut guard
+            {
+                guard_fields.push(("if".to_owned(), condition.clone()));
+            }
+            guarded.push(guard);
+        }
+        guarded.push(step);
+    }
+    guarded
+}
+
 pub(super) fn download_step_by_id(name: &str, artifact_id: &str, path: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),

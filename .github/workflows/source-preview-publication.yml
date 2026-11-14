@@ -81,16 +81,31 @@ jobs:
       receipt_sha256: ${{ steps.draft.outputs.receipt_sha256 }}
       bundle_sha256: ${{ steps.draft.outputs.bundle_sha256 }}
     steps:
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.source_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-source.outputs.source_artifact_id }}
           path: source-preview-metadata
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.linux_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-source.outputs.linux_payload_artifact_id }}
           path: source-preview-payload-linux
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-source.outputs.darwin_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -171,26 +186,52 @@ jobs:
       receipt_sha256: ${{ steps.prepare.outputs.receipt_sha256 }}
       bundle_sha256: ${{ steps.prepare.outputs.bundle_sha256 }}
     steps:
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
           path: source-preview-metadata
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
           path: source-preview-payload-linux
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
           path: source-preview-payload-darwin
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download draft decision
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.artifact_id }}
           path: source-preview-decision
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.pair_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        if: ${{ needs.source-preview-draft.outputs.sign == 'false' && needs.source-preview-draft.outputs.pair_origin == 'artifact' }}
       - name: Download retained signed pair
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -283,21 +324,42 @@ jobs:
     environment:
       name: generator-source-preview
     steps:
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download admitted source metadata
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.source_artifact_id }}
           path: source-preview-metadata
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.linux_payload_artifact_id }}
           path: source-preview-payload-linux
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
       - name: Download exact qualified payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.source-preview-draft.outputs.darwin_payload_artifact_id }}
           path: source-preview-payload-darwin
+      - name: Validate exact artifact ID
+        env:
+          VELNOR_EVIDENCE_ARTIFACT_ID: ${{ needs.source-preview-attest.outputs.pair_id }}
+        shell: bash
+        run: "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
+        if: ${{ needs.source-preview-attest.outputs.pair_origin == 'artifact' }}
       - name: Download exact signed pair
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:

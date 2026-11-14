@@ -285,7 +285,7 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
             qualify_id, runner,
         )?);
     }
-    action_steps.extend(vec![
+    action_steps.extend(steps::guard_artifact_downloads(vec![
         steps::mise_step(pins.setup_for(target))?,
         steps::command_step(
             "Install pinned preview qualification tools",
@@ -315,7 +315,7 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
                 ]
             },
         ),
-    ]);
+    ]));
     let mut job_fields = fields(
         &format!("Qualify source preview {label}"),
         &[build_id],
