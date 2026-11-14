@@ -6,6 +6,8 @@ use std::fmt;
 
 use crate::ids::{PackageName, RepoPath};
 
+pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rust-ci.yml");
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChangeSet {
     pub paths: BTreeSet<RepoPath>,
@@ -47,6 +49,7 @@ pub enum AllTrigger {
     CargoConfig(RepoPath),
     WorkspaceManifest,
     UnknownPath(RepoPath),
+    Global(RepoPath),
     GeneratedWorkflow,
     BaseUnavailable,
     MostPackages(BTreeMap<PackageName, SelectionReason>),
@@ -71,6 +74,7 @@ impl fmt::Display for AllTrigger {
             Self::CargoConfig(path) => write!(f, "all:cargo-config:{path}"),
             Self::WorkspaceManifest => f.write_str("all:workspace-manifest"),
             Self::UnknownPath(path) => write!(f, "all:unknown-path:{path}"),
+            Self::Global(path) => write!(f, "all:global:{path}"),
             Self::GeneratedWorkflow => f.write_str("all:generated-workflow"),
             Self::BaseUnavailable => f.write_str("all:base-unavailable"),
             Self::MostPackages(packages) => write!(f, "all:most-packages:{}", packages.len()),

@@ -12,7 +12,7 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::ChangeSet;
-use velnor_rust::select;
+use velnor_rust::{select, unknown_paths};
 
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
@@ -101,7 +101,7 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
     }
     Ok(if args.explain {
-        explain(&selections)
+        explain(&selections, &unknown_paths(&facts, &changes))
     } else {
         outputs
     })

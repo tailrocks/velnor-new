@@ -4,20 +4,20 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, RepoFacts, RepoPath,
-    RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason, ToolPins,
+    AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob, RepoFacts,
+    RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason, ToolPins,
 };
 use velnor_rust::select;
 
-fn path(text: &str) -> RepoPath {
+pub(crate) fn path(text: &str) -> RepoPath {
     RepoPath::new(text).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn name(text: &str) -> PackageName {
+pub(crate) fn name(text: &str) -> PackageName {
     PackageName::new(text).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> RustMember {
+pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> RustMember {
     RustMember {
         name: name(package),
         manifest: path(&format!("{directory}/Cargo.toml")),
@@ -34,7 +34,7 @@ fn member(package: &str, directory: &str, dependencies: &[(&str, &str)]) -> Rust
     }
 }
 
-fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
+pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
     RepoFacts {
         rust_roots: roots
             .into_iter()
@@ -54,11 +54,11 @@ fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
     }
 }
 
-fn changed(file: &str) -> SelectionReason {
+pub(crate) fn changed(file: &str) -> SelectionReason {
     SelectionReason::Changed(path(file))
 }
 
-fn depends_on(package: &str) -> SelectionReason {
+pub(crate) fn depends_on(package: &str) -> SelectionReason {
     SelectionReason::DependsOn(name(package))
 }
 
@@ -69,7 +69,7 @@ fn packages(entries: &[(&str, SelectionReason)]) -> BTreeMap<PackageName, Select
         .collect()
 }
 
-fn some(entries: &[(&str, SelectionReason)]) -> RustSelection {
+pub(crate) fn some(entries: &[(&str, SelectionReason)]) -> RustSelection {
     RustSelection::Some(packages(entries))
 }
 
@@ -77,11 +77,19 @@ fn most(entries: &[(&str, SelectionReason)]) -> RustSelection {
     RustSelection::All(AllTrigger::MostPackages(packages(entries)))
 }
 
-fn unknown(file: &str) -> RustSelection {
+pub(crate) fn unknown(file: &str) -> RustSelection {
     RustSelection::All(AllTrigger::UnknownPath(path(file)))
 }
 
-fn assert_selects(facts: &RepoFacts, rows: Vec<(&[&str], Vec<RustSelection>)>) {
+pub(crate) fn all(trigger: AllTrigger) -> RustSelection {
+    RustSelection::All(trigger)
+}
+
+pub(crate) fn glob(text: &str) -> PathGlob {
+    PathGlob::new(text).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(crate) fn assert_selects(facts: &RepoFacts, rows: Vec<(&[&str], Vec<RustSelection>)>) {
     for (files, expected) in rows {
         let changes = ChangeSet {
             paths: files.iter().map(|file| path(file)).collect(),
@@ -97,7 +105,7 @@ fn assert_selects(facts: &RepoFacts, rows: Vec<(&[&str], Vec<RustSelection>)>) {
     }
 }
 
-fn two_roots() -> RepoFacts {
+pub(crate) fn two_roots() -> RepoFacts {
     facts(vec![
         (
             "Cargo.toml",
@@ -206,35 +214,14 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
     ]);
     assert_selects(
         &two_roots(),
-        vec![
-            (
-                &["Cargo.lock"],
-                vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
-            ),
-            (
-                &["rust-toolchain.toml"],
-                vec![
-                    unknown("rust-toolchain.toml"),
-                    unknown("rust-toolchain.toml"),
-                ],
-            ),
-            (
-                &[".cargo/config.toml"],
-                vec![unknown(".cargo/config.toml"), unknown(".cargo/config.toml")],
-            ),
-            (
-                &["helper/README.md"],
-                vec![unknown("helper/README.md"), unknown("helper/README.md")],
-            ),
-        ],
+        vec![(
+            &["helper/README.md"],
+            vec![unknown("helper/README.md"), unknown("helper/README.md")],
+        )],
     );
     assert_selects(
         &facts,
         vec![
-            (
-                &["docs/guide.md"],
-                vec![unknown("docs/guide.md"), unknown("docs/guide.md")],
-            ),
             (
                 &["a/README.md"],
                 vec![unknown("a/README.md"), unknown("a/README.md")],
@@ -296,11 +283,18 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
     rows.extend([
         (
             &["Cargo.lock"][..],
-            vec![unknown("Cargo.lock"), unknown("Cargo.lock")],
+            vec![
+                all(AllTrigger::Global(path("Cargo.lock"))),
+                all(AllTrigger::Global(path("Cargo.lock"))),
+            ],
         ),
+        (&["README.md"], vec![none.clone(), none.clone()]),
         (
-            &["README.md"],
-            vec![unknown("README.md"), unknown("README.md")],
+            &["Cargo.toml"],
+            vec![
+                all(AllTrigger::WorkspaceManifest),
+                all(AllTrigger::WorkspaceManifest),
+            ],
         ),
         (
             &["inner/i1/src/lib.rs"],

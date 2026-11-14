@@ -123,6 +123,15 @@ pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
+    pub non_inputs: Vec<PathGlob>,
+    pub inputs: Vec<InputRule>,
+    pub default_ignores: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InputRule {
+    pub glob: PathGlob,
+    pub packages: Vec<PackageName>,
 }
 
 impl Default for RustCiConfig {
@@ -131,6 +140,9 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             timeout_minutes: 30,
             exclude: Vec::new(),
+            non_inputs: Vec::new(),
+            inputs: Vec::new(),
+            default_ignores: true,
         }
     }
 }

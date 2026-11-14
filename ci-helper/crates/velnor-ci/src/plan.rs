@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection};
-use velnor_rust::root_slug;
+use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
 
@@ -39,7 +39,10 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
 }
 
 #[must_use]
-pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
+pub fn explain(
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    unknown: &BTreeSet<RepoPath>,
+) -> String {
     let mut lines = Vec::new();
     for (root, selection) in selections {
         let (header, packages) = match selection {
@@ -55,5 +58,29 @@ pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
             lines.push(format!("  {package} {reason}\n"));
         }
     }
+    for path in unknown {
+        if path.as_str().contains('*') {
+            lines.push(format!(
+                "unknown path: {path}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+            ));
+            continue;
+        }
+        let quoted = toml_string(path.as_str());
+        lines.push(format!(
+            "unknown path: {path}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    {quoted},\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = {quoted}\n    packages = [\"<package>\"]\n"
+        ));
+    }
     lines.concat()
+}
+
+fn toml_string(text: &str) -> String {
+    let escaped: String = text
+        .chars()
+        .flat_map(|c| match c {
+            '"' => vec!['\\', '"'],
+            '\\' => vec!['\\', '\\'],
+            other => vec![other],
+        })
+        .collect();
+    format!("\"{escaped}\"")
 }
