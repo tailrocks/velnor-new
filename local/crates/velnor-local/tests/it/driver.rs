@@ -310,7 +310,14 @@ async fn untracked_files_and_inside_links_are_copied_and_escaping_links_are_refu
 #[test]
 fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
     let lock = "[[package]]\nname = \"fnv-other\"\nversion = \"2.3.9\"\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.5\"\nsource = \"registry\"\n";
-    assert_eq!(next_patch(lock, "fnv").as_deref(), Some("1.0.6"));
-    assert_eq!(next_patch(lock, "fnv-other").as_deref(), Some("2.3.10"));
-    assert_eq!(next_patch(lock, "serde"), None);
+    let bump = |package| next_patch(lock, package);
+    assert_eq!(
+        bump("fnv"),
+        Some(("fnv@1.0.5".to_owned(), "1.0.6".to_owned()))
+    );
+    assert_eq!(
+        bump("fnv-other"),
+        Some(("fnv-other@2.3.9".to_owned(), "2.3.10".to_owned()))
+    );
+    assert_eq!(bump("serde"), None);
 }

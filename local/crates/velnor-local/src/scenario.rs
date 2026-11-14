@@ -123,7 +123,7 @@ impl Scenario {
 }
 
 #[must_use]
-pub fn next_patch(lock: &str, package: &str) -> Option<String> {
+pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
     let block = lock.split("\n\n").find(|block| {
         block
             .lines()
@@ -134,7 +134,8 @@ pub fn next_patch(lock: &str, package: &str) -> Option<String> {
         .find_map(|line| line.strip_prefix("version = \""))?
         .trim_end_matches('"');
     let (rest, patch) = version.rsplit_once('.')?;
-    Some(format!("{rest}.{}", patch.parse::<u64>().ok()? + 1))
+    let next = format!("{rest}.{}", patch.parse::<u64>().ok()? + 1);
+    Some((format!("{package}@{version}"), next))
 }
 
 #[derive(Debug)]

@@ -26,19 +26,25 @@ impl Driver<'_> {
             ));
         }
         let current = fs::read_to_string(&lock).await?;
-        let precise = next_patch(&current, package)
+        let (spec, precise) = next_patch(&current, package)
             .ok_or_else(|| io::Error::other(format!("Cargo.lock has no version of {package}")))?;
         let update = [
             "update",
             "-p",
-            package,
+            &spec,
             "--precise",
             &precise,
             "--manifest-path",
         ];
-        let updated = Command::new("cargo")
-            .args(update)
-            .arg(&manifest)
+        let mut cargo = Command::new("cargo");
+        cargo.args(update).arg(&manifest);
+        for config in [".cargo/config.toml", ".cargo/config"] {
+            let path = self.repo.join(config);
+            if fs::metadata(&path).await.is_ok() {
+                cargo.arg("--config").arg(path);
+            }
+        }
+        let updated = cargo
             .current_dir(&self.env.dir)
             .kill_on_drop(true)
             .output()
