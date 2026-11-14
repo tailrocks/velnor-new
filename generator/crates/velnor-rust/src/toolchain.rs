@@ -73,8 +73,15 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
         .get("path")
         .map(|value| text(value, "toolchain.path"))
         .transpose()?;
-    if channel.is_none() && path.is_none() {
-        return Err(Reason::MissingKey("toolchain.channel"));
+    match (&channel, &path) {
+        (None, None) => return Err(Reason::MissingKey("toolchain.channel")),
+        (Some(_), Some(path)) => {
+            return Err(Reason::InvalidValue {
+                key: "toolchain.path",
+                value: path.clone(),
+            });
+        }
+        _ => {}
     }
     let profile = section
         .get("profile")

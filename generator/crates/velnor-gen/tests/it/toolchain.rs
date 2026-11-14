@@ -92,6 +92,14 @@ fn plain_toolchain_cases() -> Vec<ToolchainCase> {
     vec![
         (
             "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"stable\"\npath = \"/opt/rust\"\n",
+            Err(Reason::InvalidValue {
+                key: "toolchain.path",
+                value: "/opt/rust".to_owned(),
+            }),
+        ),
+        (
+            "rust-toolchain.toml",
             "[toolchain]\npath = \"/opt/rust\"\n",
             Ok(Toolchain {
                 channel: None,
