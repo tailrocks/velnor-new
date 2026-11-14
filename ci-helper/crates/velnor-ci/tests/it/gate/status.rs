@@ -14,12 +14,18 @@ fn with_status(recorded: Recorded, context: &str, state: &str) -> Recorded {
 
 #[test]
 fn a_commit_status_named_like_a_required_check_must_pass_too_and_never_stands_in_for_a_job() {
-    for state in ["failure", "error"] {
+    for (context, state) in [
+        (VERDICT, "failure"),
+        (VERDICT, "error"),
+        ("required verdict", "failure"),
+        ("REQUIRED VERDICT", "error"),
+    ] {
         assert_eq!(
-            with_status(both(), VERDICT, state).gate(GREEN),
+            with_status(both(), context, state).gate(GREEN),
             Err(format!(
                 "check Required verdict did not pass on commit {GREEN}: its commit status is {state}"
-            ))
+            )),
+            "{context}"
         );
     }
     let pending = "check Required passed\ncheck Required verdict has a pending commit status\n";

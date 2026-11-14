@@ -77,11 +77,12 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
     }
     let mut ready = true;
     for name in &required {
-        let status = statuses
+        let named: Vec<&str> = statuses
             .iter()
-            .find(|status| &status.context == name)
-            .map(|status| status.state.as_str());
-        match with_status(judge(name, &jobs, running, &default_branch), status) {
+            .filter(|status| status.context.to_lowercase() == name.to_lowercase())
+            .map(|status| status.state.as_str())
+            .collect();
+        match with_status(judge(name, &jobs, running, &default_branch), &named) {
             Check::Passed => report.push(format!("check {name} passed")),
             Check::Waiting(state) => {
                 ready = false;
@@ -202,15 +203,20 @@ fn all_pages<T: DeserializeOwned>(
     Ok(all)
 }
 
-fn with_status(by_jobs: Check, status: Option<&str>) -> Check {
-    match (by_jobs, status) {
-        (Check::Failed(reason), _) => Check::Failed(reason),
-        (_, Some(state)) if !matches!(state, "success" | "pending") => {
-            Check::Failed(format!("its commit status is {state}"))
-        }
-        (_, Some("pending")) => Check::Waiting("has a pending commit status".to_owned()),
-        (by_jobs, _) => by_jobs,
+fn with_status(by_jobs: Check, states: &[&str]) -> Check {
+    if let Check::Failed(reason) = by_jobs {
+        return Check::Failed(reason);
     }
+    if let Some(state) = states
+        .iter()
+        .find(|state| !matches!(**state, "success" | "pending"))
+    {
+        return Check::Failed(format!("its commit status is {state}"));
+    }
+    if states.contains(&"pending") {
+        return Check::Waiting("has a pending commit status".to_owned());
+    }
+    by_jobs
 }
 
 fn judge(name: &str, jobs: &[ApiRunJob], running: bool, branch: &str) -> Check {

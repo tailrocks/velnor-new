@@ -26,7 +26,7 @@ pub enum Command {
     )]
     Inputs(InputsCommand),
     #[command(
-        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and every check its branch rules require passed in a job of a push run on that branch, and ready=false while one has not finished; exit 1 when one did not pass or the commit is off the default branch. Reads GITHUB_TOKEN, which needs contents: read and actions: read"
+        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and every check its branch rules require passed in a job of a push run on that branch, and ready=false while one has not finished; exit 1 when one did not pass or the commit is off the default branch. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
     )]
     ReleaseGate(ReleaseGateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
