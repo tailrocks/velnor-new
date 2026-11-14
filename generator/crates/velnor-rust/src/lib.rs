@@ -28,7 +28,7 @@ pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
-pub use mise::nextest_tool;
+pub use mise::{nextest_tool, toolchain_conflict};
 pub use plan::plan;
 pub use reads::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, format_inputs_lock, locate,

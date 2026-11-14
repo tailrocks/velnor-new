@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_gen::io::{Checkout, read_checkout, read_files};
-use velnor_model::{ChangeSet, RepoPath};
+use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 use velnor_rust::{cargo_files, detect, optional_steps, root_sources, select, unknown_paths};
 
 pub use self::audit::audit_inputs;
@@ -100,8 +100,16 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         head_files: read_head_files(&checkout, &paths)?,
         paths,
     };
-    let selections = select(&facts, &changes);
     let full = std::env::var(EVENT_VARIABLE).is_ok_and(|event| event == SCHEDULED);
+    let selections = if full {
+        facts
+            .rust_roots
+            .iter()
+            .map(|root| (root.manifest.clone(), RustSelection::All(AllTrigger::Event)))
+            .collect()
+    } else {
+        select(&facts, &changes)
+    };
     let steps = facts
         .rust_roots
         .iter()

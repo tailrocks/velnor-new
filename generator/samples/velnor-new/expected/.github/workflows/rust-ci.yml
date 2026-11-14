@@ -22,8 +22,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
@@ -95,8 +98,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
@@ -134,8 +140,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
@@ -201,8 +210,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: generator
@@ -252,8 +264,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: local

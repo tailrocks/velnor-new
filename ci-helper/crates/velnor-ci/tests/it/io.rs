@@ -675,7 +675,7 @@ fn doc_flags(repo: &Repo, event: Option<&str>) -> String {
     fs::read_to_string(&outputs)
         .unwrap_or_else(|e| unreachable!("{e}"))
         .lines()
-        .filter(|line| line.contains("_doc"))
+        .filter(|line| line.contains("_doc") || line.contains("_mode"))
         .flat_map(|line| [line, " "])
         .collect()
 }
@@ -685,7 +685,7 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
     let repo = plan_repo("doc-flags");
     assert_eq!(
         doc_flags(&repo, None),
-        "rust_root_doctests=skip rust_root_docs=skip rust_tools_doctests=skip rust_tools_docs=skip "
+        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
     );
     repo.write(
         "b/src/lib.rs",
@@ -694,13 +694,26 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
     repo.write("tools/src/main.rs", "//! The tool.\nfn main() {}\n");
     assert_eq!(
         doc_flags(&repo, Some("pull_request")),
-        "rust_root_doctests=run rust_root_docs=run rust_tools_doctests=skip rust_tools_docs=run "
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
     repo.write("b/src/lib.rs", "pub fn f() {}\n");
     repo.write("tools/src/main.rs", "fn main() {}\n");
     assert_eq!(
         doc_flags(&repo, Some("schedule")),
-        "rust_root_doctests=run rust_root_docs=run rust_tools_doctests=skip rust_tools_docs=run "
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+    );
+    let outputs = repo.root().join("scheduled");
+    let output = plan_command(&repo)
+        .arg("plan")
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("GITHUB_EVENT_NAME", "schedule")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let written = fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        written.contains("rust_root_mode=all\n") && written.contains("rust_tools_mode=all\n"),
+        "{written}"
     );
 }
 

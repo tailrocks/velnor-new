@@ -82,8 +82,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
@@ -113,8 +116,11 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
+          version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
+      - name: Add rustfmt and clippy
+        run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: lab
@@ -180,6 +186,30 @@ fn the_job_installs_the_pinned_rust_and_cargo_nextest_and_needs_a_real_nextest_p
         expected_files(&unpinned),
         Err(GenerateError::Detect(DetectError::NextestRequired {
             path: other
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_file_that_disagrees_with_the_mise_rust_pin_is_an_error() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut agreeing = view(&["Cargo.toml"], None)?;
+    agreeing.tracked_paths.insert(file.clone());
+    agreeing.files.insert(
+        file.clone(),
+        b"[toolchain]\nchannel = \"1.99.1\"\n".to_vec(),
+    );
+    assert!(expected_files(&agreeing).is_ok());
+    let mut disagreeing = agreeing;
+    disagreeing
+        .files
+        .insert(file, b"[toolchain]\nchannel = \"1.98.0\"\n".to_vec());
+    assert_eq!(
+        expected_files(&disagreeing),
+        Err(GenerateError::Detect(DetectError::ToolchainConflict {
+            file: "1.98.0".to_owned(),
+            mise: "1.99.1".to_owned(),
         }))
     );
     Ok(())

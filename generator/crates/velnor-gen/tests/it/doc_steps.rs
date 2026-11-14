@@ -212,6 +212,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     ]);
     facts.compile_inputs = BTreeMap::from([
         (Some(path("shared/gen.rs")), BTreeSet::from([name("tool")])),
+        (Some(path("shared/gen.inc")), BTreeSet::from([name("tool")])),
         (Some(path("macros")), BTreeSet::from([name("tool")])),
         (Some(path("other/only.rs")), BTreeSet::from([name("app")])),
     ]);
@@ -224,6 +225,9 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         "other/only.rs",
         "tools/tool/src/main.rs",
         "build.RS",
+        "shared/gen.inc",
+        "macros/template.txt",
+        "app/notes.txt",
         "Cargo.toml",
         "app/Cargo.toml",
         "tools/Cargo.toml",
@@ -256,7 +260,9 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     assert_eq!(
         sources(1),
         [
+            "macros/template.txt",
             "macros/x.rs",
+            "shared/gen.inc",
             "shared/gen.rs",
             "tools/Cargo.toml",
             "tools/tool/Cargo.toml",

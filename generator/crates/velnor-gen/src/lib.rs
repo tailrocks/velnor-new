@@ -9,7 +9,7 @@ use std::fmt;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
-use velnor_rust::{DetectError, detect, nextest_tool, plan};
+use velnor_rust::{DetectError, detect, nextest_tool, plan, toolchain_conflict};
 
 const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 
@@ -53,6 +53,12 @@ impl From<DetectError> for GenerateError {
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     let facts = detect(view)?;
     check_helper(&facts)?;
+    if let Some((file, mise)) = toolchain_conflict(&facts) {
+        return Err(GenerateError::Detect(DetectError::ToolchainConflict {
+            file,
+            mise,
+        }));
+    }
     if nextest_tool(&facts.tools).is_none() {
         return Err(GenerateError::Detect(DetectError::NextestRequired {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),

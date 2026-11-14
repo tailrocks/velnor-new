@@ -85,7 +85,7 @@ fn root_jobs(
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
-            let mut steps = setup(facts, true);
+            let mut steps = setup(facts, true, true);
             steps.extend(cargo(
                 lint.into_iter()
                     .chain(test)
@@ -100,14 +100,14 @@ fn root_jobs(
             }]
         }
         Shape::LintAndTest | Shape::BuildThenGroups => {
-            let mut lint_steps = setup(facts, false);
+            let mut lint_steps = setup(facts, true, false);
             lint_steps.extend(cargo(
                 lint.into_iter()
                     .chain([CargoCommand::Doc])
                     .chain(alone)
                     .collect(),
             ));
-            let mut test_steps = setup(facts, true);
+            let mut test_steps = setup(facts, false, true);
             test_steps.extend(cargo(test));
             vec![
                 Job {
@@ -129,12 +129,13 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .iter()
         .filter(|member| {
             member.targets.iter().any(|target| {
-                target.kinds.iter().any(|kind| {
-                    matches!(
-                        kind,
-                        TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                    )
-                })
+                !target.requires_features
+                    && target.kinds.iter().any(|kind| {
+                        matches!(
+                            kind,
+                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
+                        )
+                    })
             })
         })
         .map(|member| CargoCommand::CheckAlone {
@@ -143,7 +144,7 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn setup(facts: &RepoFacts, tests: bool) -> Vec<Step> {
+fn setup(facts: &RepoFacts, lint: bool, tests: bool) -> Vec<Step> {
     let mut tools: Vec<String> = rust_tool(&facts.tools)
         .map(str::to_owned)
         .into_iter()
@@ -160,6 +161,9 @@ fn setup(facts: &RepoFacts, tests: bool) -> Vec<Step> {
     );
     if !tools.is_empty() {
         steps.push(step(StepKind::InstallTools(tools)));
+    }
+    if lint {
+        steps.push(step(StepKind::LintComponents));
     }
     steps
 }

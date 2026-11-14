@@ -74,6 +74,7 @@ pub enum When {
 pub enum StepKind {
     Checkout { depth: u32 },
     InstallTools(Vec<String>),
+    LintComponents,
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,

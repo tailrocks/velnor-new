@@ -15,6 +15,7 @@ pub enum DetectError {
     MiseRequired { path: RepoPath },
     NextestRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
+    ToolchainConflict { file: String, mise: String },
     NoRustRoot,
 }
 
@@ -122,6 +123,10 @@ impl fmt::Display for DetectError {
             Self::SameSlug { first, second } => write!(
                 f,
                 "the Cargo roots {first} and {second} get the same job and output names; rename one of their folders or add one to exclude in {CONFIG_PATH}"
+            ),
+            Self::ToolchainConflict { file, mise } => write!(
+                f,
+                "the Rust toolchain file names {file} and mise pins rust {mise}; mise's pin wins in the generated job, so make them the same"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

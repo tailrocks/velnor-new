@@ -44,21 +44,16 @@ pub fn root_sources(
     tracked
         .iter()
         .filter(|path| {
+            let under = |directory: &Option<RepoPath>| relative(directory.as_ref(), path).is_some();
+            let rust = Path::new(path.as_str())
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"));
             manifests.contains(path)
-                || Path::new(path.as_str())
-                    .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
-        })
-        .filter(|path| {
-            manifests.contains(path) || {
-                let under =
-                    |directory: &Option<RepoPath>| relative(directory.as_ref(), path).is_some();
-                (under(&own) && !nested.iter().any(under))
-                    || members.iter().any(under)
-                    || read
-                        .iter()
-                        .any(|input| under(input) || input.as_ref() == Some(*path))
-            }
+                || read
+                    .iter()
+                    .any(|input| under(input) || input.as_ref() == Some(*path))
+                || (rust
+                    && ((under(&own) && !nested.iter().any(under)) || members.iter().any(under)))
         })
         .cloned()
         .collect()

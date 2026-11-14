@@ -11,6 +11,7 @@ use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+const MISE_VERSION: &str = "2026.11.1";
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
@@ -59,9 +60,15 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             name: "Install tools".to_owned(),
             uses: Some(MISE.to_owned()),
             with: vec![
+                ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
                 ("cache".to_owned(), Value::Bool(false)),
                 ("install_args".to_owned(), Value::Text(tools.join(" "))),
             ],
+            ..RenderedStep::default()
+        },
+        StepKind::LintComponents => RenderedStep {
+            name: "Add rustfmt and clippy".to_owned(),
+            run: Some("rustup component add rustfmt clippy".to_owned()),
             ..RenderedStep::default()
         },
         StepKind::Cargo(command) => cargo_step(command),

@@ -132,6 +132,13 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         with_targets("lib", &[TargetKind::Lib]),
         with_targets("macro", &[TargetKind::ProcMacro]),
         with_targets("tests-only", &[TargetKind::Test]),
+        RustMember {
+            targets: vec![Target {
+                requires_features: true,
+                ..target(TargetKind::Bin)
+            }],
+            ..member("gated", "crates/gated", &[])
+        },
     ];
     let steps = cargo_steps(&facts(vec![("tools/Cargo.toml", members)]));
     let commands: Vec<CargoCommand> = steps.iter().map(|(c, _, _)| c.clone()).collect();
@@ -199,6 +206,20 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         .collect();
     let both = "'rust aqua:nextest-rs/nextest/cargo-nextest'";
     assert_eq!(installs, [both, "rust", both]);
+    let components: Vec<usize> = ["  rust-root:", "  rust-lint-lab:", "  rust-test-lab:"]
+        .iter()
+        .map(|job| {
+            let start = text.find(job).unwrap_or(0);
+            let end = text[start + 1..]
+                .find("\n  rust-")
+                .or_else(|| text[start + 1..].find("\n  required:"))
+                .map_or(text.len(), |at| start + 1 + at);
+            text[start..end]
+                .matches("run: rustup component add rustfmt clippy")
+                .count()
+        })
+        .collect();
+    assert_eq!(components, [1, 1, 0]);
 
     let invalid = |path: RepoPath| {
         move |result: Result<BTreeMap<RepoPath, String>, GenerateError>| matches!(result, Err(GenerateError::Detect(DetectError::Invalid { path: p, .. })) if p == path)

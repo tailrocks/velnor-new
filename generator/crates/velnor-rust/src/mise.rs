@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoPath, ToolPin, ToolPins};
+use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
@@ -61,6 +61,18 @@ pub fn nextest_tool(pins: &ToolPins) -> Option<&str> {
                 .is_some_and(|rest| rest.is_empty() || rest.ends_with([':', '/']))
         })
     })
+}
+
+#[must_use]
+pub fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
+    let channel = facts.toolchain.as_ref()?.channel.clone()?;
+    let pinned = facts
+        .tools
+        .tools
+        .get(rust_tool(&facts.tools)?)?
+        .requested
+        .first()?;
+    (*pinned != channel).then(|| (channel, pinned.clone()))
 }
 
 pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
