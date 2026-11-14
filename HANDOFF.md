@@ -15,9 +15,9 @@ Read this file first, then `docs/roadmap.md`, `docs/goals.md`, `AGENTS.md`, and 
 | #738 | #722 the engine leaves velnor-gen workflows | Reviewer approved. Codex rounds are capped. | Wait for `Required` and DCO, check it is not behind main, merge. |
 | #749 | #724 release-gate reads the required checks from the rules | Reviewer approved. The executor was adding two tests: a `diverged` compare status must exit 1, and a case that needs the `integration_id` -1 "any source" value. | Check those tests are pushed, red/green. Then merge. |
 | #756 | #725 release record and publish | Reviewer re-approved at `b6fa367` (all 6 mutations go red). | Wait for `Required`, then merge. |
-| #755 | #717 the setup-velnor action | The executor was still doing the velnor-lab proof runs. No review yet. | Check the lab proof (install, cache hit, SHA mismatch fails). Run a reviewer (Opus 5.5, low). Merge the lab PR it opened, then this one. |
+| #755 | #717 the setup-velnor action | The executor was still doing the velnor-lab proof runs: the wrong-SHA run had just failed as expected. It also had uncommitted, unverified golden updates, saved as branch `wip/717-goldens` (`3762185c01`, one commit on top of #755's head). No review yet. | Check the lab proof (install, cache hit, SHA mismatch fails). Run a reviewer (Opus 5.5, low). Merge the lab PR it opened, then this one. |
 
-These four issues carry the `in-progress` label. If you restart an issue with a new executor, give it the existing branch; don't open a second PR.
+These four issues carry the `in-progress` label. Every agent from the old session is stopped, and every branch is pushed. No velnor-lab workflow run is in progress, and only the pre-existing probe workflows and `Fetch helper` are enabled there. If you restart an issue with a new executor, give it the existing branch; don't open a second PR.
 
 **A research task that was running.** #750 (trust boundary for project config that weakens checks) needs an owner decision. An Opus agent was writing a recommendation. Re-run that research (Opus 5.5, high): what Velnor should follow, warn about or reject, with industry sources. Then bring the owner one rule, a table of cases, and a pick. Write it in plain, short sentences: the owner asked for ADHD-friendly explanations, one question at a time, with real examples.
 
