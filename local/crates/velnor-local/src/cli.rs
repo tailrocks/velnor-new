@@ -95,6 +95,12 @@ pub struct RunArgs {
         help = "Repository as owner/name, as github.repository reports it"
     )]
     pub repository: String,
+    #[arg(
+        long,
+        default_value = "velnor-ci",
+        help = "velnor-ci program that writes the metrics file of each run"
+    )]
+    pub velnor_ci: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -125,6 +131,11 @@ pub struct ApiStubArgs {
         help = "Largest diff in bytes that pull request files and compare read; a larger one is a 422"
     )]
     pub diff_limit_bytes: usize,
+    #[arg(
+        long,
+        help = "runner.server as host:port; it answers the workflow run, job and job log endpoints"
+    )]
+    pub standin: Option<String>,
 }
 
 #[derive(Debug, Args)]

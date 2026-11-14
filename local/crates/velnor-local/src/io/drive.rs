@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -58,7 +59,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     }
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
-    for directory in ["cache", "api", "events", "logs"] {
+    for directory in ["cache", "api", "events", "logs", "metrics"] {
         match fs::remove_dir_all(env.dir.join(directory)).await {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
             _ => {}
@@ -134,6 +135,26 @@ async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Resul
     let changes = git(checkout, &["diff", "HEAD", "--binary"], None).await?;
     if !changes.is_empty() {
         git(copy, &["apply", "--index"], Some(&changes)).await?;
+    }
+    let untracked = git(
+        checkout,
+        &["ls-files", "-z", "--others", "--exclude-standard"],
+        None,
+    )
+    .await?;
+    for path in untracked
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+    {
+        let path = Path::new(std::ffi::OsStr::from_bytes(path));
+        let target = copy.join(path);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::copy(checkout.join(path), target).await?;
+    }
+    if !changes.is_empty() || !untracked.is_empty() {
+        git(copy, &["add", "-A"], None).await?;
         git(copy, &["commit", "-q", "-m", "Uncommitted changes"], None).await?;
     }
     git(copy, &["checkout", "-q", "-B", default], None).await?;
@@ -328,26 +349,39 @@ impl Driver<'_> {
     }
 
     async fn outcome(&self, run: standin::Run) -> io::Result<Outcome> {
-        let jobs: Vec<standin::Job> = self
-            .get(&format!("/_apis/v1/Message?runid={}", run.id))
-            .await?;
-        let mut started = None;
-        for timeline in jobs.iter().filter_map(|job| job.time_line_id.as_ref()) {
-            let records: Vec<standin::Record> =
-                self.get(&format!("/_apis/v1/Timeline/{timeline}")).await?;
-            started = started
-                .into_iter()
-                .chain(standin::job_started(&records))
-                .min();
-        }
+        let metrics = self.env.dir.join(format!("metrics/{}.json", run.id));
+        let id = run.id.to_string();
+        let collect = [
+            "bench",
+            "collect",
+            &id,
+            "--repo",
+            &self.args.repository,
+            "-o",
+        ];
+        let collected = Command::new(&self.args.velnor_ci)
+            .args(collect)
+            .arg(&metrics)
+            .env("GITHUB_API_URL", &self.addresses.stub_url)
+            .env("GITHUB_TOKEN", "velnor-local")
+            .output()
+            .await;
+        let path = format!("/repos/{}/actions/runs/{id}", self.args.repository);
+        let bytes = request(&self.addresses.stub, "GET", &path, "")
+            .await
+            .ok_or_else(|| io::Error::other(format!("the API stub does not answer {path}")))?;
+        let github: Value = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
         Ok(Outcome {
             id: run.id,
-            workflow: jobs
-                .first()
-                .map_or(run.display_name, |job| job.workflowname.clone()),
+            workflow: github["name"].as_str().unwrap_or(&run.file_name).to_owned(),
             event: run.event_name.unwrap_or_default(),
-            conclusion: standin::conclusion(run.result.as_deref()),
-            started,
+            conclusion: standin::conclusion(run.result.as_deref()).unwrap_or("unfinished"),
+            started: github["run_started_at"].as_str().and_then(standin::seconds),
+            metrics: match collected {
+                Ok(done) if done.status.success() => Ok(metrics),
+                Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
+                Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
+            },
         })
     }
 }

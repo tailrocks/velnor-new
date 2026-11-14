@@ -49,6 +49,7 @@ pub struct Environment<E> {
 #[derive(Debug)]
 pub struct Addresses {
     pub(super) cache: Proxy,
+    pub(super) stub: Proxy,
     pub stub_url: String,
 }
 
@@ -185,7 +186,9 @@ impl<E: Engine> Environment<E> {
         .await?;
         let checkout = format!("{}:/repo:ro", repo.display());
         let state = mount("api", "/api");
-        let stub = words("api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data");
+        let stub = words(
+            "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80",
+        );
         let mounts = ["-v", &checkout, "-v", &state, "-v", &data, LOCAL_IMAGE];
         let branch = ["--default-branch", &args.default_branch];
         self.start(
@@ -227,6 +230,7 @@ impl<E: Engine> Environment<E> {
         let stub = self.published("api").await?;
         let addresses = Addresses {
             cache: Proxy::new(&self.published("cache").await?),
+            stub: Proxy::new(&stub),
             stub_url: format!("http://{stub}"),
         };
         let deadline = tokio::time::Instant::now() + READY_TIMEOUT;

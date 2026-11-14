@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -94,18 +94,23 @@ pub struct Outcome {
     pub event: String,
     pub conclusion: &'static str,
     pub started: Option<u64>,
+    pub metrics: Result<PathBuf, String>,
 }
 
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success"
+        self.conclusion == "success" && self.metrics.is_ok()
     }
 
     #[must_use]
     pub fn line(&self) -> String {
+        let metrics = match &self.metrics {
+            Ok(path) => format!("metrics {}", path.display()),
+            Err(error) => format!("no metrics file: {error}"),
+        };
         format!(
-            "run {} {} ({}): {}",
+            "run {} {} ({}): {}, {metrics}",
             self.id, self.workflow, self.event, self.conclusion
         )
     }

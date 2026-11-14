@@ -23,6 +23,7 @@ use crate::rest::{
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
     TreeEntry, runs,
 };
+use crate::standin;
 
 const SYMLINK_TARGET_LIMIT: u64 = 4096;
 
@@ -121,7 +122,7 @@ impl ApiStub {
         serde_json::from_slice(&self.standin_bytes(path).await?).ok()
     }
 
-    async fn records(&self, job: &runs::StandInJob) -> Option<Vec<runs::Record>> {
+    async fn records(&self, job: &standin::Job) -> Option<Vec<standin::Record>> {
         match &job.time_line_id {
             Some(id) => self.standin(&format!("/_apis/v1/Timeline/{id}")).await,
             None => Some(Vec::new()),
@@ -129,7 +130,7 @@ impl ApiStub {
     }
 
     async fn attempt_jobs(&self, id: u64, attempt: u32) -> Option<Vec<Value>> {
-        let jobs: Vec<runs::StandInJob> = self
+        let jobs: Vec<standin::Job> = self
             .standin(&format!("/_apis/v1/Message?runid={id}"))
             .await?;
         let mut listed = Vec::new();
@@ -140,7 +141,7 @@ impl ApiStub {
     }
 
     async fn run(&self, id: u64) -> Reply {
-        let listed: Option<Vec<runs::StandInRun>> =
+        let listed: Option<Vec<standin::Run>> =
             self.standin("/_apis/v1/Message/workflow/runs").await;
         let Some(run) = listed.and_then(|listed| listed.into_iter().find(|run| run.id == id))
         else {
@@ -165,7 +166,7 @@ impl ApiStub {
     }
 
     async fn job_log(&self, id: u64) -> Option<String> {
-        let jobs: Vec<runs::StandInJob> = self.standin("/_apis/v1/Message").await?;
+        let jobs: Vec<standin::Job> = self.standin("/_apis/v1/Message").await?;
         let job = jobs.into_iter().find(|job| job.request_id == id)?;
         let mut log = String::new();
         for log_id in runs::log_ids(&self.records(&job).await?) {
