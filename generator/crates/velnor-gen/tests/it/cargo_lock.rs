@@ -3,11 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection, SelectionReason};
+use velnor_model::{
+    AllTrigger, ChangeSet, InputRule, RepoFacts, RepoPath, RustSelection, SelectionReason,
+};
 use velnor_rust::select;
 
 use crate::lock_affected::{Pkg, krate, member as locked_member, render, replaced, workspace};
-use crate::select::{all, depends_on, facts, member, name, path, some};
+use crate::select::{all, depends_on, facts, glob, member, name, path, some};
 
 fn two_workspaces() -> RepoFacts {
     facts(vec![
@@ -282,4 +284,48 @@ fn any_other_root_manifest_change_selects_everything() {
             ]
         );
     }
+}
+
+#[test]
+fn a_rule_of_the_project_for_a_lockfile_or_a_root_manifest_wins_over_the_lockfile_rule() {
+    let base = workspace();
+    let before = lock(&base);
+    let fnv = lock(&replaced(&base, krate("fnv", "1.0.6", &[])));
+    let mut facts = two_workspaces();
+    facts.config.non_inputs = vec![glob("Cargo.lock")];
+    let lock_change = change(&[("Cargo.lock", &before, &fnv)]);
+    assert_eq!(
+        selected(&facts, &lock_change),
+        vec![RustSelection::None, RustSelection::None]
+    );
+    facts.config.non_inputs.clear();
+    facts.config.inputs = vec![InputRule {
+        glob: glob("Cargo.lock"),
+        packages: vec![name("tool")],
+    }];
+    let mapped = vec![
+        some(&[("tool", SelectionReason::Input(path("Cargo.lock")))]),
+        some(&[("cli", depends_on("tool"))]),
+    ];
+    assert_eq!(selected(&facts, &lock_change), mapped);
+    let mut no_base = lock_change.clone();
+    no_base.base_files.clear();
+    assert_eq!(selected(&facts, &no_base), mapped);
+
+    facts.config.inputs = vec![InputRule {
+        glob: glob("Cargo.toml"),
+        packages: vec![name("tool")],
+    }];
+    let old = manifest("serde = \"1\"\n", "");
+    let new = manifest("serde = \"2\"\n", "");
+    assert_eq!(
+        selected(
+            &facts,
+            &change(&[("Cargo.toml", &old, &new), ("Cargo.lock", &before, &before)])
+        ),
+        vec![
+            some(&[("tool", SelectionReason::Input(path("Cargo.toml")))]),
+            some(&[("cli", depends_on("tool"))]),
+        ]
+    );
 }

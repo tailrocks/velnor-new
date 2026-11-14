@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::classify::{Class, classify};
+use crate::config::rule_matches;
 use crate::lock_affected::lock_affected;
 use crate::manifest_diff::only_dependency_versions_differ;
 use crate::roots::CARGO_LOCK;
@@ -221,7 +222,22 @@ impl<'a> Graph<'a> {
         }
     }
 
+    fn ruled_by_user(&self, path: &RepoPath) -> bool {
+        self.config
+            .non_inputs
+            .iter()
+            .any(|glob| rule_matches(glob, path))
+            || self
+                .config
+                .inputs
+                .iter()
+                .any(|input| rule_matches(&input.glob, path))
+    }
+
     fn place_lock(&self, path: &RepoPath, walk: &mut Walk<'a>) -> bool {
+        if self.ruled_by_user(path) {
+            return false;
+        }
         let Some(root) = self
             .roots
             .iter()
@@ -255,7 +271,8 @@ impl<'a> Graph<'a> {
     }
 
     fn only_dependency_versions_differ(&self, manifest: &RepoPath) -> bool {
-        self.changes.paths.contains(&manifest.sibling(&CARGO_LOCK))
+        !self.ruled_by_user(manifest)
+            && self.changes.paths.contains(&manifest.sibling(&CARGO_LOCK))
             && matches!(
                 (self.changes.base_files.get(manifest), self.changes.head_files.get(manifest)),
                 (Some(base), Some(head)) if only_dependency_versions_differ(base, head)
