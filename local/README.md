@@ -30,7 +30,7 @@ Every runner container is linux/arm64 and registers with the labels `ubuntu-late
 velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/ci.yml --repository owner/name
 ```
 
-`run` takes several scenarios: `velnor-local run docs leaf --parallel 2 --dir "$STATE" ...` runs each in its own environment under `$STATE/<scenario>`, at most `--parallel` at a time (one unless set), and prefixes every line with the scenario. Each environment has its own network, containers, ports, keys, cache and copy of the checkout.
+`run` takes several scenarios: `velnor-local run docs leaf --parallel 2 --dir "$STATE" ...` runs each in its own environment under `$STATE/<scenario>`, at most `--parallel` at a time (one unless set), and prefixes every line, the verdict's included, with the scenario. Ctrl-C stops the running scenarios and keeps the queued ones from starting. Each environment has its own network, containers, ports, keys, cache and copy of the checkout.
 
 A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory; a path ending in `.json` is read as is): a description and an ordered list of steps. `warm`, `cold`, `docs`, `leaf`, `hub` and `lock` replay the scenarios of the lab, and `story` merges a pull request, opens a pull request, pushes to it again, opens a second one and closes the first.
 
@@ -75,7 +75,7 @@ A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory
 
 `crates/velnor-cache-rules/` answers "what would GitHub's cache do?" for any sequence of events: which scopes a run reads and writes, which entry a restore finds, whether a save is refused, and which entries GitHub evicts. It takes data and returns data. `crates/velnor-cache-rules/RULES.md` lists each rule with its source in GitHub's documentation, or marks it as modelled or probed.
 
-`crates/velnor-local/` holds `velnor-local cache-server`. It serves `GetCacheEntryDownloadURL`, `CreateCacheEntry` and `FinalizeCacheEntryUpload`, the Azure-style uploads and the downloads, and asks `velnor-cache-rules` for every hit, miss, refusal and eviction. Each archive is one file in `archives/`, and `index.json` lists the entries and the registered pull requests. `restores.jsonl` gets one line per `GetCacheEntryDownloadURL`: the runtime token's `scp` (`Actions.Results:<run id>:<job id>`), the key, and the matched key and its scope, or `null` for a miss. `run` reads it for the verdict. Its tests replay `testdata/cache-client/` in process.
+`crates/velnor-local/` holds `velnor-local cache-server`. It serves `GetCacheEntryDownloadURL`, `CreateCacheEntry` and `FinalizeCacheEntryUpload`, the Azure-style uploads and the downloads, and asks `velnor-cache-rules` for every hit, miss, refusal and eviction. Each archive is one file in `archives/`, and `index.json` lists the entries and the registered pull requests. `restores.jsonl` gets one line per `GetCacheEntryDownloadURL`: the runtime token's `scp` (`Actions.Results:<run id>:<job id>`), the key, and the matched key and its scope, or `null` for a miss. `run` reads it for the verdict. The journal records lookups, so an `actions/cache/restore` with `lookup-only: true` also reads as restored, although it downloads nothing. Its tests replay `testdata/cache-client/` in process.
 
 Run the tests from `local/`:
 

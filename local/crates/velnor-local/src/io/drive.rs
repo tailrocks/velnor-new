@@ -43,11 +43,19 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     let planned = plan(&args.scenario, &args.environment.dir).map_err(io::Error::other)?;
     let args = Arc::new(args);
     let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
+    let closer = Arc::clone(&slots);
+    let interrupt = tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            closer.close();
+        }
+    });
     let mut running = JoinSet::new();
     for (name, stem, dir) in planned {
         let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
         running.spawn(async move {
-            let _slot = slots.acquire().await.map_err(io::Error::other);
+            let Ok(_slot) = slots.acquire().await else {
+                return (stem, Err("interrupted before it started".to_owned()));
+            };
             let result = run_one(&args, &name, &stem, &dir).await;
             (stem, result.map_err(|error| error.to_string()))
         });
@@ -56,6 +64,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     while let Some(joined) = running.join_next().await {
         results.push(joined.map_err(io::Error::other)?);
     }
+    interrupt.abort();
     summary(&results).map_err(io::Error::other)
 }
 
