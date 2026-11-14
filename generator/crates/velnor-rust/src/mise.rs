@@ -80,7 +80,18 @@ fn version_list(value: &Value) -> Option<Vec<String>> {
             .map(version_list)
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
-        Value::Table(entry) => entry.get("version").and_then(version_list),
+        Value::Table(entry) => entry
+            .get("version")
+            .map_or_else(|| source_request(entry), version_list),
         _ => None,
     }
+}
+
+fn source_request(entry: &toml::Table) -> Option<Vec<String>> {
+    ["ref", "path", "prefix"].iter().find_map(|key| {
+        entry
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(|value| vec![format!("{key}:{value}")])
+    })
 }

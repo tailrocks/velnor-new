@@ -88,18 +88,31 @@ impl PathGlob {
     pub fn matches(&self, path: &RepoPath) -> bool {
         let pattern: Vec<&str> = self.as_str().split('/').collect();
         let segments: Vec<&str> = path.as_str().split('/').collect();
-        (1..=segments.len()).any(|length| glob(&pattern, &segments[..length]))
+        reachable(&pattern, &segments)[1..]
+            .iter()
+            .any(|reached| *reached)
     }
 }
 
-fn glob(pattern: &[&str], path: &[&str]) -> bool {
-    match pattern.split_first() {
-        None => path.is_empty(),
-        Some((&"**", rest)) => (0..=path.len()).any(|skip| glob(rest, &path[skip..])),
-        Some((segment, rest)) => path
-            .split_first()
-            .is_some_and(|(head, tail)| wildcard(segment, head) && glob(rest, tail)),
+fn reachable(pattern: &[&str], path: &[&str]) -> Vec<bool> {
+    let mut row = vec![false; path.len() + 1];
+    row[0] = true;
+    for segment in pattern {
+        let mut next = vec![false; path.len() + 1];
+        if *segment == "**" {
+            let mut any = false;
+            for (reached, slot) in row.iter().zip(next.iter_mut()) {
+                any |= *reached;
+                *slot = any;
+            }
+        } else {
+            for (index, text) in path.iter().enumerate() {
+                next[index + 1] = row[index] && wildcard(segment, text);
+            }
+        }
+        row = next;
     }
+    row
 }
 
 fn wildcard(pattern: &str, text: &str) -> bool {

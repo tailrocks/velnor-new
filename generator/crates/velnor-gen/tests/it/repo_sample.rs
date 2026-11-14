@@ -63,7 +63,7 @@ fn the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_carg
         ]
     );
     assert_eq!(
-        facts.toolchain.map(|toolchain| toolchain.channel),
+        facts.toolchain.and_then(|toolchain| toolchain.channel),
         Some("1.99.1".to_owned())
     );
     assert!(

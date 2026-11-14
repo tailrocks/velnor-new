@@ -264,6 +264,11 @@ fn an_exclude_glob_matches_a_path_or_anything_below_it() -> TestResult {
         ("crates/*/tests", "crates/a/b/tests/Cargo.toml", false),
         ("crates/velnor-*", "crates/velnor-runner/Cargo.toml", true),
         ("crates/*-runner", "crates/velnor-core/Cargo.toml", false),
+        (
+            "**/**/**/**/**/**/**/**/**/**/**/**/**/**/**/**/missing",
+            "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/Cargo.toml",
+            false,
+        ),
         ("Cargo.toml", "Cargo.toml", true),
         ("Cargo.toml", "a/Cargo.toml", false),
     ];

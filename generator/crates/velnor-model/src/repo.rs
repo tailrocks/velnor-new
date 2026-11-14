@@ -98,7 +98,8 @@ pub struct MemberDependency {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Toolchain {
-    pub channel: String,
+    pub channel: Option<String>,
+    pub path: Option<String>,
     pub components: Vec<String>,
     pub targets: Vec<String>,
     pub profile: Option<String>,

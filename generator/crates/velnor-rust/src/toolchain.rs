@@ -32,7 +32,8 @@ fn parse(bytes: &[u8], bare_channel_allowed: bool) -> Result<Toolchain, Reason> 
     match (text.lines().count(), bare_channel_allowed) {
         (0, _) => Err(Reason::MissingKey("toolchain.channel")),
         (1, true) => Ok(Toolchain {
-            channel: channel(text.trim())?,
+            channel: Some(channel(text.trim())?),
+            path: None,
             components: Vec::new(),
             targets: Vec::new(),
             profile: None,
@@ -64,16 +65,24 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
     if let Some(key) = section.keys().find(|key| !KEYS.contains(&key.as_str())) {
         return Err(Reason::UnknownKey(key.clone()));
     }
-    let name = section
+    let channel = section
         .get("channel")
-        .and_then(Value::as_str)
-        .ok_or(Reason::MissingKey("toolchain.channel"))?;
+        .map(|value| text(value, "toolchain.channel").and_then(|name| self::channel(&name)))
+        .transpose()?;
+    let path = section
+        .get("path")
+        .map(|value| text(value, "toolchain.path"))
+        .transpose()?;
+    if channel.is_none() && path.is_none() {
+        return Err(Reason::MissingKey("toolchain.channel"));
+    }
     let profile = section
         .get("profile")
         .map(|value| text(value, "toolchain.profile"))
         .transpose()?;
     Ok(Toolchain {
-        channel: channel(name)?,
+        channel,
+        path,
         components: strings(section, "components", "toolchain.components")?,
         targets: strings(section, "targets", "toolchain.targets")?,
         profile,

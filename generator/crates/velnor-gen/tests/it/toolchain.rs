@@ -14,7 +14,8 @@ fn toolchain(
 ) -> Toolchain {
     let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect();
     Toolchain {
-        channel: channel.to_owned(),
+        channel: Some(channel.to_owned()),
+        path: None,
         components: owned(components),
         targets: owned(targets),
         profile: profile.map(str::to_owned),
@@ -89,6 +90,17 @@ fn toolchain_cases() -> Vec<ToolchainCase> {
 
 fn plain_toolchain_cases() -> Vec<ToolchainCase> {
     vec![
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\npath = \"/opt/rust\"\n",
+            Ok(Toolchain {
+                channel: None,
+                path: Some("/opt/rust".to_owned()),
+                components: Vec::new(),
+                targets: Vec::new(),
+                profile: None,
+            }),
+        ),
         (
             "rust-toolchain",
             "1.99.1\n",
