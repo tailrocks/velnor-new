@@ -189,12 +189,7 @@ async fn a_second_save_in_the_same_scope_is_refused_in_json() {
         )
         .await;
     assert_eq!(again.status, 200);
-    assert_eq!(again.json()["ok"], false);
-    assert!(
-        again.json()["message"]
-            .as_str()
-            .is_some_and(|m| m.contains("already exists"))
-    );
+    assert_eq!(again.json(), json!({"ok": false}));
 
     assert_eq!(
         harness.save(PULL_1, "tools", b"other scope").await["ok"],

@@ -34,6 +34,25 @@ pub enum Command {
         about = "Start an environment, replay a scenario against a copy of a local repository, stop the environment and print a verdict"
     )]
     Run(RunArgs),
+    #[command(
+        about = "Compare the probe observations in the logs of a run with the probe results stored from GitHub"
+    )]
+    Conformance(ConformanceArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ConformanceArgs {
+    #[arg(
+        long,
+        help = "State directory of the run whose logs hold the observations"
+    )]
+    pub dir: PathBuf,
+    #[arg(
+        long,
+        default_value = "local/conformance",
+        help = "Directory of the probe results stored from GitHub"
+    )]
+    pub conformance: PathBuf,
 }
 
 #[derive(Clone, Debug, Args)]

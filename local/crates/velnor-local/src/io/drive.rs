@@ -13,10 +13,10 @@ use tokio::fs;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-use super::checkout::{copy_checkout, git};
+use super::checkout::{changes, copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::{EnvironmentArgs, RunArgs};
-use crate::event::{NO_COMMIT, Push, Repository, for_standin};
+use crate::event::{NO_COMMIT, Push, Repository};
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
 };
@@ -287,10 +287,12 @@ impl Driver<'_> {
         self.git(&["switch", "-q", branch]).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
+        let commits = changes(&self.repo, branch, before, &after).await?;
         let push = Push {
             branch,
             before,
             after: &after,
+            commits: &commits,
         };
         let payload = push_event(&self.repository(), &push, &self.fork_heads);
         self.pushed.insert(branch.to_owned(), after.clone());
@@ -325,11 +327,7 @@ impl Driver<'_> {
         self.events += 1;
         let name = format!("{}-{event}", self.events);
         let dir = self.env.dir.display();
-        fs::write(
-            format!("{dir}/events/{name}.json"),
-            for_standin(payload.clone()).to_string(),
-        )
-        .await?;
+        fs::write(format!("{dir}/events/{name}.json"), payload.to_string()).await?;
         let runs = "/_apis/v1/Message/workflow/runs";
         let side = Side::of(payload);
         let known: Vec<standin::Run> = self.get(side, runs).await?;

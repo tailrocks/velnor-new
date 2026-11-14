@@ -279,6 +279,7 @@ async fn an_event_runs_on_the_side_its_payload_belongs_to() {
         branch: "main",
         before: sha,
         after: sha,
+        commits: &[],
     });
     let fork = format!("{}-fork", env.name);
     for (payload, network) in [

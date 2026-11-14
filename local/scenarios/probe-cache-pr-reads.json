@@ -1,0 +1,52 @@
+{
+  "description": "The cache-pr-reads probe of the lab: dispatches on a base branch, the default branch and a head branch, then a pull request from the head into the base.",
+  "steps": [
+    {
+      "commit": {
+        "branch": "probe-7306-base",
+        "append": "probes/cache-pr-reads/runs/probe-7306-base.txt",
+        "line": "first"
+      }
+    },
+    {
+      "commit": {
+        "branch": "probe-7306-head",
+        "append": "probes/cache-pr-reads/runs/probe-7306-head.txt",
+        "line": "first"
+      }
+    },
+    {
+      "workflow_dispatch": {
+        "branch": "probe-7306-base",
+        "inputs": {
+          "tag": "7306",
+          "role": "base"
+        }
+      }
+    },
+    {
+      "workflow_dispatch": {
+        "branch": "{default}",
+        "inputs": {
+          "tag": "7306",
+          "role": "default"
+        }
+      }
+    },
+    {
+      "workflow_dispatch": {
+        "branch": "probe-7306-head",
+        "inputs": {
+          "tag": "7306",
+          "role": "head"
+        }
+      }
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7306-head",
+        "base": "probe-7306-base"
+      }
+    }
+  ]
+}

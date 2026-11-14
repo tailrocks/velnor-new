@@ -1,0 +1,28 @@
+{
+  "description": "The cache-own-pr probe of the lab: a pull request, then a second commit pushed to it.",
+  "steps": [
+    {
+      "commit": {
+        "branch": "probe-7308-own",
+        "append": "probes/cache-own-pr/runs/probe-7308-own.txt",
+        "line": "first"
+      }
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7308-own",
+        "base": "{default}"
+      }
+    },
+    {
+      "commit": {
+        "branch": "probe-7308-own",
+        "append": "probes/cache-own-pr/runs/probe-7308-own.txt",
+        "line": "next"
+      }
+    },
+    {
+      "push": "probe-7308-own"
+    }
+  ]
+}

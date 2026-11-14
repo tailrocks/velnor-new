@@ -1,0 +1,33 @@
+{
+  "description": "The event-payload probe of the lab: workflow_dispatch on the default branch, push and pull_request on probe-7301-events, then schedule.",
+  "steps": [
+    {
+      "workflow_dispatch": {
+        "branch": "{default}",
+        "inputs": {
+          "tag": "7301",
+          "role": "manual"
+        }
+      }
+    },
+    {
+      "commit": {
+        "branch": "probe-7301-events",
+        "append": "probes/event-payload/runs/probe-7301-events.txt",
+        "line": "first"
+      }
+    },
+    {
+      "push": "probe-7301-events"
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7301-events",
+        "base": "{default}"
+      }
+    },
+    {
+      "schedule": "25 6 * * 1"
+    }
+  ]
+}

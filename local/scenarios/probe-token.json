@@ -1,0 +1,24 @@
+{
+  "description": "The token probe of the lab: push and pull_request on probe-7302-events, then schedule.",
+  "steps": [
+    {
+      "commit": {
+        "branch": "probe-7302-events",
+        "append": "probes/token/runs/probe-7302-events.txt",
+        "line": "first"
+      }
+    },
+    {
+      "push": "probe-7302-events"
+    },
+    {
+      "open_pull_request": {
+        "head": "probe-7302-events",
+        "base": "{default}"
+      }
+    },
+    {
+      "schedule": "17 6 * * 1"
+    }
+  ]
+}

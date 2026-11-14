@@ -7,6 +7,21 @@ RUN git init -q . \
     && test "$(git rev-parse HEAD)" = "${RUNNER_SERVER_COMMIT}"
 RUN sed -i 's|container.StoreName)), "application/octet-stream")|container.StoreName)), "application/zip")|' src/Runner.Server/Controllers/ArtifactControllerV2.cs \
     && grep -q 'container.StoreName)), "application/zip")' src/Runner.Server/Controllers/ArtifactControllerV2.cs
+RUN sed -i \
+      -e '/githubctx.Add("ref_type"/ s#Ref.StartsWith("refs/heads/") ? "branch"#Ref.StartsWith("refs/heads/") || Ref.StartsWith("refs/pull/") ? "branch"#' \
+      -e '/githubctx.Add("ref_name"/ s#Ref.Substring("refs/heads/".Length) : ""#Ref.Substring("refs/heads/".Length) : Ref.StartsWith("refs/pull/") ? Ref.Substring("refs/pull/".Length) : ""#' \
+      -e 's#public WebhookWorkflow Workflow  { get; set; }#[Newtonsoft.Json.JsonConverter(typeof(WorkflowObjectConverter))] public WebhookWorkflow Workflow  { get; set; }#' \
+      src/Runner.Server/Controllers/MessageController.cs \
+    && grep -q 'Ref.StartsWith("refs/pull/") ? "branch"' src/Runner.Server/Controllers/MessageController.cs \
+    && grep -q 'Ref.StartsWith("refs/pull/") ? Ref.Substring("refs/pull/".Length)' src/Runner.Server/Controllers/MessageController.cs \
+    && grep -q 'JsonConverter(typeof(WorkflowObjectConverter))\] public WebhookWorkflow Workflow' src/Runner.Server/Controllers/MessageController.cs
+RUN sed -i \
+      -e "s#elseif startsWith(server.ref, 'refs/heads/') }}:#elseif startsWith(server.ref, 'refs/heads/')||startsWith(server.ref,'refs/pull/') }}:#" \
+      -e "s#ref_name: \${{ split(server.ref, 'refs/heads/')\[1\] }}#ref_name: \${{ split(server.ref, startsWith(server.ref, 'refs/heads/') \&\& 'refs/heads/' || 'refs/pull/')[1] }}#" \
+      src/Runner.Server/contextTemplate.yml \
+    && grep -q "||startsWith(server.ref,'refs/pull/') }}:" src/Runner.Server/contextTemplate.yml \
+    && grep -q "|| 'refs/pull/')\[1\]" src/Runner.Server/contextTemplate.yml
+COPY WorkflowObjectConverter.cs src/Runner.Server/Controllers/WorkflowObjectConverter.cs
 RUN cd src && dotnet msbuild dir.proj -t:GenerateConstant \
     && dotnet publish Runner.Client -c Release --no-self-contained -p:BUILD_OS=Any -p:RuntimeFrameworkVersion=8.0.0 -o /out
 
