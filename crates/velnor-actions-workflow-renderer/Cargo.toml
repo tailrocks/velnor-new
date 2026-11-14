@@ -66,6 +66,10 @@ path = "tests/prune_state.rs"
 name = "rust_tree_digest_pin"
 path = "tests/rust_tree_digest_pin.rs"
 
+[[test]]
+name = "quote_run_arg_public"
+path = "tests/quote_run_arg_public.rs"
+
 [lints]
 workspace = true
 
