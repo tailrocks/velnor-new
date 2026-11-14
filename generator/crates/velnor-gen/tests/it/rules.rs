@@ -8,11 +8,12 @@ use std::path::Path;
 
 use velnor_model::{
     Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease, HelperVersion, Job,
-    JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WorkflowPlan,
+    JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
+    WorkflowPlan,
 };
 use velnor_render::{
     FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value, WORKFLOW_PATH, check_rules, render, render_workflow,
+    RuleViolation, Value, check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;

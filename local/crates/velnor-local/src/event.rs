@@ -48,6 +48,31 @@ pub struct PullRequest<'a> {
 pub struct MergeGroup<'a> {
     pub base: (&'a str, &'a str),
     pub head: (&'a str, &'a str),
+    pub commit: &'a Commit,
+}
+
+#[derive(Debug)]
+pub struct Commit {
+    pub tree_id: String,
+    pub message: String,
+    pub timestamp: String,
+    pub author: (String, String),
+    pub committer: (String, String),
+}
+
+impl Commit {
+    #[must_use]
+    pub fn parse(log: &str) -> Option<Self> {
+        let mut fields = log.splitn(7, '\0');
+        let mut next = || fields.next().map(str::to_owned);
+        Some(Self {
+            tree_id: next()?,
+            timestamp: next()?,
+            author: (next()?, next()?),
+            committer: (next()?, next()?),
+            message: next()?.trim_end().to_owned(),
+        })
+    }
 }
 
 impl Repository<'_> {
@@ -155,7 +180,14 @@ impl Repository<'_> {
             "head_ref": format!("refs/heads/{}", group.head.0),
             "base_sha": group.base.1,
             "base_ref": format!("refs/heads/{}", group.base.0),
-            "head_commit": {"id": group.head.1},
+            "head_commit": {
+                "id": group.head.1,
+                "tree_id": group.commit.tree_id,
+                "message": group.commit.message,
+                "timestamp": group.commit.timestamp,
+                "author": {"name": group.commit.author.0, "email": group.commit.author.1},
+                "committer": {"name": group.commit.committer.0, "email": group.commit.committer.1},
+            },
         });
         payload
     }

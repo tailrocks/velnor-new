@@ -4,9 +4,11 @@
 use std::path::Path;
 
 use serde_json::Value;
-use velnor_local::event::{MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin};
+use velnor_local::event::{
+    Commit, MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin,
+};
 use velnor_local::io::checkout::copy_untracked;
-use velnor_local::scenario::{Scenario, Step, next_patch, overlapping, restores};
+use velnor_local::scenario::{Scenario, Step, next_patch, overlapping, restores, with_path};
 use velnor_local::standin::Job;
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -140,9 +142,14 @@ fn schedule_and_workflow_dispatch_payloads_have_the_shape_github_sent_in_the_pro
 #[test]
 fn a_merge_group_payload_names_the_queue_branch_and_its_base() {
     let queue = "gh-readonly-queue/main/pr-3-007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
+    let commit = Commit::parse(
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904\u{0}2026-11-14T07:00:00+00:00\u{0}Ann\u{0}ann@example.com\u{0}Bob\u{0}bob@example.com\u{0}Merge patch (#3)\n",
+    )
+    .unwrap_or_else(|| unreachable!("a commit"));
     let payload = REPOSITORY.merge_group(&MergeGroup {
         base: ("main", SHA_A),
         head: (queue, SHA_B),
+        commit: &commit,
     });
     assert_eq!(payload["action"], "checks_requested");
     let group = &payload["merge_group"];
@@ -151,6 +158,18 @@ fn a_merge_group_payload_names_the_queue_branch_and_its_base() {
     assert_eq!(group["base_ref"], "refs/heads/main");
     assert_eq!(group["base_sha"], SHA_A);
     assert_eq!(group["head_commit"]["id"], SHA_B);
+    let head = &group["head_commit"];
+    assert_eq!(head["tree_id"], "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+    assert_eq!(head["message"], "Merge patch (#3)");
+    assert_eq!(head["timestamp"], "2026-11-14T07:00:00+00:00");
+    assert_eq!(
+        head["author"],
+        serde_json::json!({"name": "Ann", "email": "ann@example.com"})
+    );
+    assert_eq!(
+        head["committer"],
+        serde_json::json!({"name": "Bob", "email": "bob@example.com"})
+    );
 }
 
 #[test]
@@ -346,6 +365,61 @@ fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
         Some(("fnv-other@2.3.9".to_owned(), "2.3.10".to_owned()))
     );
     assert_eq!(bump("serde"), None);
+    let unusual = "[[package]]\nname = \"pre\"\nversion = \"1.2.3-alpha.1\"\n\n[[package]]\nname = \"build\"\nversion = \"1.2.3+linux\"\n";
+    assert_eq!(next_patch(unusual, "pre"), None);
+    assert_eq!(next_patch(unusual, "build"), None);
+}
+
+#[test]
+fn workflow_dispatch_inputs_keep_their_json_types() {
+    let scenario = br#"{"description": "x", "steps": [{"workflow_dispatch": {"branch": "main", "inputs": {"deploy": false, "count": 3, "tag": "x"}}}]}"#;
+    let scenario = Scenario::parse(scenario).unwrap_or_else(|e| unreachable!("{e}"));
+    let Some(Step::WorkflowDispatch { inputs, .. }) = scenario.steps.first() else {
+        unreachable!("not a workflow_dispatch step")
+    };
+    let payload = REPOSITORY.workflow_dispatch("main", &serde_json::json!(inputs), "ci.yml");
+    assert_eq!(
+        payload["inputs"],
+        serde_json::json!({"deploy": false, "count": 3, "tag": "x"})
+    );
+}
+
+#[test]
+fn dispatch_inputs_are_limited_to_what_github_accepts() {
+    let step = |inputs: serde_json::Value| {
+        let text = serde_json::json!({"description": "x", "steps": [{"workflow_dispatch": {"branch": "main", "inputs": inputs}}]});
+        Scenario::parse(text.to_string().as_bytes()).unwrap_or_else(|e| unreachable!("{e}"))
+    };
+    assert!(
+        step(serde_json::json!({"a": true, "b": 2, "c": "x"}))
+            .refuse_options(["main"])
+            .is_ok()
+    );
+    for bad in [
+        serde_json::json!({"a": [1]}),
+        serde_json::json!({"a": {"b": 1}}),
+        serde_json::json!({"a": null}),
+    ] {
+        assert!(step(bad.clone()).refuse_options(["main"]).is_err(), "{bad}");
+    }
+    let many: serde_json::Map<String, serde_json::Value> = (0..26)
+        .map(|n| (format!("i{n}"), serde_json::json!(n)))
+        .collect();
+    assert!(
+        step(serde_json::Value::Object(many))
+            .refuse_options(["main"])
+            .is_err()
+    );
+}
+
+#[test]
+fn the_copy_is_added_to_the_mise_ignored_paths_the_user_already_has() {
+    assert_eq!(with_path(None, "/state/repo"), "/state/repo");
+    assert_eq!(with_path(Some(""), "/state/repo"), "/state/repo");
+    assert_eq!(
+        with_path(Some("/home/u/mise.toml"), "/state/repo"),
+        "/home/u/mise.toml:/state/repo"
+    );
 }
 
 #[test]
