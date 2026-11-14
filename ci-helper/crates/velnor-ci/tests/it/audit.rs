@@ -41,12 +41,14 @@ fn workspace_below_the_root() -> Repo {
         repo.write(&format!("rust/{package}/tests/it.rs"), "");
     }
     repo.write("rust/lib/build.rs", "fn main() {}\n");
+    repo.write("rust/app/build.rs", "fn main() {}\n");
     repo.write("rust/app/data.txt", "");
     for file in [
         "greeting.txt",
         "app-test.txt",
         "lib-test.txt",
         "build.txt",
+        "app-build.txt",
         "old.txt",
     ] {
         repo.write(&format!("shared/{file}"), "");
@@ -93,13 +95,23 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/build/lib-0000000000000005/output"),
         "cargo:rerun-if-changed=build.rs\ncargo::rerun-if-changed=../../shared/build.txt\ncargo:rustc-env=A=b\n",
     );
+    unit(
+        &repo,
+        &format!("{target}/build/app-000000000000000b/build_script_build-000000000000000b.d"),
+        "out.d: app/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/app-000000000000000c/output"),
+        "cargo:rerun-if-changed=../../shared/app-build.txt\n",
+    );
 
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     assert_eq!(
         fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
-        "shared/app-test.txt\tapp\nshared/build.txt\tlib\nshared/greeting.txt\tapp\nshared/lib-test.txt\tlib\n"
+        "shared/app-build.txt\tapp\nshared/app-test.txt\tapp\nshared/build.txt\tlib\nshared/greeting.txt\tapp\nshared/lib-test.txt\tlib\n"
     );
 
     repo.git(&["add", "--all"]);
@@ -108,7 +120,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
 
     repo.write(
         ".velnor/rust-inputs.lock",
-        "shared/app-test.txt\tapp\nshared/build.txt\tlib\nshared/lib-test.txt\tlib\nshared/old.txt\tapp\n",
+        "shared/app-build.txt\tapp\nshared/app-test.txt\tapp\nshared/build.txt\tlib\nshared/lib-test.txt\tlib\nshared/old.txt\tapp\n",
     );
     let stale = audit(&repo, &[]);
     assert_eq!(stale.status.code(), Some(1), "{stale:?}");
@@ -179,8 +191,7 @@ fn a_tracked_path_the_lock_cannot_hold_is_an_error_that_names_it() {
     );
 }
 
-#[test]
-fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_declared_paths() {
+fn root_package_with_path_dependencies() -> Repo {
     let repo = Repo::new("audit-owners");
     repo.write(".gitignore", "target/\n");
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
@@ -223,6 +234,12 @@ fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_
     std::os::unix::fs::symlink("../README.md", repo.root().join("shared/link.txt"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_declared_paths() {
+    let repo = root_package_with_path_dependencies();
     let target = "target/debug";
     unit(
         &repo,
