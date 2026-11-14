@@ -15,6 +15,7 @@ mod job_setup;
 mod job_shape;
 mod lock;
 mod lock_affected;
+mod lock_consistency;
 mod patch;
 mod pipeline;
 mod release_workflow;
