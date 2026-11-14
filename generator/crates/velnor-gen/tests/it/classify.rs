@@ -69,7 +69,7 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
         ),
         ("mise.toml", AllTrigger::Global(path("mise.toml"))),
         ("mise.lock", AllTrigger::Global(path("mise.lock"))),
-        ("Cargo.lock", AllTrigger::Global(path("Cargo.lock"))),
+        ("Cargo.lock", AllTrigger::WorkspaceManifest),
         (
             ".velnor/rust-ci.toml",
             AllTrigger::Global(path(".velnor/rust-ci.toml")),

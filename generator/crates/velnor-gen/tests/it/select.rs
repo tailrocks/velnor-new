@@ -95,6 +95,7 @@ pub(crate) fn assert_selects(facts: &RepoFacts, rows: Vec<(&[&str], Vec<RustSele
         let changes = ChangeSet {
             paths: files.iter().map(|file| path(file)).collect(),
             base_files: BTreeMap::new(),
+            head_files: BTreeMap::new(),
         };
         let expected: BTreeMap<RepoPath, RustSelection> = facts
             .rust_roots
@@ -285,8 +286,8 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
         (
             &["Cargo.lock"][..],
             vec![
-                all(AllTrigger::Global(path("Cargo.lock"))),
-                all(AllTrigger::Global(path("Cargo.lock"))),
+                all(AllTrigger::WorkspaceManifest),
+                all(AllTrigger::WorkspaceManifest),
             ],
         ),
         (&["README.md"], vec![none.clone(), none.clone()]),

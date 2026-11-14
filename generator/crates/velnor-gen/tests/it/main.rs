@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cargo_lock;
 mod classify;
 mod compile_inputs;
 mod detect;
@@ -10,6 +11,7 @@ mod golden;
 mod inputs;
 mod io;
 mod lock;
+mod lock_affected;
 mod patch;
 mod pipeline;
 mod release_workflow;

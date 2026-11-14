@@ -100,6 +100,7 @@ fn a_change_reaches_a_member_through_a_package_patched_in_cargo_configuration() 
     let changes = ChangeSet {
         paths: BTreeSet::from([path("b/base/src/lib.rs")?]),
         base_files: BTreeMap::new(),
+        head_files: BTreeMap::new(),
     };
     let selections = select(&detect(&view)?, &changes);
     assert_eq!(
