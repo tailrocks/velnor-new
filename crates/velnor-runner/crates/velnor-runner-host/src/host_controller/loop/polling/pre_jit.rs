@@ -3,8 +3,7 @@
 
 use crate::{
     error::HostError,
-    journal::{IntentState, ReservationState},
-    launch::bootstrap::recover_pre_jit_reservation,
+    launch::bootstrap::{UncertainRecovery, recover_uncertain_reservations},
 };
 
 use super::super::state::PreparedConnection;
@@ -14,37 +13,13 @@ pub(super) async fn reconcile(
     prepared: &PreparedConnection,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
-    Box::pin(crate::worker::storage_initialization::recover_interrupted(
-        context.docker,
-        &prepared.scope,
-    ))
-    .await?;
-    let reservations = prepared.scope.physical_runner_reservations().await?;
-    for reservation in reservations {
-        if reservation.reservation.state != ReservationState::Uncertain
-            || reservation.intent_state != Some(IntentState::Uncertain)
-            || reservation.jit_state != crate::journal::PhysicalRunnerJitState::Absent
-            || reservation.acquired_request.is_none()
-            || reservation.ownership.assignment().is_none()
-        {
-            continue;
-        }
-        if let Err(error) = Box::pin(recover_pre_jit_reservation(
-            context.docker,
-            context.journal,
-            &prepared.scope,
-            context.selected_engine,
-            context.worker_images,
-            reservation.reservation_id,
-            context.image_authority,
-        ))
-        .await
-        {
-            eprintln!(
-                "The controller keeps an uncertain pre-JIT reservation charged. connection={} reservation={} reason={error}",
-                prepared.binding.connection_id, reservation.reservation_id
-            );
-        }
-    }
-    Ok(())
+    Box::pin(recover_uncertain_reservations(&UncertainRecovery {
+        docker: context.docker,
+        journal: context.journal,
+        scope: &prepared.scope,
+        engine: context.selected_engine,
+        images: context.worker_images,
+        image_authority: context.image_authority,
+    }))
+    .await
 }

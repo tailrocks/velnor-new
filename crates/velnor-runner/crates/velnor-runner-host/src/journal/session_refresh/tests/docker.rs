@@ -20,32 +20,36 @@ const IMAGE_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:
 struct State {
     helper: Option<(String, Value)>,
     requests: Vec<String>,
+    hang_on: Option<String>,
 }
 
 pub(super) struct FixtureDocker {
     state: Arc<Mutex<State>>,
-    created: Arc<Notify>,
+    hung: Arc<Notify>,
 }
 
 impl FixtureDocker {
-    pub(super) fn start(socket: &Path) -> TestResult<Self> {
+    pub(super) fn start(socket: &Path, hang_on: String) -> TestResult<Self> {
         let listener = UnixListener::bind(socket)?;
         let fixture = Self {
-            state: Arc::default(),
-            created: Arc::default(),
+            state: Arc::new(Mutex::new(State {
+                hang_on: Some(hang_on),
+                ..State::default()
+            })),
+            hung: Arc::default(),
         };
-        let (state, created) = (Arc::clone(&fixture.state), Arc::clone(&fixture.created));
+        let (state, hung) = (Arc::clone(&fixture.state), Arc::clone(&fixture.hung));
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                let (state, created) = (Arc::clone(&state), Arc::clone(&created));
-                tokio::spawn(async move { drop(serve(stream, &state, &created).await) });
+                let (state, hung) = (Arc::clone(&state), Arc::clone(&hung));
+                tokio::spawn(async move { drop(serve(stream, &state, &hung).await) });
             }
         });
         Ok(fixture)
     }
 
-    pub(super) async fn helper_created(&self) {
-        self.created.notified().await;
+    pub(super) async fn hung(&self) {
+        self.hung.notified().await;
     }
 
     pub(super) fn helper_present(&self) -> bool {
@@ -61,11 +65,20 @@ fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-async fn serve(mut stream: UnixStream, state: &Mutex<State>, created: &Notify) -> TestResult<()> {
+async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> TestResult<()> {
     let (method, target, body) = read_request(&mut stream).await?;
     let (route, query) = target.split_once('?').unwrap_or((&target, ""));
     let route = route.replace("%3A", ":");
-    lock(state).requests.push(format!("{method} {route}"));
+    let request = format!("{method} {route}");
+    let hang = {
+        let mut state = lock(state);
+        state.requests.push(request.clone());
+        let hang = state.hang_on.as_deref() == Some(request.as_str());
+        if hang {
+            state.hang_on = None;
+        }
+        hang
+    };
     let segments: Vec<&str> = route.split('/').skip(1).collect();
     let response = match (method.as_str(), segments.as_slice()) {
         ("GET", ["info"]) => Some(
@@ -79,8 +92,7 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, created: &Notify) -
             let name = query.split('&').find_map(|pair| pair.strip_prefix("name="));
             let name = name.unwrap_or_default().to_owned();
             lock(state).helper = Some((name, serde_json::from_slice(&body)?));
-            created.notify_one();
-            return std::future::pending().await;
+            Some(json!({"Id": HELPER_ID, "Warnings": []}))
         }
         ("GET", ["containers", key, "json"]) => lock(state)
             .helper
@@ -90,6 +102,10 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, created: &Notify) -
         ("DELETE", ["containers", HELPER_ID]) => lock(state).helper.take().map(|_| Value::Null),
         _ => None,
     };
+    if hang {
+        hung.notify_one();
+        return std::future::pending().await;
+    }
     let (status, body) = match response {
         Some(Value::Null) => ("204 No Content", String::new()),
         Some(body) => ("200 OK", body.to_string()),

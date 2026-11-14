@@ -10,7 +10,7 @@ pub(crate) mod request_result;
 pub(crate) mod specification;
 mod verification;
 
-pub(crate) use adapter::{finish_after_pair_mounts, initialize, recover_interrupted};
+pub(crate) use adapter::{finish_after_pair_mounts, initialize, recover_absent};
 pub(crate) use pending::PendingStorageInitialization;
 pub(crate) use proof::{
     StorageInitializerCreateResponse, VerifiedStorageInitializerAbortRemoval,

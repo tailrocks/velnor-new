@@ -18,7 +18,7 @@ pub(super) use claims::same_start_claim;
 use claims::{same_create_claim, verify_claim_image};
 pub(crate) use handoff::finish_after_pair_mounts;
 pub(crate) use initialize::initialize;
-pub(crate) use recovery::recover_interrupted;
+pub(crate) use recovery::recover_absent;
 use tokio::time::{Instant, timeout_at};
 
 use crate::{
