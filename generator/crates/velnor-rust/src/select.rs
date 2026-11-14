@@ -4,6 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::classify::{Class, classify};
+use crate::config::rule_matches;
+use crate::lock_affected::lock_affected;
+use crate::manifest_diff::only_dependency_versions_differ;
+use crate::roots::CARGO_LOCK;
 use velnor_model::{
     AllTrigger, ChangeSet, CompileInputs, PackageName, RepoFacts, RepoPath, RustCiConfig, RustRoot,
     RustSelection, SelectionReason,
@@ -41,7 +45,7 @@ pub fn unknown_paths(facts: &RepoFacts, changes: &ChangeSet) -> BTreeSet<RepoPat
 }
 
 fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
-    let graph = Graph::new(facts);
+    let graph = Graph::new(facts, changes);
     let mut walk = Walk {
         triggers: vec![None; facts.rust_roots.len()],
         ..Walk::default()
@@ -95,6 +99,7 @@ pub(crate) fn claims(directory: Option<&RepoPath>, whole: bool, path: &RepoPath)
 
 struct Graph<'a> {
     roots: &'a [RustRoot],
+    changes: &'a ChangeSet,
     config: &'a RustCiConfig,
     inputs: &'a CompileInputs,
     nodes: BTreeMap<&'a RepoPath, Node<'a>>,
@@ -112,10 +117,11 @@ struct Walk<'a> {
 }
 
 impl<'a> Graph<'a> {
-    fn new(facts: &'a RepoFacts) -> Self {
+    fn new(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Self {
         let roots = &facts.rust_roots;
         let mut graph = Self {
             roots,
+            changes,
             config: &facts.config,
             inputs: &facts.compile_inputs,
             nodes: BTreeMap::new(),
@@ -171,6 +177,9 @@ impl<'a> Graph<'a> {
         self.seed_named(&locked, path, walk);
         let everywhere: Vec<&PackageName> = self.inputs.get(&None).into_iter().flatten().collect();
         self.seed_named(&everywhere, path, walk);
+        if self.place_lock(path, walk) {
+            return;
+        }
         let root = self
             .roots
             .iter()
@@ -193,6 +202,9 @@ impl<'a> Graph<'a> {
             return;
         }
         let is_root_manifest = self.roots.iter().any(|root| root.manifest == *path);
+        if is_root_manifest && self.only_dependency_versions_differ(path) {
+            return;
+        }
         match classify(
             self.config,
             path,
@@ -208,6 +220,65 @@ impl<'a> Graph<'a> {
                 walk.trigger(&AllTrigger::UnknownPath(path.clone()));
             }
         }
+    }
+
+    fn ruled_by_user(&self, path: &RepoPath) -> bool {
+        self.config
+            .non_inputs
+            .iter()
+            .any(|glob| rule_matches(glob, path))
+            || self
+                .config
+                .inputs
+                .iter()
+                .any(|input| rule_matches(&input.glob, path))
+    }
+
+    fn place_lock(&self, path: &RepoPath, walk: &mut Walk<'a>) -> bool {
+        if self.ruled_by_user(path) {
+            return false;
+        }
+        let Some(root) = self
+            .roots
+            .iter()
+            .find(|root| root.manifest.sibling(&CARGO_LOCK) == *path)
+        else {
+            return false;
+        };
+        let names: Vec<PackageName> = root
+            .members
+            .iter()
+            .map(|member| member.name.clone())
+            .collect();
+        let affected = match (
+            self.changes.base_files.get(path),
+            self.changes.head_files.get(path),
+        ) {
+            (Some(base), Some(head)) => lock_affected(base, head, &names).ok(),
+            _ => None,
+        };
+        match affected {
+            Some(affected) => {
+                for member in &root.members {
+                    if let Some(dependency) = affected.get(&member.name) {
+                        walk.seed(&member.manifest, SelectionReason::Lock(dependency.clone()));
+                    }
+                }
+            }
+            None => walk.trigger(&AllTrigger::WorkspaceManifest),
+        }
+        true
+    }
+
+    fn only_dependency_versions_differ(&self, manifest: &RepoPath) -> bool {
+        let lock = manifest.sibling(&CARGO_LOCK);
+        !self.ruled_by_user(manifest)
+            && !self.ruled_by_user(&lock)
+            && self.changes.paths.contains(&lock)
+            && matches!(
+                (self.changes.base_files.get(manifest), self.changes.head_files.get(manifest)),
+                (Some(base), Some(head)) if only_dependency_versions_differ(base, head)
+            )
     }
 
     fn seed_named(&self, names: &[&PackageName], path: &RepoPath, walk: &mut Walk<'a>) {

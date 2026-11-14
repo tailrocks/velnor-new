@@ -5,22 +5,22 @@ mod audit;
 mod http;
 mod inputs;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_gen::io::read_checkout;
-use velnor_model::ChangeSet;
-use velnor_rust::{detect, select, unknown_paths};
+use velnor_gen::io::{Checkout, read_checkout, read_files};
+use velnor_model::{ChangeSet, RepoPath};
+use velnor_rust::{cargo_files, detect, select, unknown_paths};
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
-    AuditArgs, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
-    PlanArgs, ReleaseGateArgs,
+    AuditArgs, BaseFile, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
+    InputsCommand, PlanArgs, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
@@ -92,9 +92,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
 fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let checkout = read_checkout(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
+    let paths: BTreeSet<RepoPath> = args.changed.iter().cloned().collect();
     let changes = ChangeSet {
-        paths: args.changed.iter().cloned().collect(),
-        base_files: BTreeMap::new(),
+        base_files: read_base_files(&args.base_files)?,
+        head_files: read_head_files(&checkout, &paths)?,
+        paths,
     };
     let selections = select(&facts, &changes);
     let outputs = outputs(&selections)?;
@@ -111,6 +113,32 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     } else {
         outputs
     })
+}
+
+fn read_base_files(files: &[BaseFile]) -> Result<BTreeMap<RepoPath, String>, CiError> {
+    files
+        .iter()
+        .map(|base| {
+            fs::read_to_string(&base.file)
+                .map(|text| (base.path.clone(), text))
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", base.file.display())))
+        })
+        .collect()
+}
+
+fn read_head_files(
+    checkout: &Checkout,
+    changed: &BTreeSet<RepoPath>,
+) -> Result<BTreeMap<RepoPath, String>, CiError> {
+    let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
+        .into_iter()
+        .filter(|path| changed.contains(path))
+        .collect();
+    let files = read_files(&checkout.root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
+    Ok(files
+        .into_iter()
+        .filter_map(|(path, bytes)| Some((path, String::from_utf8(bytes).ok()?)))
+        .collect())
 }
 
 fn current_dir() -> Result<std::path::PathBuf, CiError> {
