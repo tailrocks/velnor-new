@@ -12,14 +12,12 @@ use serde_json::{Value, json};
 use tokio::fs;
 use tokio::process::Command;
 
-use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, program, request, words};
+use super::checkout::{copy_checkout, git};
+use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::RunArgs;
 use crate::event::{NO_COMMIT, PullRequest, Push, Repository};
 use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
 use crate::standin;
-
-const GIT_CONFIG: &str =
-    "-c user.name=velnor-local -c user.email=velnor-local@localhost -c commit.gpgsign=false";
 
 #[derive(Debug)]
 struct Driver<'a> {
@@ -58,7 +56,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     }
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo, &args.environment.default_branch).await?;
-    for directory in ["cache", "api", "events", "logs"] {
+    for directory in ["cache", "api", "events", "logs", "metrics"] {
         match fs::remove_dir_all(env.dir.join(directory)).await {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
             _ => {}
@@ -113,31 +111,6 @@ async fn session(
     }
     driver.replay(&scenario.steps).await?;
     Ok((driver.outcomes, up_at, up_seconds))
-}
-
-async fn git(repo: &Path, args: &[&str], input: Option<&[u8]>) -> io::Result<Vec<u8>> {
-    let repo = repo.to_string_lossy();
-    let head = [&["-C", repo.as_ref()], &words(GIT_CONFIG)[..]].concat();
-    program("git", &[&head[..], args].concat(), input).await
-}
-
-async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -> io::Result<()> {
-    if fs::metadata(copy).await.is_ok() {
-        fs::remove_dir_all(copy).await?;
-    }
-    git(
-        checkout,
-        &["clone", "-q", ".", &copy.to_string_lossy()],
-        None,
-    )
-    .await?;
-    let changes = git(checkout, &["diff", "HEAD", "--binary"], None).await?;
-    if !changes.is_empty() {
-        git(copy, &["apply", "--index"], Some(&changes)).await?;
-        git(copy, &["commit", "-q", "-m", "Uncommitted changes"], None).await?;
-    }
-    git(copy, &["checkout", "-q", "-B", default], None).await?;
-    Ok(())
 }
 
 impl Driver<'_> {
@@ -328,26 +301,48 @@ impl Driver<'_> {
     }
 
     async fn outcome(&self, run: standin::Run) -> io::Result<Outcome> {
-        let jobs: Vec<standin::Job> = self
-            .get(&format!("/_apis/v1/Message?runid={}", run.id))
-            .await?;
-        let mut started = None;
-        for timeline in jobs.iter().filter_map(|job| job.time_line_id.as_ref()) {
-            let records: Vec<standin::Record> =
-                self.get(&format!("/_apis/v1/Timeline/{timeline}")).await?;
-            started = started
-                .into_iter()
-                .chain(standin::job_started(&records))
-                .min();
-        }
+        let metrics = self.env.dir.join(format!("metrics/{}.json", run.id));
+        let id = run.id.to_string();
+        let collect = [
+            "bench",
+            "collect",
+            &id,
+            "--repo",
+            &self.args.repository,
+            "-o",
+        ];
+        let collected = Command::new(&self.args.velnor_ci)
+            .kill_on_drop(true)
+            .args(collect)
+            .arg(&metrics)
+            .env("GITHUB_API_URL", &self.addresses.stub_url)
+            .env("GITHUB_TOKEN", "velnor-local")
+            .output()
+            .await;
+        let written = fs::metadata(&metrics)
+            .await
+            .is_ok_and(|file| file.len() > 0);
+        let path = format!("/repos/{}/actions/runs/{id}", self.args.repository);
+        let bytes = request(&self.addresses.stub, "GET", &path, "")
+            .await
+            .ok_or_else(|| io::Error::other(format!("the API stub does not answer {path}")))?;
+        let github: Value = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
         Ok(Outcome {
             id: run.id,
-            workflow: jobs
-                .first()
-                .map_or(run.display_name, |job| job.workflowname.clone()),
+            workflow: github["name"].as_str().unwrap_or(&run.file_name).to_owned(),
             event: run.event_name.unwrap_or_default(),
-            conclusion: standin::conclusion(run.result.as_deref()),
-            started,
+            conclusion: standin::conclusion(run.result.as_deref()).unwrap_or("unfinished"),
+            started: github["run_started_at"].as_str().and_then(standin::seconds),
+            metrics: match collected {
+                Ok(done) if done.status.success() && written => Ok(metrics),
+                Ok(done) if done.status.success() => Err(format!(
+                    "{} exited 0 but wrote no {}",
+                    self.args.velnor_ci.display(),
+                    metrics.display()
+                )),
+                Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
+                Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
+            },
         })
     }
 }

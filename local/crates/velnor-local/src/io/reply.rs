@@ -57,6 +57,19 @@ impl Reply {
     }
 }
 
+pub(super) fn text_response(text: String) -> Response<Body> {
+    let mut response = Response::new(
+        Full::new(Bytes::from(text))
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    response
+}
+
 pub(super) fn response(reply: Reply) -> Response<Body> {
     let bytes = reply
         .body

@@ -11,7 +11,7 @@ use tokio::fs;
 use tokio::sync::Mutex;
 
 use super::git::Git;
-use super::reply::{Reply, response};
+use super::reply::{Reply, response, text_response};
 use super::{
     Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
 };
@@ -20,6 +20,10 @@ use crate::rest::{
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
     TreeEntry,
 };
+
+mod actions;
+
+pub use actions::{Answer, HttpStandIn, StandIn};
 
 const SYMLINK_TARGET_LIMIT: u64 = 4096;
 
@@ -30,6 +34,7 @@ pub struct ApiStubConfig {
     pub cache_dir: PathBuf,
     pub default_branch: String,
     pub diff_limit_bytes: usize,
+    pub standin: Option<std::sync::Arc<dyn StandIn>>,
 }
 
 #[derive(Debug)]
@@ -77,14 +82,24 @@ impl ApiStub {
                 repository: &repository,
             },
         };
-        let reply = match rest::route(&method, &path) {
+        let route = rest::route(&method, &path);
+        if let Api::JobLog { id } = route {
+            let log = self.job_log(id).await;
+            eprintln!("{method} {path} {}", if log.is_some() { 200 } else { 404 });
+            return log.map_or_else(|| response(Reply::missing()), text_response);
+        }
+        let reply = match route {
             Api::PullFiles { number } => self.pull_files(&call, number).await,
             Api::PullList => self.pull_list(&call).await,
             Api::Compare { base, head } => self.compare(&call, &base, &head).await,
             Api::Contents { path } => self.contents(&call, &path).await,
             Api::CacheList => self.cache_list(&call).await,
             Api::CacheDelete { id } => self.cache_delete(&call, id).await,
-            Api::NotImplemented => Reply::with(501, rest::not_implemented(&method, &path), None),
+            Api::Run { id } => self.run(id).await,
+            Api::RunJobs { id, attempt } => self.run_jobs(&call, id, attempt).await,
+            Api::JobLog { .. } | Api::NotImplemented => {
+                Reply::with(501, rest::not_implemented(&method, &path), None)
+            }
         };
         eprintln!("{method} {path} {}", reply.status);
         response(reply)
