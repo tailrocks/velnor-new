@@ -170,9 +170,16 @@ impl<'f> Owners<'f> {
                 .any(|unit| unit.directory.as_ref() == Some(&folder)),
             Some(Package::Root) | None => false,
         };
-        self.units
+        let named: Vec<&Unit<'f>> = self
+            .units
             .iter()
-            .filter(|unit| !foreign && unit.name.is_some_and(|own| own.as_str() == name))
+            .filter(|unit| unit.name.is_some_and(|own| own.as_str() == name))
+            .collect();
+        if foreign || !named.iter().any(|unit| unit.unowned) {
+            return Vec::new();
+        }
+        named
+            .into_iter()
             .flat_map(|unit| unit.owners.iter().cloned())
             .collect()
     }
