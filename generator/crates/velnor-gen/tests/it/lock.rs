@@ -76,9 +76,13 @@ fn a_locked_helper_is_fetched_right_after_the_checkout_and_nowhere_else() -> Tes
         .lines()
         .filter_map(|line| line.strip_prefix("      - name: "))
         .collect();
+    assert_eq!(steps[..2], ["Check out", "Fetch velnor-ci 0.1.79"]);
     assert_eq!(
-        steps,
-        ["Check out", "Fetch velnor-ci 0.1.79", "Format Cargo.toml"]
+        steps
+            .iter()
+            .filter(|step| step.starts_with("Fetch velnor-ci"))
+            .count(),
+        1
     );
     assert!(text.contains(
         "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64"

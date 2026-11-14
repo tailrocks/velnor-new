@@ -11,6 +11,7 @@ use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 
 const CARGO_MANIFEST: &str = "Cargo.toml";
@@ -21,6 +22,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
         CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
+        TIMINGS_PATH,
         MISE_LOCK,
         TOOLCHAIN_PLAIN,
         TOOLCHAIN_TOML,
@@ -72,7 +74,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    let timings = view
+        .files
+        .get(&TIMINGS_PATH)
+        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_timings(bytes))?;
+    if let Some(root) = timings
+        .keys()
+        .find(|root| !rust_roots.iter().any(|known| known.manifest == **root))
+    {
+        return Err(DetectError::invalid(
+            &TIMINGS_PATH,
+            Reason::UnknownRoot(root.clone()),
+        ));
+    }
     Ok(RepoFacts {
+        timings,
         rust_roots,
         toolchain,
         tools,

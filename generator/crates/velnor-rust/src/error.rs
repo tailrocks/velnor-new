@@ -13,6 +13,7 @@ pub enum DetectError {
     Invalid { path: RepoPath, reason: Reason },
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
+    NextestRequired { path: RepoPath },
     NoRustRoot,
 }
 
@@ -43,6 +44,7 @@ pub enum Reason {
     UnknownInputPackage(String),
     LockLine(usize),
     UnknownLockedPackage(String),
+    UnknownRoot(RepoPath),
 }
 
 impl DetectError {
@@ -86,6 +88,10 @@ impl fmt::Display for Reason {
                 f,
                 "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"
             ),
+            Self::UnknownRoot(root) => write!(
+                f,
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
+            ),
             Self::InvalidPatch(key) => {
                 write!(
                     f,
@@ -107,6 +113,10 @@ impl fmt::Display for DetectError {
             Self::MiseRequired { path } => write!(
                 f,
                 "a mise configuration is required; commit {path} with the tool versions the project uses"
+            ),
+            Self::NextestRequired { path } => write!(
+                f,
+                "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

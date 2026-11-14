@@ -14,7 +14,7 @@ use std::process::ExitCode;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_gen::io::{Checkout, read_checkout, read_files};
 use velnor_model::{ChangeSet, RepoPath};
-use velnor_rust::{cargo_files, detect, select, unknown_paths};
+use velnor_rust::{cargo_files, detect, optional_steps, root_sources, select, unknown_paths};
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
@@ -28,11 +28,13 @@ use crate::error::CiError;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
-use crate::plan::{explain, outputs};
+use crate::plan::{Steps, explain, outputs};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
+const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
+const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
 
@@ -99,7 +101,18 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         paths,
     };
     let selections = select(&facts, &changes);
-    let outputs = outputs(&selections)?;
+    let full = std::env::var(EVENT_VARIABLE).is_ok_and(|event| event == SCHEDULED);
+    let steps = facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            let paths = root_sources(&facts, root, &checkout.view.tracked_paths);
+            let sources =
+                read_files(&checkout.root, &paths).map_err(|e| CiError::new(e.to_string()))?;
+            Ok((root.manifest.clone(), optional_steps(root, &sources, full)))
+        })
+        .collect::<Result<Steps, CiError>>()?;
+    let outputs = outputs(&selections, &steps)?;
     if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
         OpenOptions::new()
             .append(true)
@@ -109,7 +122,7 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
     }
     Ok(if args.explain {
-        explain(&selections, &unknown_paths(&facts, &changes))
+        explain(&selections, &steps, &unknown_paths(&facts, &changes))
     } else {
         outputs
     })

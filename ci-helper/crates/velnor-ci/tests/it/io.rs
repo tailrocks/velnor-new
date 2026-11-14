@@ -620,12 +620,29 @@ fn plan_repo(name: &str) -> Repo {
     repo
 }
 
+fn plan_command(repo: &Repo) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .current_dir(repo.root())
+        .env_remove("GITHUB_OUTPUT")
+        .env_remove("GITHUB_EVENT_NAME");
+    command
+}
+
+fn selected(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| !line.starts_with("  left out: "))
+        .flat_map(|line| [line, "\n"])
+        .collect()
+}
+
 #[test]
 fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_request() {
     let repo = plan_repo("plan");
     let outputs = repo.root().join("github-output");
     fs::write(&outputs, "earlier=kept\n").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let output = plan_command(&repo)
         .current_dir(repo.root().join("b"))
         .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
         .env("GITHUB_OUTPUT", &outputs)
@@ -634,12 +651,56 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
 
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        selected(&output),
         "Cargo.toml: some\n  a changed:a/src/lib.rs\ntools/Cargo.toml: all:most-packages:1\n  t depends-on:a\n"
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=skip\n"
+    );
+}
+
+fn doc_flags(repo: &Repo, event: Option<&str>) -> String {
+    let outputs = repo.root().join("doc-flags");
+    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = plan_command(repo);
+    command
+        .args(["plan", "--changed", "rust-toolchain.toml"])
+        .env("GITHUB_OUTPUT", &outputs);
+    if let Some(event) = event {
+        command.env("GITHUB_EVENT_NAME", event);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    fs::read_to_string(&outputs)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .lines()
+        .filter(|line| line.contains("_doc"))
+        .flat_map(|line| [line, " "])
+        .collect()
+}
+
+#[test]
+fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps() {
+    let repo = plan_repo("doc-flags");
+    assert_eq!(
+        doc_flags(&repo, None),
+        "rust_root_doctests=skip rust_root_docs=skip rust_tools_doctests=skip rust_tools_docs=skip "
+    );
+    repo.write(
+        "b/src/lib.rs",
+        "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
+    );
+    repo.write("tools/src/main.rs", "//! The tool.\nfn main() {}\n");
+    assert_eq!(
+        doc_flags(&repo, Some("pull_request")),
+        "rust_root_doctests=run rust_root_docs=run rust_tools_doctests=skip rust_tools_docs=run "
+    );
+    repo.write("b/src/lib.rs", "pub fn f() {}\n");
+    repo.write("tools/src/main.rs", "fn main() {}\n");
+    assert_eq!(
+        doc_flags(&repo, Some("schedule")),
+        "rust_root_doctests=run rust_root_docs=run rust_tools_doctests=skip rust_tools_docs=run "
     );
 }
 
@@ -648,14 +709,13 @@ fn explain(repo: &Repo, changed: &str) -> String {
 }
 
 fn explain_all(repo: &Repo, changed: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root())
+    let output = plan_command(repo)
         .args(["plan", "--explain", "--changed"])
         .args(changed)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
-    String::from_utf8_lossy(&output.stdout).into_owned()
+    selected(&output)
 }
 
 #[test]
@@ -700,9 +760,8 @@ fn plan_lock(fnv: &str) -> String {
 }
 
 fn plan_with_bases(repo: &Repo, changed: &[&str], bases: &[(&str, &str)]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut command = plan_command(repo);
     command
-        .current_dir(repo.root())
         .args(["plan", "--explain", "--changed"])
         .args(changed);
     for (path, text) in bases {
@@ -726,12 +785,12 @@ fn plan_reads_the_old_text_of_a_lockfile_and_selects_only_the_members_whose_depe
     );
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        selected(&output),
         "Cargo.toml: some\n  b lock:fnv\ntools/Cargo.toml: none\n"
     );
     let without_base = plan_with_bases(&repo, &["Cargo.lock"], &[]);
     assert_eq!(
-        String::from_utf8_lossy(&without_base.stdout),
+        selected(&without_base),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
     );
     let missing = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -765,12 +824,12 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        selected(&output),
         "Cargo.toml: none\ntools/Cargo.toml: none\n"
     );
     let alone = plan_with_bases(&repo, &["Cargo.toml"], &bases[..1]);
     assert_eq!(
-        String::from_utf8_lossy(&alone.stdout),
+        selected(&alone),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
     );
     repo.write(
@@ -779,7 +838,7 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     );
     let output = plan_with_bases(&repo, &["Cargo.toml", "Cargo.lock"], &bases);
     assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
+        selected(&output),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
     );
 }

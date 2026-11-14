@@ -3,12 +3,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection};
+use velnor_model::{AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed};
 use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
 
-pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String, CiError> {
+pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
+
+pub fn outputs(
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    steps: &Steps,
+) -> Result<String, CiError> {
     let mut owners = BTreeMap::new();
     let mut lines = Vec::new();
     for (root, selection) in selections {
@@ -34,6 +39,10 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
         lines.push(format!("rust_{slug}_mode={mode}\n"));
         lines.push(format!("rust_{slug}_packages={}\n", packages.join(" ")));
         lines.push(format!("rust_{slug}_test_filter={filter}\n"));
+        if let Some(steps) = steps.get(root) {
+            lines.push(format!("rust_{slug}_doctests={}\n", flag(steps.doctests)));
+            lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
+        }
     }
     Ok(lines.concat())
 }
@@ -41,6 +50,7 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
 #[must_use]
 pub fn explain(
     selections: &BTreeMap<RepoPath, RustSelection>,
+    steps: &Steps,
     unknown: &BTreeSet<RepoPath>,
 ) -> String {
     let mut lines = Vec::new();
@@ -57,6 +67,17 @@ pub fn explain(
         for (package, reason) in packages.into_iter().flatten() {
             lines.push(format!("  {package} {reason}\n"));
         }
+        let selected = !matches!(selection, RustSelection::None);
+        for (step, need) in steps
+            .get(root)
+            .filter(|_| selected)
+            .into_iter()
+            .flat_map(|steps| [("doctests", steps.doctests), ("documentation", steps.docs)])
+        {
+            if let StepNeed::Skip(reason) = need {
+                lines.push(format!("  left out: {step}: {reason}\n"));
+            }
+        }
     }
     for path in unknown {
         if path.as_str().contains('*') {
@@ -71,6 +92,13 @@ pub fn explain(
         ));
     }
     lines.concat()
+}
+
+fn flag(need: StepNeed) -> &'static str {
+    match need {
+        StepNeed::Run => "run",
+        StepNeed::Skip(_) => "skip",
+    }
 }
 
 fn toml_string(text: &str) -> String {

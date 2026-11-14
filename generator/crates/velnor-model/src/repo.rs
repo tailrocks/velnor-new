@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::HelperRelease;
+use crate::plan::{HelperRelease, Shape};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
@@ -45,6 +45,7 @@ pub struct Target {
     pub name: TargetName,
     pub kinds: Vec<TargetKind>,
     pub tests: bool,
+    pub doctest: bool,
     pub source: Option<RepoPath>,
     pub requires_features: bool,
 }
@@ -68,6 +69,15 @@ pub struct RepoFacts {
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
     pub compile_inputs: CompileInputs,
+    pub timings: BTreeMap<RepoPath, Timings>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Timings {
+    pub lint_build_seconds: u64,
+    pub test_build_seconds: u64,
+    pub test_seconds: u64,
+    pub test_binary_seconds: BTreeMap<String, u64>,
 }
 
 pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
@@ -131,6 +141,8 @@ pub struct RustCiConfig {
     pub non_inputs: Vec<PathGlob>,
     pub inputs: Vec<InputRule>,
     pub default_ignores: bool,
+    pub shape: Option<Shape>,
+    pub required_check: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,6 +160,8 @@ impl Default for RustCiConfig {
             non_inputs: Vec::new(),
             inputs: Vec::new(),
             default_ignores: true,
+            shape: None,
+            required_check: "Required".to_owned(),
         }
     }
 }

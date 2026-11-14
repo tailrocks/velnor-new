@@ -11,12 +11,16 @@ pub use ids::{
     Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, HelperBinary, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, Step, StepKind, Triggers, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job,
+    PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
+    WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
     RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind,
-    ToolPin, ToolPins, Toolchain,
+    Timings, ToolPin, ToolPins, Toolchain,
 };
-pub use selection::{AllTrigger, ChangeSet, RustSelection, SelectionReason, WORKFLOW_PATH};
+pub use selection::{
+    AllTrigger, ChangeSet, OptionalSteps, RustSelection, SelectionReason, SkipReason, StepNeed,
+    WORKFLOW_PATH,
+};

@@ -56,6 +56,37 @@ pub enum AllTrigger {
     MostPackages(BTreeMap<PackageName, SelectionReason>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OptionalSteps {
+    pub doctests: StepNeed,
+    pub docs: StepNeed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepNeed {
+    Run,
+    Skip(SkipReason),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipReason {
+    NoDoctestLibrary,
+    NoFencedDocs,
+    NoDocs,
+}
+
+impl fmt::Display for SkipReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NoDoctestLibrary => "no library target runs doctests",
+            Self::NoFencedDocs => {
+                "no doc comment has a code fence and no doc attribute sets the text"
+            }
+            Self::NoDocs => "no doc comment or doc attribute exists",
+        })
+    }
+}
+
 impl fmt::Display for SelectionReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
