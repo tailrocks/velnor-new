@@ -53,14 +53,17 @@ pub fn job(job: &Job, records: &[Record]) -> Value {
 
 #[must_use]
 pub fn log_ids(records: &[Record]) -> Vec<u64> {
-    records
-        .iter()
-        .find(|record| record.parent_id.is_none())
-        .map(|root| steps(root, records))
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|step| step.log.as_ref().map(|log| log.id))
-        .collect()
+    fn below(parent: &Record, records: &[Record], ids: &mut Vec<u64>) {
+        for step in steps(parent, records) {
+            ids.extend(step.log.as_ref().map(|log| log.id));
+            below(step, records, ids);
+        }
+    }
+    let mut ids = Vec::new();
+    if let Some(root) = records.iter().find(|record| record.parent_id.is_none()) {
+        below(root, records, &mut ids);
+    }
+    ids
 }
 
 #[must_use]

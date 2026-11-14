@@ -312,6 +312,7 @@ impl Driver<'_> {
             "-o",
         ];
         let collected = Command::new(&self.args.velnor_ci)
+            .kill_on_drop(true)
             .args(collect)
             .arg(&metrics)
             .env("GITHUB_API_URL", &self.addresses.stub_url)

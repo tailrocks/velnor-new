@@ -132,6 +132,12 @@ async fn a_run_is_reported_with_its_latest_attempt_and_a_broken_workflow_by_its_
     runs[0]["displayName"] = "warm into main".into();
     let mut records = recorded_json("timeline");
     records[0]["startTime"] = "2026-11-13T22:32:3\u{e9}".into();
+    if let Some(list) = records.as_array_mut() {
+        list.push(serde_json::json!({
+            "id": "inner", "parentId": "dd54b3f9-5650-4957-b8b2-3e0ad80c3ea5",
+            "name": "Run cargo nextest", "log": {"id": 99}
+        }));
+    }
     let stub = recorded_standin(&runs, &jobs, &records);
     let run = stub
         .call("GET", "/repos/tailrocks/velnor-lab/actions/runs/2")
@@ -141,6 +147,13 @@ async fn a_run_is_reported_with_its_latest_attempt_and_a_broken_workflow_by_its_
     assert_eq!(run["name"], "mbx default");
     assert_eq!(run["display_title"], "warm into main");
     assert_eq!(run["run_started_at"], "2026-11-13T22:32:3\u{e9}Z");
+    let log = stub
+        .call("GET", "/repos/tailrocks/velnor-lab/actions/jobs/2/logs")
+        .await;
+    let log = String::from_utf8_lossy(&log.body).into_owned();
+    assert!(log.contains(
+        "log 18\n2026-11-13T22:33:00.0000000Z log 99\n2026-11-13T22:33:00.0000000Z log 19\n"
+    ));
     let latest = stub
         .call(
             "GET",

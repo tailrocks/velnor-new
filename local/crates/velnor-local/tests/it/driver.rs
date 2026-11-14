@@ -5,7 +5,8 @@ use std::path::Path;
 
 use serde_json::Value;
 use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
-use velnor_local::scenario::{Scenario, Step, link_inside, overlapping};
+use velnor_local::io::checkout::copy_untracked;
+use velnor_local::scenario::{Scenario, Step, overlapping};
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
 const SHA_B: &str = "b151fd5994a1e3e2b2ba84bf7d3c3d1e5a5e4f60";
@@ -144,24 +145,60 @@ fn a_state_directory_that_overlaps_the_checkout_is_refused() {
     assert!(!overlapping(Path::new("/tmp/state"), checkout));
 }
 
-#[test]
-fn an_untracked_link_is_copied_only_when_it_stays_inside_the_checkout() {
-    assert!(link_inside(
-        Path::new("docs/latest.md"),
-        Path::new("v2/notes.md")
+#[tokio::test]
+async fn untracked_files_and_inside_links_are_copied_and_escaping_links_are_refused() {
+    let root = crate::support::temp_dir("untracked-links");
+    let (checkout, copy, outside) = (
+        root.join("checkout"),
+        root.join("copy"),
+        root.join("outside"),
+    );
+    for dir in [checkout.join("docs"), copy.clone(), outside.clone()] {
+        std::fs::create_dir_all(dir).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let make = |result: std::io::Result<()>| result.unwrap_or_else(|e| unreachable!("{e}"));
+    make(std::fs::write(checkout.join("note.txt"), "note"));
+    make(std::fs::write(outside.join("secret.txt"), "secret"));
+    make(std::os::unix::fs::symlink(
+        "../note.txt",
+        checkout.join("docs/latest"),
     ));
-    assert!(link_inside(
-        Path::new("docs/latest.md"),
-        Path::new("../README.md")
+    make(std::os::unix::fs::symlink(
+        "../outside/secret.txt",
+        checkout.join("out"),
     ));
-    assert!(link_inside(Path::new("a/b/c"), Path::new("./../../d")));
-    assert!(!link_inside(
-        Path::new("outside-link"),
-        Path::new("../outside.txt")
+    make(std::os::unix::fs::symlink(
+        &outside,
+        checkout.join("escape"),
     ));
-    assert!(!link_inside(
-        Path::new("docs/x"),
-        Path::new("../../etc/passwd")
+    make(std::os::unix::fs::symlink(
+        "escape/secret.txt",
+        checkout.join("alias"),
     ));
-    assert!(!link_inside(Path::new("x"), Path::new("/etc/passwd")));
+    make(std::os::unix::fs::symlink(
+        "../../nowhere",
+        checkout.join("dangling"),
+    ));
+    let copied = |path: &'static str| copy_untracked(&checkout, &copy, Path::new(path));
+    assert!(copied("note.txt").await.is_ok());
+    assert_eq!(
+        std::fs::read_to_string(copy.join("note.txt"))
+            .ok()
+            .as_deref(),
+        Some("note")
+    );
+    assert!(copied("docs/latest").await.is_ok());
+    let link = std::fs::read_link(copy.join("docs/latest")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(link, Path::new("../note.txt"));
+    for escaping in ["out", "alias", "dangling"] {
+        let refused = copied(escaping).await.map_err(|e| e.to_string());
+        assert!(
+            refused.is_err_and(|message| message.contains(escaping)),
+            "{escaping}"
+        );
+        assert!(
+            std::fs::symlink_metadata(copy.join(escaping)).is_err(),
+            "{escaping}"
+        );
+    }
 }

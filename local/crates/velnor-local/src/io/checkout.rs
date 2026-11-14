@@ -59,7 +59,7 @@ pub(super) async fn copy_checkout(checkout: &Path, copy: &Path, default: &str) -
     Ok(())
 }
 
-async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Result<()> {
+pub async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Result<()> {
     let (source, target) = (checkout.join(path), copy.join(path));
     if path.as_os_str().as_bytes().ends_with(b"/") {
         eprintln!(
@@ -76,7 +76,11 @@ async fn copy_untracked(checkout: &Path, copy: &Path, path: &Path) -> io::Result
         return Ok(());
     }
     let link = fs::read_link(&source).await?;
-    if !link_inside(path, &link) {
+    let resolved = match fs::canonicalize(&source).await {
+        Ok(real) => real.starts_with(fs::canonicalize(checkout).await?),
+        Err(_) => true,
+    };
+    if !resolved || !link_inside(path, &link) {
         return Err(io::Error::other(format!(
             "{} is a link to {}, which leaves the checkout",
             path.display(),

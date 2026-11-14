@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod api_stub;
-mod checkout;
+pub mod checkout;
 mod drive;
 pub mod env;
 mod git;
