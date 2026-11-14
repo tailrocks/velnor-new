@@ -44,6 +44,7 @@ pub enum DependencyKind {
 pub struct Target {
     pub name: TargetName,
     pub kinds: Vec<TargetKind>,
+    pub tests: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,9 +86,7 @@ pub struct RustMember {
 impl RustMember {
     #[must_use]
     pub fn has_test_target(&self) -> bool {
-        self.targets
-            .iter()
-            .any(|target| target.kinds.contains(&TargetKind::Test))
+        self.targets.iter().any(|target| target.tests)
     }
 }
 
@@ -107,7 +106,7 @@ pub struct Toolchain {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolPins {
-    pub config: RepoPath,
+    pub configs: Vec<RepoPath>,
     pub tools: BTreeMap<String, ToolPin>,
 }
 

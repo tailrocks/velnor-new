@@ -41,7 +41,7 @@ version = \"0.9.151\"
         &[("mise.toml", config), ("mise.lock", lock)],
     )?;
     let tools = detect(&view)?.tools;
-    assert_eq!(tools.config, path("mise.toml")?);
+    assert_eq!(tools.configs, vec![path("mise.toml")?]);
     let found: Vec<(&str, &ToolPin)> = tools
         .tools
         .iter()
@@ -63,15 +63,34 @@ version = \"0.9.151\"
 }
 
 #[test]
-fn a_hidden_mise_configuration_is_read_when_mise_toml_is_absent() -> TestResult {
-    let mut view = repo(
+fn mise_toml_and_the_hidden_mise_toml_are_merged_with_the_hidden_one_winning() -> TestResult {
+    let both = repo(
         vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])],
-        &[(".mise.toml", "[tools]\nbun = \"1.4.4\"\n")],
+        &[
+            ("mise.toml", "[tools]\nbun = \"1.0.0\"\njq = \"1.7\"\n"),
+            (".mise.toml", "[tools]\nbun = \"2.0.0\"\nyq = \"4\"\n"),
+        ],
     )?;
-    view.files.remove(&path("mise.toml")?);
-    let tools = detect(&view)?.tools;
-    assert_eq!(tools.config, path(".mise.toml")?);
-    assert_eq!(tools.tools.get("bun"), Some(&pin(&["1.4.4"], &[])));
+    let tools = detect(&both)?.tools;
+    assert_eq!(tools.configs, vec![path("mise.toml")?, path(".mise.toml")?]);
+    let found: Vec<(&str, &ToolPin)> = tools
+        .tools
+        .iter()
+        .map(|(name, pin)| (name.as_str(), pin))
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            ("bun", &pin(&["2.0.0"], &[])),
+            ("jq", &pin(&["1.7"], &[])),
+            ("yq", &pin(&["4"], &[])),
+        ]
+    );
+    let mut hidden = both;
+    hidden.files.remove(&path("mise.toml")?);
+    let tools = detect(&hidden)?.tools;
+    assert_eq!(tools.configs, vec![path(".mise.toml")?]);
+    assert_eq!(tools.tools.get("bun"), Some(&pin(&["2.0.0"], &[])));
     Ok(())
 }
 

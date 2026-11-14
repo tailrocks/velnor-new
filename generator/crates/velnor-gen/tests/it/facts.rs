@@ -20,7 +20,7 @@ pub(crate) fn package(
     name: &str,
     manifest: &str,
     dependencies: &[(&str, DependencyKind, &str)],
-    targets: &[(&str, TargetKind)],
+    targets: &[(&str, TargetKind, bool)],
 ) -> Result<RustPackage, Box<dyn Error>> {
     Ok(RustPackage {
         name: PackageName::new(name)?,
@@ -37,10 +37,11 @@ pub(crate) fn package(
             .collect::<Result<_, Box<dyn Error>>>()?,
         targets: targets
             .iter()
-            .map(|(name, kind)| {
+            .map(|(name, kind, tests)| {
                 Ok(Target {
                     name: TargetName::new(*name)?,
                     kinds: vec![*kind],
+                    tests: *tests,
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
@@ -48,7 +49,7 @@ pub(crate) fn package(
 }
 
 pub(crate) fn lib(name: &str, manifest: &str) -> Result<RustPackage, Box<dyn Error>> {
-    package(name, manifest, &[], &[(name, TargetKind::Lib)])
+    package(name, manifest, &[], &[(name, TargetKind::Lib, true)])
 }
 
 pub(crate) fn repo(

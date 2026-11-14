@@ -151,26 +151,35 @@ fn path_dependencies_are_edges_between_members_and_between_roots() -> TestResult
 }
 
 #[test]
-fn member_targets_are_kept_and_a_test_target_is_reported() -> TestResult {
-    let tested = package(
-        "tested",
-        "tested/Cargo.toml",
+fn member_targets_are_kept_and_cargos_test_flag_decides_which_members_have_tests() -> TestResult {
+    let kept = package(
+        "a-kept",
+        "a-kept/Cargo.toml",
         &[],
         &[
-            ("tested", TargetKind::Lib),
-            ("tool", TargetKind::Bin),
-            ("derive", TargetKind::ProcMacro),
-            ("build-script-build", TargetKind::BuildScript),
-            ("smoke", TargetKind::Test),
+            ("a-kept", TargetKind::Lib, false),
+            ("tool", TargetKind::Bin, false),
+            ("derive", TargetKind::ProcMacro, false),
+            ("build-script-build", TargetKind::BuildScript, false),
+            ("smoke", TargetKind::Test, true),
         ],
     )?;
-    let untested = package(
-        "untested",
-        "untested/Cargo.toml",
+    let unit = package(
+        "b-unit",
+        "b-unit/Cargo.toml",
         &[],
-        &[("untested", TargetKind::Lib), ("bench", TargetKind::Bench)],
+        &[("b-unit", TargetKind::Lib, true)],
     )?;
-    let view = repo(vec![("Cargo.toml", vec![tested, untested])], &[])?;
+    let none = package(
+        "c-none",
+        "c-none/Cargo.toml",
+        &[],
+        &[
+            ("c-none", TargetKind::Lib, false),
+            ("bench", TargetKind::Bench, false),
+        ],
+    )?;
+    let view = repo(vec![("Cargo.toml", vec![kept, unit, none])], &[])?;
     let facts = detect(&view)?;
     let members = &facts.rust_roots[0].members;
     let kinds: Vec<Vec<TargetKind>> = members[0]
@@ -193,7 +202,7 @@ fn member_targets_are_kept_and_a_test_target_is_reported() -> TestResult {
             .iter()
             .map(velnor_model::RustMember::has_test_target)
             .collect::<Vec<_>>(),
-        vec![true, false]
+        vec![true, true, false]
     );
     Ok(())
 }

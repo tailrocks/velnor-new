@@ -24,14 +24,25 @@ fn the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_carg
             .ok_or("path is not UTF-8")?
             .trim_end_matches(".json")
             .to_owned();
-        let count = json["packages"].as_array().map_or(0, Vec::len);
-        reported.push((relative, count));
+        let packages = json["packages"].as_array().ok_or("no packages")?;
+        let tested = packages
+            .iter()
+            .filter(|package| {
+                package["targets"]
+                    .as_array()
+                    .is_some_and(|targets| targets.iter().any(|t| t["test"] == true))
+            })
+            .count();
+        reported.push((relative, packages.len(), tested));
     }
     reported.sort();
-    let found: Vec<(String, usize)> = facts
+    let found: Vec<(String, usize, usize)> = facts
         .rust_roots
         .iter()
-        .map(|root| (root.manifest.to_string(), root.members.len()))
+        .map(|root| {
+            let tested = root.members.iter().filter(|m| m.has_test_target()).count();
+            (root.manifest.to_string(), root.members.len(), tested)
+        })
         .collect();
     let mut expected = reported;
     expected.sort();
@@ -41,7 +52,7 @@ fn the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_carg
     assert_eq!(
         found
             .iter()
-            .map(|(manifest, _)| manifest.as_str())
+            .map(|(manifest, _, _)| manifest.as_str())
             .collect::<Vec<_>>(),
         vec![
             "Cargo.toml",

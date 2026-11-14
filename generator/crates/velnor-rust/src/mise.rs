@@ -18,20 +18,29 @@ pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 type Versions = BTreeMap<String, Vec<String>>;
 
 pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, DetectError> {
-    let (config, bytes) = MISE_CONFIGS
+    let present: Vec<(&RepoPath, &Vec<u8>)> = MISE_CONFIGS
         .iter()
-        .find_map(|path| files.get(path).map(|bytes| (path, bytes)))
-        .ok_or_else(|| DetectError::MiseRequired {
+        .filter_map(|path| files.get(path).map(|bytes| (path, bytes)))
+        .collect();
+    if present.is_empty() {
+        return Err(DetectError::MiseRequired {
             path: MISE_CONFIGS[0].clone(),
-        })?;
-    let requested = versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
+        });
+    }
+    let mut requested = Versions::new();
+    for (config, bytes) in &present {
+        requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
+    }
     let mut locked = files
         .get(&MISE_LOCK)
         .map(|bytes| versions(bytes).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason)))
         .transpose()?
         .unwrap_or_default();
     Ok(ToolPins {
-        config: config.clone(),
+        configs: present
+            .iter()
+            .map(|(config, _)| (*config).clone())
+            .collect(),
         tools: requested
             .into_iter()
             .map(|(name, requested)| {
