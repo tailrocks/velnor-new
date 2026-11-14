@@ -38,7 +38,7 @@ pub(super) async fn reconcile(
     if jit_conflict::reconcile(prepared, context).await? {
         return Ok(());
     }
-    Box::pin(pre_jit::reconcile(prepared, context)).await?;
+    Box::pin(pre_jit::reconcile(&prepared.scope, context)).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());
     };

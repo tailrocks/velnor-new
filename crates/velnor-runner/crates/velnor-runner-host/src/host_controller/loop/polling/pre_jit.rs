@@ -6,17 +6,17 @@ use crate::{
     launch::bootstrap::{UncertainRecovery, recover_uncertain_reservations},
 };
 
-use super::super::state::PreparedConnection;
 use super::PositivePollContext;
+use crate::journal::ConnectionJournal;
 
 pub(super) async fn reconcile(
-    prepared: &PreparedConnection,
+    scope: &ConnectionJournal,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
     Box::pin(recover_uncertain_reservations(&UncertainRecovery {
         docker: context.docker,
         journal: context.journal,
-        scope: &prepared.scope,
+        scope,
         engine: context.selected_engine,
         images: context.worker_images,
         image_authority: context.image_authority,

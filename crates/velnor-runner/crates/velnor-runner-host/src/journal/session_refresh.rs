@@ -49,4 +49,11 @@ async fn recover_after_restart(connection: &turso::Connection) -> Result<(), Hos
 }
 
 #[cfg(test)]
-mod tests;
+impl Journal {
+    pub(crate) async fn recover_after_restart_without_authority(&self) -> Result<(), HostError> {
+        in_transaction(self, async |connection| {
+            recover_after_restart(connection).await
+        })
+        .await
+    }
+}

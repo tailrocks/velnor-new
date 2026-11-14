@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bollard::Docker;
+use sha2::{Digest, Sha256};
 
 use crate::config::{
     ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
     SourcePolicyMode, WorkflowEvent,
 };
-use crate::error::HostError;
-use crate::journal::connection::storage::in_transaction;
 use crate::journal::{ConnectionJournal, Journal};
 use crate::launch::SelectedEngineContext;
 
@@ -119,7 +118,12 @@ pub(super) async fn reservation_at_storage_initialization(
     docker: &Docker,
 ) -> TestResult<(ConnectionJournal, String)> {
     journal.bind_engine(ENGINE_ID).await?;
-    let scope = journal.connection_scope(&binding()?).await?;
+    let binding = binding()?;
+    let scope = journal.connection_scope(&binding).await?;
+    let binding_digest: String = Sha256::digest(binding.canonical_identity_bytes()?)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     execute(journal, BINDING).await?;
     let selected = scope.engine_context().await?.ok_or("engine context")?;
     let root = SelectedEngineContext::capture(&selected, &docker.info().await?)?
@@ -140,7 +144,7 @@ pub(super) async fn reservation_at_storage_initialization(
             .replace("{hex64}", &hex64)
             .replace("{root}", &root)
             .replace("{image}", IMAGE_ID)
-            .replace("{binding}", scope.binding_digest())
+            .replace("{binding}", &binding_digest)
             .replace("{volume}", volume)
             .replace("{r}", &reservation.to_string())
             .replace("{i}", &(reservation - 1).to_string())
@@ -173,50 +177,27 @@ async fn execute_all(journal: &Journal, rows: &str) -> TestResult<()> {
 }
 
 async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
-    in_transaction(journal, async |connection| {
-        connection
-            .execute(sql, ())
-            .await
-            .map_err(|_| HostError::Journal)
-    })
-    .await?;
+    journal.connection().await?.execute(sql, ()).await?;
     Ok(())
 }
 
 async fn trigger_sql(journal: &Journal, name: &str) -> TestResult<String> {
-    Ok(in_transaction(journal, async |connection| {
-        let mut rows = connection
-            .query("SELECT sql FROM sqlite_schema WHERE name = ?1", [name])
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let row = rows
-            .next()
-            .await
-            .map_err(|_| HostError::Journal)?
-            .ok_or(HostError::Journal)?;
-        row.get::<String>(0).map_err(|_| HostError::Journal)
-    })
-    .await?)
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query("SELECT sql FROM sqlite_schema WHERE name = ?1", [name])
+        .await?;
+    let row = rows.next().await?.ok_or("trigger missing")?;
+    Ok(row.get::<String>(0)?)
 }
 
 pub(super) async fn recorded(
     journal: &Journal,
     reservation: i64,
 ) -> TestResult<Vec<Option<String>>> {
-    Ok(in_transaction(journal, async |connection| {
-        let mut rows = connection
-            .query(RECORDED, [reservation])
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let row = rows
-            .next()
-            .await
-            .map_err(|_| HostError::Journal)?
-            .ok_or(HostError::Journal)?;
-        (0..7)
-            .map(|index| row.get::<Option<String>>(index))
-            .collect::<Result<_, _>>()
-            .map_err(|_| HostError::Journal)
-    })
-    .await?)
+    let connection = journal.connection().await?;
+    let mut rows = connection.query(RECORDED, [reservation]).await?;
+    let row = rows.next().await?.ok_or("reservation missing")?;
+    Ok((0..7)
+        .map(|index| row.get::<Option<String>>(index))
+        .collect::<Result<_, _>>()?)
 }

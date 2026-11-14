@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[path = "tests/docker.rs"]
+#[path = "restart_tests/docker.rs"]
 mod docker;
-#[path = "tests/seed.rs"]
+#[path = "restart_tests/seed.rs"]
 mod seed;
 
 use std::time::Duration;
@@ -12,16 +12,17 @@ use bollard::Docker;
 
 use crate::config::RunnerPlatform;
 use crate::journal::{ConnectionJournal, Journal, StorageRole};
-use crate::launch::bootstrap::{
-    UncertainRecovery, VerifiedCreatedStorageObject, recover_uncertain_reservations,
-};
+use std::sync::Arc;
+
+use crate::config::HostConfig;
+use crate::launch::bootstrap::VerifiedCreatedStorageObject;
 use crate::launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages};
 use crate::worker::ResourceBudgetConfig;
 use crate::worker::storage_initialization::{
     StorageInitializationImage, StorageInitializationLimits, initialize,
 };
 
-use super::super::connection::storage::in_transaction;
+use super::PositivePollContext;
 use docker::{FixtureDocker, HELPER_ID};
 use seed::{ENGINE_ID, IMAGE_ID, LIVE_RESERVATIONS, PRIVATE_VOLUME};
 
@@ -86,23 +87,56 @@ async fn kill_at_hang(
     }
 }
 
+const HOST_CONFIG: &str = r#"schema = 2
+[[connections]]
+connection_id = "conn-test-1"
+repository_id = 42
+repository = "owner/repo"
+credential_ref = "keychain:velnor.test/conn-test-1"
+[connections.scale_set]
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
+[connections.source_policy]
+mode = "branch_restricted"
+branches = ["main"]
+tag_prefixes = []
+events = ["push"]
+pull_request_rules = []
+[host]
+max_jobs = 1
+[host.resources]
+runner_cpu_millicores = 2000
+runner_memory_bytes = 4294967296
+dind_cpu_millicores = 1000
+dind_memory_bytes = 2147483648
+operational_memory_reserve_bytes = 1073741824
+[docker]
+context = "orbstack"
+platform = "linux/amd64"
+endpoint = "unix:///docker.sock"
+"#;
+
 async fn controller_turn(
     journal: &Journal,
     docker: &Docker,
     scope: &ConnectionJournal,
     engine: &SelectedEngineContext,
 ) -> TestResult<()> {
+    let config = HostConfig::parse(HOST_CONFIG)?;
     let images = VerifiedWorkerImages::for_test(engine, &"1".repeat(40), IMAGE_ID, IMAGE_ID)?;
-    let image_authority = ImageAuthority::parse("token")?;
-    recover_uncertain_reservations(&UncertainRecovery {
-        docker,
+    let image_authority = Arc::new(ImageAuthority::parse("token")?);
+    let state = tempfile::tempdir()?;
+    let context = PositivePollContext {
+        config: &config,
         journal,
-        scope,
-        engine,
-        images: &images,
+        docker,
+        selected_engine: engine,
+        worker_images: &images,
+        state: state.path(),
         image_authority: &image_authority,
-    })
-    .await?;
+        admission_ready: true,
+    };
+    super::pre_jit::reconcile(scope, &context).await?;
     Ok(())
 }
 
@@ -112,10 +146,7 @@ async fn restart(
     scope: &ConnectionJournal,
     engine: &SelectedEngineContext,
 ) -> TestResult<()> {
-    in_transaction(journal, async |connection| {
-        super::recover_after_restart(connection).await
-    })
-    .await?;
+    journal.recover_after_restart_without_authority().await?;
     controller_turn(journal, docker, scope, engine).await
 }
 
