@@ -35,9 +35,7 @@ jobs:
         run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
@@ -100,6 +98,7 @@ jobs:
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
       - name: Add rustfmt and clippy
+        working-directory: ci-helper
         run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
@@ -112,9 +111,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
@@ -140,6 +137,7 @@ jobs:
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
       - name: Add rustfmt and clippy
+        working-directory: crates/velnor-runner
         run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
@@ -152,9 +150,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
@@ -208,6 +204,7 @@ jobs:
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
       - name: Add rustfmt and clippy
+        working-directory: generator
         run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
@@ -220,9 +217,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: generator
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: generator
@@ -260,6 +255,7 @@ jobs:
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
       - name: Add rustfmt and clippy
+        working-directory: local
         run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
@@ -272,9 +268,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: local
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: local

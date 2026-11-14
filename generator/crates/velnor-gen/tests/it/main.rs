@@ -11,6 +11,7 @@ mod facts;
 mod golden;
 mod inputs;
 mod io;
+mod job_setup;
 mod job_shape;
 mod lock;
 mod lock_affected;

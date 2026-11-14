@@ -120,16 +120,13 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::NextestRun { filter } => (
             "Test".into(),
-            "cargo-nextest nextest run --workspace --locked --no-fail-fast -E \"$FILTER\"".into(),
-            vec![(
-                "FILTER".to_owned(),
-                Value::Text(
-                    match filter {
-                        FilterRef::All => "all()",
-                    }
-                    .to_owned(),
-                ),
-            )],
+            format!(
+                "cargo-nextest nextest run --workspace --locked --no-fail-fast -E '{}'",
+                match filter {
+                    FilterRef::All => "all()",
+                }
+            ),
+            vec![],
         ),
         CargoCommand::NextestArchive { file } => (
             "Build the tests".into(),

@@ -1,0 +1,131 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_gen::{GenerateError, expected_files};
+use velnor_model::RepoPath;
+use velnor_rust::DetectError;
+
+use crate::facts::TestResult;
+use crate::pipeline::{view, workflow};
+
+#[test]
+fn the_job_installs_the_pinned_rust_and_cargo_nextest_and_needs_a_real_nextest_pin() -> TestResult {
+    let mut pinned = view(&["Cargo.toml"], None)?;
+    let other = RepoPath::new(".mise.toml")?;
+    pinned.files.remove(&RepoPath::new("mise.toml")?);
+    pinned.tracked_paths.remove(&RepoPath::new("mise.toml")?);
+    pinned.tracked_paths.insert(other.clone());
+    pinned.files.insert(
+        other.clone(),
+        b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+    );
+    assert!(workflow(&pinned)?.contains("install_args: 'core:rust cargo:cargo-nextest'\n"));
+    let mut unpinned = pinned;
+    unpinned.files.insert(
+        other.clone(),
+        b"[tools]\nrust = \"1.99.1\"\nnextest-helper = \"1\"\n".to_vec(),
+    );
+    assert_eq!(
+        expected_files(&unpinned),
+        Err(GenerateError::Detect(DetectError::NextestRequired {
+            path: other
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_file_that_disagrees_with_the_mise_rust_pin_is_an_error() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut agreeing = view(&["Cargo.toml"], None)?;
+    agreeing.tracked_paths.insert(file.clone());
+    agreeing.files.insert(
+        file.clone(),
+        b"[toolchain]\nchannel = \"1.99.1\"\n".to_vec(),
+    );
+    assert!(expected_files(&agreeing).is_ok());
+    let mut disagreeing = agreeing;
+    disagreeing
+        .files
+        .insert(file, b"[toolchain]\nchannel = \"1.98.0\"\n".to_vec());
+    assert_eq!(
+        expected_files(&disagreeing),
+        Err(GenerateError::Detect(DetectError::ToolchainConflict {
+            file: "1.98.0".to_owned(),
+            mise: "1.99.1".to_owned(),
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> TestResult {
+    let config = RepoPath::new("lab/.cargo/config.toml")?;
+    let mut array = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    array.tracked_paths.insert(config.clone());
+    array.files.insert(
+        config.clone(),
+        b"[build]\nrustdocflags = [\"--cfg\", \"docsrs\"]\n".to_vec(),
+    );
+    assert!(
+        workflow(&array)?.contains("--config ")
+            && workflow(&array)?.contains("build.rustdocflags=[")
+    );
+    let mut string = array;
+    string.files.insert(
+        config.clone(),
+        b"[build]\nrustdocflags = \"--cfg docsrs\"\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&string),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_path_toolchain_gets_no_component_step_and_a_nested_toolchain_file_needs_no_mise_rust()
+-> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut path_toolchain = view(&["Cargo.toml"], None)?;
+    path_toolchain.tracked_paths.insert(file.clone());
+    path_toolchain
+        .files
+        .insert(file, b"[toolchain]\npath = \"/opt/rust\"\n".to_vec());
+    assert!(!workflow(&path_toolchain)?.contains("rustup component add"));
+
+    let nested = RepoPath::new("lab/rust-toolchain.toml")?;
+    let mut pinned = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    pinned.tracked_paths.insert(nested.clone());
+    assert_eq!(
+        expected_files(&pinned),
+        Err(GenerateError::Detect(DetectError::NestedToolchain {
+            file: nested
+        }))
+    );
+    let mise = RepoPath::new("mise.toml")?;
+    pinned.files.insert(
+        mise,
+        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+    );
+    let text = workflow(&pinned)?;
+    assert!(
+        text.contains(
+            "        working-directory: lab\n        run: rustup component add rustfmt clippy\n"
+        ),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
+    assert_eq!(
+        expected_files(&view(&["a-b/Cargo.toml", "a_b/Cargo.toml"], None)?),
+        Err(GenerateError::Detect(DetectError::SameSlug {
+            first: RepoPath::new("a-b/Cargo.toml")?,
+            second: RepoPath::new("a_b/Cargo.toml")?,
+        }))
+    );
+    Ok(())
+}

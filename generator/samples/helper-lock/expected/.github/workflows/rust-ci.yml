@@ -47,9 +47,7 @@ jobs:
         run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Doctests
         if: '${{ !cancelled() }}'
         run: cargo test --doc --workspace --locked

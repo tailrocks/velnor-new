@@ -8,6 +8,7 @@ use velnor_model::{
     OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, TargetKind,
 };
 
+use crate::roots::is_cargo_config;
 use crate::select::relative;
 
 #[must_use]
@@ -44,6 +45,10 @@ pub fn root_sources(
     tracked
         .iter()
         .filter(|path| {
+            let config_base = path.parent().and_then(|folder| folder.parent());
+            if is_cargo_config(path) {
+                return contains(config_base.as_ref(), own.as_ref()) || config_base == own;
+            }
             let under = |directory: &Option<RepoPath>| relative(directory.as_ref(), path).is_some();
             let rust = Path::new(path.as_str())
                 .extension()
@@ -131,9 +136,8 @@ const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
 
 fn code_block(rest: &str) -> bool {
     let text = rest.strip_prefix(' ').unwrap_or(rest);
-    let trimmed = text.trim_start();
-    trimmed.starts_with("```")
-        || trimmed.starts_with("~~~")
+    text.contains("```")
+        || text.contains("~~~")
         || text.starts_with("    ")
         || text.starts_with('\t')
 }

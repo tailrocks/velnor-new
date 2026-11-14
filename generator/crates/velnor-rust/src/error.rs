@@ -16,6 +16,7 @@ pub enum DetectError {
     NextestRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
+    NestedToolchain { file: RepoPath },
     NoRustRoot,
 }
 
@@ -131,6 +132,10 @@ impl fmt::Display for DetectError {
             Self::ToolchainConflict { file, mise } => write!(
                 f,
                 "the Rust toolchain file names {file} and mise pins rust {mise}; mise's pin wins in the generated job, so make them the same"
+            ),
+            Self::NestedToolchain { file } => write!(
+                f,
+                "{file} names a toolchain for its Cargo root, but mise's rust pin sets RUSTUP_TOOLCHAIN for every job and would override it; pin one Rust version for the repository"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
         }

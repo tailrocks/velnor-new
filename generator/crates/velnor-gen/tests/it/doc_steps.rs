@@ -58,7 +58,7 @@ enum Kind {
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 18] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 19] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -129,6 +129,14 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 18] = [
         "a block doc may hold an example",
         Kind::Doctested,
         "/** x */\nfn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "fence in a block quote",
+        Kind::Doctested,
+        "/// > ```\n/// > assert!(true);\n/// > ```\npub fn f() {}\n",
         false,
         RUN,
         RUN,
@@ -234,6 +242,9 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         "tools/tool/Cargo.toml",
         "vendor/ext/Cargo.toml",
         "other/Cargo.toml",
+        ".cargo/config.toml",
+        "tools/.cargo/config.toml",
+        "other/.cargo/config.toml",
     ]
     .into_iter()
     .map(path)
@@ -247,6 +258,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     assert_eq!(
         sources(0),
         [
+            ".cargo/config.toml",
             "Cargo.toml",
             "app/Cargo.toml",
             "app/src/main.rs",
@@ -260,10 +272,12 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     assert_eq!(
         sources(1),
         [
+            ".cargo/config.toml",
             "macros/template.txt",
             "macros/x.rs",
             "shared/gen.inc",
             "shared/gen.rs",
+            "tools/.cargo/config.toml",
             "tools/Cargo.toml",
             "tools/tool/Cargo.toml",
             "tools/tool/src/main.rs",

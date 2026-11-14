@@ -35,9 +35,7 @@ jobs:
         run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Doctests
         if: '${{ !cancelled() }}'
         run: cargo test --doc --workspace --locked
@@ -67,6 +65,7 @@ jobs:
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
       - name: Add rustfmt and clippy
+        working-directory: xtask
         run: rustup component add rustfmt clippy
       - name: Format
         if: '${{ !cancelled() }}'
@@ -79,9 +78,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        env:
-          FILTER: 'all()'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: xtask

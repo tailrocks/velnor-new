@@ -8,7 +8,7 @@ use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, Rus
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIGS, MISE_LOCK, rust_tool, tool_pins};
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::select::root_slug;
@@ -76,6 +76,20 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
+    if rust_tool(&tools).is_some() {
+        let nested = rust_roots
+            .iter()
+            .filter_map(|root| root.manifest.parent())
+            .flat_map(|folder| {
+                [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
+                    .map(|file| RepoPath::new(format!("{folder}/{file}")))
+            })
+            .flatten()
+            .find(|file| view.tracked_paths.contains(file));
+        if let Some(file) = nested {
+            return Err(DetectError::NestedToolchain { file });
+        }
+    }
     let helper = view
         .files
         .get(&LOCK_PATH)
