@@ -644,9 +644,14 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
 }
 
 fn explain(repo: &Repo, changed: &str) -> String {
+    explain_all(repo, &[changed])
+}
+
+fn explain_all(repo: &Repo, changed: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
-        .args(["plan", "--explain", "--changed", changed])
+        .args(["plan", "--explain", "--changed"])
+        .args(changed)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
@@ -674,6 +679,15 @@ fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selec
         "{unknown}"
     );
     assert_eq!(unknown.matches("[[inputs]]").count(), 1, "{unknown}");
+    let masked = explain_all(
+        &repo,
+        &[".cargo/config.toml", "scripts/gen.sh", "tools/gen.sh"],
+    );
+    assert!(
+        masked.contains("unknown path: scripts/gen.sh\n"),
+        "{masked}"
+    );
+    assert!(masked.contains("unknown path: tools/gen.sh\n"), "{masked}");
     assert!(unknown.contains("non_inputs"), "{unknown}");
     assert!(unknown.contains("\"scripts/gen.sh\","), "{unknown}");
     assert!(unknown.contains("[[inputs]]"), "{unknown}");

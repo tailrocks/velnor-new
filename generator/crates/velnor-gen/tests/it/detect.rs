@@ -413,7 +413,9 @@ fn a_non_inputs_glob_that_overlaps_an_inputs_glob_is_an_error_naming_both() -> T
         ("a/*", "a/*/b", false),
         ("a/b", "a/b/c", false),
         ("a/b", "a/b", true),
-        ("*/*/**", "x/y", true),
+        ("*/*/**", "x/y", false),
+        ("*/*/**", "x/y/z", true),
+        ("docs/**", "docs", false),
     ];
     for (non_input, input, overlap) in cases {
         let result = detect_with(&format!(

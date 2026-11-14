@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::plan::{explain, outputs};
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection, SelectionReason};
@@ -58,26 +58,26 @@ fn two_roots_whose_output_names_would_collide_are_an_error() {
 }
 
 #[test]
-fn an_unknown_path_is_explained_once_with_the_lines_that_would_classify_it() {
-    let unknown = AllTrigger::UnknownPath(path("scripts/gen.sh"));
+fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     let selections = BTreeMap::from([
-        (path("Cargo.toml"), RustSelection::All(unknown.clone())),
-        (path("tools/Cargo.toml"), RustSelection::All(unknown)),
+        (
+            path("Cargo.toml"),
+            RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+        ),
+        (
+            path("tools/Cargo.toml"),
+            RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+        ),
     ]);
-    let text = explain(&selections);
+    let unknown = BTreeSet::from([path("scripts/gen.sh"), path("docs/a\"b.txt")]);
+    let text = explain(&selections, &unknown);
     assert_eq!(text.matches("unknown path: scripts/gen.sh").count(), 1);
     assert!(text.contains("\n    \"scripts/gen.sh\",\n"), "{text}");
     assert!(
         text.contains("[[inputs]]\n    glob = \"scripts/gen.sh\"\n"),
         "{text}"
     );
+    assert!(text.contains("\n    \"docs/a\\\"b.txt\",\n"), "{text}");
 
-    let settled = BTreeMap::from([
-        (path("Cargo.toml"), RustSelection::None),
-        (
-            path("tools/Cargo.toml"),
-            RustSelection::All(AllTrigger::Global(path("Cargo.lock"))),
-        ),
-    ]);
-    assert!(!explain(&settled).contains("unknown path"));
+    assert!(!explain(&selections, &BTreeSet::new()).contains("unknown path"));
 }

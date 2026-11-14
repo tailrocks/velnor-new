@@ -328,7 +328,7 @@ fn assert_rows(facts: &RepoFacts, rows: Vec<Row>) {
 }
 
 #[test]
-fn a_path_outside_every_package_selects_by_its_class_with_an_empty_config() {
+fn a_global_path_outside_every_package_selects_everything_with_an_empty_config() {
     let facts = two_roots();
     let mut rows = Vec::new();
     for (file, trigger) in [
@@ -358,6 +358,19 @@ fn a_path_outside_every_package_selects_by_its_class_with_an_empty_config() {
         ),
         ("Cargo.toml", AllTrigger::WorkspaceManifest),
         ("helper/Cargo.toml", AllTrigger::WorkspaceManifest),
+        ("docs/mise.toml", AllTrigger::Global(path("docs/mise.toml"))),
+        (
+            "docs/rust-toolchain.toml",
+            AllTrigger::ToolchainFile(path("docs/rust-toolchain.toml")),
+        ),
+        (
+            "docs/Cargo.lock",
+            AllTrigger::Global(path("docs/Cargo.lock")),
+        ),
+        (
+            "docs/.cargo/config.toml",
+            AllTrigger::CargoConfig(path("docs/.cargo/config.toml")),
+        ),
         ("mise.toml", AllTrigger::Global(path("mise.toml"))),
         ("mise.lock", AllTrigger::Global(path("mise.lock"))),
         ("Cargo.lock", AllTrigger::Global(path("Cargo.lock"))),
@@ -372,6 +385,13 @@ fn a_path_outside_every_package_selects_by_its_class_with_an_empty_config() {
     ] {
         rows.push((vec![file], vec![all(trigger.clone()), all(trigger)]));
     }
+    assert_rows(&facts, rows);
+}
+
+#[test]
+fn docs_and_licence_paths_select_nothing_and_look_alikes_select_everything() {
+    let facts = two_roots();
+    let mut rows = Vec::new();
     rows.extend(everywhere(
         &[
             "docs/guide.md",
@@ -465,6 +485,28 @@ fn a_docs_looking_file_that_a_package_reads_still_selects_that_package() {
         ],
     );
 
+    let mut shared = two_roots();
+    shared.config.inputs = vec![
+        InputRule {
+            glob: glob("schema/*"),
+            packages: vec![name("app")],
+        },
+        InputRule {
+            glob: glob("schema/a.json"),
+            packages: vec![name("cli")],
+        },
+    ];
+    assert_rows(
+        &shared,
+        vec![(
+            vec!["schema/a.json"],
+            vec![
+                some(&[("app", SelectionReason::Input(path("schema/a.json")))]),
+                some(&[("cli", SelectionReason::Input(path("schema/a.json")))]),
+            ],
+        )],
+    );
+
     let nested = facts(vec![
         ("Cargo.toml", vec![member("app", "app", &[])]),
         (
@@ -512,6 +554,7 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
     let mut ruled = two_roots();
     ruled.config.non_inputs = vec![
         glob("data/**"),
+        glob("scripts/gen.sh"),
         glob("scripts/*/notes.txt"),
         glob(".cargo/config.toml"),
     ];
@@ -519,6 +562,15 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
         &ruled,
         vec![
             (vec!["data/x/y.bin"], vec![none.clone(), none.clone()]),
+            (vec!["scripts/gen.sh"], vec![none.clone(), none.clone()]),
+            (
+                vec!["scripts/gen.sh/out.rs"],
+                vec![
+                    unknown("scripts/gen.sh/out.rs"),
+                    unknown("scripts/gen.sh/out.rs"),
+                ],
+            ),
+            (vec!["data"], vec![unknown("data"), unknown("data")]),
             (
                 vec!["scripts/a/notes.txt"],
                 vec![none.clone(), none.clone()],

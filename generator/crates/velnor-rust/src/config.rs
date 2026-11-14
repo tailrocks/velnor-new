@@ -158,6 +158,21 @@ fn shape(glob: &str) -> (Vec<&str>, bool) {
     (segments, open)
 }
 
+pub(crate) fn rule_matches(glob: &PathGlob, path: &RepoPath) -> bool {
+    let (pattern, open) = shape(glob.as_str());
+    let segments: Vec<&str> = path.as_str().split('/').collect();
+    let length_fits = if open {
+        segments.len() > pattern.len()
+    } else {
+        segments.len() == pattern.len()
+    };
+    length_fits
+        && pattern
+            .iter()
+            .zip(&segments)
+            .all(|(want, got)| want == got || *want == ANY_SEGMENT)
+}
+
 fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
     let (left, left_open) = shape(left.as_str());
     let (right, right_open) = shape(right.as_str());
@@ -168,8 +183,8 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
     agree
         && match (left_open, right_open) {
             (true, true) => true,
-            (true, false) => right.len() >= left.len(),
-            (false, true) => left.len() >= right.len(),
+            (true, false) => right.len() > left.len(),
+            (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
 }

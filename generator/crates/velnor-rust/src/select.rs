@@ -11,21 +11,7 @@ use velnor_model::{
 
 #[must_use]
 pub fn select(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, RustSelection> {
-    let graph = Graph::new(&facts.rust_roots, &facts.config);
-    let mut walk = Walk {
-        triggers: vec![None; facts.rust_roots.len()],
-        ..Walk::default()
-    };
-    for path in &changes.paths {
-        graph.place(path, &mut walk);
-    }
-    while let Some(manifest) = walk.queue.pop() {
-        let name = graph.nodes[manifest].name;
-        let dependents = graph.dependents.get(manifest).into_iter().flatten();
-        for dependent in dependents.chain(&graph.unowned) {
-            walk.seed(dependent, SelectionReason::DependsOn(name.clone()));
-        }
-    }
+    let walk = walk(facts, changes);
     facts
         .rust_roots
         .iter()
@@ -47,6 +33,30 @@ pub fn select(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, Rust
             (root.manifest.clone(), selection)
         })
         .collect()
+}
+
+#[must_use]
+pub fn unknown_paths(facts: &RepoFacts, changes: &ChangeSet) -> BTreeSet<RepoPath> {
+    walk(facts, changes).unknown.into_iter().cloned().collect()
+}
+
+fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
+    let graph = Graph::new(&facts.rust_roots, &facts.config);
+    let mut walk = Walk {
+        triggers: vec![None; facts.rust_roots.len()],
+        ..Walk::default()
+    };
+    for path in &changes.paths {
+        graph.place(path, &mut walk);
+    }
+    while let Some(manifest) = walk.queue.pop() {
+        let name = graph.nodes[manifest].name;
+        let dependents = graph.dependents.get(manifest).into_iter().flatten();
+        for dependent in dependents.chain(&graph.unowned) {
+            walk.seed(dependent, SelectionReason::DependsOn(name.clone()));
+        }
+    }
+    walk
 }
 
 #[must_use]
@@ -101,6 +111,7 @@ struct Walk<'a> {
     reasons: BTreeMap<&'a RepoPath, SelectionReason>,
     reached: BTreeSet<&'a RepoPath>,
     queue: Vec<&'a RepoPath>,
+    unknown: BTreeSet<&'a RepoPath>,
 }
 
 impl<'a> Graph<'a> {
@@ -177,13 +188,16 @@ impl<'a> Graph<'a> {
             Class::Nothing => {}
             Class::Packages(names) => {
                 for (manifest, node) in &self.nodes {
-                    if node.root.is_some() && names.contains(node.name) {
+                    if node.root.is_some() && names.contains(&node.name) {
                         walk.seed(manifest, SelectionReason::Input(path.clone()));
                     }
                 }
             }
             Class::Global(trigger) => walk.trigger(&trigger),
-            Class::Unknown => walk.trigger(&AllTrigger::UnknownPath(path.clone())),
+            Class::Unknown => {
+                walk.unknown.insert(path);
+                walk.trigger(&AllTrigger::UnknownPath(path.clone()));
+            }
         }
     }
 

@@ -5,12 +5,12 @@ use std::path::Path;
 
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH};
 
-use crate::config::CONFIG_PATH;
+use crate::config::{CONFIG_PATH, rule_matches};
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 
 pub(crate) enum Class<'c> {
     Nothing,
-    Packages(&'c [PackageName]),
+    Packages(Vec<&'c PackageName>),
     Global(AllTrigger),
     Unknown,
 }
@@ -28,11 +28,21 @@ pub(crate) fn classify<'c>(
     is_root_manifest: bool,
     sheltered: bool,
 ) -> Class<'c> {
-    if config.non_inputs.iter().any(|glob| glob.matches(path)) {
+    if config
+        .non_inputs
+        .iter()
+        .any(|glob| rule_matches(glob, path))
+    {
         return Class::Nothing;
     }
-    if let Some(input) = config.inputs.iter().find(|input| input.glob.matches(path)) {
-        return Class::Packages(&input.packages);
+    let packages: Vec<&PackageName> = config
+        .inputs
+        .iter()
+        .filter(|input| rule_matches(&input.glob, path))
+        .flat_map(|input| &input.packages)
+        .collect();
+    if !packages.is_empty() {
+        return Class::Packages(packages);
     }
     if let Some(trigger) = global(path, is_root_manifest) {
         return Class::Global(trigger);

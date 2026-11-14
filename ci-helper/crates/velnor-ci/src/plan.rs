@@ -39,13 +39,12 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
 }
 
 #[must_use]
-pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
+pub fn explain(
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    unknown: &BTreeSet<RepoPath>,
+) -> String {
     let mut lines = Vec::new();
-    let mut unknown = BTreeSet::new();
     for (root, selection) in selections {
-        if let RustSelection::All(AllTrigger::UnknownPath(path)) = selection {
-            unknown.insert(path);
-        }
         let (header, packages) = match selection {
             RustSelection::None => ("none".to_owned(), None),
             RustSelection::Some(packages) => ("some".to_owned(), Some(packages)),
@@ -60,9 +59,22 @@ pub fn explain(selections: &BTreeMap<RepoPath, RustSelection>) -> String {
         }
     }
     for path in unknown {
+        let quoted = toml_string(path.as_str());
         lines.push(format!(
-            "unknown path: {path}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    \"{path}\",\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = \"{path}\"\n    packages = [\"<package>\"]\n"
+            "unknown path: {path}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    {quoted},\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = {quoted}\n    packages = [\"<package>\"]\n"
         ));
     }
     lines.concat()
+}
+
+fn toml_string(text: &str) -> String {
+    let escaped: String = text
+        .chars()
+        .flat_map(|c| match c {
+            '"' => vec!['\\', '"'],
+            '\\' => vec!['\\', '\\'],
+            other => vec![other],
+        })
+        .collect();
+    format!("\"{escaped}\"")
 }
