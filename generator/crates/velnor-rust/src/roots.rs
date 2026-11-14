@@ -9,7 +9,7 @@ use velnor_model::{
 };
 
 use crate::config::excluded;
-use crate::error::DetectError;
+use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -54,7 +54,7 @@ pub(crate) fn rust_roots(
                 });
             }
             let mut targets = named.clone();
-            for (name, target) in patches(view.files.get(*manifest), manifest) {
+            for (name, target) in patches(view.files.get(*manifest), manifest)? {
                 targets.entry(name).or_default().insert(target);
             }
             Ok(root(manifest, metadata, &owner, &targets))
@@ -89,25 +89,43 @@ fn root(
     }
 }
 
-fn patches(manifest_text: Option<&Vec<u8>>, manifest: &RepoPath) -> Vec<(PackageName, RepoPath)> {
-    let Some(table) = manifest_text.and_then(|bytes| table(bytes).ok()) else {
-        return Vec::new();
+fn patches(
+    text: Option<&Vec<u8>>,
+    manifest: &RepoPath,
+) -> Result<Vec<(PackageName, RepoPath)>, DetectError> {
+    let invalid = |key: String| DetectError::invalid(manifest, Reason::InvalidPatch(key));
+    let Some(bytes) = text else {
+        return Ok(Vec::new());
     };
-    table
-        .get("patch")
-        .and_then(toml::Value::as_table)
-        .into_iter()
-        .flat_map(|sources| sources.values().filter_map(toml::Value::as_table))
-        .flatten()
-        .filter_map(|(name, patch)| {
-            let folder = patch.get("path")?.as_str()?;
-            let target = within(manifest.parent().as_ref(), folder)?;
-            Some((PackageName::new(name.as_str()).ok()?, target))
-        })
-        .collect()
+    let table = table(bytes).map_err(|reason| DetectError::invalid(manifest, reason))?;
+    let Some(patch) = table.get("patch") else {
+        return Ok(Vec::new());
+    };
+    let sources = patch
+        .as_table()
+        .ok_or_else(|| invalid("patch".to_owned()))?;
+    let mut found = Vec::new();
+    for (source, entries) in sources {
+        let entries = entries
+            .as_table()
+            .ok_or_else(|| invalid(format!("patch.{source}")))?;
+        for (name, entry) in entries {
+            let key = format!("patch.{source}.{name}");
+            let entry = entry.as_table().ok_or_else(|| invalid(key.clone()))?;
+            let Some(folder) = entry.get("path") else {
+                continue;
+            };
+            let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
+            let name = PackageName::new(name.as_str()).map_err(|_| invalid(key.clone()))?;
+            if let Some(target) = within(manifest.parent().as_ref(), folder) {
+                found.push((name, RepoPath::new(target).map_err(|_| invalid(key))?));
+            }
+        }
+    }
+    Ok(found)
 }
 
-fn within(base: Option<&RepoPath>, relative: &str) -> Option<RepoPath> {
+fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {
@@ -120,7 +138,7 @@ fn within(base: Option<&RepoPath>, relative: &str) -> Option<RepoPath> {
         }
     }
     segments.push("Cargo.toml");
-    RepoPath::new(segments.join("/")).ok()
+    Some(segments.join("/"))
 }
 
 fn member(package: &RustPackage, targets: &Targets) -> RustMember {

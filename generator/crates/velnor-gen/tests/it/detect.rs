@@ -190,6 +190,58 @@ fn a_registry_dependency_that_the_repository_can_patch_is_an_edge_to_the_patch()
 }
 
 #[test]
+fn a_malformed_patch_table_is_an_error_naming_the_manifest_and_the_key() -> TestResult {
+    let cases = [
+        ("patch = 1\n", Some("patch")),
+        ("[patch]\ncrates-io = 1\n", Some("patch.crates-io")),
+        (
+            "[patch.crates-io]\nmid = \"1.0\"\n",
+            Some("patch.crates-io.mid"),
+        ),
+        (
+            "[patch.crates-io]\nmid = { path = 1 }\n",
+            Some("patch.crates-io.mid"),
+        ),
+        (
+            "[patch.crates-io]\n\"mi\\td\" = { path = \"mid\" }\n",
+            Some("patch.crates-io.mi\td"),
+        ),
+        (
+            "[patch.crates-io]\nmid = { path = \"m\\\\id\" }\n",
+            Some("patch.crates-io.mid"),
+        ),
+        ("[patch.crates-io\n", None),
+    ];
+    for (text, key) in cases {
+        let view = repo(
+            vec![("a/Cargo.toml", vec![lib("app", "a/app/Cargo.toml")?])],
+            &[("a/Cargo.toml", text)],
+        )?;
+        let result = detect(&view);
+        let reason = match &result {
+            Err(DetectError::Invalid { path, reason }) if path.as_str() == "a/Cargo.toml" => reason,
+            other => return Err(format!("{text:?}: {other:?}").into()),
+        };
+        match (key, reason) {
+            (Some(key), Reason::InvalidPatch(found)) => assert_eq!(found, key, "{text:?}"),
+            (None, Reason::Syntax(_)) => {}
+            (_, other) => return Err(format!("{text:?}: {other:?}").into()),
+        }
+    }
+    for text in [
+        "[patch.crates-io]\nmid = { git = \"https://example.com/mid\" }\n",
+        "[patch.crates-io]\nmid = { path = \"../../outside\" }\n",
+    ] {
+        let view = repo(
+            vec![("a/Cargo.toml", vec![lib("app", "a/app/Cargo.toml")?])],
+            &[("a/Cargo.toml", text)],
+        )?;
+        detect(&view)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn member_targets_are_kept_and_cargos_test_flag_decides_which_members_have_tests() -> TestResult {
     let kept = package(
         "a-kept",
