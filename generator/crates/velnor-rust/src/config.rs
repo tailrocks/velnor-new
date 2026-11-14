@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{RepoPath, RunnerLabel, RustCiConfig};
+use velnor_model::{PathGlob, RepoPath, RunnerLabel, RustCiConfig};
 
-use crate::DetectError;
+use crate::error::{DetectError, Reason};
+use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
+const KEYS: [&str; 3] = ["runner", "timeout_minutes", "exclude"];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RawConfig {
     runner: Option<String>,
     timeout_minutes: Option<u16>,
@@ -20,34 +21,50 @@ struct RawConfig {
 }
 
 pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
-    let text = std::str::from_utf8(bytes).map_err(|error| config_error(&error))?;
-    let raw: RawConfig = toml::from_str(text).map_err(|error| config_error(&error))?;
+    let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
+    let table = table(bytes).map_err(invalid)?;
+    if let Some(key) = table.keys().find(|key| !KEYS.contains(&key.as_str())) {
+        return Err(invalid(Reason::UnknownKey(key.clone())));
+    }
+    let raw: RawConfig = table
+        .try_into()
+        .map_err(|error: toml::de::Error| invalid(Reason::Syntax(error.message().to_owned())))?;
     let defaults = RustCiConfig::default();
     let timeout_minutes = raw.timeout_minutes.unwrap_or(defaults.timeout_minutes);
     if !TIMEOUT_RANGE.contains(&timeout_minutes) {
-        return Err(DetectError::Config(format!(
-            "timeout_minutes must be between {} and {}, got {timeout_minutes}",
-            TIMEOUT_RANGE.start(),
-            TIMEOUT_RANGE.end()
-        )));
+        return Err(invalid(Reason::OutOfRange {
+            key: "timeout_minutes",
+            value: timeout_minutes,
+            min: *TIMEOUT_RANGE.start(),
+            max: *TIMEOUT_RANGE.end(),
+        }));
     }
     Ok(RustCiConfig {
-        runner: raw
-            .runner
-            .map(RunnerLabel::new)
-            .transpose()
-            .map_err(|error| config_error(&error))?
-            .unwrap_or(defaults.runner),
+        runner: match raw.runner {
+            Some(label) => RunnerLabel::new(label.clone()).map_err(|_| {
+                invalid(Reason::InvalidValue {
+                    key: "runner",
+                    value: label,
+                })
+            })?,
+            None => defaults.runner,
+        },
         timeout_minutes,
         exclude: raw
             .exclude
             .into_iter()
-            .map(|path| RepoPath::new(path.trim_end_matches('/')))
-            .collect::<Result<_, _>>()
-            .map_err(|error| config_error(&error))?,
+            .map(|entry| {
+                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
+                    invalid(Reason::InvalidValue {
+                        key: "exclude",
+                        value: entry,
+                    })
+                })
+            })
+            .collect::<Result<_, _>>()?,
     })
 }
 
-fn config_error(error: &impl std::fmt::Display) -> DetectError {
-    DetectError::Config(error.to_string())
+pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
+    config.exclude.iter().any(|entry| entry.matches(manifest))
 }

@@ -58,6 +58,8 @@ struct Dependency {
 struct RawTarget {
     name: String,
     kind: Vec<String>,
+    #[serde(default)]
+    test: bool,
 }
 
 pub fn reduce_metadata(
@@ -114,7 +116,8 @@ fn target_of(target: RawTarget) -> Result<Target, MetadataError> {
         .kind
         .iter()
         .map(|kind| match kind.as_str() {
-            "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro" => Ok(TargetKind::Lib),
+            "lib" | "rlib" | "dylib" | "cdylib" | "staticlib" => Ok(TargetKind::Lib),
+            "proc-macro" => Ok(TargetKind::ProcMacro),
             "bin" => Ok(TargetKind::Bin),
             "test" => Ok(TargetKind::Test),
             "bench" => Ok(TargetKind::Bench),
@@ -126,6 +129,7 @@ fn target_of(target: RawTarget) -> Result<Target, MetadataError> {
     Ok(Target {
         name: TargetName::new(target.name).map_err(invalid)?,
         kinds,
+        tests: target.test,
     })
 }
 

@@ -15,7 +15,7 @@ use velnor_rust::{metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-fn samples() -> PathBuf {
+pub(crate) fn samples() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
 }
 
@@ -65,7 +65,7 @@ fn files_under(directory: &Path) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dyn 
     Ok(files)
 }
 
-fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
     let recorded = files_under(&sample.join("view"))?;
     let mut tracked_paths: BTreeSet<RepoPath> = recorded.keys().cloned().collect();
     for line in fs::read_to_string(sample.join("manifests.txt"))?.lines() {
