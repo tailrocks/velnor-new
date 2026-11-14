@@ -6,7 +6,7 @@ use std::{fs, io::Read};
 
 use velnor_actions_contract::{
     DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, TASK_EXECUTION_MANIFEST_PATH,
-    is_generated_marker_line,
+    VELNOR_GEN_MARKER, is_generated_marker_line, is_velnor_gen_marker_line,
 };
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -157,7 +157,15 @@ fn copy_repository_content(
 
 const HAND_WRITTEN_WORKFLOWS: [&str; 1] = ["workflows/release-rust-ci-tools.yml"];
 
-pub(super) fn generator_owned(relative: &Path) -> bool {
+pub(super) fn generator_owned(
+    relative: &Path,
+    source: &Path,
+    metadata: &std::fs::Metadata,
+) -> Result<bool, OrchestratorError> {
+    Ok(reserved_path(relative) && !velnor_gen_owned(relative, source, metadata)?)
+}
+
+pub(super) fn reserved_path(relative: &Path) -> bool {
     if relative.starts_with("workflows") {
         return relative != Path::new("workflows")
             && !HAND_WRITTEN_WORKFLOWS
@@ -175,6 +183,24 @@ pub(super) fn generator_owned(relative: &Path) -> bool {
                 .strip_prefix(".github")
                 .is_ok_and(|rel| rel == relative)
         })
+}
+
+pub(super) fn velnor_gen_owned(
+    relative: &Path,
+    source: &Path,
+    metadata: &std::fs::Metadata,
+) -> Result<bool, OrchestratorError> {
+    if relative.components().count() != 2
+        || !relative.starts_with("workflows")
+        || !metadata.is_file()
+    {
+        return Ok(false);
+    }
+    first_line_matches(
+        source,
+        VELNOR_GEN_MARKER.len() + 2,
+        is_velnor_gen_marker_line,
+    )
 }
 
 pub(super) fn generated_shared_action(
@@ -227,9 +253,20 @@ pub(super) fn retired_marked_lint_config(
 }
 
 fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
+    first_line_matches(
+        source,
+        MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len()),
+        is_generated_marker_line,
+    )
+}
+
+fn first_line_matches(
+    source: &Path,
+    limit: usize,
+    matches: fn(&str) -> bool,
+) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
-    let limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
     let mut first = Vec::with_capacity(limit);
     let mut byte = [0u8; 1];
     for _ in 0..limit {
@@ -238,8 +275,10 @@ fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorErr
         }
         first.push(byte[0]);
     }
-    let first = std::str::from_utf8(&first).ok();
-    Ok(first.is_some_and(is_generated_marker_line))
+    if first.last() == Some(&b'\r') {
+        first.pop();
+    }
+    Ok(matches(&String::from_utf8_lossy(&first)))
 }
 
 fn copy_entry(
@@ -249,7 +288,7 @@ fn copy_entry(
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<bool, OrchestratorError> {
     let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
-    if generator_owned(relative)
+    if generator_owned(relative, source, &metadata)?
         || generated_shared_action(relative, source, &metadata)?
         || generated_marked_script(relative, source, &metadata)?
         || generated_marked_dco(relative, source, &metadata)?
@@ -351,24 +390,5 @@ fn io(path: &Path, error: &std::io::Error) -> OrchestratorError {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use super::generator_owned;
-
-    #[test]
-    fn the_workflows_namespace_is_generator_owned_except_the_release_workflow_of_the_rust_tools() {
-        let cases = [
-            ("workflows", false),
-            ("workflows/ci.yml", true),
-            ("workflows/manual.yml", true),
-            ("workflows/release-rust-ci-tools.yml", false),
-            ("workflows/release-rust-ci-tools.yml.bak", true),
-            ("workflows/nested/release-rust-ci-tools.yml", true),
-            ("release-rust-ci-tools.yml", false),
-        ];
-        for (path, owned) in cases {
-            assert_eq!(generator_owned(Path::new(path)), owned, "{path}");
-        }
-    }
-}
+#[path = "generate_preserve_tests.rs"]
+mod tests;

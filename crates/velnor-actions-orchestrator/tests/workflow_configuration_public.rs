@@ -316,3 +316,6 @@ mod runner_family_authority;
 
 #[path = "workflow_configuration_public/premerge_event_proof.rs"]
 mod premerge_event_proof;
+
+#[path = "workflow_configuration_public/velnor_gen_workflows.rs"]
+mod velnor_gen_workflows;
