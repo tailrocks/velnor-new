@@ -17,6 +17,6 @@ pub use plan::{
 pub use repo::{
     CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
     RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind,
-    ToolPin, ToolPins, Toolchain,
+    ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };
 pub use selection::{AllTrigger, ChangeSet, RustSelection, SelectionReason, WORKFLOW_PATH};

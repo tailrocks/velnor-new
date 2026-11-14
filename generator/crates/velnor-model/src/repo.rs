@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
 use crate::plan::HelperRelease;
@@ -68,6 +69,40 @@ pub struct RepoFacts {
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
     pub compile_inputs: CompileInputs,
+    pub unowned: BTreeMap<RepoPath, UnownedPackage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnownedPackage {
+    pub name: PackageName,
+    pub dependencies: Vec<MemberDependency>,
+    pub unread: Option<Unread>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unread {
+    Missing,
+    Invalid(String),
+    Git(String),
+    Inherited(String),
+    Outside(String),
+}
+
+impl fmt::Display for Unread {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => f.write_str("its manifest is not in the checkout"),
+            Self::Invalid(detail) => write!(f, "its manifest does not parse: {detail}"),
+            Self::Git(key) => write!(f, "it has the git dependency {key}"),
+            Self::Inherited(key) => {
+                write!(
+                    f,
+                    "its workspace does not say where the dependency {key} is"
+                )
+            }
+            Self::Outside(key) => write!(f, "its dependency {key} is outside the repository"),
+        }
+    }
 }
 
 pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;

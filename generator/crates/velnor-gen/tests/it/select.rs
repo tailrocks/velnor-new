@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{
     AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob, RepoFacts,
     RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason, ToolPins,
+    UnownedPackage,
 };
 use velnor_rust::select;
 
@@ -35,15 +36,30 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
 }
 
 pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
+    let rust_roots: Vec<RustRoot> = roots
+        .into_iter()
+        .map(|(manifest, members)| RustRoot {
+            manifest: path(manifest),
+            members,
+            depends_on: Vec::new(),
+        })
+        .collect();
+    let members: Vec<&RustMember> = rust_roots.iter().flat_map(|root| &root.members).collect();
+    let unowned = members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| !members.iter().any(|m| m.manifest == dependency.manifest))
+        .map(|dependency| {
+            let package = UnownedPackage {
+                name: dependency.name.clone(),
+                dependencies: Vec::new(),
+                unread: None,
+            };
+            (dependency.manifest.clone(), package)
+        })
+        .collect();
     RepoFacts {
-        rust_roots: roots
-            .into_iter()
-            .map(|(manifest, members)| RustRoot {
-                manifest: path(manifest),
-                members,
-                depends_on: Vec::new(),
-            })
-            .collect(),
+        rust_roots,
         toolchain: None,
         tools: ToolPins {
             configs: Vec::new(),
@@ -52,6 +68,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         config: RustCiConfig::default(),
         helper: None,
         compile_inputs: BTreeMap::new(),
+        unowned,
     }
 }
 
@@ -238,7 +255,7 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
             (
                 &["b/four/src/lib.rs"],
                 vec![
-                    some(&[("one", depends_on("patched"))]),
+                    RustSelection::None,
                     some(&[("four", changed("b/four/src/lib.rs"))]),
                 ],
             ),

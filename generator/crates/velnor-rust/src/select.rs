@@ -9,8 +9,8 @@ use crate::lock_affected::lock_affected;
 use crate::manifest_diff::only_dependency_versions_differ;
 use crate::roots::CARGO_LOCK;
 use velnor_model::{
-    AllTrigger, ChangeSet, CompileInputs, PackageName, RepoFacts, RepoPath, RustCiConfig, RustRoot,
-    RustSelection, SelectionReason,
+    AllTrigger, ChangeSet, CompileInputs, MemberDependency, PackageName, RepoFacts, RepoPath,
+    RustCiConfig, RustRoot, RustSelection, SelectionReason, Unread,
 };
 
 #[must_use]
@@ -44,6 +44,23 @@ pub fn unknown_paths(facts: &RepoFacts, changes: &ChangeSet) -> BTreeSet<RepoPat
     walk(facts, changes).unknown.into_iter().cloned().collect()
 }
 
+#[must_use]
+pub fn unread_packages(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, Unread> {
+    let walk = walk(facts, changes);
+    walk.unread
+        .into_iter()
+        .filter(|manifest| walk.reached.contains(manifest))
+        .map(|manifest| {
+            let unread = facts
+                .unowned
+                .get(manifest)
+                .and_then(|package| package.unread.clone())
+                .unwrap_or(Unread::Missing);
+            (manifest.clone(), unread)
+        })
+        .collect()
+}
+
 fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     let graph = Graph::new(facts, changes);
     let mut walk = Walk {
@@ -55,11 +72,19 @@ fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     }
     while let Some(manifest) = walk.queue.pop() {
         let name = graph.nodes[manifest].name;
-        let dependents = graph.dependents.get(manifest).into_iter().flatten();
-        for dependent in dependents.chain(&graph.unowned) {
-            walk.seed(dependent, SelectionReason::DependsOn(name.clone()));
+        let reason = if graph.unread.contains(manifest) {
+            SelectionReason::DependsOnUnread(name.clone())
+        } else {
+            SelectionReason::DependsOn(name.clone())
+        };
+        for dependent in graph.dependents.get(manifest).into_iter().flatten() {
+            walk.seed(dependent, reason.clone());
+        }
+        for unread in &graph.unread {
+            walk.seed(unread, SelectionReason::DependsOn(name.clone()));
         }
     }
+    walk.unread = graph.unread;
     walk
 }
 
@@ -104,7 +129,7 @@ struct Graph<'a> {
     inputs: &'a CompileInputs,
     nodes: BTreeMap<&'a RepoPath, Node<'a>>,
     dependents: BTreeMap<&'a RepoPath, Vec<&'a RepoPath>>,
-    unowned: Vec<&'a RepoPath>,
+    unread: BTreeSet<&'a RepoPath>,
 }
 
 #[derive(Default)]
@@ -114,6 +139,7 @@ struct Walk<'a> {
     reached: BTreeSet<&'a RepoPath>,
     queue: Vec<&'a RepoPath>,
     unknown: BTreeSet<&'a RepoPath>,
+    unread: BTreeSet<&'a RepoPath>,
 }
 
 impl<'a> Graph<'a> {
@@ -126,7 +152,7 @@ impl<'a> Graph<'a> {
             inputs: &facts.compile_inputs,
             nodes: BTreeMap::new(),
             dependents: BTreeMap::new(),
-            unowned: Vec::new(),
+            unread: BTreeSet::new(),
         };
         for (index, root) in roots.iter().enumerate() {
             for member in &root.members {
@@ -143,26 +169,46 @@ impl<'a> Graph<'a> {
         }
         for member in roots.iter().flat_map(|root| &root.members) {
             for dependency in &member.dependencies {
-                graph
-                    .dependents
-                    .entry(&dependency.manifest)
-                    .or_default()
-                    .push(&member.manifest);
-                graph.nodes.entry(&dependency.manifest).or_insert(Node {
-                    root: None,
-                    name: &dependency.name,
-                    directory: dependency.manifest.parent(),
-                    whole: true,
-                });
+                graph.depend(&member.manifest, dependency);
             }
         }
-        graph.unowned = graph
+        for (manifest, package) in &facts.unowned {
+            graph.nodes.entry(manifest).or_insert(Node {
+                root: None,
+                name: &package.name,
+                directory: manifest.parent(),
+                whole: true,
+            });
+            for dependency in &package.dependencies {
+                graph.depend(manifest, dependency);
+            }
+        }
+        graph.unread = graph
             .nodes
             .iter()
-            .filter(|(_, node)| node.root.is_none())
+            .filter(|(manifest, node)| {
+                node.root.is_none()
+                    && facts
+                        .unowned
+                        .get(*manifest)
+                        .is_none_or(|package| package.unread.is_some())
+            })
             .map(|(manifest, _)| *manifest)
             .collect();
         graph
+    }
+
+    fn depend(&mut self, dependent: &'a RepoPath, dependency: &'a MemberDependency) {
+        self.dependents
+            .entry(&dependency.manifest)
+            .or_default()
+            .push(dependent);
+        self.nodes.entry(&dependency.manifest).or_insert(Node {
+            root: None,
+            name: &dependency.name,
+            directory: dependency.manifest.parent(),
+            whole: true,
+        });
     }
 
     fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>) {

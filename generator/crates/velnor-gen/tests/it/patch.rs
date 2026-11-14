@@ -92,10 +92,16 @@ fn a_change_reaches_a_member_through_a_package_patched_in_cargo_configuration() 
             ),
             ("b/Cargo.toml", vec![lib("base", "b/base/Cargo.toml")?]),
         ],
-        &[(
-            ".cargo/config.toml",
-            "[patch.crates-io]\nmid = { path = \"vendor/mid\" }\n",
-        )],
+        &[
+            (
+                ".cargo/config.toml",
+                "[patch.crates-io]\nmid = { path = \"vendor/mid\" }\n",
+            ),
+            (
+                "vendor/mid/Cargo.toml",
+                "[package]\nname = \"mid\"\n\n[dependencies]\nbase = { path = \"../../b/base\" }\n",
+            ),
+        ],
     )?;
     let changes = ChangeSet {
         paths: BTreeSet::from([path("b/base/src/lib.rs")?]),

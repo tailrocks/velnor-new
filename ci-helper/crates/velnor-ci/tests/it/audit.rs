@@ -255,7 +255,11 @@ fn root_package_with_path_dependencies() -> Repo {
     repo.write(".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     repo.write(
         "Cargo.toml",
-        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
+        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[dependencies]\nside = { path = \"vendor/side\" }\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
+    );
+    repo.write(
+        "vendor/side/Cargo.toml",
+        "[package]\nname = \"side\"\nedition = \"2024\"\n",
     );
     repo.write(
         "other/Cargo.toml",
@@ -281,6 +285,7 @@ fn root_package_with_path_dependencies() -> Repo {
         "vendor/mid/build.rs",
         "vendor/leaf/src/lib.rs",
         "vendor/leaf/build.rs",
+        "vendor/side/src/lib.rs",
         "LICENSE",
         "ext.rs",
         "data/ext.txt",
@@ -297,74 +302,89 @@ fn root_package_with_path_dependencies() -> Repo {
 #[test]
 fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_declared_paths() {
     let repo = root_package_with_path_dependencies();
-    let target = "target/debug";
-    unit(
-        &repo,
-        &format!("{target}/deps/top-0000000000000001.d"),
-        "out.d: src/lib.rs shared/link.txt\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/other-0000000000000005.d"),
-        "out.d: other/src/lib.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/other-000000000000000c.d"),
-        "out.d: other/src/lib.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/top-000000000000000d.d"),
-        "out.d: src/lib.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/qa-0000000000000002.d"),
-        "out.d: qa.rs data/qa.txt\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/mid-0000000000000003.d"),
-        "out.d: vendor/mid/src/lib.rs vendor/mid/src/../../../NOTICE\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
-        "out.d: vendor/mid/build.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/build/mid-0000000000000004/output"),
-        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/leaf-0000000000000007.d"),
-        "out.d: vendor/leaf/src/lib.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/build/leaf-0000000000000008/build_script_build-0000000000000008.d"),
-        "out.d: vendor/leaf/build.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/build/leaf-0000000000000009/output"),
-        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/deps/ext-000000000000000a.d"),
-        "out.d: ext.rs data/ext.txt\n",
-    );
-
+    path_dependency_units(&repo);
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
         "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\n"
+    );
+}
+
+#[test]
+fn reads_below_an_unowned_manifest_that_does_not_parse_go_to_every_member_using_unowned_packages() {
+    let repo = root_package_with_path_dependencies();
+    repo.write("vendor/mid/Cargo.toml", "[package\nname = \"mid\"\n");
+    path_dependency_units(&repo);
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    let lock = fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(lock.contains("LICENSE\tother\nLICENSE\ttop\n"), "{lock}");
+}
+
+fn path_dependency_units(repo: &Repo) {
+    let target = "target/debug";
+    unit(
+        repo,
+        &format!("{target}/deps/top-0000000000000001.d"),
+        "out.d: src/lib.rs shared/link.txt\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/other-0000000000000005.d"),
+        "out.d: other/src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/other-000000000000000c.d"),
+        "out.d: other/src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/top-000000000000000d.d"),
+        "out.d: src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/qa-0000000000000002.d"),
+        "out.d: qa.rs data/qa.txt\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/mid-0000000000000003.d"),
+        "out.d: vendor/mid/src/lib.rs vendor/mid/src/../../../NOTICE\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: vendor/mid/build.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/build/mid-0000000000000004/output"),
+        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/leaf-0000000000000007.d"),
+        "out.d: vendor/leaf/src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/build/leaf-0000000000000008/build_script_build-0000000000000008.d"),
+        "out.d: vendor/leaf/build.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/build/leaf-0000000000000009/output"),
+        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/deps/ext-000000000000000a.d"),
+        "out.d: ext.rs data/ext.txt\n",
     );
 }
 

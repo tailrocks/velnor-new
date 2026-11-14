@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection};
+use velnor_model::{AllTrigger, PackageName, RepoPath, RustSelection, Unread};
 use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
@@ -42,6 +42,7 @@ pub fn outputs(selections: &BTreeMap<RepoPath, RustSelection>) -> Result<String,
 pub fn explain(
     selections: &BTreeMap<RepoPath, RustSelection>,
     unknown: &BTreeSet<RepoPath>,
+    unread: &BTreeMap<RepoPath, Unread>,
 ) -> String {
     let mut lines = Vec::new();
     for (root, selection) in selections {
@@ -57,6 +58,11 @@ pub fn explain(
         for (package, reason) in packages.into_iter().flatten() {
             lines.push(format!("  {package} {reason}\n"));
         }
+    }
+    for (manifest, cause) in unread {
+        lines.push(format!(
+            "unread package: {manifest}\n  {cause}, so Velnor cannot follow its dependencies and a change to any package selects every package that depends on it\n"
+        ));
     }
     for path in unknown {
         if path.as_str().contains('*') {
