@@ -171,8 +171,21 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));
     }
+    let env = table.get("env").and_then(toml::Value::as_table);
+    if let Some(name) = env.into_iter().flatten().find_map(|(name, value)| {
+        let forced = value
+            .get("force")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        let checked = CHECKED_ENV.iter().any(|prefix| name.starts_with(prefix));
+        (forced || checked).then(|| name.clone())
+    }) {
+        return Err(DetectError::invalid(file, Reason::CargoEnv(name)));
+    }
     Ok(())
 }
+
+const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
 
 fn patches(
     bytes: &[u8],

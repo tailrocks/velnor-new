@@ -53,6 +53,7 @@ pub enum Reason {
     MiseOverridesFlags(String),
     OtherMiseConfig,
     CapLints,
+    CargoEnv(String),
 }
 
 impl DetectError {
@@ -106,6 +107,10 @@ impl fmt::Display for Reason {
             Self::MiseOverridesFlags(name) => write!(
                 f,
                 "[{name}] is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::CargoEnv(name) => write!(
+                f,
+                "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
             Self::CapLints => f.write_str(
                 "rustflags with --cap-lints would let the lint step pass with warnings; remove it",

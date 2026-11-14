@@ -7,6 +7,8 @@ mod compare;
 mod gate;
 mod inputs;
 mod io;
+mod io_plan;
+mod io_restore;
 mod logscan;
 mod plan;
 mod support;

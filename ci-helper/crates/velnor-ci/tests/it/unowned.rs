@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::io::{Repo, plan_command, selected};
+use crate::io::Repo;
+use crate::io_plan::{plan_command, selected};
 
 #[test]
 fn plan_follows_the_edges_of_unowned_packages_and_explains_a_package_it_cannot_read() {

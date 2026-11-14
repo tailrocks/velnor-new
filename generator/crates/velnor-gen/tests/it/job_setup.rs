@@ -269,3 +269,42 @@ fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
+    let config = RepoPath::new("lab/.cargo/config.toml")?;
+    let rejected = [
+        "[target.x86_64-unknown-linux-gnu]\nrustflags = [\"--cap-lints\", \"allow\"]\n",
+        "[env]\nCLIPPY_ARGS = { value = \"\", force = true }\n",
+        "[env]\nANY_NAME = { value = \"x\", force = true }\n",
+        "[env]\nRUSTFLAGS = \"--cap-lints allow\"\n",
+        "[env]\nCARGO_BUILD_RUSTDOCFLAGS = \"\"\n",
+    ];
+    let accepted = [
+        "[env]\nANY_NAME = \"x\"\n",
+        "[env]\nANY_NAME = { value = \"x\", force = false }\n",
+        "[build]\nrustflags = [\"-C\", \"debuginfo=0\"]\n",
+    ];
+    for (text, ok) in rejected
+        .iter()
+        .map(|text| (text, false))
+        .chain(accepted.iter().map(|text| (text, true)))
+    {
+        let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+        repo.tracked_paths.insert(config.clone());
+        repo.files.insert(config.clone(), text.as_bytes().to_vec());
+        let result = expected_files(&repo);
+        if ok {
+            assert!(result.is_ok(), "{text}: {result:?}");
+        } else {
+            assert!(
+                matches!(
+                    &result,
+                    Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if *path == config
+                ),
+                "{text}: {result:?}"
+            );
+        }
+    }
+    Ok(())
+}
