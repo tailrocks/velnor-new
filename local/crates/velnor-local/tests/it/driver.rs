@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use serde_json::Value;
-use velnor_local::event::{NO_COMMIT, PullRequest, Push, Repository};
+use velnor_local::event::{MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin};
 use velnor_local::io::checkout::copy_untracked;
 use velnor_local::scenario::{Scenario, Step, overlapping};
 
@@ -87,16 +87,110 @@ fn a_push_payload_has_the_shape_github_sent_in_the_probe() {
 
 #[test]
 fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
-    let payload = REPOSITORY.pull_request(&PullRequest {
+    let pull = |action, before, merged| PullRequest {
+        action,
         number: 3,
         base: ("main", SHA_A),
         head: ("warm", SHA_B),
+        before,
+        merged,
         changed_files: 1,
+    };
+    let opened = REPOSITORY.pull_request(&pull("opened", None, false));
+    assert_like_github("pull_request", &opened);
+    assert_eq!(opened["pull_request"]["base"]["sha"], SHA_A);
+    assert_eq!(opened["pull_request"]["head"]["ref"], "warm");
+    assert_eq!(opened["number"], 3);
+    let pushed = REPOSITORY.pull_request(&pull("synchronize", Some(SHA_A), false));
+    assert_eq!(pushed["action"], "synchronize");
+    assert_eq!(
+        (&pushed["before"], &pushed["after"]),
+        (&SHA_A.into(), &SHA_B.into())
+    );
+    let merged = REPOSITORY.pull_request(&pull("closed", None, true));
+    assert_eq!(merged["pull_request"]["state"], "closed");
+    assert_eq!(merged["pull_request"]["merged"], true);
+}
+
+#[test]
+fn schedule_and_workflow_dispatch_payloads_have_the_shape_github_sent_in_the_probe() {
+    let scheduled = REPOSITORY.schedule("25 6 * * 1", ".github/workflows/ci.yml");
+    assert_like_github("schedule", &scheduled);
+    assert_eq!(scheduled["schedule"], "25 6 * * 1");
+    assert!(for_standin(scheduled).get("workflow").is_none());
+    let inputs = serde_json::json!({"tag": "x"});
+    let dispatched = REPOSITORY.workflow_dispatch("main", &inputs, ".github/workflows/ci.yml");
+    assert_like_github("workflow_dispatch", &dispatched);
+    assert_eq!(dispatched["ref"], "refs/heads/main");
+    assert_eq!(dispatched["inputs"]["tag"], "x");
+}
+
+#[test]
+fn a_merge_group_payload_names_the_queue_branch_and_its_base() {
+    let queue = "gh-readonly-queue/main/pr-3-007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
+    let payload = REPOSITORY.merge_group(&MergeGroup {
+        base: ("main", SHA_A),
+        head: (queue, SHA_B),
     });
-    assert_like_github("pull_request", &payload);
-    assert_eq!(payload["pull_request"]["base"]["sha"], SHA_A);
-    assert_eq!(payload["pull_request"]["head"]["ref"], "warm");
-    assert_eq!(payload["number"], 3);
+    assert_eq!(payload["action"], "checks_requested");
+    let group = &payload["merge_group"];
+    assert_eq!(group["head_ref"], format!("refs/heads/{queue}"));
+    assert_eq!(group["head_sha"], SHA_B);
+    assert_eq!(group["base_ref"], "refs/heads/main");
+    assert_eq!(group["base_sha"], SHA_A);
+    assert_eq!(group["head_commit"]["id"], SHA_B);
+}
+
+#[test]
+fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenarios");
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        let scenario = Scenario::parse(&std::fs::read(&path).unwrap_or_default())
+            .unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
+            .on_default_branch("main");
+        assert!(
+            scenario.refuse_options(["main"]).is_ok(),
+            "{}",
+            path.display()
+        );
+        names.extend(
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_owned),
+        );
+    }
+    names.sort();
+    assert_eq!(
+        names,
+        ["cold", "docs", "hub", "leaf", "lock", "story", "warm"]
+    );
+    let story = Scenario::parse(&read("scenarios/story.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("main");
+    let shape: Vec<String> = story
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            Step::OpenPullRequest { head, .. } => Some(format!("open {head}")),
+            Step::MergePullRequest(head) => Some(format!("merge {head}")),
+            Step::ClosePullRequest(head) => Some(format!("close {head}")),
+            Step::Push(head) => Some(format!("push {head}")),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        [
+            "open first",
+            "merge first",
+            "open second",
+            "push second",
+            "open third",
+            "close second"
+        ]
+    );
 }
 
 #[test]

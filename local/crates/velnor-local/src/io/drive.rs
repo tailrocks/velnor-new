@@ -15,9 +15,11 @@ use tokio::process::Command;
 use super::checkout::{copy_checkout, git};
 use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
 use crate::cli::RunArgs;
-use crate::event::{NO_COMMIT, PullRequest, Push, Repository};
+use crate::event::{NO_COMMIT, Push, Repository, for_standin};
 use crate::scenario::{Outcome, Scenario, Step, overlapping, verdict};
 use crate::standin;
+
+mod pulls;
 
 #[derive(Debug)]
 struct Driver<'a> {
@@ -26,7 +28,7 @@ struct Driver<'a> {
     addresses: Addresses,
     repo: PathBuf,
     pushed: BTreeMap<String, String>,
-    pulls: Vec<Value>,
+    pulls: Vec<pulls::Pull>,
     events: usize,
     outcomes: Vec<Outcome>,
 }
@@ -122,11 +124,87 @@ impl Driver<'_> {
                     append,
                     line,
                 } => self.commit(branch, append, line).await?,
+                Step::UpdateLock {
+                    branch,
+                    package,
+                    precise,
+                } => self.update_lock(branch, package, precise).await?,
                 Step::Push(branch) => self.push(branch).await?,
                 Step::OpenPullRequest { head, base } => self.open(head, base).await?,
+                Step::MergePullRequest(head) => self.merge(head).await?,
+                Step::ClosePullRequest(head) => self.close(head).await?,
+                Step::MergeGroup(head) => self.merge_group(head).await?,
+                Step::Schedule(cron) => self.schedule(cron).await?,
+                Step::WorkflowDispatch { branch, inputs } => self.dispatch(branch, inputs).await?,
             }
         }
         Ok(())
+    }
+
+    async fn on_branch(&self, branch: &str) -> io::Result<()> {
+        if self.git(&["switch", "-q", branch]).await.is_err() {
+            let base = &self.args.environment.default_branch;
+            self.git(&["switch", "-q", "-c", branch, base]).await?;
+        }
+        Ok(())
+    }
+
+    async fn update_lock(&self, branch: &str, package: &str, precise: &str) -> io::Result<()> {
+        self.on_branch(branch).await?;
+        let manifest = self.repo.join("Cargo.toml");
+        let update = [
+            "update",
+            "-p",
+            package,
+            "--precise",
+            precise,
+            "--manifest-path",
+        ];
+        let updated = Command::new("cargo")
+            .args(update)
+            .arg(&manifest)
+            .current_dir(&self.env.dir)
+            .kill_on_drop(true)
+            .output()
+            .await?;
+        if !updated.status.success() {
+            let error = String::from_utf8_lossy(&updated.stderr);
+            return Err(io::Error::other(format!("cargo update: {}", error.trim())));
+        }
+        let message = format!("Update {package} to {precise}");
+        self.git(&["commit", "-q", "-a", "-m", &message]).await?;
+        Ok(())
+    }
+
+    async fn schedule(&mut self, cron: &str) -> io::Result<()> {
+        let branch = self.args.environment.default_branch.clone();
+        self.git(&["switch", "-q", &branch]).await?;
+        let sha = self.git(&["rev-parse", "HEAD"]).await?;
+        let workflow = self.args.workflow.as_deref().unwrap_or_default();
+        let payload = self.repository().schedule(cron, workflow);
+        self.send("schedule", &payload, &format!("refs/heads/{branch}"), &sha)
+            .await
+    }
+
+    async fn dispatch(
+        &mut self,
+        branch: &str,
+        inputs: &BTreeMap<String, String>,
+    ) -> io::Result<()> {
+        self.git(&["switch", "-q", branch]).await?;
+        let sha = self.git(&["rev-parse", "HEAD"]).await?;
+        let workflow = self.args.workflow.as_deref().unwrap_or_default();
+        let inputs = json!(inputs);
+        let payload = self
+            .repository()
+            .workflow_dispatch(branch, &inputs, workflow);
+        self.send(
+            "workflow_dispatch",
+            &payload,
+            &format!("refs/heads/{branch}"),
+            &sha,
+        )
+        .await
     }
 
     fn repository(&self) -> Repository<'_> {
@@ -142,10 +220,7 @@ impl Driver<'_> {
     }
 
     async fn commit(&self, branch: &str, append: &str, line: &str) -> io::Result<()> {
-        if self.git(&["switch", "-q", branch]).await.is_err() {
-            let base = &self.args.environment.default_branch;
-            self.git(&["switch", "-q", "-c", branch, base]).await?;
-        }
+        self.on_branch(branch).await?;
         let file = self.repo.join(append);
         let parent = fs::canonicalize(file.parent().unwrap_or(&self.repo)).await?;
         if !parent.starts_with(fs::canonicalize(&self.repo).await?) {
@@ -174,50 +249,8 @@ impl Driver<'_> {
         });
         self.pushed.insert(branch.to_owned(), after.clone());
         self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
-            .await
-    }
-
-    async fn open(&mut self, head: &str, base: &str) -> io::Result<()> {
-        let number = self.pulls.len() as u64 + 1;
-        let base_sha = self.git(&["rev-parse", base]).await?;
-        let head_sha = self.git(&["rev-parse", head]).await?;
-        let range = format!("{base_sha}...{head_sha}");
-        let changed = self.git(&["diff", "--name-only", &range]).await?;
-        self.git(&["switch", "-q", "--detach", &base_sha]).await?;
-        self.git(&["merge", "-q", "--no-ff", "--no-edit", &head_sha])
             .await?;
-        let merge = self.git(&["rev-parse", "HEAD"]).await?;
-        let pull = format!("refs/pull/{number}");
-        self.git(&["update-ref", &format!("{pull}/merge"), &merge])
-            .await?;
-        self.git(&["update-ref", &format!("{pull}/head"), &head_sha])
-            .await?;
-        self.pulls.push(json!({
-            "number": number,
-            "state": "open",
-            "base": {"ref": base, "sha": base_sha},
-            "head": {"ref": head, "sha": head_sha},
-        }));
-        let pulls = Value::Array(self.pulls.clone()).to_string();
-        fs::write(self.env.dir.join("api/pulls.json"), pulls).await?;
-        let registration = json!({"base_branch": base}).to_string();
-        let path = format!("/_velnor/pull-requests/{number}");
-        request(&self.addresses.cache, "PUT", &path, &registration)
-            .await
-            .ok_or_else(|| io::Error::other(format!("cannot register pull request {number}")))?;
-        let payload = self.repository().pull_request(&PullRequest {
-            number,
-            base: (base, &base_sha),
-            head: (head, &head_sha),
-            changed_files: changed.lines().count(),
-        });
-        self.send(
-            "pull_request",
-            &payload,
-            &format!("refs/pull/{number}/merge"),
-            &merge,
-        )
-        .await
+        self.synchronize(branch, &after).await
     }
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> io::Result<T> {
@@ -237,7 +270,11 @@ impl Driver<'_> {
         self.events += 1;
         let name = format!("{}-{event}", self.events);
         let dir = self.env.dir.display();
-        fs::write(format!("{dir}/events/{name}.json"), payload.to_string()).await?;
+        fs::write(
+            format!("{dir}/events/{name}.json"),
+            for_standin(payload.clone()).to_string(),
+        )
+        .await?;
         let runs = "/_apis/v1/Message/workflow/runs";
         let known: Vec<standin::Run> = self.get(runs).await?;
         let label = format!("velnor-local={}", self.env.name);
@@ -284,15 +321,21 @@ impl Driver<'_> {
             .stderr(log)
             .status()
             .await?;
-        let before = self.outcomes.len();
+        let mut created = false;
         for run in self.get::<Vec<standin::Run>>(runs).await? {
-            if known.iter().all(|old| old.id != run.id) {
-                let outcome = self.outcome(run).await?;
-                println!("velnor-local: {}", outcome.line());
-                self.outcomes.push(outcome);
+            if known.iter().any(|old| old.id == run.id) {
+                continue;
             }
+            created = true;
+            if standin::conclusion(run.result.as_deref()) == Some("skipped") {
+                println!("velnor-local: {event} does not trigger {}", run.file_name);
+                continue;
+            }
+            let outcome = self.outcome(run).await?;
+            println!("velnor-local: {}", outcome.line());
+            self.outcomes.push(outcome);
         }
-        if !status.success() && self.outcomes.len() == before {
+        if !status.success() && !created {
             return Err(io::Error::other(format!(
                 "Runner.Client failed; see logs/{name}.log"
             )));
