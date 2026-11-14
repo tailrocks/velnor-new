@@ -7,11 +7,11 @@ mod repo;
 mod selection;
 
 pub use ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
     Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job,
+    Access, CargoCommand, Concurrency, FilterRef, HelperCommand, HelperRelease, Job,
     PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
     WorkflowPlan,
 };

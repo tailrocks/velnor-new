@@ -7,18 +7,19 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease, HelperVersion, Job,
-    JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
-    When, WorkflowPlan,
+    CommitSha, Concurrency, HelperCommand, HelperRelease, HelperVersion, Job, JobId, Permissions,
+    Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{
-    FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value, check_rules, render, render_workflow,
+    MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
+    check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 const PINNED: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+const SETUP_COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
+const SETUP_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 fn workflow(step: RenderedStep) -> RenderedWorkflow {
     RenderedWorkflow {
@@ -56,17 +57,12 @@ fn violations(step: RenderedStep) -> Vec<Rule> {
 }
 
 fn release() -> Result<HelperRelease, Box<dyn Error>> {
-    let binary = |name: &str, digit: char| -> Result<HelperBinary, Box<dyn Error>> {
-        Ok(HelperBinary {
-            url: DownloadUrl::new(format!("https://example.com/rust-ci-v1.2.3/{name}"))?,
-            sha256: Sha256::new(digit.to_string().repeat(64))?,
-        })
-    };
     Ok(HelperRelease::new(
         HelperVersion::new("1.2.3")?,
+        CommitSha::new(SETUP_COMMIT)?,
         BTreeMap::from([
-            (Platform::LinuxX64, binary("velnor-ci-linux-x64", 'a')?),
-            (Platform::MacosArm64, binary("velnor-ci-macos-arm64", 'b')?),
+            (Platform::LinuxX64, Sha256::new("a".repeat(64))?),
+            (Platform::MacosArm64, Sha256::new("b".repeat(64))?),
         ]),
     )?)
 }
@@ -174,22 +170,56 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
 }
 
 #[test]
+fn only_the_setup_action_of_this_repository_is_allowed_and_only_by_full_commit_sha() {
+    let cases = [
+        (
+            uses(&format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
+            Rule::ActionNotPinned(format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
+        ),
+        (
+            uses(&format!("{SETUP_ACTION}@main")),
+            Rule::ActionNotPinned(format!("{SETUP_ACTION}@main")),
+        ),
+        (
+            uses(&format!(
+                "tailrocks/velnor-new/actions/other@{SETUP_COMMIT}"
+            )),
+            Rule::ActionNotAllowed("tailrocks/velnor-new/actions/other".to_owned()),
+        ),
+    ];
+    for (step, rule) in cases {
+        assert!(violations(step.clone()).contains(&rule), "{step:?}");
+    }
+    assert_eq!(
+        violations(uses(&format!("{SETUP_ACTION}@{SETUP_COMMIT}"))),
+        Vec::<Rule>::new()
+    );
+}
+
+#[test]
 fn a_helper_release_that_could_not_work_is_refused_before_rendering() -> TestResult {
-    let good = format!("https://example.com/{}", "a");
-    assert!(DownloadUrl::new(good).is_ok());
-    for url in [
-        "https://?",
-        "https://",
-        "http://example.com/a",
-        "https://exa mple.com",
-        "https://a.com/'x",
+    assert!(CommitSha::new(SETUP_COMMIT).is_ok());
+    for commit in [
+        "",
+        "main",
+        "rust-ci-v1.2.3",
+        &SETUP_COMMIT[..39],
+        &SETUP_COMMIT.to_uppercase(),
+        &format!("{SETUP_COMMIT}0"),
     ] {
-        assert!(DownloadUrl::new(url).is_err(), "{url}");
+        assert!(CommitSha::new(commit).is_err(), "{commit}");
     }
     for digest in ["", "ABC", &"g".repeat(64), &"a".repeat(63)] {
         assert!(Sha256::new(digest).is_err(), "{digest}");
     }
-    assert!(HelperRelease::new(HelperVersion::new("1.2.3")?, BTreeMap::new()).is_err());
+    assert!(
+        HelperRelease::new(
+            HelperVersion::new("1.2.3")?,
+            CommitSha::new(SETUP_COMMIT)?,
+            BTreeMap::new()
+        )
+        .is_err()
+    );
     Ok(())
 }
 
@@ -230,15 +260,7 @@ fn a_compliant_workflow_is_accepted() {
         run("velnor-ci inputs save"),
         run("velnor-gen check"),
         run("cargo build --workspace --exclude diff-tool --features diffing"),
-        RenderedStep {
-            name: "fetch".to_owned(),
-            env: vec![(
-                "URL".to_owned(),
-                Value::Text("https://example.com".to_owned()),
-            )],
-            run: Some(FETCH_HELPER_RUN.to_owned()),
-            ..RenderedStep::default()
-        },
+        uses(&format!("{SETUP_ACTION}@{SETUP_COMMIT}")),
     ]);
     for action in [
         "actions/cache/restore",
@@ -255,26 +277,25 @@ fn a_compliant_workflow_is_accepted() {
 }
 
 #[test]
-fn fetch_helper_renders_the_constant_and_a_platform_table() -> TestResult {
-    let files = render(&plan(vec![StepKind::FetchHelper(release()?)])?)
+fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_digest() -> TestResult
+{
+    let files = render(&plan(vec![StepKind::InstallHelper(release()?)])?)
         .map_err(|found| format!("{found:?}"))?;
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;
-    let expected = "\
+    let expected = format!(
+        "\
     steps:
-      - name: Fetch velnor-ci 1.2.3
-        env:
-          # jactionlint ignore=obfuscation
-          SHA: '${{ fromJSON(''{\"Linux-X64\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"macOS-ARM64\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
-          # jactionlint ignore=obfuscation
-          URL: '${{ fromJSON(''{\"Linux-X64\":\"https://example.com/rust-ci-v1.2.3/velnor-ci-linux-x64\",\"macOS-ARM64\":\"https://example.com/rust-ci-v1.2.3/velnor-ci-macos-arm64\"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
-        run: |
-          curl -fsSL --create-dirs -o \"$RUNNER_TEMP/vbin/velnor-ci\" \"$URL\"
-          echo \"$SHA  $RUNNER_TEMP/vbin/velnor-ci\" > \"$RUNNER_TEMP/velnor-ci.sha\"
-          shasum -a 256 -c \"$RUNNER_TEMP/velnor-ci.sha\"
-          chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
-          echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"
-";
-    assert!(text.ends_with(expected), "{text}");
+      - name: Install velnor-ci 1.2.3
+        uses: {SETUP_ACTION}@{SETUP_COMMIT}  # rust-ci-v1.2.3
+        with:
+          version: '1.2.3'
+          sha256-linux-x64: {}
+          sha256-macos-arm64: {}
+",
+        "a".repeat(64),
+        "b".repeat(64)
+    );
+    assert!(text.ends_with(&expected), "{text}");
     Ok(())
 }
 
@@ -315,9 +336,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
                 .take_while(|next| next.starts_with(&" ".repeat(indent + 1)))
                 .map(|next| next.trim_start())
                 .collect();
-            if block.join("\n") != FETCH_HELPER_RUN {
-                found.push(block.join("\n"));
-            }
+            found.push(block.join("\n"));
         } else if value.is_empty() || quoted_open {
             found.push(value.to_owned());
         }
@@ -326,22 +345,17 @@ fn multi_line_runs(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_golden_workflow_has_a_multi_line_run_other_than_the_fetch_constant() -> TestResult {
-    let allowed = format!(
-        "run: |\n{}\n",
-        FETCH_HELPER_RUN
-            .lines()
-            .map(|line| format!("  {line}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+fn no_golden_workflow_has_a_multi_line_run() -> TestResult {
     let rejected = [
         "run: |\n  echo one\n  echo two\n",
         "run: >\n  echo one\n",
         "run: 'echo one\n  echo two'\n",
         "run:\n  echo one\n",
     ];
-    assert_eq!(multi_line_runs(&allowed), Vec::<String>::new());
+    assert_eq!(
+        multi_line_runs("run: cargo-fmt --all --check\n"),
+        Vec::<String>::new()
+    );
     for text in rejected {
         assert_eq!(multi_line_runs(text).len(), 1, "{text}");
     }

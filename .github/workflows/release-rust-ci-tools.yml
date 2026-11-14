@@ -17,16 +17,11 @@ jobs:
       contents: read
       checks: read
     steps:
-      - name: Fetch velnor-ci 0.1.79
-        env:
-          SHA: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
-          URL: https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64
-        run: |
-          curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"
-          echo "$SHA  $RUNNER_TEMP/vbin/velnor-ci" > "$RUNNER_TEMP/velnor-ci.sha"
-          shasum -a 256 -c "$RUNNER_TEMP/velnor-ci.sha"
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb
+        with:
+          version: 0.1.79
+          sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
       - name: Check that the tagged commit is on the default branch and passed Required
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -163,7 +158,9 @@ jobs:
       - name: Verify every file against SHA256SUMS
         working-directory: dist
         run: sha256sum --check --strict SHA256SUMS
+      - name: Record the commit of the release
+        run: echo "$GITHUB_SHA" > dist/COMMIT
       - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-ci-macos-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64 dist/velnor-gen-macos-arm64
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/COMMIT dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-ci-macos-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64 dist/velnor-gen-macos-arm64
