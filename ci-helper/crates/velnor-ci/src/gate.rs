@@ -7,11 +7,13 @@ use serde::de::DeserializeOwned;
 
 use crate::error::CiError;
 use crate::github::{
-    ApiCompare, ApiPage, ApiRepo, ApiRule, ApiRunJob, ApiWorkflowRun, GitHub, Repo, compare_path,
-    parse, repo_path, rules_path, run_jobs_path, runs_path,
+    ApiBranch, ApiCompare, ApiPage, ApiRepo, ApiRequiredCheck, ApiRule, ApiRunJob, ApiWorkflowRun,
+    GitHub, Repo, branch_path, compare_path, parse, repo_path, rules_path, run_jobs_path,
+    runs_path,
 };
 
-const ACTIONS_APP_ID: u64 = 15368;
+const ACTIONS_APP_ID: i64 = 15368;
+const ANY_APP: i64 = -1;
 const RULES_PAGE: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,25 +131,45 @@ fn required_checks(
                     ))
                 })?;
             for check in listed {
-                if let Some(app) = check.integration_id.filter(|app| *app != ACTIONS_APP_ID) {
-                    return Err(CiError::new(format!(
-                        "branch {branch} requires check {} from the GitHub App {app}, and only a check from GitHub Actions ({ACTIONS_APP_ID}) can be tied to a push run",
-                        check.context
-                    )));
-                }
-                checks.insert(check.context.clone());
+                require(&mut checks, branch, check)?;
             }
         }
         if rules.len() < RULES_PAGE {
             break;
         }
     }
+    let ApiBranch { protection } = parse(&github.get(&branch_path(repo, branch))?, "branch")?;
+    let classic = protection.required_status_checks;
+    if classic.enforcement_level != "off" {
+        checks.extend(classic.contexts);
+        for check in &classic.checks {
+            require(&mut checks, branch, check)?;
+        }
+    }
     if checks.is_empty() {
         return Err(CiError::new(format!(
-            "branch {branch} requires no status check in its rules, so no commit of it can be released"
+            "branch {branch} requires no status check in its rules or its branch protection, so no commit of it can be released"
         )));
     }
     Ok(checks)
+}
+
+fn require(
+    checks: &mut BTreeSet<String>,
+    branch: &str,
+    check: &ApiRequiredCheck,
+) -> Result<(), CiError> {
+    if let Some(app) = check
+        .integration_id
+        .filter(|app| ![ACTIONS_APP_ID, ANY_APP].contains(app))
+    {
+        return Err(CiError::new(format!(
+            "branch {branch} requires check {} from the GitHub App {app}, and only a check from GitHub Actions ({ACTIONS_APP_ID}) can be tied to a push run",
+            check.context
+        )));
+    }
+    checks.insert(check.context.clone());
+    Ok(())
 }
 
 fn all_pages<T: DeserializeOwned>(

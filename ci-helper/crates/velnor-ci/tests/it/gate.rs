@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 use velnor_ci::gate::{Verdict, release_gate};
-use velnor_ci::github::{compare_path, rules_path, run_jobs_path, runs_path};
+use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, runs_path};
 
 use crate::support::{FakeGitHub, repo};
 
@@ -62,6 +62,13 @@ impl Recorded {
         })
     }
 
+    fn protection(self, branch: &str, level: &str, contexts: &[&str], checks: &Value) -> Self {
+        self.set(
+            branch_path(&repo(), branch),
+            json!({"protection": {"enabled": level != "off", "required_status_checks": {"enforcement_level": level, "contexts": contexts, "checks": checks}}}),
+        )
+    }
+
     fn total(self, path: &str, total: usize) -> Self {
         self.edit(path, |page| page["total_count"] = json!(total))
     }
@@ -86,13 +93,11 @@ fn check(context: &str) -> Value {
 }
 
 fn required(checks: &[Value]) -> Value {
-    json!({
-        "type": "required_status_checks",
-        "parameters": {"strict_required_status_checks_policy": true, "do_not_enforce_on_create": false, "required_status_checks": checks},
-        "ruleset_source_type": "Repository",
-        "ruleset_source": "tailrocks/velnor-new",
-        "ruleset_id": 24_396_608
-    })
+    json!({"type": "required_status_checks", "parameters": {"strict_required_status_checks_policy": true, "do_not_enforce_on_create": false, "required_status_checks": checks}, "ruleset_source_type": "Repository", "ruleset_source": "tailrocks/velnor-new", "ruleset_id": 24_396_608})
+}
+
+fn assert_refused(said: &Result<Verdict, String>, part: &str) {
+    assert!(said.as_ref().is_err_and(|e| e.contains(part)), "{said:?}");
 }
 
 fn both() -> Recorded {
@@ -236,20 +241,29 @@ fn a_required_check_from_a_fork_whose_branch_is_named_main_is_refused() {
 }
 
 #[test]
-fn a_required_check_the_rules_tie_to_another_github_app_is_refused() {
+fn a_required_check_the_rules_or_the_protection_tie_to_another_github_app_is_refused() {
     let actions = json!({"context": "Required", "integration_id": 15368});
     assert_eq!(
         Recorded::new().requiring(&[actions]).gate(GREEN),
         Ok(verdict(true, GREEN, "check Required passed\n"))
     );
     let other = json!({"context": "Required", "integration_id": 9426});
-    assert_eq!(
-        Recorded::new().requiring(&[other]).gate(GREEN),
-        Err(
-            "branch main requires check Required from the GitHub App 9426, and only a check from GitHub Actions (15368) can be tied to a push run"
-                .to_owned()
-        )
-    );
+    let dco = json!([{"context": "DCO", "app_id": 1861}]);
+    for (recorded, check, app) in [
+        (Recorded::new().requiring(&[other]), "Required", 9426),
+        (
+            Recorded::new().protection("main", "everyone", &["DCO"], &dco),
+            "DCO",
+            1861,
+        ),
+    ] {
+        assert_eq!(
+            recorded.gate(GREEN),
+            Err(format!(
+                "branch main requires check {check} from the GitHub App {app}, and only a check from GitHub Actions (15368) can be tied to a push run"
+            ))
+        );
+    }
 }
 
 #[test]
@@ -261,23 +275,35 @@ fn a_commit_ahead_of_the_default_branch_is_refused_even_with_green_checks() {
     let off_main =
         |sha: &str| format!("commit {sha} is not on the default branch main (comparison: ahead)");
     assert_eq!(said, Err(off_main(GREEN)));
-    let said = both().gate(AHEAD);
-    assert!(
-        said.as_ref()
-            .is_err_and(|e| e.starts_with(&format!("{}\n", off_main(AHEAD)))),
-        "{said:?}"
-    );
+    assert_refused(&both().gate(AHEAD), &format!("{}\n", off_main(AHEAD)));
 }
 
 #[test]
-fn a_default_branch_whose_rules_require_no_check_releases_nothing() {
-    let refusal = Err(
-        "branch main requires no status check in its rules, so no commit of it can be released"
+fn a_check_that_the_rules_or_classic_branch_protection_require_counts_and_none_refuses() {
+    let none = Err(
+        "branch main requires no status check in its rules or its branch protection, so no commit of it can be released"
             .to_owned(),
     );
-    assert_eq!(Recorded::new().requiring(&[]).gate(GREEN), refusal);
-    let no_rule = Recorded::new().rules(vec![json!({"type": "deletion"})]);
-    assert_eq!(no_rule.gate(GREEN), refusal);
+    assert_eq!(Recorded::new().requiring(&[]).gate(GREEN), none);
+    let verdict_check = json!([{"context": VERDICT, "app_id": 15368}]);
+    let enforced = Recorded::new()
+        .protection("main", "everyone", &[VERDICT], &verdict_check)
+        .green_job(VERDICT, failing);
+    assert_eq!(enforced.gate(GREEN), concluded(GREEN, VERDICT, "failure"));
+    let off = Recorded::new()
+        .protection("main", "off", &[VERDICT], &verdict_check)
+        .green_job(VERDICT, failing);
+    let only_required = Ok(verdict(true, GREEN, "check Required passed\n"));
+    assert_eq!(off.gate(GREEN), only_required);
+    let classic_only = Recorded::new()
+        .rules(vec![json!({"type": "deletion"})])
+        .protection("main", "non_admins", &["Required"], &json!([]));
+    assert_eq!(classic_only.gate(GREEN), only_required);
+    let unknown = Recorded::new().set(
+        branch_path(&repo(), "main"),
+        json!({"name": "main", "protected": true}),
+    );
+    assert_refused(&unknown.gate(GREEN), "cannot read GitHub branch response");
 }
 
 #[test]
@@ -309,12 +335,7 @@ fn a_failing_required_check_on_a_later_page_of_rules_runs_or_jobs_is_seen() {
         json!({"total_count": 4, "jobs": [failed_job(VERDICT)]}),
     );
     for recorded in [rules_page_2, runs_page_2, jobs_page_2] {
-        let said = recorded.gate(GREEN);
-        assert!(
-            said.as_ref()
-                .is_err_and(|e| e.ends_with(": it concluded failure")),
-            "{said:?}"
-        );
+        assert_refused(&recorded.gate(GREEN), ": it concluded failure");
     }
     let short = both().total(&runs_path(&repo(), GREEN, 1), 7).set(
         runs_path(&repo(), GREEN, 2),
@@ -331,11 +352,7 @@ fn a_value_that_is_not_a_full_commit_sha_never_reaches_the_api() {
     let upper = GREEN.to_uppercase();
     for sha in ["", "main", "21ec8b9f", upper.as_str(), "../x"] {
         let said = release_gate(&FakeGitHub::default(), &repo(), sha).map_err(|e| e.to_string());
-        assert!(
-            said.as_ref()
-                .is_err_and(|e| e.contains("not a full lowercase commit SHA")),
-            "{said:?}"
-        );
+        assert_refused(&said, "not a full lowercase commit SHA");
     }
 }
 
@@ -350,6 +367,7 @@ fn the_default_branch_and_its_rules_are_whatever_the_repository_says() {
             rules_path(&repo(), branch, 1),
             json!([required(&[check("Required")])]),
         )
+        .protection(branch, "off", &[], &json!([]))
         .set(
             compare_path(&repo(), branch, GREEN),
             json!({"status": "identical"}),

@@ -109,7 +109,25 @@ pub struct ApiRuleParameters {
 #[derive(Debug, Deserialize)]
 pub struct ApiRequiredCheck {
     pub context: String,
-    pub integration_id: Option<u64>,
+    #[serde(alias = "app_id")]
+    pub integration_id: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiBranch {
+    pub protection: ApiProtection,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiProtection {
+    pub required_status_checks: ApiClassicChecks,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiClassicChecks {
+    pub enforcement_level: String,
+    pub contexts: Vec<String>,
+    pub checks: Vec<ApiRequiredCheck>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +175,11 @@ pub fn rules_path(repo: &Repo, branch: &str, page: u32) -> String {
         "/repos/{repo}/rules/branches/{}?per_page=100&page={page}",
         encode(branch)
     )
+}
+
+#[must_use]
+pub fn branch_path(repo: &Repo, branch: &str) -> String {
+    format!("/repos/{repo}/branches/{}", encode(branch))
 }
 
 #[must_use]
