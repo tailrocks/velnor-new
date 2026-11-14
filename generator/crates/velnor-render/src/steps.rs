@@ -56,13 +56,12 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ],
             ..RenderedStep::default()
         },
-        StepKind::InstallTools(tools) => RenderedStep {
+        StepKind::InstallTools => RenderedStep {
             name: "Install tools".to_owned(),
             uses: Some(MISE.to_owned()),
             with: vec![
                 ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
                 ("cache".to_owned(), Value::Bool(false)),
-                ("install_args".to_owned(), Value::Text(tools.join(" "))),
             ],
             ..RenderedStep::default()
         },
@@ -126,7 +125,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestRun { filter } => (
             "Test".into(),
             format!(
-                "cargo-nextest nextest run --workspace --locked --no-fail-fast -E '{}'",
+                "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
                 match filter {
                     FilterRef::All => "all()",
                 }

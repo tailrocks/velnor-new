@@ -169,7 +169,6 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
 }
 
 fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
-    let tools: Vec<String> = facts.tools.tools.keys().cloned().collect();
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
     steps.extend(
         facts
@@ -177,8 +176,8 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
             .iter()
             .map(|release| step(StepKind::FetchHelper(release.clone()))),
     );
-    if !tools.is_empty() {
-        steps.push(step(StepKind::InstallTools(tools)));
+    if !facts.tools.tools.is_empty() {
+        steps.push(step(StepKind::InstallTools));
     }
     let declared = facts.toolchain.as_ref();
     if declared.is_some_and(|toolchain| toolchain.path.is_some()) {

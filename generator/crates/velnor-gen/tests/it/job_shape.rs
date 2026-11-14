@@ -221,12 +221,8 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
     );
     assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  rust-lint-lab:\n"), "{text}");
     assert!(text.contains("    name: CI passed\n"), "{text}");
-    let installs: Vec<&str> = text
-        .lines()
-        .filter_map(|line| line.trim().strip_prefix("install_args: "))
-        .collect();
-    let all = "'aqua:nextest-rs/nextest/cargo-nextest rust'";
-    assert_eq!(installs, [all, all, all]);
+    assert_eq!(text.matches("      - name: Install tools\n").count(), 3);
+    assert!(!text.contains("install_args"), "{text}");
     let components: Vec<usize> = ["  rust-root:", "  rust-lint-lab:", "  rust-test-lab:"]
         .iter()
         .map(|job| {

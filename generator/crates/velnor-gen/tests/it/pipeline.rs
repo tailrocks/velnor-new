@@ -93,7 +93,6 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'aqua:nextest-rs/nextest/cargo-nextest rust'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Format
@@ -104,7 +103,7 @@ jobs:
         run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
@@ -123,7 +122,6 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
-          install_args: 'aqua:nextest-rs/nextest/cargo-nextest rust'
       - name: Add Rust components
         working-directory: lab
         run: rustup component add clippy rustfmt
@@ -138,7 +136,7 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: lab
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E ''all()'''
+        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: lab

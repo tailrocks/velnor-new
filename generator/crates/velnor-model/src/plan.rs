@@ -73,7 +73,7 @@ pub enum When {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
     Checkout { depth: u32 },
-    InstallTools(Vec<String>),
+    InstallTools,
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     Cargo(CargoCommand),
