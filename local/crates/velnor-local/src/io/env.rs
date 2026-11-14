@@ -197,7 +197,8 @@ impl<E: Engine> Environment<E> {
         }
         let mount = |from: &str, to: &str| format!("{}:{to}", self.dir.join(from).display());
         let token = self.dir.join("keys/control");
-        if fs::metadata(&token).await.is_err() {
+        let kept = fs::read_to_string(&token).await.unwrap_or_default();
+        if !(kept.len() == 64 && kept.bytes().all(|byte| byte.is_ascii_hexdigit())) {
             let mut bytes = [0_u8; 32];
             SystemRandom::new()
                 .fill(&mut bytes)
@@ -206,14 +207,17 @@ impl<E: Engine> Environment<E> {
                 let _ = write!(hex, "{byte:02x}");
                 hex
             });
+            let fresh = self.dir.join("keys/control.new");
+            let _ = fs::remove_file(&fresh).await;
             fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .mode(0o600)
-                .open(&token)
+                .open(&fresh)
                 .await?
                 .write_all(hex.as_bytes())
                 .await?;
+            fs::rename(&fresh, &token).await?;
         }
         fs::set_permissions(&token, Permissions::from_mode(0o600)).await?;
         let checkout = format!("{}:/repo:ro", repo.display());

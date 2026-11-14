@@ -191,6 +191,10 @@ pub struct ControlArgs {
         help = "Second address to listen on, where every request must carry the control token as a bearer token"
     )]
     pub control_listen: Option<SocketAddr>,
-    #[arg(long, help = "File that holds the control token")]
+    #[arg(
+        long,
+        requires = "control_listen",
+        help = "File that holds the control token"
+    )]
     pub control_token: Option<PathBuf>,
 }

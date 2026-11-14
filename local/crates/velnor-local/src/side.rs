@@ -45,6 +45,15 @@ impl Side {
 }
 
 #[must_use]
+pub fn fork_may_restore(git_ref: &str, forks: &BTreeSet<u64>) -> bool {
+    git_ref
+        .strip_prefix("refs/pull/")
+        .and_then(|rest| rest.strip_suffix("/merge"))
+        .and_then(|number| number.parse().ok())
+        .is_some_and(|number| forks.contains(&number))
+}
+
+#[must_use]
 pub fn push_event(
     repository: &Repository<'_>,
     push: &Push<'_>,

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod restore;
+
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -19,10 +21,12 @@ use serde_json::json;
 use tokio::fs;
 use tokio::net::TcpListener;
 
+pub use restore::RestoreOnly;
+
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
 use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, ControlArgs, UpArgs};
-use crate::protocol::{control_only, writes};
+use crate::protocol::control_only;
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -64,16 +68,17 @@ async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {
         upstream: args.upstream,
         limit_bytes: args.limit_bytes,
     };
+    let restoring = args
+        .restore_only
+        .then(|| Arc::new(RestoreOnly::new(config.token_key.clone())));
     let server = CacheServer::open(config).await?;
-    let restoring = args.restore_only;
     serve("cache-server", args.listen, &args.control, move |request| {
-        let server = Arc::clone(&server);
+        let (server, restoring) = (Arc::clone(&server), restoring.clone());
         async move {
             let handle = |request| async move { server.handle(request).await };
-            if restoring {
-                restore_only(request, handle).await
-            } else {
-                handle(request).await
+            match restoring {
+                Some(restoring) => restoring.handle(request, handle).await,
+                None => handle(request).await,
             }
         }
     })
@@ -110,18 +115,6 @@ where
     }
     let refusal = json!({"message": "this port needs the control token as a bearer token"});
     super::json_response(401, &refusal)
-}
-
-pub async fn restore_only<H, F>(request: Request<Body>, handler: H) -> Response<Body>
-where
-    H: FnOnce(Request<Body>) -> F,
-    F: Future<Output = Response<Body>>,
-{
-    if writes(request.method().as_str(), request.uri().path()) {
-        let refusal = json!({"message": "this cache server serves restores only, as GitHub does for pull requests from forks"});
-        return super::json_response(403, &refusal);
-    }
-    handler(request).await
 }
 
 pub async fn open<H, F>(request: Request<Body>, handler: H) -> Response<Body>

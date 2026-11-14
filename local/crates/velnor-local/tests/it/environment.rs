@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use velnor_local::cli::EnvironmentArgs;
 use velnor_local::event::{PullRequest, Push, Repository};
 use velnor_local::io::env::{Engine, Environment};
-use velnor_local::io::{guarded, open, restore_only};
+use velnor_local::io::{guarded, open};
 
 use crate::support::temp_dir;
 
@@ -332,36 +332,53 @@ async fn the_open_port_refuses_pull_request_registration() {
 }
 
 #[tokio::test]
-async fn the_untrusted_cache_server_serves_restores_and_refuses_every_write() {
-    use http_body_util::BodyExt;
-    let handled = |_| async {
-        let body: velnor_local::io::Body = http_body_util::Empty::new()
-            .map_err(|never| match never {})
-            .boxed_unsync();
-        let mut response = hyper::Response::new(body);
-        *response.status_mut() = hyper::StatusCode::NO_CONTENT;
-        response
+async fn a_malformed_control_token_is_replaced_by_a_full_one() {
+    let dir = temp_dir("environment-token");
+    std::fs::create_dir_all(dir.join("keys")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(dir.join("keys/control"), "0f1e").unwrap_or_else(|e| unreachable!("{e}"));
+    let docker = FakeDocker::default();
+    let env = Environment::at(&dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let args = EnvironmentArgs {
+        dir: dir.clone(),
+        runners: 1_u16,
+        fork_runners: 0,
+        default_branch: "main".to_owned(),
     };
-    let twirp = "/twirp/github.actions.results.api.v1.CacheService/";
-    for (method, path, status) in [
-        ("POST", format!("{twirp}GetCacheEntryDownloadURL"), 204),
-        ("GET", "/velnor-cache/archives/abc".to_owned(), 204),
-        ("GET", "/_apis/v1/Message".to_owned(), 204),
-        ("POST", format!("{twirp}CreateCacheEntry"), 403),
-        ("POST", format!("{twirp}FinalizeCacheEntryUpload"), 403),
-        ("PUT", "/velnor-cache/archives/abc".to_owned(), 403),
-        ("PUT", "/_velnor/pull-requests/3".to_owned(), 403),
-    ] {
-        let request = hyper::Request::builder()
-            .method(method)
-            .uri(&path)
-            .body(
-                http_body_util::Empty::new()
-                    .map_err(|never| match never {})
-                    .boxed_unsync(),
-            )
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        let response = restore_only(request, handled).await;
-        assert_eq!(response.status().as_u16(), status, "{method} {path}");
-    }
+    assert!(env.up(&dir, &args).await.is_err());
+    let token = std::fs::read_to_string(dir.join("keys/control")).unwrap_or_default();
+    assert_eq!(token.len(), 64, "{token}");
+    assert!(
+        token.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "{token}"
+    );
+    assert!(!dir.join("keys/control.new").exists());
+}
+
+#[test]
+fn a_control_token_without_a_control_listener_is_refused() {
+    use clap::Parser;
+    let parse = |extra: &[&str]| {
+        let base = [
+            "velnor-local",
+            "cache-server",
+            "--upstream",
+            "u:80",
+            "--dir",
+            "d",
+            "--token-key",
+            "k",
+        ];
+        velnor_local::cli::Cli::try_parse_from(base.iter().chain(extra)).is_ok()
+    };
+    assert!(parse(&[]));
+    assert!(parse(&[
+        "--control-listen",
+        "127.0.0.1:81",
+        "--control-token",
+        "t"
+    ]));
+    assert!(!parse(&["--control-token", "t"]));
+    assert!(!parse(&["--control-listen", "127.0.0.1:81"]));
 }

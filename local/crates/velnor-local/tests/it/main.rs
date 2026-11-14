@@ -9,6 +9,7 @@ mod environment;
 mod io;
 mod io_edges;
 mod report;
+mod restore;
 mod side;
 mod standin;
 mod store;
