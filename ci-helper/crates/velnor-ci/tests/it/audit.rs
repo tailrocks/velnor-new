@@ -437,3 +437,22 @@ fn a_stale_target_unit_or_a_build_output_older_than_its_build_script_makes_the_a
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+#[test]
+fn a_built_target_that_needs_features_still_credits_its_reads() {
+    let repo = workspace_below_the_root();
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    unit(
+        &repo,
+        &format!("{target}/deps/extra-f00000000000000e.d"),
+        "out.d: app/src/extra.rs app/src/../../../shared/greeting.txt\n",
+    );
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        "shared/greeting.txt\tapp\n"
+    );
+}
