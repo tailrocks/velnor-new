@@ -75,10 +75,7 @@ impl Driver<'_> {
             closed_at: closed_at.as_deref(),
             changed_files: changed.lines().count(),
         });
-        self.fork = pull.fork;
-        let sent = self.send("pull_request", &payload, &git_ref, &sha).await;
-        self.fork = false;
-        sent
+        self.send("pull_request", &payload, &git_ref, &sha).await
     }
 
     pub(super) async fn open(&mut self, head: &str, base: &str, fork: bool) -> io::Result<()> {

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
+use std::fs::Permissions;
 use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -12,12 +14,14 @@ use std::time::Duration;
 use http_body_util::{BodyExt, Full};
 use hyper::Request;
 use ring::rand::{SecureRandom, SystemRandom};
+use serde_json::Value;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use super::proxy::Proxy;
 use crate::cli::EnvironmentArgs;
+use crate::side::Side;
 
 pub(super) const STANDIN_IMAGE: &str = "velnor-local/runner-server";
 const LOCAL_IMAGE: &str = "velnor-local/cache-server";
@@ -28,6 +32,7 @@ const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -
 
 pub trait Engine: Sync {
     fn docker(&self, args: &[&str]) -> impl Future<Output = io::Result<String>> + Send;
+    fn logged(&self, args: &[&str], log: &Path) -> impl Future<Output = io::Result<bool>> + Send;
 }
 
 #[derive(Debug)]
@@ -37,6 +42,19 @@ impl Engine for DockerCli {
     async fn docker(&self, args: &[&str]) -> io::Result<String> {
         let stdout = program("docker", args, None).await?;
         Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
+    }
+
+    async fn logged(&self, args: &[&str], log: &Path) -> io::Result<bool> {
+        let log = std::fs::File::create(log)?;
+        let status = Command::new("docker")
+            .args(args)
+            .kill_on_drop(true)
+            .stdin(Stdio::null())
+            .stdout(log.try_clone()?)
+            .stderr(log)
+            .status()
+            .await?;
+        Ok(status.success())
     }
 }
 
@@ -54,6 +72,13 @@ pub struct Addresses {
     pub(super) stub: Proxy,
     pub stub_url: String,
     pub(super) token: String,
+}
+
+impl Addresses {
+    pub(super) fn standin(&self, side: Side) -> io::Result<&Proxy> {
+        side.pick(&self.cache, self.fork.as_ref())
+            .map_err(io::Error::other)
+    }
 }
 
 pub(super) fn words(text: &'static str) -> Vec<&'static str> {
@@ -123,18 +148,24 @@ impl<E: Engine> Environment<E> {
             .await
     }
 
-    pub fn network(&self, fork: bool) -> String {
-        if fork {
-            format!("{}-fork", self.name)
-        } else {
-            self.name.clone()
+    pub fn network(&self, side: Side) -> String {
+        match side {
+            Side::Untrusted => format!("{}-fork", self.name),
+            Side::Trusted => self.name.clone(),
         }
+    }
+
+    pub async fn client(&self, payload: &Value, values: &[&str], log: &Path) -> io::Result<bool> {
+        let label = format!("velnor-local={}", self.name);
+        let network = self.network(Side::of(payload));
+        let head = ["run", "--rm", "--label", &label, "--network", &network];
+        self.engine.logged(&[&head[..], values].concat(), log).await
     }
 
     async fn start(&self, role: &str, constant: &'static str, values: &[&str]) -> io::Result<()> {
         let container = format!("{}-{role}", self.name);
         let label = format!("velnor-local={}", self.name);
-        let network = self.network(role.starts_with("fork-"));
+        let network = self.network(Side::of_role(role));
         let head = [
             "--name",
             &container,
@@ -165,14 +196,6 @@ impl<E: Engine> Environment<E> {
             fs::write(&pulls, "[]").await?;
         }
         let mount = |from: &str, to: &str| format!("{}:{to}", self.dir.join(from).display());
-        if fs::metadata(self.dir.join("keys/token.pub.der"))
-            .await
-            .is_err()
-        {
-            let keys = mount("keys", "/keys");
-            let values = ["-v", &keys, STANDIN_IMAGE, "-c", OPENSSL];
-            self.docker("run --rm --entrypoint sh", &values).await?;
-        }
         let token = self.dir.join("keys/control");
         if fs::metadata(&token).await.is_err() {
             let mut bytes = [0_u8; 32];
@@ -183,8 +206,16 @@ impl<E: Engine> Environment<E> {
                 let _ = write!(hex, "{byte:02x}");
                 hex
             });
-            fs::write(&token, hex).await?;
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&token)
+                .await?
+                .write_all(hex.as_bytes())
+                .await?;
         }
+        fs::set_permissions(&token, Permissions::from_mode(0o600)).await?;
         let checkout = format!("{}:/repo:ro", repo.display());
         let state = mount("api", "/api");
         let control = mount("keys/control", "/keys/control:ro");
@@ -221,11 +252,24 @@ impl<E: Engine> Environment<E> {
 
     async fn side(&self, prefix: &str, runners: u16) -> io::Result<()> {
         let label = format!("velnor-local={}", self.name);
-        let network = self.network(!prefix.is_empty());
+        let network = self.network(Side::of_role(prefix));
         self.docker("network create", &["--label", &label, &network])
             .await?;
         let mount = |from: &str, to: &str| format!("{}:{to}", self.dir.join(from).display());
-        let pem = mount("keys/token.pem", "/keys/token.pem:ro");
+        let keys = match Side::of_role(prefix) {
+            Side::Trusted => "keys",
+            Side::Untrusted => "keys/fork",
+        };
+        fs::create_dir_all(self.dir.join(keys)).await?;
+        if fs::metadata(self.dir.join(keys).join("token.pub.der"))
+            .await
+            .is_err()
+        {
+            let generated = mount(keys, "/keys");
+            let values = ["-v", &generated, STANDIN_IMAGE, "-c", OPENSSL];
+            self.docker("run --rm --entrypoint sh", &values).await?;
+        }
+        let pem = mount(&format!("{keys}/token.pem"), "/keys/token.pem:ro");
         self.start(
             &format!("{prefix}standin"),
             "run -d --network-alias runner-server -e Runner.Server__GitServerUrl=http://github.localhost \
@@ -234,7 +278,7 @@ impl<E: Engine> Environment<E> {
             &["-v", &pem, STANDIN_IMAGE],
         )
         .await?;
-        let der = mount("keys/token.pub.der", "/keys/token.pub.der:ro");
+        let der = mount(&format!("{keys}/token.pub.der"), "/keys/token.pub.der:ro");
         let data = mount("cache", "/data");
         let control = mount("keys/control", "/keys/control:ro");
         let server = words(

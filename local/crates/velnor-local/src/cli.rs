@@ -48,7 +48,7 @@ pub struct EnvironmentArgs {
     #[arg(
         long,
         default_value_t = 0,
-        help = "Number of runner containers for untrusted runs, on a network without the API stub; run starts one when a scenario opens a pull request from a fork"
+        help = "Number of runner containers for untrusted runs, on a network without the API stub but with whatever else Docker containers reach (the host, the LAN, the internet); run starts one when a scenario opens a pull request from a fork"
     )]
     pub fork_runners: u16,
     #[arg(

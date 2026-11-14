@@ -11,6 +11,11 @@ const TWIRP_PREFIX: &str = "/twirp/github.actions.results.api.v1.CacheService/";
 const ARCHIVE_PREFIX: &str = "/velnor-cache/archives/";
 const PULL_REQUEST_PREFIX: &str = "/_velnor/pull-requests/";
 
+#[must_use]
+pub fn control_only(path: &str) -> bool {
+    path.starts_with(PULL_REQUEST_PREFIX)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route<'a> {
     Twirp(&'a str),

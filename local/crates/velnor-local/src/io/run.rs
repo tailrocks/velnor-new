@@ -22,6 +22,7 @@ use tokio::net::TcpListener;
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
 use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, ControlArgs, UpArgs};
+use crate::protocol::control_only;
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -103,6 +104,18 @@ where
     super::json_response(401, &refusal)
 }
 
+pub async fn open<H, F>(request: Request<Body>, handler: H) -> Response<Body>
+where
+    H: FnOnce(Request<Body>) -> F,
+    F: Future<Output = Response<Body>>,
+{
+    if control_only(request.uri().path()) {
+        let refusal = json!({"message": "this path is served only on the control port"});
+        return super::json_response(403, &refusal);
+    }
+    handler(request).await
+}
+
 async fn serve<H, F>(
     name: &str,
     listen: SocketAddr,
@@ -126,6 +139,8 @@ where
                 eprintln!("velnor-local {control_name}: {error}");
             }
         });
+        let open_handler = move |request| open(request, handler.clone());
+        return listen_on(name, listen, open_handler).await;
     }
     listen_on(name, listen, handler).await
 }

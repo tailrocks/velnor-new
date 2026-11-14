@@ -11,10 +11,11 @@ use super::Driver;
 use crate::io::RESTORES;
 use crate::io::env::request;
 use crate::scenario::{Outcome, restores};
+use crate::side::Side;
 use crate::standin;
 
 impl Driver<'_> {
-    pub(super) async fn outcome(&self, run: standin::Run) -> io::Result<Outcome> {
+    pub(super) async fn outcome(&self, run: standin::Run, side: Side) -> io::Result<Outcome> {
         let metrics = self.env.dir.join(format!("metrics/{}.json", run.id));
         let id = run.id.to_string();
         let collect = [
@@ -25,7 +26,9 @@ impl Driver<'_> {
             &self.args.repository,
             "-o",
         ];
-        let jobs: Vec<standin::Job> = self.get(&format!("/_apis/v1/Message?runid={id}")).await?;
+        let jobs: Vec<standin::Job> = self
+            .get(side, &format!("/_apis/v1/Message?runid={id}"))
+            .await?;
         let journal = match fs::read_to_string(self.env.dir.join("cache").join(RESTORES)).await {
             Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
             read => read?,
@@ -33,7 +36,7 @@ impl Driver<'_> {
         let caches = restores(&journal, run.id, &jobs);
         let conclusion = standin::conclusion(run.result.as_deref()).unwrap_or("unfinished");
         let event = run.event_name.clone().unwrap_or_default();
-        if self.fork {
+        if side == Side::Untrusted {
             return Ok(Outcome {
                 id: run.id,
                 workflow: jobs
