@@ -22,7 +22,7 @@ pub enum Command {
     Bench(BenchCommand),
     #[command(
         subcommand,
-        about = "Keep tracked files' modification times with a cached target directory"
+        about = "Keep tracked files' modification times with a cached target directory, and audit the files packages read at compile time"
     )]
     Inputs(InputsCommand),
     #[command(
@@ -81,6 +81,19 @@ pub enum InputsCommand {
         about = "Set the saved modification time on every tracked file whose path, bytes on disk and mode equal the saved ones; report changed, new, deleted, absent and left-out files"
     )]
     Restore,
+    #[command(
+        about = "Run after a build of all targets in every Cargo root: read cargo's dep-info and build script output, and exit 1 when .velnor/rust-inputs.lock does not list a file that a package read at compile time from outside its own directory. Files that tests read at run time are not seen here; declare them with [[inputs]] in .velnor/rust-ci.toml"
+    )]
+    Audit(AuditArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AuditArgs {
+    #[arg(
+        long,
+        help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
+    )]
+    pub write: bool,
 }
 
 #[derive(Debug, Subcommand)]

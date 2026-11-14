@@ -65,7 +65,10 @@ pub struct RepoFacts {
     pub tools: ToolPins,
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
+    pub compile_inputs: CompileInputs,
 }
+
+pub type CompileInputs = BTreeMap<RepoPath, BTreeSet<PackageName>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {

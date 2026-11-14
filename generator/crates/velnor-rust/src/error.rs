@@ -41,6 +41,8 @@ pub enum Reason {
         input: PathGlob,
     },
     UnknownInputPackage(String),
+    LockLine(usize),
+    UnknownLockedPackage(String),
 }
 
 impl DetectError {
@@ -78,6 +80,11 @@ impl fmt::Display for Reason {
             Self::UnknownInputPackage(package) => write!(
                 f,
                 "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
+            Self::UnknownLockedPackage(package) => write!(
+                f,
+                "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"
             ),
             Self::InvalidPatch(key) => {
                 write!(

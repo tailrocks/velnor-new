@@ -6,6 +6,7 @@ use std::path::Path;
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH};
 
 use crate::config::{CONFIG_PATH, rule_matches};
+use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 
 pub(crate) enum Class<'c> {
@@ -63,7 +64,10 @@ fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
         Some(AllTrigger::WorkspaceManifest)
     } else if *path == WORKFLOW_PATH {
         Some(AllTrigger::GeneratedWorkflow)
-    } else if TOOL_PIN_FILES.contains(&name) || name == CARGO_LOCK.as_str() || *path == CONFIG_PATH
+    } else if TOOL_PIN_FILES.contains(&name)
+        || name == CARGO_LOCK.as_str()
+        || *path == CONFIG_PATH
+        || *path == INPUTS_LOCK
     {
         Some(AllTrigger::Global(path.clone()))
     } else {

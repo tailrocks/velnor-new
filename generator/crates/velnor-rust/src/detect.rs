@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RepoFacts, RepoPath, RepoView, RustCiConfig};
+use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 
@@ -19,6 +20,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
         LOCK_PATH,
+        INPUTS_LOCK,
         MISE_LOCK,
         TOOLCHAIN_PLAIN,
         TOOLCHAIN_TOML,
@@ -43,20 +45,21 @@ pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
 pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let config = config(view)?;
     let rust_roots = rust_roots(view, &config)?;
-    if let Some(package) = config
-        .inputs
-        .iter()
-        .flat_map(|input| &input.packages)
-        .find(|package| {
-            !rust_roots
-                .iter()
-                .flat_map(|root| &root.members)
-                .any(|member| member.name == **package)
-        })
-    {
+    let compile_inputs = view
+        .files
+        .get(&INPUTS_LOCK)
+        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_inputs_lock(bytes))?;
+    let named = config.inputs.iter().flat_map(|input| &input.packages);
+    if let Some(package) = unknown_package(&rust_roots, named) {
         return Err(DetectError::invalid(
             &CONFIG_PATH,
-            Reason::UnknownInputPackage(package.to_string()),
+            Reason::UnknownInputPackage(package),
+        ));
+    }
+    if let Some(package) = unknown_package(&rust_roots, compile_inputs.values().flatten()) {
+        return Err(DetectError::invalid(
+            &INPUTS_LOCK,
+            Reason::UnknownLockedPackage(package),
         ));
     }
     let toolchain = toolchain(&view.files)?;
@@ -75,7 +78,22 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         tools,
         config,
         helper,
+        compile_inputs,
     })
+}
+
+fn unknown_package<'p>(
+    roots: &[RustRoot],
+    mut packages: impl Iterator<Item = &'p PackageName>,
+) -> Option<String> {
+    packages
+        .find(|package| {
+            !roots
+                .iter()
+                .flat_map(|root| &root.members)
+                .any(|member| member.name == **package)
+        })
+        .map(ToString::to_string)
 }
 
 fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
