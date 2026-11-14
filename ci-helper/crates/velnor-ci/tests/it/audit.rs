@@ -520,3 +520,32 @@ fn a_library_without_its_test_harness_unit_or_a_shared_target_directory_makes_th
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+#[test]
+fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_uncovered() {
+    let repo = workspace_below_the_root();
+    let target = "rust/target/debug";
+    own_units(&repo, target, &["lib-build"]);
+    unit(
+        &repo,
+        &format!("{target}/build/lib-000000000000000e/build_script_build-000000000000000e.d"),
+        "out.d: lib/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/lib-000000000000000f/output"),
+        "cargo:rerun-if-changed=../../shared/build.txt\n",
+    );
+    repo.set_mtime(
+        "shared/build.txt",
+        UNIX_EPOCH + Duration::from_secs(4_000_000_000),
+    );
+    let changed = audit(&repo, &["--write"]);
+    assert_eq!(changed.status.code(), Some(1), "{changed:?}");
+    assert!(
+        String::from_utf8_lossy(&changed.stderr).contains(
+            " for lib (rust/lib/Cargo.toml) target build-script-build (rust/lib/build.rs, 0 of 1 units);"
+        ),
+        "{changed:?}"
+    );
+}
