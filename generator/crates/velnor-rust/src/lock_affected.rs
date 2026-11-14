@@ -44,6 +44,7 @@ struct Index {
     by_key: BTreeMap<Key, usize>,
     dependencies: Vec<BTreeSet<Key>>,
     dependents: Vec<Vec<usize>>,
+    member_versions: BTreeMap<String, String>,
 }
 
 impl Index {
@@ -90,11 +91,18 @@ impl Index {
                 dependents[*dependency].push(index);
             }
         }
+        let member_versions = lock
+            .packages
+            .iter()
+            .filter(|package| package.source.is_none() && members.contains(package.name.as_str()))
+            .map(|package| (package.name.clone(), package.version.clone()))
+            .collect();
         Ok(Self {
             keys,
             by_key,
             dependencies,
             dependents,
+            member_versions,
         })
     }
 
@@ -109,7 +117,6 @@ pub fn lock_affected(
     members: &[PackageName],
     edited: &BTreeSet<PackageName>,
 ) -> Result<BTreeMap<PackageName, String>, LockError> {
-    let _ = edited;
     let (base, head) = (CargoLock::parse(base)?, CargoLock::parse(head)?);
     if base.format != head.format {
         return Err(LockError::new("the lockfile format differs"));
@@ -132,8 +139,16 @@ pub fn lock_affected(
             "member {missing} is not in the lockfile"
         )));
     }
+    if let Some(member) = base.member_versions.iter().find_map(|(member, version)| {
+        let edited = edited.iter().any(|edited| edited.as_str() == member);
+        (!edited && head.member_versions.get(member) != Some(version)).then_some(member)
+    }) {
+        return Err(LockError::new(format!(
+            "the lockfile changed the version of member {member} and its manifest is unchanged"
+        )));
+    }
     let changed = changed(&base, &head)?;
-    Ok(reached(&head, &changed, members))
+    reached(&head, &changed, members)
 }
 
 fn changed(base: &Index, head: &Index) -> Result<Vec<usize>, LockError> {
@@ -165,15 +180,16 @@ fn reached(
     head: &Index,
     changed: &[usize],
     members: &[PackageName],
-) -> BTreeMap<PackageName, String> {
+) -> Result<BTreeMap<PackageName, String>, LockError> {
     let by_name: BTreeMap<&str, &PackageName> = members
         .iter()
         .map(|member| (member.as_str(), member))
         .collect();
     let mut found = BTreeMap::new();
-    let mut seen = BTreeSet::new();
     for origin in changed {
         let cause = head.keys[*origin].name();
+        let mut reaches_member = false;
+        let mut seen = BTreeSet::new();
         let mut pending = vec![*origin];
         while let Some(index) = pending.pop() {
             if !seen.insert(index) {
@@ -182,10 +198,18 @@ fn reached(
             if let Key::Member(name) = &head.keys[index]
                 && let Some(member) = by_name.get(name.as_str())
             {
-                found.insert((*member).clone(), cause.to_owned());
+                reaches_member = true;
+                found
+                    .entry((*member).clone())
+                    .or_insert_with(|| cause.to_owned());
             }
             pending.extend(&head.dependents[index]);
         }
+        if !reaches_member {
+            return Err(LockError::new(format!(
+                "{cause} changed in the lockfile and no member reaches it"
+            )));
+        }
     }
-    found
+    Ok(found)
 }

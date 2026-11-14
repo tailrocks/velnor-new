@@ -27,7 +27,10 @@ fn mask_versions(manifest: &mut Table) {
         match dependency {
             Value::String(version) => version.clear(),
             Value::Table(table) => {
-                if let Some(Value::String(version)) = table.get_mut("version") {
+                if !table.contains_key("path")
+                    && !table.contains_key("git")
+                    && let Some(Value::String(version)) = table.get_mut("version")
+                {
                     version.clear();
                 }
             }
