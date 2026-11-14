@@ -4,6 +4,8 @@
 use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
 
+use crate::io::Repo;
+
 use super::{
     audit, own_units, path_dependency_units, root_package_with_path_dependencies, unit,
     workspace_below_the_root,
@@ -179,5 +181,110 @@ fn a_built_target_that_needs_features_still_credits_its_reads() {
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
         "shared/greeting.txt\tapp\n"
+    );
+}
+
+fn written_lock(repo: &Repo) -> String {
+    let written = audit(repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn reads_of_a_path_dependency_whose_sources_lie_outside_its_directory_go_to_the_members_that_reach_it()
+ {
+    let repo = root_package_with_path_dependencies();
+    repo.write(
+        "vendor/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"../../shared/mid-build.rs\"\n\n[lib]\npath = \"../../shared/mid.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\" }\n",
+    );
+    for file in ["shared/mid.rs", "shared/mid.txt", "shared/mid-build.rs"] {
+        repo.write(file, "");
+    }
+    path_dependency_units(&repo);
+    let target = "target/debug";
+    unit(
+        &repo,
+        &format!("{target}/deps/mid-0000000000000003.d"),
+        "out.d: shared/mid.rs shared/mid.txt\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: shared/mid-build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/mid-0000000000000004/output"),
+        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\n",
+    );
+    assert_eq!(
+        written_lock(&repo),
+        "LICENSE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\nshared/mid-build.rs\tother\nshared/mid.rs\tother\nshared/mid.txt\tother\n"
+    );
+}
+
+#[test]
+fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
+    let repo = root_package_with_path_dependencies();
+    repo.write(
+        "Cargo.toml",
+        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[dependencies]\nside = { path = \"vendor/side\", package = \"other\" }\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
+    );
+    repo.write(
+        "vendor/side/Cargo.toml",
+        "[package]\nname = \"other\"\nversion = \"0.3.0\"\nedition = \"2024\"\n\n[dependencies]\nalt = { path = \"../alt\", package = \"leaf\" }\n",
+    );
+    repo.write(
+        "vendor/alt/Cargo.toml",
+        "[package]\nname = \"leaf\"\nversion = \"0.2.0\"\nedition = \"2024\"\n",
+    );
+    repo.write(
+        "vendor/registry/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nversion = \"1.0.0\"\nedition = \"2024\"\n",
+    );
+    for file in [
+        "vendor/alt/src/lib.rs",
+        "vendor/registry/mid/src/lib.rs",
+        "shared/alt.txt",
+        "shared/other.txt",
+        "shared/third.txt",
+    ] {
+        repo.write(file, "");
+    }
+    path_dependency_units(&repo);
+    let target = "target/debug";
+    for (hash, package, text) in [
+        (
+            "0000000000000005",
+            "other",
+            "other/src/lib.rs shared/other.txt",
+        ),
+        (
+            "00000000000000a1",
+            "leaf",
+            "vendor/alt/src/lib.rs shared/alt.txt",
+        ),
+        (
+            "00000000000000c1",
+            "mid",
+            "vendor/registry/mid/src/lib.rs shared/third.txt",
+        ),
+    ] {
+        unit(
+            &repo,
+            &format!("{target}/deps/{package}-{hash}.d"),
+            &format!("out.d: {text}\n"),
+        );
+        unit(
+            &repo,
+            &format!("{target}/.fingerprint/{package}-{hash}/lib-{package}"),
+            "",
+        );
+    }
+    assert_eq!(
+        written_lock(&repo),
+        "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/alt.txt\ttop\nshared/link.txt\ttop\nshared/other.txt\tother\nshared/third.txt\tother\nshared/third.txt\ttop\n"
     );
 }

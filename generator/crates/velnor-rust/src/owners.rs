@@ -44,6 +44,7 @@ impl Owner<'_> {
 
 #[derive(Debug)]
 struct Unit<'f> {
+    name: Option<&'f PackageName>,
     directory: Option<RepoPath>,
     sources: Vec<&'f RepoPath>,
     unowned: bool,
@@ -71,6 +72,7 @@ impl<'f> Owners<'f> {
         let mut units: Vec<Unit<'f>> = members
             .iter()
             .map(|(member, whole)| Unit {
+                name: Some(&member.name),
                 directory: member.directory.clone(),
                 sources: member
                     .targets
@@ -101,6 +103,7 @@ impl<'f> Owners<'f> {
                     pending.extend(package.dependencies.iter().map(|d| &d.manifest));
                 }
                 let unit = unowned.entry(manifest).or_insert_with(|| Unit {
+                    name: facts.unowned.get(manifest).map(|package| &package.name),
                     directory: manifest.parent(),
                     sources: Vec::new(),
                     unowned: true,
@@ -120,7 +123,10 @@ impl<'f> Owners<'f> {
     }
 
     #[must_use]
-    pub fn of(&self, source: &RepoPath) -> Vec<Owner<'f>> {
+    pub fn of(&self, package: Option<&str>, source: &RepoPath) -> Vec<Owner<'f>> {
+        if let Some(unit) = package.and_then(|name| self.named(name, source)) {
+            return unit.owners.clone();
+        }
         let targets: Vec<Owner<'f>> = self
             .units
             .iter()
@@ -153,6 +159,25 @@ impl<'f> Owners<'f> {
                 })
                 .collect(),
         }
+    }
+
+    fn named(&self, name: &str, source: &RepoPath) -> Option<&Unit<'f>> {
+        let named: Vec<&Unit<'f>> = self
+            .units
+            .iter()
+            .filter(|unit| unit.name.is_some_and(|own| own.as_str() == name))
+            .collect();
+        let [unit] = named[..] else {
+            return None;
+        };
+        let foreign = match self.package(source) {
+            Some(Package::Folder(folder)) => !self
+                .units
+                .iter()
+                .any(|unit| unit.directory.as_ref() == Some(&folder)),
+            Some(Package::Root) | None => false,
+        };
+        (unit.unowned && !foreign).then_some(unit)
     }
 
     fn package(&self, source: &RepoPath) -> Option<Package> {
