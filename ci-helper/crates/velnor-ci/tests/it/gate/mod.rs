@@ -9,7 +9,10 @@ use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, ru
 
 use crate::support::{FakeGitHub, repo};
 
-pub(crate) const GATE: &str = include_str!("data/gate.json");
+mod inputs;
+mod status;
+
+pub(crate) const GATE: &str = include_str!("../data/gate.json");
 pub(crate) const GREEN: &str = "21ec8b9ff9268c1e2445755d325906d26757babb";
 pub(crate) const RUNNING: &str = "25fd566dd0950e7db7a3d1e58d760ad73ca92c90";
 pub(crate) const RED: &str = "f4a062683f7e31e3c654c3beebaa6751463f6459";
@@ -353,48 +356,4 @@ fn a_failing_required_check_on_a_later_page_of_rules_runs_or_jobs_is_seen() {
     );
     let said = short.gate(GREEN);
     assert_refused(&said, "GitHub lists 7 workflow runs and returned 6");
-}
-
-#[test]
-fn a_value_that_is_not_a_full_commit_sha_never_reaches_the_api() {
-    let upper = GREEN.to_uppercase();
-    for sha in ["", "main", "21ec8b9f", upper.as_str(), "../x"] {
-        let said = release_gate(&FakeGitHub::default(), &repo(), sha).map_err(|e| e.to_string());
-        assert_refused(&said, "not a full lowercase commit SHA");
-    }
-}
-
-#[test]
-fn the_default_branch_and_its_rules_are_whatever_the_repository_says() {
-    let branch = "trunk/a b";
-    let recorded = both()
-        .edit("/repos/tailrocks/velnor-new", |body| {
-            body["default_branch"] = json!(branch);
-        })
-        .set(
-            rules_path(&repo(), branch, 1),
-            json!([required(&[check("Required")])]),
-        )
-        .protection(branch, "off", &[], &json!([]))
-        .set(
-            compare_path(&repo(), branch, GREEN),
-            json!({"status": "identical"}),
-        )
-        .green_run(|run| run["head_branch"] = json!(branch));
-    let report = format!("commit {GREEN} is on {branch}\n{ONE_PASSED}ready=true\n");
-    assert_eq!(
-        recorded.gate(GREEN),
-        Ok(Verdict {
-            ready: true,
-            report
-        })
-    );
-    assert_eq!(
-        rules_path(&repo(), "release/stable #1", 2),
-        "/repos/tailrocks/velnor-new/rules/branches/release%2Fstable%20%231?per_page=100&page=2"
-    );
-    assert_eq!(
-        compare_path(&repo(), "release/stable #1", GREEN),
-        format!("/repos/tailrocks/velnor-new/compare/release%2Fstable%20%231...{GREEN}?per_page=1")
-    );
 }

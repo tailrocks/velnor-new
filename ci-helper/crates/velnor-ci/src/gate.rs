@@ -7,9 +7,9 @@ use serde::de::DeserializeOwned;
 
 use crate::error::CiError;
 use crate::github::{
-    ApiBranch, ApiCompare, ApiPage, ApiRepo, ApiRequiredCheck, ApiRule, ApiRunJob, ApiWorkflowRun,
-    GitHub, Repo, branch_path, compare_path, parse, repo_path, rules_path, run_jobs_path,
-    runs_path,
+    ApiBranch, ApiCommitStatus, ApiCompare, ApiPage, ApiRepo, ApiRequiredCheck, ApiRule, ApiRunJob,
+    ApiWorkflowRun, GitHub, Repo, branch_path, compare_path, parse, repo_path, rules_path,
+    run_jobs_path, runs_path, statuses_path,
 };
 
 const ACTIONS_APP_ID: i64 = 15368;
@@ -62,6 +62,9 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
         })?);
     }
     let running = runs.iter().any(|run| run.status != "completed");
+    let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
+        statuses_path(repo, sha, page)
+    })?;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -74,7 +77,11 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
     }
     let mut ready = true;
     for name in &required {
-        match judge(name, &jobs, running, &default_branch) {
+        let status = statuses
+            .iter()
+            .find(|status| &status.context == name)
+            .map(|status| status.state.as_str());
+        match with_status(judge(name, &jobs, running, &default_branch), status) {
             Check::Passed => report.push(format!("check {name} passed")),
             Check::Waiting(state) => {
                 ready = false;
@@ -193,6 +200,17 @@ fn all_pages<T: DeserializeOwned>(
         }
     }
     Ok(all)
+}
+
+fn with_status(by_jobs: Check, status: Option<&str>) -> Check {
+    match (by_jobs, status) {
+        (Check::Failed(reason), _) => Check::Failed(reason),
+        (_, Some(state)) if !matches!(state, "success" | "pending") => {
+            Check::Failed(format!("its commit status is {state}"))
+        }
+        (_, Some("pending")) => Check::Waiting("has a pending commit status".to_owned()),
+        (by_jobs, _) => by_jobs,
+    }
 }
 
 fn judge(name: &str, jobs: &[ApiRunJob], running: bool, branch: &str) -> Check {

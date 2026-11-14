@@ -133,7 +133,12 @@ pub struct ApiClassicChecks {
 #[derive(Debug, Deserialize)]
 pub struct ApiPage<T> {
     pub total_count: usize,
-    #[serde(rename = "items", alias = "workflow_runs", alias = "jobs")]
+    #[serde(
+        rename = "items",
+        alias = "workflow_runs",
+        alias = "jobs",
+        alias = "statuses"
+    )]
     pub items: Vec<T>,
 }
 
@@ -145,6 +150,12 @@ pub struct ApiWorkflowRun {
     pub head_branch: Option<String>,
     pub head_sha: String,
     pub head_repository: Option<ApiRepoId>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCommitStatus {
+    pub context: String,
+    pub state: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,6 +191,11 @@ pub fn rules_path(repo: &Repo, branch: &str, page: u32) -> String {
 #[must_use]
 pub fn branch_path(repo: &Repo, branch: &str) -> String {
     format!("/repos/{repo}/branches/{}", encode(branch))
+}
+
+#[must_use]
+pub fn statuses_path(repo: &Repo, sha: &str, page: u32) -> String {
+    format!("/repos/{repo}/commits/{sha}/status?per_page=100&page={page}")
 }
 
 #[must_use]
