@@ -37,12 +37,23 @@ pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins,
             .map_err(|reason| DetectError::invalid(config, reason))?
             .get("env")
             .and_then(Value::as_table)
-            .map(|env| env.keys().cloned().collect::<Vec<_>>())
+            .map(|env| {
+                env.iter()
+                    .flat_map(|(name, value)| {
+                        let loads = value.as_table().into_iter().flat_map(|directives| {
+                            ["file", "source"]
+                                .into_iter()
+                                .filter(|key| directives.contains_key(*key))
+                                .map(|key| format!("{name}.{key}"))
+                        });
+                        std::iter::once(name.clone()).chain(loads.collect::<Vec<_>>())
+                    })
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
-        if let Some(name) = env
-            .into_iter()
-            .find(|name| OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix)))
-        {
+        if let Some(name) = env.into_iter().find(|name| {
+            OVERRIDING_ENV.iter().any(|prefix| name.starts_with(prefix)) || name.starts_with("_.")
+        }) {
             return Err(DetectError::invalid(
                 config,
                 Reason::MiseOverridesFlags(name),

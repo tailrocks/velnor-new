@@ -30,7 +30,7 @@ pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use mise::check_tools;
-pub use plan::plan;
+pub use plan::{check_required_check, plan};
 pub use reads::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, format_inputs_lock, locate,
     normalize, parse_inputs_lock, rerun_if_changed, unlisted,

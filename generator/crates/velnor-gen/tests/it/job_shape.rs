@@ -258,6 +258,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         );
     }
     for config in [
+        "required_check = \"rust\"\n",
         "shape = \"two\"\n",
         "required_check = \"\"\n",
         "required_check = \"a\\u0007b\"\n",

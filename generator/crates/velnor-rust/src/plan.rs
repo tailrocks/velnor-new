@@ -9,7 +9,9 @@ use velnor_model::{
     When, WorkflowPlan,
 };
 
+use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
+use crate::error::{DetectError, Reason};
 use crate::mise::{nextest_tool, rust_tool};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
@@ -127,6 +129,24 @@ fn root_jobs(
             jobs
         }
     }
+}
+
+pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
+    let name = &facts.config.required_check;
+    if plan
+        .jobs
+        .iter()
+        .any(|job| job.name.is_none() && job.id.as_str() == name)
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::InvalidValue {
+                key: "required_check",
+                value: name.clone(),
+            },
+        ));
+    }
+    Ok(())
 }
 
 fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
