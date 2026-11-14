@@ -213,23 +213,7 @@ pub(super) fn publication_evidence_upload_step(result: &str) -> Yaml {
 }
 
 pub(super) fn artifact_id_check_step(artifact_id: &str) -> Yaml {
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Examine the uploaded artifact ID"),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "env".to_owned(),
-            Yaml::Map(vec![("ARTIFACT_ID".to_owned(), Yaml::str(artifact_id))]),
-        ),
-        (
-            "run".to_owned(),
-            Yaml::str(
-                "if [[ ! \"$ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]; then\n  printf '%s\\n' 'The artifact ID is missing or incorrect.' >&2\n  exit 1\nfi",
-            ),
-        ),
-    ])
+    crate::schema2::features::artifact_guard(artifact_id, None)
 }
 
 pub(super) fn download_step(artifact_id: &str, destination: &str) -> Yaml {

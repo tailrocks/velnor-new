@@ -102,7 +102,10 @@ pub(super) fn verify_job(
             "permissions",
             strings(&[("actions", "read"), ("contents", "read")]),
         ),
-        ("steps", Yaml::Seq(steps)),
+        (
+            "steps",
+            Yaml::Seq(crate::schema2::features::guard_artifact_downloads(steps)),
+        ),
     ]))
 }
 

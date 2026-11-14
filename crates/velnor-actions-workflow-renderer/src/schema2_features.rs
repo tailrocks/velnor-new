@@ -179,12 +179,60 @@ fn base_fields(name: &str, runs_on: Yaml, timeout: JobTimeout) -> Vec<(String, Y
     ]
 }
 
+const ARTIFACT_ID_GUARD_NAME: &str = "Validate exact artifact ID";
+const ARTIFACT_ID_GUARD_RUN: &str = "set -eu\n[[ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]] || exit 1\nlength=\"${#VELNOR_EVIDENCE_ARTIFACT_ID}\"\n[ \"$length\" -le 16 ] || exit 1\nif [ \"$length\" -eq 16 ]; then [ \"$VELNOR_EVIDENCE_ARTIFACT_ID\" -le 9007199254740991 ] || exit 1; fi";
+
+fn is_guard(step: &Yaml) -> bool {
+    matches!(step, Yaml::Map(fields) if fields.iter().any(|(key, value)| key == "name"
+        && matches!(value, Yaml::Str(name) if name == ARTIFACT_ID_GUARD_NAME
+            || name == "Validate producer artifact identity")))
+}
+
+pub(in crate::schema2) fn artifact_guard(artifact_id: &str, condition: Option<&Yaml>) -> Yaml {
+    let mut fields = vec![
+        ("name".to_owned(), Yaml::str(ARTIFACT_ID_GUARD_NAME)),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "VELNOR_EVIDENCE_ARTIFACT_ID".to_owned(),
+                Yaml::str(artifact_id),
+            )]),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("run".to_owned(), Yaml::str(ARTIFACT_ID_GUARD_RUN)),
+    ];
+    if let Some(condition) = condition {
+        fields.push(("if".to_owned(), condition.clone()));
+    }
+    Yaml::Map(fields)
+}
+
+pub(in crate::schema2) fn guard_artifact_downloads(steps: Vec<Yaml>) -> Vec<Yaml> {
+    let mut guarded: Vec<Yaml> = Vec::with_capacity(steps.len());
+    for step in steps {
+        if let Yaml::Map(fields) = &step
+            && let Some((_, Yaml::Map(inputs))) = fields.iter().find(|(key, _)| key == "with")
+            && let Some((_, Yaml::Str(artifact_id))) =
+                inputs.iter().find(|(key, _)| key == "artifact-ids")
+            && !guarded.last().is_some_and(is_guard)
+        {
+            let condition = fields.iter().find(|(key, _)| key == "if").map(|(_, c)| c);
+            guarded.push(artifact_guard(artifact_id, condition));
+        }
+        guarded.push(step);
+    }
+    guarded
+}
+
 pub(super) fn finish(
     id: &str,
     mut fields: Vec<(String, Yaml)>,
     steps: Vec<Yaml>,
 ) -> (String, Yaml) {
-    fields.push(("steps".to_owned(), Yaml::Seq(steps)));
+    fields.push((
+        "steps".to_owned(),
+        Yaml::Seq(guard_artifact_downloads(steps)),
+    ));
     (id.to_owned(), Yaml::Map(fields))
 }
 
