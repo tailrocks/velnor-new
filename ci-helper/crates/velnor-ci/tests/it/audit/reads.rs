@@ -203,20 +203,16 @@ fn reads_of_a_path_dependency_whose_sources_lie_outside_its_directory_go_to_the_
         repo.write(file, "");
     }
     path_dependency_units(&repo);
-    let target = "target/debug";
+    let build = "target/debug/build/mid-0000000000000006/build_script_build-0000000000000006.d";
+    unit(&repo, build, "out.d: shared/mid-build.rs\n");
     unit(
         &repo,
-        &format!("{target}/deps/mid-0000000000000003.d"),
+        "target/debug/deps/mid-0000000000000003.d",
         "out.d: shared/mid.rs shared/mid.txt\n",
     );
     unit(
         &repo,
-        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
-        "out.d: shared/mid-build.rs\n",
-    );
-    unit(
-        &repo,
-        &format!("{target}/build/mid-0000000000000004/output"),
+        "target/debug/build/mid-0000000000000004/output",
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\n",
     );
     assert_eq!(
@@ -254,32 +250,22 @@ fn a_package_name_that_several_packages_share_credits_their_reads_by_source() {
         repo.write(file, "");
     }
     path_dependency_units(&repo);
-    let target = "target/debug";
     for (hash, package, text) in [
+        ("5", "other", "other/src/lib.rs shared/other.txt"),
+        ("a1", "leaf", "vendor/alt/src/lib.rs shared/alt.txt"),
         (
-            "0000000000000005",
-            "other",
-            "other/src/lib.rs shared/other.txt",
-        ),
-        (
-            "00000000000000a1",
-            "leaf",
-            "vendor/alt/src/lib.rs shared/alt.txt",
-        ),
-        (
-            "00000000000000c1",
+            "c1",
             "mid",
             "vendor/registry/mid/src/lib.rs shared/third.txt",
         ),
     ] {
-        unit(
-            &repo,
-            &format!("{target}/deps/{package}-{hash}.d"),
+        let unit_at = |path: String, text: &str| unit(&repo, &format!("target/debug/{path}"), text);
+        unit_at(
+            format!("deps/{package}-{hash:0>16}.d"),
             &format!("out.d: {text}\n"),
         );
-        unit(
-            &repo,
-            &format!("{target}/.fingerprint/{package}-{hash}/lib-{package}"),
+        unit_at(
+            format!(".fingerprint/{package}-{hash:0>16}/lib-{package}"),
             "",
         );
     }
