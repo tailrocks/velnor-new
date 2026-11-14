@@ -49,6 +49,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     RustdocflagsString,
+    CargoConfigInclude,
 }
 
 impl DetectError {
@@ -98,6 +99,9 @@ impl fmt::Display for Reason {
             ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
+            ),
+            Self::CargoConfigInclude => f.write_str(
+                "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
             ),
             Self::InvalidPatch(key) => {
                 write!(

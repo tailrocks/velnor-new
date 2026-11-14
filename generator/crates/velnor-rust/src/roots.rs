@@ -149,6 +149,9 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     if flags.is_some_and(toml::Value::is_str) || per_target {
         return Err(DetectError::invalid(file, Reason::RustdocflagsString));
     }
+    if table.contains_key("include") {
+        return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+    }
     Ok(())
 }
 

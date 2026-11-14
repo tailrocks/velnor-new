@@ -236,7 +236,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
                 .or_else(|| text[start + 1..].find("\n  required:"))
                 .map_or(text.len(), |at| start + 1 + at);
             text[start..end]
-                .matches("run: rustup component add rustfmt clippy")
+                .matches("run: rustup component add clippy rustfmt")
                 .count()
         })
         .collect();

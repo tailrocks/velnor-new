@@ -80,6 +80,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         let nested = rust_roots
             .iter()
             .filter_map(|root| root.manifest.parent())
+            .flat_map(|folder| std::iter::successors(Some(folder), RepoPath::parent))
             .flat_map(|folder| {
                 [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
                     .map(|file| RepoPath::new(format!("{folder}/{file}")))

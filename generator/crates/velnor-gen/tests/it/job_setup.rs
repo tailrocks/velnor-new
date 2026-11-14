@@ -80,6 +80,14 @@ fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> Te
         expected_files(&string),
         Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
     ));
+    let mut included = string.clone();
+    included
+        .files
+        .insert(config.clone(), b"include = [\"ci.toml\"]\n".to_vec());
+    assert!(matches!(
+        expected_files(&included),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
+    ));
     let mut per_target = string;
     per_target.files.insert(
         config.clone(),
@@ -120,7 +128,7 @@ fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> Te
     let text = workflow(&two)?;
     assert!(
         text.contains(
-            "        working-directory: lab\n        run: rustup component add rustfmt clippy\n"
+            "        working-directory: lab\n        run: rustup component add clippy rustfmt\n"
         ),
         "{text}"
     );
@@ -130,6 +138,42 @@ fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> Te
         Err(GenerateError::Detect(DetectError::NestedToolchain {
             file: nested
         }))
+    );
+    let ancestor = RepoPath::new("projects/rust-toolchain.toml")?;
+    let mut deep = view(&["Cargo.toml", "projects/lab/Cargo.toml"], None)?;
+    deep.tracked_paths.insert(ancestor.clone());
+    assert_eq!(
+        expected_files(&deep),
+        Err(GenerateError::Detect(DetectError::NestedToolchain {
+            file: ancestor
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut declared = view(&["Cargo.toml"], Some(b"shape = \"lint-test\"\n"))?;
+    declared.tracked_paths.insert(file.clone());
+    declared.files.insert(
+        file,
+        b"[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"llvm-tools\"]\ntargets = [\"wasm32-unknown-unknown\"]\n"
+            .to_vec(),
+    );
+    let text = workflow(&declared)?;
+    let runs: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("run: rustup "))
+        .collect();
+    assert_eq!(
+        runs,
+        [
+            "component add clippy llvm-tools rustfmt",
+            "target add wasm32-unknown-unknown",
+            "component add llvm-tools",
+            "target add wasm32-unknown-unknown",
+        ]
     );
     Ok(())
 }

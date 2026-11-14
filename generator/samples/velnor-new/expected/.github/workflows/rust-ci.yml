@@ -25,8 +25,10 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
-        run: rustup component add rustfmt clippy
+      - name: Add Rust components
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Format
         if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
@@ -97,9 +99,12 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
+      - name: Add Rust components
         working-directory: ci-helper
-        run: rustup component add rustfmt clippy
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: ci-helper
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
@@ -136,9 +141,12 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
+      - name: Add Rust components
         working-directory: crates/velnor-runner
-        run: rustup component add rustfmt clippy
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: crates/velnor-runner
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
@@ -203,9 +211,12 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
+      - name: Add Rust components
         working-directory: generator
-        run: rustup component add rustfmt clippy
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: generator
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: generator
@@ -254,9 +265,12 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
+      - name: Add Rust components
         working-directory: local
-        run: rustup component add rustfmt clippy
+        run: rustup component add clippy rustfmt
+      - name: Add Rust targets
+        working-directory: local
+        run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: local

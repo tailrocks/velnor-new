@@ -94,8 +94,8 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
-        run: rustup component add rustfmt clippy
+      - name: Add Rust components
+        run: rustup component add clippy rustfmt
       - name: Format
         if: '${{ !cancelled() }}'
         run: cargo-fmt --all --check
@@ -124,9 +124,9 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'rust aqua:nextest-rs/nextest/cargo-nextest'
-      - name: Add rustfmt and clippy
+      - name: Add Rust components
         working-directory: lab
-        run: rustup component add rustfmt clippy
+        run: rustup component add clippy rustfmt
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: lab

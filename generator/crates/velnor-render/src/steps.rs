@@ -66,9 +66,14 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ],
             ..RenderedStep::default()
         },
-        StepKind::LintComponents => RenderedStep {
-            name: "Add rustfmt and clippy".to_owned(),
-            run: Some("rustup component add rustfmt clippy".to_owned()),
+        StepKind::RustComponents(components) => RenderedStep {
+            name: "Add Rust components".to_owned(),
+            run: Some(format!("rustup component add {}", components.join(" "))),
+            ..RenderedStep::default()
+        },
+        StepKind::RustTargets(targets) => RenderedStep {
+            name: "Add Rust targets".to_owned(),
+            run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
         StepKind::Cargo(command) => cargo_step(command),

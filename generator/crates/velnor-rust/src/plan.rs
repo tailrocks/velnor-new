@@ -167,12 +167,31 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, tests: bool) -> Vec<Ste
     if !tools.is_empty() {
         steps.push(step(StepKind::InstallTools(tools)));
     }
-    let path_toolchain = facts.toolchain.as_ref().is_some_and(|t| t.path.is_some());
-    if lint && !path_toolchain {
-        steps.push(Step {
-            directory: root.manifest.parent(),
-            ..step(StepKind::LintComponents)
-        });
+    let declared = facts.toolchain.as_ref();
+    if declared.is_some_and(|toolchain| toolchain.path.is_some()) {
+        return steps;
+    }
+    let mut components: Vec<String> = declared
+        .map(|toolchain| toolchain.components.clone())
+        .unwrap_or_default();
+    if lint {
+        components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
+    }
+    components.sort();
+    components.dedup();
+    let targets = declared
+        .map(|toolchain| toolchain.targets.clone())
+        .unwrap_or_default();
+    for (kind, names) in [
+        (StepKind::RustComponents(components.clone()), &components),
+        (StepKind::RustTargets(targets.clone()), &targets),
+    ] {
+        if !names.is_empty() {
+            steps.push(Step {
+                directory: root.manifest.parent(),
+                ..step(kind)
+            });
+        }
     }
     steps
 }
