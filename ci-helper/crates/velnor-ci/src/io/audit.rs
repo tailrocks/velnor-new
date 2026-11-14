@@ -3,41 +3,32 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::time::SystemTime;
 
-use serde::Deserialize;
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, RepoFacts, RepoPath, TargetKind};
+use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, normalize, parse_inputs_lock, rerun_if_changed, unlisted,
+    locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
+use super::units::{UnitFile, Workspace, apart, profile, triples, unit_files, workspace};
+use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 
-#[derive(Deserialize)]
-struct Workspace {
-    workspace_root: PathBuf,
-    target_directory: PathBuf,
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum UnitFile {
-    DepInfo(Option<String>),
-    BuildOutput(String),
-}
-
-struct Audit<'a> {
+pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
-    scripts: BTreeMap<String, BTreeMap<RepoPath, SystemTime>>,
+    pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) present: BTreeSet<(usize, String, String)>,
+    pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
-    covered: BTreeMap<RepoPath, usize>,
+    pub(super) built: Vec<Built>,
 }
 
 pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
@@ -57,20 +48,14 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .iter()
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut directories = BTreeSet::new();
-    if let Some(shared) = workspaces
-        .iter()
-        .find(|w| !directories.insert(normalize(&w.target_directory)))
-    {
-        return Err(CiError::new(format!(
-            "two Cargo roots share the target directory {}, so its units cannot be told apart; give each Cargo root its own target directory",
-            shared.target_directory.display()
-        )));
-    }
+    apart(&workspaces)?;
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
+        fingerprints: BTreeMap::new(),
+        names: BTreeMap::new(),
+        present: BTreeSet::new(),
         scripts: BTreeMap::new(),
         targets: workspaces
             .iter()
@@ -81,34 +66,30 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             .collect(),
         found: CompileInputs::new(),
         units: 0,
-        covered: BTreeMap::new(),
+        built: workspaces.iter().map(|_| Built::default()).collect(),
     };
     let mut files = Vec::new();
-    for workspace in &workspaces {
-        let mut found = Vec::new();
-        unit_files(&workspace.target_directory, &mut found)?;
+    for (index, workspace) in workspaces.iter().enumerate() {
         files.extend(
-            found
+            unit_files(&workspace.target_directory)?
                 .into_iter()
-                .map(|(file, kind)| (kind, file, &workspace.workspace_root)),
+                .map(|(unit, file)| (unit, file, index)),
         );
     }
     files.sort();
-    for (kind, file, workspace) in &files {
-        audit.record(workspace, file, kind)?;
-    }
-    let targets: Vec<String> = workspaces
+    let files_under_triples = files
         .iter()
-        .map(|w| w.target_directory.display().to_string())
-        .collect();
-    let unbuilt = uncovered(&facts, &audit.covered);
-    if !unbuilt.is_empty() {
-        return Err(CiError::new(format!(
-            "found no current dep-info in {} for {}; run this after cargo build --all-targets in every Cargo root",
-            targets.join(", "),
-            unbuilt.join(", ")
-        )));
+        .any(|(unit, _, _)| unit.configuration().is_some_and(|c| c.contains('/')));
+    for (unit, file, index) in files {
+        audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
+    audit.orphans();
+    let triples = if files_under_triples {
+        triples(&checkout.root)?
+    } else {
+        BTreeSet::new()
+    };
+    complete(&facts, &workspaces, &audit.built, &triples)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -118,36 +99,39 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     compare(&audit.found, &listed, &summary)
 }
 
-fn uncovered(facts: &RepoFacts, covered: &BTreeMap<RepoPath, usize>) -> Vec<String> {
-    facts
+fn complete(
+    facts: &RepoFacts,
+    workspaces: &[Workspace],
+    built: &[Built],
+    triples: &BTreeSet<String>,
+) -> Result<(), CiError> {
+    let gaps: Vec<String> = facts
         .rust_roots
         .iter()
-        .flat_map(|root| &root.members)
-        .flat_map(|member| {
-            member
-                .targets
-                .iter()
-                .filter(|target| !target.requires_features)
-                .filter_map(|target| {
-                    let source = target.source.as_ref()?;
-                    let harness = target.tests
-                        && target.kinds.iter().any(|kind| {
-                            matches!(
-                                kind,
-                                TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                            )
-                        });
-                    let expected = 1 + usize::from(harness);
-                    let current = covered.get(source).copied().unwrap_or_default();
-                    (current < expected).then(|| {
-                        format!(
-                            "{} ({}) target {} ({source}, {current} of {expected} units)",
-                            member.name, member.manifest, target.name
-                        )
-                    })
+        .zip(workspaces)
+        .zip(built)
+        .flat_map(|((root, workspace), built)| {
+            gaps(root, &facts.unowned, built, triples)
+                .into_iter()
+                .map(|gap| {
+                    format!(
+                        "in {} for {}",
+                        workspace
+                            .target_directory
+                            .join(&gap.configuration)
+                            .display(),
+                        gap.missing.join(", ")
+                    )
                 })
         })
-        .collect()
+        .collect();
+    if gaps.is_empty() {
+        return Ok(());
+    }
+    Err(CiError::new(format!(
+        "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        gaps.join("; ")
+    )))
 }
 
 fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
@@ -184,67 +168,154 @@ fn compare(
 }
 
 impl Audit<'_> {
-    fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
-        let text = fs::read_to_string(file)
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-        let built = modified(file)?;
-        match kind {
-            UnitFile::DepInfo(script) => {
-                let paths = dep_info_paths(&text);
-                let Some(Located::Inside(source)) = paths
-                    .first()
-                    .map(|source| locate(self.repository, workspace, source))
-                else {
+    fn record(
+        &mut self,
+        workspace: &Path,
+        index: usize,
+        file: &Path,
+        unit: UnitFile,
+    ) -> Result<(), CiError> {
+        match unit {
+            UnitFile::Fingerprint {
+                configuration,
+                package,
+                hash,
+                name,
+            } => {
+                if let Some(fingerprint) = Fingerprint::parse(&name) {
+                    if fingerprint.kind == UnitKind::Normal {
+                        self.names.insert(
+                            (index, configuration.clone(), fingerprint.target.clone()),
+                            (package.clone(), fingerprint.clone()),
+                        );
+                    }
+                    self.fingerprints.insert(
+                        (index, configuration.clone(), hash),
+                        (package.clone(), fingerprint),
+                    );
+                }
+                if let Ok(package) = PackageName::new(package) {
+                    if name.starts_with("lib-") {
+                        self.built[index].libraries.insert((configuration, package));
+                    } else if name.starts_with("build-script-") && !name.contains('.') {
+                        self.built[index].builders.insert((configuration, package));
+                    }
+                }
+            }
+            UnitFile::DepInfo {
+                configuration,
+                hash,
+                stem,
+            } => {
+                let identity = configuration.as_ref().and_then(|configuration| {
+                    let key = (
+                        index,
+                        configuration.clone(),
+                        hash.clone().unwrap_or_else(|| stem.clone()),
+                    );
+                    self.present.insert(key.clone());
+                    match hash {
+                        Some(_) => self.fingerprints.get(&key),
+                        None => self.names.get(&key),
+                    }
+                    .cloned()
+                });
+                if hash.is_none() && identity.is_none() {
+                    return Ok(());
+                }
+                let Some((source, _)) = self.dep_info(workspace, file)? else {
                     return Ok(());
                 };
-                if changed_since(workspace, &paths, built) {
-                    return Ok(());
+                if let (Some(configuration), Some((package, fingerprint))) =
+                    (configuration, identity)
+                {
+                    self.built[index].units.insert(Unit {
+                        configuration,
+                        kind: fingerprint.kind,
+                        package,
+                        target: fingerprint.target,
+                        source,
+                    });
                 }
-                match script {
-                    Some(package) => {
-                        self.scripts
-                            .entry(package.clone())
-                            .or_default()
-                            .insert(source.clone(), built);
-                    }
-                    None => *self.covered.entry(source.clone()).or_default() += 1,
-                }
-                for owner in self.owners.of(&source) {
-                    self.credit(&owner, workspace, &paths, false);
-                }
-                self.units += 1;
             }
-            UnitFile::BuildOutput(package) => {
-                let paths = rerun_if_changed(&text);
-                let scripts: Vec<RepoPath> = self
-                    .scripts
-                    .get(package)
-                    .into_iter()
-                    .flatten()
-                    .filter(|(_, compiled)| **compiled <= built)
-                    .map(|(source, _)| source.clone())
-                    .collect();
-                let mut seen = BTreeSet::new();
-                for source in scripts {
-                    let mut ran = false;
-                    for owner in self.owners.of(&source) {
-                        let base = owner.directory().map_or_else(
-                            || self.repository.to_path_buf(),
-                            |d| self.repository.join(d.as_str()),
-                        );
-                        if changed_since(&base, &paths, built) {
-                            continue;
-                        }
-                        ran = true;
-                        if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
-                            self.credit(&owner, &base, &paths, true);
-                            self.units += 1;
-                        }
-                    }
-                    if ran {
-                        *self.covered.entry(source).or_default() += 1;
-                    }
+            UnitFile::Script { profile, package } => {
+                self.script(workspace, index, file, profile, package)?;
+            }
+            UnitFile::BuildOutput {
+                configuration,
+                package,
+            } => self.build_output(index, file, &configuration, &package)?,
+        }
+        Ok(())
+    }
+
+    pub(super) fn dep_info(
+        &mut self,
+        workspace: &Path,
+        file: &Path,
+    ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
+        let text = read(file)?;
+        let built = modified(file)?;
+        let paths = dep_info_paths(&text);
+        let Some(Located::Inside(source)) = paths
+            .first()
+            .map(|source| locate(self.repository, workspace, source))
+        else {
+            return Ok(None);
+        };
+        if changed_since(workspace, &paths, built) {
+            return Ok(None);
+        }
+        for owner in self.owners.of(&source) {
+            self.credit(&owner, workspace, &paths, false);
+        }
+        self.units += 1;
+        Ok(Some((source, built)))
+    }
+
+    fn build_output(
+        &mut self,
+        index: usize,
+        file: &Path,
+        configuration: &str,
+        package: &str,
+    ) -> Result<(), CiError> {
+        let text = read(file)?;
+        let built = modified(file)?;
+        let paths = rerun_if_changed(&text);
+        let scripts: Vec<RepoPath> = self
+            .scripts
+            .get(&(index, profile(configuration).to_owned(), package.to_owned()))
+            .into_iter()
+            .flatten()
+            .filter(|(_, compiled)| **compiled <= built)
+            .map(|(source, _)| source.clone())
+            .collect();
+        let mut seen = BTreeSet::new();
+        for source in scripts {
+            let mut ran = false;
+            for owner in self.owners.of(&source) {
+                let base = owner.directory().map_or_else(
+                    || self.repository.to_path_buf(),
+                    |d| self.repository.join(d.as_str()),
+                );
+                if changed_since(&base, &paths, built) {
+                    continue;
                 }
+                ran = true;
+                if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
+                    self.credit(&owner, &base, &paths, true);
+                    self.units += 1;
+                }
+            }
+            if ran {
+                self.built[index].units.insert(Unit {
+                    configuration: configuration.to_owned(),
+                    kind: UnitKind::Run,
+                    package: package.to_owned(),
+                    target: String::new(),
+                    source,
+                });
             }
         }
         Ok(())
@@ -281,80 +352,9 @@ fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
         .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
 }
 
-fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
-    let output = Command::new("cargo")
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-        ])
-        .arg("--manifest-path")
-        .arg(manifest)
-        .current_dir(manifest.parent().unwrap_or(manifest))
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
-}
-
-fn unit_files(directory: &Path, found: &mut Vec<(PathBuf, UnitFile)>) -> Result<(), CiError> {
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => {
-            return Err(CiError::new(format!(
-                "cannot read {}: {e}",
-                directory.display()
-            )));
-        }
-    };
-    for entry in entries {
-        let entry =
-            entry.map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
-        let path = entry.path();
-        let kind = entry
-            .file_type()
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
-        if kind.is_dir() && entry.file_name() != "incremental" {
-            unit_files(&path, found)?;
-        } else if let Some(unit) = unit_file(&path).filter(|_| kind.is_file()) {
-            found.push((path, unit));
-        }
-    }
-    Ok(())
-}
-
-fn unit_file(path: &Path) -> Option<UnitFile> {
-    let name = path.file_name()?.to_str()?;
-    let unit = path.parent()?;
-    let package = unit
-        .file_name()
-        .and_then(|folder| unit_name(folder.to_str()?))
-        .filter(|_| unit.parent().and_then(Path::file_name) == Some("build".as_ref()));
-    if name.strip_suffix(".d").and_then(unit_name).is_some() {
-        return Some(UnitFile::DepInfo(package.map(str::to_owned)));
-    }
-    (name == "output")
-        .then_some(package)?
-        .map(|package| UnitFile::BuildOutput(package.to_owned()))
-}
-
-fn unit_name(stem: &str) -> Option<&str> {
-    let (name, hash) = stem.rsplit_once('-')?;
-    (!name.is_empty()
-        && hash.len() == 16
-        && hash
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
-    .then_some(name)
+fn read(file: &Path) -> Result<String, CiError> {
+    fs::read_to_string(file)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))
 }
 
 fn modified(path: &Path) -> Result<SystemTime, CiError> {
