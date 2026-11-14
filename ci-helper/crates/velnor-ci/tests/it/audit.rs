@@ -168,15 +168,10 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
-    let lines = fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    for line in [
-        "shared/old.txt\tlib\n",
-        "rust/app/src/lib.rs\tlib\n",
-        "mise.toml\tlib\n",
-    ] {
-        assert!(lines.contains(line), "{lines}");
-    }
-    assert!(!lines.contains("rust/lib/"), "{lines}");
+    assert_eq!(
+        fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
+        ".\tlib\nshared/greeting.txt\tapp\n"
+    );
 }
 
 #[test]
@@ -198,7 +193,7 @@ fn root_package_with_path_dependencies() -> Repo {
     repo.write(".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     repo.write(
         "Cargo.toml",
-        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
+        "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
     );
     repo.write(
         "other/Cargo.toml",
@@ -297,6 +292,66 @@ fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_
     assert_eq!(
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
-        "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/qa.txt\ttop\next.rs\tother\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\n"
+        "LICENSE\tother\nNOTICE\tother\nREADME.md\ttop\ndata/ext.txt\tother\ndata/ext.txt\ttop\ndata/qa.txt\ttop\next.rs\tother\next.rs\ttop\nqa.rs\ttop\nschema/future.json\tother\nshared/link.txt\ttop\n"
+    );
+}
+
+#[test]
+fn a_path_dependency_unit_does_not_stand_in_for_the_member_that_depends_on_it() {
+    let repo = root_package_with_path_dependencies();
+    let target = "target/debug";
+    unit(
+        &repo,
+        &format!("{target}/deps/top-0000000000000001.d"),
+        "out.d: src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/deps/mid-0000000000000003.d"),
+        "out.d: vendor/mid/src/lib.rs\n",
+    );
+    let partial = audit(&repo, &["--write"]);
+    assert_eq!(partial.status.code(), Some(1), "{partial:?}");
+    assert!(
+        String::from_utf8_lossy(&partial.stderr).contains(" for other (other/Cargo.toml);"),
+        "{partial:?}"
+    );
+}
+
+#[test]
+fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
+    let repo = workspace_below_the_root();
+    repo.write(
+        "rust/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../docs\"\n",
+    );
+    repo.write("docs/schema.json", "");
+    let target = "docs/debug";
+    unit(
+        &repo,
+        &format!("{target}/deps/app-0000000000000001.d"),
+        "out.d: app/src/lib.rs app/src/../../../docs/schema.json\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/deps/lib-0000000000000002.d"),
+        "out.d: lib/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/lib-0000000000000003/build_script_build-0000000000000003.d"),
+        "out.d: lib/build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/lib-0000000000000004/output"),
+        "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
+    );
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        "docs/schema.json\tapp\n"
     );
 }

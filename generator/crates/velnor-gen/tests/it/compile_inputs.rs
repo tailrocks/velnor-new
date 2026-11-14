@@ -40,7 +40,7 @@ fn locked(facts: &mut RepoFacts, entries: &[(&str, &str)]) {
     for (file, package) in entries {
         facts
             .compile_inputs
-            .entry(path(file))
+            .entry(Some(path(file)))
             .or_default()
             .insert(name(package));
     }
@@ -108,6 +108,24 @@ fn a_path_the_inputs_lock_lists_selects_its_packages_even_when_rules_ignore_it()
             ),
         ],
     );
+
+    let mut everywhere = two_roots();
+    everywhere
+        .compile_inputs
+        .insert(None, BTreeSet::from([name("cli")]));
+    assert_selects(
+        &everywhere,
+        vec![
+            (
+                &["CHANGELOG.md"],
+                vec![none.clone(), some(&[("cli", input("CHANGELOG.md"))])],
+            ),
+            (
+                &["unknown/file.bin"],
+                vec![unknown("unknown/file.bin"), unknown("unknown/file.bin")],
+            ),
+        ],
+    );
 }
 
 #[test]
@@ -119,10 +137,11 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
         )
     };
     assert_eq!(
-        detect(&view("README.md\tapp\nshared/a.txt\tapp\n")?)?.compile_inputs,
+        detect(&view(".\tapp\nREADME.md\tapp\nshared/a.txt\tapp\n")?)?.compile_inputs,
         BTreeMap::from([
-            (path("README.md"), BTreeSet::from([name("app")])),
-            (path("shared/a.txt"), BTreeSet::from([name("app")])),
+            (None, BTreeSet::from([name("app")])),
+            (Some(path("README.md")), BTreeSet::from([name("app")])),
+            (Some(path("shared/a.txt")), BTreeSet::from([name("app")])),
         ])
     );
     for (lock, reason) in [

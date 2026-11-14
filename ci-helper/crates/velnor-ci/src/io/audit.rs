@@ -147,19 +147,21 @@ fn compare(
     )))
 }
 
-impl Audit<'_> {
-    fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
-        let text = fs::read_to_string(file)
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-        let declared = matches!(kind, UnitFile::BuildOutput(_));
-        let readers: Vec<(Owner<'_>, PathBuf, Vec<String>)> = match kind {
+impl<'a> Audit<'a> {
+    fn readers(
+        &mut self,
+        workspace: &Path,
+        text: &str,
+        kind: &UnitFile,
+    ) -> Vec<(Owner<'a>, PathBuf, Vec<String>)> {
+        match kind {
             UnitFile::DepInfo(script) => {
-                let paths = dep_info_paths(&text);
+                let paths = dep_info_paths(text);
                 let Some(Located::Inside(source)) = paths
                     .first()
                     .map(|source| locate(self.repository, workspace, source))
                 else {
-                    return Ok(());
+                    return Vec::new();
                 };
                 if let Some(package) = script {
                     self.scripts
@@ -188,11 +190,18 @@ impl Audit<'_> {
                             || self.repository.to_path_buf(),
                             |d| self.repository.join(d.as_str()),
                         );
-                        (owner, base, rerun_if_changed(&text))
+                        (owner, base, rerun_if_changed(text))
                     })
                     .collect()
             }
-        };
+        }
+    }
+
+    fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
+        let text = fs::read_to_string(file)
+            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+        let declared = matches!(kind, UnitFile::BuildOutput(_));
+        let readers = self.readers(workspace, &text, kind);
         let built = modified(file)?;
         if !readers.is_empty() {
             self.units += 1;
@@ -207,23 +216,25 @@ impl Audit<'_> {
             let mut reads = Vec::new();
             for path in &paths {
                 match locate(self.repository, &base, path) {
-                    Located::Inside(read) => reads.push(read),
-                    Located::Repository => reads.extend(self.tracked.iter().cloned()),
+                    Located::Inside(read) => reads.push(Some(read)),
+                    Located::Repository => reads.push(None),
                     Located::Outside => {}
                 }
                 if let Ok(Located::Inside(target)) = fs::canonicalize(base.join(path))
                     .map(|target| locate(self.repository, &target, ""))
                 {
-                    reads.push(target);
+                    reads.push(Some(target));
                 }
             }
-            reads.retain(|read| {
-                !self.targets.iter().any(|target| {
-                    read == target || read.as_str().starts_with(&format!("{target}/"))
-                })
-            });
-            add_reads(&mut self.found, self.tracked, &owner, &reads, declared);
-            if *kind == UnitFile::DepInfo(None) {
+            add_reads(
+                &mut self.found,
+                self.tracked,
+                &owner,
+                &reads,
+                declared,
+                &self.targets,
+            );
+            if owner.is_own() && *kind == UnitFile::DepInfo(None) {
                 self.built.insert(owner.manifest().clone());
             }
         }

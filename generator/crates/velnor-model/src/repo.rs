@@ -69,7 +69,7 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
 }
 
-pub type CompileInputs = BTreeMap<RepoPath, BTreeSet<PackageName>>;
+pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {

@@ -165,10 +165,12 @@ impl<'a> Graph<'a> {
             .match_indices('/')
             .map(|(at, _)| &text[..at])
             .chain([text])
-            .filter_map(|prefix| self.inputs.get(&RepoPath::new(prefix).ok()?))
+            .filter_map(|prefix| self.inputs.get(&Some(RepoPath::new(prefix).ok()?)))
             .flatten()
             .collect();
         self.seed_named(&locked, path, walk);
+        let everywhere: Vec<&PackageName> = self.inputs.get(&None).into_iter().flatten().collect();
+        self.seed_named(&everywhere, path, walk);
         let root = self
             .roots
             .iter()

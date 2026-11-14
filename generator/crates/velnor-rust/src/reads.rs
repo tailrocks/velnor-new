@@ -10,6 +10,7 @@ use crate::error::{DetectError, Reason};
 use crate::select::{claims, relative};
 
 pub const INPUTS_LOCK: RepoPath = RepoPath::from_static(".velnor/rust-inputs.lock");
+const REPOSITORY: &str = ".";
 
 #[must_use]
 pub fn dep_info_paths(text: &str) -> Vec<String> {
@@ -100,9 +101,15 @@ pub struct Owner<'f> {
     manifest: &'f RepoPath,
     directory: Option<RepoPath>,
     whole: bool,
+    own: bool,
 }
 
 impl Owner<'_> {
+    #[must_use]
+    pub fn is_own(&self) -> bool {
+        self.own
+    }
+
     #[must_use]
     pub fn name(&self) -> &PackageName {
         self.name
@@ -164,6 +171,7 @@ impl<'f> Owners<'f> {
                     manifest: &member.manifest,
                     directory: member.directory.clone(),
                     whole: *whole,
+                    own: true,
                 }],
             })
             .collect();
@@ -187,6 +195,7 @@ impl<'f> Owners<'f> {
                     manifest: &member.manifest,
                     directory: unit.directory.clone(),
                     whole: true,
+                    own: false,
                 });
             }
         }
@@ -196,12 +205,14 @@ impl<'f> Owners<'f> {
 
     #[must_use]
     pub fn of(&self, source: &RepoPath) -> Vec<Owner<'f>> {
-        if let Some(unit) = self
+        let targets: Vec<Owner<'f>> = self
             .units
             .iter()
-            .find(|unit| unit.sources.contains(&source))
-        {
-            return unit.owners.clone();
+            .filter(|unit| unit.sources.contains(&source))
+            .flat_map(|unit| unit.owners.iter().cloned())
+            .collect();
+        if !targets.is_empty() {
+            return targets;
         }
         let Some(package) = self.package(source).map(Package::directory) else {
             return self
@@ -262,10 +273,20 @@ pub fn add_reads(
     found: &mut CompileInputs,
     tracked: &BTreeSet<RepoPath>,
     owner: &Owner<'_>,
-    reads: &[RepoPath],
+    reads: &[Option<RepoPath>],
     declared: bool,
+    targets: &[RepoPath],
 ) {
     for read in reads {
+        let Some(read) = read else {
+            if !tracked.iter().all(|path| owner.claims(path)) {
+                found.entry(None).or_default().insert(owner.name().clone());
+            }
+            continue;
+        };
+        let generated = targets
+            .iter()
+            .any(|target| read == target || read.as_str().starts_with(&format!("{target}/")));
         let mut below = tracked
             .range(read.clone()..)
             .take_while(|path| path.as_str().starts_with(read.as_str()))
@@ -276,11 +297,11 @@ pub fn add_reads(
             .peekable();
         let outside = match below.peek() {
             Some(_) => !below.all(|path| owner.claims(path)),
-            None => declared && !owner.claims(read),
+            None => declared && !generated && !owner.claims(read),
         };
         if outside {
             found
-                .entry(read.clone())
+                .entry(Some(read.clone()))
                 .or_default()
                 .insert(owner.name().clone());
         }
@@ -307,9 +328,10 @@ pub fn format_inputs_lock(inputs: &CompileInputs) -> String {
     inputs
         .iter()
         .flat_map(|(path, packages)| {
-            packages
-                .iter()
-                .map(move |package| format!("{path}\t{package}\n"))
+            packages.iter().map(move |package| match path {
+                Some(path) => format!("{path}\t{package}\n"),
+                None => format!("{REPOSITORY}\t{package}\n"),
+            })
         })
         .collect()
 }
@@ -320,7 +342,11 @@ pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
     let mut inputs: CompileInputs = BTreeMap::new();
     for (index, line) in text.lines().enumerate() {
         let entry = line.split_once('\t').and_then(|(path, package)| {
-            Some((RepoPath::new(path).ok()?, PackageName::new(package).ok()?))
+            let path = match path {
+                REPOSITORY => None,
+                path => Some(RepoPath::new(path).ok()?),
+            };
+            Some((path, PackageName::new(package).ok()?))
         });
         let (path, package) = entry.ok_or_else(|| invalid(Reason::LockLine(index + 1)))?;
         inputs.entry(path).or_default().insert(package);
