@@ -86,7 +86,13 @@ pub struct ApiStep {
 
 #[derive(Debug, Deserialize)]
 pub struct ApiRepo {
+    pub id: u64,
     pub default_branch: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiRepoId {
+    pub id: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,22 +101,74 @@ pub struct ApiCompare {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ApiCheckRuns {
-    pub total_count: usize,
-    pub check_runs: Vec<ApiCheckRun>,
+pub struct ApiRule {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub parameters: Option<ApiRuleParameters>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ApiCheckRun {
+pub struct ApiRuleParameters {
+    pub required_status_checks: Option<Vec<ApiRequiredCheck>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiRequiredCheck {
+    pub context: String,
+    #[serde(alias = "app_id")]
+    pub integration_id: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiBranch {
+    pub protection: ApiProtection,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiProtection {
+    pub required_status_checks: ApiClassicChecks,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiClassicChecks {
+    pub enforcement_level: String,
+    pub contexts: Vec<String>,
+    pub checks: Vec<ApiRequiredCheck>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiPage<T> {
+    pub total_count: usize,
+    #[serde(
+        rename = "items",
+        alias = "workflow_runs",
+        alias = "jobs",
+        alias = "statuses"
+    )]
+    pub items: Vec<T>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiWorkflowRun {
+    pub id: u64,
+    pub event: String,
+    pub status: String,
+    pub head_branch: Option<String>,
+    pub head_sha: String,
+    pub head_repository: Option<ApiRepoId>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiCommitStatus {
+    pub context: String,
+    pub state: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiRunJob {
     pub name: String,
     pub status: String,
     pub conclusion: Option<String>,
-    pub app: Option<ApiApp>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ApiApp {
-    pub slug: String,
 }
 
 pub fn parse<T: serde::de::DeserializeOwned>(body: &str, what: &str) -> Result<T, CiError> {
@@ -129,11 +187,33 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 }
 
 #[must_use]
-pub fn check_runs_path(repo: &Repo, sha: &str, check: &str) -> String {
+pub fn rules_path(repo: &Repo, branch: &str, page: u32) -> String {
     format!(
-        "/repos/{repo}/commits/{sha}/check-runs?check_name={}&filter=latest&per_page=100",
-        encode(check)
+        "/repos/{repo}/rules/branches/{}?per_page=100&page={page}",
+        encode(branch)
     )
+}
+
+#[must_use]
+pub fn branch_path(repo: &Repo, branch: &str) -> String {
+    format!("/repos/{repo}/branches/{}", encode(branch))
+}
+
+#[must_use]
+pub fn statuses_path(repo: &Repo, sha: &str, page: u32) -> String {
+    format!("/repos/{repo}/commits/{sha}/status?per_page=100&page={page}")
+}
+
+#[must_use]
+pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
+    format!(
+        "/repos/{repo}/actions/runs?head_sha={sha}&exclude_pull_requests=true&per_page=100&page={page}"
+    )
+}
+
+#[must_use]
+pub fn run_jobs_path(repo: &Repo, run_id: u64, page: u32) -> String {
+    format!("/repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100&page={page}")
 }
 
 fn encode(text: &str) -> String {
