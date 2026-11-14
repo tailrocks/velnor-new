@@ -1,0 +1,153 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use velnor_model::{
+    DependencyKind, PackageName, RepoPath, RustMember, RustRoot, Target, TargetKind, UnownedPackage,
+};
+
+use crate::coverage::{UnitKind, crate_name};
+
+pub(crate) enum Need<'f> {
+    Unit {
+        host: bool,
+        kind: UnitKind,
+        package: &'f PackageName,
+        target: String,
+        source: &'f RepoPath,
+    },
+    Library(&'f PackageName),
+    Run(&'f PackageName),
+}
+
+pub(crate) type Paths<'f> = BTreeMap<&'f PackageName, Vec<&'f RepoPath>>;
+
+pub(crate) struct Group<'f> {
+    pub(crate) label: String,
+    pub(crate) needs: Vec<Need<'f>>,
+}
+
+pub(crate) fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<'f>> {
+    let hosted = hosted(root);
+    let mut groups: Vec<Group<'f>> = root
+        .members
+        .iter()
+        .flat_map(|member| {
+            let hosted = hosted.contains(&member.manifest);
+            member
+                .targets
+                .iter()
+                .filter(|target| !target.requires_features)
+                .filter_map(move |target| {
+                    let source = target.source.as_ref()?;
+                    Some(Group {
+                        label: format!(
+                            "{} ({}) target {} ({source}",
+                            member.name, member.manifest, target.name
+                        ),
+                        needs: needs(&member.name, target, source, hosted),
+                    })
+                })
+        })
+        .collect();
+    groups.extend(paths.iter().map(|(name, manifests)| {
+        let manifests: Vec<String> = manifests.iter().map(ToString::to_string).collect();
+        Group {
+            label: format!("path dependency {name} ({}", manifests.join(" or ")),
+            needs: vec![Need::Library(name), Need::Run(name)],
+        }
+    }));
+    groups
+}
+
+fn hosted(root: &RustRoot) -> BTreeSet<&RepoPath> {
+    let mut pending: Vec<&RustMember> = root
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| dependency.kind == DependencyKind::Build)
+        .filter_map(|dependency| member_of(root, &dependency.manifest))
+        .collect();
+    let mut hosted = BTreeSet::new();
+    while let Some(member) = pending.pop() {
+        if hosted.insert(&member.manifest) {
+            pending.extend(
+                member
+                    .dependencies
+                    .iter()
+                    .filter(|dependency| dependency.kind != DependencyKind::Dev)
+                    .filter_map(|dependency| member_of(root, &dependency.manifest)),
+            );
+        }
+    }
+    hosted
+}
+
+fn member_of<'f>(root: &'f RustRoot, manifest: &RepoPath) -> Option<&'f RustMember> {
+    root.members
+        .iter()
+        .find(|member| &member.manifest == manifest)
+}
+
+fn needs<'f>(
+    package: &'f PackageName,
+    target: &Target,
+    source: &'f RepoPath,
+    hosted: bool,
+) -> Vec<Need<'f>> {
+    let has = |kinds: &[TargetKind]| target.kinds.iter().any(|kind| kinds.contains(kind));
+    let proc_macro = has(&[TargetKind::ProcMacro]);
+    let unit = |kind| Need::Unit {
+        host: proc_macro || (hosted && kind == UnitKind::Normal && has(&[TargetKind::Lib])),
+        kind,
+        package,
+        target: crate_name(target.name.as_str()),
+        source,
+    };
+    if has(&[TargetKind::BuildScript]) {
+        return vec![Need::Unit {
+            host: hosted,
+            kind: UnitKind::Run,
+            package,
+            target: String::new(),
+            source,
+        }];
+    }
+    if has(&[TargetKind::Bench]) {
+        return vec![unit(UnitKind::Harness)];
+    }
+    if has(&[TargetKind::Test]) {
+        return [unit(UnitKind::Harness)]
+            .into_iter()
+            .filter(|_| target.tests)
+            .collect();
+    }
+    let mut needs = vec![unit(UnitKind::Normal)];
+    if target.tests {
+        needs.push(unit(UnitKind::Harness));
+    }
+    needs
+}
+
+pub(crate) fn reached<'f>(
+    root: &RustRoot,
+    unowned: &'f BTreeMap<RepoPath, UnownedPackage>,
+) -> BTreeMap<&'f RepoPath, &'f UnownedPackage> {
+    let mut pending: Vec<&RepoPath> = root
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .map(|dependency| &dependency.manifest)
+        .collect();
+    let mut reached = BTreeMap::new();
+    while let Some(manifest) = pending.pop() {
+        let Some((manifest, package)) = unowned.get_key_value(manifest) else {
+            continue;
+        };
+        if reached.insert(manifest, package).is_none() {
+            pending.extend(package.dependencies.iter().map(|d| &d.manifest));
+        }
+    }
+    reached
+}

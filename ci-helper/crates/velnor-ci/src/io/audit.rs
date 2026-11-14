@@ -7,13 +7,13 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath};
+use velnor_model::{CompileInputs, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
     locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, profile, triples, unit_files, workspace};
+use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 
@@ -22,7 +22,10 @@ pub(super) struct Audit<'a> {
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
-    names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
+    pub(super) runs: BTreeMap<(usize, String, String), String>,
+    pub(super) placed: BTreeSet<(usize, String)>,
+    pub(super) rooted: BTreeSet<(usize, String)>,
     pub(super) present: BTreeSet<(usize, String, String)>,
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
@@ -55,6 +58,9 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         tracked: &checkout.view.tracked_paths,
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
+        runs: BTreeMap::new(),
+        placed: BTreeSet::new(),
+        rooted: BTreeSet::new(),
         present: BTreeSet::new(),
         scripts: BTreeMap::new(),
         targets: workspaces
@@ -77,19 +83,11 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         );
     }
     files.sort();
-    let files_under_triples = files
-        .iter()
-        .any(|(unit, _, _)| unit.configuration().is_some_and(|c| c.contains('/')));
     for (unit, file, index) in files {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
     audit.orphans();
-    let triples = if files_under_triples {
-        triples(&checkout.root)?
-    } else {
-        BTreeSet::new()
-    };
-    complete(&facts, &workspaces, &audit.built, &triples)?;
+    complete(&facts, &workspaces, &audit.built)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -99,30 +97,23 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     compare(&audit.found, &listed, &summary)
 }
 
-fn complete(
-    facts: &RepoFacts,
-    workspaces: &[Workspace],
-    built: &[Built],
-    triples: &BTreeSet<String>,
-) -> Result<(), CiError> {
+fn complete(facts: &RepoFacts, workspaces: &[Workspace], built: &[Built]) -> Result<(), CiError> {
     let gaps: Vec<String> = facts
         .rust_roots
         .iter()
         .zip(workspaces)
         .zip(built)
         .flat_map(|((root, workspace), built)| {
-            gaps(root, &facts.unowned, built, triples)
-                .into_iter()
-                .map(|gap| {
-                    format!(
-                        "in {} for {}",
-                        workspace
-                            .target_directory
-                            .join(&gap.configuration)
-                            .display(),
-                        gap.missing.join(", ")
-                    )
-                })
+            gaps(root, &facts.unowned, built).into_iter().map(|gap| {
+                format!(
+                    "in {} for {}",
+                    workspace
+                        .target_directory
+                        .join(&gap.configuration)
+                        .display(),
+                    gap.missing.join(", ")
+                )
+            })
         })
         .collect();
     if gaps.is_empty() {
@@ -181,27 +172,7 @@ impl Audit<'_> {
                 package,
                 hash,
                 name,
-            } => {
-                if let Some(fingerprint) = Fingerprint::parse(&name) {
-                    if fingerprint.kind == UnitKind::Normal {
-                        self.names.insert(
-                            (index, configuration.clone(), fingerprint.target.clone()),
-                            (package.clone(), fingerprint.clone()),
-                        );
-                    }
-                    self.fingerprints.insert(
-                        (index, configuration.clone(), hash),
-                        (package.clone(), fingerprint),
-                    );
-                }
-                if let Ok(package) = PackageName::new(package) {
-                    if name.starts_with("lib-") {
-                        self.built[index].libraries.insert((configuration, package));
-                    } else if name.starts_with("build-script-") && !name.contains('.') {
-                        self.built[index].builders.insert((configuration, package));
-                    }
-                }
-            }
+            } => self.fingerprint(index, configuration, package, hash, &name),
             UnitFile::DepInfo {
                 configuration,
                 hash,
@@ -245,7 +216,12 @@ impl Audit<'_> {
             UnitFile::BuildOutput {
                 configuration,
                 package,
-            } => self.build_output(index, file, &configuration, &package)?,
+                hash,
+            } => {
+                self.present.insert((index, configuration.clone(), hash));
+                self.build_output(index, file, &configuration, &package)?;
+            }
+            UnitFile::Directory { name, root } => self.directory(index, name, root),
         }
         Ok(())
     }

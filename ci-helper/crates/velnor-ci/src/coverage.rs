@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{PackageName, RepoPath, RustRoot, Target, TargetKind, UnownedPackage};
+use velnor_model::{PackageName, RepoPath, RustRoot, TargetKind, UnownedPackage};
+
+use crate::needs::{Group, Need, Paths, groups, reached};
 
 pub const HOST: &str = "debug";
 
@@ -65,6 +67,7 @@ pub struct Built {
     pub scripts: BTreeSet<(String, RepoPath)>,
     pub builders: BTreeSet<(String, PackageName)>,
     pub orphans: BTreeSet<(String, String, Fingerprint)>,
+    pub placed: BTreeSet<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,31 +76,11 @@ pub struct Gap {
     pub missing: Vec<String>,
 }
 
-enum Need<'f> {
-    Unit {
-        host: bool,
-        kind: UnitKind,
-        package: &'f PackageName,
-        target: String,
-        source: &'f RepoPath,
-    },
-    Library(&'f PackageName),
-    Run(&'f PackageName),
-}
-
-type Paths<'f> = BTreeMap<&'f PackageName, Vec<&'f RepoPath>>;
-
-struct Group<'f> {
-    label: String,
-    needs: Vec<Need<'f>>,
-}
-
 #[must_use]
 pub fn gaps(
     root: &RustRoot,
     unowned: &BTreeMap<RepoPath, UnownedPackage>,
     built: &Built,
-    triples: &BTreeSet<String>,
 ) -> Vec<Gap> {
     let reached = reached(root, unowned);
     let mut paths: Paths<'_> = BTreeMap::new();
@@ -119,17 +102,23 @@ pub fn gaps(
             .chain(orphans(configuration, built, &owned))
             .collect(),
     };
-    let active = active(root, built, triples);
+    let active = active(root, built);
     let mut found: Vec<Gap> = if active.is_empty() {
+        let others: BTreeSet<&str> = built
+            .units
+            .iter()
+            .map(|unit| unit.configuration.as_str())
+            .chain(
+                built
+                    .orphans
+                    .iter()
+                    .filter(|(_, package, _)| owned.contains(package.as_str()))
+                    .map(|(at, _, _)| at.as_str()),
+            )
+            .filter(|configuration| profiled(configuration, built) && *configuration != HOST)
+            .collect();
         let mut candidates = vec![HOST];
-        candidates.extend(
-            built
-                .units
-                .iter()
-                .map(|unit| unit.configuration.as_str())
-                .filter(|configuration| profiled(configuration, triples) && *configuration != HOST),
-        );
-        candidates.dedup();
+        candidates.extend(others);
         candidates
             .into_iter()
             .map(check)
@@ -152,38 +141,7 @@ pub fn gaps(
     found
 }
 
-fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<'f>> {
-    let mut groups: Vec<Group<'f>> = root
-        .members
-        .iter()
-        .flat_map(|member| {
-            member
-                .targets
-                .iter()
-                .filter(|target| !target.requires_features)
-                .filter_map(move |target| {
-                    let source = target.source.as_ref()?;
-                    Some(Group {
-                        label: format!(
-                            "{} ({}) target {} ({source}",
-                            member.name, member.manifest, target.name
-                        ),
-                        needs: needs(&member.name, target, source),
-                    })
-                })
-        })
-        .collect();
-    groups.extend(paths.iter().map(|(name, manifests)| {
-        let manifests: Vec<String> = manifests.iter().map(ToString::to_string).collect();
-        Group {
-            label: format!("path dependency {name} ({}", manifests.join(" or ")),
-            needs: vec![Need::Library(name), Need::Run(name)],
-        }
-    }));
-    groups
-}
-
-fn active<'b>(root: &RustRoot, built: &'b Built, triples: &BTreeSet<String>) -> Vec<&'b str> {
+fn active<'b>(root: &RustRoot, built: &'b Built) -> Vec<&'b str> {
     let tested: BTreeSet<(&str, String)> = root
         .members
         .iter()
@@ -200,20 +158,32 @@ fn active<'b>(root: &RustRoot, built: &'b Built, triples: &BTreeSet<String>) -> 
         .iter()
         .filter(|unit| {
             unit.kind == UnitKind::Harness
-                && profiled(&unit.configuration, triples)
+                && profiled(&unit.configuration, built)
                 && tested.contains(&(unit.package.as_str(), unit.target.clone()))
         })
         .map(|unit| unit.configuration.as_str())
+        .chain(
+            built
+                .orphans
+                .iter()
+                .filter(|(at, package, fingerprint)| {
+                    fingerprint.kind == UnitKind::Harness
+                        && profiled(at, built)
+                        && tested.contains(&(package.as_str(), fingerprint.target.clone()))
+                })
+                .map(|(at, _, _)| at.as_str()),
+        )
         .collect();
+    active.sort_unstable();
     active.dedup();
     active
 }
 
-fn profiled(configuration: &str, triples: &BTreeSet<String>) -> bool {
+fn profiled(configuration: &str, built: &Built) -> bool {
     configuration == HOST
         || configuration
             .strip_suffix(&format!("/{HOST}"))
-            .is_some_and(|triple| triples.contains(triple))
+            .is_some_and(|directory| built.placed.contains(directory))
 }
 
 fn orphans<'b>(
@@ -227,12 +197,13 @@ fn orphans<'b>(
         .filter(move |(at, package, _)| at == configuration && owned.contains(package.as_str()))
         .map(|(_, package, fingerprint)| {
             format!(
-                "{package} target {} ({} unit with a cargo fingerprint and no dep-info)",
+                "{package} target {} ({})",
                 fingerprint.target,
                 match fingerprint.kind {
-                    UnitKind::Normal => "normal",
-                    UnitKind::Harness => "test harness",
-                    UnitKind::Run => "build script run",
+                    UnitKind::Normal => "normal unit with a cargo fingerprint and no dep-info",
+                    UnitKind::Harness =>
+                        "test harness unit with a cargo fingerprint and no dep-info",
+                    UnitKind::Run => "build script run with a cargo fingerprint and no output",
                 }
             )
         })
@@ -302,61 +273,4 @@ fn missing(group: &Group<'_>, configuration: &str, built: &Built) -> Option<Stri
         found += units.iter().filter(|present| **present).count();
     }
     (found < wanted).then(|| format!("{}, {found} of {wanted} units)", group.label))
-}
-
-fn needs<'f>(package: &'f PackageName, target: &Target, source: &'f RepoPath) -> Vec<Need<'f>> {
-    let has = |kinds: &[TargetKind]| target.kinds.iter().any(|kind| kinds.contains(kind));
-    let host = has(&[TargetKind::ProcMacro]);
-    let unit = |kind| Need::Unit {
-        host,
-        kind,
-        package,
-        target: crate_name(target.name.as_str()),
-        source,
-    };
-    if has(&[TargetKind::BuildScript]) {
-        return vec![Need::Unit {
-            host: false,
-            kind: UnitKind::Run,
-            package,
-            target: String::new(),
-            source,
-        }];
-    }
-    if has(&[TargetKind::Bench]) {
-        return vec![unit(UnitKind::Harness)];
-    }
-    if has(&[TargetKind::Test]) {
-        return [unit(UnitKind::Harness)]
-            .into_iter()
-            .filter(|_| target.tests)
-            .collect();
-    }
-    let mut needs = vec![unit(UnitKind::Normal)];
-    if target.tests {
-        needs.push(unit(UnitKind::Harness));
-    }
-    needs
-}
-
-fn reached<'f>(
-    root: &RustRoot,
-    unowned: &'f BTreeMap<RepoPath, UnownedPackage>,
-) -> BTreeMap<&'f RepoPath, &'f UnownedPackage> {
-    let mut pending: Vec<&RepoPath> = root
-        .members
-        .iter()
-        .flat_map(|member| &member.dependencies)
-        .map(|dependency| &dependency.manifest)
-        .collect();
-    let mut reached = BTreeMap::new();
-    while let Some(manifest) = pending.pop() {
-        let Some((manifest, package)) = unowned.get_key_value(manifest) else {
-            continue;
-        };
-        if reached.insert(manifest, package).is_none() {
-            pending.extend(package.dependencies.iter().map(|d| &d.manifest));
-        }
-    }
-    reached
 }
