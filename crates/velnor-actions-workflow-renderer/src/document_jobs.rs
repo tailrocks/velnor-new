@@ -91,7 +91,38 @@ pub(super) fn job_to_yaml(
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
+    if reads_private_bun(source_steps) {
+        rendered_steps.insert(0, private_bun_fork_guard());
+    }
     crate::document_services::push_services(&mut entries, &job.services);
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
+}
+
+fn reads_private_bun(steps: &[velnor_actions_contract::Step]) -> bool {
+    steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::BunRegistryInstall))
+}
+
+fn private_bun_fork_guard() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Reject private registry access on fork pull requests"),
+        ),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "VELNOR_PULL_REQUEST_FORK".to_owned(),
+                Yaml::str("${{ toJSON(github.event.pull_request.head.repo.fork) }}"),
+            )]),
+        ),
+        (
+            "run".to_owned(),
+            Yaml::str(
+                "case \"${GITHUB_EVENT_NAME-}\" in pull_request) [ \"${VELNOR_PULL_REQUEST_FORK-}\" = false ] ;; '') exit 1 ;; *) : ;; esac",
+            ),
+        ),
+    ])
 }

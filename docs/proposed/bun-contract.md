@@ -185,6 +185,16 @@ and the job holds `packages: read`:
    qualification item; the fallback is for the registry operation to pre-fetch
    the scoped tarballs itself.
 
+Fork pull requests never reach the registry phase. The planner fails with
+`private_npm_registry_forbidden_for_fork` when selected fork work (a member job
+or a suite) belongs to a repository with `[private_sources] npm_scopes`. Every
+generated private Bun member, suite and report job also starts, before checkout
+or any private dependency work, with a step that exits non-zero on a
+`pull_request` whose `github.event.pull_request.head.repo.fork` is not `false`
+and on an empty event name. This is hardening under the adopted
+[fork trust model](../implemented/fork-pr-trust-model.md), not a boundary
+against a workflow edited by the pull request.
+
 The org admin must grant "Manage Actions access" read on each npm package to the
 consuming repository after its first publish; there is no API for it.
 

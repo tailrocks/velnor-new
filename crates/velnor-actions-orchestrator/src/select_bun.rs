@@ -14,6 +14,8 @@ use velnor_actions_workflow_renderer::verification_jobs::BUN_ASSETS_SUFFIX;
 
 use super::ChangeEvidence;
 use crate::discover::Discovery;
+use crate::internal::internal;
+use crate::OrchestratorError;
 
 pub(crate) fn dispositions(
     config: &VelnorConfig,
@@ -21,9 +23,9 @@ pub(crate) fn dispositions(
     event: WorkflowEvent,
     affected: Option<&BTreeSet<String>>,
     evidence: &ChangeEvidence,
-) -> Vec<PlanJob> {
+) -> Result<Vec<PlanJob>, OrchestratorError> {
     let Some(bun) = &config.stacks.bun else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let inventory = &discovery.bun;
     let workspaces = inventory.workspaces();
@@ -39,6 +41,10 @@ pub(crate) fn dispositions(
         .private_sources
         .as_ref()
         .is_some_and(|sources| !sources.release_assets.is_empty());
+    let private_registry = config
+        .private_sources
+        .as_ref()
+        .is_some_and(|sources| !sources.npm_scopes.is_empty());
     let mut jobs = Vec::new();
     for member in workspaces.iter().flat_map(|workspace| &workspace.members) {
         let has_member_job = !matches!(member_job_scripts(member, bun), Ok(None));
@@ -63,6 +69,13 @@ pub(crate) fn dispositions(
             .into_iter()
             .flat_map(|options| options.suites.keys())
             .collect();
+        if event == WorkflowEvent::Fork
+            && private_registry
+            && disposition == JobDisposition::Run
+            && (has_member_job || !suites.is_empty())
+        {
+            return Err(internal("private_npm_registry_forbidden_for_fork"));
+        }
         for suite in &suites {
             jobs.push(PlanJob {
                 lane: None,
@@ -78,5 +91,5 @@ pub(crate) fn dispositions(
             });
         }
     }
-    jobs
+    Ok(jobs)
 }
