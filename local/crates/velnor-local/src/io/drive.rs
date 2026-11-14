@@ -20,7 +20,7 @@ use crate::event::{NO_COMMIT, Push, Repository, for_standin};
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
 };
-use crate::side::{Side, fork_heads, refuse_fork_branches};
+use crate::side::{Side, fork_heads, push_event, refuse_fork_branches};
 use crate::standin;
 
 mod outcome;
@@ -287,21 +287,22 @@ impl Driver<'_> {
         self.git(&["switch", "-q", branch]).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
-        let payload = self.repository().push(&Push {
+        let push = Push {
             branch,
             before,
             after: &after,
-        });
+        };
+        let payload = push_event(&self.repository(), &push, &self.fork_heads);
         self.pushed.insert(branch.to_owned(), after.clone());
         let moved = self.retarget(branch, &after).await?;
-        if self.fork_heads.contains(branch) {
+        if let Some(payload) = payload {
+            self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
+                .await?;
+        } else {
             println!(
                 "velnor-local {}: {branch} is a fork's branch, so the push reaches only its pull request",
                 self.tag
             );
-        } else {
-            self.send("push", &payload, &format!("refs/heads/{branch}"), &after)
-                .await?;
         }
         self.synchronize(moved).await
     }
@@ -340,23 +341,15 @@ impl Driver<'_> {
         let mut client = words("-w /repo --entrypoint dotnet");
         client.extend(["-v", &repo, "-v", &events]);
         client.push(STANDIN_IMAGE);
-        client.extend(words(
-            "/opt/runner.server/Runner.Client.dll --server http://runner-server",
-        ));
-        client.extend([
-            "--event",
+        let call = standin::ClientCall {
             event,
-            "--payload",
-            &payload_path,
-            "--ref",
+            payload: &payload_path,
             git_ref,
-            "--sha",
             sha,
-        ]);
-        client.extend(["--repository", &self.args.repository]);
-        if let Some(workflow) = &self.args.workflow {
-            client.extend(["-W", workflow]);
-        }
+            repository: &self.args.repository,
+            workflow: self.args.workflow.as_deref(),
+        };
+        client.extend(call.args());
         let log = self.env.dir.join(format!("logs/{name}.log"));
         let succeeded = self.env.client(payload, &client, &log).await?;
         let mut created = false;

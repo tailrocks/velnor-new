@@ -3,7 +3,8 @@
 
 use velnor_local::event::{PullRequest, Push, Repository};
 use velnor_local::scenario::Scenario;
-use velnor_local::side::{Side, fork_heads, refuse_fork_branches};
+use velnor_local::side::{Side, fork_heads, push_event, refuse_fork_branches};
+use velnor_local::standin::ClientCall;
 
 const SHA: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
 const REPOSITORY: Repository<'static> = Repository {
@@ -82,5 +83,59 @@ fn a_fork_branch_is_never_dispatched_used_as_a_base_or_shared_with_the_repositor
             r#"{"open_pull_request": {"head": "patch", "base": "main"}}"#
         ))
         .is_empty()
+    );
+}
+
+#[test]
+fn a_push_of_a_fork_branch_sends_no_push_event() {
+    let forks = fork_heads(&steps(
+        r#"{"open_pull_request": {"head": "patch", "base": "main", "fork": true}}"#,
+    ));
+    let push = |branch| Push {
+        branch,
+        before: SHA,
+        after: SHA,
+    };
+    assert!(push_event(&REPOSITORY, &push("patch"), &forks).is_none());
+    let sent = push_event(&REPOSITORY, &push("main"), &forks);
+    assert_eq!(
+        sent.as_ref().map(|payload| payload["ref"].clone()),
+        Some(serde_json::json!("refs/heads/main"))
+    );
+}
+
+#[test]
+fn a_job_gets_no_secrets_variables_or_token_from_the_client() {
+    let call = ClientCall {
+        event: "pull_request",
+        payload: "/events/2-pull_request.json",
+        git_ref: "refs/pull/2/merge",
+        sha: SHA,
+        repository: "tailrocks/velnor-lab",
+        workflow: Some(".github/workflows/ci.yml"),
+    };
+    let args = call.args();
+    let flags: Vec<&str> = args
+        .iter()
+        .copied()
+        .filter(|arg| arg.starts_with('-'))
+        .collect();
+    assert_eq!(
+        flags,
+        [
+            "--server",
+            "--event",
+            "--payload",
+            "--ref",
+            "--sha",
+            "--repository",
+            "-W"
+        ]
+    );
+    assert!(
+        args.iter()
+            .all(|arg| !arg.to_lowercase().contains("token")
+                && !arg.to_lowercase().contains("secret")),
+        "{args:?}"
     );
 }

@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
+use crate::event::{Push, Repository};
 use crate::scenario::Step;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +42,15 @@ impl Side {
             }
         }
     }
+}
+
+#[must_use]
+pub fn push_event(
+    repository: &Repository<'_>,
+    push: &Push<'_>,
+    fork_heads: &BTreeSet<String>,
+) -> Option<Value> {
+    (!fork_heads.contains(push.branch)).then(|| repository.push(push))
 }
 
 #[must_use]
