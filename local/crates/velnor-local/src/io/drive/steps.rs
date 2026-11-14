@@ -12,10 +12,16 @@ use super::Driver;
 use crate::scenario::next_patch;
 
 impl Driver<'_> {
-    pub(super) async fn update_lock(&self, branch: &str, package: &str) -> io::Result<()> {
+    pub(super) async fn update_lock(
+        &self,
+        branch: &str,
+        package: &str,
+        workspace: &str,
+    ) -> io::Result<()> {
         self.on_branch(branch).await?;
-        let manifest = fs::canonicalize(self.repo.join("Cargo.toml")).await?;
-        let lock = self.repo.join("Cargo.lock");
+        let root = self.repo.join(workspace);
+        let manifest = fs::canonicalize(root.join("Cargo.toml")).await?;
+        let lock = root.join("Cargo.lock");
         let lock_inside = match fs::canonicalize(&lock).await {
             Ok(real) => real.starts_with(fs::canonicalize(&self.repo).await?),
             Err(_) => fs::symlink_metadata(&lock).await.is_err(),
@@ -36,17 +42,11 @@ impl Driver<'_> {
             &precise,
             "--manifest-path",
         ];
-        let mut cargo = Command::new("cargo");
-        cargo.args(update).arg(&manifest);
-        for config in [".cargo/config", ".cargo/config.toml"] {
-            let path = self.repo.join(config);
-            if fs::metadata(&path).await.is_ok() {
-                cargo.arg("--config").arg(path);
-                break;
-            }
-        }
-        let updated = cargo
-            .current_dir(&self.env.dir)
+        let updated = Command::new("cargo")
+            .args(update)
+            .arg(&manifest)
+            .current_dir(&root)
+            .env("MISE_IGNORED_CONFIG_PATHS", &self.repo)
             .kill_on_drop(true)
             .output()
             .await?;
@@ -77,7 +77,11 @@ impl Driver<'_> {
     ) -> io::Result<()> {
         self.git(&["switch", "-q", branch]).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
-        let workflow = self.args.workflow.as_deref().unwrap_or_default();
+        let workflow = self.args.workflow.as_deref().ok_or_else(|| {
+            io::Error::other(
+                "a workflow_dispatch step needs --workflow, as GitHub dispatches one workflow",
+            )
+        })?;
         let inputs = json!(inputs);
         let payload = self
             .repository()

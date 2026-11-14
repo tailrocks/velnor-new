@@ -120,6 +120,14 @@ impl Driver<'_> {
         for at in open {
             let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
             self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
+            let (base_sha, number) = (self.pulls[at].base_sha.clone(), self.pulls[at].number);
+            if self.merge_commit(&base_sha, after).await.is_err() {
+                let _ = self.git(&["merge", "--abort"]).await;
+                println!(
+                    "velnor-local: pull request {number} has a merge conflict, so no pull_request event"
+                );
+                continue;
+            }
             self.announce(at, "synchronize", Some(&before)).await?;
         }
         Ok(())
