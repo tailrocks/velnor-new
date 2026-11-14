@@ -32,7 +32,13 @@ fn workspace_below_the_root() -> Repo {
         "[workspace]\nmembers = [\"app\", \"lib\"]\nresolver = \"3\"\n",
     );
     repo.write("rust/Cargo.lock", "version = 4\n");
-    for (package, extra) in [("app", ""), ("lib", "build = \"build.rs\"\n")] {
+    for (package, extra) in [
+        (
+            "app",
+            "\n[features]\nextra = []\n\n[[bin]]\nname = \"extra\"\npath = \"src/extra.rs\"\nrequired-features = [\"extra\"]\n",
+        ),
+        ("lib", "build = \"build.rs\"\n"),
+    ] {
         repo.write(
             &format!("rust/{package}/Cargo.toml"),
             &format!("[package]\nname = \"{package}\"\nedition = \"2024\"\n{extra}"),
@@ -42,6 +48,7 @@ fn workspace_below_the_root() -> Repo {
     }
     repo.write("rust/lib/build.rs", "fn main() {}\n");
     repo.write("rust/app/build.rs", "fn main() {}\n");
+    repo.write("rust/app/src/extra.rs", "fn main() {}\n");
     repo.write("rust/app/data.txt", "");
     for file in [
         "greeting.txt",
@@ -56,10 +63,52 @@ fn workspace_below_the_root() -> Repo {
     repo
 }
 
+fn own_units(repo: &Repo, target: &str, left_out: &[&str]) {
+    for (key, file, text) in [
+        (
+            "app",
+            "deps/app-f000000000000001.d",
+            "out.d: app/src/lib.rs\n",
+        ),
+        (
+            "app-it",
+            "deps/it-f000000000000002.d",
+            "out.d: app/tests/it.rs\n",
+        ),
+        (
+            "app-build",
+            "build/app-f000000000000003/build_script_build-f000000000000003.d",
+            "out.d: app/build.rs\n",
+        ),
+        ("app-build", "build/app-f000000000000004/output", ""),
+        (
+            "lib",
+            "deps/lib-f000000000000005.d",
+            "out.d: lib/src/lib.rs\n",
+        ),
+        (
+            "lib-it",
+            "deps/it-f000000000000006.d",
+            "out.d: lib/tests/it.rs\n",
+        ),
+        (
+            "lib-build",
+            "build/lib-f000000000000007/build_script_build-f000000000000007.d",
+            "out.d: lib/build.rs\n",
+        ),
+        ("lib-build", "build/lib-f000000000000008/output", ""),
+    ] {
+        if !left_out.contains(&key) {
+            unit(repo, &format!("{target}/{file}"), text);
+        }
+    }
+}
+
 #[test]
 fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_stale_lock() {
     let repo = workspace_below_the_root();
     let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
     unit(
         &repo,
         &format!("{target}/deps/app-0000000000000001.d"),
@@ -137,6 +186,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
 fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole_repository() {
     let repo = workspace_below_the_root();
     let target = "rust/target/debug";
+    own_units(&repo, target, &["lib"]);
     unit(
         &repo,
         &format!("{target}/deps/app-0000000000000001.d"),
@@ -155,7 +205,8 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
     assert!(
-        String::from_utf8_lossy(&partial.stderr).contains(" for lib (rust/lib/Cargo.toml);"),
+        String::from_utf8_lossy(&partial.stderr)
+            .contains(" for lib (rust/lib/Cargo.toml) target lib (rust/lib/src/lib.rs);"),
         "{partial:?}"
     );
     let lock = repo.root().join(".velnor/rust-inputs.lock");
@@ -258,13 +309,13 @@ fn audit_credits_path_dependencies_targets_outside_packages_symlink_targets_and_
     );
     unit(
         &repo,
-        &format!("{target}/build/mid-0000000000000004/output"),
-        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
+        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: vendor/mid/build.rs\n",
     );
     unit(
         &repo,
-        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
-        "out.d: vendor/mid/build.rs\n",
+        &format!("{target}/build/mid-0000000000000004/output"),
+        "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\ncargo:rerun-if-changed=../../target/debug/gen.txt\n",
     );
     unit(
         &repo,
@@ -313,7 +364,8 @@ fn a_path_dependency_unit_does_not_stand_in_for_the_member_that_depends_on_it() 
     let partial = audit(&repo, &["--write"]);
     assert_eq!(partial.status.code(), Some(1), "{partial:?}");
     assert!(
-        String::from_utf8_lossy(&partial.stderr).contains(" for other (other/Cargo.toml);"),
+        String::from_utf8_lossy(&partial.stderr)
+            .contains("other (other/Cargo.toml) target other (other/src/lib.rs)"),
         "{partial:?}"
     );
 }
@@ -327,6 +379,7 @@ fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
     );
     repo.write("docs/schema.json", "");
     let target = "docs/debug";
+    own_units(&repo, target, &[]);
     unit(
         &repo,
         &format!("{target}/deps/app-0000000000000001.d"),
@@ -354,4 +407,33 @@ fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
             .unwrap_or_else(|e| unreachable!("{e}")),
         "docs/schema.json\tapp\n"
     );
+}
+
+#[test]
+fn a_stale_target_unit_or_a_build_output_older_than_its_build_script_makes_the_audit_refuse() {
+    let repo = workspace_below_the_root();
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    let old = UNIX_EPOCH + Duration::from_secs(1_000_000_000);
+    let test_unit = format!("{target}/deps/it-f000000000000006.d");
+    repo.set_mtime(&test_unit, old);
+    let stale_test = audit(&repo, &["--write"]);
+    assert_eq!(stale_test.status.code(), Some(1), "{stale_test:?}");
+    assert!(
+        String::from_utf8_lossy(&stale_test.stderr)
+            .contains(" for lib (rust/lib/Cargo.toml) target it (rust/lib/tests/it.rs);"),
+        "{stale_test:?}"
+    );
+
+    unit(&repo, &test_unit, "out.d: lib/tests/it.rs\n");
+    repo.set_mtime(&format!("{target}/build/lib-f000000000000008/output"), old);
+    let stale_output = audit(&repo, &["--write"]);
+    assert_eq!(stale_output.status.code(), Some(1), "{stale_output:?}");
+    assert!(
+        String::from_utf8_lossy(&stale_output.stderr).contains(
+            " for lib (rust/lib/Cargo.toml) target build-script-build (rust/lib/build.rs);"
+        ),
+        "{stale_output:?}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }

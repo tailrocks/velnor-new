@@ -63,6 +63,8 @@ struct RawTarget {
     #[serde(default)]
     test: bool,
     src_path: Option<PathBuf>,
+    #[serde(rename = "required-features", default)]
+    required_features: Vec<String>,
 }
 
 pub fn reduce_metadata(
@@ -133,6 +135,7 @@ fn target_of(repository: &Path, target: RawTarget) -> Result<Target, MetadataErr
         name: TargetName::new(target.name).map_err(invalid)?,
         kinds,
         tests: target.test,
+        requires_features: !target.required_features.is_empty(),
         source: target
             .src_path
             .and_then(|path| match locate(repository, &path, "") {

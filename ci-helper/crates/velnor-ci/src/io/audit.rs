@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use serde::Deserialize;
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, RepoPath};
+use velnor_model::{CompileInputs, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
     locate, parse_inputs_lock, rerun_if_changed, unlisted,
@@ -33,11 +33,11 @@ struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
-    scripts: BTreeMap<String, BTreeSet<RepoPath>>,
+    scripts: BTreeMap<String, BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
-    built: BTreeSet<RepoPath>,
+    covered: BTreeSet<RepoPath>,
 }
 
 pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
@@ -71,7 +71,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             .collect(),
         found: CompileInputs::new(),
         units: 0,
-        built: BTreeSet::new(),
+        covered: BTreeSet::new(),
     };
     let mut files = Vec::new();
     for workspace in &workspaces {
@@ -91,13 +91,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .iter()
         .map(|w| w.target_directory.display().to_string())
         .collect();
-    let unbuilt: Vec<String> = facts
-        .rust_roots
-        .iter()
-        .flat_map(|root| &root.members)
-        .filter(|member| !audit.built.contains(&member.manifest))
-        .map(|member| format!("{} ({})", member.name, member.manifest))
-        .collect();
+    let unbuilt = uncovered(&facts, &audit.covered);
     if !unbuilt.is_empty() {
         return Err(CiError::new(format!(
             "found no current dep-info in {} for {}; run this after cargo build --all-targets in every Cargo root",
@@ -112,6 +106,29 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
     compare(&audit.found, &listed, &summary)
+}
+
+fn uncovered(facts: &RepoFacts, covered: &BTreeSet<RepoPath>) -> Vec<String> {
+    facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .flat_map(|member| {
+            member
+                .targets
+                .iter()
+                .filter(|target| !target.requires_features)
+                .filter_map(|target| {
+                    let source = target.source.as_ref()?;
+                    (!covered.contains(source)).then(|| {
+                        format!(
+                            "{} ({}) target {} ({source})",
+                            member.name, member.manifest, target.name
+                        )
+                    })
+                })
+        })
+        .collect()
 }
 
 fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
@@ -147,99 +164,100 @@ fn compare(
     )))
 }
 
-impl<'a> Audit<'a> {
-    fn readers(
-        &mut self,
-        workspace: &Path,
-        text: &str,
-        kind: &UnitFile,
-    ) -> Vec<(Owner<'a>, PathBuf, Vec<String>)> {
+impl Audit<'_> {
+    fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
+        let text = fs::read_to_string(file)
+            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+        let built = modified(file)?;
         match kind {
             UnitFile::DepInfo(script) => {
-                let paths = dep_info_paths(text);
+                let paths = dep_info_paths(&text);
                 let Some(Located::Inside(source)) = paths
                     .first()
                     .map(|source| locate(self.repository, workspace, source))
                 else {
-                    return Vec::new();
+                    return Ok(());
                 };
-                if let Some(package) = script {
-                    self.scripts
-                        .entry(package.clone())
-                        .or_default()
-                        .insert(source.clone());
+                if changed_since(workspace, &paths, built) {
+                    return Ok(());
                 }
-                self.owners
-                    .of(&source)
-                    .into_iter()
-                    .map(|owner| (owner, workspace.to_path_buf(), paths.clone()))
-                    .collect()
+                match script {
+                    Some(package) => {
+                        self.scripts
+                            .entry(package.clone())
+                            .or_default()
+                            .insert(source.clone(), built);
+                    }
+                    None => {
+                        self.covered.insert(source.clone());
+                    }
+                }
+                for owner in self.owners.of(&source) {
+                    self.credit(&owner, workspace, &paths, false);
+                }
+                self.units += 1;
             }
             UnitFile::BuildOutput(package) => {
-                let mut seen = BTreeSet::new();
-                self.scripts
+                let paths = rerun_if_changed(&text);
+                let scripts: Vec<RepoPath> = self
+                    .scripts
                     .get(package)
                     .into_iter()
                     .flatten()
-                    .flat_map(|source| self.owners.of(source))
-                    .filter(|owner| {
-                        seen.insert((owner.manifest().clone(), owner.directory().cloned()))
-                    })
-                    .map(|owner| {
+                    .filter(|(_, compiled)| **compiled <= built)
+                    .map(|(source, _)| source.clone())
+                    .collect();
+                let mut seen = BTreeSet::new();
+                for source in scripts {
+                    for owner in self.owners.of(&source) {
                         let base = owner.directory().map_or_else(
                             || self.repository.to_path_buf(),
                             |d| self.repository.join(d.as_str()),
                         );
-                        (owner, base, rerun_if_changed(text))
-                    })
-                    .collect()
-            }
-        }
-    }
-
-    fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
-        let text = fs::read_to_string(file)
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-        let declared = matches!(kind, UnitFile::BuildOutput(_));
-        let readers = self.readers(workspace, &text, kind);
-        let built = modified(file)?;
-        if !readers.is_empty() {
-            self.units += 1;
-        }
-        for (owner, base, paths) in readers {
-            if paths
-                .iter()
-                .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
-            {
-                continue;
-            }
-            let mut reads = Vec::new();
-            for path in &paths {
-                match locate(self.repository, &base, path) {
-                    Located::Inside(read) => reads.push(Some(read)),
-                    Located::Repository => reads.push(None),
-                    Located::Outside => {}
+                        if changed_since(&base, &paths, built) {
+                            continue;
+                        }
+                        self.covered.insert(source.clone());
+                        if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
+                            self.credit(&owner, &base, &paths, true);
+                            self.units += 1;
+                        }
+                    }
                 }
-                if let Ok(Located::Inside(target)) = fs::canonicalize(base.join(path))
-                    .map(|target| locate(self.repository, &target, ""))
-                {
-                    reads.push(Some(target));
-                }
-            }
-            add_reads(
-                &mut self.found,
-                self.tracked,
-                &owner,
-                &reads,
-                declared,
-                &self.targets,
-            );
-            if owner.is_own() && *kind == UnitFile::DepInfo(None) {
-                self.built.insert(owner.manifest().clone());
             }
         }
         Ok(())
     }
+
+    fn credit(&mut self, owner: &Owner<'_>, base: &Path, paths: &[String], declared: bool) {
+        let mut reads = Vec::new();
+        for path in paths {
+            match locate(self.repository, base, path) {
+                Located::Inside(read) => reads.push(Some(read)),
+                Located::Repository => reads.push(None),
+                Located::Outside => {}
+            }
+            if let Ok(Located::Inside(target)) =
+                fs::canonicalize(base.join(path)).map(|target| locate(self.repository, &target, ""))
+            {
+                reads.push(Some(target));
+            }
+        }
+        add_reads(
+            &mut self.found,
+            self.tracked,
+            owner,
+            &reads,
+            declared,
+            &self.targets,
+        );
+    }
+}
+
+fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
+    paths
+        .iter()
+        .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
 }
 
 fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
