@@ -271,8 +271,10 @@ impl<'a> Graph<'a> {
     }
 
     fn only_dependency_versions_differ(&self, manifest: &RepoPath) -> bool {
+        let lock = manifest.sibling(&CARGO_LOCK);
         !self.ruled_by_user(manifest)
-            && self.changes.paths.contains(&manifest.sibling(&CARGO_LOCK))
+            && !self.ruled_by_user(&lock)
+            && self.changes.paths.contains(&lock)
             && matches!(
                 (self.changes.base_files.get(manifest), self.changes.head_files.get(manifest)),
                 (Some(base), Some(head)) if only_dependency_versions_differ(base, head)

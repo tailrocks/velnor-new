@@ -329,3 +329,32 @@ fn a_rule_of_the_project_for_a_lockfile_or_a_root_manifest_wins_over_the_lockfil
         ]
     );
 }
+
+#[test]
+fn a_version_bump_with_its_lockfile_stays_global_when_a_project_rule_decides_the_lockfile() {
+    let before = lock(&workspace());
+    let bumped = lock(&replaced(&workspace(), krate("fnv", "1.0.6", &[])));
+    let old = manifest("serde = \"1\"\n", "");
+    let new = manifest("serde = \"2\"\n", "");
+    let changes = change(&[("Cargo.toml", &old, &new), ("Cargo.lock", &before, &bumped)]);
+    let global = vec![
+        all(AllTrigger::WorkspaceManifest),
+        all(AllTrigger::WorkspaceManifest),
+    ];
+    let mut facts = two_workspaces();
+    assert_eq!(
+        selected(&facts, &changes),
+        vec![
+            some(&[("tool", lock_reason("fnv"))]),
+            some(&[("cli", depends_on("tool"))])
+        ]
+    );
+    facts.config.non_inputs = vec![glob("Cargo.lock")];
+    assert_eq!(selected(&facts, &changes), global);
+    facts.config.non_inputs.clear();
+    facts.config.inputs = vec![InputRule {
+        glob: glob("Cargo.lock"),
+        packages: vec![name("core")],
+    }];
+    assert_eq!(selected(&facts, &changes), global);
+}
