@@ -11,6 +11,12 @@ pub trait GitHub {
     fn get(&self, path: &str) -> Result<String, CiError>;
 }
 
+pub trait GitHubWrite: GitHub {
+    fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError>;
+    fn patch(&self, path: &str, json: &str) -> Result<String, CiError>;
+    fn delete(&self, path: &str) -> Result<(), CiError>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Repo {
     owner: String,
