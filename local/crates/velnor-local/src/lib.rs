@@ -4,7 +4,9 @@
 pub mod cli;
 pub mod conformance;
 pub mod event;
+pub mod images;
 pub mod io;
+pub mod jit;
 pub mod protocol;
 pub mod rest;
 pub mod scenario;

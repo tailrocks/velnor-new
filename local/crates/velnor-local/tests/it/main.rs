@@ -9,6 +9,7 @@ mod driver;
 mod environment;
 mod io;
 mod io_edges;
+mod pair;
 mod report;
 mod restore;
 mod side;

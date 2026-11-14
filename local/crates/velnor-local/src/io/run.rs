@@ -50,6 +50,8 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
         Command::Run(args) => drive::run(args).await,
         Command::Conformance(args) => conformance(args).await,
+        Command::Build(args) => super::pair::build(args).await,
+        Command::Jit(args) => super::pair::jit(args).await,
     }
 }
 
