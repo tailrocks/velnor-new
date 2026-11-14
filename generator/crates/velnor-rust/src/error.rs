@@ -47,6 +47,7 @@ pub enum Reason {
     LockLine(usize),
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
+    RustdocflagsString,
 }
 
 impl DetectError {
@@ -93,6 +94,9 @@ impl fmt::Display for Reason {
             Self::UnknownRoot(root) => write!(
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
+            ),
+            Self::RustdocflagsString => f.write_str(
+                "build.rustdocflags must be an array of strings: the generated documentation step adds -D warnings with --config, and cargo merges only arrays",
             ),
             Self::InvalidPatch(key) => {
                 write!(

@@ -146,11 +146,9 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Doc => (
             "Documentation".into(),
-            "cargo doc --workspace --no-deps --locked".into(),
-            vec![(
-                "RUSTDOCFLAGS".to_owned(),
-                Value::Text("-D warnings".to_owned()),
-            )],
+            "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
+                .into(),
+            vec![],
         ),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),

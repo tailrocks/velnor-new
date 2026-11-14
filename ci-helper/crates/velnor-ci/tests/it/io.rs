@@ -81,7 +81,7 @@ impl Repo {
         ]);
     }
 
-    fn link(&self, target: &str, path: &str) {
+    pub(crate) fn link(&self, target: &str, path: &str) {
         let target = Path::new(target)
             .file_name()
             .unwrap_or_else(|| unreachable!());
@@ -714,6 +714,11 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
     assert!(
         written.contains("rust_root_mode=all\n") && written.contains("rust_tools_mode=all\n"),
         "{written}"
+    );
+    repo.link("b/src/lib.rs", "b/src/linked.rs");
+    assert_eq!(
+        doc_flags(&repo, None),
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
     );
 }
 

@@ -100,9 +100,7 @@ jobs:
         run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast -E "$FILTER"'
       - name: Documentation
         if: '${{ !cancelled() }}'
-        env:
-          RUSTDOCFLAGS: '-D warnings'
-        run: cargo doc --workspace --no-deps --locked
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-lab:
     runs-on: ubuntu-latest
@@ -138,9 +136,7 @@ jobs:
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: lab
-        env:
-          RUSTDOCFLAGS: '-D warnings'
-        run: cargo doc --workspace --no-deps --locked
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
   required:
     name: Required
     needs:
@@ -212,6 +208,31 @@ fn a_toolchain_file_that_disagrees_with_the_mise_rust_pin_is_an_error() -> TestR
             mise: "1.99.1".to_owned(),
         }))
     );
+    Ok(())
+}
+
+#[test]
+fn rustdocflags_in_cargo_config_must_be_an_array_the_doc_step_can_extend() -> TestResult {
+    let config = RepoPath::new("lab/.cargo/config.toml")?;
+    let mut array = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    array.tracked_paths.insert(config.clone());
+    array.files.insert(
+        config.clone(),
+        b"[build]\nrustdocflags = [\"--cfg\", \"docsrs\"]\n".to_vec(),
+    );
+    assert!(
+        workflow(&array)?.contains("--config ")
+            && workflow(&array)?.contains("build.rustdocflags=[")
+    );
+    let mut string = array;
+    string.files.insert(
+        config.clone(),
+        b"[build]\nrustdocflags = \"--cfg docsrs\"\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&string),
+        Err(GenerateError::Detect(DetectError::Invalid { path, .. })) if path == config
+    ));
     Ok(())
 }
 

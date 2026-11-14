@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_gen::io::{Checkout, read_checkout, read_files};
+use velnor_gen::io::{Checkout, Error as GenError, read_checkout, read_files};
 use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 use velnor_rust::{cargo_files, detect, optional_steps, root_sources, select, unknown_paths};
 
@@ -115,9 +115,12 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .iter()
         .map(|root| {
             let paths = root_sources(&facts, root, &checkout.view.tracked_paths);
-            let sources =
-                read_files(&checkout.root, &paths).map_err(|e| CiError::new(e.to_string()))?;
-            Ok((root.manifest.clone(), optional_steps(root, &sources, full)))
+            let steps = match read_files(&checkout.root, &paths) {
+                Ok(sources) => optional_steps(root, &sources, full),
+                Err(GenError::NotRegular(_)) => optional_steps(root, &BTreeMap::new(), true),
+                Err(error) => return Err(CiError::new(error.to_string())),
+            };
+            Ok((root.manifest.clone(), steps))
         })
         .collect::<Result<Steps, CiError>>()?;
     let outputs = outputs(&selections, &steps)?;

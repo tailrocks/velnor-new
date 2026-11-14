@@ -43,9 +43,7 @@ jobs:
         run: cargo test --doc --workspace --locked
       - name: Documentation
         if: '${{ !cancelled() }}'
-        env:
-          RUSTDOCFLAGS: '-D warnings'
-        run: cargo doc --workspace --no-deps --locked
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() }}'
         run: cargo check -p app --locked
@@ -546,9 +544,7 @@ jobs:
       - name: Documentation
         if: '${{ !cancelled() }}'
         working-directory: lab
-        env:
-          RUSTDOCFLAGS: '-D warnings'
-        run: cargo doc --workspace --no-deps --locked
+        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check lab alone
         if: '${{ !cancelled() }}'
         working-directory: lab

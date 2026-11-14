@@ -55,6 +55,9 @@ pub(crate) fn rust_roots(
             }
             let mut targets = named.clone();
             for (file, bytes, base) in patch_files(view, manifest) {
+                if file != *manifest {
+                    rustdocflags_list(bytes, file)?;
+                }
                 for (name, target) in patches(bytes, file, base.as_ref())? {
                     targets.entry(name).or_default().insert(target);
                 }
@@ -128,6 +131,17 @@ fn patch_files<'v>(
             applies.then_some((file, bytes.as_slice(), base))
         })
         .collect()
+}
+
+fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
+    let table = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+    let flags = table
+        .get("build")
+        .and_then(|build| build.get("rustdocflags"));
+    if flags.is_some_and(toml::Value::is_str) {
+        return Err(DetectError::invalid(file, Reason::RustdocflagsString));
+    }
+    Ok(())
 }
 
 fn patches(
