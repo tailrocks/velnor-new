@@ -94,6 +94,7 @@ impl RustMember {
 pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
+    pub manifest: RepoPath,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

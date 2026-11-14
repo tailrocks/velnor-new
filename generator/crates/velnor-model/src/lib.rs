@@ -4,6 +4,7 @@
 mod ids;
 mod plan;
 mod repo;
+mod selection;
 
 pub use ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
@@ -18,3 +19,4 @@ pub use repo::{
     RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, ToolPin, ToolPins,
     Toolchain,
 };
+pub use selection::{AllTrigger, ChangeSet, RustSelection, SelectionReason};

@@ -9,6 +9,7 @@ mod metadata;
 mod mise;
 mod plan;
 mod roots;
+mod select;
 mod toml_file;
 mod toolchain;
 
@@ -18,3 +19,4 @@ pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
 pub use metadata::{MetadataError, reduce_metadata};
 pub use plan::plan;
+pub use select::{root_slug, select};

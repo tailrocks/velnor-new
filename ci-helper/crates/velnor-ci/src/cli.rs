@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use velnor_model::{InvalidId, RepoPath};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -30,6 +31,30 @@ pub enum Command {
     ReleaseGate(ReleaseGateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
     CheckTag(CheckTagArgs),
+    #[command(
+        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages and rust_<root>_test_filter for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
+    )]
+    Plan(PlanArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PlanArgs {
+    #[arg(
+        long,
+        num_args = 1..,
+        value_parser = repo_path,
+        help = "Changed files, relative to the repository root"
+    )]
+    pub changed: Vec<RepoPath>,
+    #[arg(
+        long,
+        help = "Print each selected package with its reason, and the trigger when a root selects everything, instead of the outputs"
+    )]
+    pub explain: bool,
+}
+
+fn repo_path(text: &str) -> Result<RepoPath, InvalidId> {
+    RepoPath::new(text)
 }
 
 #[derive(Debug, Args)]

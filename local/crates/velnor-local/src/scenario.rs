@@ -28,6 +28,8 @@ pub enum Step {
     UpdateLock {
         branch: String,
         package: String,
+        #[serde(default)]
+        workspace: String,
     },
     OpenPullRequest {
         head: String,
@@ -67,7 +69,15 @@ impl Step {
             | Self::MergeGroup(branch)
             | Self::WorkflowDispatch { branch, .. } => vec![branch],
             Self::Commit { branch, append, .. } => vec![branch, append],
-            Self::UpdateLock { branch, package } => vec![branch, package],
+            Self::UpdateLock {
+                branch,
+                package,
+                workspace,
+            } => [branch, package]
+                .into_iter()
+                .chain((!workspace.is_empty()).then_some(workspace))
+                .map(String::as_str)
+                .collect(),
             Self::OpenPullRequest { head, base } => vec![head, base],
             Self::Schedule(_) => Vec::new(),
         }
@@ -114,6 +124,9 @@ impl Scenario {
         };
         match self.steps.iter().find_map(|step| match step {
             Step::Commit { append, .. } if !inside(append) => Some(append),
+            Step::UpdateLock { workspace, .. } if !workspace.is_empty() && !inside(workspace) => {
+                Some(workspace)
+            }
             _ => None,
         }) {
             Some(path) => Err(format!("`{path}` is not a path inside the repository")),
@@ -123,7 +136,7 @@ impl Scenario {
 }
 
 #[must_use]
-pub fn next_patch(lock: &str, package: &str) -> Option<String> {
+pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
     let block = lock.split("\n\n").find(|block| {
         block
             .lines()
@@ -134,7 +147,8 @@ pub fn next_patch(lock: &str, package: &str) -> Option<String> {
         .find_map(|line| line.strip_prefix("version = \""))?
         .trim_end_matches('"');
     let (rest, patch) = version.rsplit_once('.')?;
-    Some(format!("{rest}.{}", patch.parse::<u64>().ok()? + 1))
+    let next = format!("{rest}.{}", patch.parse::<u64>().ok()? + 1);
+    Some((format!("{package}@{version}"), next))
 }
 
 #[derive(Debug)]

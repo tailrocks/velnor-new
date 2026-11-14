@@ -12,11 +12,11 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoFacts, RepoPath, RepoView};
 use velnor_render::OWNED_PATHS;
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, metadata_roots, pin_lock, reduce_metadata,
-    release_version, sums_url, wanted_files,
+    DetectError, LOCK_PATH, LockError, MetadataError, detect, metadata_roots, pin_lock,
+    reduce_metadata, release_version, sums_url, wanted_files,
 };
 
 mod sample;
@@ -266,6 +266,10 @@ fn toplevel(path: &Path) -> Result<PathBuf, Error> {
     fs::canonicalize(&root).map_err(|e| Error::File(root, e))
 }
 
+pub fn read_facts(path: &Path) -> Result<RepoFacts, Error> {
+    detect(&read_view(&toplevel(path)?, false)?.0).map_err(Error::Detect)
+}
+
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
 fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
@@ -316,6 +320,8 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
         }
         view.rust_metadata.insert(workspace, metadata);
     }
+    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
+    view.files.extend(read_files(root, &roots)?);
     Ok((view, recorded))
 }
 

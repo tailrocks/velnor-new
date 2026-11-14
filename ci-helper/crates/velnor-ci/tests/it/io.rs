@@ -595,3 +595,45 @@ fn check_tag_exits_0_for_the_tag_of_its_own_version_and_1_for_any_other() {
         assert_eq!(output.status.code(), code, "{tag}");
     }
 }
+
+#[test]
+fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_request() {
+    let repo = Repo::new("plan");
+    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write(
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"a\", \"b\"]\nexclude = [\"tools\"]\nresolver = \"3\"\n",
+    );
+    repo.write("Cargo.lock", "version = 4\n");
+    for member in ["a", "b"] {
+        repo.write(
+            &format!("{member}/Cargo.toml"),
+            &format!("[package]\nname = \"{member}\"\nedition = \"2024\"\n"),
+        );
+        repo.write(&format!("{member}/src/lib.rs"), "");
+    }
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
+    );
+    repo.write("tools/Cargo.lock", "version = 4\n");
+    repo.write("tools/src/main.rs", "fn main() {}\n");
+    let outputs = repo.root().join("github-output");
+    fs::write(&outputs, "earlier=kept\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("b"))
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_OUTPUT", &outputs)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "Cargo.toml: some\n  a changed:a/src/lib.rs\ntools/Cargo.toml: all:most-packages:1\n  t depends-on:a\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\n"
+    );
+}
