@@ -4,6 +4,7 @@
 mod audit;
 mod http;
 mod inputs;
+mod release;
 mod units;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,7 +24,7 @@ pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
 use crate::cli::{
     AuditArgs, BaseFile, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    InputsCommand, PlanArgs, ReleaseGateArgs,
+    InputsCommand, PlanArgs, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
@@ -90,6 +91,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
+        Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
+        Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Plan(args) => run_plan(&args),
     }
 }
@@ -127,14 +130,7 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         })
         .collect::<Result<Steps, CiError>>()?;
     let outputs = outputs(&selections, &steps)?;
-    if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(outputs.as_bytes()))
-            .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
-    }
+    append_outputs(&outputs)?;
     Ok(if args.explain {
         explain(
             &selections,
@@ -178,9 +174,13 @@ fn current_dir() -> Result<std::path::PathBuf, CiError> {
         .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))
 }
 
+fn token() -> Result<String, CiError> {
+    std::env::var(TOKEN_VARIABLE)
+        .map_err(|_| CiError::new(format!("set {TOKEN_VARIABLE} to a GitHub token")))
+}
+
 fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
-    let token = std::env::var(TOKEN_VARIABLE)
-        .map_err(|_| CiError::new(format!("set {TOKEN_VARIABLE} to a GitHub token")))?;
+    let token = token()?;
     let repo = Repo::parse(&args.repo)?;
     let github = http::HttpGitHub::new(api_url(), token);
     let metrics = collect(&github, &repo, args.run_id, args.allow_rerun)?;
@@ -195,10 +195,23 @@ fn api_url() -> String {
 }
 
 fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
-    let token = std::env::var(TOKEN_VARIABLE)
-        .map_err(|_| CiError::new(format!("set {TOKEN_VARIABLE} to a GitHub token")))?;
+    let token = token()?;
     let repo = Repo::parse(&args.repo)?;
-    release_gate(&http::HttpGitHub::new(api_url(), token), &repo, &args.sha)
+    let verdict = release_gate(&http::HttpGitHub::new(api_url(), token), &repo, &args.sha)?;
+    append_outputs(&format!("ready={}\n", verdict.ready))?;
+    Ok(verdict.report)
+}
+
+fn append_outputs(outputs: &str) -> Result<(), CiError> {
+    if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&file)
+            .and_then(|mut handle| handle.write_all(outputs.as_bytes()))
+            .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
+    }
+    Ok(())
 }
 
 pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {

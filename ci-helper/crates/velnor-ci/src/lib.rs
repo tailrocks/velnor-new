@@ -14,4 +14,6 @@ pub mod logscan;
 pub mod metrics;
 mod needs;
 pub mod plan;
+pub mod publish;
+pub mod release;
 pub mod time;
