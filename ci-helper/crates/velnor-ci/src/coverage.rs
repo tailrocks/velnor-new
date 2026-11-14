@@ -62,7 +62,7 @@ pub struct Unit {
 pub struct Built {
     pub units: BTreeSet<Unit>,
     pub libraries: BTreeSet<(String, PackageName)>,
-    pub scripts: BTreeSet<RepoPath>,
+    pub scripts: BTreeSet<(String, RepoPath)>,
     pub builders: BTreeSet<(String, PackageName)>,
     pub orphans: BTreeSet<(String, String, Fingerprint)>,
 }
@@ -81,11 +81,11 @@ enum Need<'f> {
         target: String,
         source: &'f RepoPath,
     },
-    Library(&'f [Option<RepoPath>], &'f PackageName),
-    Run(&'f [Option<RepoPath>], &'f PackageName),
+    Library(&'f PackageName),
+    Run(&'f PackageName),
 }
 
-type Paths<'f> = BTreeMap<&'f PackageName, (Vec<&'f RepoPath>, Vec<Option<RepoPath>>)>;
+type Paths<'f> = BTreeMap<&'f PackageName, Vec<&'f RepoPath>>;
 
 struct Group<'f> {
     label: String,
@@ -102,17 +102,9 @@ pub fn gaps(
     let reached = reached(root, unowned);
     let mut paths: Paths<'_> = BTreeMap::new();
     for (manifest, package) in &reached {
-        let (manifests, directories) = paths.entry(&package.name).or_default();
-        manifests.push(manifest);
-        directories.push(manifest.parent());
+        paths.entry(&package.name).or_default().push(manifest);
     }
     let groups = groups(root, &paths);
-    let packages: Vec<Option<RepoPath>> = root
-        .members
-        .iter()
-        .map(|member| member.directory.clone())
-        .chain(unowned.keys().map(RepoPath::parent))
-        .collect();
     let owned: BTreeSet<&str> = root
         .members
         .iter()
@@ -123,7 +115,7 @@ pub fn gaps(
         configuration: configuration.to_owned(),
         missing: groups
             .iter()
-            .filter_map(|group| missing(group, configuration, built, &packages))
+            .filter_map(|group| missing(group, configuration, built))
             .chain(orphans(configuration, built, &owned))
             .collect(),
     };
@@ -181,14 +173,11 @@ fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<'f>> {
                 })
         })
         .collect();
-    groups.extend(paths.iter().map(|(name, (manifests, directories))| {
+    groups.extend(paths.iter().map(|(name, manifests)| {
         let manifests: Vec<String> = manifests.iter().map(ToString::to_string).collect();
         Group {
             label: format!("path dependency {name} ({}", manifests.join(" or ")),
-            needs: vec![
-                Need::Library(directories, name),
-                Need::Run(directories, name),
-            ],
+            needs: vec![Need::Library(name), Need::Run(name)],
         }
     }));
     groups
@@ -249,12 +238,7 @@ fn orphans<'b>(
         })
 }
 
-fn missing(
-    group: &Group<'_>,
-    configuration: &str,
-    built: &Built,
-    packages: &[Option<RepoPath>],
-) -> Option<String> {
+fn missing(group: &Group<'_>, configuration: &str, built: &Built) -> Option<String> {
     let places: Vec<&str> = if configuration == HOST {
         vec![HOST]
     } else {
@@ -277,7 +261,7 @@ fn missing(
                 target: target.clone(),
                 source: (*source).clone(),
             })],
-            Need::Library(directories, name) => places
+            Need::Library(name) => places
                 .iter()
                 .filter(|place| {
                     built
@@ -288,19 +272,20 @@ fn missing(
                     built.units.iter().any(|unit| {
                         unit.kind == UnitKind::Normal
                             && unit.configuration == *place
-                            && within(&unit.source, directories, packages)
+                            && unit.package == name.as_str()
                     })
                 })
                 .collect(),
-            Need::Run(directories, name) => {
+            Need::Run(name) => {
                 let scripts: Vec<bool> = built
                     .scripts
                     .iter()
-                    .filter(|script| within(script, directories, packages))
-                    .map(|script| {
+                    .filter(|(package, _)| package == name.as_str())
+                    .map(|(package, script)| {
                         built.units.iter().any(|unit| {
                             unit.kind == UnitKind::Run
                                 && places.contains(&unit.configuration.as_str())
+                                && unit.package == *package
                                 && unit.source == *script
                         })
                     })
@@ -352,22 +337,6 @@ fn needs<'f>(package: &'f PackageName, target: &Target, source: &'f RepoPath) ->
         needs.push(unit(UnitKind::Harness));
     }
     needs
-}
-
-fn within(
-    source: &RepoPath,
-    directories: &[Option<RepoPath>],
-    packages: &[Option<RepoPath>],
-) -> bool {
-    packages
-        .iter()
-        .filter(|directory| {
-            directory
-                .as_ref()
-                .is_none_or(|directory| source.as_str().starts_with(&format!("{directory}/")))
-        })
-        .max_by_key(|directory| directory.as_ref().map_or(0, |d| d.as_str().len()))
-        .is_some_and(|package| directories.contains(package))
 }
 
 fn reached<'f>(

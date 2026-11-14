@@ -145,3 +145,33 @@ fn a_path_dependency_needs_its_build_script_run_and_a_current_unit_wherever_carg
     );
     assert!(!lock.exists());
 }
+
+#[test]
+fn a_path_dependency_whose_library_and_build_script_live_outside_its_directory_passes() {
+    let repo = root_package_with_path_dependencies();
+    repo.write(
+        "vendor/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"../../shared/mid-build.rs\"\n\n[lib]\npath = \"../../shared/mid.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\" }\n",
+    );
+    repo.write("shared/mid.rs", "");
+    repo.write("shared/mid-build.rs", "fn main() {}\n");
+    path_dependency_units(&repo);
+    let target = "target/debug";
+    unit(
+        &repo,
+        &format!("{target}/deps/mid-0000000000000003.d"),
+        "out.d: shared/mid.rs NOTICE\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/mid-0000000000000006/build_script_build-0000000000000006.d"),
+        "out.d: shared/mid-build.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/build/mid-0000000000000004/output"),
+        "cargo:rerun-if-changed=build.rs\n",
+    );
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+}

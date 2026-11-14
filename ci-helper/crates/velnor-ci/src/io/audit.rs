@@ -259,7 +259,9 @@ impl Audit<'_> {
     ) -> Result<(), CiError> {
         if let Some((source, built)) = self.dep_info(workspace, file)? {
             if profile == HOST {
-                self.built[index].scripts.insert(source.clone());
+                self.built[index]
+                    .scripts
+                    .insert((package.clone(), source.clone()));
             }
             self.scripts
                 .entry((index, profile, package))
