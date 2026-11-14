@@ -1,210 +1,373 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::gate::{check_tag, release_gate};
-use velnor_ci::github::{check_runs_path, compare_path};
+use std::collections::BTreeMap;
+
+use serde_json::{Value, json};
+use velnor_ci::gate::{Verdict, release_gate};
+use velnor_ci::github::{compare_path, rules_path, run_jobs_path, runs_path};
 
 use crate::support::{FakeGitHub, repo};
 
-pub(crate) const ON_MAIN_GREEN: &str = "87919076157ac0b3a611ce4f18c8301c1a569e9e";
-pub(crate) const OFF_MAIN_GREEN: &str = "a68e6204fc4171264e247825bbf5468b3bc8330d";
-pub(crate) const ON_MAIN_RED: &str = "f4a062683f7e31e3c654c3beebaa6751463f6459";
-pub(crate) const OFF_MAIN_RED: &str = "ce626ef859cf255461f3eec883f18f65e583d792";
+pub(crate) const GATE: &str = include_str!("data/gate.json");
+pub(crate) const GREEN: &str = "21ec8b9ff9268c1e2445755d325906d26757babb";
+pub(crate) const RUNNING: &str = "25fd566dd0950e7db7a3d1e58d760ad73ca92c90";
+pub(crate) const RED: &str = "f4a062683f7e31e3c654c3beebaa6751463f6459";
+pub(crate) const AHEAD: &str = "5839d07cc9d92794a514c686081c83f6c3cf95f7";
+const GREEN_CI: u64 = 43_632_161_397;
+const VERDICT: &str = "Required verdict";
 
-fn verdict(fake: &FakeGitHub, sha: &str) -> Result<String, String> {
-    release_gate(fake, &repo(), sha).map_err(|e| e.to_string())
-}
+struct Recorded(BTreeMap<String, Value>);
 
-fn refusal(fake: &FakeGitHub, sha: &str) -> String {
-    match verdict(fake, sha) {
-        Ok(said) => unreachable!("released: {said}"),
-        Err(said) => said,
+impl Recorded {
+    fn new() -> Self {
+        Self(serde_json::from_str(GATE).unwrap_or_else(|e| unreachable!("{e}")))
+    }
+
+    fn set(mut self, path: String, body: Value) -> Self {
+        self.0.insert(path, body);
+        self
+    }
+
+    fn edit(mut self, path: &str, change: impl FnOnce(&mut Value)) -> Self {
+        change(self.0.get_mut(path).unwrap_or_else(|| unreachable!()));
+        self
+    }
+
+    fn rules(self, rules: Vec<Value>) -> Self {
+        self.set(rules_path(&repo(), "main", 1), Value::Array(rules))
+    }
+
+    fn requiring(self, checks: &[Value]) -> Self {
+        self.rules(vec![json!({"type": "deletion"}), required(checks)])
+    }
+
+    fn green_run(self, change: impl Fn(&mut Value)) -> Self {
+        self.edit(&runs_path(&repo(), GREEN, 1), |runs| {
+            for run in each(&mut runs["workflow_runs"]) {
+                if run["id"] == json!(GREEN_CI) {
+                    change(run);
+                }
+            }
+        })
+    }
+
+    fn green_job(self, name: &str, change: impl Fn(&mut Value)) -> Self {
+        self.edit(&run_jobs_path(&repo(), GREEN_CI, 1), |jobs| {
+            for job in each(&mut jobs["jobs"]) {
+                if job["name"] == json!(name) {
+                    change(job);
+                }
+            }
+        })
+    }
+
+    fn total(self, path: &str, total: usize) -> Self {
+        self.edit(path, |page| page["total_count"] = json!(total))
+    }
+
+    fn gate(&self, sha: &str) -> Result<Verdict, String> {
+        let mut fake = FakeGitHub::default();
+        for (path, body) in &self.0 {
+            fake.respond(path.clone(), &body.to_string());
+        }
+        release_gate(&fake, &repo(), sha).map_err(|e| e.to_string())
     }
 }
 
-fn with_total(sha: &str, total: usize, runs: &str) -> FakeGitHub {
-    let mut fake = FakeGitHub::gate();
-    fake.respond(
-        check_runs_path(&repo(), sha, "Required"),
-        &format!("{{\"total_count\": {total}, \"check_runs\": {runs}}}"),
-    );
-    fake
+fn each(list: &mut Value) -> impl Iterator<Item = &mut Value> {
+    list.as_array_mut()
+        .unwrap_or_else(|| unreachable!())
+        .iter_mut()
 }
 
-fn with_runs(sha: &str, runs: &str) -> FakeGitHub {
-    let listed = serde_json::from_str::<Vec<serde_json::Value>>(runs)
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    with_total(sha, listed.len(), runs)
+fn check(context: &str) -> Value {
+    json!({"context": context})
+}
+
+fn required(checks: &[Value]) -> Value {
+    json!({
+        "type": "required_status_checks",
+        "parameters": {"strict_required_status_checks_policy": true, "do_not_enforce_on_create": false, "required_status_checks": checks},
+        "ruleset_source_type": "Repository",
+        "ruleset_source": "tailrocks/velnor-new",
+        "ruleset_id": 24_396_608
+    })
+}
+
+fn both() -> Recorded {
+    Recorded::new().requiring(&[check("Required"), check(VERDICT)])
+}
+
+fn verdict(ready: bool, sha: &str, checks: &str) -> Verdict {
+    Verdict {
+        ready,
+        report: format!("commit {sha} is on main\n{checks}ready={ready}\n"),
+    }
+}
+
+fn concluded(sha: &str, check: &str, conclusion: &str) -> Result<Verdict, String> {
+    Err(format!(
+        "check {check} did not pass on commit {sha}: it concluded {conclusion}"
+    ))
+}
+
+fn absent(check: &str) -> String {
+    format!("check {check} did not pass on commit {GREEN}: no job of a push run on main reports it")
+}
+
+fn assert_not_counted(case: &str, change: impl Fn(&mut Value)) {
+    let said = both().green_run(change).gate(GREEN);
+    let both_absent = format!("{}\n{}", absent("Required"), absent(VERDICT));
+    assert_eq!(said, Err(both_absent), "{case}");
+}
+
+fn failing(job: &mut Value) {
+    job["conclusion"] = json!("failure");
 }
 
 #[test]
-fn a_commit_on_main_with_a_passing_required_check_is_released() {
-    let said = verdict(&FakeGitHub::gate(), ON_MAIN_GREEN);
+fn a_commit_on_main_whose_two_required_checks_passed_in_its_push_run_is_ready() {
+    let both_passed = "check Required passed\ncheck Required verdict passed\n";
+    assert_eq!(both().gate(GREEN), Ok(verdict(true, GREEN, both_passed)));
     assert_eq!(
-        said,
-        Ok(format!(
-            "commit {ON_MAIN_GREEN} is on main\ncheck Required passed on commit {ON_MAIN_GREEN}\n"
+        Recorded::new().gate(GREEN),
+        Ok(verdict(true, GREEN, "check Required passed\n"))
+    );
+}
+
+#[test]
+fn every_required_check_must_pass_whether_one_ruleset_or_several_require_it() {
+    let one_rule = both().green_job(VERDICT, failing);
+    let two_rules = Recorded::new()
+        .rules(vec![
+            required(&[check("Required")]),
+            required(&[check(VERDICT)]),
+        ])
+        .green_job(VERDICT, failing);
+    for recorded in [one_rule, two_rules] {
+        assert_eq!(recorded.gate(GREEN), concluded(GREEN, VERDICT, "failure"));
+    }
+    assert_eq!(
+        both().gate(RED),
+        Err(format!(
+            "check Required did not pass on commit {RED}: it concluded failure\ncheck Required verdict did not pass on commit {RED}: it concluded failure"
         ))
     );
 }
 
 #[test]
-fn a_commit_that_is_not_on_the_default_branch_is_refused_whatever_its_checks_say() {
-    let said = refusal(&FakeGitHub::gate(), OFF_MAIN_GREEN);
+fn a_required_check_still_running_gives_ready_false_and_a_failed_one_beside_it_exits_1() {
+    let not_started = "check Required has not started\ncheck Required verdict has not started\n";
     assert_eq!(
-        said,
-        format!("commit {OFF_MAIN_GREEN} is not on the default branch main (comparison: diverged)")
+        both().gate(RUNNING),
+        Ok(verdict(false, RUNNING, not_started))
+    );
+    let running = both()
+        .green_run(|run| run["status"] = json!("in_progress"))
+        .green_job("Required", |job| {
+            job["status"] = json!("in_progress");
+            job["conclusion"] = Value::Null;
+        });
+    let in_progress = "check Required is in_progress\ncheck Required verdict passed\n";
+    assert_eq!(running.gate(GREEN), Ok(verdict(false, GREEN, in_progress)));
+    let failed_beside = running.green_job(VERDICT, failing);
+    assert_eq!(
+        failed_beside.gate(GREEN),
+        concluded(GREEN, VERDICT, "failure")
     );
 }
 
 #[test]
-fn a_commit_whose_required_check_failed_is_refused_even_on_main() {
-    let said = refusal(&FakeGitHub::gate(), ON_MAIN_RED);
-    assert_eq!(
-        said,
-        format!("check Required did not pass on commit {ON_MAIN_RED}: it concluded failure")
-    );
-}
-
-#[test]
-fn a_commit_that_fails_both_facts_is_refused_with_both_reasons() {
-    let said = refusal(&FakeGitHub::gate(), OFF_MAIN_RED);
-    assert_eq!(said.lines().count(), 2, "{said}");
-    assert!(said.contains("not on the default branch main"), "{said}");
-    assert!(said.contains("it concluded failure"), "{said}");
-}
-
-#[test]
-fn only_a_finished_successful_run_of_required_by_github_actions_counts() {
-    let run = |name: &str, status: &str, conclusion: &str, app: &str| {
-        format!(
-            "[{{\"name\": \"{name}\", \"status\": \"{status}\", \"conclusion\": {conclusion}, \"app\": {app}}}]"
-        )
-    };
-    let actions = "{\"slug\": \"github-actions\"}";
-    let cases = [
-        ("[]".to_owned(), "no run of it by github-actions"),
-        (
-            run(
-                "Required",
-                "completed",
-                "\"success\"",
-                "{\"slug\": \"evil-app\"}",
-            ),
-            "no run of it by github-actions",
-        ),
-        (
-            run("Required", "completed", "\"success\"", "null"),
-            "no run of it by github-actions",
-        ),
-        (
-            run("Required verdict", "completed", "\"success\"", actions),
-            "no run of it by github-actions",
-        ),
-        (
-            run("Required", "in_progress", "null", actions),
-            "it is in_progress",
-        ),
-        (
-            run("Required", "completed", "\"cancelled\"", actions),
-            "it concluded cancelled",
-        ),
-        (
-            run("Required", "completed", "\"skipped\"", actions),
-            "it concluded skipped",
-        ),
-        (
-            run("Required", "completed", "null", actions),
-            "it concluded without a result",
-        ),
-    ];
-    for (runs, reason) in cases {
-        let said = refusal(&with_runs(ON_MAIN_GREEN, &runs), ON_MAIN_GREEN);
-        assert!(said.ends_with(reason), "{runs} gave {said}");
+fn a_required_check_that_is_missing_or_skipped_or_did_not_succeed_is_refused() {
+    for conclusion in ["skipped", "cancelled", "neutral", "timed_out", "failure"] {
+        let said = both()
+            .green_job("Required", |job| job["conclusion"] = json!(conclusion))
+            .gate(GREEN);
+        assert_eq!(said, concluded(GREEN, "Required", conclusion));
     }
-    let passing = run("Required", "completed", "\"success\"", actions);
-    assert!(verdict(&with_runs(ON_MAIN_GREEN, &passing), ON_MAIN_GREEN).is_ok());
+    let said = both()
+        .green_job("Required", |job| job["conclusion"] = Value::Null)
+        .gate(GREEN);
+    assert_eq!(said, concluded(GREEN, "Required", "without a result"));
+    let said = Recorded::new()
+        .requiring(&[check("Required"), check("DCO")])
+        .gate(GREEN);
+    assert_eq!(said, Err(absent("DCO")));
 }
 
 #[test]
-fn a_foreign_failing_run_cannot_pass_and_cannot_hide_a_failure() {
-    let mixed = "[{\"name\": \"Required\", \"status\": \"completed\", \"conclusion\": \"success\", \"app\": {\"slug\": \"evil-app\"}}, {\"name\": \"Required\", \"status\": \"completed\", \"conclusion\": \"failure\", \"app\": {\"slug\": \"github-actions\"}}]";
-    let said = refusal(&with_runs(ON_MAIN_GREEN, mixed), ON_MAIN_GREEN);
-    assert!(said.ends_with("it concluded failure"), "{said}");
+fn a_required_check_from_a_run_that_is_not_a_push_is_refused() {
+    for event in [
+        "pull_request",
+        "pull_request_target",
+        "workflow_dispatch",
+        "workflow_run",
+        "schedule",
+        "merge_group",
+    ] {
+        assert_not_counted(event, |run| run["event"] = json!(event));
+    }
+}
+
+#[test]
+fn a_required_check_from_a_push_run_on_another_branch_or_commit_is_refused() {
+    for branch in [json!("fast/724-forge"), json!("main2"), Value::Null] {
+        assert_not_counted(&branch.to_string(), |run| {
+            run["head_branch"] = branch.clone();
+        });
+    }
+    assert_not_counted("another commit", |run| run["head_sha"] = json!(RED));
+}
+
+#[test]
+fn a_required_check_from_a_fork_whose_branch_is_named_main_is_refused() {
+    let fork = json!({"id": 1_390_999_999, "full_name": "someone/velnor-new"});
+    for (event, head) in [
+        ("push", fork.clone()),
+        ("pull_request", fork),
+        ("push", Value::Null),
+    ] {
+        assert_not_counted(&format!("{event} {head}"), |run| {
+            run["event"] = json!(event);
+            run["head_repository"] = head.clone();
+        });
+    }
+}
+
+#[test]
+fn a_required_check_the_rules_tie_to_another_github_app_is_refused() {
+    let actions = json!({"context": "Required", "integration_id": 15368});
+    assert_eq!(
+        Recorded::new().requiring(&[actions]).gate(GREEN),
+        Ok(verdict(true, GREEN, "check Required passed\n"))
+    );
+    let other = json!({"context": "Required", "integration_id": 9426});
+    assert_eq!(
+        Recorded::new().requiring(&[other]).gate(GREEN),
+        Err(
+            "branch main requires check Required from the GitHub App 9426, and only a check from GitHub Actions (15368) can be tied to a push run"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn a_commit_ahead_of_the_default_branch_is_refused_even_with_green_checks() {
+    let ahead = json!({"status": "ahead", "ahead_by": 1, "behind_by": 0, "total_commits": 1});
+    let said = both()
+        .set(compare_path(&repo(), "main", GREEN), ahead)
+        .gate(GREEN);
+    let off_main =
+        |sha: &str| format!("commit {sha} is not on the default branch main (comparison: ahead)");
+    assert_eq!(said, Err(off_main(GREEN)));
+    let said = both().gate(AHEAD);
+    assert!(
+        said.as_ref()
+            .is_err_and(|e| e.starts_with(&format!("{}\n", off_main(AHEAD)))),
+        "{said:?}"
+    );
+}
+
+#[test]
+fn a_default_branch_whose_rules_require_no_check_releases_nothing() {
+    let refusal = Err(
+        "branch main requires no status check in its rules, so no commit of it can be released"
+            .to_owned(),
+    );
+    assert_eq!(Recorded::new().requiring(&[]).gate(GREEN), refusal);
+    let no_rule = Recorded::new().rules(vec![json!({"type": "deletion"})]);
+    assert_eq!(no_rule.gate(GREEN), refusal);
+}
+
+#[test]
+fn a_failing_required_check_on_a_later_page_of_rules_runs_or_jobs_is_seen() {
+    let mut full_page = vec![json!({"type": "deletion"}); 99];
+    full_page.push(required(&[check("Required")]));
+    let rules_page_2 = Recorded::new()
+        .rules(full_page)
+        .set(
+            rules_path(&repo(), "main", 2),
+            json!([required(&[check(VERDICT)])]),
+        )
+        .green_job(VERDICT, failing);
+    let extra_run = json!({"id": 7, "event": "push", "status": "completed", "head_branch": "main", "head_sha": GREEN, "head_repository": {"id": 1_390_620_900}});
+    let failed_job =
+        |name: &str| json!({"name": name, "status": "completed", "conclusion": "failure"});
+    let runs_page_2 = both()
+        .total(&runs_path(&repo(), GREEN, 1), 7)
+        .set(
+            runs_path(&repo(), GREEN, 2),
+            json!({"total_count": 7, "workflow_runs": [extra_run]}),
+        )
+        .set(
+            run_jobs_path(&repo(), 7, 1),
+            json!({"total_count": 1, "jobs": [failed_job("Required")]}),
+        );
+    let jobs_page_2 = both().total(&run_jobs_path(&repo(), GREEN_CI, 1), 4).set(
+        run_jobs_path(&repo(), GREEN_CI, 2),
+        json!({"total_count": 4, "jobs": [failed_job(VERDICT)]}),
+    );
+    for recorded in [rules_page_2, runs_page_2, jobs_page_2] {
+        let said = recorded.gate(GREEN);
+        assert!(
+            said.as_ref()
+                .is_err_and(|e| e.ends_with(": it concluded failure")),
+            "{said:?}"
+        );
+    }
+    let short = both().total(&runs_path(&repo(), GREEN, 1), 7).set(
+        runs_path(&repo(), GREEN, 2),
+        json!({"total_count": 7, "workflow_runs": []}),
+    );
+    assert_eq!(
+        short.gate(GREEN),
+        Err("GitHub lists 7 workflow runs and returned 6".to_owned())
+    );
 }
 
 #[test]
 fn a_value_that_is_not_a_full_commit_sha_never_reaches_the_api() {
-    let upper = ON_MAIN_GREEN.to_uppercase();
-    for sha in ["", "main", "87919076", upper.as_str(), "../x"] {
-        let said = refusal(&FakeGitHub::default(), sha);
-        assert!(said.contains("not a full lowercase commit SHA"), "{said}");
-    }
-}
-
-#[test]
-fn the_default_branch_is_whatever_the_repository_says() {
-    let mut fake = FakeGitHub::gate();
-    fake.respond(
-        "/repos/tailrocks/velnor-new".to_owned(),
-        "{\"default_branch\": \"trunk/a b\"}",
-    );
-    fake.respond(
-        compare_path(&repo(), "trunk/a b", ON_MAIN_GREEN),
-        "{\"status\": \"identical\"}",
-    );
-    assert_eq!(
-        verdict(&fake, ON_MAIN_GREEN).map(|said| said.lines().next().map(str::to_owned)),
-        Ok(Some(format!("commit {ON_MAIN_GREEN} is on trunk/a b")))
-    );
-}
-
-#[test]
-fn a_page_that_does_not_hold_every_run_of_required_is_refused_not_trusted() {
-    let green = "[{\"name\": \"Required\", \"status\": \"completed\", \"conclusion\": \"success\", \"app\": {\"slug\": \"github-actions\"}}]";
-    assert!(verdict(&with_total(ON_MAIN_GREEN, 1, green), ON_MAIN_GREEN).is_ok());
-    let said = refusal(&with_total(ON_MAIN_GREEN, 2, green), ON_MAIN_GREEN);
-    assert!(said.contains("lists 2 runs of check Required"), "{said}");
-    assert!(said.contains("returned 1"), "{said}");
-}
-
-#[test]
-fn only_the_tag_of_the_version_of_the_program_is_released() {
-    assert_eq!(
-        check_tag("0.1.79", "rust-ci-v0.1.79").map_err(|e| e.to_string()),
-        Ok("tag rust-ci-v0.1.79 names version 0.1.79\n".to_owned())
-    );
-    for tag in [
-        "rust-ci-v0.1.80",
-        "rust-ci-v0.1.7",
-        "rust-ci-v0.1.79-rc1",
-        "rust-ci-v0.1.79 ",
-        "v0.1.79",
-        "0.1.79",
-        "",
-    ] {
-        let said = check_tag("0.1.79", tag).map_err(|e| e.to_string());
-        assert_eq!(
-            said,
-            Err(format!(
-                "tag {tag} must be rust-ci-v0.1.79, because this program is version 0.1.79"
-            ))
+    let upper = GREEN.to_uppercase();
+    for sha in ["", "main", "21ec8b9f", upper.as_str(), "../x"] {
+        let said = release_gate(&FakeGitHub::default(), &repo(), sha).map_err(|e| e.to_string());
+        assert!(
+            said.as_ref()
+                .is_err_and(|e| e.contains("not a full lowercase commit SHA")),
+            "{said:?}"
         );
     }
 }
 
 #[test]
-fn a_branch_name_stays_one_segment_of_the_comparison_path() {
-    assert_eq!(
-        compare_path(&repo(), "release/stable #1", ON_MAIN_GREEN),
-        format!(
-            "/repos/tailrocks/velnor-new/compare/release%2Fstable%20%231...{ON_MAIN_GREEN}?per_page=1"
+fn the_default_branch_and_its_rules_are_whatever_the_repository_says() {
+    let branch = "trunk/a b";
+    let recorded = both()
+        .edit("/repos/tailrocks/velnor-new", |body| {
+            body["default_branch"] = json!(branch);
+        })
+        .set(
+            rules_path(&repo(), branch, 1),
+            json!([required(&[check("Required")])]),
         )
+        .set(
+            compare_path(&repo(), branch, GREEN),
+            json!({"status": "identical"}),
+        )
+        .green_run(|run| run["head_branch"] = json!(branch));
+    assert_eq!(
+        recorded.gate(GREEN),
+        Ok(Verdict {
+            ready: true,
+            report: format!("commit {GREEN} is on {branch}\ncheck Required passed\nready=true\n"),
+        })
     );
     assert_eq!(
-        check_runs_path(&repo(), ON_MAIN_GREEN, "Required"),
-        format!(
-            "/repos/tailrocks/velnor-new/commits/{ON_MAIN_GREEN}/check-runs?check_name=Required&filter=latest&per_page=100"
-        )
+        rules_path(&repo(), "release/stable #1", 2),
+        "/repos/tailrocks/velnor-new/rules/branches/release%2Fstable%20%231?per_page=100&page=2"
+    );
+    assert_eq!(
+        compare_path(&repo(), "release/stable #1", GREEN),
+        format!("/repos/tailrocks/velnor-new/compare/release%2Fstable%20%231...{GREEN}?per_page=1")
     );
 }

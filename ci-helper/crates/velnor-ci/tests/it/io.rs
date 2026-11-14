@@ -13,8 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use velnor_ci::io::{read_limited, restore_inputs, save_inputs};
 
-use crate::gate::{OFF_MAIN_GREEN, OFF_MAIN_RED, ON_MAIN_GREEN, ON_MAIN_RED};
-use crate::support::GATE;
+use crate::gate::{AHEAD, GATE, GREEN, RED, RUNNING};
 
 #[test]
 fn a_body_at_the_limit_is_read_whole() {
@@ -524,7 +523,7 @@ fn serve(responses: BTreeMap<String, String>) -> String {
     format!("http://{address}")
 }
 
-fn release_gate(api: &str, token: Option<&str>, sha: &str) -> Output {
+fn release_gate(api: &str, token: Option<&str>, sha: &str, outputs: &Path) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .args([
@@ -534,7 +533,8 @@ fn release_gate(api: &str, token: Option<&str>, sha: &str) -> Output {
             "--sha",
             sha,
         ])
-        .env("GITHUB_API_URL", api);
+        .env("GITHUB_API_URL", api)
+        .env("GITHUB_OUTPUT", outputs);
     match token {
         Some(token) => command.env("GITHUB_TOKEN", token),
         None => command.env_remove("GITHUB_TOKEN"),
@@ -543,7 +543,7 @@ fn release_gate(api: &str, token: Option<&str>, sha: &str) -> Output {
 }
 
 #[test]
-fn release_gate_exits_0_for_a_released_commit_and_1_for_each_refusal() {
+fn release_gate_writes_ready_and_exits_0_until_a_refusal_exits_1() {
     let recorded: BTreeMap<String, serde_json::Value> =
         serde_json::from_str(GATE).unwrap_or_else(|e| unreachable!("{e}"));
     let api = serve(
@@ -553,29 +553,28 @@ fn release_gate_exits_0_for_a_released_commit_and_1_for_each_refusal() {
             .collect(),
     );
     let cases = [
-        (ON_MAIN_GREEN, Some(0), "check Required passed", ""),
-        (
-            OFF_MAIN_GREEN,
-            Some(1),
-            "",
-            "not on the default branch main",
-        ),
-        (ON_MAIN_RED, Some(1), "", "it concluded failure"),
-        (OFF_MAIN_RED, Some(1), "", "not on the default branch main"),
+        (GREEN, Some(0), "ready=true\n", ""),
+        (RUNNING, Some(0), "ready=false\n", ""),
+        (RED, Some(1), "", "it concluded failure"),
+        (AHEAD, Some(1), "", "not on the default branch main"),
     ];
-    for (sha, code, said, complained) in cases {
-        let output = release_gate(&api, Some("recorded"), sha);
+    let repo = Repo::new("release-gate");
+    for (sha, code, ready, complained) in cases {
+        let outputs = repo.root().join(format!("github-output-{sha}"));
+        let output = release_gate(&api, Some("recorded"), sha, &outputs);
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), code, "{sha}: {stdout}{stderr}");
-        assert!(stdout.contains(said), "{sha}: {stdout}");
+        assert!(stdout.ends_with(ready), "{sha}: {stdout}");
         assert!(stderr.contains(complained), "{sha}: {stderr}");
+        let written = fs::read_to_string(&outputs).unwrap_or_default();
+        assert_eq!(written, ready, "{sha}");
     }
 }
 
 #[test]
 fn release_gate_without_a_token_exits_1_before_any_request() {
-    let output = release_gate("http://127.0.0.1:1", None, ON_MAIN_GREEN);
+    let output = release_gate("http://127.0.0.1:1", None, GREEN, Path::new(""));
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("set GITHUB_TOKEN"));
 }

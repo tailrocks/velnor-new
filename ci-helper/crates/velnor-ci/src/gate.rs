@@ -1,16 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
+use serde::de::DeserializeOwned;
+
 use crate::error::CiError;
 use crate::github::{
-    ApiCheckRun, ApiCheckRuns, ApiCompare, ApiRepo, GitHub, Repo, check_runs_path, compare_path,
-    parse, repo_path,
+    ApiCompare, ApiPage, ApiRepo, ApiRule, ApiRunJob, ApiWorkflowRun, GitHub, Repo, compare_path,
+    parse, repo_path, rules_path, run_jobs_path, runs_path,
 };
 
-pub const REQUIRED_CHECK: &str = "Required";
-const CHECK_APP: &str = "github-actions";
+const ACTIONS_APP_ID: u64 = 15368;
+const RULES_PAGE: usize = 100;
 
-pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<String, CiError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Verdict {
+    pub ready: bool,
+    pub report: String,
+}
+
+enum Check {
+    Passed,
+    Waiting(String),
+    Failed(String),
+}
+
+pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdict, CiError> {
     if sha.len() != 40
         || !sha
             .bytes()
@@ -20,41 +36,61 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Strin
             "`{sha}` is not a full lowercase commit SHA"
         )));
     }
-    let ApiRepo { default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
+    let ApiRepo { id, default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
+    let required = required_checks(github, repo, &default_branch)?;
     let compare: ApiCompare = parse(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
     )?;
-    let checks: ApiCheckRuns = parse(
-        &github.get(&check_runs_path(repo, sha, REQUIRED_CHECK))?,
-        "check runs",
-    )?;
-    if checks.total_count > checks.check_runs.len() {
-        return Err(CiError::new(format!(
-            "GitHub lists {} runs of check {REQUIRED_CHECK} on commit {sha} and returned {}",
-            checks.total_count,
-            checks.check_runs.len()
-        )));
+    let mut runs: Vec<ApiWorkflowRun> =
+        all_pages(github, "workflow runs", |page| runs_path(repo, sha, page))?;
+    runs.retain(|run| {
+        run.event == "push"
+            && run.head_branch.as_deref() == Some(default_branch.as_str())
+            && run.head_sha == sha
+            && run
+                .head_repository
+                .as_ref()
+                .is_some_and(|head| head.id == id)
+    });
+    let mut jobs = Vec::new();
+    for run in &runs {
+        jobs.extend(all_pages::<ApiRunJob>(github, "jobs", |page| {
+            run_jobs_path(repo, run.id, page)
+        })?);
     }
+    let running = runs.iter().any(|run| run.status != "completed");
+    let mut report = Vec::new();
     let mut failures = Vec::new();
-    if !matches!(compare.status.as_str(), "identical" | "behind") {
+    if matches!(compare.status.as_str(), "identical" | "behind") {
+        report.push(format!("commit {sha} is on {default_branch}"));
+    } else {
         failures.push(format!(
             "commit {sha} is not on the default branch {default_branch} (comparison: {})",
             compare.status
         ));
     }
-    if let Err(reason) = required_passed(&checks.check_runs) {
-        failures.push(format!(
-            "check {REQUIRED_CHECK} did not pass on commit {sha}: {reason}"
-        ));
+    let mut ready = true;
+    for name in &required {
+        match judge(name, &jobs, running, &default_branch) {
+            Check::Passed => report.push(format!("check {name} passed")),
+            Check::Waiting(state) => {
+                ready = false;
+                report.push(format!("check {name} {state}"));
+            }
+            Check::Failed(reason) => failures.push(format!(
+                "check {name} did not pass on commit {sha}: {reason}"
+            )),
+        }
     }
-    if failures.is_empty() {
-        Ok(format!(
-            "commit {sha} is on {default_branch}\ncheck {REQUIRED_CHECK} passed on commit {sha}\n"
-        ))
-    } else {
-        Err(CiError::new(failures.join("\n")))
+    if !failures.is_empty() {
+        return Err(CiError::new(failures.join("\n")));
     }
+    report.push(format!("ready={ready}"));
+    Ok(Verdict {
+        ready,
+        report: report.join("\n") + "\n",
+    })
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
@@ -68,29 +104,95 @@ pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
     }
 }
 
-fn required_passed(runs: &[ApiCheckRun]) -> Result<(), String> {
-    let ours: Vec<&ApiCheckRun> = runs
-        .iter()
-        .filter(|run| {
-            run.name == REQUIRED_CHECK && run.app.as_ref().is_some_and(|app| app.slug == CHECK_APP)
-        })
-        .collect();
-    if ours.is_empty() {
-        return Err(format!("no run of it by {CHECK_APP}"));
-    }
-    for run in ours {
-        if run.status != "completed" {
-            return Err(format!("it is {}", run.status));
-        }
-        match run.conclusion.as_deref() {
-            Some("success") => {}
-            other => {
-                return Err(format!(
-                    "it concluded {}",
-                    other.unwrap_or("without a result")
-                ));
+fn required_checks(
+    github: &dyn GitHub,
+    repo: &Repo,
+    branch: &str,
+) -> Result<BTreeSet<String>, CiError> {
+    let mut checks = BTreeSet::new();
+    for page in 1.. {
+        let rules: Vec<ApiRule> = parse(
+            &github.get(&rules_path(repo, branch, page))?,
+            "branch rules",
+        )?;
+        for rule in rules
+            .iter()
+            .filter(|rule| rule.kind == "required_status_checks")
+        {
+            let listed = rule
+                .parameters
+                .as_ref()
+                .and_then(|parameters| parameters.required_status_checks.as_ref())
+                .ok_or_else(|| {
+                    CiError::new(format!(
+                        "a required_status_checks rule of branch {branch} lists no checks"
+                    ))
+                })?;
+            for check in listed {
+                if let Some(app) = check.integration_id.filter(|app| *app != ACTIONS_APP_ID) {
+                    return Err(CiError::new(format!(
+                        "branch {branch} requires check {} from the GitHub App {app}, and only a check from GitHub Actions ({ACTIONS_APP_ID}) can be tied to a push run",
+                        check.context
+                    )));
+                }
+                checks.insert(check.context.clone());
             }
         }
+        if rules.len() < RULES_PAGE {
+            break;
+        }
     }
-    Ok(())
+    if checks.is_empty() {
+        return Err(CiError::new(format!(
+            "branch {branch} requires no status check in its rules, so no commit of it can be released"
+        )));
+    }
+    Ok(checks)
+}
+
+fn all_pages<T: DeserializeOwned>(
+    github: &dyn GitHub,
+    what: &str,
+    path: impl Fn(u32) -> String,
+) -> Result<Vec<T>, CiError> {
+    let mut all = Vec::new();
+    for page in 1.. {
+        let ApiPage { total_count, items } = parse(&github.get(&path(page))?, what)?;
+        let empty = items.is_empty();
+        all.extend(items);
+        if all.len() >= total_count {
+            break;
+        }
+        if empty {
+            return Err(CiError::new(format!(
+                "GitHub lists {total_count} {what} and returned {}",
+                all.len()
+            )));
+        }
+    }
+    Ok(all)
+}
+
+fn judge(name: &str, jobs: &[ApiRunJob], running: bool, branch: &str) -> Check {
+    let ours: Vec<&ApiRunJob> = jobs.iter().filter(|job| job.name == name).collect();
+    if ours.is_empty() {
+        return if running {
+            Check::Waiting("has not started".to_owned())
+        } else {
+            Check::Failed(format!("no job of a push run on {branch} reports it"))
+        };
+    }
+    if let Some(job) = ours
+        .iter()
+        .find(|job| job.status == "completed" && job.conclusion.as_deref() != Some("success"))
+    {
+        return Check::Failed(format!(
+            "it concluded {}",
+            job.conclusion.as_deref().unwrap_or("without a result")
+        ));
+    }
+    match ours.iter().find(|job| job.status != "completed") {
+        Some(job) => Check::Waiting(format!("is {}", job.status)),
+        None => Check::Passed,
+    }
 }
