@@ -3,10 +3,13 @@
 
 use crate::{CheckDeadline, command::IsolatedCommand, error::MiseError};
 use std::{
+    collections::BTreeSet,
     ffi::OsString,
     path::{Path, PathBuf},
 };
 
+#[path = "git_tap_capture/checkout_modes.rs"]
+mod checkout_modes;
 #[path = "git_tap_capture/homebrew_pinned_source.rs"]
 pub mod homebrew_pinned_source;
 
@@ -18,6 +21,7 @@ const OUTPUT_LIMIT: usize = 1024 * 1024;
 pub struct CapturedTapMain {
     pub commit_sha: String,
     pub checkout: PathBuf,
+    pub tree: Vec<TapTreeEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,10 +41,11 @@ pub fn capture_tap_main(
         return Err(invalid("tap_checkout_destination"));
     }
     let sha = capture_remote_sha(repository, deadline)?;
-    materialize(repository, &sha, destination, deadline)?;
+    let tree = materialize(repository, &sha, destination, deadline)?;
     Ok(CapturedTapMain {
         commit_sha: sha,
         checkout: destination.to_path_buf(),
+        tree,
     })
 }
 
@@ -63,6 +68,7 @@ pub fn read_tap_tree(
 
 fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
     let mut entries = Vec::new();
+    let mut paths = BTreeSet::new();
     for record in bytes.split(|byte| *byte == 0) {
         if record.is_empty() {
             continue;
@@ -94,10 +100,7 @@ fn parse_tree(bytes: &[u8]) -> Result<Vec<TapTreeEntry>, MiseError> {
         let path = std::str::from_utf8(path)
             .map_err(|_| invalid("tap_tree_non_utf8_path"))?
             .to_owned();
-        if entries
-            .iter()
-            .any(|entry: &TapTreeEntry| entry.path == path)
-        {
+        if !paths.insert(path.clone()) {
             return Err(invalid("tap_tree_path"));
         }
         entries.push(validate_tap_regular_leaf(&path, mode, object_type, sha)?);
@@ -172,7 +175,7 @@ fn materialize(
     expected_sha: &str,
     destination: &Path,
     deadline: CheckDeadline,
-) -> Result<(), MiseError> {
+) -> Result<Vec<TapTreeEntry>, MiseError> {
     run_git(
         Some(destination),
         ["init", "--quiet", "--template=/dev/null", "."],
@@ -230,7 +233,9 @@ fn materialize(
     if head != expected_sha || !status.is_empty() {
         return Err(invalid("tap_checkout_not_clean_at_captured_main"));
     }
-    Ok(())
+    let entries = read_tap_tree(destination, expected_sha, deadline)?;
+    checkout_modes::normalize(destination, &entries, deadline)?;
+    Ok(entries)
 }
 
 fn run_git<const N: usize>(

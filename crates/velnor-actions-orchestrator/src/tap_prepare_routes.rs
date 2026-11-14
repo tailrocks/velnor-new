@@ -21,8 +21,8 @@ use super::{
     TapPreparationDisposition, candidate, internal, sha256, snapshot, updater,
 };
 
-struct CapturedTapBase {
-    tree: Vec<velnor_actions_mise::TapTreeEntry>,
+struct CapturedTapBase<'a> {
+    tree: &'a [velnor_actions_mise::TapTreeEntry],
     snapshot: snapshot::Snapshot,
     formula: Vec<u8>,
     discovered: Option<DiscoveredCheck>,
@@ -40,24 +40,18 @@ pub(super) fn prepare_captured_tap(
         )?),
         None => None,
     };
-    let tree = velnor_actions_mise::read_tap_tree(
-        &captured.checkout,
-        &captured.commit_sha,
-        preparation.deadline,
-    )
-    .map_err(|error| internal(&error.to_string()))?;
+    let tree = captured.tree.as_slice();
     if tree.len() > super::TREE_LIMIT {
         return Err(internal("tap_tree_too_large"));
     }
     let tree_snapshot = snapshot::snapshot_tree(&captured.checkout)?;
-    snapshot::validate_tree_snapshot(&tree, &tree_snapshot)?;
+    snapshot::validate_tree_snapshot(tree, &tree_snapshot)?;
     if !is_sha256(preparation.sdk_artifact_digest) {
         return Err(internal("tap_sdk_artifact_digest_invalid"));
     }
     let base = capture_tap_base(
         captured,
         preparation.formula_path,
-        tree,
         tree_snapshot,
         discovered,
     )?;
@@ -69,12 +63,12 @@ pub(super) fn prepare_captured_tap(
 
 fn prepare_native(
     preparation: &CapturedTapPreparation<'_>,
-    base: &CapturedTapBase,
+    base: &CapturedTapBase<'_>,
     spec: &HomebrewFormulaSpec,
 ) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
     read_captured_source_locator(
         &preparation.captured.checkout,
-        &base.tree,
+        base.tree,
         &base.snapshot,
         preparation.source_repository,
         preparation.release.receipt.repository.id,
@@ -108,7 +102,7 @@ fn prepare_native(
 
 fn prepare_custom(
     preparation: &CapturedTapPreparation<'_>,
-    base: &CapturedTapBase,
+    base: &CapturedTapBase<'_>,
 ) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
     if is_exact_current_formula(
         preparation.source_repository,
@@ -174,7 +168,7 @@ fn prepare_custom(
 
 fn persist_prepared_candidate(
     preparation: &CapturedTapPreparation<'_>,
-    base: &CapturedTapBase,
+    base: &CapturedTapBase<'_>,
     formula: &[u8],
     disposition: TapPreparationDisposition,
     spec: Option<&HomebrewFormulaSpec>,
@@ -205,13 +199,12 @@ fn persist_prepared_candidate(
     )
 }
 
-fn capture_tap_base(
-    captured: &CapturedTapMain,
+fn capture_tap_base<'a>(
+    captured: &'a CapturedTapMain,
     formula_path: &str,
-    tree: Vec<velnor_actions_mise::TapTreeEntry>,
     snapshot: snapshot::Snapshot,
     discovered: Option<DiscoveredCheck>,
-) -> Result<CapturedTapBase, OrchestratorError> {
+) -> Result<CapturedTapBase<'a>, OrchestratorError> {
     if snapshot
         .get(formula_path)
         .is_none_or(|entry| entry.directory || entry.mode != 0o644)
@@ -220,7 +213,7 @@ fn capture_tap_base(
     }
     let formula = snapshot::read_formula(&captured.checkout, formula_path)?;
     Ok(CapturedTapBase {
-        tree,
+        tree: captured.tree.as_slice(),
         snapshot,
         formula,
         discovered,
