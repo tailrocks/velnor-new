@@ -69,8 +69,18 @@ pub struct DownArgs {
 
 #[derive(Debug, Args)]
 pub struct RunArgs {
-    #[arg(help = "Scenario name in --scenarios, or the path of a scenario file")]
-    pub scenario: String,
+    #[arg(
+        required = true,
+        help = "Scenario names in --scenarios, or paths of scenario files; with several, each runs in <dir>/<name>"
+    )]
+    pub scenario: Vec<String>,
+    #[arg(
+        long,
+        default_value_t = 1,
+        value_parser = clap::value_parser!(u16).range(1..),
+        help = "How many scenarios run at the same time, each in its own environment"
+    )]
+    pub parallel: u16,
     #[command(flatten)]
     pub environment: EnvironmentArgs,
     #[arg(

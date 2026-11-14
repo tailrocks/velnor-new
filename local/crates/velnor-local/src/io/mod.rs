@@ -42,6 +42,7 @@ use crate::token;
 pub type Body = UnsyncBoxBody<Bytes, std::io::Error>;
 
 const JSON_LIMIT_BYTES: usize = 1 << 20;
+pub const RESTORES: &str = "restores.jsonl";
 
 #[derive(Debug)]
 pub struct Config {
@@ -90,6 +91,19 @@ impl CacheServer {
         response
     }
 
+    async fn journal(&self, line: &Value) -> Result<(), Error> {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.config.dir.join(RESTORES))
+            .await
+            .map_err(Error::internal)?;
+        file.write_all(format!("{line}\n").as_bytes())
+            .await
+            .map_err(Error::internal)?;
+        file.flush().await.map_err(Error::internal)
+    }
+
     async fn twirp(&self, call: &str, request: Request<Body>) -> Result<Response<Body>, Error> {
         let host = header(&request, &HOST)?;
         let bearer = header(&request, &AUTHORIZATION)?;
@@ -111,18 +125,27 @@ impl CacheServer {
             version: &body.version,
             writer: &claims.scp,
         };
+        let mut restore = None;
         let (reply, gone) = match call {
-            "GetCacheEntryDownloadURL" => match index.restore(&at, &body.restore_keys, now) {
-                Some(record) => (
-                    json!({
-                        "ok": true,
-                        "signed_download_url": archive_url(&host, &record.blob),
-                        "matched_key": record.key,
-                    }),
-                    Vec::new(),
-                ),
-                None => (json!({"ok": false}), Vec::new()),
-            },
+            "GetCacheEntryDownloadURL" => {
+                let found = index.restore(&at, &body.restore_keys, now);
+                let matched = found.as_ref().map(|record| (&record.key, &record.scope));
+                restore = Some(json!({
+                    "matched_key": matched.map(|(key, _)| key),
+                    "scope": matched.map(|(_, scope)| scope),
+                }));
+                let reply = found.as_ref().map_or_else(
+                    || json!({"ok": false}),
+                    |record| {
+                        json!({
+                            "ok": true,
+                            "signed_download_url": archive_url(&host, &record.blob),
+                            "matched_key": record.key,
+                        })
+                    },
+                );
+                (reply, Vec::new())
+            }
             "CreateCacheEntry" => match index.create(&at, random_blob()?, now) {
                 Ok((record, replaced)) => (
                     json!({"ok": true, "signed_upload_url": archive_url(&host, &record.blob)}),
@@ -145,6 +168,13 @@ impl CacheServer {
         if let Err(error) = self.save(&index).await {
             *index = before;
             return Err(error);
+        }
+        if let Some(mut line) = restore {
+            line["writer"] = json!(claims.scp);
+            line["key"] = json!(body.key);
+            if let Err(error) = self.journal(&line).await {
+                eprintln!("cache-server: the restore journal is not writable: {error:?}");
+            }
         }
         for record in gone {
             let _ = fs::remove_file(self.archive(&record.blob)).await;

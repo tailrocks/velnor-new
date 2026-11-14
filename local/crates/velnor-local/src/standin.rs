@@ -19,6 +19,7 @@ pub struct Run {
 #[serde(rename_all = "camelCase")]
 pub struct Job {
     pub request_id: u64,
+    pub job_id: String,
     pub time_line_id: Option<String>,
     pub name: String,
     pub workflowname: String,
