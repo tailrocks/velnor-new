@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    MemberDependency, PackageName, RepoPath, RepoView, RustCiConfig, RustMember, RustMetadata,
-    RustPackage, RustRoot,
+    MemberDependency, RepoPath, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
+    RustRoot,
 };
 
 use crate::config::excluded;
@@ -51,11 +51,6 @@ fn root(
     metadata: &RustMetadata,
     owner: &BTreeMap<&RepoPath, &RepoPath>,
 ) -> RustRoot {
-    let local: BTreeMap<&RepoPath, &PackageName> = metadata
-        .members
-        .iter()
-        .map(|package| (&package.manifest, &package.name))
-        .collect();
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
         .iter()
@@ -64,11 +59,7 @@ fn root(
         .filter(|root| **root != manifest)
         .map(|root| (*root).clone())
         .collect();
-    let mut members: Vec<RustMember> = metadata
-        .members
-        .iter()
-        .map(|package| member(package, &local))
-        .collect();
+    let mut members: Vec<RustMember> = metadata.members.iter().map(member).collect();
     members.sort_by(|a, b| a.name.cmp(&b.name));
     RustRoot {
         manifest: manifest.clone(),
@@ -77,7 +68,7 @@ fn root(
     }
 }
 
-fn member(package: &RustPackage, local: &BTreeMap<&RepoPath, &PackageName>) -> RustMember {
+fn member(package: &RustPackage) -> RustMember {
     RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
@@ -86,10 +77,10 @@ fn member(package: &RustPackage, local: &BTreeMap<&RepoPath, &PackageName>) -> R
             .dependencies
             .iter()
             .filter_map(|dependency| {
-                let name = local.get(dependency.manifest.as_ref()?)?;
                 Some(MemberDependency {
-                    name: (*name).clone(),
+                    name: dependency.name.clone(),
                     kind: dependency.kind,
+                    manifest: dependency.manifest.clone()?,
                 })
             })
             .collect(),

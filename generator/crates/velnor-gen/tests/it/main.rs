@@ -12,6 +12,7 @@ mod pipeline;
 mod release_workflow;
 mod repo_sample;
 mod rules;
+mod select;
 mod tool_pins;
 mod toolchain;
 mod version;
