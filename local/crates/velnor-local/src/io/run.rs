@@ -17,8 +17,9 @@ use hyper_util::rt::TokioIo;
 use tokio::fs;
 use tokio::net::TcpListener;
 
-use super::{Body, CacheServer, Config, api_stub};
-use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command};
+use super::env::{DockerCli, Environment};
+use super::{Body, CacheServer, Config, api_stub, drive};
+use crate::cli::{ApiStubArgs, CacheServerArgs, Cli, Command, UpArgs};
 
 #[must_use]
 pub fn main() -> ExitCode {
@@ -36,7 +37,21 @@ async fn run(command: Command) -> std::io::Result<()> {
     match command {
         Command::CacheServer(args) => run_cache_server(args).await,
         Command::ApiStub(args) => run_api_stub(args).await,
+        Command::Up(args) => up(args).await,
+        Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
+        Command::Run(args) => drive::run(args).await,
     }
+}
+
+async fn up(args: UpArgs) -> std::io::Result<()> {
+    let env = Environment::at(&args.environment.dir, DockerCli).await?;
+    let repo = fs::canonicalize(&args.repo).await?;
+    let addresses = env.up(&repo, &args.environment).await?;
+    println!(
+        "velnor-local: {} is up, API stub at {}",
+        env.name, addresses.stub_url
+    );
+    Ok(())
 }
 
 async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {
