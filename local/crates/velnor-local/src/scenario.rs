@@ -106,6 +106,19 @@ impl Scenario {
         values: impl IntoIterator<Item = &'a str>,
     ) -> Result<(), String> {
         let steps = self.steps.iter().flat_map(Step::arguments);
+        for step in &self.steps {
+            if let Step::WorkflowDispatch { inputs, .. } = step {
+                let supported = inputs
+                    .values()
+                    .all(|value| value.is_boolean() || value.is_number() || value.is_string());
+                if inputs.len() > 25 || !supported {
+                    return Err(
+                        "workflow_dispatch inputs are at most 25 booleans, numbers or strings"
+                            .to_owned(),
+                    );
+                }
+            }
+        }
         match values
             .into_iter()
             .chain(steps)
@@ -146,9 +159,24 @@ pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
         .lines()
         .find_map(|line| line.strip_prefix("version = \""))?
         .trim_end_matches('"');
-    let (rest, patch) = version.rsplit_once('.')?;
-    let next = format!("{rest}.{}", patch.parse::<u64>().ok()? + 1);
+    let numbers: Vec<u64> = version
+        .split('.')
+        .take(3)
+        .map(|part| part.parse().ok())
+        .collect::<Option<_>>()?;
+    let [major, minor, patch] = numbers[..] else {
+        return None;
+    };
+    let next = format!("{major}.{minor}.{}", patch + 1);
     Some((format!("{package}@{version}"), next))
+}
+
+#[must_use]
+pub fn with_path(list: Option<&str>, path: &str) -> String {
+    match list {
+        Some(list) if !list.is_empty() => format!("{list}:{path}"),
+        _ => path.to_owned(),
+    }
 }
 
 #[derive(Debug)]

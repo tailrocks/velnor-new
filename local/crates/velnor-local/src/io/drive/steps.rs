@@ -9,7 +9,7 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::Driver;
-use crate::scenario::next_patch;
+use crate::scenario::{next_patch, with_path};
 
 impl Driver<'_> {
     pub(super) async fn update_lock(
@@ -32,8 +32,11 @@ impl Driver<'_> {
             ));
         }
         let current = fs::read_to_string(&lock).await?;
-        let (spec, precise) = next_patch(&current, package)
-            .ok_or_else(|| io::Error::other(format!("Cargo.lock has no version of {package}")))?;
+        let (spec, precise) = next_patch(&current, package).ok_or_else(|| {
+            io::Error::other(format!(
+                "Cargo.lock has no plain x.y.z version of {package}"
+            ))
+        })?;
         let update = [
             "update",
             "-p",
@@ -46,7 +49,13 @@ impl Driver<'_> {
             .args(update)
             .arg(&manifest)
             .current_dir(&root)
-            .env("MISE_IGNORED_CONFIG_PATHS", &self.repo)
+            .env(
+                "MISE_IGNORED_CONFIG_PATHS",
+                with_path(
+                    std::env::var("MISE_IGNORED_CONFIG_PATHS").ok().as_deref(),
+                    &self.repo.to_string_lossy(),
+                ),
+            )
             .kill_on_drop(true)
             .output()
             .await?;
