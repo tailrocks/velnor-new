@@ -28,7 +28,6 @@ pub enum Step {
     UpdateLock {
         branch: String,
         package: String,
-        precise: String,
     },
     OpenPullRequest {
         head: String,
@@ -68,11 +67,7 @@ impl Step {
             | Self::MergeGroup(branch)
             | Self::WorkflowDispatch { branch, .. } => vec![branch],
             Self::Commit { branch, append, .. } => vec![branch, append],
-            Self::UpdateLock {
-                branch,
-                package,
-                precise,
-            } => vec![branch, package, precise],
+            Self::UpdateLock { branch, package } => vec![branch, package],
             Self::OpenPullRequest { head, base } => vec![head, base],
             Self::Schedule(_) => Vec::new(),
         }
@@ -125,6 +120,21 @@ impl Scenario {
             None => Ok(()),
         }
     }
+}
+
+#[must_use]
+pub fn next_patch(lock: &str, package: &str) -> Option<String> {
+    let block = lock.split("\n\n").find(|block| {
+        block
+            .lines()
+            .any(|line| line == format!("name = \"{package}\""))
+    })?;
+    let version = block
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \""))?
+        .trim_end_matches('"');
+    let (rest, patch) = version.rsplit_once('.')?;
+    Some(format!("{rest}.{}", patch.parse::<u64>().ok()? + 1))
 }
 
 #[derive(Debug)]

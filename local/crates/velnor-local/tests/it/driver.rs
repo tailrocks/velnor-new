@@ -6,7 +6,7 @@ use std::path::Path;
 use serde_json::Value;
 use velnor_local::event::{MergeGroup, NO_COMMIT, PullRequest, Push, Repository, for_standin};
 use velnor_local::io::checkout::copy_untracked;
-use velnor_local::scenario::{Scenario, Step, overlapping, restores};
+use velnor_local::scenario::{Scenario, Step, next_patch, overlapping, restores};
 use velnor_local::standin::Job;
 
 const SHA_A: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
@@ -88,29 +88,39 @@ fn a_push_payload_has_the_shape_github_sent_in_the_probe() {
 
 #[test]
 fn a_pull_request_payload_has_the_shape_github_sent_in_the_probe() {
-    let pull = |action, before, merged| PullRequest {
+    let pull = |action, before, merged, closed_at| PullRequest {
         action,
         number: 3,
         base: ("main", SHA_A),
         head: ("warm", SHA_B),
         before,
         merged,
+        merge_commit: SHA_B,
+        closed_at,
         changed_files: 1,
     };
-    let opened = REPOSITORY.pull_request(&pull("opened", None, false));
+    let opened = REPOSITORY.pull_request(&pull("opened", None, false, None));
     assert_like_github("pull_request", &opened);
     assert_eq!(opened["pull_request"]["base"]["sha"], SHA_A);
     assert_eq!(opened["pull_request"]["head"]["ref"], "warm");
     assert_eq!(opened["number"], 3);
-    let pushed = REPOSITORY.pull_request(&pull("synchronize", Some(SHA_A), false));
+    let pushed = REPOSITORY.pull_request(&pull("synchronize", Some(SHA_A), false, None));
     assert_eq!(pushed["action"], "synchronize");
     assert_eq!(
         (&pushed["before"], &pushed["after"]),
         (&SHA_A.into(), &SHA_B.into())
     );
-    let merged = REPOSITORY.pull_request(&pull("closed", None, true));
+    assert_eq!(opened["pull_request"]["closed_at"], Value::Null);
+    assert_eq!(opened["pull_request"]["merge_commit_sha"], SHA_B);
+    let at = "2026-11-14T00:00:00Z";
+    let merged = REPOSITORY.pull_request(&pull("closed", None, true, Some(at)));
     assert_eq!(merged["pull_request"]["state"], "closed");
     assert_eq!(merged["pull_request"]["merged"], true);
+    assert_eq!(merged["pull_request"]["merged_at"], at);
+    assert_eq!(merged["pull_request"]["closed_at"], at);
+    let closed = REPOSITORY.pull_request(&pull("closed", None, false, Some(at)));
+    assert_eq!(closed["pull_request"]["merged_at"], Value::Null);
+    assert_eq!(closed["pull_request"]["closed_at"], at);
 }
 
 #[test]
@@ -319,4 +329,12 @@ fn the_report_names_each_job_with_its_key_the_entry_it_restored_and_its_scope() 
             "job test: key mise-y found no entry",
         ]
     );
+}
+
+#[test]
+fn the_lock_step_bumps_the_patch_version_it_finds_in_the_lock_file() {
+    let lock = "[[package]]\nname = \"fnv-other\"\nversion = \"2.3.9\"\n\n[[package]]\nname = \"fnv\"\nversion = \"1.0.5\"\nsource = \"registry\"\n";
+    assert_eq!(next_patch(lock, "fnv").as_deref(), Some("1.0.6"));
+    assert_eq!(next_patch(lock, "fnv-other").as_deref(), Some("2.3.10"));
+    assert_eq!(next_patch(lock, "serde"), None);
 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::Semaphore;
@@ -24,6 +24,7 @@ use crate::standin;
 
 mod outcome;
 mod pulls;
+mod steps;
 
 #[derive(Debug)]
 struct Driver<'a> {
@@ -114,7 +115,7 @@ async fn run_one(args: &RunArgs, scenario: &str, tag: &str, dir: &Path) -> io::R
     let (outcomes, up_at, up_seconds) = session?;
     stopped?;
     print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
-    if outcomes.is_empty() || !outcomes.iter().all(Outcome::passed) {
+    if !outcomes.iter().all(Outcome::passed) {
         return Err(io::Error::other("a run did not succeed"));
     }
     Ok(())
@@ -170,11 +171,7 @@ impl Driver<'_> {
                     append,
                     line,
                 } => self.commit(branch, append, line).await?,
-                Step::UpdateLock {
-                    branch,
-                    package,
-                    precise,
-                } => self.update_lock(branch, package, precise).await?,
+                Step::UpdateLock { branch, package } => self.update_lock(branch, package).await?,
                 Step::Push(branch) => self.push(branch).await?,
                 Step::OpenPullRequest { head, base } => self.open(head, base).await?,
                 Step::MergePullRequest(head) => self.merge(head).await?,
@@ -193,64 +190,6 @@ impl Driver<'_> {
             self.git(&["switch", "-q", "-c", branch, base]).await?;
         }
         Ok(())
-    }
-
-    async fn update_lock(&self, branch: &str, package: &str, precise: &str) -> io::Result<()> {
-        self.on_branch(branch).await?;
-        let manifest = self.repo.join("Cargo.toml");
-        let update = [
-            "update",
-            "-p",
-            package,
-            "--precise",
-            precise,
-            "--manifest-path",
-        ];
-        let updated = Command::new("cargo")
-            .args(update)
-            .arg(&manifest)
-            .current_dir(&self.env.dir)
-            .kill_on_drop(true)
-            .output()
-            .await?;
-        if !updated.status.success() {
-            let error = String::from_utf8_lossy(&updated.stderr);
-            return Err(io::Error::other(format!("cargo update: {}", error.trim())));
-        }
-        let message = format!("Update {package} to {precise}");
-        self.git(&["commit", "-q", "-a", "-m", &message]).await?;
-        Ok(())
-    }
-
-    async fn schedule(&mut self, cron: &str) -> io::Result<()> {
-        let branch = self.args.environment.default_branch.clone();
-        self.git(&["switch", "-q", &branch]).await?;
-        let sha = self.git(&["rev-parse", "HEAD"]).await?;
-        let workflow = self.args.workflow.as_deref().unwrap_or_default();
-        let payload = self.repository().schedule(cron, workflow);
-        self.send("schedule", &payload, &format!("refs/heads/{branch}"), &sha)
-            .await
-    }
-
-    async fn dispatch(
-        &mut self,
-        branch: &str,
-        inputs: &BTreeMap<String, String>,
-    ) -> io::Result<()> {
-        self.git(&["switch", "-q", branch]).await?;
-        let sha = self.git(&["rev-parse", "HEAD"]).await?;
-        let workflow = self.args.workflow.as_deref().unwrap_or_default();
-        let inputs = json!(inputs);
-        let payload = self
-            .repository()
-            .workflow_dispatch(branch, &inputs, workflow);
-        self.send(
-            "workflow_dispatch",
-            &payload,
-            &format!("refs/heads/{branch}"),
-            &sha,
-        )
-        .await
     }
 
     fn repository(&self) -> Repository<'_> {

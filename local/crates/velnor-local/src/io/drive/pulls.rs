@@ -9,6 +9,8 @@ use tokio::fs;
 use super::Driver;
 use crate::event::{MergeGroup, PullRequest};
 use crate::io::env::request;
+use crate::io::now;
+use crate::rest::rfc3339;
 
 #[derive(Debug)]
 pub(super) struct Pull {
@@ -40,13 +42,21 @@ impl Driver<'_> {
         let pull = &self.pulls[at];
         let range = format!("{}...{}", pull.base_sha, pull.head_sha);
         let changed = self.git(&["diff", "--name-only", &range]).await?;
-        let merge = self.merge_commit(&pull.base_sha, &pull.head_sha).await?;
-        let pull = &self.pulls[at];
         let refs = format!("refs/pull/{}", pull.number);
-        self.git(&["update-ref", &format!("{refs}/merge"), &merge])
-            .await?;
-        self.git(&["update-ref", &format!("{refs}/head"), &pull.head_sha])
-            .await?;
+        let (git_ref, sha) = if pull.merged {
+            let base = format!("refs/heads/{}", pull.base);
+            let sha = self.git(&["rev-parse", &base]).await?;
+            (base, sha)
+        } else {
+            let merge = self.merge_commit(&pull.base_sha, &pull.head_sha).await?;
+            let head = &self.pulls[at].head_sha;
+            self.git(&["update-ref", &format!("{refs}/merge"), &merge])
+                .await?;
+            self.git(&["update-ref", &format!("{refs}/head"), head])
+                .await?;
+            (format!("{refs}/merge"), merge)
+        };
+        let pull = &self.pulls[at];
         let listed: Vec<Value> = self
             .pulls
             .iter()
@@ -64,6 +74,7 @@ impl Driver<'_> {
             Value::Array(listed).to_string(),
         )
         .await?;
+        let closed_at = (action == "closed").then(|| rfc3339(now()));
         let payload = self.repository().pull_request(&PullRequest {
             action,
             number: pull.number,
@@ -71,10 +82,11 @@ impl Driver<'_> {
             head: (&pull.head, &pull.head_sha),
             before,
             merged: pull.merged,
+            merge_commit: &sha,
+            closed_at: closed_at.as_deref(),
             changed_files: changed.lines().count(),
         });
-        let git_ref = format!("{refs}/merge");
-        self.send("pull_request", &payload, &git_ref, &merge).await
+        self.send("pull_request", &payload, &git_ref, &sha).await
     }
 
     pub(super) async fn open(&mut self, head: &str, base: &str) -> io::Result<()> {
@@ -93,6 +105,8 @@ impl Driver<'_> {
             open: true,
             merged: false,
         });
+        let head_sha = self.pulls[self.pulls.len() - 1].head_sha.clone();
+        self.pushed.insert(head.to_owned(), head_sha);
         self.announce(self.pulls.len() - 1, "opened", None).await
     }
 

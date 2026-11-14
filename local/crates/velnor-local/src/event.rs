@@ -37,6 +37,8 @@ pub struct PullRequest<'a> {
     pub head: (&'a str, &'a str),
     pub before: Option<&'a str>,
     pub merged: bool,
+    pub merge_commit: &'a str,
+    pub closed_at: Option<&'a str>,
     pub changed_files: usize,
 }
 
@@ -103,6 +105,9 @@ impl Repository<'_> {
             "title": format!("{} into {}", pull.head.0, pull.base.0),
             "draft": false,
             "merged": pull.merged,
+            "merge_commit_sha": pull.merge_commit,
+            "closed_at": pull.closed_at,
+            "merged_at": pull.closed_at.filter(|_| pull.merged),
             "labels": [],
             "changed_files": pull.changed_files,
             "user": {"login": SENDER},
