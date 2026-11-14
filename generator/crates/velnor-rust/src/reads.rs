@@ -7,7 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath, RustMember, TargetKind};
 
 use crate::error::{DetectError, Reason};
-use crate::select::claims;
+use crate::select::{claims, relative};
 
 pub const INPUTS_LOCK: RepoPath = RepoPath::from_static(".velnor/rust-inputs.lock");
 
@@ -94,61 +94,122 @@ pub fn locate(repository: &Path, base: &Path, raw: &str) -> Located {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Owner<'f> {
-    member: &'f RustMember,
+    name: &'f PackageName,
+    manifest: &'f RepoPath,
+    directory: Option<RepoPath>,
     whole: bool,
 }
 
 impl Owner<'_> {
     #[must_use]
     pub fn name(&self) -> &PackageName {
-        &self.member.name
+        self.name
+    }
+
+    #[must_use]
+    pub fn manifest(&self) -> &RepoPath {
+        self.manifest
     }
 
     #[must_use]
     pub fn directory(&self) -> Option<&RepoPath> {
-        self.member.directory.as_ref()
+        self.directory.as_ref()
     }
 
     fn claims(&self, path: &RepoPath) -> bool {
-        claims(self.member.directory.as_ref(), self.whole, path)
+        claims(self.directory.as_ref(), self.whole, path)
     }
 }
 
-fn owners(facts: &RepoFacts) -> impl Iterator<Item = Owner<'_>> {
-    facts.rust_roots.iter().flat_map(|root| {
-        root.members.iter().map(move |member| Owner {
-            member,
-            whole: member.manifest != root.manifest,
+struct Unit<'f> {
+    name: &'f PackageName,
+    directory: Option<RepoPath>,
+    build_script: bool,
+    unowned: bool,
+    owners: Vec<Owner<'f>>,
+}
+
+fn units(facts: &RepoFacts) -> Vec<Unit<'_>> {
+    let members: Vec<(&RustMember, bool)> = facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| {
+            root.members
+                .iter()
+                .map(move |member| (member, member.manifest != root.manifest))
         })
-    })
+        .collect();
+    let mut units: Vec<Unit<'_>> = members
+        .iter()
+        .map(|(member, whole)| Unit {
+            name: &member.name,
+            directory: member.directory.clone(),
+            build_script: member
+                .targets
+                .iter()
+                .any(|target| target.kinds.contains(&TargetKind::BuildScript)),
+            unowned: false,
+            owners: vec![Owner {
+                name: &member.name,
+                manifest: &member.manifest,
+                directory: member.directory.clone(),
+                whole: *whole,
+            }],
+        })
+        .collect();
+    let mut unowned: BTreeMap<&RepoPath, Unit<'_>> = BTreeMap::new();
+    for (member, _) in &members {
+        for dependency in &member.dependencies {
+            if members
+                .iter()
+                .any(|(m, _)| m.manifest == dependency.manifest)
+            {
+                continue;
+            }
+            let unit = unowned.entry(&dependency.manifest).or_insert_with(|| Unit {
+                name: &dependency.name,
+                directory: dependency.manifest.parent(),
+                build_script: true,
+                unowned: true,
+                owners: Vec::new(),
+            });
+            unit.owners.push(Owner {
+                name: &member.name,
+                manifest: &member.manifest,
+                directory: unit.directory.clone(),
+                whole: true,
+            });
+        }
+    }
+    units.extend(unowned.into_values());
+    units
 }
 
 #[must_use]
-pub fn source_owner<'f>(facts: &'f RepoFacts, source: &RepoPath) -> Option<Owner<'f>> {
-    owners(facts)
-        .filter(|owner| owner.claims(source))
-        .max_by_key(|owner| {
-            owner
-                .member
-                .directory
-                .as_ref()
-                .map_or(0, |d| d.as_str().len())
-        })
+pub fn source_owners<'f>(facts: &'f RepoFacts, source: &RepoPath) -> Vec<Owner<'f>> {
+    let units = units(facts);
+    match units
+        .iter()
+        .filter(|unit| relative(unit.directory.as_ref(), source).is_some())
+        .max_by_key(|unit| unit.directory.as_ref().map_or(0, |d| d.as_str().len()))
+    {
+        Some(unit) => unit.owners.clone(),
+        None => units
+            .iter()
+            .filter(|unit| unit.unowned)
+            .flat_map(|unit| unit.owners.iter().cloned())
+            .collect(),
+    }
 }
 
 #[must_use]
 pub fn build_script_owners<'f>(facts: &'f RepoFacts, package: &str) -> Vec<Owner<'f>> {
-    owners(facts)
-        .filter(|owner| {
-            owner.member.name.as_str() == package
-                && owner
-                    .member
-                    .targets
-                    .iter()
-                    .any(|target| target.kinds.contains(&TargetKind::BuildScript))
-        })
+    units(facts)
+        .into_iter()
+        .filter(|unit| unit.build_script && unit.name.as_str() == package)
+        .flat_map(|unit| unit.owners)
         .collect()
 }
 
@@ -157,6 +218,7 @@ pub fn add_reads(
     tracked: &BTreeSet<RepoPath>,
     owner: &Owner<'_>,
     reads: &[RepoPath],
+    declared: bool,
 ) {
     for read in reads {
         let mut below = tracked
@@ -167,7 +229,11 @@ pub fn add_reads(
                     || path.as_str()[read.as_str().len()..].starts_with('/')
             })
             .peekable();
-        if below.peek().is_some() && !below.all(|path| owner.claims(path)) {
+        let outside = match below.peek() {
+            Some(_) => !below.all(|path| owner.claims(path)),
+            None => declared && !owner.claims(read),
+        };
+        if outside {
             found
                 .entry(read.clone())
                 .or_default()

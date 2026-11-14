@@ -12,7 +12,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, add_reads, build_script_owners, dep_info_paths, detect,
-    format_inputs_lock, locate, parse_inputs_lock, rerun_if_changed, source_owner, unlisted,
+    format_inputs_lock, locate, parse_inputs_lock, rerun_if_changed, source_owners, unlisted,
 };
 
 use crate::error::CiError;
@@ -32,8 +32,10 @@ struct Audit<'a> {
     repository: &'a Path,
     facts: &'a RepoFacts,
     tracked: &'a BTreeSet<RepoPath>,
+    targets: Vec<RepoPath>,
     found: CompileInputs,
     units: usize,
+    built: BTreeSet<RepoPath>,
 }
 
 pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
@@ -48,68 +50,111 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
+    let workspaces = facts
+        .rust_roots
+        .iter()
+        .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut audit = Audit {
         repository: &checkout.root,
         facts: &facts,
         tracked: &checkout.view.tracked_paths,
+        targets: workspaces
+            .iter()
+            .filter_map(|w| match locate(&checkout.root, &w.target_directory, "") {
+                Located::Inside(target) => Some(target),
+                Located::Repository | Located::Outside => None,
+            })
+            .collect(),
         found: CompileInputs::new(),
         units: 0,
+        built: BTreeSet::new(),
     };
-    let mut targets = Vec::new();
-    for root in &facts.rust_roots {
-        let workspace = workspace(&checkout.root.join(root.manifest.as_str()))?;
+    for workspace in &workspaces {
         let mut files = Vec::new();
         unit_files(&workspace.target_directory, &mut files)?;
         for (file, kind) in files {
             audit.record(&workspace.workspace_root, &file, &kind)?;
         }
-        targets.push(workspace.target_directory.display().to_string());
     }
-    if audit.units == 0 {
+    let targets: Vec<String> = workspaces
+        .iter()
+        .map(|w| w.target_directory.display().to_string())
+        .collect();
+    let unbuilt: Vec<String> = facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .filter(|member| !audit.built.contains(&member.manifest))
+        .map(|member| format!("{} ({})", member.name, member.manifest))
+        .collect();
+    if !unbuilt.is_empty() {
         return Err(CiError::new(format!(
-            "found no current dep-info of a workspace package in {}; run this after cargo build --all-targets",
-            targets.join(", ")
+            "found no current dep-info in {} for {}; run this after cargo build --all-targets in every Cargo root",
+            targets.join(", "),
+            unbuilt.join(", ")
         )));
     }
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
-        let lock = checkout.root.join(INPUTS_LOCK.as_str());
-        if let Some(parent) = lock.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
-        }
-        fs::write(&lock, format_inputs_lock(&audit.found))
-            .map_err(|e| CiError::new(format!("cannot write {}: {e}", lock.display())))?;
+        write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
-    let missing = unlisted(&audit.found, &listed);
-    if missing.is_empty() {
-        Ok(format!("{INPUTS_LOCK} lists every read: {summary}\n"))
-    } else {
-        Err(CiError::new(format!(
-            "{INPUTS_LOCK} does not list these reads; run velnor-ci inputs audit --write after a build of all targets and commit it:\n{}",
-            format_inputs_lock(&missing).trim_end()
-        )))
+    compare(&audit.found, &listed, &summary)
+}
+
+fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
+    if let Some(parent) = lock.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
     }
+    fs::write(lock, format_inputs_lock(found))
+        .map_err(|e| CiError::new(format!("cannot write {}: {e}", lock.display())))
+}
+
+fn compare(
+    found: &CompileInputs,
+    listed: &CompileInputs,
+    summary: &str,
+) -> Result<String, CiError> {
+    let missing = unlisted(found, listed);
+    let unread = unlisted(listed, found);
+    if missing.is_empty() && unread.is_empty() {
+        return Ok(format!("{INPUTS_LOCK} lists every read: {summary}\n"));
+    }
+    let sections: Vec<String> = [
+        ("reads it does not list", missing),
+        ("lines nothing reads", unread),
+    ]
+    .into_iter()
+    .filter(|(_, entries)| !entries.is_empty())
+    .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
+    .collect();
+    Err(CiError::new(format!(
+        "{INPUTS_LOCK} is stale; run velnor-ci inputs audit --write after a build of all targets and commit it\n{}",
+        sections.concat().trim_end()
+    )))
 }
 
 impl Audit<'_> {
     fn record(&mut self, workspace: &Path, file: &Path, kind: &UnitFile) -> Result<(), CiError> {
         let text = fs::read_to_string(file)
             .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+        let declared = matches!(kind, UnitFile::BuildOutput(_));
         let readers: Vec<(Owner<'_>, PathBuf, Vec<String>)> = match kind {
             UnitFile::DepInfo => {
                 let paths = dep_info_paths(&text);
-                let owner = paths.first().and_then(|source| {
-                    match locate(self.repository, workspace, source) {
-                        Located::Inside(source) => source_owner(self.facts, &source),
-                        Located::Repository | Located::Outside => None,
-                    }
-                });
-                owner
-                    .map(|owner| (owner, workspace.to_path_buf(), paths))
+                let owners = match paths
+                    .first()
+                    .map(|source| locate(self.repository, workspace, source))
+                {
+                    Some(Located::Inside(source)) => source_owners(self.facts, &source),
+                    _ => Vec::new(),
+                };
+                owners
                     .into_iter()
+                    .map(|owner| (owner, workspace.to_path_buf(), paths.clone()))
                     .collect()
             }
             UnitFile::BuildOutput(package) => build_script_owners(self.facts, package)
@@ -124,6 +169,9 @@ impl Audit<'_> {
                 .collect(),
         };
         let built = modified(file)?;
+        if !readers.is_empty() {
+            self.units += 1;
+        }
         for (owner, base, paths) in readers {
             if paths
                 .iter()
@@ -135,18 +183,22 @@ impl Audit<'_> {
             for path in &paths {
                 match locate(self.repository, &base, path) {
                     Located::Inside(read) => reads.push(read),
+                    Located::Repository => reads.extend(self.tracked.iter().cloned()),
                     Located::Outside => {}
-                    Located::Repository => {
-                        return Err(CiError::new(format!(
-                            "{} names the whole repository as an input of {}; name the files it reads",
-                            file.display(),
-                            owner.name()
-                        )));
-                    }
+                }
+                if let Ok(Located::Inside(target)) = fs::canonicalize(base.join(path))
+                    .map(|target| locate(self.repository, &target, ""))
+                {
+                    reads.push(target);
                 }
             }
-            add_reads(&mut self.found, self.tracked, &owner, &reads);
-            self.units += 1;
+            reads.retain(|read| {
+                !self.targets.iter().any(|target| {
+                    read == target || read.as_str().starts_with(&format!("{target}/"))
+                })
+            });
+            add_reads(&mut self.found, self.tracked, &owner, &reads, declared);
+            self.built.insert(owner.manifest().clone());
         }
         Ok(())
     }

@@ -248,7 +248,7 @@ fn depth(directory: Option<&RepoPath>) -> usize {
     directory.map_or(0, |directory| directory.as_str().len())
 }
 
-fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
+pub(crate) fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
     match directory {
         None => Some(path.as_str()),
         Some(directory) => path
