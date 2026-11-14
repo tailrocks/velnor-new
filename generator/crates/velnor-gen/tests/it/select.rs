@@ -224,10 +224,7 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
             ),
             (
                 &["helper/README.md"],
-                vec![
-                    some(&[("tool", depends_on("shared"))]),
-                    unknown("helper/README.md"),
-                ],
+                vec![unknown("helper/README.md"), unknown("helper/README.md")],
             ),
         ],
     );
@@ -239,15 +236,26 @@ fn a_file_selection_cannot_place_selects_everything_that_could_read_it() {
                 vec![unknown("docs/guide.md"), unknown("docs/guide.md")],
             ),
             (
+                &["a/README.md"],
+                vec![unknown("a/README.md"), unknown("a/README.md")],
+            ),
+            (
                 &["b/vendor/patched/src/lib.rs"],
                 vec![
-                    some(&[("one", depends_on("patched"))]),
+                    unknown("b/vendor/patched/src/lib.rs"),
                     unknown("b/vendor/patched/src/lib.rs"),
                 ],
             ),
             (
-                &["ab/one/src/lib.rs"],
-                vec![unknown("ab/one/src/lib.rs"), unknown("ab/one/src/lib.rs")],
+                &["b/four/src/lib.rs"],
+                vec![
+                    some(&[("one", depends_on("patched"))]),
+                    some(&[("four", changed("b/four/src/lib.rs"))]),
+                ],
+            ),
+            (
+                &["a/one2/src/lib.rs"],
+                vec![unknown("a/one2/src/lib.rs"), unknown("a/one2/src/lib.rs")],
             ),
         ],
     );
@@ -303,7 +311,7 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
         ),
         (
             &["inner/README.md"],
-            vec![none.clone(), unknown("inner/README.md")],
+            vec![unknown("inner/README.md"), unknown("inner/README.md")],
         ),
     ]);
     assert_selects(&facts, rows);

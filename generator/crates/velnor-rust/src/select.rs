@@ -20,7 +20,8 @@ pub fn select(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, Rust
     }
     while let Some(manifest) = walk.queue.pop() {
         let name = graph.nodes[manifest].name;
-        for dependent in graph.dependents.get(manifest).into_iter().flatten() {
+        let dependents = graph.dependents.get(manifest).into_iter().flatten();
+        for dependent in dependents.chain(&graph.unowned) {
             walk.seed(dependent, SelectionReason::DependsOn(name.clone()));
         }
     }
@@ -89,6 +90,7 @@ struct Graph<'a> {
     roots: &'a [RustRoot],
     nodes: BTreeMap<&'a RepoPath, Node<'a>>,
     dependents: BTreeMap<&'a RepoPath, Vec<&'a RepoPath>>,
+    unowned: Vec<&'a RepoPath>,
 }
 
 #[derive(Default)]
@@ -105,6 +107,7 @@ impl<'a> Graph<'a> {
             roots,
             nodes: BTreeMap::new(),
             dependents: BTreeMap::new(),
+            unowned: Vec::new(),
         };
         for (index, root) in roots.iter().enumerate() {
             for member in &root.members {
@@ -134,6 +137,12 @@ impl<'a> Graph<'a> {
                 });
             }
         }
+        graph.unowned = graph
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.root.is_none())
+            .map(|(manifest, _)| *manifest)
+            .collect();
         graph
     }
 
@@ -154,18 +163,8 @@ impl<'a> Graph<'a> {
         if let Some(manifest) = package {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
         } else {
-            let area = root.and_then(|index| self.roots[index].manifest.parent());
             for (index, candidate) in self.roots.iter().enumerate() {
-                if root == Some(index)
-                    || within(area.as_ref(), candidate.manifest.parent().as_ref())
-                {
-                    walk.trigger(candidate, index, path);
-                }
-            }
-        }
-        for (manifest, node) in &self.nodes {
-            if node.root.is_none() && node.claims(path) {
-                walk.seed(manifest, SelectionReason::Changed(path.clone()));
+                walk.trigger(candidate, index, path);
             }
         }
     }
@@ -193,10 +192,6 @@ impl<'a> Walk<'a> {
 
 fn depth(directory: Option<&RepoPath>) -> usize {
     directory.map_or(0, |directory| directory.as_str().len())
-}
-
-fn within(area: Option<&RepoPath>, directory: Option<&RepoPath>) -> bool {
-    directory.is_some_and(|directory| contains(area, directory))
 }
 
 fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
