@@ -102,6 +102,15 @@ async fn session(
         events: 0,
         outcomes: Vec::new(),
     };
+    let branches = driver
+        .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+        .await?;
+    for branch in branches.lines() {
+        let parent = format!("{branch}^");
+        if let Ok(before) = driver.git(&["rev-parse", "--verify", "-q", &parent]).await {
+            driver.pushed.insert(branch.to_owned(), before);
+        }
+    }
     driver.replay(&scenario.steps).await?;
     Ok((driver.outcomes, up_at, up_seconds))
 }
