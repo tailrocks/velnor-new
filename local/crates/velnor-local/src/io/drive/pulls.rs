@@ -59,24 +59,8 @@ impl Driver<'_> {
                 .await?;
             (format!("{refs}/merge"), merge)
         };
+        self.write_pulls().await?;
         let pull = &self.pulls[at];
-        let listed: Vec<Value> = self
-            .pulls
-            .iter()
-            .map(|pull| {
-                json!({
-                    "number": pull.number,
-                    "state": if pull.open { "open" } else { "closed" },
-                    "base": {"ref": pull.base, "sha": pull.base_sha},
-                    "head": {"ref": pull.head, "sha": pull.head_sha},
-                })
-            })
-            .collect();
-        fs::write(
-            self.env.dir.join("api/pulls.json"),
-            Value::Array(listed).to_string(),
-        )
-        .await?;
         let closed_at = (action == "closed").then(|| rfc3339(now()));
         let payload = self.repository().pull_request(&PullRequest {
             action,
@@ -113,15 +97,47 @@ impl Driver<'_> {
         self.announce(self.pulls.len() - 1, "opened", None).await
     }
 
-    pub(super) async fn synchronize(&mut self, branch: &str, after: &str) -> io::Result<()> {
-        let open: Vec<usize> = (0..self.pulls.len())
-            .filter(|at| self.pulls[*at].open && self.pulls[*at].head == branch)
+    async fn write_pulls(&self) -> io::Result<()> {
+        let listed: Vec<Value> = self
+            .pulls
+            .iter()
+            .map(|pull| {
+                json!({
+                    "number": pull.number,
+                    "state": if pull.open { "open" } else { "closed" },
+                    "base": {"ref": pull.base, "sha": pull.base_sha},
+                    "head": {"ref": pull.head, "sha": pull.head_sha},
+                })
+            })
             .collect();
-        for at in open {
-            let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
-            self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
+        let pulls = Value::Array(listed).to_string();
+        fs::write(self.env.dir.join("api/pulls.json"), pulls).await
+    }
+
+    pub(super) async fn retarget(
+        &mut self,
+        branch: &str,
+        after: &str,
+    ) -> io::Result<Vec<(usize, String)>> {
+        let mut moved = Vec::new();
+        for at in 0..self.pulls.len() {
+            if self.pulls[at].open && self.pulls[at].head == branch {
+                let before = std::mem::replace(&mut self.pulls[at].head_sha, after.to_owned());
+                self.pulls[at].base_sha = self.git(&["rev-parse", &self.pulls[at].base]).await?;
+                moved.push((at, before));
+            }
+        }
+        if !moved.is_empty() {
+            self.write_pulls().await?;
+        }
+        Ok(moved)
+    }
+
+    pub(super) async fn synchronize(&mut self, moved: Vec<(usize, String)>) -> io::Result<()> {
+        for (at, before) in moved {
             let (base_sha, number) = (self.pulls[at].base_sha.clone(), self.pulls[at].number);
-            if self.merge_commit(&base_sha, after).await.is_err() {
+            let after = self.pulls[at].head_sha.clone();
+            if self.merge_commit(&base_sha, &after).await.is_err() {
                 let _ = self.git(&["merge", "--abort"]).await;
                 println!(
                     "velnor-local: pull request {number} has a merge conflict, so no pull_request event"
