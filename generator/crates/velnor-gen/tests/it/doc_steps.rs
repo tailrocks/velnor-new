@@ -58,7 +58,7 @@ enum Kind {
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 22] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 23] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -164,6 +164,14 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 22] = [
         false,
         NO_FENCE,
         NO_DOCS,
+    ),
+    (
+        "tokens included from a generated file",
+        Kind::Doctested,
+        "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\n",
+        false,
+        RUN,
+        RUN,
     ),
     (
         "indented code block",

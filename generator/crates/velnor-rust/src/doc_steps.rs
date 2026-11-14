@@ -123,6 +123,9 @@ impl Found {
             if let Some((rest, block)) = doc_comment(line) {
                 self.docs = true;
                 self.fenced |= block || code_block(rest);
+            } else if line.contains("include!(") {
+                self.docs = true;
+                self.fenced = true;
             } else if attribute_depth > 0 || line.starts_with("#[") || line.starts_with("#![") {
                 let opened = line.matches('[').count();
                 let closed = line.matches(']').count();
