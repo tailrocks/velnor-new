@@ -40,6 +40,18 @@ pub(super) enum UnitFile {
     },
 }
 
+impl UnitFile {
+    pub(super) fn configuration(&self) -> Option<&str> {
+        match self {
+            Self::Fingerprint { configuration, .. } | Self::BuildOutput { configuration, .. } => {
+                Some(configuration)
+            }
+            Self::DepInfo { configuration, .. } => configuration.as_deref(),
+            Self::Script { .. } => None,
+        }
+    }
+}
+
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
     let mut found = Vec::new();
     walk(target, target, &mut found)?;

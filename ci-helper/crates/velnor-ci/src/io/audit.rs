@@ -49,7 +49,6 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
-    let triples = triples(&checkout.root)?;
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
@@ -78,10 +77,18 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         );
     }
     files.sort();
+    let files_under_triples = files
+        .iter()
+        .any(|(unit, _, _)| unit.configuration().is_some_and(|c| c.contains('/')));
     for (unit, file, index) in files {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
     audit.orphans();
+    let triples = if files_under_triples {
+        triples(&checkout.root)?
+    } else {
+        BTreeSet::new()
+    };
     complete(&facts, &workspaces, &audit.built, &triples)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
@@ -232,20 +239,34 @@ impl Audit<'_> {
                 }
             }
             UnitFile::Script { profile, package } => {
-                if let Some((source, built)) = self.dep_info(workspace, file)? {
-                    if profile == HOST {
-                        self.built[index].scripts.insert(source.clone());
-                    }
-                    self.scripts
-                        .entry((index, profile, package))
-                        .or_default()
-                        .insert(source, built);
-                }
+                self.script(workspace, index, file, profile, package)?;
             }
             UnitFile::BuildOutput {
                 configuration,
                 package,
             } => self.build_output(index, file, &configuration, &package)?,
+        }
+        Ok(())
+    }
+
+    fn script(
+        &mut self,
+        workspace: &Path,
+        index: usize,
+        file: &Path,
+        profile: String,
+        package: String,
+    ) -> Result<(), CiError> {
+        if let Some((source, built)) = self.dep_info(workspace, file)? {
+            if profile == HOST {
+                self.built[index].scripts.insert(source.clone());
+            }
+            self.scripts
+                .entry((index, profile, package))
+                .or_default()
+                .entry(source)
+                .and_modify(|compiled| *compiled = (*compiled).min(built))
+                .or_insert(built);
         }
         Ok(())
     }

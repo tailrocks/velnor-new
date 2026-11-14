@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::{
     audit, own_units, own_units_in, path_dependency_units, root_package_with_path_dependencies,
@@ -260,6 +260,10 @@ fn a_complete_build_for_a_target_triple_with_a_cdylib_and_an_untested_test_targe
         repo.root().join(format!("{target}/deps/lib.d")),
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
+    let recompiled =
+        "rust/target/debug/build/lib-f00000000000001a/build_script_build-f00000000000001a.d";
+    unit(&repo, recompiled, "out.d: lib/build.rs\n");
+    repo.set_mtime(recompiled, SystemTime::now() + Duration::from_secs(100));
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");

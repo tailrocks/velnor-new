@@ -28,13 +28,14 @@ pub(super) fn unit(repo: &Repo, path: &str, text: &str) {
 
 pub(super) fn workspace_below_the_root() -> Repo {
     let repo = Repo::new("audit");
-    repo.write(".gitignore", "target/\n");
-    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
-    repo.write(
+    unit(&repo, ".gitignore", "target/\n");
+    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(
+        &repo,
         "rust/Cargo.toml",
         "[workspace]\nmembers = [\"app\", \"lib\", \"macros\"]\nresolver = \"3\"\n",
     );
-    repo.write("rust/Cargo.lock", "version = 4\n");
+    unit(&repo, "rust/Cargo.lock", "version = 4\n");
     for (package, extra) in [
         (
             "app",
@@ -42,22 +43,24 @@ pub(super) fn workspace_below_the_root() -> Repo {
         ),
         ("lib", "build = \"build.rs\"\n"),
     ] {
-        repo.write(
+        unit(
+            &repo,
             &format!("rust/{package}/Cargo.toml"),
             &format!("[package]\nname = \"{package}\"\nedition = \"2024\"\n{extra}"),
         );
-        repo.write(&format!("rust/{package}/src/lib.rs"), "");
-        repo.write(&format!("rust/{package}/tests/it.rs"), "");
+        unit(&repo, &format!("rust/{package}/src/lib.rs"), "");
+        unit(&repo, &format!("rust/{package}/tests/it.rs"), "");
     }
-    repo.write(
+    unit(
+        &repo,
         "rust/macros/Cargo.toml",
         "[package]\nname = \"macros\"\nedition = \"2024\"\n\n[lib]\nproc-macro = true\n",
     );
-    repo.write("rust/macros/src/lib.rs", "");
-    repo.write("rust/lib/build.rs", "fn main() {}\n");
-    repo.write("rust/app/build.rs", "fn main() {}\n");
-    repo.write("rust/app/src/extra.rs", "fn main() {}\n");
-    repo.write("rust/app/data.txt", "");
+    unit(&repo, "rust/macros/src/lib.rs", "");
+    unit(&repo, "rust/lib/build.rs", "fn main() {}\n");
+    unit(&repo, "rust/app/build.rs", "fn main() {}\n");
+    unit(&repo, "rust/app/src/extra.rs", "fn main() {}\n");
+    unit(&repo, "rust/app/data.txt", "");
     for file in [
         "greeting.txt",
         "app-test.txt",
@@ -66,8 +69,9 @@ pub(super) fn workspace_below_the_root() -> Repo {
         "app-build.txt",
         "old.txt",
     ] {
-        repo.write(&format!("shared/{file}"), "");
+        unit(&repo, &format!("shared/{file}"), "");
     }
+    repo.git(&["add", "--all"]);
     repo
 }
 
@@ -182,27 +186,32 @@ pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&s
 
 pub(super) fn root_package_with_path_dependencies() -> Repo {
     let repo = Repo::new("audit-owners");
-    repo.write(".gitignore", "target/\n");
-    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
-    repo.write(".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
-    repo.write(
+    unit(&repo, ".gitignore", "target/\n");
+    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
+    unit(
+        &repo,
         "Cargo.toml",
         "[package]\nname = \"top\"\nedition = \"2024\"\n\n[[test]]\nname = \"qa\"\npath = \"qa.rs\"\n\n[[test]]\nname = \"ext\"\npath = \"ext.rs\"\n\n[dependencies]\nside = { path = \"vendor/side\" }\n\n[workspace]\nmembers = [\"other\"]\nexclude = [\"vendor\"]\n",
     );
-    repo.write(
+    unit(
+        &repo,
         "vendor/side/Cargo.toml",
         "[package]\nname = \"side\"\nedition = \"2024\"\n",
     );
-    repo.write(
+    unit(
+        &repo,
         "other/Cargo.toml",
         "[package]\nname = \"other\"\nedition = \"2024\"\n\n[[test]]\nname = \"ext\"\npath = \"../ext.rs\"\n\n[dependencies]\nmid = { path = \"../vendor/mid\" }\n",
     );
-    repo.write("Cargo.lock", "version = 4\n");
-    repo.write(
+    unit(&repo, "Cargo.lock", "version = 4\n");
+    unit(
+        &repo,
         "vendor/mid/Cargo.toml",
         "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\" }\n",
     );
-    repo.write(
+    unit(
+        &repo,
         "vendor/leaf/Cargo.toml",
         "[package]\nname = \"leaf\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
     );
@@ -222,7 +231,7 @@ pub(super) fn root_package_with_path_dependencies() -> Repo {
         "ext.rs",
         "data/ext.txt",
     ] {
-        repo.write(file, "");
+        unit(&repo, file, "");
     }
     fs::create_dir_all(repo.root().join("shared")).unwrap_or_else(|e| unreachable!("{e}"));
     std::os::unix::fs::symlink("../README.md", repo.root().join("shared/link.txt"))
