@@ -7,6 +7,7 @@ mod gate;
 mod inputs;
 mod io;
 mod logscan;
+mod plan;
 mod support;
 mod time;
 mod version;

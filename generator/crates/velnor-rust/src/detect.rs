@@ -9,7 +9,7 @@ use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
-use crate::roots::{CARGO_LOCK, rust_roots};
+use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 
 const CARGO_MANIFEST: &str = "Cargo.toml";
@@ -26,6 +26,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .into_iter()
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
+    .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
     .collect()
 }
 
