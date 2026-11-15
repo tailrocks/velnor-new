@@ -4,11 +4,11 @@
 pub mod cli;
 pub mod io;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
-use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
+use velnor_render::{Owner, RuleViolation, owner_of, render};
 use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
@@ -89,15 +89,18 @@ pub enum Drift {
     Missing(RepoPath),
     Stale(RepoPath),
     Foreign(RepoPath),
+    Unmarked(RepoPath),
 }
 
 impl Drift {
     #[must_use]
     pub fn path(&self) -> &RepoPath {
         match self {
-            Self::Changed(path) | Self::Missing(path) | Self::Stale(path) | Self::Foreign(path) => {
-                path
-            }
+            Self::Changed(path)
+            | Self::Missing(path)
+            | Self::Stale(path)
+            | Self::Foreign(path)
+            | Self::Unmarked(path) => path,
         }
     }
 }
@@ -112,6 +115,10 @@ impl fmt::Display for Drift {
                 f,
                 "{path} was not written by velnor-gen; move it away to let velnor-gen own it"
             ),
+            Self::Unmarked(path) => write!(
+                f,
+                "{path} has no generated header and no generator owns it; delete it or generate it"
+            ),
         }
     }
 }
@@ -119,18 +126,24 @@ impl fmt::Display for Drift {
 #[must_use]
 pub fn drift(
     expected: &BTreeMap<RepoPath, String>,
-    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+    workflows: &BTreeMap<RepoPath, Vec<u8>>,
+    engine_configured: bool,
 ) -> Vec<Drift> {
-    OWNED_PATHS
-        .iter()
-        .filter_map(|path| match (expected.get(path), on_disk.get(path)) {
-            (_, Some(have)) if !have.starts_with(GENERATED_HEADER.as_bytes()) => {
-                Some(Drift::Foreign(path.clone()))
-            }
-            (Some(want), Some(have)) if want.as_bytes() == have.as_slice() => None,
-            (Some(_), Some(_)) => Some(Drift::Changed(path.clone())),
+    let paths: BTreeSet<&RepoPath> = expected.keys().chain(workflows.keys()).collect();
+    paths
+        .into_iter()
+        .filter_map(|path| match (expected.get(path), workflows.get(path)) {
+            (Some(want), Some(have)) => match owner_of(have) {
+                Owner::VelnorGen if want.as_bytes() == have.as_slice() => None,
+                Owner::VelnorGen => Some(Drift::Changed(path.clone())),
+                Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
+            },
             (Some(_), None) => Some(Drift::Missing(path.clone())),
-            (None, Some(_)) => Some(Drift::Stale(path.clone())),
+            (None, Some(have)) => match owner_of(have) {
+                Owner::VelnorGen => Some(Drift::Stale(path.clone())),
+                Owner::Engine => None,
+                Owner::Nobody => (!engine_configured).then(|| Drift::Unmarked(path.clone())),
+            },
             (None, None) => None,
         })
         .collect()

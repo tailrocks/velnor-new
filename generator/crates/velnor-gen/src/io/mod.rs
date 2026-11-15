@@ -13,19 +13,20 @@ pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
-use velnor_render::OWNED_PATHS;
 use velnor_rust::{
     DetectError, LOCK_PATH, LockError, MetadataError, commit_url, manifests, metadata_roots,
     pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
 mod sample;
+mod workflows;
 
 use crate::cli::{Cli, Command};
 use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
+use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[derive(Debug)]
 pub enum Error {
@@ -140,7 +141,7 @@ pub fn main() -> Exit {
                 match drift {
                     Drift::Changed(path) | Drift::Missing(path) => println!("wrote {path}"),
                     Drift::Stale(path) => println!("removed {path}"),
-                    Drift::Foreign(path) => println!("kept {path}"),
+                    Drift::Foreign(path) | Drift::Unmarked(path) => println!("kept {path}"),
                 }
             }
             Exit::SUCCESS
@@ -201,7 +202,9 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
     let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
-    let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
+    let workflows = read_files(&root, &workflow_paths(&root)?)?;
+    let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
+    let drifts = drift(&expected, &workflows, engine_configured);
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
@@ -221,11 +224,11 @@ pub fn apply(
         let existing = regular_file(root, path)?;
         match (change, expected.get(path), existing) {
             (Drift::Foreign(_), _, _) => return Err(Error::Foreign(path.clone())),
+            (Drift::Unmarked(_), _, _) | (_, None, None) => {}
             (_, Some(content), _) => replace(&root.join(path.as_str()), content.as_bytes())?,
             (_, None, Some(file)) => {
                 fs::remove_file(&file).map_err(|e| Error::File(file.clone(), e))?;
             }
-            (_, None, None) => {}
         }
     }
     Ok(())
