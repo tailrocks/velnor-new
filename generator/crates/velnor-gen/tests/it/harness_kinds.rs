@@ -103,8 +103,14 @@ fn members_sharing_a_harness_target_name_each_get_a_direct_step() -> TestResult 
         &[("a/Cargo.toml", &ma), ("b/Cargo.toml", &mb)],
         vec![a, b],
     )?)?;
-    assert!(text.contains("cargo test -p a --locked --test=custom"), "{text}");
-    assert!(text.contains("cargo test -p b --locked --test=custom"), "{text}");
+    assert!(
+        text.contains("cargo test -p a --locked --test=custom"),
+        "{text}"
+    );
+    assert!(
+        text.contains("cargo test -p b --locked --test=custom"),
+        "{text}"
+    );
     Ok(())
 }
 

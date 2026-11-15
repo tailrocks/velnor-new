@@ -342,11 +342,6 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[build]\nrustflags = [\"--force-warn\", \"unused-variables\"]\n",
         "[build]\nrustdoc = \"/bin/true\"\n",
         "[build]\nrustc-wrapper = \"/bin/true\"\n",
-        "[registry]\ncredential-provider = \"./steal.sh\"\n",
-        "[registry]\nglobal-credential-providers = [\"cargo:token\", \"./steal.sh\"]\n",
-        "[registry]\ncredential-provider = \"cargo:token-from-stdout ./steal.sh\"\n",
-        "[registries.mine]\ncredential-provider = [\"./steal.sh\", \"--flag\"]\n",
-        "[credential-alias]\nsteal = \"./steal.sh\"\n",
     ];
     let accepted = [
         "[env]\nANY_NAME = \"x\"\n",
@@ -354,6 +349,8 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[build]\nrustflags = [\"-C\", \"debuginfo=0\"]\n",
         "[registry]\ncredential-provider = \"cargo:token\"\n",
         "[registry]\nglobal-credential-providers = [\"cargo:token\", \"cargo:libsecret\"]\n",
+        "[registry]\ncredential-provider = \"cargo:1password\"\n",
+        "[credential-alias]\ncorp = \"corp-credential-helper --flag\"\n",
     ];
     for (text, ok) in rejected
         .iter()

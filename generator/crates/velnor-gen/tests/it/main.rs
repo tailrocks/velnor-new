@@ -4,6 +4,7 @@
 mod cargo_lock;
 mod classify;
 mod compile_inputs;
+mod credential_hooks;
 mod detect;
 mod doc_steps;
 mod drift;

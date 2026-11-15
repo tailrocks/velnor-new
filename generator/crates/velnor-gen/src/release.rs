@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
 use velnor_release::{ReleaseFiles, ReleasePlan};
 use velnor_render::render_release;
-use velnor_rust::{MISE_CONFIGS, MISE_LOCK};
+use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
 use crate::GenerateError;
 
@@ -33,6 +33,7 @@ pub(crate) fn release_workflow(
             .iter()
             .find(|detected| detected.manifest.as_str() == manifest)
             .ok_or_else(|| GenerateError::ReleaseRootWithoutCargoToml(root.root.clone()))?;
+        reject_release_credential_hooks(view, &detected.manifest)?;
         if let Some((package, _)) = root.packages.iter().find(|(package, _)| {
             !detected
                 .members

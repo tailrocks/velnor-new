@@ -4,6 +4,7 @@
 mod cargo_lock;
 mod classify;
 mod config;
+mod credentials;
 mod detect;
 mod doc_steps;
 mod error;
@@ -28,6 +29,7 @@ mod toolchain;
 mod unowned;
 
 pub use config::CONFIG_PATH;
+pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{optional_steps, root_sources};
 pub use error::{DetectError, Reason};
