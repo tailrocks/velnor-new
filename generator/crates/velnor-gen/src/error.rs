@@ -18,6 +18,7 @@ pub enum GenerateError {
     ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
     ReleaseRootWithoutCargoToml(String),
+    ReleaseToolchainPath,
     ReleasePackageNotInRoot { root: String, package: String },
     Rules(Vec<RuleViolation>),
 }
@@ -39,6 +40,9 @@ impl fmt::Display for GenerateError {
             Self::ReleaseRootWithoutCargoToml(root) => write!(
                 f,
                 ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
+            ),
+            Self::ReleaseToolchainPath => f.write_str(
+                "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
             Self::ReleasePackageNotInRoot { root, package } => write!(
                 f,

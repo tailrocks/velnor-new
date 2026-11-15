@@ -21,6 +21,13 @@ pub(crate) fn release_workflow(
         .helper
         .as_ref()
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
+    if facts
+        .toolchain
+        .as_ref()
+        .is_some_and(|toolchain| toolchain.path.is_some())
+    {
+        return Err(GenerateError::ReleaseToolchainPath);
+    }
     let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
     for root in &plan.roots {
         let manifest = if root.root == "." {

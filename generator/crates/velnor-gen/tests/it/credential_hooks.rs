@@ -50,3 +50,38 @@ fn a_repository_without_a_release_root_may_use_any_credential_provider() -> Test
     }
     Ok(())
 }
+
+fn path_toolchain_view(
+    release: bool,
+) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let release_toml = release.then_some("[[binaries]]\npackage = \"app\"\n");
+    let mut view = release_view(&[APP], release_toml)?;
+    let toolchain = RepoPath::new("rust-toolchain.toml")?;
+    view.files.insert(
+        RepoPath::new("mise.toml")?,
+        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
+    );
+    view.tracked_paths.insert(toolchain.clone());
+    view.files.insert(
+        toolchain,
+        b"[toolchain]\npath = \"/tmp/fake-toolchain\"\n".to_vec(),
+    );
+    Ok(view)
+}
+
+#[test]
+fn a_release_root_refuses_a_rust_toolchain_that_names_a_path() -> TestResult {
+    let result = expected_files(&path_toolchain_view(true)?);
+    assert!(
+        matches!(result, Err(GenerateError::ReleaseToolchainPath)),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_repository_without_a_release_root_may_use_a_path_toolchain() -> TestResult {
+    let result = expected_files(&path_toolchain_view(false)?);
+    assert!(result.is_ok(), "{result:?}");
+    Ok(())
+}

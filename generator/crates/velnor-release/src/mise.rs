@@ -65,6 +65,27 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
+const RELEASE_PLZ_DOWNLOADS: [&str; 2] = [
+    "https://github.com/release-plz/release-plz/releases/download/",
+    "https://api.github.com/repos/release-plz/release-plz/releases/assets/",
+];
+
+fn foreign_artifact(value: &toml::Value) -> Option<String> {
+    match value {
+        toml::Value::Array(items) => items.iter().find_map(foreign_artifact),
+        toml::Value::Table(table) => table.iter().find_map(|(key, inner)| match inner {
+            toml::Value::String(url) if matches!(key.as_str(), "url" | "url_api") => {
+                let own = RELEASE_PLZ_DOWNLOADS
+                    .iter()
+                    .any(|prefix| url.starts_with(prefix));
+                (!own).then(|| url.clone())
+            }
+            other => foreign_artifact(other),
+        }),
+        _ => None,
+    }
+}
+
 fn redirecting_key(table: &Table) -> Option<&'static str> {
     if table.contains_key("plugins") {
         return Some("plugins");
@@ -118,6 +139,12 @@ pub(crate) fn check(
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };
+        if let Some(url) = foreign_artifact(entry) {
+            return Err(ReleaseError::ReleasePlzArtifactElsewhere {
+                tool: key.clone(),
+                url,
+            });
+        }
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
         let matches = !wanted.is_empty()

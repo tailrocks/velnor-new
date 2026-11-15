@@ -109,6 +109,10 @@ pub enum ReleaseError {
         file: String,
         key: String,
     },
+    ReleasePlzArtifactElsewhere {
+        tool: String,
+        url: String,
+    },
 }
 
 fn subject(package: Option<&String>) -> String {
@@ -264,6 +268,10 @@ impl ReleaseError {
             Self::MiseRedirectsInstall { file, key } => write!(
                 f,
                 "{file}: {key} can redirect where mise downloads release-plz from, so the downloaded program runs with the release App token in scope; remove it"
+            ),
+            Self::ReleasePlzArtifactElsewhere { tool, url } => write!(
+                f,
+                "mise.lock: {tool} downloads from {url}, which is not a release-plz release on GitHub, so the downloaded program would run with the release App token in scope; run `mise lock` again"
             ),
             _ => Ok(()),
         }
