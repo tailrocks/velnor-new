@@ -3,6 +3,7 @@
 
 mod guards;
 mod identity;
+mod partial;
 mod reads;
 
 use std::fs;
@@ -24,6 +25,15 @@ pub(super) fn unit(repo: &Repo, path: &str, text: &str) {
     fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
         .unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(path, text).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+pub(super) fn placed(repo: &Repo, target: &str) {
+    if let Some(parent) = std::path::Path::new(target)
+        .parent()
+        .filter(|parent| parent.file_name().is_some_and(|name| name != "target"))
+    {
+        unit(repo, &format!("{}/CACHEDIR.TAG", parent.display()), "");
+    }
 }
 
 pub(super) fn workspace_below_the_root() -> Repo {
@@ -167,6 +177,7 @@ const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
 ];
 
 pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&str]) {
+    placed(repo, target);
     for (key, on_host, file, text, fingerprint) in OWN_UNITS {
         if left_out.contains(&key) {
             continue;
@@ -245,6 +256,7 @@ pub(super) fn path_dependency_units(repo: &Repo) {
 }
 
 pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
+    placed(repo, target);
     for (file, text, fingerprint) in [
         (
             "deps/top-0000000000000001.d",
