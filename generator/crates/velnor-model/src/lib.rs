@@ -17,9 +17,8 @@ pub use plan::{
 };
 pub use repo::{
     CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
-    PolicyTools,
-    RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
+    RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };
 pub use selection::{
     AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

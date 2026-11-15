@@ -6,8 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
     PermissionScope, Permissions, PullRequestType, RepoFacts, RustRoot, Shape, ShapeDecision, Step,
-    StepKind,
-    TargetKind, Triggers, When, WorkflowPlan,
+    StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
