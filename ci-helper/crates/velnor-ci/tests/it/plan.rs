@@ -187,3 +187,19 @@ fn a_weakening_printed_by_explain_cannot_forge_a_workflow_command() {
         "{explained:?}"
     );
 }
+
+#[test]
+fn a_percent_in_an_unknown_path_is_kept_in_the_suggested_glob() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    let text = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::from([path("docs/100%.md")]),
+        &BTreeMap::new(),
+    );
+    assert!(text.contains("glob = \"docs/100%.md\"\n"), "{text}");
+    assert!(text.contains("\n    \"docs/100%.md\",\n"), "{text}");
+}

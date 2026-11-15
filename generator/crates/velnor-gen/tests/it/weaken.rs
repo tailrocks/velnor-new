@@ -306,3 +306,13 @@ fn a_rustdoc_flag_value_that_contains_a_bypass_flag_is_not_a_bypass() -> TestRes
     );
     Ok(())
 }
+
+#[test]
+fn an_empty_compiler_wrapper_resets_cargo_and_is_not_named() -> TestResult {
+    let files = [(
+        ".cargo/config.toml",
+        "[build]\nrustc-wrapper = \"\"\nrustc-workspace-wrapper = \"\"\n",
+    )];
+    assert_eq!(named(&files)?, Vec::<String>::new());
+    Ok(())
+}
