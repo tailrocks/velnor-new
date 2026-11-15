@@ -97,3 +97,22 @@ fn plan_prints_a_root_with_a_control_character_in_its_name_escaped_or_not_at_all
         );
     }
 }
+
+#[test]
+fn plan_explain_escapes_a_changed_path_that_carries_a_line_separator_and_a_command() {
+    for separator in ["\u{85}", "\u{2028}", "\u{2029}"] {
+        let repo = plan_repo("forged-reason");
+        let changed = format!("a/src/{separator}::error::forged.rs");
+        repo.write(&changed, "");
+        let output = plan_command(&repo)
+            .args(["plan", "--explain", "--changed"])
+            .arg(&changed)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(text.contains("changed:"), "{text}");
+        assert!(!text.contains("::error::"), "{text}");
+        assert!(text.chars().all(|c| c == '\n' || !c.is_control()), "{text}");
+    }
+}
