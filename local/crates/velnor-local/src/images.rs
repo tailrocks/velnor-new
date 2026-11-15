@@ -74,32 +74,8 @@ fn build(tag: &str, mut args: Vec<String>, path: String) -> Vec<String> {
     command
 }
 
-pub fn refuse_dirty(porcelain: &str) -> Result<(), String> {
-    let changed: Vec<&str> = porcelain.lines().collect();
-    if changed.is_empty() {
-        return Ok(());
-    }
-    Err(format!(
-        "the images are built from the working tree but named for HEAD; commit or stash these first: {}",
-        changed.join("; ")
-    ))
-}
-
-pub fn plan(
-    lock: &Lock,
-    root: &Path,
-    stages: &Path,
-    source_sha: &str,
-) -> Result<Vec<Vec<String>>, String> {
-    let (root, stages) = (root.display().to_string(), stages.display().to_string());
-    let base = format!(
-        "{}=docker-image://{}@{}",
-        lock.get("base_image")?,
-        lock.get("base_image_name")?,
-        lock.get("base_image_arm64_digest")?,
-    );
-    let context = |name: &str, stage: &str| format!("{name}={stages}/{stage}");
-    let helpers = [
+fn helpers(root: &str, stages: &str, source_sha: &str) -> Vec<String> {
+    [
         "run",
         "--rm",
         "--platform",
@@ -129,7 +105,35 @@ pub fn plan(
         HELPERS,
     ]
     .map(str::to_owned)
-    .to_vec();
+    .to_vec()
+}
+
+pub fn refuse_dirty(porcelain: &str) -> Result<(), String> {
+    let changed: Vec<&str> = porcelain.lines().collect();
+    if changed.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the images are built from the working tree but named for HEAD; commit or stash these first: {}",
+        changed.join("; ")
+    ))
+}
+
+pub fn plan(
+    lock: &Lock,
+    root: &Path,
+    stages: &Path,
+    source_sha: &str,
+) -> Result<Vec<Vec<String>>, String> {
+    let (root, stages) = (root.display().to_string(), stages.display().to_string());
+    let base = format!(
+        "{}=docker-image://{}@{}",
+        lock.get("base_image")?,
+        lock.get("base_image_name")?,
+        lock.get("base_image_arm64_digest")?,
+    );
+    let context = |name: &str, stage: &str| format!("{name}={stages}/{stage}");
+    let helpers = helpers(&root, &stages, source_sha);
     let sha = format!("VELNOR_SOURCE_SHA={source_sha}");
     let mut runner = flags(
         "--build-arg",

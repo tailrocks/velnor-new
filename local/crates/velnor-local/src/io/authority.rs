@@ -48,11 +48,11 @@ struct Ledger {
 
 impl Ledger {
     async fn save(&self) -> io::Result<()> {
-        let text: String = self
-            .entries
-            .iter()
-            .map(|entry| format!("{}\n", json!(entry)))
-            .collect();
+        let mut text = String::new();
+        for entry in &self.entries {
+            text.push_str(&json!(entry).to_string());
+            text.push('\n');
+        }
         write_private(&self.path, &text).await
     }
 }
@@ -164,10 +164,10 @@ impl<B: Backend> Authority<B> {
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
         let mut ledger = self.ledger.lock().await;
         let admitted = admit(&ledger.entries, side, &found).cloned();
-        if let Ok(entry) = &admitted {
-            if claim(&mut ledger.entries, &entry.id, &found) {
-                ledger.save().await.map_err(Error::internal)?;
-            }
+        if let Ok(entry) = &admitted
+            && claim(&mut ledger.entries, &entry.id, &found)
+        {
+            ledger.save().await.map_err(Error::internal)?;
         }
         let verdict = admitted.as_ref().map_err(|refusal| *refusal);
         Ok(json_response(200, &answer(side, &found, verdict)))
