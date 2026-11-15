@@ -4,6 +4,7 @@ on:
   pull_request:
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
@@ -102,7 +103,9 @@ jobs:
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         env:
@@ -110,8 +113,10 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
         run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Doctests
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
-        run: velnor-ci run --require-doctests -- cargo test --doc --workspace --locked
+        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run --require-doctests -- cargo test --doc $PACKAGE_ARGS --locked'
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
@@ -632,7 +637,9 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: lab
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: lab

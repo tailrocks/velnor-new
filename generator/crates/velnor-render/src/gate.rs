@@ -65,9 +65,8 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             match gate.need {
-                GateNeed::Doctests => parts.push(runs(GateNeed::Doctests)),
-                GateNeed::Docs => {
-                    parts.push(runs(GateNeed::Docs));
+                GateNeed::Doctests | GateNeed::Docs => {
+                    parts.push(runs(gate.need));
                     parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
                 }
                 _ => {}

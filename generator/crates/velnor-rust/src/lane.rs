@@ -58,7 +58,7 @@ impl Lane {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
             CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
-            CargoCommand::Deny => Some(self.gate(GateNeed::Deny)),
+            CargoCommand::Deny { .. } => Some(self.gate(GateNeed::Deny)),
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
             _ => self.steps(),
         };
@@ -72,6 +72,7 @@ impl Lane {
             kind: StepKind::Cargo(command),
             directory,
             when: When::NotCancelled,
+            skip_on_draft: false,
         }
     }
 }
@@ -122,16 +123,25 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let tools = [
-        (facts.policy.deny, CargoCommand::Deny),
-        (facts.policy.machete, CargoCommand::Machete),
-    ];
-    steps.extend(
-        tools
-            .into_iter()
-            .filter(|(wanted, _)| *wanted)
-            .map(|(_, command)| lane.cargo(command, None)),
-    );
+    if !facts.tools.tools.is_empty() {
+        steps.push(Step {
+            gate: lane.plan.is_none().then(|| lane.gate(GateNeed::Policy)),
+            ..step(StepKind::InstallTools)
+        });
+    }
+    if facts.policy.deny {
+        steps.extend(facts.rust_roots.iter().map(|root| {
+            lane.cargo(
+                CargoCommand::Deny {
+                    manifest: root.manifest.clone(),
+                },
+                None,
+            )
+        }));
+    }
+    if facts.policy.machete {
+        steps.push(lane.cargo(CargoCommand::Machete, None));
+    }
     Job {
         needs: lane.plan.clone().into_iter().collect(),
         gate: lane.plan.is_some().then(|| lane.gate(GateNeed::Policy)),

@@ -56,7 +56,10 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let everything = selections
         .values()
         .any(|selection| matches!(selection, RustSelection::All(_)));
-    let policy = policy_runs(facts.policy, &changes.paths, everything);
+    let selected = selections
+        .values()
+        .any(|selection| !matches!(selection, RustSelection::None));
+    let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
     let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
     let new = introduced(&facts, &changes);

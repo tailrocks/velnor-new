@@ -4,6 +4,7 @@ on:
   pull_request:
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
@@ -68,7 +69,9 @@ jobs:
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ steps.plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
