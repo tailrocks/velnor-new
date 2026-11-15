@@ -10,6 +10,7 @@ mod drift;
 mod facts;
 mod golden;
 mod harness;
+mod harness_kinds;
 mod inputs;
 mod io;
 mod io_manifests;

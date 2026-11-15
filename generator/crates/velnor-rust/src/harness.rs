@@ -3,7 +3,9 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CustomHarness, RepoView, RustCiConfig, RustMember, RustPackage, TargetKind};
+use velnor_model::{
+    CustomHarness, RepoView, RustCiConfig, RustMember, RustPackage, Target, TargetKind,
+};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
@@ -30,7 +32,7 @@ pub(crate) fn custom_harnesses(
     };
     let manifest =
         table(bytes).map_err(|reason| DetectError::invalid(&package.manifest, reason))?;
-    let defaults = default_features(&manifest);
+    let defaults = enabled_features(&manifest, &requested_by_siblings(view, package));
     let library = manifest
         .get("lib")
         .into_iter()
@@ -57,9 +59,10 @@ pub(crate) fn custom_harnesses(
             || package.name.as_str().replace('-', "_"),
             ToOwned::to_owned,
         );
-        let tested = package.targets.iter().find(|target| {
-            target.name.as_str() == name && target.tests && target.kinds.contains(&kind)
-        });
+        let tested = package
+            .targets
+            .iter()
+            .find(|target| target.name.as_str() == name && target.tests && has_kind(target, kind));
         if let Some(target) = tested {
             let harness = CustomHarness {
                 name: target.name.clone(),
@@ -88,10 +91,34 @@ pub(crate) fn uses_nextest(config: &RustCiConfig, member: &RustMember) -> bool {
         target.tests
             && !member.custom_harnesses.iter().any(|harness| {
                 harness.name == target.name
-                    && target.kinds.contains(&harness.kind)
+                    && has_kind(target, harness.kind)
                     && runs_in_direct_step(config, member, harness)
             })
     })
+}
+
+pub(crate) fn has_kind(target: &Target, kind: TargetKind) -> bool {
+    target.kinds.iter().any(|candidate| {
+        *candidate == kind || (kind == TargetKind::Lib && *candidate == TargetKind::ProcMacro)
+    })
+}
+
+pub(crate) fn selector_id(harness: &CustomHarness) -> String {
+    match harness.kind {
+        TargetKind::Lib | TargetKind::ProcMacro => "lib".to_owned(),
+        kind => format!("{kind:?}:{}", harness.name),
+    }
+}
+
+fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> Vec<String> {
+    view.rust_metadata
+        .values()
+        .flat_map(|metadata| &metadata.members)
+        .filter(|member| member.manifest != package.manifest)
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| dependency.manifest.as_ref() == Some(&package.manifest))
+        .flat_map(|dependency| dependency.features.iter().cloned())
+        .collect()
 }
 
 fn gated_on(entry: &toml::Value, defaults: &BTreeSet<String>) -> bool {
@@ -103,10 +130,11 @@ fn gated_on(entry: &toml::Value, defaults: &BTreeSet<String>) -> bool {
         .all(|feature| feature.as_str().is_some_and(|name| defaults.contains(name)))
 }
 
-fn default_features(manifest: &toml::Table) -> BTreeSet<String> {
+fn enabled_features(manifest: &toml::Table, requested: &[String]) -> BTreeSet<String> {
     let features = manifest.get("features").and_then(toml::Value::as_table);
     let mut enabled = BTreeSet::new();
     let mut pending = vec!["default".to_owned()];
+    pending.extend(requested.iter().cloned());
     while let Some(name) = pending.pop() {
         if !enabled.insert(name.clone()) {
             continue;

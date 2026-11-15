@@ -32,6 +32,7 @@ pub(crate) fn package(
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     manifest: Some(path(manifest)?),
+                    features: Vec::new(),
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
