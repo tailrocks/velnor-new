@@ -172,6 +172,8 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     Ok(())
 }
 
+type Case<'a> = (&'a [&'a str], bool, bool, (bool, bool));
+
 #[test]
 fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
     let changed = |paths: &[&str]| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
@@ -184,7 +186,7 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         deny: true,
         machete: true,
     };
-    let cases: [(&[&str], bool, bool, (bool, bool)); 11] = [
+    let cases: [Case<'_>; 11] = [
         (&["README.md"], false, false, (false, false)),
         (&[], false, false, (false, false)),
         (&["Cargo.lock"], false, true, (true, true)),

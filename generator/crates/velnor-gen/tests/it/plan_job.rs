@@ -143,7 +143,7 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
         .lines()
         .filter(|line| line.contains("cargo test --doc"))
         .collect();
-    assert!(!steps.is_empty());
+    assert_ne!(steps.len(), 0);
     for line in steps {
         assert!(
             line.contains("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"),
