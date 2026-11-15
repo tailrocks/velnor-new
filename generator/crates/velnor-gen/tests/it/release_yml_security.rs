@@ -177,9 +177,12 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
+    let refuse =
+        "! grep -q -e replace_command -e changelog_config release-plz.toml tools/release-plz.toml";
     assert_eq!(
         runs("release-pr")?,
         [
+            refuse.to_owned(),
             format!(
                 "release-plz release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
             ),
@@ -191,6 +194,7 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     assert_eq!(
         runs("tag")?,
         [
+            refuse.to_owned(),
             format!("release-plz release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
             format!("release-plz release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
             "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),

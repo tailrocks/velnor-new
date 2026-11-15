@@ -199,3 +199,22 @@ fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> Test
     assert_eq!(refusal(&files), None);
     Ok(())
 }
+
+#[test]
+fn a_package_entry_that_is_not_a_member_of_its_root_is_refused() {
+    let mut files = files();
+    files.root_members = Some(std::collections::BTreeMap::from([(
+        ".".to_owned(),
+        names(&["other"]),
+    )]));
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::PackageNotInRoot { package, .. }) if package == "app"),
+        "{error:?}"
+    );
+    files.root_members = Some(std::collections::BTreeMap::from([(
+        ".".to_owned(),
+        names(&["app", "other"]),
+    )]));
+    assert_eq!(refusal(&files), None);
+}

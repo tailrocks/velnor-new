@@ -115,6 +115,10 @@ pub enum ReleaseError {
         root: String,
         prefix: String,
     },
+    PackageNotInRoot {
+        root: String,
+        package: String,
+    },
     BinaryTargetMissing {
         package: String,
         bin: String,
@@ -294,6 +298,10 @@ impl ReleaseError {
             Self::InvalidPrBranchPrefix { root, prefix } => write!(
                 f,
                 "{root}/release-plz.toml: pr_branch_prefix {prefix:?} cannot start a Git branch name"
+            ),
+            Self::PackageNotInRoot { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: [[package]] {package} is not a package of the Cargo workspace at {root}"
             ),
             Self::BinaryTargetMissing { package, bin } => write!(
                 f,

@@ -132,6 +132,17 @@ fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), R
     };
     let mut released: BTreeMap<&str, &str> = BTreeMap::new();
     for config in configs {
+        if let Some(known) = members.get(&config.root)
+            && let Some(package) = config
+                .packages
+                .iter()
+                .find(|package| !known.contains(&package.name))
+        {
+            return Err(ReleaseError::PackageNotInRoot {
+                root: config.root.clone(),
+                package: package.name.clone(),
+            });
+        }
         let inherited = members
             .get(&config.root)
             .filter(|_| !config.workspace_tags.is_empty())

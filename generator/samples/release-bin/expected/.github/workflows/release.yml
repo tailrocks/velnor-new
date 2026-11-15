@@ -62,6 +62,8 @@ jobs:
           version: '2026.11.1'
           install_args: 'aqua:release-plz/release-plz'
           cache: false
+      - name: Refuse a release-plz config that runs commands
+        run: '! grep -q -e replace_command -e changelog_config release-plz.toml'
       - id: app
         name: Create the release App token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
@@ -83,6 +85,9 @@ jobs:
     environment: release
     permissions:
       contents: read
+    concurrency:
+      group: release-tag
+      cancel-in-progress: false
     outputs:
       app: '${{ steps.record.outputs.app }}'
     runs-on: ubuntu-latest
@@ -107,6 +112,8 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - name: Refuse a release-plz config that runs commands
+        run: '! grep -q -e replace_command -e changelog_config release-plz.toml'
       - id: app
         name: Create the release App token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0

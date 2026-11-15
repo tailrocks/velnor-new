@@ -195,7 +195,10 @@ fn release_yml_serializes_runs_per_commit_and_never_cancels_a_release() -> TestR
         pr.get("cancel-in-progress").and_then(Node::text),
         Some("false")
     );
-    assert!(tree.at(&["jobs", "tag", "concurrency"]).is_none());
+    let tag = tree
+        .at(&["jobs", "tag", "concurrency"])
+        .ok_or("no tag group")?;
+    assert_eq!(tag.get("group").and_then(Node::text), Some("release-tag"));
     Ok(())
 }
 

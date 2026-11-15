@@ -8,8 +8,8 @@ use velnor_release::ReleasePlan;
 
 use crate::release_binaries::binary_jobs;
 use crate::release_steps::{
-    app_token, checkout, expression, install_tool, label, permissions, release_plz_arguments,
-    release_plz_step, variables,
+    app_token, checkout, expression, install_tool, label, permissions, refuse_commands,
+    release_plz_arguments, release_plz_step, variables,
 };
 use crate::rules::{
     RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, RuleViolation, check_rules,
@@ -151,6 +151,7 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT, 0),
         install_tool(&plan.release_plz_tool),
+        refuse_commands(&plan.roots),
         app_token(&[("contents", "write"), ("pull-requests", "write")]),
     ];
     steps.extend(plan.roots.iter().map(|root| {
@@ -178,6 +179,7 @@ fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob 
         checkout(VERIFIED_COMMIT, 0),
         install_tool(&plan.release_plz_tool),
         install_helper(helper),
+        refuse_commands(&plan.roots),
         app_token(&[("contents", "write"), ("pull-requests", "read")]),
     ];
     let files: Vec<String> = (0..plan.roots.len())
@@ -203,6 +205,10 @@ fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob 
         scopes.push(("id-token", "write"));
     }
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: "release-tag".to_owned(),
+            cancel_in_progress: false,
+        }),
         permissions: permissions(&scopes),
         outputs: plan
             .binaries

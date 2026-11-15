@@ -78,6 +78,21 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
+pub(crate) fn refuse_commands(roots: &[RootPlan]) -> RenderedStep {
+    let files: Vec<String> = roots
+        .iter()
+        .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
+        .collect();
+    RenderedStep {
+        name: "Refuse a release-plz config that runs commands".to_owned(),
+        run: Some(format!(
+            "! grep -q -e replace_command -e changelog_config {}",
+            files.join(" ")
+        )),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn release_plz_step(name: String, run: String) -> RenderedStep {
     RenderedStep {
         name,
