@@ -103,3 +103,13 @@ fn run_without_a_command_is_a_usage_error() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn run_passes_every_argument_after_the_first_separator_to_the_command() {
+    let temp = scratch("separator");
+    let output = run(&temp, &["echo", "clippy", "--", "-D", "warnings", "--help"]);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "clippy -- -D warnings --help\n"
+    );
+}
