@@ -308,14 +308,6 @@ impl ReleaseError {
                 f,
                 "{file}: a cargo proxy or CA override would redirect the crates.io publish token"
             ),
-            Self::CargoConfigInclude { file } => write!(
-                f,
-                "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"
-            ),
-            Self::CargoConfigKeyNotAllowed { file, key } => write!(
-                f,
-                "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
-            ),
             Self::ToolchainFromPath { file } => write!(
                 f,
                 "{file}: a toolchain taken from a path makes rustup run repository code while release-plz holds the release App token"
@@ -360,6 +352,20 @@ impl ReleaseError {
             Self::TagsMayCollide { first, second } => write!(
                 f,
                 "tag patterns {first} and {second} can render the same tag"
+            ),
+            _ => self.fmt_cargo_config(f),
+        }
+    }
+
+    fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CargoConfigInclude { file } => write!(
+                f,
+                "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"
+            ),
+            Self::CargoConfigKeyNotAllowed { file, key } => write!(
+                f,
+                "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
             ),
             _ => Ok(()),
         }
