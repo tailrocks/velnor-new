@@ -37,6 +37,15 @@ impl StorageInitializationImage {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn for_test(runtime_id: &str, source_sha: &str, platform: RunnerPlatform) -> Self {
+        Self {
+            runtime_id: runtime_id.to_owned(),
+            source_sha: source_sha.to_owned(),
+            platform,
+        }
+    }
+
     pub(crate) fn source_sha(&self) -> &str {
         &self.source_sha
     }

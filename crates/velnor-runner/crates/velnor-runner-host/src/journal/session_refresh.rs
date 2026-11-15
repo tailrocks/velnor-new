@@ -7,6 +7,7 @@ use crate::launch::SessionRefreshStartupAuthority;
 use super::Journal;
 use super::connection::storage::in_transaction;
 
+mod interrupted_initialization;
 mod orphan_recovery;
 
 impl Journal {
@@ -27,16 +28,31 @@ impl Journal {
             {
                 return Err(HostError::Journal);
             }
-            connection
-                .execute(
-                    "UPDATE connection_session_refreshes SET state = 'abandoned_uncertain' WHERE state = 'requested'",
-                    (),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            super::execution_authorization::recover_at_startup(connection).await?;
-            orphan_recovery::mark_interrupted_ready_reservations(connection).await?;
-            super::doctor_probe::recover_at_startup(connection).await
+            recover_after_restart(connection).await
+        })
+        .await
+    }
+}
+
+async fn recover_after_restart(connection: &turso::Connection) -> Result<(), HostError> {
+    connection
+        .execute(
+            "UPDATE connection_session_refreshes SET state = 'abandoned_uncertain' WHERE state = 'requested'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::execution_authorization::recover_at_startup(connection).await?;
+    orphan_recovery::mark_interrupted_ready_reservations(connection).await?;
+    interrupted_initialization::mark_interrupted_storage_initializations(connection).await?;
+    super::doctor_probe::recover_at_startup(connection).await
+}
+
+#[cfg(test)]
+impl Journal {
+    pub(crate) async fn recover_after_restart_without_authority(&self) -> Result<(), HostError> {
+        in_transaction(self, async |connection| {
+            recover_after_restart(connection).await
         })
         .await
     }
