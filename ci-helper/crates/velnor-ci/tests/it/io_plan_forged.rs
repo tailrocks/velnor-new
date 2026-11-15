@@ -147,3 +147,26 @@ fn plan_prints_a_setting_with_a_unicode_separator_or_a_legacy_prefix_as_no_comma
         assert_eq!(commands, 0, "{text}");
     }
 }
+
+#[test]
+fn plan_explain_escapes_a_changed_path_in_the_all_header_and_the_unknown_path_lines() {
+    for separator in ["\u{2028}", "\u{85}"] {
+        let repo = plan_repo("forged-header");
+        let changed = format!("unknown/{separator}::error::forged.dat");
+        let output = plan_command(&repo)
+            .args(["plan", "--explain", "--changed"])
+            .arg(&changed)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(text.contains("forged.dat"), "{text}");
+        let commands = text
+            .split([
+                '\n', '\r', '\u{2028}', '\u{2029}', '\u{85}', '\u{b}', '\u{c}',
+            ])
+            .filter(|line| line.trim().starts_with("::"))
+            .count();
+        assert_eq!(commands, 0, "{text}");
+    }
+}
