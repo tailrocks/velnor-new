@@ -18,7 +18,7 @@ jobs:
       checks: read
     steps:
       - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@636c5a35430db307d7df753cf04a247ee84e5a59
+        uses: tailrocks/velnor-new/actions/setup-velnor@46dde57f398db48e54bd2721aa1c7d75a10b28c5
         with:
           version: 0.1.79
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
