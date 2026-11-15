@@ -65,6 +65,8 @@ mod ubuntu_owned_publication;
 mod job_image_candidate_execution_public;
 mod job_image_source_inputs_public;
 
+mod agents_md_public;
+
 mod bounded_test_support;
 
 use velnor_actions_workflow_renderer::RenderError;
