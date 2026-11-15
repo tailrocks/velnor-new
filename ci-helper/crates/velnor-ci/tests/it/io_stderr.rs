@@ -60,3 +60,15 @@ fn a_command_line_error_that_echoes_a_hostile_argument_prints_no_workflow_comman
         "{stderr}"
     );
 }
+
+#[test]
+fn a_command_line_error_that_echoes_a_legacy_command_prefix_prints_no_double_hash_marker() {
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("x ##[error]FORGED")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("FORGED"), "{stderr}");
+    assert!(!stderr.contains("##["), "{stderr}");
+}

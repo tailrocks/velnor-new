@@ -20,7 +20,8 @@ pub fn escape(text: &str, property: bool) -> String {
             }
             other => other.to_string(),
         })
-        .collect()
+        .collect::<String>()
+        .replace("##[", "#%23[")
 }
 
 #[must_use]
