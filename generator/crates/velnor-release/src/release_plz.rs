@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
+use crate::git_ref;
 use crate::hazards::external_command;
 use crate::settings::{Document, Settings};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
@@ -22,6 +23,7 @@ pub(crate) struct RootConfig {
     pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
     pub(crate) workspace_tags: Vec<TagPattern>,
+    pub(crate) workspace_tag: Option<TagPattern>,
 }
 
 fn check_package(
@@ -162,6 +164,12 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             root: root.to_owned(),
         });
     }
+    if !git_ref::is_valid(&format!("refs/heads/{prefix}x")) {
+        return Err(ReleaseError::InvalidPrBranchPrefix {
+            root: root.to_owned(),
+            prefix,
+        });
+    }
     let released = released_packages(root, &document)?;
     let workspace_tags = workspace_tags(root, workspace, released.is_empty())?;
     let mut packages = Vec::new();
@@ -185,6 +193,10 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         publishes_to_crates_io,
         pr_branch_prefix: prefix,
         packages,
+        workspace_tag: workspace_tags
+            .first()
+            .filter(|_| workspace.git_tag_name.is_some())
+            .cloned(),
         workspace_tags,
     })
 }

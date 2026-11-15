@@ -76,7 +76,13 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
         .map(|text| parse("mise.toml", text))
         .collect::<Result<Vec<_>, _>>()?;
     let mise_lock = parse("mise.lock", mise_lock)?;
-    let configured: Vec<_> = mise_tomls.iter().flat_map(release_plz_tools).collect();
+    let mut configured: Vec<(&String, &toml::Value)> = Vec::new();
+    for (key, value) in mise_tomls.iter().flat_map(release_plz_tools) {
+        match configured.iter_mut().find(|(known, _)| *known == key) {
+            Some(slot) => slot.1 = value,
+            None => configured.push((key, value)),
+        }
+    }
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }

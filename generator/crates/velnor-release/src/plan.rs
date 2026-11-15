@@ -8,9 +8,9 @@ use velnor_model::Platform;
 use crate::error::ReleaseError;
 use crate::hazards::credential_provider;
 use crate::mise;
-use crate::release_plz::{Package, RootConfig, read};
-use crate::tag::TagPattern;
-use crate::velnor_config::parse;
+use crate::release_plz::{RootConfig, read};
+use crate::tag::{PACKAGE_WILDCARD, TagPattern};
+use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -18,7 +18,9 @@ pub struct ReleaseFiles {
     pub release_plz_toml: BTreeMap<String, String>,
     pub mise_tomls: Vec<String>,
     pub cargo_configs: BTreeMap<String, String>,
-    pub bin_targets: Option<BTreeSet<(String, String)>>,
+    pub cargo_manifests: Option<BTreeSet<String>>,
+    pub bin_targets: Option<BTreeSet<(String, String, String)>>,
+    pub workflow_names: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
 
@@ -63,22 +65,39 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             packages,
         });
     }
-    let all: Vec<(&str, &Package)> = configs
-        .iter()
-        .flat_map(|config| config.packages.iter().map(|p| (config.root.as_str(), p)))
-        .collect();
-    for (index, (root, package)) in all.iter().enumerate() {
-        for (other_root, other) in &all[index + 1..] {
-            if other.name == package.name {
+    let mut all: Vec<(&str, &TagPattern, Option<&str>)> = Vec::new();
+    for config in configs {
+        let root = config.root.as_str();
+        all.extend(
+            config
+                .packages
+                .iter()
+                .map(|package| (root, &package.tag_pattern, Some(package.name.as_str()))),
+        );
+        all.extend(
+            config
+                .workspace_tag
+                .iter()
+                .filter(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
+                .map(|pattern| (root, pattern, None)),
+        );
+    }
+    for (index, (root, pattern, name)) in all.iter().enumerate() {
+        for (other_root, other_pattern, other_name) in &all[index + 1..] {
+            let same_root = root == other_root;
+            if let (Some(name), Some(other_name)) = (name, other_name)
+                && name == other_name
+            {
                 return Err(ReleaseError::DuplicatePackageName {
-                    package: package.name.clone(),
+                    package: (*name).to_owned(),
                     roots: vec![(*root).to_owned(), (*other_root).to_owned()],
                 });
             }
-            if other.tag_pattern.may_collide(&package.tag_pattern) {
+            let both_listed = name.is_some() && other_name.is_some();
+            if (both_listed || !same_root) && other_pattern.may_collide(pattern) {
                 return Err(ReleaseError::TagsMayCollide {
-                    first: package.tag_pattern.as_str().to_owned(),
-                    second: other.tag_pattern.as_str().to_owned(),
+                    first: pattern.as_str().to_owned(),
+                    second: other_pattern.as_str().to_owned(),
                 });
             }
         }
@@ -106,9 +125,79 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     Ok(())
 }
 
+fn manifest_of(root: &str) -> String {
+    if root == "." {
+        "Cargo.toml".to_owned()
+    } else {
+        format!("{root}/Cargo.toml")
+    }
+}
+
+fn check_reality(config: &VelnorConfig, files: &ReleaseFiles) -> Result<(), ReleaseError> {
+    if let Some(manifests) = &files.cargo_manifests
+        && let Some(root) = config
+            .roots
+            .iter()
+            .find(|root| !manifests.contains(&manifest_of(root)))
+    {
+        return Err(ReleaseError::RootWithoutCargoManifest { root: root.clone() });
+    }
+    if let Some(names) = &files.workflow_names
+        && let Some(unknown) = config.after.iter().find(|name| !names.contains(*name))
+    {
+        return Err(ReleaseError::UnknownWorkflow {
+            name: unknown.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn plan_binaries(
+    config: &VelnorConfig,
+    configs: &[RootConfig],
+    files: &ReleaseFiles,
+) -> Result<Vec<BinaryPlan>, ReleaseError> {
+    let mut binaries = Vec::new();
+    for binary in &config.binaries {
+        let (root, package) = configs
+            .iter()
+            .find_map(|candidate| {
+                candidate
+                    .packages
+                    .iter()
+                    .find(|package| package.name == binary.package)
+                    .map(|package| (candidate.root.clone(), package))
+            })
+            .ok_or_else(|| ReleaseError::BinaryNotReleased {
+                package: binary.package.clone(),
+            })?;
+        if let Some(targets) = &files.bin_targets
+            && !targets.contains(&(
+                manifest_of(&root),
+                binary.package.clone(),
+                binary.bin.clone(),
+            ))
+        {
+            return Err(ReleaseError::BinaryTargetMissing {
+                package: binary.package.clone(),
+                bin: binary.bin.clone(),
+            });
+        }
+        binaries.push(BinaryPlan {
+            package: binary.package.clone(),
+            bin: binary.bin.clone(),
+            root,
+            platforms: binary.platforms.clone(),
+            tag_pattern: package.tag_pattern.clone(),
+        });
+    }
+    Ok(binaries)
+}
+
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
+        check_reality(&config, files)?;
         let mut configs = Vec::new();
         for root in &config.roots {
             let text = files
@@ -124,36 +213,7 @@ impl ReleasePlan {
                 credential_provider(file, text)?;
             }
         }
-        let mut binaries = Vec::new();
-        for binary in &config.binaries {
-            let (root, package) = configs
-                .iter()
-                .find_map(|candidate| {
-                    candidate
-                        .packages
-                        .iter()
-                        .find(|package| package.name == binary.package)
-                        .map(|package| (candidate.root.clone(), package))
-                })
-                .ok_or_else(|| ReleaseError::BinaryNotReleased {
-                    package: binary.package.clone(),
-                })?;
-            if let Some(targets) = &files.bin_targets
-                && !targets.contains(&(binary.package.clone(), binary.bin.clone()))
-            {
-                return Err(ReleaseError::BinaryTargetMissing {
-                    package: binary.package.clone(),
-                    bin: binary.bin.clone(),
-                });
-            }
-            binaries.push(BinaryPlan {
-                package: binary.package.clone(),
-                bin: binary.bin.clone(),
-                root,
-                platforms: binary.platforms.clone(),
-                tag_pattern: package.tag_pattern.clone(),
-            });
-        }
+        let binaries = plan_binaries(&config, &configs, files)?;
         Ok(ReleasePlan {
             roots: configs
                 .into_iter()

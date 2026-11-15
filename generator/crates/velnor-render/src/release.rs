@@ -75,7 +75,8 @@ pub fn render_release(
 
 fn trigger(plan: &ReleasePlan) -> Yaml {
     let names = |items: &[&str]| Yaml::Seq(items.iter().map(|item| text(item)).collect());
-    let after: Vec<&str> = plan.after.iter().map(String::as_str).collect();
+    let after: Vec<String> = plan.after.iter().map(|name| escape_filter(name)).collect();
+    let after: Vec<&str> = after.iter().map(String::as_str).collect();
     Yaml::Map(vec![entry(
         "workflow_run",
         Yaml::Noted(
@@ -86,6 +87,15 @@ fn trigger(plan: &ReleasePlan) -> Yaml {
             ])),
         ),
     )])
+}
+
+fn escape_filter(name: &str) -> String {
+    name.chars()
+        .flat_map(|ch| {
+            let escaped = matches!(ch, '\\' | '*' | '?' | '+' | '[' | ']' | '!');
+            escaped.then_some('\\').into_iter().chain([ch])
+        })
+        .collect()
 }
 
 fn gate(runner: &str, helper: &HelperRelease) -> RenderedJob {

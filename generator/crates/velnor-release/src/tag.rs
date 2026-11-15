@@ -63,8 +63,10 @@ pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
     let example = out
         .replace(VERSION, "0")
         .replace(PACKAGE_WILDCARD, "package");
-    (is_plain(&example) && git_ref::is_valid(&format!("refs/tags/{example}")))
-        .then_some(TagPattern(out))
+    (out.contains(VERSION)
+        && is_plain(&example)
+        && git_ref::is_valid(&format!("refs/tags/{example}")))
+    .then_some(TagPattern(out))
 }
 
 fn is_plain(text: &str) -> bool {

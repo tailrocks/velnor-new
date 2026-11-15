@@ -78,6 +78,28 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
 }
 
 #[test]
+fn an_after_name_that_no_workflow_has_is_refused_when_rendering() {
+    let rendered = render(
+        &[crate::release_fixture::APP],
+        Some("after = [\"Rust CI\", \"Linter\"]\n"),
+    );
+    assert!(
+        rendered
+            .err()
+            .is_some_and(|error| error.to_string().contains("Linter"))
+    );
+}
+
+#[test]
+fn a_root_without_a_tracked_cargo_manifest_is_refused_when_rendering() {
+    let rendered = render(
+        &[crate::release_fixture::APP],
+        Some("roots = [\".\", \"gone\"]\n"),
+    );
+    assert!(rendered.is_err());
+}
+
+#[test]
 fn release_yml_installs_the_release_plz_tool_key_that_mise_toml_and_the_lock_name() -> TestResult {
     let (_, tree) = two_binaries()?;
     for id in ["release-pr", "tag"] {
@@ -109,4 +131,32 @@ fn a_binary_whose_bin_target_does_not_exist_is_refused_when_rendering() {
             .err()
             .is_some_and(|error| error.to_string().contains("nope"))
     );
+}
+
+#[test]
+fn a_workflow_name_with_filter_characters_is_escaped_in_the_trigger() -> TestResult {
+    use velnor_gen::expected_files;
+    use velnor_model::{RELEASE_WORKFLOW_PATH, RepoPath};
+
+    let mut view = crate::release_fixture::release_view(
+        &[crate::release_fixture::APP],
+        Some("after = [\"Build+Test\", \"checks[linux]\"]\n"),
+    )?;
+    for (file, name) in [("build", "Build+Test"), ("checks", "checks[linux]")] {
+        view.files.insert(
+            RepoPath::new(format!(".github/workflows/{file}.yml"))?,
+            format!("name: {name}\non: push\n").into_bytes(),
+        );
+    }
+    let text = expected_files(&view)?
+        .remove(&RELEASE_WORKFLOW_PATH)
+        .ok_or("no release.yml")?;
+    let tree = crate::yaml_tree::parse(&text)?;
+    assert_eq!(
+        tree.at(&["on", "workflow_run", "workflows"])
+            .ok_or("no workflows")?
+            .texts(),
+        ["Build\\+Test", "checks\\[linux\\]"]
+    );
+    Ok(())
 }

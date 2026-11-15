@@ -15,6 +15,7 @@ use crate::GenerateError;
 pub(crate) fn release_workflow(
     view: &RepoView,
     facts: &RepoFacts,
+    generated: &BTreeMap<RepoPath, String>,
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
@@ -23,8 +24,9 @@ pub(crate) fn release_workflow(
         .helper
         .as_ref()
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
+    let reality = Reality { facts, generated };
     let plan =
-        ReleasePlan::read(&release_files(view, Some(facts))?).map_err(GenerateError::Release)?;
+        ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
     render_release(&plan, facts.config.runner.as_str(), helper).map_err(GenerateError::Rules)
 }
 
@@ -36,26 +38,70 @@ pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     Ok(ruleset_json(&plan))
 }
 
-fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String)> {
+struct Reality<'a> {
+    facts: &'a RepoFacts,
+    generated: &'a BTreeMap<RepoPath, String>,
+}
+
+fn cargo_manifests(facts: &RepoFacts) -> BTreeSet<String> {
     facts
         .rust_roots
         .iter()
-        .flat_map(|root| &root.members)
-        .flat_map(|member| {
-            member
-                .targets
-                .iter()
-                .filter(|target| {
-                    target.kinds.contains(&TargetKind::Bin) && !target.requires_features
-                })
-                .map(|target| (member.name.to_string(), target.name.to_string()))
+        .flat_map(|root| {
+            std::iter::once(root.manifest.to_string()).chain(
+                root.members
+                    .iter()
+                    .map(|member| member.manifest.to_string()),
+            )
         })
         .collect()
 }
 
+fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
+    let mut found = BTreeSet::new();
+    for root in &facts.rust_roots {
+        for member in &root.members {
+            for target in &member.targets {
+                if target.kinds.contains(&TargetKind::Bin) && !target.requires_features {
+                    for manifest in [&root.manifest, &member.manifest] {
+                        found.insert((
+                            manifest.to_string(),
+                            member.name.to_string(),
+                            target.name.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    found
+}
+
+fn workflow_name(text: &str) -> Option<String> {
+    text.lines()
+        .find_map(|line| line.strip_prefix("name:"))
+        .map(|name| name.trim().trim_matches(['"', '\'']).to_owned())
+}
+
+fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {
+    let tracked = view
+        .files
+        .iter()
+        .filter(|(path, _)| {
+            let name = path.as_str();
+            name.starts_with(".github/workflows/")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        })
+        .filter_map(|(_, bytes)| workflow_name(&String::from_utf8_lossy(bytes)));
+    let made = generated.values().filter_map(|text| workflow_name(text));
+    tracked.chain(made).collect()
+}
+
 fn release_files(
     view: &RepoView,
-    facts: Option<&RepoFacts>,
+    reality: Option<&Reality<'_>>,
 ) -> Result<ReleaseFiles, GenerateError> {
     let text = |path: &RepoPath| -> Result<Option<String>, GenerateError> {
         view.files
@@ -95,7 +141,9 @@ fn release_files(
         release_plz_toml,
         mise_tomls,
         cargo_configs,
-        bin_targets: facts.map(bin_targets),
+        bin_targets: reality.map(|known| bin_targets(known.facts)),
+        cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
+        workflow_names: reality.map(|known| workflow_names(view, known.generated)),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

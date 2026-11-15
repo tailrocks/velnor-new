@@ -46,10 +46,6 @@ pub enum ReleaseError {
         bin: String,
     },
     EmptyAfter,
-    ExpressionInValue {
-        key: String,
-        value: String,
-    },
     EmptyRoots,
     EmptyPlatforms {
         package: String,
@@ -111,9 +107,23 @@ pub enum ReleaseError {
     ReleasePlzSource {
         key: String,
     },
+    ExpressionInValue {
+        key: String,
+        value: String,
+    },
+    InvalidPrBranchPrefix {
+        root: String,
+        prefix: String,
+    },
     BinaryTargetMissing {
         package: String,
         bin: String,
+    },
+    RootWithoutCargoManifest {
+        root: String,
+    },
+    UnknownWorkflow {
+        name: String,
     },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
@@ -199,10 +209,6 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
             ),
-            Self::ExpressionInValue { key, value } => write!(
-                f,
-                ".velnor/release.toml: {key} {value:?} contains \"${{{{\", which GitHub Actions would evaluate as an expression"
-            ),
             Self::EmptyAfter => write!(
                 f,
                 ".velnor/release.toml: after must name at least one non-blank workflow"
@@ -273,9 +279,25 @@ impl ReleaseError {
                 f,
                 "mise.toml: tool {key} is not release-plz from its release-plz/release-plz source, or sets options other than version"
             ),
+            Self::RootWithoutCargoManifest { root } => write!(
+                f,
+                ".velnor/release.toml: root {root} has no tracked Cargo.toml"
+            ),
+            Self::UnknownWorkflow { name } => write!(
+                f,
+                ".velnor/release.toml: after names workflow {name:?}, which no tracked or generated workflow has as its name"
+            ),
+            Self::ExpressionInValue { key, value } => write!(
+                f,
+                ".velnor/release.toml: {key} {value:?} contains \"${{{{\", which GitHub Actions would evaluate as an expression"
+            ),
+            Self::InvalidPrBranchPrefix { root, prefix } => write!(
+                f,
+                "{root}/release-plz.toml: pr_branch_prefix {prefix:?} cannot start a Git branch name"
+            ),
             Self::BinaryTargetMissing { package, bin } => write!(
                 f,
-                ".velnor/release.toml: package {package} has no binary target {bin} that builds without extra features"
+                ".velnor/release.toml: package {package} has no binary target {bin} that builds without extra features in its release root"
             ),
             Self::DuplicatePackageName { package, roots } => write!(
                 f,

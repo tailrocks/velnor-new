@@ -4,7 +4,7 @@ on:
   # jactionlint ignore=dangerous-triggers
   workflow_run:
     workflows:
-      - CI
+      - Rust CI
       - Qualification
     types:
       - completed

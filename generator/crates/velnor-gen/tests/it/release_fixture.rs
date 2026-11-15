@@ -117,6 +117,10 @@ pub(crate) fn release_view(
         RepoPath::new("mise.lock")?,
         b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_vec(),
     );
+    view.files.insert(
+        RepoPath::new(".github/workflows/lint.yml")?,
+        b"name: Lint\non: push\n".to_vec(),
+    );
     if let Some(text) = release_toml {
         view.files
             .insert(RELEASE_CONFIG_PATH, text.as_bytes().to_vec());

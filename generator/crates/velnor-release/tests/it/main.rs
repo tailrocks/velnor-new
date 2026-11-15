@@ -6,5 +6,6 @@ mod defaults;
 mod expressions;
 mod fixture;
 mod hardening;
+mod refs;
 mod refusals;
 mod sources;
