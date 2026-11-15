@@ -4,6 +4,7 @@
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ import unittest
 ACTION = Path(__file__).resolve().parent.parent / "actions" / "setup-velnor" / "action.yml"
 RELEASE_URL = "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64"
 PAYLOAD = b"the released velnor-ci binary\n"
+DIGEST_TOOLS = ("sha256sum", "shasum")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv")
 
 STUB_CURL = """#!/bin/sh
 printf '%s\\n' "$*" >> "$STUB_LOG"
@@ -54,13 +57,13 @@ class SetupVelnorInstallTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        root = Path(temp.name)
-        self.stub_bin = root / "stub-bin"
-        self.runner_temp = root / "runner-temp"
-        self.tool_cache = root / "tool-cache"
-        self.github_path = root / "github-path"
-        self.stub_log = root / "curl-calls.log"
-        self.payload = root / "payload"
+        self.root = Path(temp.name)
+        self.stub_bin = self.root / "stub-bin"
+        self.runner_temp = self.root / "runner-temp"
+        self.tool_cache = self.root / "tool-cache"
+        self.github_path = self.root / "github-path"
+        self.stub_log = self.root / "curl-calls.log"
+        self.payload = self.root / "payload"
         for directory in (self.stub_bin, self.runner_temp, self.tool_cache):
             directory.mkdir()
         self.github_path.touch()
@@ -69,9 +72,25 @@ class SetupVelnorInstallTests(unittest.TestCase):
         curl.write_text(STUB_CURL)
         curl.chmod(0o755)
 
-    def install(self, expected_digest):
+    def path_with(self, digest_tool):
+        if shutil.which(digest_tool) is None:
+            self.skipTest(f"{digest_tool} is not installed")
+        bin_dir = self.root / f"path-{digest_tool}"
+        bin_dir.mkdir()
+        for name in (*SCRIPT_TOOLS, digest_tool):
+            (bin_dir / name).symlink_to(shutil.which(name))
+        (bin_dir / "curl").symlink_to(self.stub_bin / "curl")
+        return str(bin_dir)
+
+    def reset(self):
+        shutil.rmtree(self.tool_cache)
+        self.tool_cache.mkdir()
+        self.stub_log.unlink(missing_ok=True)
+        self.github_path.write_text("")
+
+    def install(self, expected_digest, path=None):
         env = {
-            "PATH": f"{self.stub_bin}{os.pathsep}{os.environ['PATH']}",
+            "PATH": path or f"{self.stub_bin}{os.pathsep}{os.environ['PATH']}",
             "VERSION": "0.1.79",
             "SHA256_LINUX_X64": expected_digest,
             "SHA256_LINUX_ARM64": "",
@@ -102,14 +121,17 @@ class SetupVelnorInstallTests(unittest.TestCase):
 
     def test_a_binary_whose_sha256_differs_from_the_pinned_one_is_refused(self):
         wrong_digest = hashlib.sha256(b"some other binary").hexdigest()
-        result = self.install(wrong_digest)
-        self.assertEqual(result.returncode, 1, result.output)
-        self.assertIn("SHA-256 mismatch for velnor-ci 0.1.79 linux-x64", result.output)
-        self.assertIn("velnor-ci was not installed", result.output)
-        self.assertEqual(len(self.curl_calls()), 1)
-        self.assertTrue(self.curl_calls()[0].endswith(RELEASE_URL), self.curl_calls())
-        self.assertEqual(installed_files(self.tool_cache), [], result.output)
-        self.assertEqual(self.github_path.read_text(), "")
+        for tool in DIGEST_TOOLS:
+            with self.subTest(tool=tool):
+                self.reset()
+                result = self.install(wrong_digest, self.path_with(tool))
+                self.assertEqual(result.returncode, 1, result.output)
+                self.assertIn("SHA-256 mismatch for velnor-ci 0.1.79 linux-x64", result.output)
+                self.assertIn("velnor-ci was not installed", result.output)
+                self.assertEqual(len(self.curl_calls()), 1)
+                self.assertTrue(self.curl_calls()[0].endswith(RELEASE_URL), self.curl_calls())
+                self.assertEqual(installed_files(self.tool_cache), [], result.output)
+                self.assertEqual(self.github_path.read_text(), "")
 
     def test_a_cached_binary_whose_sha256_differs_is_not_used(self):
         cached = self.tool_cache / "velnor-ci" / "0.1.79" / "x64" / "velnor-ci"
@@ -122,12 +144,15 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(cached.read_bytes(), PAYLOAD)
 
     def test_a_binary_with_the_pinned_sha256_is_installed_and_put_on_path(self):
-        result = self.install(hashlib.sha256(PAYLOAD).hexdigest())
-        self.assertEqual(result.returncode, 0, result.output)
-        installed = self.tool_cache / "velnor-ci" / "0.1.79" / "x64" / "velnor-ci"
-        self.assertEqual(installed.read_bytes(), PAYLOAD)
-        bin_dir = Path(self.github_path.read_text().strip())
-        self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
+        for tool in DIGEST_TOOLS:
+            with self.subTest(tool=tool):
+                self.reset()
+                result = self.install(hashlib.sha256(PAYLOAD).hexdigest(), self.path_with(tool))
+                self.assertEqual(result.returncode, 0, result.output)
+                installed = self.tool_cache / "velnor-ci" / "0.1.79" / "x64" / "velnor-ci"
+                self.assertEqual(installed.read_bytes(), PAYLOAD)
+                bin_dir = Path(self.github_path.read_text().strip())
+                self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
 
 
 if __name__ == "__main__":
