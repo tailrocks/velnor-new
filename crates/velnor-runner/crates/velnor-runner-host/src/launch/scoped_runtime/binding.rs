@@ -15,7 +15,7 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
     reservation_id: i64,
     context: ScopedPrepareContext<'_, P>,
 ) -> ScopedRuntimeOutcome {
-    let cleaned = Box::pin(
+    let cleaned = match Box::pin(
         super::super::bootstrap::remove_bootstrap_after_terminal_failure(
             context.docker,
             context.scoped,
@@ -27,7 +27,13 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
         ),
     )
     .await
-    .unwrap_or(false);
+    {
+        Ok(cleaned) => cleaned,
+        Err(cleanup) => {
+            eprintln!("{}", super::cleanup_failure_line(reservation_id, cleanup));
+            false
+        }
+    };
     super::pending(
         prepared,
         Some(network),

@@ -89,3 +89,35 @@ async fn an_empty_drain_succeeds_and_stray_output_is_a_frame_error() {
     };
     assert_eq!(drain(vec![Ok(stray)]).await, Err(HostError::Frame));
 }
+
+#[tokio::test]
+async fn a_helper_message_split_across_frames_is_reported_whole()
+-> Result<(), Box<dyn std::error::Error>> {
+    let text = failure(
+        &read(vec![
+            Ok(stderr(b"resource probe: ")),
+            Ok(stderr(b"helper_source_revision_")),
+            Ok(stderr(b"missing_invalid\n")),
+        ])
+        .await,
+    )?;
+    assert!(
+        text.contains("helper_source_revision_missing_invalid"),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_empty_stderr_frame_is_not_a_helper_failure() -> Result<(), HostError> {
+    assert_eq!(drain(vec![Ok(stderr(b""))]).await, Ok(()));
+    let line = read(vec![
+        Ok(stderr(b"")),
+        Ok(LogOutput::StdOut {
+            message: b"{}\n".to_vec().into(),
+        }),
+    ])
+    .await?;
+    assert_eq!(line, b"{}\n");
+    Ok(())
+}
