@@ -260,10 +260,22 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(sent.success());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap_or_else(|e| unreachable!("{e}")) {
+            break Some(status);
+        }
+        if std::time::Instant::now() >= deadline {
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    if status.is_none() {
+        child.kill().ok();
+    }
+    assert_eq!(status.and_then(|status| status.code()), Some(5));
     assert_eq!(
         lines.next().and_then(Result::ok).as_deref(),
         Some("got-term")
     );
-    let status = child.wait().unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(status.code(), Some(5));
 }
