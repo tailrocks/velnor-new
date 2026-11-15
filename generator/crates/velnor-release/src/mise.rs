@@ -65,6 +65,44 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
+const RELEASE_PLZ_DOWNLOAD: &str = "https://github.com/release-plz/release-plz/releases/download/";
+const RELEASE_PLZ_ASSET: &str =
+    "https://api.github.com/repos/release-plz/release-plz/releases/assets/";
+
+fn plain_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment != "."
+        && segment != ".."
+        && segment
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'+' | b'-'))
+}
+
+fn own_download(url: &str) -> bool {
+    if let Some(rest) = url.strip_prefix(RELEASE_PLZ_DOWNLOAD) {
+        let mut segments = rest.split('/');
+        return matches!(
+            (segments.next(), segments.next(), segments.next()),
+            (Some(tag), Some(asset), None) if plain_segment(tag) && plain_segment(asset)
+        );
+    }
+    url.strip_prefix(RELEASE_PLZ_ASSET)
+        .is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn foreign_artifact(value: &toml::Value) -> Option<String> {
+    match value {
+        toml::Value::Array(items) => items.iter().find_map(foreign_artifact),
+        toml::Value::Table(table) => table.iter().find_map(|(key, inner)| match inner {
+            toml::Value::String(url) if matches!(key.as_str(), "url" | "url_api") => {
+                (!own_download(url)).then(|| url.clone())
+            }
+            other => foreign_artifact(other),
+        }),
+        _ => None,
+    }
+}
+
 fn redirecting_key(table: &Table) -> Option<&'static str> {
     if table.contains_key("plugins") {
         return Some("plugins");
@@ -118,6 +156,12 @@ pub(crate) fn check(
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };
+        if let Some(url) = foreign_artifact(entry) {
+            return Err(ReleaseError::ReleasePlzArtifactElsewhere {
+                tool: key.clone(),
+                url,
+            });
+        }
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
         let matches = !wanted.is_empty()

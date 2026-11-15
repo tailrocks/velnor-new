@@ -2,78 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cli;
+mod error;
 pub mod io;
 mod release;
+
+pub use error::GenerateError;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
 
 use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
-use velnor_release::ReleaseError;
-use velnor_render::{Owner, RuleViolation, owner_of, render};
-use velnor_rust::{
-    DetectError, METADATA_PATH, MetadataFileError, check_required_check, check_tools, detect,
-    metadata_file, plan,
-};
+use velnor_render::{Owner, owner_of, render};
+use velnor_rust::{METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan};
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GenerateError {
-    Detect(DetectError),
-    IncompatibleHelper(HelperVersion),
-    Release(ReleaseError),
-    ReleaseFileNotUtf8(RepoPath),
-    ReleaseRootWithoutCargoToml(String),
-    HelperNotPinned,
-    Metadata(MetadataFileError),
-    ReleasePackageNotInRoot { root: String, package: String },
-    Rules(Vec<RuleViolation>),
-}
-
-impl fmt::Display for GenerateError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Detect(error) => error.fmt(f),
-            Self::IncompatibleHelper(version) => write!(
-                f,
-                "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
-                COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
-            ),
-            Self::Release(error) => error.fmt(f),
-            Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
-            Self::ReleaseRootWithoutCargoToml(root) => write!(
-                f,
-                ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
-            ),
-            Self::HelperNotPinned => f.write_str(
-                "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
-            ),
-            Self::Metadata(error) => error.fmt(f),
-            Self::ReleasePackageNotInRoot { root, package } => write!(
-                f,
-                "release-plz.toml in {root:?} releases package {package:?}, which is not a member of that Cargo root"
-            ),
-            Self::Rules(violations) => {
-                f.write_str("the generated workflow breaks the YAML rules:")?;
-                for violation in violations {
-                    write!(f, "\n  {violation}")?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-impl std::error::Error for GenerateError {}
-
-impl From<DetectError> for GenerateError {
-    fn from(error: DetectError) -> Self {
-        Self::Detect(error)
-    }
-}
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
