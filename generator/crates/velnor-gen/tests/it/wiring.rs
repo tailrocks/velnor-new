@@ -270,3 +270,17 @@ fn a_one_job_workflow_that_skips_drafts_still_lints_them() -> TestResult {
     assert!(step(&job, "Test").join("\n").contains(draft), "{job}");
     Ok(())
 }
+
+#[test]
+fn the_inputs_audit_runs_only_where_one_job_has_built_every_cargo_root() -> TestResult {
+    let config = Some(b"on_main = \"everything\"\n".as_slice());
+    let single = text(&view(&["Cargo.toml"], config)?)?;
+    assert_eq!(
+        single.matches("run: velnor-ci inputs audit").count(),
+        1,
+        "{single}"
+    );
+    let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], config)?)?;
+    assert!(!lanes.contains("inputs audit"), "{lanes}");
+    Ok(())
+}

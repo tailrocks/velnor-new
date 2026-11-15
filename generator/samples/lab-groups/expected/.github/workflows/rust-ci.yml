@@ -212,9 +212,6 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
           DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
-      - name: velnor-ci inputs audit
-        if: '${{ github.event_name == ''schedule'' }}'
-        run: velnor-ci inputs audit
   rust-test-default-root:
     needs:
       - rust-plan
@@ -407,9 +404,6 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           overwrite: true
-      - name: velnor-ci inputs audit
-        if: '${{ github.event_name == ''schedule'' }}'
-        run: velnor-ci inputs audit
   rust-test-default-lab:
     needs:
       - rust-plan

@@ -92,6 +92,9 @@ impl RootJobs<'_> {
     }
 
     fn audit(&self) -> Option<Step> {
+        if self.facts.rust_roots.len() != 1 {
+            return None;
+        }
         let when = match (self.facts.config.on_main, &self.facts.config.full_run) {
             (OnMain::Everything, _) => When::ScheduledOrPush,
             (OnMain::Affected, FullRun::Off) => return None,
