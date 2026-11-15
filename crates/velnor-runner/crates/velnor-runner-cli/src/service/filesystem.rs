@@ -9,9 +9,10 @@ use super::quarantine::{
     path_matches_file, quarantine_remove, safe_plist_metadata,
 };
 use super::staging::PrivateDirectory;
+use crate::state_directory::create_private_dir_all;
 
 pub(super) fn write_plist(binary: &Path, state: &Path, path: &Path, logs: &Path) -> bool {
-    if std::fs::create_dir_all(state).is_err() {
+    if create_private_dir_all(state).is_err() {
         return false;
     }
     let Some(body) = render_plist(binary, state, logs) else {
@@ -130,5 +131,38 @@ fn verify_or_quarantine_published(
             | QuarantineOutcome::Recovery(_) => {}
         }
         Err(std::io::Error::from(std::io::ErrorKind::InvalidData))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::write_plist;
+
+    fn mode(path: &Path) -> std::io::Result<u32> {
+        Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
+    }
+
+    #[test]
+    fn install_creates_a_missing_state_folder_private_and_keeps_its_parent_mode()
+    -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let parent = root.join("parent");
+        std::fs::create_dir(&parent)?;
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755))?;
+        let state = parent.join("state");
+        let written = write_plist(
+            &root.join("velnor-host"),
+            &state,
+            &root.join("LaunchAgents").join("host.plist"),
+            &root.join("logs"),
+        );
+        assert!(written);
+        assert_eq!(mode(&state)?, 0o700);
+        assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
     }
 }
