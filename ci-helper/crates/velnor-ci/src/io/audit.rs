@@ -94,7 +94,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         .zip(&audit.built)
         .map(|(workspace, built)| {
             if gated {
-                platforms(&workspace.workspace_root, &built.placed)
+                platforms(&workspace.workspace_root, built)
             } else {
                 Ok(Platforms::default())
             }

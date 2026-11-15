@@ -197,6 +197,18 @@ fn an_ordinary_edge_that_holds_for_no_built_platform_needs_no_host_units() {
 }
 
 #[test]
+fn a_built_target_rustc_cannot_name_keeps_its_ordinary_edges_active() {
+    needs_the_host_units_of_lib(&behind_a_target_edge("rust/target/custom-spec/debug"));
+}
+
+#[test]
+fn a_target_folder_with_no_current_unit_adds_no_platform() {
+    let repo = behind_a_target_edge(TRIPLE);
+    unit(&repo, "rust/target/x86_64-pc-windows-gnu/CACHEDIR.TAG", "");
+    passes(&repo);
+}
+
+#[test]
 fn the_rustc_the_environment_selects_is_the_one_queried() {
     let repo = direct(INACTIVE);
     let shims = repo.root().join("env-shims");

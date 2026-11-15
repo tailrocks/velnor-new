@@ -12,7 +12,7 @@ use velnor_model::PackageName;
 use velnor_rust::normalize;
 
 use super::audit::Audit;
-use crate::coverage::{Fingerprint, HOST, UnitKind};
+use crate::coverage::{Built, Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
 use crate::platform::{Platform, Platforms};
 
@@ -195,19 +195,24 @@ fn rustc() -> OsString {
         .unwrap_or_else(|| OsString::from("rustc"))
 }
 
-pub(super) fn platforms(root: &Path, directories: &BTreeSet<String>) -> Result<Platforms, CiError> {
-    let targets = directories
+pub(super) fn platforms(root: &Path, built: &Built) -> Result<Platforms, CiError> {
+    let targets = built
+        .units
         .iter()
-        .filter_map(|triple| {
-            let output = Command::new(rustc())
+        .filter_map(|unit| unit.configuration.strip_suffix(&format!("/{HOST}")))
+        .filter(|directory| built.placed.contains(*directory))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|triple| {
+            Command::new(rustc())
                 .args(["--print", "cfg", "--target", triple])
                 .current_dir(root)
                 .output()
-                .ok()?;
-            output
-                .status
-                .success()
-                .then(|| Platform::parse(triple, &String::from_utf8_lossy(&output.stdout)))
+                .ok()
+                .filter(|output| output.status.success())
+                .map_or_else(Platform::unknown, |output| {
+                    Platform::parse(triple, &String::from_utf8_lossy(&output.stdout))
+                })
         })
         .collect();
     Ok(Platforms {

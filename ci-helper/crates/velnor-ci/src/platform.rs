@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Platform {
     triple: String,
+    unknown: bool,
     names: BTreeSet<String>,
     pairs: BTreeSet<(String, String)>,
 }
@@ -89,6 +90,14 @@ impl Truth {
 
 impl Platform {
     #[must_use]
+    pub fn unknown() -> Self {
+        Self {
+            unknown: true,
+            ..Self::default()
+        }
+    }
+
+    #[must_use]
     pub fn parse(triple: &str, printed: &str) -> Self {
         let mut platform = Self {
             triple: triple.to_owned(),
@@ -113,6 +122,9 @@ impl Platform {
 
     #[must_use]
     pub fn holds(&self, predicate: &str) -> bool {
+        if self.unknown {
+            return true;
+        }
         let predicate = predicate.trim();
         let Some(rest) = predicate.strip_prefix("cfg(") else {
             return predicate == self.triple;
