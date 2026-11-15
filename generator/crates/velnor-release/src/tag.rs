@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
+use crate::git_ref;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TagPattern(String);
@@ -29,7 +30,9 @@ pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
         rest = &inner[close + 2..];
     }
     out.push_str(rest);
-    is_plain(&out.replace("{{ version }}", "0")).then_some(TagPattern(out))
+    let example = out.replace("{{ version }}", "0");
+    (is_plain(&example) && git_ref::is_valid(&format!("refs/tags/{example}")))
+        .then_some(TagPattern(out))
 }
 
 fn is_plain(text: &str) -> bool {

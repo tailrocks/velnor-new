@@ -297,6 +297,14 @@ fn tag_templates_the_recorder_cannot_consume_are_refused() -> TestResult {
         "releases/{{ package }}/v{{ version }}",
         "{{ package }} v{{ version }}",
         "-{{ package }}{{ version }}",
+        "{{ package }}..v{{ version }}",
+        "{{ package }}.lock",
+        "{{ package }}-v{{ version }}.lock",
+        "{{ package }}@{{ version }}",
+        "{{ package }}-v{{ version }}.",
+        ".{{ package }}-v{{ version }}",
+        "{{ package }}-v{{ version }}/",
+        "{{ package }}//v{{ version }}",
     ] {
         let to = format!("git_tag_name = \"{template}\"");
         let error = plz_refusal("git_tag_name = \"{{ package }}-v{{ version }}\"", &to)?;

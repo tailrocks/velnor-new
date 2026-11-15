@@ -77,6 +77,10 @@ pub enum ReleaseError {
     },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
+    ReleasePlzLockMismatch {
+        configured: String,
+        locked: Vec<String>,
+    },
 }
 
 fn subject(package: Option<&String>) -> String {
@@ -185,6 +189,11 @@ impl ReleaseError {
             }
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
+            Self::ReleasePlzLockMismatch { configured, locked } => write!(
+                f,
+                "mise.toml requests release-plz {configured} but mise.lock locks {}",
+                locked.join(", ")
+            ),
             _ => Ok(()),
         }
     }

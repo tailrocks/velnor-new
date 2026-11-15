@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod error;
+mod git_ref;
 mod mise;
 mod plan;
 mod release_plz;

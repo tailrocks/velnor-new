@@ -64,6 +64,26 @@ fn the_locked_tool_must_be_the_configured_one() {
 }
 
 #[test]
+fn the_locked_version_must_equal_the_configured_one() {
+    let mut stale = files();
+    stale.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.2\"\n".to_owned();
+    assert!(matches!(
+        refusal(&stale),
+        Some(ReleaseError::ReleasePlzLockMismatch { configured, locked })
+            if configured == "0.4.3" && locked == ["0.4.2"]
+    ));
+
+    let mut table = files();
+    table.mise_toml = "[tools.release-plz]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(refusal(&table), None);
+    table.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.2\"\n".to_owned();
+    assert!(matches!(
+        refusal(&table),
+        Some(ReleaseError::ReleasePlzLockMismatch { .. })
+    ));
+}
+
+#[test]
 fn release_config_with_an_empty_after_or_unknown_platform_is_refused() {
     let mut files = files();
     files.release_toml = Some("after = []\n".to_owned());
