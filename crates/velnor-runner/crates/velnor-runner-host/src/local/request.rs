@@ -9,6 +9,8 @@ use crate::worker::{ResourceBudget, ResourceBudgetConfig, WorkerIdentityNames};
 
 const OPERATIONAL_RESERVE_BYTES: u64 = 1024 * 1024 * 1024;
 const RESERVED_NETWORKS: [&str; 4] = ["bridge", "host", "none", "default"];
+const LOCAL_NETWORK_PREFIX: &str = "velnor-local-";
+const PRODUCTION_NETWORK_PREFIX: &str = "velnor-";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,8 +73,12 @@ fn valid_environment(value: &str) -> bool {
 }
 
 fn valid_network(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
     (1..=64).contains(&value.len())
-        && !RESERVED_NETWORKS.contains(&value)
+        && !RESERVED_NETWORKS.contains(&lower.as_str())
+        && !lower.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && (!lower.starts_with(PRODUCTION_NETWORK_PREFIX)
+            || lower.starts_with(LOCAL_NETWORK_PREFIX))
         && value.starts_with(|first: char| first.is_ascii_alphanumeric())
         && value
             .bytes()

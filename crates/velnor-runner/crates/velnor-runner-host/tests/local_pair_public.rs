@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::Write as _;
 
 use bollard::Docker;
-use bollard::models::{ContainerInspectResponse, NetworkCreateRequest};
-use bollard::query_parameters::{
-    BuildImageOptions, ListContainersOptions, ListVolumesOptions, RemoveImageOptions,
-};
-use futures_util::StreamExt;
+use bollard::models::ContainerInspectResponse;
+use bollard::query_parameters::ListVolumesOptions;
 use velnor_runner_host::HostError;
 use velnor_runner_host::local::{
     ENVIRONMENT_LABEL, LocalPairRequest, Removed, remove_pair, start_pair,
 };
 
-type TestResult<T> = Result<T, Box<dyn Error>>;
+#[path = "local_pair_public/support.rs"]
+mod support;
+use support::{Fixture, TestResult, labelled, request};
 
-const BASE: &str =
-    "busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec";
 const TMPFS: [(&str, &str); 2] = [
     (
         "/tmp",
@@ -31,121 +26,60 @@ const TMPFS: [(&str, &str); 2] = [
     ),
 ];
 
-fn docker() -> TestResult<Docker> {
-    let socket =
-        std::env::var("DOCKER_HOST").unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
-    Ok(velnor_runner_host::connect_unix(&socket)?)
+struct Observed {
+    dind: ContainerInspectResponse,
+    runner: ContainerInspectResponse,
+    dind_id: String,
+    label_keys: Vec<String>,
+    removed: Removed,
+    left: (usize, usize),
 }
 
-fn suffix() -> TestResult<String> {
-    let mut bytes = [0_u8; 6];
-    getrandom::fill(&mut bytes).map_err(|error| error.to_string())?;
-    let mut text = String::new();
-    for byte in bytes {
-        write!(text, "{byte:02x}")?;
-    }
-    Ok(text)
-}
-
-fn platform() -> &'static str {
-    if cfg!(target_arch = "aarch64") {
-        "linux/arm64"
-    } else {
-        "linux/amd64"
-    }
-}
-
-async fn build_sleeper(docker: &Docker, tag: &str) -> TestResult<String> {
-    let dockerfile = format!("FROM {BASE}\nCMD [\"sleep\", \"600\"]\n");
-    let mut header = tar::Header::new_ustar();
-    header.set_path("Dockerfile")?;
-    header.set_size(u64::try_from(dockerfile.len())?);
-    header.set_mode(0o644);
-    header.set_cksum();
-    let mut context = tar::Builder::new(Vec::new());
-    context.append(&header, dockerfile.as_bytes())?;
-    let options = BuildImageOptions {
-        dockerfile: "Dockerfile".to_owned(),
-        t: Some(tag.to_owned()),
-        rm: true,
-        ..Default::default()
-    };
-    let mut build = docker.build_image(
-        options,
-        None,
-        Some(bollard::body_full(context.into_inner()?.into())),
-    );
-    while let Some(step) = build.next().await {
-        if let Some(error) = step?.error_detail {
-            return Err(format!("build failed: {error:?}").into());
-        }
-    }
-    docker
-        .inspect_image(tag)
-        .await?
-        .id
-        .ok_or_else(|| "built image has no id".into())
-}
-
-fn request(environment: &str, network: &str, image: &str) -> LocalPairRequest {
-    LocalPairRequest {
-        environment: environment.to_owned(),
-        network: network.to_owned(),
-        platform: platform().to_owned(),
-        runner_image: image.to_owned(),
-        dind_image: image.to_owned(),
-        sequence: 1,
-        runner_cpu_millicores: 1500,
-        runner_memory_bytes: 1_073_741_824,
-        dind_cpu_millicores: 500,
-        dind_memory_bytes: 1_073_741_824,
-    }
-}
-
-async fn labelled(docker: &Docker, environment: &str) -> TestResult<(usize, usize)> {
+async fn volume_label_keys(docker: &Docker, environment: &str) -> TestResult<Vec<String>> {
     let filters = HashMap::from([(
         "label".to_owned(),
         vec![format!("{ENVIRONMENT_LABEL}={environment}")],
     )]);
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true,
-            filters: Some(filters.clone()),
-            ..Default::default()
-        }))
-        .await?;
     let volumes = docker
         .list_volumes(Some(ListVolumesOptions {
             filters: Some(filters),
         }))
         .await?;
-    Ok((containers.len(), volumes.volumes.unwrap_or_default().len()))
+    Ok(volumes
+        .volumes
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|volume| volume.labels.into_keys())
+        .collect())
 }
 
-struct Observed {
-    dind: ContainerInspectResponse,
-    runner: ContainerInspectResponse,
-    dind_id: String,
-    removed: Removed,
-    left: (usize, usize),
+fn container_label_keys(container: &ContainerInspectResponse) -> Vec<String> {
+    container
+        .config
+        .as_ref()
+        .and_then(|config| config.labels.as_ref())
+        .map(|labels| labels.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
-async fn observe_pair(
-    docker: &Docker,
-    environment: &str,
-    network: &str,
-    image: &str,
-) -> TestResult<Observed> {
-    let pair = Box::pin(start_pair(docker, &request(environment, network, image))).await?;
+async fn observe_pair(fixture: &Fixture) -> TestResult<Observed> {
+    let docker = &fixture.docker;
+    let pair = Box::pin(start_pair(docker, &fixture.request())).await?;
     let dind = docker.inspect_container(pair.dind_id(), None).await;
     let runner = docker.inspect_container(pair.runner_id(), None).await;
+    let volume_keys = volume_label_keys(docker, &fixture.environment).await;
     let removed = remove_pair(docker, &pair).await?;
+    let (dind, runner) = (dind?, runner?);
+    let mut label_keys = volume_keys?;
+    label_keys.extend(container_label_keys(&dind));
+    label_keys.extend(container_label_keys(&runner));
     Ok(Observed {
-        dind: dind?,
-        runner: runner?,
+        dind,
+        runner,
         dind_id: pair.dind_id().to_owned(),
+        label_keys,
         removed,
-        left: labelled(docker, environment).await?,
+        left: labelled(docker, &fixture.environment).await?,
     })
 }
 
@@ -187,23 +121,10 @@ fn running(container: &ContainerInspectResponse) -> bool {
 
 #[tokio::test]
 async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() -> TestResult<()> {
-    let docker = docker()?;
-    let suffix = suffix()?;
-    let environment = format!("test-{suffix}");
-    let network = format!("velnor-local-test-{suffix}");
-    let tag = format!("velnor-local-test-sleeper:{suffix}");
-    let image = build_sleeper(&docker, &tag).await?;
-    docker
-        .create_network(NetworkCreateRequest {
-            name: network.clone(),
-            ..Default::default()
-        })
-        .await?;
-    let observed = Box::pin(observe_pair(&docker, &environment, &network, &image)).await;
-    docker.remove_network(&network).await?;
-    docker
-        .remove_image(&tag, None::<RemoveImageOptions>, None)
-        .await?;
+    let fixture = Fixture::new().await?;
+    let network = fixture.network.clone();
+    let observed = Box::pin(observe_pair(&fixture)).await;
+    fixture.finish().await?;
     let observed = observed?;
     let expected_tmpfs = TMPFS
         .iter()
@@ -238,13 +159,27 @@ async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() ->
         }
     );
     assert_eq!(observed.left, (0, 0));
+    assert!(
+        observed
+            .label_keys
+            .iter()
+            .any(|key| key == ENVIRONMENT_LABEL)
+    );
+    assert_eq!(
+        observed
+            .label_keys
+            .iter()
+            .filter(|key| key.starts_with("io.velnor."))
+            .count(),
+        0
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn local_pair_refuses_the_host_network_before_creating_anything() -> TestResult<()> {
-    let docker = docker()?;
-    let environment = format!("test-{}", suffix()?);
+    let docker = support::docker()?;
+    let environment = format!("test-{}", support::suffix()?);
     let refused = Box::pin(start_pair(
         &docker,
         &request(&environment, "host", &format!("sha256:{}", "a".repeat(64))),
@@ -252,5 +187,131 @@ async fn local_pair_refuses_the_host_network_before_creating_anything() -> TestR
     .await;
     assert_eq!(refused, Err(HostError::Config));
     assert_eq!(labelled(&docker, &environment).await?, (0, 0));
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_pair_removal_leaves_another_pair_of_the_environment_intact() -> TestResult<()> {
+    let fixture = Fixture::new().await?;
+    let docker = &fixture.docker;
+    let both = async {
+        let first = Box::pin(start_pair(docker, &fixture.request())).await?;
+        let second = Box::pin(start_pair(docker, &fixture.request())).await?;
+        let before = labelled(docker, &fixture.environment).await?;
+        let removed_first = remove_pair(docker, &first).await?;
+        let between = labelled(docker, &fixture.environment).await?;
+        let second_running = docker
+            .inspect_container(second.runner_id(), None)
+            .await?
+            .state
+            .and_then(|state| state.running);
+        let removed_second = remove_pair(docker, &second).await?;
+        let after = labelled(docker, &fixture.environment).await?;
+        TestResult::Ok((
+            before,
+            removed_first,
+            between,
+            second_running,
+            removed_second,
+            after,
+        ))
+    }
+    .await;
+    fixture.finish().await?;
+    let (before, removed_first, between, second_running, removed_second, after) = both?;
+    let one = Removed {
+        containers: 2,
+        volumes: 5,
+    };
+    assert_eq!(before, (4, 10));
+    assert_eq!(removed_first, one);
+    assert_eq!(between, (2, 5));
+    assert_eq!(second_running, Some(true));
+    assert_eq!(removed_second, one);
+    assert_eq!(after, (0, 0));
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_pair_start_failure_removes_everything_it_created() -> TestResult<()> {
+    let fixture = Fixture::new().await?;
+    let mut failing: LocalPairRequest = fixture.request();
+    failing.runner_image = format!("sha256:{}", "b".repeat(64));
+    let failed = Box::pin(start_pair(&fixture.docker, &failing)).await;
+    let left = labelled(&fixture.docker, &fixture.environment).await;
+    fixture.finish().await?;
+    assert_eq!(failed, Err(HostError::Docker));
+    assert_eq!(left?, (0, 0));
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_pair_refuses_unsafe_requests_without_a_docker_daemon() -> TestResult<()> {
+    let directory = tempfile::tempdir()?;
+    let socket = directory.path().join("docker.sock");
+    drop(std::os::unix::net::UnixListener::bind(&socket)?);
+    let docker = velnor_runner_host::connect_unix(&socket.to_string_lossy())?;
+    let image = format!("sha256:{}", "a".repeat(64));
+    let valid = request("env-one", "velnor-local-net", &image);
+    let mut refused = Vec::new();
+    for network in [
+        "bridge",
+        "none",
+        "default",
+        "host",
+        "Host",
+        "container:abc",
+        "has space",
+        " ",
+        "",
+        "velnor-runner-1-private",
+        "velnor-private",
+        "VELNOR-runner-1-private",
+        "deadbeef",
+        "0123456789abcdef",
+        "ABCDEF",
+    ] {
+        refused.push(LocalPairRequest {
+            network: network.to_owned(),
+            ..valid.clone()
+        });
+    }
+    for image in [
+        "",
+        "sha256:abc",
+        "busybox:latest",
+        &format!("sha256:{}", "A".repeat(64)),
+        &format!("sha256:{}", "a".repeat(65)),
+        &"a".repeat(64),
+    ] {
+        refused.push(LocalPairRequest {
+            runner_image: image.to_owned(),
+            ..valid.clone()
+        });
+        refused.push(LocalPairRequest {
+            dind_image: image.to_owned(),
+            ..valid.clone()
+        });
+    }
+    refused.push(LocalPairRequest {
+        sequence: 0,
+        ..valid.clone()
+    });
+    for budget in 0..4 {
+        let mut zero = valid.clone();
+        match budget {
+            0 => zero.runner_cpu_millicores = 0,
+            1 => zero.runner_memory_bytes = 0,
+            2 => zero.dind_cpu_millicores = 0,
+            _ => zero.dind_memory_bytes = 0,
+        }
+        refused.push(zero);
+    }
+    for request in refused {
+        let outcome = Box::pin(start_pair(&docker, &request)).await;
+        assert_eq!(outcome, Err(HostError::Config), "{request:?}");
+    }
+    let accepted = Box::pin(start_pair(&docker, &valid)).await;
+    assert_eq!(accepted, Err(HostError::Docker));
     Ok(())
 }

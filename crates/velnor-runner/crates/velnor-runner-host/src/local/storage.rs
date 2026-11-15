@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::journal::{
-    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageProvisioningPlan,
-    StorageProvisioningRole, StorageRole,
-};
+use crate::journal::{StorageProvisioningPlan, StorageProvisioningRole, StorageRole};
 
 const MIB: u64 = 1024 * 1024;
 const GIB: u64 = 1024 * MIB;
@@ -40,41 +37,17 @@ pub(super) const fn charge_inodes(role: StorageRole) -> u64 {
 }
 
 pub(super) fn plan(sequence: u32) -> StorageProvisioningPlan {
-    StorageProvisioningPlan {
-        reservation_id: i64::from(sequence),
-        operation_id: i64::from(sequence),
-        engine_id: ENGINE_ID.to_owned(),
-        docker_root_digest: "0".repeat(64),
-        profile_generation_id: ENGINE_ID.to_owned(),
-        profile_digest: "0".repeat(64),
-        sample_generation_id: ENGINE_ID.to_owned(),
-        roles: StorageRole::PHYSICAL.into_iter().map(role).collect(),
-    }
-}
-
-fn role(role: StorageRole) -> StorageProvisioningRole {
-    let tmpfs = on_tmpfs(role);
-    StorageProvisioningRole {
-        role,
-        pool_id: ENGINE_ID.to_owned(),
-        medium: if tmpfs {
-            StorageMedium::Tmpfs
-        } else {
-            StorageMedium::Disk
-        },
-        filesystem_kind: if tmpfs {
-            StorageFilesystemKind::Tmpfs
-        } else {
-            StorageFilesystemKind::Other
-        },
-        inode_policy: if tmpfs {
-            StorageInodePolicy::Finite
-        } else {
-            StorageInodePolicy::Unknown
-        },
-        planned_filesystem_instance_digest: None,
-        charge_bytes: charge_bytes(role),
-        charge_inodes: charge_inodes(role),
-        retained_memory_bytes: if tmpfs { charge_bytes(role) } else { 0 },
-    }
+    let roles = StorageRole::PHYSICAL
+        .into_iter()
+        .map(|role| {
+            StorageProvisioningRole::unreserved(
+                role,
+                ENGINE_ID,
+                on_tmpfs(role),
+                charge_bytes(role),
+                charge_inodes(role),
+            )
+        })
+        .collect();
+    StorageProvisioningPlan::unreserved(i64::from(sequence), ENGINE_ID, roles)
 }

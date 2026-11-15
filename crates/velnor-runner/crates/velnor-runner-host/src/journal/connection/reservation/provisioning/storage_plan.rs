@@ -17,18 +17,51 @@ const EXPECTED_ROLE_COUNT: usize = StorageRole::PHYSICAL.len();
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct StorageProvisioningRole {
-    pub(crate) role: StorageRole,
-    pub(crate) pool_id: String,
-    pub(crate) medium: StorageMedium,
-    pub(crate) filesystem_kind: StorageFilesystemKind,
-    pub(crate) inode_policy: StorageInodePolicy,
-    pub(crate) planned_filesystem_instance_digest: Option<String>,
-    pub(crate) charge_bytes: u64,
-    pub(crate) charge_inodes: u64,
-    pub(crate) retained_memory_bytes: u64,
+    role: StorageRole,
+    pool_id: String,
+    medium: StorageMedium,
+    filesystem_kind: StorageFilesystemKind,
+    inode_policy: StorageInodePolicy,
+    planned_filesystem_instance_digest: Option<String>,
+    charge_bytes: u64,
+    charge_inodes: u64,
+    retained_memory_bytes: u64,
 }
 
 impl StorageProvisioningRole {
+    #[cfg(feature = "local-mode")]
+    pub(crate) fn unreserved(
+        role: StorageRole,
+        pool_id: &str,
+        tmpfs: bool,
+        charge_bytes: u64,
+        charge_inodes: u64,
+    ) -> Self {
+        Self {
+            role,
+            pool_id: pool_id.to_owned(),
+            medium: if tmpfs {
+                StorageMedium::Tmpfs
+            } else {
+                StorageMedium::Disk
+            },
+            filesystem_kind: if tmpfs {
+                StorageFilesystemKind::Tmpfs
+            } else {
+                StorageFilesystemKind::Other
+            },
+            inode_policy: if tmpfs {
+                StorageInodePolicy::Finite
+            } else {
+                StorageInodePolicy::Unknown
+            },
+            planned_filesystem_instance_digest: None,
+            charge_bytes,
+            charge_inodes,
+            retained_memory_bytes: if tmpfs { charge_bytes } else { 0 },
+        }
+    }
+
     pub(crate) const fn role(&self) -> StorageRole {
         self.role
     }
@@ -68,18 +101,36 @@ impl StorageProvisioningRole {
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct StorageProvisioningPlan {
-    pub(crate) reservation_id: i64,
-    pub(crate) operation_id: i64,
+    reservation_id: i64,
+    operation_id: i64,
 
-    pub(crate) engine_id: String,
-    pub(crate) docker_root_digest: String,
-    pub(crate) profile_generation_id: String,
-    pub(crate) profile_digest: String,
-    pub(crate) sample_generation_id: String,
-    pub(crate) roles: Vec<StorageProvisioningRole>,
+    engine_id: String,
+    docker_root_digest: String,
+    profile_generation_id: String,
+    profile_digest: String,
+    sample_generation_id: String,
+    roles: Vec<StorageProvisioningRole>,
 }
 
 impl StorageProvisioningPlan {
+    #[cfg(feature = "local-mode")]
+    pub(crate) fn unreserved(
+        sequence: i64,
+        engine_id: &str,
+        roles: Vec<StorageProvisioningRole>,
+    ) -> Self {
+        Self {
+            reservation_id: sequence,
+            operation_id: sequence,
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: "0".repeat(64),
+            profile_generation_id: engine_id.to_owned(),
+            profile_digest: "0".repeat(64),
+            sample_generation_id: engine_id.to_owned(),
+            roles,
+        }
+    }
+
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }
