@@ -197,7 +197,8 @@ fn policy_job(facts: &RepoFacts) -> Job {
         (facts.policy.deny, CargoCommand::Deny),
         (facts.policy.machete, CargoCommand::Machete),
     ];
-    let mut steps = base_steps(facts);
+    let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
+    steps.extend(tools_steps(facts));
     steps.extend(
         commands
             .into_iter()
@@ -221,10 +222,12 @@ fn base_steps(facts: &RepoFacts) -> Vec<Step> {
             .iter()
             .map(|release| step(StepKind::FetchHelper(release.clone()))),
     );
-    if !facts.tools.tools.is_empty() {
-        steps.push(step(StepKind::InstallTools));
-    }
+    steps.extend(tools_steps(facts));
     steps
+}
+
+fn tools_steps(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools))
 }
 
 fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {

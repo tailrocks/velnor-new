@@ -17,6 +17,7 @@ const EVENTS: &str = r"on:
       - synchronize
       - reopened
       - ready_for_review
+      - edited
   push:
     branches:
       - main
@@ -201,6 +202,7 @@ fn a_root_named_policy_cannot_share_a_job_id_with_the_policy_lane() -> TestResul
 fn a_draft_run_fails_the_verdict_and_a_conversion_to_draft_starts_a_run() -> TestResult {
     let off = with(&[], None)?;
     assert!(!off.contains("converted_to_draft"), "{off}");
+    assert!(off.contains("      - edited\n"), "{off}");
     assert!(!off.contains("draft == true"), "{off}");
     let on = with(&[], Some(b"skip_draft_pull_requests = true\n"))?;
     assert!(on.contains("      - converted_to_draft\n"), "{on}");
@@ -209,5 +211,31 @@ fn a_draft_run_fails_the_verdict_and_a_conversion_to_draft_starts_a_run() -> Tes
         unquoted(verdict).contains("if: ${{ github.event.pull_request.draft == true }}"),
         "{on}"
     );
+    Ok(())
+}
+
+#[test]
+fn the_policy_lane_fetches_no_helper_it_never_runs() -> TestResult {
+    let mut multi = view(&["Cargo.toml"], None)?;
+    for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
+        let path = RepoPath::new(path)?;
+        multi.tracked_paths.insert(path.clone());
+        multi.files.insert(path, text.as_bytes().to_vec());
+    }
+    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+    multi.tracked_paths.insert(lock.clone());
+    multi.files.insert(
+        lock,
+        std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../samples/helper-lock/view/.velnor/rust-ci.lock"),
+        )?,
+    );
+    let text = workflow(&multi)?;
+    assert!(text.contains("Fetch velnor-ci"), "{text}");
+    let policy = text.split("\n  policy:\n").nth(1).unwrap_or_default();
+    let policy = policy.split("\n  required:\n").next().unwrap_or_default();
+    assert!(policy.contains("cargo-deny"), "{policy}");
+    assert!(!policy.contains("Fetch velnor-ci"), "{policy}");
     Ok(())
 }

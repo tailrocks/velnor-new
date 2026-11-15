@@ -30,15 +30,17 @@ pub enum PullRequestType {
     Synchronize,
     Reopened,
     ReadyForReview,
+    Edited,
     ConvertedToDraft,
 }
 
 impl PullRequestType {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Opened,
         Self::Synchronize,
         Self::Reopened,
         Self::ReadyForReview,
+        Self::Edited,
     ];
 }
 

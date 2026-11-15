@@ -81,6 +81,7 @@ fn triggers(triggers: &Triggers) -> Yaml {
                 PullRequestType::Synchronize => "synchronize",
                 PullRequestType::Reopened => "reopened",
                 PullRequestType::ReadyForReview => "ready_for_review",
+                PullRequestType::Edited => "edited",
                 PullRequestType::ConvertedToDraft => "converted_to_draft",
             })
         });

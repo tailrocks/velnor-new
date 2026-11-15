@@ -76,6 +76,7 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+      - edited
   push:
     branches:
       - main
