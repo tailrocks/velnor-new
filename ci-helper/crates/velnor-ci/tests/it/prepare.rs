@@ -41,15 +41,18 @@ struct Run {
 }
 
 fn prepare(name: &str, json: &str) -> Run {
+    prepare_with(name, MISE, &format!("cat <<'EOF'\n{json}\nEOF\n"))
+}
+
+fn prepare_with(name: &str, mise_toml: &str, mise_script: &str) -> Run {
     let dir = scratch(name);
     let checkout = dir.join("checkout");
     fs::create_dir_all(&checkout).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(checkout.join("mise.toml"), MISE).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(checkout.join("mise.toml"), mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
     let bin = dir.join("bin");
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
     let mise = bin.join("mise");
-    fs::write(&mise, format!("#!/bin/sh\ncat <<'EOF'\n{json}\nEOF\n"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&mise, format!("#!/bin/sh\n{mise_script}")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&mise, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
@@ -77,6 +80,13 @@ fn prepare_sets_the_build_profile_and_an_empty_compat_when_every_tool_is_at_its_
         run.env_file,
         "RUSTUP_AUTO_INSTALL=0\nCARGO_INCREMENTAL=0\nCARGO_TERM_COLOR=always\nSOURCE_DATE_EPOCH=0\n"
     );
+    assert_eq!(run.outputs, "compat=\n");
+}
+
+#[test]
+fn prepare_does_not_need_mise_when_no_tool_is_pinned() {
+    let run = prepare_with("empty", "[tools]\n", "echo mise must not run >&2\nexit 1\n");
+    assert!(run.output.status.success(), "{:?}", run.output);
     assert_eq!(run.outputs, "compat=\n");
 }
 

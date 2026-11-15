@@ -225,3 +225,22 @@ fn a_file_cargo_would_discover_as_a_target_after_the_file_was_written_is_refused
     }
     Ok(())
 }
+
+#[test]
+fn a_manifest_without_a_digest_in_the_file_is_refused() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    for manifest in ["Cargo.toml", "core/Cargo.toml", "tool/Cargo.toml"] {
+        let mut value: serde_json::Value = serde_json::from_str(&text)?;
+        value["manifests"]
+            .as_object_mut()
+            .ok_or("manifests")?
+            .remove(manifest);
+        assert_eq!(
+            recorded_metadata(&files, Some(value.to_string().as_bytes())),
+            Err(MetadataFileError::Unlisted(path(manifest)?)),
+            "{manifest}"
+        );
+    }
+    Ok(())
+}

@@ -196,6 +196,11 @@ pub fn recorded_metadata(
             .into_iter()
             .map(package)
             .collect::<Result<Vec<_>, _>>()?;
+        for manifest in std::iter::once(&workspace).chain(members.iter().map(|m| &m.manifest)) {
+            if !file.manifests.contains_key(manifest.as_str()) {
+                return Err(MetadataFileError::Unlisted(manifest.clone()));
+            }
+        }
         known.insert(workspace, RustMetadata { members });
     }
     if file.layout != layout(&view.tracked_paths, known.values()) {

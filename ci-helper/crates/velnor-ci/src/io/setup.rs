@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::thread;
 
 use velnor_gen::io::read_files;
+use velnor_model::ToolPins;
 use velnor_rust::{mise_files, tool_pins};
 
 use super::{append_outputs, append_to, current_dir};
@@ -28,9 +29,18 @@ pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
     let files = read_files(&root, &mise_files()).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
+    if !pins.tools.is_empty() {
+        check_pinned_tools(&root, &pins)?;
+    }
+    append_to(ENV_VARIABLE, &env_lines())?;
+    append_outputs(&output_lines())?;
+    Ok(String::new())
+}
+
+fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
     let output = Command::new("mise")
         .args(["ls", "--current", "--json"])
-        .current_dir(&root)
+        .current_dir(root)
         .output()
         .map_err(|e| CiError::new(format!("cannot run mise: {e}")))?;
     if !output.status.success() {
@@ -40,12 +50,9 @@ pub(super) fn prepare() -> Result<String, CiError> {
         )));
     }
     check_tools(
-        &pins,
+        pins,
         &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
-    )?;
-    append_to(ENV_VARIABLE, &env_lines())?;
-    append_outputs(&output_lines())?;
-    Ok(String::new())
+    )
 }
 
 fn log_path() -> Result<PathBuf, (u8, String)> {
@@ -104,13 +111,14 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let log = Mutex::new(log);
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    thread::scope(|scope| {
-        if let Some(from) = stdout {
-            scope.spawn(|| pump(from, std::io::stdout(), &log));
-        }
-        if let Some(from) = stderr {
-            scope.spawn(|| pump(from, std::io::stderr(), &log));
-        }
+    let pumped = thread::scope(|scope| {
+        let out = stdout.map(|from| scope.spawn(|| pump(from, std::io::stdout(), &log)));
+        let err = stderr.map(|from| scope.spawn(|| pump(from, std::io::stderr(), &log)));
+        [out, err]
+            .into_iter()
+            .flatten()
+            .filter_map(|handle| handle.join().ok().flatten())
+            .next()
     });
     let status = child
         .wait()
@@ -120,6 +128,9 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     writeln!(log, "velnor-ci run: exit {code}").map_err(write_error)?;
+    if let Some(error) = pumped {
+        return Err(write_error(error));
+    }
     Ok(ExitCode::from(u8::try_from(code).unwrap_or(1)))
 }
 
@@ -137,16 +148,25 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
+fn pump(
+    mut from: impl Read,
+    mut to: impl Write,
+    log: &Mutex<std::fs::File>,
+) -> Option<std::io::Error> {
     let mut buffer = [0_u8; CHUNK];
-    while let Ok(read) = from.read(&mut buffer) {
-        if read == 0 {
-            break;
-        }
+    let mut failed = None;
+    loop {
+        let read = match from.read(&mut buffer) {
+            Ok(0) => return failed,
+            Ok(read) => read,
+            Err(error) => return failed.or(Some(error)),
+        };
         let chunk = &buffer[..read];
         to.write_all(chunk).and_then(|()| to.flush()).ok();
         if let Ok(mut file) = log.lock() {
-            file.write_all(chunk).ok();
+            if let Err(error) = file.write_all(chunk) {
+                failed.get_or_insert(error);
+            }
         }
     }
 }
