@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use velnor_local::scenario::{Outcome, distinct, inside, plan, restores, summary, verdict};
+use velnor_local::scenario::{
+    Outcome, distinct, inside, keeps_environment, plan, restores, summary, verdict,
+};
 use velnor_local::standin::Job;
 
 #[test]
@@ -132,4 +134,43 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         text.contains("first job started 10 s after up began"),
         "{text}"
     );
+}
+
+#[test]
+fn every_verdict_says_that_the_approved_workflows_check_is_off() {
+    let text = verdict("leaf", &[], 100, 4.5);
+    let warning = format!("velnor-local leaf: {}\n", velnor_local::authority::WARNING);
+    assert!(text.contains(&warning), "{text}");
+    assert!(warning.contains("approved-workflows check is off"));
+    assert!(warning.contains("not available yet"));
+}
+
+#[test]
+fn keep_holds_an_environment_whose_scenario_triggered_no_runs() {
+    assert!(keeps_environment(true, false, false, 0));
+    assert!(keeps_environment(true, false, true, 2));
+    assert!(!keeps_environment(true, false, true, 0));
+    assert!(!keeps_environment(true, true, false, 3));
+    assert!(!keeps_environment(false, false, false, 3));
+}
+
+#[test]
+fn the_warning_names_only_options_that_up_and_run_accept() {
+    use clap::CommandFactory;
+    let cli = velnor_local::cli::Cli::command();
+    let flags: Vec<&str> = velnor_local::authority::WARNING
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .filter(|word| word.starts_with("--"))
+        .collect();
+    for name in ["up", "run"] {
+        let command = cli.find_subcommand(name);
+        for flag in &flags {
+            let accepted = command.is_some_and(|command| {
+                command
+                    .get_arguments()
+                    .any(|arg| arg.get_long() == flag.strip_prefix("--"))
+            });
+            assert!(accepted, "{name} has no {flag}");
+        }
+    }
 }
