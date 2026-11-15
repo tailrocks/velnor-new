@@ -3,7 +3,7 @@
 
 pub(crate) mod adapter;
 mod cleanup;
-mod containers;
+pub(crate) mod containers;
 mod delivery;
 mod pre_jit_recovery;
 mod publication;

@@ -88,6 +88,21 @@ fn dispatch(cli: &Cli) -> ExitCode {
             connection_id,
             wait,
         } => disconnect(&state, connection_id, *wait),
+        #[cfg(feature = "local-mode")]
+        Command::Local => local(),
+    }
+}
+
+#[cfg(feature = "local-mode")]
+fn local() -> ExitCode {
+    let mut input = std::io::stdin().lock();
+    let mut output = std::io::stdout().lock();
+    match velnor_runner_host::local::run_one_pair(&mut input, &mut output) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("velnor-host local: {error}");
+            ExitCode::from(1)
+        }
     }
 }
 
