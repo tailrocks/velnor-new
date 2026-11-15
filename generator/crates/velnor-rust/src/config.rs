@@ -110,18 +110,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: match raw.runner {
-            Some(label) => RunnerLabel::new(label.clone())
-                .ok()
-                .filter(|runner| !without_helper_build(runner.as_str()))
-                .ok_or_else(|| {
-                    invalid(Reason::InvalidValue {
-                        key: "runner",
-                        value: label,
-                    })
-                })?,
-            None => defaults.runner,
-        },
+        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
         timeout_minutes,
         exclude: raw
             .exclude
@@ -136,6 +125,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+    let Some(label) = configured else {
+        return Ok(default);
+    };
+    RunnerLabel::new(label.clone())
+        .ok()
+        .filter(|runner| !without_helper_build(runner.as_str()))
+        .ok_or(Reason::InvalidValue {
+            key: "runner",
+            value: label,
+        })
 }
 
 fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
