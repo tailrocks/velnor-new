@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape};
+use velnor_model::{
+    InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
+};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 8] = [
+const KEYS: [&str; 9] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -18,6 +20,7 @@ const KEYS: [&str; 8] = [
     "default_ignores",
     "shape",
     "required_check",
+    "nextest_harnesses",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -34,6 +37,8 @@ struct RawConfig {
     default_ignores: Option<bool>,
     shape: Option<String>,
     required_check: Option<String>,
+    #[serde(default)]
+    nextest_harnesses: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -85,7 +90,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
+    let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
     Ok(RustCiConfig {
+        nextest_harnesses,
         shape,
         required_check,
         non_inputs,
@@ -114,6 +121,23 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let invalid = || Reason::InvalidValue {
+                key: "nextest_harnesses",
+                value: entry.clone(),
+            };
+            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
+            Ok((
+                PackageName::new(package).map_err(|_| invalid())?,
+                TargetName::new(target).map_err(|_| invalid())?,
+            ))
+        })
+        .collect()
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

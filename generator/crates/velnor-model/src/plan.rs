@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    TargetName,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,10 +159,22 @@ impl Platform {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CargoCommand {
     FmtCheck,
-    Clippy { extra: Vec<String> },
-    CheckAlone { package: PackageName },
-    NextestRun { filter: FilterRef },
-    NextestArchive { file: RepoPath },
+    Clippy {
+        extra: Vec<String>,
+    },
+    CheckAlone {
+        package: PackageName,
+    },
+    NextestRun {
+        filter: FilterRef,
+    },
+    NextestArchive {
+        file: RepoPath,
+    },
+    TestTarget {
+        package: PackageName,
+        target: TargetName,
+    },
     Doctest,
     Doc,
     Deny,

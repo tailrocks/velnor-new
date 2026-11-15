@@ -77,16 +77,7 @@ fn root_jobs(
         CargoCommand::FmtCheck,
         CargoCommand::Clippy { extra: Vec::new() },
     ];
-    let nextest = root.members.iter().any(RustMember::has_test_target);
-    let mut test = Vec::new();
-    if nextest {
-        test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
-        });
-    }
-    if has_doctest_library(root) {
-        test.push(CargoCommand::Doctest);
-    }
+    let test = test_commands(facts, root);
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
@@ -128,6 +119,34 @@ fn root_jobs(
             jobs
         }
     }
+}
+
+fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
+    let mut test = Vec::new();
+    if root.members.iter().any(RustMember::has_test_target) {
+        test.push(CargoCommand::NextestRun {
+            filter: FilterRef::All,
+        });
+    }
+    test.extend(root.members.iter().flat_map(|member| {
+        member
+            .custom_harnesses
+            .iter()
+            .filter(|target| {
+                !facts
+                    .config
+                    .nextest_harnesses
+                    .contains(&(member.name.clone(), (*target).clone()))
+            })
+            .map(|target| CargoCommand::TestTarget {
+                package: member.name.clone(),
+                target: target.clone(),
+            })
+    }));
+    if has_doctest_library(root) {
+        test.push(CargoCommand::Doctest);
+    }
+    test
 }
 
 pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
