@@ -189,7 +189,6 @@ pub async fn build(args: BuildArgs) -> io::Result<()> {
     let root = fs::canonicalize(&args.root).await?;
     let lock = fs::read_to_string(root.join(".velnor/runner.lock")).await?;
     let lock = Lock::parse(&lock).map_err(io::Error::other)?;
-    ensure_clean(&root).await?;
     let git_root = root.display().to_string();
     let dirty = program(
         "git",
@@ -208,6 +207,7 @@ pub async fn build(args: BuildArgs) -> io::Result<()> {
     )
     .await?;
     refuse_dirty(&String::from_utf8_lossy(&dirty)).map_err(io::Error::other)?;
+    ensure_clean(&root).await?;
     let sha = program("git", &["-C", &git_root, "rev-parse", "HEAD"], None).await?;
     let sha = String::from_utf8_lossy(&sha).trim().to_owned();
     let stages = std::env::temp_dir().join(format!("velnor-local-build-{}", random_hex(8)?));
