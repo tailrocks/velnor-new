@@ -119,23 +119,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
-    let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    let pinned = |tool: &str| {
-        pinned_for_runner(
-            &view.files,
-            |name| is_tool(name, tool),
-            config.runner.as_str(),
-        )
-    };
-    if deny && !pinned("cargo-deny") {
-        return Err(DetectError::DenyRequired {
-            path: tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
-        });
-    }
-    let policy = PolicyTools {
-        deny,
-        machete: pinned("cargo-machete"),
-    };
+    let policy = policy_tools(view, config.runner.as_str(), &tools.configs)?;
     Ok(RepoFacts {
         policy,
         timings,
@@ -146,6 +130,24 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
+    })
+}
+
+fn policy_tools(
+    view: &RepoView,
+    runner: &str,
+    configs: &[RepoPath],
+) -> Result<PolicyTools, DetectError> {
+    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
+    let deny = view.tracked_paths.contains(&DENY_CONFIG);
+    if deny && !pinned("cargo-deny") {
+        return Err(DetectError::DenyRequired {
+            path: configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
+    Ok(PolicyTools {
+        deny,
+        machete: pinned("cargo-machete"),
     })
 }
 

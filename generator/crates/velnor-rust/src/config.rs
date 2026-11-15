@@ -170,9 +170,9 @@ fn branch_name(name: &str) -> bool {
         && !name.ends_with(['/', '.'])
         && !name.contains("..")
         && !name.contains("//")
-        && name
-            .split('/')
-            .all(|part| !part.starts_with('.') && !part.ends_with(".lock"))
+        && name.split('/').all(|part| {
+            !part.starts_with('.') && part.rsplit_once('.').is_none_or(|(_, ext)| ext != "lock")
+        })
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
