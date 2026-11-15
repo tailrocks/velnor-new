@@ -338,3 +338,13 @@ pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {
         Err(failed.join("; "))
     }
 }
+
+#[must_use]
+pub const fn keeps_environment(
+    keep: bool,
+    interrupted: bool,
+    replay_failed: bool,
+    runs: usize,
+) -> bool {
+    keep && !interrupted && (!replay_failed || runs > 0)
+}

@@ -18,11 +18,11 @@ use tokio::sync::Mutex;
 
 pub use runners::Runners;
 
-use super::pair::Minted;
+use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
-    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, answer, call, facts,
-    run_ids,
+    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, answer, call, claim,
+    facts, run_ids,
 };
 use crate::protocol::{Error, parse};
 use crate::side::Side;
@@ -37,13 +37,24 @@ pub trait Backend: Send + Sync {
         path: &str,
     ) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send;
     fn delete(&self, side: Side, path: &str) -> impl Future<Output = io::Result<()>> + Send;
-    fn mint(&self, side: Side) -> impl Future<Output = io::Result<Option<Minted>>> + Send;
+    fn mint(&self, side: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
 }
 
 #[derive(Debug)]
 struct Ledger {
     path: PathBuf,
     entries: Vec<Entry>,
+}
+
+impl Ledger {
+    async fn save(&self) -> io::Result<()> {
+        let mut text = String::new();
+        for entry in &self.entries {
+            text.push_str(&json!(entry).to_string());
+            text.push('\n');
+        }
+        write_private(&self.path, &text).await
+    }
 }
 
 #[derive(Debug)]
@@ -151,19 +162,27 @@ impl<B: Backend> Authority<B> {
             .fetch(side, &format!("/_apis/v1/Message?runid={id}"))
             .await?;
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
-        let entries = self.ledger.lock().await.entries.clone();
-        let admitted = admit(&entries, side, &found);
-        Ok(json_response(200, &answer(side, &found, admitted)))
+        let mut ledger = self.ledger.lock().await;
+        let admitted = admit(&ledger.entries, side, &found).cloned();
+        if let Ok(entry) = &admitted
+            && claim(&mut ledger.entries, &entry.id, &found)
+        {
+            ledger.save().await.map_err(Error::internal)?;
+        }
+        let verdict = admitted.as_ref().map_err(|refusal| *refusal);
+        Ok(json_response(200, &answer(side, &found, verdict)))
     }
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
         let asked: JitRequest = parse(&read_small_body(request.into_body()).await?)?;
-        let minted = self
-            .backend
-            .mint(asked.side)
-            .await
-            .map_err(|error| Error::upstream(format!("minting a JIT: {error}")))?
-            .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
+        let minted = match self.backend.mint(asked.side).await {
+            Ok(minted) => minted,
+            Err(error) => {
+                let _removed = self.remove(asked.side, &error.name).await;
+                return Err(Error::upstream(format!("minting a JIT: {error}")));
+            }
+        }
+        .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
         let reply =
             json!({"name": minted.name, "jit": minted.jit, "seconds": minted.took.as_secs_f64()});
         Ok(json_response(200, &reply))

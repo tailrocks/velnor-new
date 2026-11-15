@@ -11,6 +11,17 @@ use velnor_local::io::{guarded, open};
 use crate::fake_docker::{FakeDocker, after};
 use crate::support::temp_dir;
 
+fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentArgs {
+    EnvironmentArgs {
+        dir: dir.to_path_buf(),
+        runners,
+        fork_runners,
+        default_branch: "main".to_owned(),
+        runner: RunnerMode::Plain,
+        velnor_host: "velnor-host".into(),
+    }
+}
+
 #[tokio::test]
 async fn an_environment_that_fails_to_start_leaves_no_container_or_network() {
     let dir = temp_dir("environment-fails");
@@ -18,14 +29,7 @@ async fn an_environment_that_fails_to_start_leaves_no_container_or_network() {
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 2_u16,
-        fork_runners: 1,
-        default_branch: "main".to_owned(),
-        runner: RunnerMode::Plain,
-        velnor_host: "velnor-host".into(),
-    };
+    let args = plain(&dir, 2, 1);
     let started = env.up(&dir, &args).await;
     assert!(started.is_err());
     assert_eq!(docker.left(), Vec::<String>::new());
@@ -76,14 +80,7 @@ async fn the_untrusted_side_has_its_own_network_and_keys_and_no_way_to_the_stub(
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 1_u16,
-        fork_runners: 1,
-        default_branch: "main".to_owned(),
-        runner: RunnerMode::Plain,
-        velnor_host: "velnor-host".into(),
-    };
+    let args = plain(&dir, 1, 1);
     assert!(env.up(&dir, &args).await.is_err());
     let (trusted, untrusted) = (env.name.clone(), format!("{}-fork", env.name));
     let started = docker.started();
@@ -147,6 +144,11 @@ async fn the_untrusted_side_has_its_own_network_and_keys_and_no_way_to_the_stub(
         |meta| meta.permissions().mode() & 0o777,
     );
     assert_eq!(mode, 0o600);
+    let keys_mode = std::fs::metadata(dir.join("keys")).map_or_else(
+        |e| unreachable!("{e}"),
+        |meta| meta.permissions().mode() & 0o777,
+    );
+    assert_eq!(keys_mode, 0o700);
 }
 
 #[tokio::test]
@@ -241,14 +243,7 @@ async fn a_malformed_control_token_is_replaced_by_a_full_one() {
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 1_u16,
-        fork_runners: 0,
-        default_branch: "main".to_owned(),
-        runner: RunnerMode::Plain,
-        velnor_host: "velnor-host".into(),
-    };
+    let args = plain(&dir, 1, 0);
     assert!(env.up(&dir, &args).await.is_err());
     let token = std::fs::read_to_string(dir.join("keys/control")).unwrap_or_default();
     assert_eq!(token.len(), 64, "{token}");

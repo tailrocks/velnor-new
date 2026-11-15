@@ -17,7 +17,9 @@ use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
 use crate::pairs::{DECISIONS, decisions};
-use crate::scenario::{Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary};
+use crate::scenario::{
+    Outcome, Scenario, Step, distinct, inside, keeps_environment, overlapping, plan, summary,
+};
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
 use crate::verdict::{Check, verdict};
 
@@ -153,7 +155,7 @@ async fn run_one(
     let interrupted = replayed
         .as_ref()
         .is_err_and(|error| error.kind() == io::ErrorKind::Interrupted);
-    let kept = args.keep && !interrupted && !outcomes.is_empty();
+    let kept = keeps_environment(args.keep, interrupted, replayed.is_err(), outcomes.len());
     let stopped = if kept { Ok([0; 3]) } else { env.down().await };
     let check = job_start_check(&env.dir, pairs.is_some()).await?;
     print!("{}", verdict(tag, &outcomes, (up_at, up_seconds), &check));
@@ -205,7 +207,7 @@ async fn session<'a>(
         Ok(addresses) => addresses,
         Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
     };
-    let authority = match super::supervisor::start(&env.dir, pairs).await {
+    let authority = match super::supervisor::start_with(&env.dir, pairs).await {
         Ok(authority) => {
             for pair in &authority.pairs {
                 println!("velnor-local {tag}: pair {pair} listening");

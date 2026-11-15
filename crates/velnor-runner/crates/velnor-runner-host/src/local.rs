@@ -20,7 +20,9 @@ mod slot;
 mod storage;
 mod supervisor;
 
-pub use pair::{ENVIRONMENT_LABEL, LocalPair, remove_pair, start_pair};
+pub use pair::{
+    ENVIRONMENT_LABEL, LocalPair, StartFailure, remove_pair, remove_pair_named, start_pair,
+};
 pub use plan::{LoopbackAuthority, MARKER, Plan, Side, check_state};
 pub use remove::Removed;
 pub use request::LocalPairRequest;

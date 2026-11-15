@@ -51,7 +51,7 @@ impl LoopbackAuthority {
             IpAddr::V4(ip) => ip == Ipv4Addr::LOCALHOST,
             IpAddr::V6(ip) => ip == Ipv6Addr::LOCALHOST,
         };
-        if !loopback || address.port() == 0 || address.to_string() != host {
+        if !loopback || address.port() == 0 {
             return Err(HostError::Config);
         }
         Ok(Self(address))

@@ -100,7 +100,7 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
     let pairs = super::supervisor::pairs(&args.environment).await?;
     println!("velnor-local: {}", runner_mode(pairs.as_ref()));
     let addresses = env.up(&repo, &args.environment).await?;
-    let authority = match super::supervisor::start(&env.dir, pairs.as_ref()).await {
+    let authority = match super::supervisor::start_with(&env.dir, pairs.as_ref()).await {
         Ok(authority) => authority,
         Err(error) => {
             let _ = env.down().await;

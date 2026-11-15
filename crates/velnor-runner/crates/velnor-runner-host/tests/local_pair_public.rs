@@ -8,9 +8,15 @@ use bollard::models::ContainerInspectResponse;
 use bollard::query_parameters::ListVolumesOptions;
 use velnor_runner_host::HostError;
 use velnor_runner_host::local::{
-    ENVIRONMENT_LABEL, LocalPairRequest, Removed, remove_pair, start_pair,
+    ENVIRONMENT_LABEL, LocalPairRequest, Removed, StartFailure, remove_pair, start_pair,
 };
 
+#[path = "local_pair_public/failure.rs"]
+mod failure;
+#[expect(
+    dead_code,
+    reason = "Each test binary uses part of the shared pair fixtures."
+)]
 #[path = "local_pair_public/support.rs"]
 mod support;
 use support::{Fixture, TestResult, labelled, request};
@@ -185,7 +191,10 @@ async fn local_pair_refuses_the_host_network_before_creating_anything() -> TestR
         &request(&environment, "host", &format!("sha256:{}", "a".repeat(64))),
     ))
     .await;
-    assert_eq!(refused, Err(HostError::Config));
+    assert_eq!(
+        refused.map_err(|failure| failure.error),
+        Err(HostError::Config)
+    );
     assert_eq!(labelled(&docker, &environment).await?, (0, 0));
     Ok(())
 }
@@ -240,7 +249,7 @@ async fn local_pair_start_failure_removes_everything_it_created() -> TestResult<
     let failed = Box::pin(start_pair(&fixture.docker, &failing)).await;
     let left = labelled(&fixture.docker, &fixture.environment).await;
     fixture.finish().await?;
-    assert_eq!(failed, Err(HostError::Docker));
+    assert_eq!(failed, Err(StartFailure::from(HostError::Docker)));
     assert_eq!(left?, (0, 0));
     Ok(())
 }
@@ -309,9 +318,16 @@ async fn local_pair_refuses_unsafe_requests_without_a_docker_daemon() -> TestRes
     }
     for request in refused {
         let outcome = Box::pin(start_pair(&docker, &request)).await;
-        assert_eq!(outcome, Err(HostError::Config), "{request:?}");
+        assert_eq!(
+            outcome.map_err(|failure| failure.error),
+            Err(HostError::Config),
+            "{request:?}"
+        );
     }
     let accepted = Box::pin(start_pair(&docker, &valid)).await;
-    assert_eq!(accepted, Err(HostError::Docker));
+    assert_eq!(
+        accepted.map_err(|failure| failure.error),
+        Err(HostError::Docker)
+    );
     Ok(())
 }

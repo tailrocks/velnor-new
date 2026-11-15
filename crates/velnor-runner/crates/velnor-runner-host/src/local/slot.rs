@@ -78,9 +78,9 @@ impl Supervisor {
         let request = self.request(slot, &minted.name, sequence);
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
-            Err(error) => {
+            Err(failure) => {
                 self.retire_agent(slot.side, &minted.name).await?;
-                return Err(error);
+                return Err(failure.error);
             }
         };
         let served = self.serve(slot, &pair, &minted, sequence, stop).await;

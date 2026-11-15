@@ -8,9 +8,15 @@ use crate::protocol::Error;
 use crate::side::Side;
 use crate::standin::{Job, Run};
 
-pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are; --policy turns the check on (see FAST-L.8.6)";
+pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are; the check is not available yet (see FAST-L.8.6)";
 pub const RUNS_PATH: &str = "/_apis/v1/Message/workflow/runs";
 pub const AGENTS_PATH: &str = "/_apis/v1/Agent/0";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Claim {
+    pub workflow: String,
+    pub run: u64,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entry {
@@ -22,6 +28,22 @@ pub struct Entry {
     pub sha: String,
     pub workflow: Option<String>,
     pub existing: Vec<u64>,
+    #[serde(default)]
+    pub claims: Vec<Claim>,
+}
+
+impl Entry {
+    fn holds(&self, facts: &Facts) -> bool {
+        self.claims
+            .iter()
+            .any(|claim| claim.workflow == facts.workflow && claim.run == facts.id)
+    }
+
+    fn open_for(&self, facts: &Facts) -> bool {
+        self.claims
+            .iter()
+            .all(|claim| claim.workflow != facts.workflow)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +76,7 @@ impl Posted {
             sha: self.sha,
             workflow: self.workflow,
             existing,
+            claims: Vec::new(),
         })
     }
 }
@@ -166,12 +189,17 @@ fn describes(entry: &Entry, facts: &Facts) -> bool {
 }
 
 pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a Entry, Refusal> {
-    let before_run = |entry: &&Entry| !entry.existing.contains(&facts.id);
-    let own = entries
-        .iter()
-        .filter(|entry| entry.side == side && describes(entry, facts))
-        .find(before_run);
-    if let Some(entry) = own {
+    let own = |entry: &&Entry| {
+        entry.side == side && describes(entry, facts) && !entry.existing.contains(&facts.id)
+    };
+    let held = entries.iter().filter(own).find(|entry| entry.holds(facts));
+    let free = || {
+        entries
+            .iter()
+            .filter(own)
+            .find(|entry| entry.open_for(facts))
+    };
+    if let Some(entry) = held.or_else(free) {
         return Ok(entry);
     }
     if entries
@@ -181,6 +209,20 @@ pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a 
         return Err(Refusal::WrongSide);
     }
     Err(Refusal::NotDispatched)
+}
+
+pub fn claim(entries: &mut [Entry], id: &str, facts: &Facts) -> bool {
+    let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
+        return false;
+    };
+    if entry.holds(facts) {
+        return false;
+    }
+    entry.claims.push(Claim {
+        workflow: facts.workflow.clone(),
+        run: facts.id,
+    });
+    true
 }
 
 #[must_use]

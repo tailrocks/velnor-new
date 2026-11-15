@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod claims;
 mod fake;
 
 use serde_json::{Value, json};
@@ -69,6 +70,19 @@ async fn authority_refuses_a_run_that_matches_no_dispatched_event_as_not_dispatc
     runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
     runners.create(Side::Trusted, 2, "push", "refs/heads/other", SHA);
     let (_, run) = run_facts(&authority, "trusted", 2).await;
+    assert_eq!(run["ledger"], Value::Null, "{run}");
+    assert_eq!(run["refusal"], "not_dispatched", "{run}");
+}
+
+#[tokio::test]
+async fn authority_refuses_a_run_of_the_same_event_and_ref_but_another_sha_as_not_dispatched() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-other-sha", &runners).await;
+    let mut dispatched = entry("1-push", "trusted", "push", "refs/heads/main");
+    dispatched["sha"] = json!("1a2b3c4");
+    assert_eq!(post(&authority, dispatched).await, 200);
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    let (_, run) = run_facts(&authority, "trusted", 1).await;
     assert_eq!(run["ledger"], Value::Null, "{run}");
     assert_eq!(run["refusal"], "not_dispatched", "{run}");
 }
@@ -299,6 +313,7 @@ fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
         sha: SHA.to_owned(),
         workflow: workflow.map(str::to_owned),
         existing,
+        claims: Vec::new(),
     };
     let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
     assert!(admit(&entries, Side::Trusted, &facts(1, "a.yml")).is_ok());

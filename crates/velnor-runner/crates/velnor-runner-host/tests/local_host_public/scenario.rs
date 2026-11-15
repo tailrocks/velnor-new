@@ -16,7 +16,7 @@ use velnor_runner_host::HostError;
 use velnor_runner_host::local::{Plan, supervise};
 
 use super::authority::{Fake, Served, TOKEN, serve};
-use super::support::{Fixture, TestResult};
+use super::support::{Fixture, Program, TestResult};
 
 const WAIT: Duration = Duration::from_secs(240);
 const CONTROL: &str = "/opt/velnor/source-proof/control";
@@ -38,7 +38,14 @@ pub(crate) struct Live {
 
 impl Scenario {
     pub(crate) async fn new() -> TestResult<Self> {
-        let fixture = Fixture::new().await?;
+        Self::with(Fixture::new().await?).await
+    }
+
+    pub(crate) async fn running(program: Program) -> TestResult<Self> {
+        Self::with(Fixture::running(program).await?).await
+    }
+
+    async fn with(fixture: Fixture) -> TestResult<Self> {
         let served = serve(fixture.docker.clone(), &fixture.environment).await?;
         let fork_network = format!("{}-fork", fixture.network);
         fixture
