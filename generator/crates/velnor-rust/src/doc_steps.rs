@@ -117,12 +117,12 @@ pub fn optional_steps(
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
-            found.scan_rust(&text, macros);
+            found.scan_rust(&text);
         } else {
             found.scan_text(&text);
         }
     }
-    let unseen = !root.external_dependencies.is_empty();
+    let unseen = macros || !root.external_dependencies.is_empty();
     let doctests = if !has_doctest_library(root) {
         StepNeed::Skip(SkipReason::NoDoctestLibrary)
     } else if full || unseen || found.fenced {

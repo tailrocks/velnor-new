@@ -4,7 +4,6 @@
 use super::tokens::{Token, tokens};
 
 const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
-const DOC_MARKERS: [&str; 4] = ["///", "//!", "/**", "/*!"];
 
 #[derive(Default)]
 pub(crate) struct Found {
@@ -29,13 +28,8 @@ impl Found {
             });
     }
 
-    pub(crate) fn scan_rust(&mut self, text: &str, strings_may_hold_docs: bool) {
+    pub(crate) fn scan_rust(&mut self, text: &str) {
         self.scan_text(text);
-        if strings_may_hold_docs
-            && (DOC_MARKERS.iter().any(|marker| text.contains(marker)) || has_word(text, "doc"))
-        {
-            self.both();
-        }
         for token in tokens(text) {
             match token {
                 Token::Doc { fenced } => {
@@ -51,15 +45,4 @@ impl Found {
 
 fn names_doc_input(word: &str) -> bool {
     word.starts_with("doc") || word.starts_with("include") || word == "path"
-}
-
-fn has_word(text: &str, word: &str) -> bool {
-    text.match_indices(word).any(|(at, _)| {
-        let identifier = |c: char| c.is_alphanumeric() || c == '_';
-        !text[..at].chars().next_back().is_some_and(identifier)
-            && !text[at + word.len()..]
-                .chars()
-                .next()
-                .is_some_and(identifier)
-    })
 }

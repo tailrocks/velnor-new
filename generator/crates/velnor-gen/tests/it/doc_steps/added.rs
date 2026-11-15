@@ -89,8 +89,16 @@ pub(super) const ADDED: &[Case] = &[
         Kind::Macros,
         "fn f() {}\n",
         false,
-        NO_FENCE,
-        NO_DOCS,
+        RUN,
+        RUN,
+    ),
+    (
+        "a proc-macro crate that builds the attribute name from characters",
+        Kind::Macros,
+        "fn f() -> String {\n    format!(\"d{}\", \"oc\")\n}\n",
+        false,
+        RUN,
+        RUN,
     ),
     (
         "a doc marker in a string of a crate without macros",
