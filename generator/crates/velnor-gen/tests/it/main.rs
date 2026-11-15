@@ -27,5 +27,6 @@ mod rules;
 mod select;
 mod tool_pins;
 mod toolchain;
+mod toolchain_components;
 mod unowned;
 mod version;

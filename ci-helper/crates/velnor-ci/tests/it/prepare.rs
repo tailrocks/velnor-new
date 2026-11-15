@@ -212,37 +212,58 @@ fn prepare_passes_a_complete_profile_whose_components_are_all_installed() {
     assert!(run.output.status.success(), "{:?}", run.output);
 }
 
+fn assert_lacks(name: &str, file: &'static str, missing: &str) {
+    let run = prepare_declared(
+        name,
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&declared(file)),
+    );
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.ends_with(&format!("{missing}\n")), "{stderr}");
+}
+
 #[test]
-fn prepare_checks_the_default_profile_the_listed_components_and_the_listed_targets() {
-    for (name, file, missing) in [
-        (
-            "default",
-            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
-            "component rust-docs",
-        ),
-        (
-            "listed",
-            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"rust-src\"]\n",
-            "component rust-src",
-        ),
-        (
-            "target",
-            "[toolchain]\nchannel = \"1.99.1\"\ntargets = [\"wasm32-unknown-unknown\"]\n",
-            "target wasm32-unknown-unknown",
-        ),
-    ] {
-        let run = prepare_declared(
-            name,
-            &reported("1.99.1", Some("0.9.151")),
-            Some(&declared(file)),
-        );
-        let stderr = String::from_utf8_lossy(&run.output.stderr);
-        assert_eq!(run.output.status.code(), Some(1), "{name}: {stderr}");
-        assert!(
-            stderr.ends_with(&format!("{missing}\n")),
-            "{name}: {stderr}"
-        );
-    }
+fn prepare_checks_the_components_the_default_profile_implies() {
+    assert_lacks(
+        "default",
+        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
+        "component rust-docs",
+    );
+}
+
+#[test]
+fn prepare_checks_the_listed_components() {
+    assert_lacks(
+        "listed",
+        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"rust-src\"]\n",
+        "component rust-src",
+    );
+}
+
+#[test]
+fn prepare_checks_the_listed_targets() {
+    assert_lacks(
+        "target",
+        "[toolchain]\nchannel = \"1.99.1\"\ntargets = [\"wasm32-unknown-unknown\"]\n",
+        "target wasm32-unknown-unknown",
+    );
+}
+
+#[test]
+fn prepare_matches_a_legacy_preview_component_name_to_its_renamed_component() {
+    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"llvm-tools-preview\", \"clippy-preview\"]\n";
+    let listing = "clippy-x86_64-unknown-linux-gnu (installed)\nllvm-tools-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)";
+    let run = prepare_declared(
+        "preview",
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&Declared {
+            file,
+            components: listing,
+            targets: "x86_64-unknown-linux-gnu",
+        }),
+    );
+    assert!(run.output.status.success(), "{:?}", run.output);
 }
 
 #[test]

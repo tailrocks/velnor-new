@@ -96,6 +96,7 @@ fn same_version(wanted: &str, installed: &str) -> bool {
 const DEFAULT_PROFILE: [&str; 3] = ["rust-docs", "rustfmt", "clippy"];
 const COMPLETE_PROFILE: &str = "complete";
 const DEFAULT_PROFILE_NAME: &str = "default";
+const PREVIEW: &str = "-preview";
 const TARGETLESS: &str = "rust-src";
 
 pub fn check_toolchain(
@@ -105,7 +106,10 @@ pub fn check_toolchain(
     targets: &str,
 ) -> Result<(), CiError> {
     let suffix = format!("-{host}");
-    let short = |name: &str| name.strip_suffix(&suffix).unwrap_or(name).to_owned();
+    let short = |name: &str| {
+        let bare = name.strip_suffix(&suffix).unwrap_or(name);
+        bare.strip_suffix(PREVIEW).unwrap_or(bare).to_owned()
+    };
     let mut offered = BTreeSet::new();
     let mut installed = BTreeSet::new();
     for line in components.lines() {
