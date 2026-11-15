@@ -6,6 +6,8 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use velnor_release::is_tag_name;
+
 use crate::error::CiError;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -24,6 +26,17 @@ impl PlainName {
         } else {
             Err(CiError::new(format!(
                 "{what} `{}` must be ASCII letters, digits, '.', '_' and '-', and must not start with '.' or '-' or end with '.'",
+                text.escape_debug()
+            )))
+        }
+    }
+
+    pub fn tag(text: &str) -> Result<Self, CiError> {
+        if is_tag_name(text) {
+            Ok(Self(text.to_owned()))
+        } else {
+            Err(CiError::new(format!(
+                "tag `{}` must be ASCII letters, digits, '.', '_', '-' and '+', and must not start with '.' or '-' or end with '.'",
                 text.escape_debug()
             )))
         }
@@ -63,7 +76,7 @@ pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
         })?;
         for release in output.releases {
             let package = output_name(&release.package_name)?;
-            let tag = PlainName::new("tag", &release.tag)?;
+            let tag = PlainName::tag(&release.tag)?;
             if let Some(other) = tags.insert(package.clone(), tag.clone()) {
                 return Err(CiError::new(format!(
                     "release-plz released package {package} twice, as {other} and as {tag}"

@@ -317,6 +317,24 @@ fn tag_templates_the_recorder_cannot_consume_are_refused() -> TestResult {
 }
 
 #[test]
+fn a_tag_template_is_checked_against_a_version_with_build_metadata() -> TestResult {
+    let plus = plz_edited(
+        "git_tag_name = \"{{ package }}-v{{ version }}\"",
+        "git_tag_name = \"{{ package }}+v{{ version }}\"",
+    )?;
+    assert_eq!(refusal(&plus), None);
+    let bad = plz_refusal(
+        "git_tag_name = \"{{ package }}-v{{ version }}\"",
+        "git_tag_name = \"{{ package }} v{{ version }}\"",
+    )?;
+    assert!(
+        matches!(bad, Some(ReleaseError::InvalidTagTemplate { .. })),
+        "{bad:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn unsafe_workspace_defaults_are_refused_even_when_every_listed_package_overrides_them()
 -> TestResult {
     let safe_package = "[[package]]\nname = \"app\"\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\n";

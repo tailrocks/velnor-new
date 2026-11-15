@@ -12,4 +12,4 @@ mod velnor_config;
 
 pub use error::ReleaseError;
 pub use plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan};
-pub use tag::TagPattern;
+pub use tag::{TagPattern, is_tag_name};

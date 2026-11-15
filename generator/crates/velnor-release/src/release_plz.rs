@@ -35,6 +35,23 @@ fn check_package(
         let (root, package) = owned();
         return Err(ReleaseError::SemverCheckNotFalse { root, package });
     }
+    for (field, value) in [
+        ("git_tag_enable", settings.git_tag_enable),
+        ("git_release_enable", settings.git_release_enable),
+    ] {
+        if value == Some(false) {
+            let (root, package) = owned();
+            return Err(ReleaseError::ReleaseSwitchOff {
+                root,
+                package,
+                field,
+            });
+        }
+    }
+    if settings.publish == Some(true) && settings.git_only == Some(true) {
+        let (root, package) = owned();
+        return Err(ReleaseError::PublishWithGitOnly { root, package });
+    }
     if settings.publishes_to_crates_io() && settings.publish_no_verify != Some(true) {
         let (root, package) = owned();
         return Err(ReleaseError::PublishWithoutNoVerify { root, package });
@@ -131,13 +148,19 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         });
     }
     let publishes_to_crates_io = publishes(workspace, &released);
+    let pr_branch_prefix = workspace
+        .pr_branch_prefix
+        .clone()
+        .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned());
+    if pr_branch_prefix.is_empty() {
+        return Err(ReleaseError::EmptyPrBranchPrefix {
+            root: root.to_owned(),
+        });
+    }
     Ok(RootConfig {
         root: root.to_owned(),
         publishes_to_crates_io,
-        pr_branch_prefix: workspace
-            .pr_branch_prefix
-            .clone()
-            .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned()),
+        pr_branch_prefix,
         packages,
     })
 }

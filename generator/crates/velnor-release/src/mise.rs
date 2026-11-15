@@ -63,25 +63,23 @@ pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
     let locked = release_plz_tools(&mise_lock);
-    let mut mismatch = None;
     for (key, value) in configured {
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
-            continue;
+            return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
-        if !wanted.is_empty()
+        let matches = !wanted.is_empty()
             && !versions.is_empty()
             && versions
                 .iter()
-                .all(|version| !version.is_empty() && version == wanted)
-        {
-            return Ok(());
+                .all(|version| !version.is_empty() && version == wanted);
+        if !matches {
+            return Err(ReleaseError::ReleasePlzLockMismatch {
+                configured: wanted.to_owned(),
+                locked: versions,
+            });
         }
-        mismatch = Some(ReleaseError::ReleasePlzLockMismatch {
-            configured: wanted.to_owned(),
-            locked: versions,
-        });
     }
-    Err(mismatch.unwrap_or(ReleaseError::ReleasePlzNotInMiseLock))
+    Ok(())
 }
