@@ -179,7 +179,7 @@ fn release_yml_is_refused_without_a_pinned_helper_and_with_a_broken_release_plz_
     view.tracked_paths.remove(&LOCK_PATH);
     assert_eq!(
         expected_files(&view).err(),
-        Some(GenerateError::ReleaseNeedsHelper)
+        Some(GenerateError::HelperNotPinned)
     );
     let mut view = release_view(&[], Some("[[binaries]]\npackage = \"app\"\n"))?;
     view.files.remove(&RepoPath::new("release-plz.toml")?);

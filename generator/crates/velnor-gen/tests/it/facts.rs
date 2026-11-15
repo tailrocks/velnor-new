@@ -76,6 +76,12 @@ pub(crate) fn repo(
         view.tracked_paths.insert(path(name)?);
         view.files.insert(path(name)?, text.as_bytes().to_vec());
     }
+    let lock = path(".velnor/rust-ci.lock")?;
+    if !view.files.contains_key(&lock) {
+        view.tracked_paths.insert(lock.clone());
+        view.files
+            .insert(lock, crate::pipeline::HELPER_LOCK.to_vec());
+    }
     Ok(view)
 }
 
