@@ -565,6 +565,7 @@ dependencies = [
  "clap",
  "serde_json",
  "velnor-model",
+ "velnor-release",
  "velnor-render",
  "velnor-rust",
 ]
@@ -574,10 +575,19 @@ name = "velnor-model"
 version = "0.0.0"
 
 [[package]]
+name = "velnor-release"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "velnor-render"
 version = "0.0.0"
 dependencies = [
  "velnor-model",
+ "velnor-release",
 ]
 
 [[package]]

@@ -50,6 +50,16 @@ fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
+fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
+    if released.is_empty() {
+        workspace.publishes_to_crates_io()
+    } else {
+        released
+            .iter()
+            .any(|(_, settings)| settings.publishes_to_crates_io())
+    }
+}
+
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
@@ -118,13 +128,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
-    let publishes_to_crates_io = if released.is_empty() {
-        workspace.publishes_to_crates_io()
-    } else {
-        released
-            .iter()
-            .any(|(_, settings)| settings.publishes_to_crates_io())
-    };
+    let publishes_to_crates_io = publishes(workspace, &released);
     Ok(RootConfig {
         root: root.to_owned(),
         publishes_to_crates_io,
