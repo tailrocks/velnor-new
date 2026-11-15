@@ -7,7 +7,8 @@ use bollard::Docker;
 
 use crate::error::HostError;
 use crate::journal::{
-    ConnectionJournal, JitConflictRecoveryClaim, PostJitRetirementClaim, StorageNetworkRemovalClaim,
+    ConnectionJournal, JitConflictRecoveryClaim, PostJitRetirementClaim,
+    StorageNetworkRemovalClaim, UnboundRetirementClaim,
 };
 use crate::launch::SelectedEngineContext;
 
@@ -156,8 +157,55 @@ pub(crate) async fn remove_owned_network_for_jit_conflict(
     }
 }
 
+pub(crate) async fn remove_owned_network_for_unbound_retirement(
+    docker: &Docker,
+    journal: &ConnectionJournal,
+    engine: &SelectedEngineContext,
+    retirement: &UnboundRetirementClaim,
+) -> Result<(), HostError> {
+    journal
+        .validate_unbound_retirement_claim(retirement)
+        .await?;
+    let reservation_id = retirement.reservation_id();
+    let claim = match journal
+        .claim_storage_network_removal(reservation_id)
+        .await?
+    {
+        Some(claim) => claim,
+        None => match journal
+            .recover_storage_network_removal(reservation_id)
+            .await?
+        {
+            Some(claim) => claim,
+            None => return Ok(()),
+        },
+    };
+    let deadline = Instant::now() + NETWORK_TIMEOUT;
+    let result = remove_claimed(
+        docker,
+        journal,
+        engine,
+        &claim,
+        RemovalAuthority::Unbound(retirement),
+        deadline,
+    )
+    .await;
+    match result {
+        Ok(proof) => journal.record_storage_network_removed(&claim, &proof).await,
+        Err(error) => {
+            let _marked = tokio::time::timeout(
+                REQUEST_TIMEOUT,
+                journal.mark_storage_network_removal_uncertain(&claim),
+            )
+            .await;
+            Err(error)
+        }
+    }
+}
+
 enum RemovalAuthority<'a> {
     None,
+    Unbound(&'a UnboundRetirementClaim),
     Retirement(&'a PostJitRetirementClaim),
     Conflict(&'a JitConflictRecoveryClaim),
 }
@@ -318,6 +366,11 @@ async fn validate_authority(
 ) -> Result<(), HostError> {
     match authority {
         RemovalAuthority::None => {}
+        RemovalAuthority::Unbound(retirement) => {
+            journal
+                .validate_unbound_retirement_claim(retirement)
+                .await?;
+        }
         RemovalAuthority::Retirement(retirement) => {
             journal
                 .validate_post_jit_retirement_claim(retirement)

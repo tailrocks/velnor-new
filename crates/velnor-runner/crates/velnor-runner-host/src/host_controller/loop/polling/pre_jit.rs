@@ -4,7 +4,7 @@
 use crate::{
     error::HostError,
     journal::{IntentState, ReservationState},
-    launch::bootstrap::recover_pre_jit_reservation,
+    launch::bootstrap::{recover_pre_jit_reservation, retire_unbound_pair},
 };
 
 use super::super::state::PreparedConnection;
@@ -37,6 +37,19 @@ pub(super) async fn reconcile(
         {
             eprintln!(
                 "The controller keeps an uncertain pre-JIT reservation charged. connection={} reservation={} reason={error}",
+                prepared.binding.connection_id, reservation.reservation_id
+            );
+        }
+        if let Err(error) = Box::pin(retire_unbound_pair(
+            context.docker,
+            &prepared.scope,
+            context.selected_engine,
+            reservation.reservation_id,
+        ))
+        .await
+        {
+            eprintln!(
+                "The controller keeps an unbound pair charged. connection={} reservation={} reason={error}",
                 prepared.binding.connection_id, reservation.reservation_id
             );
         }

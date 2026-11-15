@@ -1,0 +1,342 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::HashMap;
+use std::future::Future;
+use std::time::Duration;
+
+use bollard::{
+    Docker,
+    errors::Error as DockerError,
+    models::{ContainerInspectResponse, Volume},
+    query_parameters::{RemoveContainerOptions, StopContainerOptions},
+};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+
+use crate::{
+    docker_client::docker_deadline_after,
+    error::HostError,
+    journal::{ConnectionJournal, UnboundRetirementClaim, UnboundRetirementPhase},
+    launch::SelectedEngineContext,
+};
+
+#[cfg(test)]
+#[path = "unbound_retirement/tests.rs"]
+mod tests;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub(crate) async fn abandon_and_retire_unbound_pair(
+    docker: &Docker,
+    scope: &ConnectionJournal,
+    engine: &SelectedEngineContext,
+    reservation_id: i64,
+) -> Result<bool, HostError> {
+    scope.abandon_unbound_pair(reservation_id).await?;
+    Box::pin(retire_unbound_pair(docker, scope, engine, reservation_id)).await
+}
+
+pub(crate) async fn retire_unbound_pair(
+    docker: &Docker,
+    scope: &ConnectionJournal,
+    engine: &SelectedEngineContext,
+    reservation_id: i64,
+) -> Result<bool, HostError> {
+    let Some(claim) = scope.claim_unbound_retirement(reservation_id).await? else {
+        return Ok(false);
+    };
+    let effects = Effects {
+        docker,
+        scope,
+        engine,
+        claim: &claim,
+    };
+    if claim.engine_id() != engine.engine_id()
+        || claim.docker_root_digest() != engine.docker_root_digest()
+    {
+        return Err(HostError::Ownership);
+    }
+    for phase in [
+        UnboundRetirementPhase::ContainersAbsent,
+        UnboundRetirementPhase::VolumesAbsent,
+    ] {
+        if scope
+            .unbound_retirement_phase_recorded(&claim, phase)
+            .await?
+        {
+            continue;
+        }
+        let evidence = match phase {
+            UnboundRetirementPhase::ContainersAbsent => {
+                Box::pin(effects.remove_containers()).await?
+            }
+            UnboundRetirementPhase::VolumesAbsent => Box::pin(effects.remove_volumes()).await?,
+        };
+        let digest =
+            Sha256::digest(serde_json::to_vec(&evidence).map_err(|_| HostError::Identity)?)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+        scope
+            .record_unbound_retirement_phase(&claim, phase, &digest)
+            .await?;
+    }
+    Box::pin(super::remove_owned_network_for_unbound_retirement(
+        docker, scope, engine, &claim,
+    ))
+    .await?;
+    scope.settle_unbound_retirement(&claim).await?;
+    Ok(true)
+}
+
+#[derive(Serialize)]
+struct Observation {
+    role: String,
+    name: String,
+    id: Option<String>,
+    outcome: &'static str,
+}
+
+struct Effects<'a> {
+    docker: &'a Docker,
+    scope: &'a ConnectionJournal,
+    engine: &'a SelectedEngineContext,
+    claim: &'a UnboundRetirementClaim,
+}
+
+impl Effects<'_> {
+    async fn authorized<T, F>(&self, effect: F) -> Result<T, HostError>
+    where
+        F: Future<Output = Result<T, HostError>>,
+    {
+        self.scope
+            .validate_unbound_retirement_claim(self.claim)
+            .await?;
+        self.verify_engine().await?;
+        effect.await
+    }
+
+    async fn verify_engine(&self) -> Result<(), HostError> {
+        let selected = crate::journal::EngineContext {
+            engine_id: self.engine.engine_id().to_owned(),
+            endpoint: self.engine.endpoint().to_owned(),
+            platform: self.engine.platform().to_owned(),
+        };
+        let info = within(self.docker.info())
+            .await?
+            .map_err(|_| HostError::Docker)?;
+        let current = SelectedEngineContext::capture(&selected, &info)?;
+        if current.matches_selection(&selected)
+            && current.engine_id() == self.claim.engine_id()
+            && current.docker_root_digest() == self.claim.docker_root_digest()
+        {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
+    async fn remove_containers(&self) -> Result<Vec<Observation>, HostError> {
+        let mut observations = Vec::new();
+        for container in self.claim.containers() {
+            let present = self
+                .authorized(inspect_container(self.docker, &container.id))
+                .await?;
+            let by_name = self
+                .authorized(inspect_container(self.docker, &container.name))
+                .await?;
+            if by_name
+                .as_ref()
+                .is_some_and(|named| named.id.as_deref() != Some(container.id.as_str()))
+            {
+                return Err(HostError::Ownership);
+            }
+            let Some(inspected) = present else {
+                observations.push(observation(
+                    &container.role,
+                    &container.name,
+                    Some(&container.id),
+                    "already_absent",
+                ));
+                continue;
+            };
+            self.validate_container(&inspected, &container.role, &container.name, &container.id)?;
+            if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
+                let stop = self.docker.stop_container(
+                    &container.id,
+                    Some(StopContainerOptions {
+                        t: Some(10),
+                        signal: None,
+                    }),
+                );
+                self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) })
+                    .await?;
+            }
+            let remove = self.docker.remove_container(
+                &container.id,
+                Some(RemoveContainerOptions {
+                    force: false,
+                    v: false,
+                    link: false,
+                }),
+            );
+            self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) })
+                .await?;
+            if self
+                .authorized(inspect_container(self.docker, &container.id))
+                .await?
+                .is_some()
+                || self
+                    .authorized(inspect_container(self.docker, &container.name))
+                    .await?
+                    .is_some()
+            {
+                return Err(HostError::Ownership);
+            }
+            observations.push(observation(
+                &container.role,
+                &container.name,
+                Some(&container.id),
+                "removed_and_absent",
+            ));
+        }
+        Ok(observations)
+    }
+
+    async fn remove_volumes(&self) -> Result<Vec<Observation>, HostError> {
+        let mut observations = Vec::new();
+        for volume in self.claim.volumes() {
+            let Some(inspected) = self
+                .authorized(inspect_volume(self.docker, &volume.name))
+                .await?
+            else {
+                observations.push(observation(
+                    &volume.role,
+                    &volume.name,
+                    None,
+                    "already_absent",
+                ));
+                continue;
+            };
+            self.validate_volume(&inspected, &volume.role, &volume.name)?;
+            let remove = self.docker.remove_volume(
+                &volume.name,
+                None::<bollard::query_parameters::RemoveVolumeOptions>,
+            );
+            self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) })
+                .await?;
+            if self
+                .authorized(inspect_volume(self.docker, &volume.name))
+                .await?
+                .is_some()
+            {
+                return Err(HostError::Ownership);
+            }
+            observations.push(observation(
+                &volume.role,
+                &volume.name,
+                None,
+                "removed_and_absent",
+            ));
+        }
+        Ok(observations)
+    }
+
+    fn validate_container(
+        &self,
+        container: &ContainerInspectResponse,
+        role: &str,
+        name: &str,
+        id: &str,
+    ) -> Result<(), HostError> {
+        let labels = container
+            .config
+            .as_ref()
+            .and_then(|config| config.labels.as_ref())
+            .ok_or(HostError::Ownership)?;
+        let expected = HashMap::from([
+            ("io.velnor.managed", "true".to_owned()),
+            (
+                "io.velnor.reservation-id",
+                self.claim.reservation_id().to_string(),
+            ),
+            (
+                "io.velnor.operation-id",
+                self.claim.operation_id().to_string(),
+            ),
+            (
+                "io.velnor.connection-id",
+                self.claim.connection_id().to_owned(),
+            ),
+            ("io.velnor.role", role.to_owned()),
+        ]);
+        if container.id.as_deref() != Some(id)
+            || container.name.as_deref() != Some(format!("/{name}").as_str())
+            || expected
+                .iter()
+                .any(|(key, value)| labels.get(*key) != Some(value))
+        {
+            return Err(HostError::Ownership);
+        }
+        Ok(())
+    }
+
+    fn validate_volume(&self, volume: &Volume, role: &str, name: &str) -> Result<(), HostError> {
+        let expected = HashMap::from([
+            ("velnor.connection", self.claim.connection_id().to_owned()),
+            (
+                "velnor.reservation",
+                self.claim.reservation_id().to_string(),
+            ),
+            ("velnor.operation", self.claim.operation_id().to_string()),
+            ("velnor.role", role.to_owned()),
+        ]);
+        if volume.name != name
+            || volume.driver != "local"
+            || volume.labels.len() != expected.len()
+            || expected
+                .iter()
+                .any(|(key, value)| volume.labels.get(*key) != Some(value))
+        {
+            return Err(HostError::Ownership);
+        }
+        Ok(())
+    }
+}
+
+fn observation(role: &str, name: &str, id: Option<&str>, outcome: &'static str) -> Observation {
+    Observation {
+        role: role.to_owned(),
+        name: name.to_owned(),
+        id: id.map(str::to_owned),
+        outcome,
+    }
+}
+
+async fn inspect_container(
+    docker: &Docker,
+    name_or_id: &str,
+) -> Result<Option<ContainerInspectResponse>, HostError> {
+    match within(docker.inspect_container(name_or_id, None)).await? {
+        Ok(value) => Ok(Some(value)),
+        Err(DockerError::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(None),
+        Err(_) => Err(HostError::Docker),
+    }
+}
+
+async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, HostError> {
+    match within(docker.inspect_volume(name)).await? {
+        Ok(volume) => Ok(Some(volume)),
+        Err(DockerError::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(None),
+        Err(_) => Err(HostError::Docker),
+    }
+}
+
+async fn within<F: Future>(future: F) -> Result<F::Output, HostError> {
+    docker_deadline_after(future, REQUEST_TIMEOUT).await
+}

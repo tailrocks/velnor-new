@@ -1,0 +1,183 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use bollard::Docker;
+use sha2::{Digest, Sha256};
+
+use crate::config::{
+    ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
+    SourcePolicyMode, WorkflowEvent,
+};
+use crate::journal::{ConnectionJournal, Journal};
+use crate::launch::SelectedEngineContext;
+
+use super::TestResult;
+
+pub(super) const CONNECTION_ID: &str = "conn-test-1";
+pub(super) const ENGINE_ID: &str = "engine-test";
+
+const BINDING: &str = "INSERT INTO connection_runtime_bindings (connection_id, scale_set_id, scale_set_name, set_ownership, engine_id, docker_endpoint, platform) VALUES ('conn-test-1', 7, 'ubuntu-26.04-scale-set', 'created', 'engine-test', 'unix:///docker.sock', 'linux/amd64')";
+
+const PROFILE: &str = "INSERT INTO host_storage_profiles (generation_id, profile_digest) VALUES ('{hex32}', '{hex64}')";
+
+const PAIR: &str = "INSERT INTO connection_intents (id, connection_id, kind, subject, state, scale_set_id, docker_engine_id, launch_phase, assignment_key, runner_name) VALUES ({i}, 'conn-test-1', 'launch', 'req-{i}', 'pending', 7, 'engine-test', 'provisioning_held', 'assign-{i}', 'v{nonce}');
+INSERT INTO capacity_reservations (id, intent_id, connection_id, assignment_key, engine_id, docker_root_digest, binding_digest, sample_generation_id, cpu_millicores, memory_bytes, state) VALUES ({r}, {i}, 'conn-test-1', 'assign-{i}', 'engine-test', '{root}', '{binding}', '{hex32}', 3000, 6442450944, 'reserved');
+INSERT INTO capacity_reservation_provisioning (reservation_id, operation_id, profile_generation_id, profile_digest, sample_generation_id, observed_at_unix_ms, engine_id, docker_root_digest, retained_memory_bytes) VALUES ({r}, {i}, '{hex32}', '{hex64}', '{hex32}', 1700000000000, 'engine-test', '{root}', 0);
+INSERT INTO capacity_reservation_provisioning_topology (reservation_id, topology_version) VALUES ({r}, 2);
+INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, create_state) VALUES ({r}, 'shared-run', 'w{nonce}', 'w{nonce}', 'created');
+INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, create_state) VALUES ({r}, 'runner-home', 'w{nonce}-home', 'w{nonce}-home', 'created');
+INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, create_state) VALUES ({r}, 'runner-work', 'w{nonce}-work', 'w{nonce}-work', 'created');
+INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, create_state) VALUES ({r}, 'dind-data', 'w{nonce}-docker', 'w{nonce}-docker', 'created');
+INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, publication_policy_digest, create_state) VALUES ({r}, 'engine-metadata', 'w{nonce}-metadata', 'w{nonce}-metadata', '{hex64}', 'created');
+INSERT INTO capacity_reservation_networks (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, network_name, labels_json, create_state, network_id) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', 'velnor-v{nonce}-private', '{\"io.velnor.connection-id\":\"conn-test-1\",\"io.velnor.engine-id\":\"engine-test\",\"io.velnor.managed\":\"true\",\"io.velnor.operation-id\":\"{i}\",\"io.velnor.reservation-id\":\"{r}\"}', 'created', '{network}');
+INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, container_id, create_state, start_state) VALUES ({r}, 'runner', 'w{nonce}-runner', '{runner}', 'created', 'started');
+INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, container_id, create_state, start_state) VALUES ({r}, 'dind', 'w{nonce}-dind', '{dind}', 'created', 'started');
+INSERT INTO capacity_reservation_provisioning_state (reservation_id, bootstrap_start_state, runner_container_id, dind_container_id{bound_columns}) VALUES ({r}, 'started', '{runner}', '{dind}'{bound_values});
+INSERT INTO physical_attempt_lineages (lineage_id, connection_id, scale_set_id, binding_digest) VALUES ({r}, 'conn-test-1', 7, '{binding}');
+INSERT INTO physical_attempts (lineage_id, generation, reservation_id, intent_id, physical_nonce, connection_id, scale_set_id, witness_request_id, binding_digest, source_digest, engine_id, docker_root_digest, created_at) VALUES ({r}, 1, {r}, {i}, '{nonce}', 'conn-test-1', 7, {r}, '{binding}', '{hex64}', 'engine-test', '{root}', 0);
+INSERT INTO physical_attempt_current (lineage_id, generation, reservation_id, intent_id) VALUES ({r}, 1, {r}, {i})";
+
+const GUARDS: [&str; 2] = [
+    "physical_attempt_insert_guard",
+    "physical_attempt_current_insert_guard",
+];
+
+#[derive(Clone, Copy)]
+pub(super) struct Pair {
+    pub(super) reservation: i64,
+    pub(super) bound: bool,
+}
+
+impl Pair {
+    pub(super) fn nonce(self) -> String {
+        format!("{:032x}", self.reservation)
+    }
+
+    pub(super) fn container_id(self, role: &str) -> String {
+        let digit = if role == "runner" { 'a' } else { 'd' };
+        format!("{}{:063x}", digit, self.reservation)
+    }
+
+    pub(super) fn network_id(self) -> String {
+        format!("e{:063x}", self.reservation)
+    }
+
+    pub(super) fn volumes(self) -> [(String, &'static str); 5] {
+        let base = format!("w{}", self.nonce());
+        [
+            (base.clone(), "shared-run"),
+            (format!("{base}-home"), "runner-home"),
+            (format!("{base}-work"), "runner-work"),
+            (format!("{base}-docker"), "dind-data"),
+            (format!("{base}-metadata"), "engine-metadata"),
+        ]
+    }
+}
+
+fn binding() -> TestResult<RepositoryConnection> {
+    Ok(RepositoryConnection::try_new(
+        ConnectionId::parse(CONNECTION_ID)?,
+        42,
+        "owner/repo".to_owned(),
+        KeychainReference::parse("keychain:velnor.test/conn-test-1")?,
+        ScaleSetSelector::try_new(
+            "ubuntu-26.04-scale-set",
+            &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+        )?,
+        SourcePolicy::try_new(
+            SourcePolicyMode::BranchRestricted,
+            vec!["main".to_owned()],
+            Vec::new(),
+            vec![WorkflowEvent::Push],
+            Vec::new(),
+        )?,
+    )?)
+}
+
+pub(super) async fn started_pairs(
+    journal: &Journal,
+    docker: &Docker,
+    pairs: &[Pair],
+) -> TestResult<(ConnectionJournal, SelectedEngineContext)> {
+    journal.bind_engine(ENGINE_ID).await?;
+    let binding = binding()?;
+    let scope = journal.connection_scope(&binding).await?;
+    let binding_digest: String = Sha256::digest(binding.canonical_identity_bytes()?)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    execute(journal, BINDING).await?;
+    let engine = SelectedEngineContext::capture(
+        &scope.engine_context().await?.ok_or("engine context")?,
+        &docker.info().await?,
+    )?;
+    let (hex32, hex64) = ("b".repeat(32), "a".repeat(64));
+    execute(
+        journal,
+        &PROFILE
+            .replace("{hex32}", &hex32)
+            .replace("{hex64}", &hex64),
+    )
+    .await?;
+    let saved = trigger_sql(journal).await?;
+    for name in GUARDS {
+        execute(journal, &format!("DROP TRIGGER {name}")).await?;
+    }
+    for pair in pairs {
+        let (bound_columns, bound_values) = if pair.bound {
+            (
+                ", resources_bound, instance_binding_digest, guest_boot_id",
+                format!(", 1, '{hex64}', 'boot'"),
+            )
+        } else {
+            ("", String::new())
+        };
+        let rows = PAIR
+            .replace("{bound_columns}", bound_columns)
+            .replace("{bound_values}", &bound_values)
+            .replace("{hex32}", &hex32)
+            .replace("{hex64}", &hex64)
+            .replace("{root}", engine.docker_root_digest())
+            .replace("{binding}", &binding_digest)
+            .replace("{nonce}", &pair.nonce())
+            .replace("{runner}", &pair.container_id("runner"))
+            .replace("{dind}", &pair.container_id("dind"))
+            .replace("{network}", &pair.network_id())
+            .replace("{r}", &pair.reservation.to_string())
+            .replace("{i}", &(pair.reservation - 1).to_string());
+        for row in rows.split(";\n") {
+            execute(journal, row).await?;
+        }
+    }
+    for sql in saved {
+        execute(journal, &sql).await?;
+    }
+    Ok((scope, engine))
+}
+
+pub(super) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
+    journal.connection().await?.execute(sql, ()).await?;
+    Ok(())
+}
+
+async fn trigger_sql(journal: &Journal) -> TestResult<Vec<String>> {
+    let connection = journal.connection().await?;
+    let mut saved = Vec::new();
+    for name in GUARDS {
+        let mut rows = connection
+            .query("SELECT sql FROM sqlite_schema WHERE name = ?1", [name])
+            .await?;
+        let row = rows.next().await?.ok_or("trigger missing")?;
+        saved.push(row.get::<String>(0)?);
+    }
+    Ok(saved)
+}
+
+pub(super) async fn text(journal: &Journal, sql: &str, reservation: i64) -> TestResult<String> {
+    let connection = journal.connection().await?;
+    let mut rows = connection.query(sql, [reservation]).await?;
+    let row = rows.next().await?.ok_or("row missing")?;
+    Ok(row.get::<String>(0)?)
+}
+
+pub(super) const RESERVATION: &str = "SELECT r.state || '/' || r.remote_cleanup_proven || r.local_cleanup_proven || '/' || i.state || '/' || i.cleanup_proven || '/' || (SELECT COUNT(*) FROM physical_attempt_current AS c WHERE c.reservation_id = r.id) || '/' || COALESCE((SELECT outcome FROM physical_attempt_terminal_proofs AS p WHERE p.reservation_id = r.id), 'none') || '/' || COALESCE((SELECT group_concat(phase) FROM (SELECT phase FROM capacity_reservation_unbound_retirement_progress AS g WHERE g.reservation_id = r.id ORDER BY phase)), '') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id WHERE r.id = ?1";
