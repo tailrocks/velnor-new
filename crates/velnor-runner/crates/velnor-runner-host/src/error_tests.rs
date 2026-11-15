@@ -34,3 +34,11 @@ fn the_probe_reason_fits_whole() {
     let message = b"resource probe: helper_source_revision_missing_invalid";
     assert_eq!(shown(message).as_bytes(), message);
 }
+
+#[test]
+fn a_detail_longer_than_the_limit_keeps_its_first_64_printable_bytes() {
+    let mut raw = vec![0x07_u8];
+    raw.extend((b'a'..=b'z').cycle().take(100));
+    let expected: String = (b'a'..=b'z').cycle().take(64).map(char::from).collect();
+    assert_eq!(shown(&raw), expected);
+}
