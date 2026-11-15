@@ -236,3 +236,42 @@ fn only_cargo_configs_that_reach_a_release_root_are_checked_for_credential_provi
         Some(ReleaseError::CargoCredentialProvider { .. })
     ));
 }
+
+#[test]
+fn a_locked_download_must_come_from_the_release_plz_repository() {
+    let lock = |url: &str| {
+        format!(
+            "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"aqua:release-plz/release-plz\"\n[tools.release-plz.platforms.linux-x64]\nchecksum = \"sha256:00\"\nurl = \"{url}\"\n"
+        )
+    };
+    let mut files = files();
+    files.mise_lock = lock("https://example.com/release-plz.tar.gz");
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzSource { .. })
+    ));
+    files.mise_lock = lock(
+        "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz.tar.gz",
+    );
+    assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn cargo_proxy_and_ca_overrides_are_refused_when_publishing_to_crates_io() {
+    for config in [
+        "[http]\nproxy = \"http://evil.example:8080\"\n",
+        "[http]\ncainfo = \"evil.pem\"\n",
+    ] {
+        let mut files = files();
+        files
+            .cargo_configs
+            .insert(".cargo/config.toml".to_owned(), config.to_owned());
+        assert!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::CargoCredentialProvider { .. })
+            ),
+            "{config}"
+        );
+    }
+}
