@@ -123,7 +123,7 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn release_plz_step(name: String, version: &str, run: String) -> RenderedStep {
+pub(crate) fn release_plz_step(name: String, version: &str, run: &str) -> RenderedStep {
     let mut env = variables(&[("GITHUB_TOKEN", APP_TOKEN_OUTPUT)]);
     env.extend(
         NO_PROGRAM_VARIABLES

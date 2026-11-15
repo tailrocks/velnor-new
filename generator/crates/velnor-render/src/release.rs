@@ -148,7 +148,7 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
         release_plz_step(
             format!("Open the release pull request of {}", label(root)),
             &plan.release_plz_version,
-            format!("release-plz release-pr {}", release_plz_arguments(root)),
+            &format!("release-plz release-pr {}", release_plz_arguments(root)),
         )
     }));
     RenderedJob {
@@ -180,7 +180,7 @@ fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob 
         release_plz_step(
             format!("Tag the releases of {}", label(root)),
             &plan.release_plz_version,
-            format!(
+            &format!(
                 "release-plz release {} -o json > {file}",
                 release_plz_arguments(root)
             ),

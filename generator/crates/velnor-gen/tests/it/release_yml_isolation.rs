@@ -11,7 +11,9 @@ type TestResult = Result<(), Box<dyn Error>>;
 const ISOLATED: &str = "mise --no-config --no-env --no-hooks";
 const MISE_SHA256: &str = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
 
-fn token_jobs(tree: &Node) -> Result<Vec<(&'static str, &[Node])>, Box<dyn Error>> {
+type TokenJob<'a> = (&'static str, &'a [Node]);
+
+fn token_jobs(tree: &Node) -> Result<Vec<TokenJob<'_>>, Box<dyn Error>> {
     ["release-pr", "tag"]
         .into_iter()
         .map(|id| Ok((id, steps(tree.at(&["jobs", id]).ok_or("no job")?))))
