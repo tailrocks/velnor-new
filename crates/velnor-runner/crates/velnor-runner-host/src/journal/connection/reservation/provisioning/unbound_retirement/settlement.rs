@@ -105,8 +105,9 @@ async fn proof_digest(
     .map_err(|_| HostError::Identity)?;
     Ok(Sha256::digest(bytes)
         .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect())
+        .flat_map(|byte| [byte >> 4, byte & 0x0f])
+        .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
+        .collect::<String>())
 }
 
 async fn expect_one(

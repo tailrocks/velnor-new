@@ -76,7 +76,8 @@ pub(crate) async fn retire_unbound_pair(
         let digest =
             Sha256::digest(serde_json::to_vec(&evidence).map_err(|_| HostError::Identity)?)
                 .iter()
-                .map(|byte| format!("{byte:02x}"))
+                .flat_map(|byte| [byte >> 4, byte & 0x0f])
+                .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
                 .collect::<String>();
         scope
             .record_unbound_retirement_phase(&claim, phase, &digest)
@@ -170,8 +171,10 @@ impl Effects<'_> {
                         signal: None,
                     }),
                 );
-                self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) })
-                    .await?;
+                Box::pin(
+                    self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) }),
+                )
+                .await?;
             }
             let remove = self.docker.remove_container(
                 &container.id,
@@ -181,8 +184,10 @@ impl Effects<'_> {
                     link: false,
                 }),
             );
-            self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) })
-                .await?;
+            Box::pin(
+                self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }),
+            )
+            .await?;
             if self
                 .authorized(inspect_container(self.docker, &container.id))
                 .await?
@@ -224,8 +229,10 @@ impl Effects<'_> {
                 &volume.name,
                 None::<bollard::query_parameters::RemoveVolumeOptions>,
             );
-            self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) })
-                .await?;
+            Box::pin(
+                self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }),
+            )
+            .await?;
             if self
                 .authorized(inspect_volume(self.docker, &volume.name))
                 .await?
