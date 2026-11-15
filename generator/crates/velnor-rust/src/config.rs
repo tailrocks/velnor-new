@@ -114,12 +114,15 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner: match raw.runner {
-            Some(label) => RunnerLabel::new(label.clone()).map_err(|_| {
-                invalid(Reason::InvalidValue {
-                    key: "runner",
-                    value: label,
-                })
-            })?,
+            Some(label) => RunnerLabel::new(label.clone())
+                .ok()
+                .filter(|runner| !without_helper_build(runner.as_str()))
+                .ok_or_else(|| {
+                    invalid(Reason::InvalidValue {
+                        key: "runner",
+                        value: label,
+                    })
+                })?,
             None => defaults.runner,
         },
         timeout_minutes,
@@ -136,6 +139,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn without_helper_build(label: &str) -> bool {
+    let label = label.to_ascii_lowercase();
+    let Some(version) = label.strip_prefix("macos-") else {
+        return label.starts_with("windows");
+    };
+    let major: u32 = version
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(u32::MAX);
+    major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
 }
 
 fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {

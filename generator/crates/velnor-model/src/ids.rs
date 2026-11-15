@@ -64,7 +64,7 @@ id!(RunnerLabel, text);
 id!(JobId, identifier);
 id!(RootSlug, slug);
 id!(HelperVersion, version);
-id!(DownloadUrl, download_url);
+id!(CommitSha, commit_sha);
 id!(Sha256, sha256);
 
 impl RepoPath {
@@ -262,35 +262,16 @@ const fn version(value: &[u8]) -> bool {
     true
 }
 
-const fn download_url(value: &[u8]) -> bool {
-    let prefix = b"https://";
-    if value.len() <= prefix.len() {
-        return false;
-    }
-    if !value[prefix.len()].is_ascii_alphanumeric() {
-        return false;
-    }
-    let mut index = 0;
-    while index < value.len() {
-        let byte = value[index];
-        if index < prefix.len() && byte != prefix[index] {
-            return false;
-        }
-        if !(byte.is_ascii_alphanumeric()
-            || matches!(
-                byte,
-                b'.' | b'_' | b'~' | b':' | b'/' | b'%' | b'+' | b'@' | b'=' | b'&' | b'?' | b'-'
-            ))
-        {
-            return false;
-        }
-        index += 1;
-    }
-    true
+const fn commit_sha(value: &[u8]) -> bool {
+    lowercase_hex(value, 40)
 }
 
 const fn sha256(value: &[u8]) -> bool {
-    if value.len() != 64 {
+    lowercase_hex(value, 64)
+}
+
+const fn lowercase_hex(value: &[u8], length: usize) -> bool {
+    if value.len() != length {
         return false;
     }
     let mut index = 0;
