@@ -68,7 +68,7 @@ pub(crate) fn rust_roots(
                     targets.entry(name).or_default().insert(target);
                 }
             }
-            Ok(root(manifest, metadata, &owner, &targets, &view.files))
+            root(manifest, metadata, &owner, &targets, &view.files)
         })
         .collect::<Result<_, _>>()?;
     Ok((roots, every))
@@ -80,7 +80,7 @@ fn root(
     owner: &BTreeMap<&RepoPath, &RepoPath>,
     targets: &Targets,
     files: &BTreeMap<RepoPath, Vec<u8>>,
-) -> RustRoot {
+) -> Result<RustRoot, DetectError> {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
         .iter()
@@ -93,13 +93,13 @@ fn root(
         .members
         .iter()
         .map(|package| member(package, targets, files))
-        .collect();
+        .collect::<Result<_, _>>()?;
     members.sort_by(|a, b| a.name.cmp(&b.name));
-    RustRoot {
+    Ok(RustRoot {
         manifest: manifest.clone(),
         members,
         depends_on: depends_on.into_iter().collect(),
-    }
+    })
 }
 
 const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
@@ -263,8 +263,8 @@ fn member(
     package: &RustPackage,
     targets: &Targets,
     files: &BTreeMap<RepoPath, Vec<u8>>,
-) -> RustMember {
-    RustMember {
+) -> Result<RustMember, DetectError> {
+    Ok(RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
         directory: package.manifest.parent(),
@@ -284,6 +284,6 @@ fn member(
             })
             .collect(),
         targets: package.targets.clone(),
-        custom_harnesses: custom_harnesses(files, package),
-    }
+        custom_harnesses: custom_harnesses(files, package)?,
+    })
 }

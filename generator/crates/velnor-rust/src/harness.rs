@@ -5,15 +5,18 @@ use std::collections::BTreeMap;
 
 use velnor_model::{RepoPath, RustPackage, TargetKind, TargetName};
 
+use crate::error::DetectError;
 use crate::toml_file::table;
 
 pub(crate) fn custom_harnesses(
     files: &BTreeMap<RepoPath, Vec<u8>>,
     package: &RustPackage,
-) -> Vec<TargetName> {
-    let Some(manifest) = files.get(&package.manifest).and_then(|b| table(b).ok()) else {
-        return Vec::new();
+) -> Result<Vec<TargetName>, DetectError> {
+    let Some(bytes) = files.get(&package.manifest) else {
+        return Ok(Vec::new());
     };
+    let manifest =
+        table(bytes).map_err(|reason| DetectError::invalid(&package.manifest, reason))?;
     let declared = manifest
         .get("test")
         .and_then(toml::Value::as_array)
@@ -37,5 +40,5 @@ pub(crate) fn custom_harnesses(
         .collect();
     found.sort();
     found.dedup();
-    found
+    Ok(found)
 }

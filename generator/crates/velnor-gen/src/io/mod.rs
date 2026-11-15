@@ -330,12 +330,8 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
-    for manifest in manifests(&view.tracked_paths) {
-        if let Ok(Some(file)) = regular_file(root, &manifest)
-            && let Ok(bytes) = fs::read(&file)
-        {
-            view.files.entry(manifest).or_insert(bytes);
-        }
+    for (manifest, bytes) in read_files(root, &manifests(&view.tracked_paths))? {
+        view.files.entry(manifest).or_insert(bytes);
     }
     Ok((view, recorded))
 }
