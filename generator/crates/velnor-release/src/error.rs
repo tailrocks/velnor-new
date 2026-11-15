@@ -104,8 +104,12 @@ pub enum ReleaseError {
         first: String,
         second: String,
     },
-    ReleasePlzSource {
+    CargoRunsProgram {
+        file: String,
         key: String,
+    },
+    ReleasePlzVersionNotExact {
+        version: String,
     },
     PackageNotInRoot {
         root: String,
@@ -271,9 +275,13 @@ impl ReleaseError {
                 f,
                 "{file}: a cargo credential provider would run next to the crates.io publish token"
             ),
-            Self::ReleasePlzSource { key } => write!(
+            Self::CargoRunsProgram { file, key } => write!(
                 f,
-                "mise.toml: tool {key} is not release-plz from its release-plz/release-plz source, or sets options other than version"
+                "{file}: {key} makes cargo run a program while release-plz holds the release App token"
+            ),
+            Self::ReleasePlzVersionNotExact { version } => write!(
+                f,
+                "mise.toml: release-plz must be pinned to an exact MAJOR.MINOR.PATCH version, not {version:?}"
             ),
             Self::RootWithoutCargoManifest { root } => write!(
                 f,

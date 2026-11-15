@@ -13,60 +13,6 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
-const APPROVED_KEYS: [&str; 5] = [
-    "release-plz",
-    "aqua:release-plz/release-plz",
-    "github:release-plz/release-plz",
-    "ubi:release-plz/release-plz",
-    "cargo:release-plz",
-];
-
-fn plugin_for_release_plz(table: &Table) -> Option<&String> {
-    table
-        .get("plugins")
-        .and_then(toml::Value::as_table)
-        .and_then(|plugins| plugins.keys().find(|key| names_release_plz(key)))
-}
-
-const APPROVED_DOWNLOADS: &str = "https://github.com/release-plz/release-plz/";
-
-fn urls_approved(value: &toml::Value) -> bool {
-    match value {
-        toml::Value::Table(table) => table.iter().all(|(key, inner)| {
-            if key == "url" {
-                inner
-                    .as_str()
-                    .is_some_and(|url| url.starts_with(APPROVED_DOWNLOADS))
-            } else {
-                urls_approved(inner)
-            }
-        }),
-        toml::Value::Array(items) => items.iter().all(urls_approved),
-        _ => true,
-    }
-}
-
-fn locked_backend_approved(value: &toml::Value) -> bool {
-    let entries = match value {
-        toml::Value::Array(entries) => entries.iter().collect(),
-        other => vec![other],
-    };
-    entries.into_iter().all(|entry| {
-        urls_approved(entry)
-            && entry
-                .get("backend")
-                .and_then(toml::Value::as_str)
-                .is_none_or(|backend| APPROVED_KEYS.contains(&backend))
-    })
-}
-
-fn approved(key: &str, value: &toml::Value) -> bool {
-    APPROVED_KEYS.contains(&key)
-        && value
-            .as_table()
-            .is_none_or(|options| options.keys().all(|option| option == "version"))
-}
-
 fn names_release_plz(key: &str) -> bool {
     key.rsplit(['/', ':']).next() == Some("release-plz")
 }
@@ -109,6 +55,14 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
+fn exact_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
 pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, ReleaseError> {
     let mise_tomls = mise_tomls
         .iter()
@@ -125,13 +79,13 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
-    if let Some(key) = mise_tomls.iter().find_map(plugin_for_release_plz) {
-        return Err(ReleaseError::ReleasePlzSource { key: key.clone() });
-    }
-    if let Some((key, _)) = configured.iter().find(|(key, value)| !approved(key, value)) {
-        return Err(ReleaseError::ReleasePlzSource {
-            key: (*key).clone(),
-        });
+    for (_, value) in &configured {
+        let wanted = configured_version(value).unwrap_or_default();
+        if !exact_version(wanted) {
+            return Err(ReleaseError::ReleasePlzVersionNotExact {
+                version: wanted.to_owned(),
+            });
+        }
     }
     let locked = release_plz_tools(&mise_lock);
     let mut mismatch = None;
@@ -139,11 +93,6 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             continue;
         };
-        if !locked_backend_approved(entry) {
-            return Err(ReleaseError::ReleasePlzSource {
-                key: (*key).clone(),
-            });
-        }
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
         if !wanted.is_empty()
@@ -152,7 +101,7 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
                 .iter()
                 .all(|version| !version.is_empty() && version == wanted)
         {
-            return Ok((*key).clone());
+            return Ok(wanted.to_owned());
         }
         mismatch = Some(ReleaseError::ReleasePlzLockMismatch {
             configured: wanted.to_owned(),

@@ -8,8 +8,8 @@ use velnor_release::ReleasePlan;
 
 use crate::release_binaries::binary_jobs;
 use crate::release_steps::{
-    app_token, checkout, expression, install_tool, label, permissions, release_plz_arguments,
-    release_plz_step, variables,
+    app_token, checkout, expression, install_release_plz, label, permissions,
+    release_plz_arguments, release_plz_step, variables,
 };
 use crate::rules::{
     RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, RuleViolation, check_rules,
@@ -138,14 +138,16 @@ pub(crate) fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
 }
 
 fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
-    let mut steps = vec![
-        checkout(VERIFIED_COMMIT, 0),
-        install_tool(&plan.release_plz_tool),
-        app_token(&[("contents", "write"), ("pull-requests", "write")]),
-    ];
+    let mut steps = vec![checkout(VERIFIED_COMMIT, 0)];
+    steps.extend(install_release_plz(&plan.release_plz_version));
+    steps.push(app_token(&[
+        ("contents", "write"),
+        ("pull-requests", "write"),
+    ]));
     steps.extend(plan.roots.iter().map(|root| {
         release_plz_step(
             format!("Open the release pull request of {}", label(root)),
+            &plan.release_plz_version,
             format!("release-plz release-pr {}", release_plz_arguments(root)),
         )
     }));
@@ -164,18 +166,20 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
 }
 
 fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
-    let mut steps = vec![
-        checkout(VERIFIED_COMMIT, 0),
-        install_tool(&plan.release_plz_tool),
-        install_helper(helper),
-        app_token(&[("contents", "write"), ("pull-requests", "read")]),
-    ];
+    let mut steps = vec![checkout(VERIFIED_COMMIT, 0)];
+    steps.extend(install_release_plz(&plan.release_plz_version));
+    steps.push(install_helper(helper));
+    steps.push(app_token(&[
+        ("contents", "write"),
+        ("pull-requests", "read"),
+    ]));
     let files: Vec<String> = (0..plan.roots.len())
         .map(|index| format!("\"$RUNNER_TEMP/release-{index}.json\""))
         .collect();
     steps.extend(plan.roots.iter().zip(&files).map(|(root, file)| {
         release_plz_step(
             format!("Tag the releases of {}", label(root)),
+            &plan.release_plz_version,
             format!(
                 "release-plz release {} -o json > {file}",
                 release_plz_arguments(root)

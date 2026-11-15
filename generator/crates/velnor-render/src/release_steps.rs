@@ -5,7 +5,7 @@ use velnor_model::RELEASE_PLZ_FILE;
 use velnor_release::RootPlan;
 
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
-use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
+use crate::steps::{CHECKOUT, MISE, MISE_BINARY_SHA256_LINUX_X64, MISE_VERSION};
 
 const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 const APP_TOKEN_VERSION: &str = "v3.3.0";
@@ -55,6 +55,51 @@ pub(crate) fn install_tool(tool: &str) -> RenderedStep {
     }
 }
 
+const MISE_ISOLATED: &str = "mise --no-config --no-env --no-hooks";
+pub(crate) const RELEASE_PLZ_BACKEND: &str = "aqua:release-plz/release-plz";
+
+pub(crate) fn release_plz_spec(version: &str) -> String {
+    format!("{RELEASE_PLZ_BACKEND}@{version}")
+}
+
+pub(crate) fn install_release_plz(version: &str) -> Vec<RenderedStep> {
+    vec![
+        RenderedStep {
+            name: "Install mise".to_owned(),
+            uses: Some(MISE.to_owned()),
+            with: vec![
+                ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+                (
+                    "sha256".to_owned(),
+                    Value::Text(MISE_BINARY_SHA256_LINUX_X64.to_owned()),
+                ),
+                ("install".to_owned(), Value::Bool(false)),
+                ("env".to_owned(), Value::Bool(false)),
+                ("cache".to_owned(), Value::Bool(false)),
+                ("cache_save".to_owned(), Value::Bool(false)),
+            ],
+            ..RenderedStep::default()
+        },
+        RenderedStep {
+            name: format!("Install release-plz {version}"),
+            run: Some(format!(
+                "{MISE_ISOLATED} install {}",
+                release_plz_spec(version)
+            )),
+            ..RenderedStep::default()
+        },
+    ]
+}
+
+const NO_PROGRAM_VARIABLES: [(&str, &str); 6] = [
+    ("RUSTC_WRAPPER", ""),
+    ("RUSTC_WORKSPACE_WRAPPER", ""),
+    ("CARGO_BUILD_RUSTC_WRAPPER", ""),
+    ("CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", ""),
+    ("CARGO_BUILD_RUSTC", "rustc"),
+    ("RUSTC", "rustc"),
+];
+
 pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     let mut with = variables(&[
         ("client-id", "${{ secrets.RELEASE_APP_ID }}"),
@@ -78,11 +123,20 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn release_plz_step(name: String, run: String) -> RenderedStep {
+pub(crate) fn release_plz_step(name: String, version: &str, run: String) -> RenderedStep {
+    let mut env = variables(&[("GITHUB_TOKEN", APP_TOKEN_OUTPUT)]);
+    env.extend(
+        NO_PROGRAM_VARIABLES
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
+    );
     RenderedStep {
         name,
-        env: variables(&[("GITHUB_TOKEN", APP_TOKEN_OUTPUT)]),
-        run: Some(run),
+        env,
+        run: Some(format!(
+            "{MISE_ISOLATED} exec {} -- {run}",
+            release_plz_spec(version)
+        )),
         ..RenderedStep::default()
     }
 }

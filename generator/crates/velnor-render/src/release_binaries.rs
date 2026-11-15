@@ -4,7 +4,7 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, VERIFIED_COMMIT};
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
@@ -80,7 +80,22 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
         join(&binary.root, "target")
     ));
     let linux = triple.ends_with("linux-musl");
-    let mut steps = vec![checkout(&tagged_source(binary), 1)];
+    let mut steps = vec![
+        RenderedStep {
+            id: Some("source".to_owned()),
+            ..checkout(&tagged_source(binary), 1)
+        },
+        RenderedStep {
+            env: variables(&[
+                ("COMMIT", VERIFIED_COMMIT),
+                ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
+            ]),
+            ..command(
+                "Check that the tag is the commit the gate verified".to_owned(),
+                "test \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
+            )
+        },
+    ];
     if linux {
         steps.push(command(
             "Install the musl C compiler".to_owned(),

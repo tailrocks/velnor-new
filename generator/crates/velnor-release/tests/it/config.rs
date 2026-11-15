@@ -111,7 +111,7 @@ fn the_locked_version_must_equal_the_configured_one() {
     unversioned.mise_lock = "[[tools.release-plz]]\n".to_owned();
     assert!(matches!(
         refusal(&unversioned),
-        Some(ReleaseError::ReleasePlzLockMismatch { .. })
+        Some(ReleaseError::ReleasePlzVersionNotExact { .. })
     ));
 
     let mut blank = files();
@@ -119,7 +119,7 @@ fn the_locked_version_must_equal_the_configured_one() {
     blank.mise_lock = "[[tools.release-plz]]\nversion = \"\"\n".to_owned();
     assert!(matches!(
         refusal(&blank),
-        Some(ReleaseError::ReleasePlzLockMismatch { .. })
+        Some(ReleaseError::ReleasePlzVersionNotExact { .. })
     ));
 }
 
