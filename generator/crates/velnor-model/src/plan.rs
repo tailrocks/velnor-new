@@ -80,7 +80,10 @@ pub struct Job {
     pub when: When,
     pub skip_on_draft: bool,
     pub runs_on: RunnerLabel,
+    pub permissions: Permissions,
     pub timeout_minutes: u16,
+    pub gate: Option<Gate>,
+    pub plan_outputs: Vec<(String, GateNeed)>,
     pub steps: Vec<Step>,
 }
 
@@ -89,6 +92,27 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub when: When,
+    pub gate: Option<Gate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gate {
+    pub slug: String,
+    pub need: GateNeed,
+    pub from: PlanFrom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum GateNeed {
+    Selected,
+    Doctests,
+    Docs,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanFrom {
+    ThisJob,
+    Job(JobId),
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -114,6 +138,9 @@ pub enum StepKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelperCommand {
+    Plan,
+    Prepare,
+    Restored,
     InputsSave,
     InputsRestore,
 }

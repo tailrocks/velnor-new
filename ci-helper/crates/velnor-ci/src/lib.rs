@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod changes;
 pub mod cli;
 pub mod collect;
 pub mod compare;
 pub mod coverage;
 pub mod error;
+pub mod event;
 pub mod gate;
 pub mod github;
 pub mod inputs;
@@ -16,5 +18,6 @@ mod needs;
 pub mod plan;
 pub mod publish;
 pub mod release;
+pub mod setup;
 pub mod time;
 pub mod timings;

@@ -193,7 +193,7 @@ impl Drop for Repo {
     }
 }
 
-fn serve(responses: BTreeMap<String, String>) -> String {
+pub(crate) fn serve(responses: BTreeMap<String, String>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
     let address = listener
         .local_addr()

@@ -9,6 +9,7 @@ use crate::error::CiError;
 
 pub trait GitHub {
     fn get(&self, path: &str) -> Result<String, CiError>;
+    fn get_raw(&self, path: &str) -> Result<String, CiError>;
 }
 
 pub trait GitHubWrite: GitHub {
@@ -90,6 +91,12 @@ pub struct ApiStep {
 pub struct ApiRepo {
     pub id: u64,
     pub default_branch: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiPullFile {
+    pub filename: String,
+    pub previous_filename: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,6 +244,21 @@ pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
 #[must_use]
 pub fn run_jobs_path(repo: &Repo, run_id: u64, page: u32) -> String {
     format!("/repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100&page={page}")
+}
+
+#[must_use]
+pub fn pull_files_path(repo: &Repo, number: u64, page: u32) -> String {
+    format!("/repos/{repo}/pulls/{number}/files?per_page=100&page={page}")
+}
+
+#[must_use]
+pub fn contents_path(repo: &Repo, path: &str, reference: &str) -> String {
+    let path: Vec<String> = path.split('/').map(encode).collect();
+    format!(
+        "/repos/{repo}/contents/{}?ref={}",
+        path.join("/"),
+        encode(reference)
+    )
 }
 
 fn encode(text: &str) -> String {

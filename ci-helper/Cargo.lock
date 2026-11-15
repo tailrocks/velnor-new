@@ -549,6 +549,7 @@ name = "velnor-ci"
 version = "0.1.79"
 dependencies = [
  "clap",
+ "libc",
  "ring",
  "serde",
  "serde_json",

@@ -109,12 +109,15 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner: match raw.runner {
-            Some(label) => RunnerLabel::new(label.clone()).map_err(|_| {
-                invalid(Reason::InvalidValue {
-                    key: "runner",
-                    value: label,
-                })
-            })?,
+            Some(label) => RunnerLabel::new(label.clone())
+                .ok()
+                .filter(|runner| !without_helper_build(runner.as_str()))
+                .ok_or_else(|| {
+                    invalid(Reason::InvalidValue {
+                        key: "runner",
+                        value: label,
+                    })
+                })?,
             None => defaults.runner,
         },
         timeout_minutes,
@@ -150,8 +153,21 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         .collect()
 }
 
-fn default_branch(raw: Option<String>, default: String) -> Result<String, Reason> {
-    match raw {
+fn without_helper_build(label: &str) -> bool {
+    let label = label.to_ascii_lowercase();
+    let Some(version) = label.strip_prefix("macos-") else {
+        return label.starts_with("windows");
+    };
+    let major: u32 = version
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(u32::MAX);
+    major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
+}
+
+fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
+    match configured {
         None => Ok(default),
         Some(name) if branch_name(&name) => Ok(name),
         Some(name) => Err(Reason::InvalidValue {
@@ -163,13 +179,18 @@ fn default_branch(raw: Option<String>, default: String) -> Result<String, Reason
 
 fn branch_name(name: &str) -> bool {
     !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
         && !name.starts_with(['/', '-'])
         && !name.ends_with(['/', '.'])
         && !name.contains("..")
         && !name.contains("//")
+        && !name.contains("@{")
+        && name != "HEAD"
+        && !name.split('/').any(|part| {
+            part.starts_with('.') || part.rsplit_once('.').is_some_and(|(_, ext)| ext == "lock")
+        })
+        && !name
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

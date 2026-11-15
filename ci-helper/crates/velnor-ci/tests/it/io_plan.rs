@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use crate::io::Repo;
 
-fn plan_repo(name: &str) -> Repo {
+pub(crate) fn plan_repo(name: &str) -> Repo {
     let repo = Repo::new(name);
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     repo.write(
@@ -32,11 +32,20 @@ fn plan_repo(name: &str) -> Repo {
 }
 
 pub(crate) fn plan_command(repo: &Repo) -> Command {
+    velnor_gen::io::write_metadata(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    stale_plan_command(repo)
+}
+
+pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .current_dir(repo.root())
         .env_remove("GITHUB_OUTPUT")
-        .env_remove("GITHUB_EVENT_NAME");
+        .env_remove("GITHUB_EVENT_NAME")
+        .env_remove("GITHUB_EVENT_PATH")
+        .env_remove("GITHUB_REPOSITORY")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GITHUB_API_URL");
     command
 }
 
@@ -172,6 +181,18 @@ fn plan_treats_a_source_over_the_size_bound_as_possibly_holding_docs() {
     );
 }
 
+#[test]
+fn plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs() {
+    let repo = plan_repo("doc-flags-total");
+    for n in 0..10 {
+        repo.write(&format!("a/src/m{n}.rs"), &"// pad\n".repeat(140_000));
+    }
+    assert_eq!(
+        doc_flags(&repo, None),
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+    );
+}
+
 fn explain(repo: &Repo, changed: &str) -> String {
     explain_all(repo, &[changed])
 }
@@ -221,7 +242,7 @@ fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selec
     assert!(unknown.contains("[[inputs]]"), "{unknown}");
 }
 
-fn plan_lock(fnv: &str) -> String {
+pub(crate) fn plan_lock(fnv: &str) -> String {
     format!(
         "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"0.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"0.0.0\"\ndependencies = [\"fnv\"]\n\n[[package]]\nname = \"fnv\"\nversion = \"{fnv}\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"sum-{fnv}\"\n"
     )

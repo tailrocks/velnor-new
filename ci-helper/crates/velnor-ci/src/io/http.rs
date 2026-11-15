@@ -9,6 +9,8 @@ use ureq::http::Response;
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite};
 
+pub(super) const PLAN_TIMEOUT: Duration = Duration::from_secs(20);
+pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug)]
@@ -19,18 +21,22 @@ pub(super) struct HttpGitHub {
 }
 
 impl HttpGitHub {
-    pub(super) fn new(api: String, token: String) -> Self {
+    pub(super) fn new(api: String, token: String, timeout: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(300)))
+            .timeout_global(Some(timeout))
             .build()
             .into();
         Self { agent, api, token }
     }
 
     fn signed<B>(&self, request: RequestBuilder<B>) -> RequestBuilder<B> {
+        self.accepting(request, "application/vnd.github+json")
+    }
+
+    fn accepting<B>(&self, request: RequestBuilder<B>, accept: &str) -> RequestBuilder<B> {
         request
             .header("Authorization", format!("Bearer {}", self.token))
-            .header("Accept", "application/vnd.github+json")
+            .header("Accept", accept)
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("User-Agent", "velnor-ci")
     }
@@ -59,6 +65,15 @@ impl GitHub for HttpGitHub {
         body(
             &format!("GET {path}"),
             self.signed(self.agent.get(&url)).call(),
+        )
+    }
+
+    fn get_raw(&self, path: &str) -> Result<String, CiError> {
+        let url = format!("{}{path}", self.api);
+        body(
+            &format!("GET {path}"),
+            self.accepting(self.agent.get(&url), "application/vnd.github.raw+json")
+                .call(),
         )
     }
 }

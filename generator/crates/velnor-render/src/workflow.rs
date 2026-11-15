@@ -50,11 +50,11 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-        entry(
-            "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-        ),
     ]);
+    items.extend([entry(
+        "steps",
+        Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+    )]);
     match &job.comment {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),

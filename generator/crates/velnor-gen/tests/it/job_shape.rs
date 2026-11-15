@@ -95,7 +95,7 @@ fn the_job_ids_do_not_grow_with_the_number_of_crates() {
         (None, vec!["rust", "required"]),
         (
             Some(Shape::LintAndTest),
-            vec!["rust-lint", "rust-test", "required"],
+            vec!["rust-plan", "rust-lint", "rust-test", "required"],
         ),
     ] {
         let mut small = facts(vec![("Cargo.toml", crates(3))]);
@@ -191,7 +191,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         "{commands:?}"
     );
     no_tests.config.shape = Some(Shape::LintAndTest);
-    assert_eq!(job_ids(&no_tests), ["rust-lint", "required"]);
+    assert_eq!(job_ids(&no_tests), ["rust-plan", "rust-lint", "required"]);
     Ok(())
 }
 
@@ -215,6 +215,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
     assert_eq!(
         jobs,
         [
+            "  rust-plan:",
             "  rust-root:",
             "  rust-lint-lab:",
             "  rust-test-lab:",

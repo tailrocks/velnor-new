@@ -87,13 +87,17 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             when: When::Success,
             skip_on_draft: false,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
+            permissions: Permissions::default(),
             timeout_minutes: 10,
+            gate: None,
+            plan_outputs: Vec::new(),
             steps: kinds
                 .into_iter()
                 .map(|kind| Step {
                     kind,
                     directory: None,
                     when: When::Success,
+                    gate: None,
                 })
                 .collect(),
         }],

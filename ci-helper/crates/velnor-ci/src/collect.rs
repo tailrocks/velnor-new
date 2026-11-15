@@ -65,6 +65,19 @@ pub fn collect(
     })
 }
 
+const SETUP_END_STEPS: [&str; 2] = ["velnor-ci restored", "velnor-ci plan"];
+
+#[must_use]
+pub fn setup_seconds(job: &ApiJob) -> Option<u64> {
+    let started = job.started_at.as_deref()?;
+    SETUP_END_STEPS.iter().find_map(|name| {
+        let step = job.steps.iter().find(|step| step.name == *name)?;
+        let done = step.completed_at.as_deref()?;
+        (step.conclusion.as_deref() == Some("success"))
+            .then(|| seconds_between(Some(started), Some(done)))
+    })
+}
+
 fn fetch_jobs(
     github: &dyn GitHub,
     repo: &Repo,
@@ -144,6 +157,7 @@ fn job_metrics(
         started,
         queue_seconds,
         duration_seconds,
+        setup_seconds: if ran { setup_seconds(job) } else { None },
         steps,
         log,
     })

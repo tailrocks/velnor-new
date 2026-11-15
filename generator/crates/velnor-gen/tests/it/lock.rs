@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_gen::{COMPATIBLE_HELPER_SERIES, GenerateError, expected_with_notes};
+use velnor_gen::{COMPATIBLE_HELPER_SERIES, GenerateError, expected_files, expected_with_notes};
 use velnor_model::{HelperVersion, RepoView};
 use velnor_rust::{DetectError, LOCK_PATH, Reason, pin_lock};
 
@@ -139,7 +139,13 @@ fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_an
     for forbidden in ["curl", "releases/download", "jactionlint", "fromJSON"] {
         assert!(!text.contains(forbidden), "{forbidden} in {text}");
     }
-    assert!(!workflow(&view(&["Cargo.toml"], None)?)?.contains("velnor-ci"));
+    let mut unpinned = view(&["Cargo.toml"], None)?;
+    unpinned.files.remove(&LOCK_PATH);
+    unpinned.tracked_paths.remove(&LOCK_PATH);
+    assert_eq!(
+        expected_files(&unpinned),
+        Err(GenerateError::HelperNotPinned)
+    );
     Ok(())
 }
 

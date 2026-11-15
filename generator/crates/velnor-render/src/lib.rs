@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod gate;
 mod header;
 mod release;
 mod rules;
@@ -108,24 +109,31 @@ fn triggers(triggers: &Triggers) -> Yaml {
     Yaml::Map(items)
 }
 
-fn permissions(permissions: &Permissions) -> Yaml {
+pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {
+    permissions
+        .0
+        .iter()
+        .map(|(scope, access)| {
+            let scope = match scope {
+                PermissionScope::Actions => "actions",
+                PermissionScope::Contents => "contents",
+                PermissionScope::PullRequests => "pull-requests",
+            };
+            let access = match access {
+                Access::None => "none",
+                Access::Read => "read",
+                Access::Write => "write",
+            };
+            (scope.to_owned(), access.to_owned())
+        })
+        .collect()
+}
+
+pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
     Yaml::Map(
-        permissions
-            .0
+        permission_pairs(permissions)
             .iter()
-            .map(|(scope, access)| {
-                let scope = match scope {
-                    PermissionScope::Actions => "actions",
-                    PermissionScope::Contents => "contents",
-                    PermissionScope::PullRequests => "pull-requests",
-                };
-                let access = match access {
-                    Access::None => "none",
-                    Access::Read => "read",
-                    Access::Write => "write",
-                };
-                entry(scope, text(access))
-            })
+            .map(|(scope, access)| entry(scope, text(access)))
             .collect(),
     )
 }

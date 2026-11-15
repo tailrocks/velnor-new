@@ -20,8 +20,43 @@ concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
 jobs:
+  rust-plan:
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_xtask_mode: '${{ steps.plan.outputs.rust_xtask_mode }}'
+      rust_xtask_docs: '${{ steps.plan.outputs.rust_xtask_docs }}'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - name: velnor-ci plan
+        id: plan
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: velnor-ci plan
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -30,6 +65,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -37,29 +79,40 @@ jobs:
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
+      - name: velnor-ci prepare
+        id: prepare
+        run: velnor-ci prepare
+      - name: velnor-ci restored
+        id: restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
-        run: cargo-fmt --all --check
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Doctests
-        if: '${{ !cancelled() }}'
-        run: cargo test --doc --workspace --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
+        run: velnor-ci run -- cargo test --doc --workspace --locked
       - name: Documentation
-        if: '${{ !cancelled() }}'
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p app --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p core --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo check -p core --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-xtask:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_xtask_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -68,6 +121,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -76,32 +136,41 @@ jobs:
       - name: Add Rust components
         working-directory: xtask
         run: rustup component add clippy rustfmt
+      - name: velnor-ci prepare
+        id: prepare
+        run: velnor-ci prepare
+      - name: velnor-ci restored
+        id: restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
-        run: cargo-fmt --all --check
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' }}'
         working-directory: xtask
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
-        run: cargo check -p xtask --locked
+        run: velnor-ci run -- cargo check -p xtask --locked
   required:
     name: Required
     needs:
+      - rust-plan
       - rust-root
       - rust-xtask
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

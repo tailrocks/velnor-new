@@ -14,15 +14,17 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, commit_url, manifests, metadata_roots,
-    pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
+    DetectError, LOCK_PATH, LockError, METADATA_PATH, MetadataError, MetadataFileError, commit_url,
+    manifests, metadata_roots, pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
+mod recorded;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
 use crate::{Drift, GenerateError, check_tag, plan_generate, require_compatible};
+pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
     relocate_metadata, write_sample,
@@ -37,6 +39,7 @@ pub enum Error {
     Program(String, String),
     Repository(String),
     Metadata(MetadataError),
+    MetadataFile(MetadataFileError),
     Detect(DetectError),
     Generate(GenerateError),
     Lock(LockError),
@@ -54,6 +57,7 @@ impl fmt::Display for Error {
             Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
             Self::Repository(message) => f.write_str(message),
             Self::Metadata(error) => error.fmt(f),
+            Self::MetadataFile(error) => error.fmt(f),
             Self::Detect(error) => error.fmt(f),
             Self::Generate(error) => error.fmt(f),
             Self::Lock(error) => error.fmt(f),
@@ -202,7 +206,9 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let workflows = read_files(&root, &workflow_paths(&root)?)?;
+    let mut wanted = workflow_paths(&root)?;
+    wanted.push(METADATA_PATH);
+    let workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
     let (expected, drifts) = plan_generate(
         &read_view(&root, false)?.0,
@@ -298,8 +304,8 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
+fn tracked_paths(root: &Path) -> Result<BTreeSet<RepoPath>, Error> {
+    program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
         .map(|entry| {
@@ -311,8 +317,23 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             })?;
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    view_of(root, tracked_paths, keep_metadata)
+        .collect()
+}
+
+fn view_from(root: &Path, tracked_paths: BTreeSet<RepoPath>) -> Result<RepoView, Error> {
+    Ok(RepoView {
+        files: read_files(root, &wanted_files(&tracked_paths))?,
+        tracked_paths,
+        rust_metadata: BTreeMap::new(),
+    })
+}
+
+fn read_tracked(root: &Path) -> Result<RepoView, Error> {
+    view_from(root, tracked_paths(root)?)
+}
+
+fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+    view_of(root, tracked_paths(root)?, keep_metadata)
 }
 
 pub fn view_of(
@@ -320,11 +341,7 @@ pub fn view_of(
     tracked_paths: BTreeSet<RepoPath>,
     keep_metadata: bool,
 ) -> Result<Recorded, Error> {
-    let mut view = RepoView {
-        files: read_files(root, &wanted_files(&tracked_paths))?,
-        tracked_paths,
-        rust_metadata: BTreeMap::new(),
-    };
+    let mut view = view_from(root, tracked_paths)?;
     let mut recorded = BTreeMap::new();
     for manifest in metadata_roots(&view).map_err(Error::Detect)? {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {

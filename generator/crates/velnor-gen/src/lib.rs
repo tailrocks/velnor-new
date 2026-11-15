@@ -12,7 +12,10 @@ use std::io::Write;
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_release::ReleaseError;
 use velnor_render::{Owner, RuleViolation, owner_of, render};
-use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
+use velnor_rust::{
+    DetectError, METADATA_PATH, MetadataFileError, check_required_check, check_tools, detect,
+    metadata_file, plan,
+};
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
@@ -24,6 +27,8 @@ pub enum GenerateError {
     ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
     ReleaseRootWithoutCargoToml(String),
+    HelperNotPinned,
+    Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
 
@@ -45,6 +50,10 @@ impl fmt::Display for GenerateError {
                 f,
                 ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
             ),
+            Self::HelperNotPinned => f.write_str(
+                "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
+            ),
+            Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {
@@ -62,6 +71,21 @@ impl From<DetectError> for GenerateError {
     fn from(error: DetectError) -> Self {
         Self::Detect(error)
     }
+}
+
+pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+    generated_with_notes(view).map(|(files, _)| files)
+}
+
+pub fn generated_with_notes(
+    view: &RepoView,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
+    let (mut files, notes) = expected_with_notes(view)?;
+    files.insert(
+        METADATA_PATH,
+        metadata_file(view).map_err(GenerateError::Metadata)?,
+    );
+    Ok((files, notes))
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -87,7 +111,7 @@ pub fn plan_generate(
     engine_configured: bool,
     out: &mut dyn Write,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
-    let (expected, notes) = expected_with_notes(view)?;
+    let (expected, notes) = generated_with_notes(view)?;
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }
@@ -99,7 +123,8 @@ fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {
     facts
         .helper
         .as_ref()
-        .map_or(Ok(()), |release| require_compatible(release.version()))
+        .ok_or(GenerateError::HelperNotPinned)
+        .and_then(|release| require_compatible(release.version()))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
@@ -171,6 +196,10 @@ pub fn drift(
     paths
         .into_iter()
         .filter_map(|path| match (expected.get(path), workflows.get(path)) {
+            (Some(want), Some(have)) if *path == METADATA_PATH => {
+                (want.as_bytes() != have.as_slice()).then(|| Drift::Changed(path.clone()))
+            }
+            (None, Some(_)) if *path == METADATA_PATH => Some(Drift::Stale(path.clone())),
             (Some(want), Some(have)) => match owner_of(have) {
                 Owner::VelnorGen if want.as_bytes() == have.as_slice() => None,
                 Owner::VelnorGen => Some(Drift::Changed(path.clone())),

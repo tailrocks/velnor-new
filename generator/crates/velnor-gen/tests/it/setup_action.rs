@@ -176,7 +176,18 @@ impl Install {
         shim_dir: Option<&Path>,
     ) -> Result<std::process::ExitStatus, Box<dyn Error>> {
         let mut child = self.spawn_with(cache, shim_dir, |_| {})?;
-        Ok(child.wait()?)
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(status);
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().ok();
+                child.wait().ok();
+                return Err("the install script did not finish in 30 seconds".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
     }
 
     fn spawn(
@@ -387,6 +398,25 @@ fn a_failed_copy_into_the_tool_cache_publishes_no_entry() -> TestResult {
     fs::remove_dir_all(&install.work)?;
     assert!(status.success());
     assert!(entries.is_empty(), "{entries:?}");
+    assert_eq!(copy?, install.binary);
+    Ok(())
+}
+
+#[test]
+fn a_special_file_in_the_tool_cache_is_not_read_and_the_download_is_used() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    let install = Install::new("cache-fifo")?;
+    let entry = install.work.join("cache/velnor-ci/1.2.3/x64");
+    fs::create_dir_all(&entry)?;
+    let fifo = entry.join("velnor-ci");
+    assert!(Command::new("mkfifo").arg(&fifo).status()?.success());
+    fs::set_permissions(&fifo, fs::Permissions::from_mode(0o755))?;
+    let status = install.run(Some(&install.work.join("cache")), None);
+    let copy = install.installed();
+    fs::remove_dir_all(&install.work)?;
+    assert!(status?.success());
     assert_eq!(copy?, install.binary);
     Ok(())
 }

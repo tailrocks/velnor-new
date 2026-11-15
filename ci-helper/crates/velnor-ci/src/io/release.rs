@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 
-use super::http::HttpGitHub;
+use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
 use crate::cli::{PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
@@ -52,5 +52,9 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         names: args.files.clone(),
         files,
     };
-    publish(&HttpGitHub::new(super::api_url(), token), &repo, &request)
+    publish(
+        &HttpGitHub::new(super::api_url(), token, DEFAULT_TIMEOUT),
+        &repo,
+        &request,
+    )
 }

@@ -20,7 +20,7 @@ pub(super) fn run_timings(args: &TimingsArgs) -> Result<String, CiError> {
     let checkout = read_checkout(&root).map_err(|e| CiError::new(e.to_string()))?;
     let (roots, runner) = current_setup(&checkout.view)?;
     let report = gather(
-        &http::HttpGitHub::new(api_url(), token),
+        &http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT),
         &repo,
         &roots,
         &runner,
