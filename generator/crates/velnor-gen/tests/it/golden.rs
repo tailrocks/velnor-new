@@ -8,7 +8,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use similar::TextDiff;
-use velnor_gen::expected_files;
+use velnor_gen::expected_with_notes;
 use velnor_gen::io::SAMPLE_REPOSITORY;
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{metadata_roots, reduce_metadata, wanted_files};
@@ -142,7 +142,7 @@ fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
     assert!(!samples.is_empty(), "no sample recorded");
     let mut failures = Vec::new();
     for sample in &samples {
-        let generated = expected_files(&load(sample)?)?;
+        let generated = expected_with_notes(&load(sample)?).map(|(files, _)| files)?;
         let expected_dir = sample.join("expected");
         if update {
             rewrite(&expected_dir, &generated)?;
@@ -205,7 +205,10 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
         .collect();
     let mut present = BTreeSet::new();
     for sample in sample_dirs()? {
-        for path in expected_files(&load(&sample)?)?.keys() {
+        for path in expected_with_notes(&load(&sample)?)
+            .map(|(files, _)| files)?
+            .keys()
+        {
             if matches!(
                 Path::new(path.as_str())
                     .extension()

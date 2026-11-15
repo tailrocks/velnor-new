@@ -49,10 +49,6 @@ impl From<DetectError> for GenerateError {
     }
 }
 
-pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
-    expected_with_notes(view).map(|(files, _)| files)
-}
-
 pub fn expected_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {

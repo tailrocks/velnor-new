@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_gen::{GenerateError, expected_files, expected_with_notes, plan_generate};
+use velnor_gen::{GenerateError, expected_with_notes, plan_generate};
 use velnor_model::{
     CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
     TargetKind, TargetName, Timings, When,
@@ -247,7 +247,8 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         "required_check = \"\"\n",
         "required_check = \"a\\u0007b\"\n",
     ] {
-        let result = expected_files(&view(&["Cargo.toml"], Some(config.as_bytes()))?);
+        let result = expected_with_notes(&view(&["Cargo.toml"], Some(config.as_bytes()))?)
+            .map(|(files, _)| files);
         assert!(invalid(CONFIG_PATH)(result.clone()), "{config}: {result:?}");
     }
     Ok(())
@@ -258,10 +259,10 @@ const GONE: &str =
     r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#;
 
 fn untimed() -> Result<BTreeMap<RepoPath, String>, Box<dyn std::error::Error>> {
-    Ok(expected_files(&view(
-        &["Cargo.toml", "lab/Cargo.toml"],
-        Some(b""),
-    )?)?)
+    Ok(
+        expected_with_notes(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?)
+            .map(|(files, _)| files)?,
+    )
 }
 
 #[test]
@@ -309,8 +310,14 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
             ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
         ]
     );
-    assert_eq!(files, expected_files(&timed_view(LAB, "")?)?);
+    assert_eq!(
+        files,
+        expected_with_notes(&timed_view(LAB, "")?).map(|(files, _)| files)?
+    );
     assert_ne!(files, untimed()?);
-    assert_eq!(expected_files(&timed_view(GONE, "")?)?, untimed()?);
+    assert_eq!(
+        expected_with_notes(&timed_view(GONE, "")?).map(|(files, _)| files)?,
+        untimed()?
+    );
     Ok(())
 }

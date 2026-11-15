@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use velnor_gen::{GenerateError, expected_files};
+use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
     PackageName, RepoPath, RepoView, RustMetadata, RustPackage, Target, TargetKind, TargetName,
 };
@@ -57,7 +57,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
 }
 
 pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
-    let mut files = expected_files(view)?;
+    let mut files = expected_with_notes(view).map(|(files, _)| files)?;
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;
@@ -157,7 +157,8 @@ jobs:
 
 #[test]
 fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> TestResult {
-    let files = expected_files(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    let files = expected_with_notes(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)
+        .map(|(files, _)| files)?;
     assert_eq!(
         files,
         BTreeMap::from([(RepoPath::new(WORKFLOW)?, TWO_ROOTS.to_owned())])
@@ -236,7 +237,8 @@ fn an_invalid_config_is_rejected() -> TestResult {
         b"exclude = [\"../lab\"]\n",
     ];
     for config in cases {
-        let result = expected_files(&view(&["Cargo.toml"], Some(config))?);
+        let result =
+            expected_with_notes(&view(&["Cargo.toml"], Some(config))?).map(|(files, _)| files);
         assert!(
             matches!(
                 &result,
@@ -251,12 +253,14 @@ fn an_invalid_config_is_rejected() -> TestResult {
 
 #[test]
 fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
-    let empty = expected_files(&view(&[], None)?);
-    let excluded = expected_files(&view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?);
-    let root_excluded = expected_files(&view(
+    let empty = expected_with_notes(&view(&[], None)?).map(|(files, _)| files);
+    let excluded = expected_with_notes(&view(&["lab/Cargo.toml"], Some(b"exclude = [\"lab\"]\n"))?)
+        .map(|(files, _)| files);
+    let root_excluded = expected_with_notes(&view(
         &["Cargo.toml"],
         Some(b"exclude = [\"Cargo.toml\"]\n"),
-    )?);
+    )?)
+    .map(|(files, _)| files);
     let mut memberless = view(&["Cargo.toml"], None)?;
     for metadata in memberless.rust_metadata.values_mut() {
         metadata.members.clear();
@@ -271,7 +275,7 @@ fn a_repository_without_a_cargo_root_with_members_is_rejected() -> TestResult {
         Err(GenerateError::Detect(DetectError::NoRustRoot))
     );
     assert_eq!(
-        expected_files(&memberless),
+        expected_with_notes(&memberless).map(|(files, _)| files),
         Err(GenerateError::Detect(DetectError::NoRustRoot))
     );
     Ok(())
