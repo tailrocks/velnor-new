@@ -140,6 +140,11 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             ),
             vec![],
         ),
+        CargoCommand::TestTarget { package, target } => (
+            format!("Test {package} {target}"),
+            format!("cargo test -p {package} --test {target} --locked"),
+            vec![],
+        ),
         CargoCommand::Doctest => (
             "Doctests".into(),
             "cargo test --doc --workspace --locked".into(),

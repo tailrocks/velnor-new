@@ -45,6 +45,7 @@ pub enum Reason {
         input: PathGlob,
     },
     UnknownInputPackage(String),
+    UnknownNextestHarness(String),
     LockLine(usize),
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
@@ -93,6 +94,10 @@ impl fmt::Display for Reason {
             Self::UnknownInputPackage(package) => write!(
                 f,
                 "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::UnknownNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which is not a test target with harness = false"
             ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(

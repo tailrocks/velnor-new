@@ -9,6 +9,7 @@ mod doc_steps;
 mod drift;
 mod facts;
 mod golden;
+mod harness;
 mod inputs;
 mod io;
 mod job_setup;

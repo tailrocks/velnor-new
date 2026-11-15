@@ -10,6 +10,7 @@ use velnor_model::{
 
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
+use crate::harness::custom_harnesses;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -67,7 +68,7 @@ pub(crate) fn rust_roots(
                     targets.entry(name).or_default().insert(target);
                 }
             }
-            Ok(root(manifest, metadata, &owner, &targets))
+            Ok(root(manifest, metadata, &owner, &targets, &view.files))
         })
         .collect::<Result<_, _>>()?;
     Ok((roots, every))
@@ -78,6 +79,7 @@ fn root(
     metadata: &RustMetadata,
     owner: &BTreeMap<&RepoPath, &RepoPath>,
     targets: &Targets,
+    files: &BTreeMap<RepoPath, Vec<u8>>,
 ) -> RustRoot {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
@@ -90,7 +92,7 @@ fn root(
     let mut members: Vec<RustMember> = metadata
         .members
         .iter()
-        .map(|package| member(package, targets))
+        .map(|package| member(package, targets, files))
         .collect();
     members.sort_by(|a, b| a.name.cmp(&b.name));
     RustRoot {
@@ -257,7 +259,11 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
     Some(segments.join("/"))
 }
 
-fn member(package: &RustPackage, targets: &Targets) -> RustMember {
+fn member(
+    package: &RustPackage,
+    targets: &Targets,
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+) -> RustMember {
     RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
@@ -278,5 +284,6 @@ fn member(package: &RustPackage, targets: &Targets) -> RustMember {
             })
             .collect(),
         targets: package.targets.clone(),
+        custom_harnesses: custom_harnesses(files, package),
     }
 }

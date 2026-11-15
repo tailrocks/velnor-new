@@ -77,6 +77,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownLockedPackage(package),
         ));
     }
+    if let Some((package, target)) = config.nextest_harnesses.iter().find(|(package, target)| {
+        !rust_roots
+            .iter()
+            .flat_map(|root| &root.members)
+            .any(|member| member.name == *package && member.custom_harnesses.contains(target))
+    }) {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::UnknownNextestHarness(format!("{package}:{target}")),
+        ));
+    }
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
