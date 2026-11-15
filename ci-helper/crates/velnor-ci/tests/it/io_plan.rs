@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use crate::io::Repo;
 
-fn plan_repo(name: &str) -> Repo {
+pub(crate) fn plan_repo(name: &str) -> Repo {
     let repo = Repo::new(name);
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     repo.write(
@@ -41,7 +41,11 @@ pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     command
         .current_dir(repo.root())
         .env_remove("GITHUB_OUTPUT")
-        .env_remove("GITHUB_EVENT_NAME");
+        .env_remove("GITHUB_EVENT_NAME")
+        .env_remove("GITHUB_EVENT_PATH")
+        .env_remove("GITHUB_REPOSITORY")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GITHUB_API_URL");
     command
 }
 
@@ -226,7 +230,7 @@ fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selec
     assert!(unknown.contains("[[inputs]]"), "{unknown}");
 }
 
-fn plan_lock(fnv: &str) -> String {
+pub(crate) fn plan_lock(fnv: &str) -> String {
     format!(
         "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"0.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"0.0.0\"\ndependencies = [\"fnv\"]\n\n[[package]]\nname = \"fnv\"\nversion = \"{fnv}\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"sum-{fnv}\"\n"
     )

@@ -98,7 +98,7 @@ fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(config))?)?;
     assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
     assert!(text.contains(
-        "      - name: Format\n        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
+        "      - name: Format\n        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
     ));
     assert!(!text.contains("lab"));
     Ok(())

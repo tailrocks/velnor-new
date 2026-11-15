@@ -38,35 +38,35 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: velnor-ci plan
       - name: Install tools
-        if: '${{ steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
           cache: false
       - name: Add Rust components
-        if: '${{ steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: rustup component add clippy rustfmt
       - name: velnor-ci prepare
         id: prepare
-        if: '${{ steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci prepare
       - name: velnor-ci restored
-        if: '${{ steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check single-crate alone
-        if: '${{ !cancelled() && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci run -- cargo check -p single-crate --locked
   required:
     name: Required

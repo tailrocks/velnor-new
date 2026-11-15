@@ -21,11 +21,7 @@ type Versions = BTreeMap<String, Vec<String>>;
 
 #[must_use]
 pub fn mise_files() -> Vec<RepoPath> {
-    MISE_CONFIGS
-        .iter()
-        .cloned()
-        .chain([MISE_LOCK])
-        .collect()
+    MISE_CONFIGS.iter().cloned().chain([MISE_LOCK]).collect()
 }
 
 pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, DetectError> {

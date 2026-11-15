@@ -26,15 +26,19 @@ pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
 }
 
 fn gate_parts(gate: &Gate) -> Vec<String> {
-    let source = match &gate.from {
-        PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
-        PlanFrom::Job(job) => format!("needs.{job}.outputs"),
+    let (source, mut parts) = match &gate.from {
+        PlanFrom::ThisJob => (
+            format!("steps.{PLAN_STEP}.outputs"),
+            vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
+        ),
+        PlanFrom::Job(job) => (format!("needs.{job}.outputs"), Vec::new()),
     };
     let read = |name: &str| format!("{source}.{}", output(&gate.slug, name));
-    let selected = format!("{} != 'none'", read("mode"));
+    parts.push(format!("{} != 'none'", read("mode")));
     match gate.need {
-        GateNeed::Selected => vec![selected],
-        GateNeed::Doctests => vec![selected, format!("{} == 'run'", read("doctests"))],
-        GateNeed::Docs => vec![selected, format!("{} == 'run'", read("docs"))],
+        GateNeed::Selected => {}
+        GateNeed::Doctests => parts.push(format!("{} == 'run'", read("doctests"))),
+        GateNeed::Docs => parts.push(format!("{} == 'run'", read("docs"))),
     }
+    parts
 }

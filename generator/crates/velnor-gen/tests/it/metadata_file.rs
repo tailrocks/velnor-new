@@ -1,0 +1,187 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_gen::{Drift, GENERATED_PATHS, drift, generated_files};
+use velnor_model::{DependencyKind, RepoPath, RepoView, TargetKind};
+use velnor_rust::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata, sha256_hex};
+
+use crate::facts::{TestResult, package, path};
+use crate::pipeline::view;
+
+fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut files = view(&["Cargo.toml", "tool/Cargo.toml"], None)?;
+    let core = package(
+        "core",
+        "core/Cargo.toml",
+        &[],
+        &[
+            ("core", TargetKind::Lib, false),
+            ("it", TargetKind::Test, true),
+        ],
+    )?;
+    let app = package(
+        "app",
+        "Cargo.toml",
+        &[("core", DependencyKind::Normal, "core/Cargo.toml")],
+        &[("app", TargetKind::Bin, false)],
+    )?;
+    let tool = package(
+        "tool",
+        "tool/Cargo.toml",
+        &[("core", DependencyKind::Dev, "core/Cargo.toml")],
+        &[("tool", TargetKind::Bin, false)],
+    )?;
+    files
+        .rust_metadata
+        .get_mut(&path("Cargo.toml")?)
+        .ok_or("root")?
+        .members = vec![app, core];
+    files
+        .rust_metadata
+        .get_mut(&path("tool/Cargo.toml")?)
+        .ok_or("tool")?
+        .members = vec![tool];
+    for manifest in ["Cargo.toml", "core/Cargo.toml", "tool/Cargo.toml"] {
+        files.tracked_paths.insert(path(manifest)?);
+        files
+            .files
+            .insert(path(manifest)?, format!("# {manifest}\n").into_bytes());
+    }
+    Ok(files)
+}
+
+fn recorded(files: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(metadata_file(files)?)
+}
+
+#[test]
+fn the_digest_matches_the_published_test_vectors() {
+    let million = "a".repeat(1_000_000);
+    for (text, digest) in [
+        (
+            "",
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        ),
+        (
+            "abc",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ),
+        (
+            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+        ),
+        (
+            million.as_str(),
+            "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0",
+        ),
+    ] {
+        assert_eq!(sha256_hex(text.as_bytes()), digest, "{}", text.len());
+    }
+}
+
+#[test]
+fn the_file_gives_back_every_member_edge_and_test_target_it_was_written_from() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    assert_eq!(
+        recorded_metadata(&files, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    assert_eq!(recorded(&files)?, text);
+    Ok(())
+}
+
+#[test]
+fn a_manifest_that_changed_or_vanished_after_the_file_was_written_is_named() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    for manifest in ["Cargo.toml", "core/Cargo.toml", "tool/Cargo.toml"] {
+        let mut edited = files.clone();
+        edited.files.insert(path(manifest)?, b"# edited\n".to_vec());
+        assert_eq!(
+            recorded_metadata(&edited, Some(text.as_bytes())),
+            Err(MetadataFileError::Changed(path(manifest)?)),
+            "{manifest}"
+        );
+        let mut deleted = files.clone();
+        deleted.files.remove(&path(manifest)?);
+        assert_eq!(
+            recorded_metadata(&deleted, Some(text.as_bytes())),
+            Err(MetadataFileError::Changed(path(manifest)?)),
+            "{manifest} deleted"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_manifest_the_file_does_not_list_is_named_unless_the_config_excludes_it() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let mut grown = files.clone();
+    grown.tracked_paths.insert(path("core/extra/Cargo.toml")?);
+    grown
+        .files
+        .insert(path("core/extra/Cargo.toml")?, b"# new\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes())),
+        Err(MetadataFileError::Unlisted(path("core/extra/Cargo.toml")?))
+    );
+    let config = RepoPath::new(".velnor/rust-ci.toml")?;
+    grown.tracked_paths.insert(config.clone());
+    grown
+        .files
+        .insert(config, b"exclude = [\"core/extra\"]\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    Ok(())
+}
+
+#[test]
+fn a_missing_or_unreadable_file_asks_for_generate() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let skewed = [
+        "not json".to_owned(),
+        text.replace("\"tests\"", "\"tested\""),
+        text.replace("\"lib\"", "\"cdylib2\""),
+        text.replace("\"normal\"", "\"sideways\""),
+    ];
+    assert_eq!(
+        recorded_metadata(&files, None),
+        Err(MetadataFileError::Missing)
+    );
+    for skew in &skewed {
+        let error = recorded_metadata(&files, Some(skew.as_bytes()))
+            .err()
+            .ok_or("accepted")?;
+        assert!(matches!(error, MetadataFileError::Unreadable(_)), "{skew}");
+        assert!(error.to_string().ends_with("run velnor-gen generate"));
+    }
+    Ok(())
+}
+
+#[test]
+fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> TestResult {
+    let files = two_workspaces()?;
+    let generated = generated_files(&files)?;
+    assert_eq!(
+        generated.keys().cloned().collect::<Vec<_>>(),
+        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
+    );
+    let on_disk = generated
+        .iter()
+        .map(|(path, text)| (path.clone(), text.clone().into_bytes()))
+        .collect();
+    assert_eq!(drift(&generated, &on_disk), []);
+    let mut changed = on_disk.clone();
+    changed.insert(METADATA_PATH, b"{}".to_vec());
+    assert_eq!(drift(&generated, &changed), [Drift::Changed(METADATA_PATH)]);
+    let mut missing = on_disk;
+    missing.remove(&METADATA_PATH);
+    assert_eq!(drift(&generated, &missing), [Drift::Missing(METADATA_PATH)]);
+    assert_eq!(GENERATED_PATHS.len(), 2);
+    Ok(())
+}
