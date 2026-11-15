@@ -9,25 +9,24 @@ use crate::io::Repo;
 
 pub(crate) fn plan_repo(name: &str) -> Repo {
     let repo = Repo::new(name);
-    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
-    repo.write(
-        "Cargo.toml",
-        "[workspace]\nmembers = [\"a\", \"b\"]\nexclude = [\"tools\"]\nresolver = \"3\"\n",
-    );
-    repo.write("Cargo.lock", "version = 4\n");
-    for member in ["a", "b"] {
-        repo.write(
-            &format!("{member}/Cargo.toml"),
-            &format!("[package]\nname = \"{member}\"\nedition = \"2024\"\n"),
-        );
-        repo.write(&format!("{member}/src/lib.rs"), "");
-    }
-    repo.write(
-        "tools/Cargo.toml",
-        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
-    );
-    repo.write("tools/Cargo.lock", "version = 4\n");
-    repo.write("tools/src/main.rs", "fn main() {}\n");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\nrust = \"1.99.1\"\n"),
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"a\", \"b\"]\nexclude = [\"tools\"]\nresolver = \"3\"\n",
+        ),
+        ("Cargo.lock", "version = 4\n"),
+        ("a/Cargo.toml", "[package]\nname = \"a\"\nedition = \"2024\"\n"),
+        ("a/src/lib.rs", ""),
+        ("b/Cargo.toml", "[package]\nname = \"b\"\nedition = \"2024\"\n"),
+        ("b/src/lib.rs", ""),
+        (
+            "tools/Cargo.toml",
+            "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
+        ),
+        ("tools/Cargo.lock", "version = 4\n"),
+        ("tools/src/main.rs", "fn main() {}\n"),
+    ]);
     repo
 }
 
@@ -85,7 +84,9 @@ fn doc_flags(repo: &Repo, event: Option<&str>) -> String {
 }
 
 fn doc_flags_of(repo: &Repo, event: Option<&str>, changed: &str) -> String {
-    let outputs = repo.root().join("doc-flags");
+    let outputs = repo
+        .root()
+        .join(format!("doc-flags-{}", event.unwrap_or("none")));
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
     command
@@ -106,57 +107,70 @@ fn doc_flags_of(repo: &Repo, event: Option<&str>, changed: &str) -> String {
         .collect()
 }
 
+const SCAN_ALL: &str = "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run ";
+const DOCS_ALL: &str = "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run ";
+
 #[test]
 fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps() {
-    let repo = plan_repo("doc-flags");
-    assert_eq!(
-        doc_flags(&repo, None),
-        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
-    );
-    repo.write(
+    let plain = plan_repo("doc-flags");
+    let minimal = plain.fork("doc-flags-minimal");
+    minimal.write_unstaged(
         "tools/Cargo.toml",
         "[package]\nname = \"t\"\nedition = \"2024\"\n",
     );
-    assert_eq!(
-        doc_flags(&repo, None),
-        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
-    );
-    repo.write(
+    let documented = plain.fork("doc-flags-documented");
+    documented.write_unstaged(
         "tools/Cargo.toml",
         "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
     );
-    repo.write(
+    documented.write_unstaged(
         "b/src/lib.rs",
         "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
     );
-    repo.write("tools/src/main.rs", "//! The tool.\nfn main() {}\n");
+    documented.write_unstaged("tools/src/main.rs", "//! The tool.\nfn main() {}\n");
+    let linked = plain.fork("doc-flags-linked");
+    linked.link("b/src/lib.rs", "b/src/linked.rs");
+    let outputs = plain.root().join("scheduled");
+    let (untouched, pull_request, scheduled, bare, linked_flags, minimal_flags) =
+        std::thread::scope(|scope| {
+            let pull_request = scope.spawn(|| doc_flags(&documented, Some("pull_request")));
+            let linked_flags = scope.spawn(|| doc_flags(&linked, None));
+            let minimal_flags = scope.spawn(|| doc_flags(&minimal, None));
+            let scheduled = scope.spawn(|| doc_flags(&plain, Some("schedule")));
+            let bare = scope.spawn(|| {
+                plan_command(&plain)
+                    .arg("plan")
+                    .env("GITHUB_OUTPUT", &outputs)
+                    .env("GITHUB_EVENT_NAME", "schedule")
+                    .output()
+                    .unwrap_or_else(|e| unreachable!("{e}"))
+            });
+            let untouched = doc_flags(&plain, None);
+            (
+                untouched,
+                pull_request.join().unwrap_or_else(|_| unreachable!()),
+                scheduled.join().unwrap_or_else(|_| unreachable!()),
+                bare.join().unwrap_or_else(|_| unreachable!()),
+                linked_flags.join().unwrap_or_else(|_| unreachable!()),
+                minimal_flags.join().unwrap_or_else(|_| unreachable!()),
+            )
+        });
     assert_eq!(
-        doc_flags(&repo, Some("pull_request")),
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+        untouched,
+        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
-    repo.write("b/src/lib.rs", "pub fn f() {}\n");
-    repo.write("tools/src/main.rs", "fn main() {}\n");
-    assert_eq!(
-        doc_flags(&repo, Some("schedule")),
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
-    );
-    let outputs = repo.root().join("scheduled");
-    let output = plan_command(&repo)
-        .arg("plan")
-        .env("GITHUB_OUTPUT", &outputs)
-        .env("GITHUB_EVENT_NAME", "schedule")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(output.status.success(), "{output:?}");
+    assert_eq!(pull_request, DOCS_ALL);
+    assert_eq!(scheduled, DOCS_ALL);
+    assert!(bare.status.success(), "{bare:?}");
     let written = fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         written.contains("rust_root_mode=all\n") && written.contains("rust_tools_mode=all\n"),
         "{written}"
     );
-    repo.link("b/src/lib.rs", "b/src/linked.rs");
+    assert_eq!(linked_flags, SCAN_ALL);
     assert_eq!(
-        doc_flags(&repo, None),
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+        minimal_flags,
+        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
     );
 }
 
@@ -225,17 +239,27 @@ fn explain_all(repo: &Repo, changed: &[&str]) -> String {
 #[test]
 fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selects_everything() {
     let repo = plan_repo("classes");
-    repo.write(".velnor/rust-ci.toml", "");
-    repo.write("README.md", "# readme\n");
+    repo.write_all(&[(".velnor/rust-ci.toml", ""), ("README.md", "# readme\n")]);
+    let (readme, toolchain, unknown, masked) = std::thread::scope(|scope| {
+        let readme = scope.spawn(|| explain(&repo, "README.md"));
+        let toolchain = scope.spawn(|| explain(&repo, "rust-toolchain.toml"));
+        let masked = scope.spawn(|| {
+            explain_all(
+                &repo,
+                &[".cargo/config.toml", "scripts/gen.sh", "tools/gen.sh"],
+            )
+        });
+        let unknown = explain(&repo, "scripts/gen.sh");
+        let join = |handle: std::thread::ScopedJoinHandle<'_, String>| {
+            handle.join().unwrap_or_else(|_| unreachable!())
+        };
+        (join(readme), join(toolchain), unknown, join(masked))
+    });
+    assert_eq!(readme, "Cargo.toml: none\ntools/Cargo.toml: none\n");
     assert_eq!(
-        explain(&repo, "README.md"),
-        "Cargo.toml: none\ntools/Cargo.toml: none\n"
-    );
-    assert_eq!(
-        explain(&repo, "rust-toolchain.toml"),
+        toolchain,
         "Cargo.toml: all:toolchain-file:rust-toolchain.toml\ntools/Cargo.toml: all:toolchain-file:rust-toolchain.toml\n"
     );
-    let unknown = explain(&repo, "scripts/gen.sh");
     assert!(
         unknown.starts_with(
             "Cargo.toml: all:unknown-path:scripts/gen.sh\ntools/Cargo.toml: all:unknown-path:scripts/gen.sh\n"
@@ -243,10 +267,6 @@ fn with_an_empty_config_a_root_readme_selects_nothing_and_a_toolchain_file_selec
         "{unknown}"
     );
     assert_eq!(unknown.matches("[[inputs]]").count(), 1, "{unknown}");
-    let masked = explain_all(
-        &repo,
-        &[".cargo/config.toml", "scripts/gen.sh", "tools/gen.sh"],
-    );
     assert!(
         masked.contains("unknown path: scripts/gen.sh\n"),
         "{masked}"

@@ -6,6 +6,7 @@ mod guards;
 mod identity;
 mod partial;
 mod reads;
+mod stand_ins;
 
 use std::fs;
 use std::process::{Command, Output};
