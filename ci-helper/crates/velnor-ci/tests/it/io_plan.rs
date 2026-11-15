@@ -299,12 +299,13 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     );
 }
 
-fn policy_output(repo: &Repo, event: Option<&str>, changed: &str) -> String {
+fn policy_output(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
     let outputs = repo.root().join("policy");
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
     command
-        .args(["plan", "--changed", changed])
+        .args(["plan", "--changed"])
+        .args(changed)
         .env("GITHUB_OUTPUT", &outputs);
     if let Some(event) = event {
         command.env("GITHUB_EVENT_NAME", event);
@@ -320,7 +321,7 @@ fn policy_output(repo: &Repo, event: Option<&str>, changed: &str) -> String {
 
 fn policy_case(name: &str, event: &str, changed: &str) -> String {
     let repo = plan_repo(name);
-    policy_output(&repo, Some(event), changed)
+    policy_output(&repo, Some(event), &[changed])
 }
 
 #[test]
@@ -344,5 +345,18 @@ fn plan_runs_the_policy_lane_on_a_schedule() {
     assert_eq!(
         policy_case("policy-schedule", "schedule", "b/src/lib.rs"),
         "rust_policy=run"
+    );
+}
+
+#[test]
+fn plan_skips_the_policy_lane_when_source_edits_only_select_most_packages() {
+    let repo = plan_repo("policy-most");
+    assert_eq!(
+        policy_output(
+            &repo,
+            Some("pull_request"),
+            &["a/src/lib.rs", "b/src/lib.rs"]
+        ),
+        "rust_policy=skip"
     );
 }

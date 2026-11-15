@@ -15,7 +15,9 @@ pub fn policy_needed(changed: &BTreeSet<RepoPath>, everything: bool, tools: Poli
     everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
-            DEPENDENCY_FILES.contains(&name) || (tools.machete && rust_source(path))
+            DEPENDENCY_FILES.contains(&name)
+                || (tools.machete && rust_source(path))
+                || (tools.deny && license_text(name))
         })
 }
 
@@ -23,4 +25,9 @@ fn rust_source(path: &RepoPath) -> bool {
     Path::new(path.as_str())
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+}
+
+fn license_text(name: &str) -> bool {
+    let name = name.to_ascii_uppercase();
+    name.starts_with("LICENSE") || name.starts_with("LICENCE")
 }

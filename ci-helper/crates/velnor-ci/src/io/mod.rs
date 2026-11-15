@@ -137,7 +137,9 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .collect::<Result<Steps, CiError>>()?;
     let everything = selections
         .values()
-        .any(|selection| matches!(selection, RustSelection::All(_)));
+        .any(|selection| {
+            matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
+        });
     let policy = policy_needed(&changes.paths, everything, facts.policy);
     let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;

@@ -239,3 +239,29 @@ fn the_policy_lane_fetches_no_helper_it_never_runs() -> TestResult {
     assert!(!policy.contains("Fetch velnor-ci"), "{policy}");
     Ok(())
 }
+
+#[test]
+fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResult {
+    let changed = |path: &str| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
+        Ok(BTreeSet::from([RepoPath::new(path)?]))
+    };
+    let deny = PolicyTools {
+        deny: true,
+        machete: false,
+    };
+    let machete = PolicyTools {
+        deny: false,
+        machete: true,
+    };
+    for path in [
+        "LICENSE",
+        "LICENSE-MIT",
+        "crates/a/LICENSE.md",
+        "licence.txt",
+    ] {
+        assert!(policy_needed(&changed(path)?, false, deny), "{path}");
+        assert!(!policy_needed(&changed(path)?, false, machete), "{path}");
+    }
+    assert!(!policy_needed(&changed("docs/readme.md")?, false, deny));
+    Ok(())
+}
