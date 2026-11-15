@@ -55,6 +55,47 @@ fn a_folder_left_by_an_earlier_run_is_not_removed_by_a_new_repo() {
     assert!(leftover.root().join("marker.txt").is_file());
 }
 
+#[test]
+fn a_repo_folder_is_removed_when_the_repo_is_dropped() {
+    let root = {
+        let repo = Repo::new("dropped");
+        repo.write("a.txt", "a\n");
+        repo.root().to_path_buf()
+    };
+    assert!(!root.exists());
+}
+
+#[test]
+fn a_repo_folder_is_removed_when_a_panic_unwinds_past_a_live_repo() {
+    let mut root = None;
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let repo = Repo::new("panicked");
+        repo.write("a.txt", "a\n");
+        root = Some(repo.root().to_path_buf());
+        panic!("unwinding past a live repo");
+    }));
+    assert!(outcome.is_err());
+    let root = root.unwrap_or_else(|| unreachable!("the closure ran"));
+    assert!(!root.exists());
+}
+
+#[test]
+fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
+    let next = CREATED.load(Ordering::Relaxed);
+    let taken = Repo(std::env::temp_dir().join(format!(
+        "velnor-ci-inputs-{}-{next}-skipme",
+        std::process::id()
+    )));
+    fs::create_dir_all(taken.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(taken.root().join("marker.txt"), "taken\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let repo = Repo::new("skipme");
+    assert_ne!(repo.root(), taken.root());
+    assert_eq!(
+        fs::read_to_string(taken.root().join("marker.txt")).unwrap_or_default(),
+        "taken\n"
+    );
+}
+
 static CREATED: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) struct Repo(PathBuf);
