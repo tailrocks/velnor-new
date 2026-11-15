@@ -55,7 +55,7 @@ async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authorit
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let down = env.down().await;
-    let alive = decoy.try_wait().map_or(true, |status| status.is_none());
+    let alive = decoy.try_wait().ok().is_none_or(|status| status.is_none());
     let _ = decoy.kill();
     let _ = decoy.wait();
     assert!(down.is_ok(), "{down:?}");
@@ -159,7 +159,7 @@ async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let down = env.down().await;
-    let alive = live.try_wait().map_or(true, |status| status.is_none());
+    let alive = live.try_wait().ok().is_none_or(|status| status.is_none());
     let _ = live.kill();
     let _ = live.wait();
     let message = down.err().map(|e| e.to_string()).unwrap_or_default();
@@ -169,6 +169,24 @@ async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
         "{message}"
     );
     assert!(message.contains("authority/pid"), "{message}");
+}
+
+#[tokio::test]
+async fn down_refuses_a_pid_it_cannot_signal_with_no_binary_record() {
+    let dir = temp_dir("supervisor-pid-foreign");
+    recorded_pid(&dir, 1);
+    let env = Environment::at(&dir, Silent)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let down = env.down().await;
+    assert!(
+        down.is_err(),
+        "down forgot a live pid it cannot signal: {down:?}"
+    );
+    assert!(
+        dir.join("authority/pid").exists(),
+        "the pid of a live process was forgotten"
+    );
 }
 
 #[tokio::test]

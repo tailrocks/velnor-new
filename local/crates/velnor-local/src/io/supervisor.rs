@@ -8,6 +8,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use nix::errno::Errno;
+use nix::sys::signal::kill;
+use nix::unistd::Pid;
 use tokio::fs;
 use tokio::net::TcpListener;
 use tokio::process::Command;
@@ -40,7 +43,6 @@ async fn forget(path: &Path) -> io::Result<()> {
     }
 }
 
-/// Public only for the integration tests of this crate.
 pub async fn start(dir: &Path) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
@@ -90,8 +92,14 @@ async fn ours(pid: &str, dir: &Path, binary: &str) -> bool {
     command.is_ok_and(|bytes| String::from_utf8_lossy(&bytes).trim() == expected)
 }
 
-async fn alive(pid: &str) -> bool {
-    program("kill", &["-0", pid], None).await.is_ok()
+fn alive(pid: &str) -> bool {
+    let Ok(pid) = pid.parse::<i32>() else {
+        return true;
+    };
+    match kill(Pid::from_raw(pid), None) {
+        Ok(()) | Err(Errno::EPERM) => true,
+        Err(_) => false,
+    }
 }
 
 async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
@@ -128,7 +136,7 @@ pub(super) async fn stop(dir: &Path) -> io::Result<()> {
         };
         match binary {
             Some(binary) => terminate(dir, &pid, &binary).await?,
-            None if alive(&pid).await => {
+            None if alive(&pid) => {
                 return Err(io::Error::other(format!(
                     "process {pid} may be the authority, but its binary record is missing; stop process {pid} or remove {}, then run this again",
                     authority.join("pid").display()
