@@ -148,7 +148,7 @@ fn prepare_parent_directory(parent: &Path) -> Result<(), StateWriteError> {
     match std::fs::symlink_metadata(parent) {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir(parent).map_err(|_| StateWriteError::Failed)?;
+            create_private_dir_all(parent).map_err(|_| StateWriteError::Failed)?;
         }
         Err(_) => return Err(StateWriteError::Failed),
     }
