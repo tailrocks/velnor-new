@@ -28,34 +28,62 @@ impl PreparationCause {
     }
 }
 
-const ERROR_DETAIL_BYTES: usize = 96;
+const ERROR_DETAIL_BYTES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorDetail {
     text: [u8; ERROR_DETAIL_BYTES],
-    len: usize,
+    len: u8,
 }
 
 impl ErrorDetail {
     #[must_use]
     pub fn from_bytes(raw: &[u8]) -> Self {
         let mut text = [0_u8; ERROR_DETAIL_BYTES];
-        let mut len = 0;
-        for byte in raw
-            .iter()
-            .filter(|byte| byte.is_ascii_graphic() || **byte == b' ')
-            .take(ERROR_DETAIL_BYTES)
-        {
-            text[len] = *byte;
+        let mut len = 0_usize;
+        let mut bytes = raw.iter().copied().peekable();
+        let mut gap = false;
+        while let Some(byte) = bytes.next() {
+            if len == ERROR_DETAIL_BYTES {
+                break;
+            }
+            if byte == 0x1b && bytes.peek() == Some(&b'[') {
+                bytes.next();
+                for next in bytes.by_ref() {
+                    if (0x40..=0x7e).contains(&next) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if byte == b'\r' || byte == b'\n' {
+                gap = len > 0;
+                continue;
+            }
+            if !(byte.is_ascii_graphic() || byte == b' ') {
+                continue;
+            }
+            if gap {
+                text[len] = b' ';
+                len += 1;
+                gap = false;
+                if len == ERROR_DETAIL_BYTES {
+                    break;
+                }
+            }
+            text[len] = byte;
             len += 1;
         }
-        Self { text, len }
+        Self {
+            text,
+            len: u8::try_from(len).unwrap_or(u8::MAX),
+        }
     }
 }
 
 impl std::fmt::Display for ErrorDetail {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&String::from_utf8_lossy(&self.text[..self.len]))
+        formatter.write_str(&String::from_utf8_lossy(&self.text[..usize::from(self.len)]))
     }
 }
 

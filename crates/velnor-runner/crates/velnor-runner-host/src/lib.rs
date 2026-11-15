@@ -22,6 +22,8 @@ mod digest_hex;
 mod docker_client;
 mod docker_spec;
 mod error;
+#[cfg(test)]
+mod error_tests;
 mod helper_supervisor;
 mod host_controller;
 mod https;
