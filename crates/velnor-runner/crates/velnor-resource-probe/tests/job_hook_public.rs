@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "job_hook_public/mountinfo_busy_host.rs"]
+mod mountinfo_busy_host;
+
 #[path = "job_hook_public/cleanup_record.rs"]
 mod cleanup_record;
 
