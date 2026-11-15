@@ -54,6 +54,7 @@ pub fn root_sources(
         .members
         .iter()
         .flat_map(|member| &member.targets)
+        .filter(|target| target.kinds.iter().copied().any(documented))
         .any(|target| {
             target
                 .source
@@ -109,11 +110,12 @@ pub fn optional_steps(
 ) -> OptionalSteps {
     let mut found = Found::default();
     let rust = target_sources(root);
-    let macros = root
+    let generates = root
         .members
         .iter()
         .flat_map(|member| &member.targets)
-        .any(|target| target.kinds.contains(&TargetKind::ProcMacro));
+        .flat_map(|target| &target.kinds)
+        .any(|kind| matches!(kind, TargetKind::ProcMacro | TargetKind::BuildScript));
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
@@ -122,7 +124,7 @@ pub fn optional_steps(
             found.scan_text(&text);
         }
     }
-    let unseen = macros || !root.external_dependencies.is_empty();
+    let unseen = generates || !root.external_dependencies.is_empty();
     let doctests = if !has_doctest_library(root) {
         StepNeed::Skip(SkipReason::NoDoctestLibrary)
     } else if full || unseen || found.fenced {
@@ -136,6 +138,13 @@ pub fn optional_steps(
         StepNeed::Skip(SkipReason::NoDocs)
     };
     OptionalSteps { doctests, docs }
+}
+
+fn documented(kind: TargetKind) -> bool {
+    matches!(
+        kind,
+        TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
+    )
 }
 
 fn target_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {

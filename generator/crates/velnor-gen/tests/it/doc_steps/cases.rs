@@ -20,6 +20,7 @@ pub(super) enum Kind {
     Macros,
     TextTarget,
     ConfigFile,
+    WithBuildScript,
 }
 
 pub(super) const TEXT_TARGET: &str = "a/src/lib.txt";

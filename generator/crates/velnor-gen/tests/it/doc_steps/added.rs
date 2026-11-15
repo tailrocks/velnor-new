@@ -236,4 +236,12 @@ pub(super) const ADDED: &[Case] = &[
         RUN,
         RUN,
     ),
+    (
+        "a build script that may write documented code",
+        Kind::WithBuildScript,
+        "pub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
 ];

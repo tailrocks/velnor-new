@@ -50,7 +50,9 @@ fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
     let mut wrong = Vec::new();
     for &(case, kind, source, full, doctests, docs) in ORIGINAL.iter().chain(ADDED) {
         let (member, file) = match kind {
-            Kind::Doctested | Kind::DependsOutside => (library(true), "a/src/lib.rs"),
+            Kind::Doctested | Kind::DependsOutside | Kind::WithBuildScript => {
+                (library(true), "a/src/lib.rs")
+            }
             Kind::NoDoctest => (library(false), "a/src/lib.rs"),
             Kind::ConfigFile => (library(true), "a/.cargo/config.toml"),
             Kind::Binary | Kind::BinaryDependsOutside => (binary(), "a/src/lib.rs"),
@@ -65,6 +67,11 @@ fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
         };
         let sources = BTreeMap::from([(path(file), source.as_bytes().to_vec())]);
         let mut root = root(vec![member]);
+        if matches!(kind, Kind::WithBuildScript) {
+            root.members[0]
+                .targets
+                .extend(target_of("build", TargetKind::BuildScript, false, "a/build.rs").targets);
+        }
         if matches!(kind, Kind::DependsOutside | Kind::BinaryDependsOutside) {
             root.external_dependencies = vec![name("serde_derive")];
         }
@@ -200,5 +207,22 @@ fn a_target_source_the_checkout_cannot_show_reads_no_file_and_runs_both_steps() 
         let facts = facts(vec![("Cargo.toml", vec![member])]);
         let root = &facts.rust_roots[0];
         assert_eq!(root_sources(&facts, root, &tracked), None);
+    }
+}
+
+#[test]
+fn a_missing_source_of_a_target_the_documentation_commands_never_select_is_not_a_doubt() {
+    let tracked: BTreeSet<_> = ["a/src/lib.rs", "a/Cargo.toml", "Cargo.toml"]
+        .into_iter()
+        .map(path)
+        .collect();
+    for kind in [TargetKind::Test, TargetKind::Bench, TargetKind::Example] {
+        let mut member = library(true);
+        member
+            .targets
+            .extend(target_of("t", kind, false, "generated/t.rs").targets);
+        let facts = facts(vec![("Cargo.toml", vec![member])]);
+        let root = &facts.rust_roots[0];
+        assert!(root_sources(&facts, root, &tracked).is_some());
     }
 }
