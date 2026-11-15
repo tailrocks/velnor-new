@@ -16,10 +16,10 @@ use super::env::{Addresses, DockerCli, Environment};
 use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
-use crate::scenario::{
-    Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
-};
+use crate::pairs::{DECISIONS, decisions};
+use crate::scenario::{Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary};
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
+use crate::verdict::{Check, verdict};
 
 mod outcome;
 mod pulls;
@@ -81,7 +81,7 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
                     Err(error) => Err(error),
                 };
                 let teardown =
-                    teardown.map_or_else(|e| format!("; teardown failed: {e}"), |()| String::new());
+                    teardown.map_or_else(|e| format!("; teardown failed: {e}"), |_| String::new());
                 results.push((stem, Err(format!("stopped: {error}{teardown}"))));
             }
         }
@@ -140,11 +140,12 @@ async fn run_one(
     if scenario.has_fork() {
         environment.fork_runners = environment.fork_runners.max(1);
     }
+    let pairs = super::supervisor::pairs(&environment).await?;
     if slots.is_closed() {
         return Err(io::Error::other("interrupted before it started"));
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
-        session = session(args, &environment, &env, repo, &scenario, tag) => session,
+        session = session(args, &environment, &env, repo, &scenario, tag, pairs.as_ref()) => session,
         _ = tokio::signal::ctrl_c() => (
             Vec::new(), 0, 0.0, Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted")),
         ),
@@ -153,8 +154,9 @@ async fn run_one(
         .as_ref()
         .is_err_and(|error| error.kind() == io::ErrorKind::Interrupted);
     let kept = args.keep && !interrupted && !outcomes.is_empty();
-    let stopped = if kept { Ok(()) } else { env.down().await };
-    print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
+    let stopped = if kept { Ok([0; 3]) } else { env.down().await };
+    let check = job_start_check(&env.dir, pairs.is_some()).await?;
+    print!("{}", verdict(tag, &outcomes, (up_at, up_seconds), &check));
     if kept {
         println!(
             "velnor-local {tag}: {} is kept up; `velnor-local down --dir {}` removes it",
@@ -164,10 +166,25 @@ async fn run_one(
     }
     replayed?;
     stopped?;
+    if check.refused() {
+        return Err(io::Error::other("a job was refused at job start"));
+    }
     if !outcomes.iter().all(Outcome::passed) {
         return Err(io::Error::other("a run did not succeed"));
     }
     Ok(())
+}
+
+async fn job_start_check(dir: &Path, pairs: bool) -> io::Result<Check> {
+    if !pairs {
+        return Ok(Check::Plain);
+    }
+    let text = fs::read_to_string(dir.join("runner").join(DECISIONS)).await;
+    let text = match text {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+        read => read?,
+    };
+    decisions(&text).map(Check::Pairs).map_err(io::Error::other)
 }
 
 async fn session<'a>(
@@ -177,7 +194,9 @@ async fn session<'a>(
     repo: PathBuf,
     scenario: &Scenario,
     tag: &'a str,
+    pairs: Option<&super::supervisor::Pairs>,
 ) -> (Vec<Outcome>, u64, f64, io::Result<()>) {
+    println!("velnor-local {tag}: {}", super::run::runner_mode(pairs));
     let up_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
@@ -186,8 +205,13 @@ async fn session<'a>(
         Ok(addresses) => addresses,
         Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
     };
-    let authority = match super::supervisor::start(&env.dir).await {
-        Ok(authority) => Proxy::authorized(&authority.address, &authority.token),
+    let authority = match super::supervisor::start(&env.dir, pairs).await {
+        Ok(authority) => {
+            for pair in &authority.pairs {
+                println!("velnor-local {tag}: pair {pair} listening");
+            }
+            Proxy::authorized(&authority.address, &authority.token)
+        }
         Err(error) => {
             let _ = env.down().await;
             return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error));

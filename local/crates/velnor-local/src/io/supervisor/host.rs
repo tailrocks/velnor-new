@@ -1,0 +1,169 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Duration;
+
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use tokio::process::{Child, Command};
+
+use crate::cli::{EnvironmentArgs, RunnerMode};
+use crate::images::{DIND_TAG, RUNNER_TAG};
+use crate::io::env::{DockerCli, Environment, program};
+use crate::io::pair::write_private;
+use crate::pairs::{MARKER, PlanInput, listening, plan, slots};
+use crate::side::Side;
+
+const LISTENING_TIMEOUT: Duration = Duration::from_secs(300);
+pub(super) const LOG: &str = "velnor-host.log";
+pub(super) const PID: &str = "pid";
+
+#[derive(Debug, Clone)]
+pub(crate) struct Pairs {
+    pub(super) host: PathBuf,
+    pub(super) trusted: u16,
+    pub(super) untrusted: u16,
+}
+
+pub(super) fn runner_dir(dir: &Path) -> PathBuf {
+    dir.join("runner")
+}
+
+async fn image(tag: &str) -> io::Result<String> {
+    let id = program(
+        "docker",
+        &["image", "inspect", "--format", "{{.Id}}", tag],
+        None,
+    )
+    .await
+    .map_err(|_| io::Error::other(format!("{tag} is missing; fix: velnor-local build")))?;
+    Ok(String::from_utf8_lossy(&id).trim().to_owned())
+}
+
+pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
+    if args.runner == RunnerMode::Plain {
+        return Ok(None);
+    }
+    let host = fs::canonicalize(&args.velnor_host).await.map_err(|error| {
+        io::Error::other(format!(
+            "velnor-host {}: {error}; fix: velnor-local build, or --runner plain",
+            args.velnor_host.display()
+        ))
+    })?;
+    for tag in [RUNNER_TAG, DIND_TAG] {
+        image(tag).await?;
+    }
+    Ok(Some(Pairs {
+        host,
+        trusted: args.runners,
+        untrusted: args.fork_runners,
+    }))
+}
+
+impl Pairs {
+    #[must_use]
+    pub(crate) fn describe(&self) -> String {
+        format!(
+            "runner mode pair: {} trusted and {} untrusted pairs, {}",
+            self.trusted,
+            self.untrusted,
+            self.host.display()
+        )
+    }
+
+    pub(super) fn arguments(&self) -> Vec<String> {
+        vec![
+            "--velnor-host".to_owned(),
+            self.host.display().to_string(),
+            "--pairs".to_owned(),
+            self.trusted.to_string(),
+            "--fork-pairs".to_owned(),
+            self.untrusted.to_string(),
+        ]
+    }
+
+    pub(super) async fn wait(&self, dir: &Path, supervise: &mut Child) -> io::Result<Vec<String>> {
+        let slots = slots(self.trusted, self.untrusted);
+        let log = runner_dir(dir).join(LOG);
+        let deadline = tokio::time::Instant::now() + LISTENING_TIMEOUT;
+        loop {
+            let text = fs::read_to_string(&log).await.unwrap_or_default();
+            if listening(&text, &slots).len() == slots.len() {
+                return Ok(slots);
+            }
+            if let Some(status) = supervise.try_wait()? {
+                return Err(io::Error::other(format!(
+                    "the authority and velnor-host exited with {status}; see runner/{LOG} and authority/supervise.log"
+                )));
+            }
+            if tokio::time::Instant::now() > deadline {
+                return Err(io::Error::other(format!(
+                    "the pairs did not listen within {} s; see runner/{LOG}",
+                    LISTENING_TIMEOUT.as_secs()
+                )));
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+}
+
+pub(super) async fn spawn(
+    env: &Environment<DockerCli>,
+    host: &Path,
+    authority: &str,
+    token: &str,
+    (trusted, untrusted): (u16, u16),
+) -> io::Result<Child> {
+    let state = runner_dir(&env.dir);
+    fs::create_dir_all(&state).await?;
+    fs::write(state.join(MARKER), "velnor-local\n").await?;
+    let docker = program(
+        "docker",
+        &[
+            "context",
+            "inspect",
+            "--format",
+            "{{.Endpoints.docker.Host}}",
+        ],
+        None,
+    )
+    .await?;
+    let (runner_image, dind_image) = (image(RUNNER_TAG).await?, image(DIND_TAG).await?);
+    let sides = [
+        (Side::Trusted, env.network(Side::Trusted), trusted),
+        (Side::Untrusted, env.network(Side::Untrusted), untrusted),
+    ];
+    let planned = plan(&PlanInput {
+        environment: &env.name,
+        authority,
+        token,
+        docker: String::from_utf8_lossy(&docker).trim(),
+        runner_image: &runner_image,
+        dind_image: &dind_image,
+        sides: &sides,
+    })
+    .to_string();
+    write_private(&state.join("plan.json"), &planned).await?;
+    let log = std::fs::File::create(state.join(LOG))?;
+    let mut child = Command::new(host)
+        .arg("--state")
+        .arg(&state)
+        .arg("local")
+        .stdin(Stdio::piped())
+        .stdout(log.try_clone()?)
+        .stderr(log)
+        .spawn()?;
+    if let Some(pid) = child.id() {
+        write_private(&state.join(PID), &pid.to_string()).await?;
+    }
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| io::Error::other("velnor-host has no stdin"))?;
+    stdin.write_all(planned.as_bytes()).await?;
+    drop(stdin);
+    Ok(child)
+}

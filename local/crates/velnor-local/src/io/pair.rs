@@ -14,7 +14,7 @@ use tokio::process::Command;
 
 use super::env::{DockerCli, Engine, Environment, RUNNER_LABELS, program, words};
 use crate::cli::{BuildArgs, JitArgs};
-use crate::images::{Lock, TARGETS, plan};
+use crate::images::{HOST_BINARY, HOST_BUILD, Lock, RELEASE_IDENTITY, TARGETS, plan};
 use crate::jit::{pack, register_script};
 use crate::side::Side;
 
@@ -141,6 +141,28 @@ pub async fn build(args: BuildArgs) -> io::Result<()> {
         .await?;
         println!("{tag} {}", String::from_utf8_lossy(&id).trim());
     }
+    let mut cargo = Command::new("cargo");
+    for name in RELEASE_IDENTITY {
+        cargo.env_remove(name);
+    }
+    let status = cargo
+        .args(HOST_BUILD)
+        .current_dir(&root)
+        .kill_on_drop(true)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(std::io::stderr()))
+        .status()
+        .await?;
+    if !status.success() {
+        return Err(io::Error::other(format!(
+            "cargo {} failed",
+            HOST_BUILD.join(" ")
+        )));
+    }
+    println!(
+        "built {} (local mode, no release identity)",
+        root.join(HOST_BINARY).display()
+    );
     Ok(())
 }
 

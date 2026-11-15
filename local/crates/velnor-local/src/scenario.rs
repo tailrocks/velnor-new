@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
@@ -338,28 +337,4 @@ pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {
     } else {
         Err(failed.join("; "))
     }
-}
-
-#[must_use]
-pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64) -> String {
-    let mut lines = vec![format!("Verdict of scenario {scenario}")];
-    for outcome in outcomes {
-        lines.push(format!("  {}", outcome.line()));
-        lines.extend(outcome.caches.iter().map(|cache| format!("    {cache}")));
-    }
-    let first = outcomes.iter().filter_map(|outcome| outcome.started).min();
-    lines.push(format!(
-        "Timing: up in {up_seconds:.1} s, first job started {} after up began.",
-        first.map_or_else(
-            || "never".to_owned(),
-            |at| format!("{} s", at.saturating_sub(up_at))
-        )
-    ));
-    lines.push("Executed: every step of every job above except actions/checkout, by GitHub's official runner in linux/arm64 containers.".to_owned());
-    lines.push("Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.".to_owned());
-    lines.push(crate::authority::WARNING.to_owned());
-    lines.iter().fold(String::new(), |mut text, line| {
-        let _ = writeln!(text, "velnor-local {scenario}: {line}");
-        text
-    })
 }

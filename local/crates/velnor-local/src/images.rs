@@ -21,6 +21,24 @@ const HELPERS: &str = r##"rustup target add aarch64-unknown-linux-musl \
     && printf "#!/bin/sh\nset -eu\nexec /velnor/job-start-hook \"\$@\"\n" > /out/job-started-hook/velnor-job-start-hook.sh \
     && chmod 0555 /out/*/*"##;
 
+pub const HOST_BUILD: [&str; 10] = [
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "crates/velnor-runner/Cargo.toml",
+    "-p",
+    "velnor-runner-cli",
+    "--bin",
+    "velnor-host",
+    "--features=local-mode",
+];
+pub const HOST_BINARY: &str = "crates/velnor-runner/target/release/velnor-host";
+pub const RELEASE_IDENTITY: [&str; 2] = [
+    "VELNOR_RUNNER_BUILD_SOURCE_SHA",
+    "VELNOR_RUNNER_BUILD_HELPER_SHA256",
+];
+
 #[derive(Debug)]
 pub struct Lock(BTreeMap<String, String>);
 

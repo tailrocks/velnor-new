@@ -130,12 +130,13 @@ impl<E: Engine> Environment<E> {
         let dir = fs::canonicalize(dir).await?;
         let digest =
             ring::digest::digest(&ring::digest::SHA256, dir.as_os_str().as_encoded_bytes());
-        let name = digest.as_ref()[..4]
-            .iter()
-            .fold("velnor-".to_owned(), |mut name, byte| {
-                let _ = write!(name, "{byte:02x}");
-                name
-            });
+        let name =
+            digest.as_ref()[..4]
+                .iter()
+                .fold("velnor-local-".to_owned(), |mut name, byte| {
+                    let _ = write!(name, "{byte:02x}");
+                    name
+                });
         Ok(Self { name, dir, engine })
     }
 
@@ -203,7 +204,7 @@ impl<E: Engine> Environment<E> {
         let state = mount("api", "/api");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
-        self.side("", args.runners).await?;
+        self.side("", args.containers(args.runners)).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
              --control-listen 0.0.0.0:81 --control-token /keys/control",
@@ -228,7 +229,8 @@ impl<E: Engine> Environment<E> {
         )
         .await?;
         if args.fork_runners > 0 {
-            self.side("fork-", args.fork_runners).await?;
+            self.side("fork-", args.containers(args.fork_runners))
+                .await?;
         }
         self.ready(args).await
     }
@@ -328,12 +330,14 @@ impl<E: Engine> Environment<E> {
             token,
         };
         let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
-        let sides = [("", &addresses.cache, args.runners)].into_iter().chain(
-            addresses
-                .fork
-                .as_ref()
-                .map(|fork| ("fork-", fork, args.fork_runners)),
-        );
+        let sides = [("", &addresses.cache, args.containers(args.runners))]
+            .into_iter()
+            .chain(
+                addresses
+                    .fork
+                    .as_ref()
+                    .map(|fork| ("fork-", fork, args.containers(args.fork_runners))),
+            );
         for (prefix, proxy, runners) in sides {
             for number in 1..=runners {
                 let path = format!(
@@ -353,19 +357,23 @@ impl<E: Engine> Environment<E> {
         Ok(addresses)
     }
 
-    pub async fn down(&self) -> io::Result<()> {
+    pub async fn down(&self) -> io::Result<[usize; 3]> {
         super::supervisor::stop(&self.dir).await?;
         let filter = format!("label=velnor-local={}", self.name);
-        let containers = self.docker("ps -aq --filter", &[&filter]).await?;
-        if !containers.is_empty() {
-            let ids: Vec<&str> = containers.split_whitespace().collect();
-            self.docker("rm -f -v", &ids).await?;
+        let mut removed = [0; 3];
+        let kinds = [
+            ("ps -aq --filter", "rm -f -v"),
+            ("volume ls -q --filter", "volume rm -f"),
+            ("network ls -q --filter", "network rm"),
+        ];
+        for ((list, remove), count) in kinds.into_iter().zip(&mut removed) {
+            let listed = self.docker(list, &[&filter]).await?;
+            let ids: Vec<&str> = listed.split_whitespace().collect();
+            if !ids.is_empty() {
+                self.docker(remove, &ids).await?;
+            }
+            *count = ids.len();
         }
-        let networks = self.docker("network ls -q --filter", &[&filter]).await?;
-        if !networks.is_empty() {
-            let ids: Vec<&str> = networks.split_whitespace().collect();
-            self.docker("network rm", &ids).await?;
-        }
-        Ok(())
+        Ok(removed)
     }
 }
