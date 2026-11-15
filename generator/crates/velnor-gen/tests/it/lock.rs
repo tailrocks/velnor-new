@@ -14,6 +14,7 @@ use crate::pipeline::{view, workflow};
 type TestResult = Result<(), Box<dyn Error>>;
 
 const SUMS: &str = "\
+4679c5492ab36252ccae31aab4f6c8a454ef2ab0e30d4dcdd3d6080d49c1cbe6  COMMIT
 10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e  velnor-ci-linux-x64
 56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6  velnor-ci-linux-arm64
 39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607  velnor-ci-macos-arm64
@@ -21,6 +22,9 @@ const SUMS: &str = "\
 1139e26866b8200c7b42095ca21f6849bb3212af157b967e831cdf5078ae5fba  velnor-gen-linux-arm64
 85e98f573e84d03701c0275e60f54a8f8b07c7c02b6b773cf25d973b960339a7  velnor-gen-macos-arm64
 ";
+
+const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
+const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
 
 fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut view = view(&["Cargo.toml"], None)?;
@@ -30,7 +34,7 @@ fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
 }
 
 fn locked(version: &str) -> Result<RepoView, Box<dyn Error>> {
-    with_lock(&pin_lock(version, SUMS)?)
+    with_lock(&pin_lock(version, COMMIT_FILE, SUMS)?)
 }
 
 #[test]
@@ -38,7 +42,10 @@ fn pin_helper_writes_the_lock_file_the_sample_repository_commits() -> TestResult
     let sample = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../samples/helper-lock/view")
         .join(LOCK_PATH.as_str());
-    assert_eq!(pin_lock("0.1.79", SUMS)?, fs::read_to_string(sample)?);
+    assert_eq!(
+        pin_lock("0.1.79", COMMIT_FILE, SUMS)?,
+        fs::read_to_string(sample)?
+    );
     Ok(())
 }
 
@@ -64,39 +71,81 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
         (String::new(), "0.1.79"),
     ];
     for (sums, version) in cases {
-        let result = pin_lock(version, &sums);
+        let result = pin_lock(version, COMMIT_FILE, &sums);
         assert!(result.is_err(), "{version} with {sums:?} gave {result:?}");
     }
 }
 
 #[test]
-fn a_locked_helper_is_fetched_right_after_the_checkout_and_nowhere_else() -> TestResult {
+fn a_commit_that_does_not_match_the_digest_sha256sums_lists_for_it_is_not_pinned() {
+    let other = "2793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
+    let unlisted: String = SUMS
+        .lines()
+        .filter(|line| !line.ends_with("COMMIT"))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    for (commit, sums) in [
+        (other, SUMS),
+        (COMMIT, SUMS),
+        (COMMIT_FILE, unlisted.as_str()),
+    ] {
+        let result = pin_lock("0.1.79", commit, sums);
+        assert!(result.is_err(), "{commit:?} gave {result:?}");
+    }
+}
+
+#[test]
+fn a_release_whose_commit_is_not_a_full_lowercase_sha_is_not_pinned() {
+    for commit in [
+        "",
+        "rust-ci-v0.1.79",
+        &COMMIT[..39],
+        &format!("{COMMIT}0"),
+        &COMMIT.to_uppercase(),
+        &format!("{}g", &COMMIT[..39]),
+    ] {
+        let result = pin_lock("0.1.79", commit, SUMS);
+        assert!(result.is_err(), "{commit:?} gave {result:?}");
+    }
+}
+
+#[test]
+fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_and_nowhere_else()
+-> TestResult {
     let text = workflow(&locked("0.1.79")?)?;
     let steps: Vec<&str> = text
         .lines()
         .filter_map(|line| line.strip_prefix("      - name: "))
         .collect();
-    assert_eq!(steps[..2], ["Check out", "Fetch velnor-ci 0.1.79"]);
+    assert_eq!(steps[..2], ["Check out", "Install velnor-ci 0.1.79"]);
     assert_eq!(
         steps
             .iter()
-            .filter(|step| step.starts_with("Fetch velnor-ci"))
+            .filter(|step| step.starts_with("Install velnor-ci"))
             .count(),
         1
     );
-    assert!(text.contains(
-        "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64"
-    ));
-    assert!(text.contains(
-        "\"Linux-X64\":\"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e\""
-    ));
-    assert!(!workflow(&view(&["Cargo.toml"], None)?)?.contains("Fetch velnor-ci"));
+    let install = format!(
+        "      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@{COMMIT}  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+"
+    );
+    assert!(text.contains(&install), "{text}");
+    for forbidden in ["curl", "releases/download", "jactionlint", "fromJSON"] {
+        assert!(!text.contains(forbidden), "{forbidden} in {text}");
+    }
+    assert!(!workflow(&view(&["Cargo.toml"], None)?)?.contains("velnor-ci"));
     Ok(())
 }
 
 #[test]
 fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestResult {
-    let good = pin_lock("0.1.79", SUMS)?;
+    let good = pin_lock("0.1.79", COMMIT_FILE, SUMS)?;
     let ci = "10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e";
     let generator = "61ec20debeae57cce969660e66c72315c59ce3cee84659540aee1942aad52628";
     let cases = [
@@ -112,6 +161,11 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
         ),
         good.replace("version = \"0.1.79\"", "version = \"0.1\""),
         good.replace("version = \"0.1.79\"\n", ""),
+        good.replace(&format!("commit = \"{COMMIT}\"\n"), ""),
+        good.replace(COMMIT, "rust-ci-v0.1.79"),
+        good.replace(COMMIT, &COMMIT[..39]),
+        good.replace(COMMIT, &COMMIT.to_uppercase()),
+        good.replace(COMMIT, &format!("{COMMIT}\\n")),
         format!("{good}extra = 1\n"),
         format!("{good}[velnor-gen]\n"),
         good.replace("[velnor-gen]", "[velnor-gen.more]"),

@@ -28,7 +28,9 @@ pub enum Command {
     Generate,
     #[command(about = "Exit 1 when a generated file differs from what generate would write")]
     Check,
-    #[command(about = "Download SHA256SUMS of a release and write .velnor/rust-ci.lock for it")]
+    #[command(
+        about = "Download SHA256SUMS and COMMIT of a release and write .velnor/rust-ci.lock for it"
+    )]
     PinHelper {
         #[arg(help = "The release version, MAJOR.MINOR.PATCH")]
         version: String,

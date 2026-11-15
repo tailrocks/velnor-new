@@ -174,7 +174,7 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
         facts
             .helper
             .iter()
-            .map(|release| step(StepKind::FetchHelper(release.clone()))),
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
     if !facts.tools.tools.is_empty() {
         steps.push(step(StepKind::InstallTools));
