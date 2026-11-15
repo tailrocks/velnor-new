@@ -149,3 +149,43 @@ fn a_dependency_feature_enables_a_local_feature_only_through_an_implicit_optiona
     assert!(render("{ version = \"1\", optional = true }", "")?.contains("--test=custom"));
     Ok(())
 }
+
+#[test]
+fn a_feature_a_sibling_forwards_counts_and_another_workspaces_request_does_not() -> TestResult {
+    let a = package(
+        "a",
+        "a/Cargo.toml",
+        &[],
+        &[("gated", TargetKind::Test, true)],
+    )?;
+    let b = package(
+        "b",
+        "b/Cargo.toml",
+        &[("a", DependencyKind::Normal, "a/Cargo.toml")],
+        &[("b", TargetKind::Lib, true)],
+    )?;
+    let forwarding = "[package]\nname = \"b\"\n[features]\ndefault = [\"a/x\"]\n";
+    let forwarded = view(
+        &[("a/Cargo.toml", GATED), ("b/Cargo.toml", forwarding)],
+        vec![a.clone(), b],
+    )?;
+    assert!(workflow(&forwarded)?.contains("--test=gated"));
+
+    let mut other = package(
+        "c",
+        "c/Cargo.toml",
+        &[("a", DependencyKind::Normal, "a/Cargo.toml")],
+        &[("c", TargetKind::Lib, true)],
+    )?;
+    other.dependencies[0].features = vec!["x".to_owned()];
+    let separate = repo(
+        vec![("Cargo.toml", vec![a]), ("c/Cargo.toml", vec![other])],
+        &[
+            ("mise.toml", NEXTEST_MISE),
+            ("a/Cargo.toml", GATED),
+            ("c/Cargo.toml", "[package]\nname = \"c\"\n"),
+        ],
+    )?;
+    assert!(!workflow(&separate)?.contains("--test=gated"));
+    Ok(())
+}
