@@ -17,6 +17,12 @@ fn runner_os(runner: &str) -> Option<&'static str> {
         .map(|name| if name == "ubuntu" { "linux" } else { name })
 }
 
+fn filter_applies(filter: &str, os: &str) -> bool {
+    let name = filter.split('/').next().unwrap_or_default();
+    let name = if name == "darwin" { "macos" } else { name };
+    name == os
+}
+
 fn entry_applies(entry: &Value, os: &str) -> bool {
     match entry {
         Value::Array(items) => items.iter().any(|item| entry_applies(item, os)),
@@ -24,8 +30,8 @@ fn entry_applies(entry: &Value, os: &str) -> bool {
             Some(Value::Array(filters)) => filters
                 .iter()
                 .filter_map(Value::as_str)
-                .any(|filter| filter.split('-').next() == Some(os)),
-            Some(Value::String(filter)) => filter.split('-').next() == Some(os),
+                .any(|filter| filter_applies(filter, os)),
+            Some(Value::String(filter)) => filter_applies(filter, os),
             _ => true,
         },
         _ => true,
