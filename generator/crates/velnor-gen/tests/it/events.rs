@@ -25,7 +25,6 @@ const EVENTS: &str = r"on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
