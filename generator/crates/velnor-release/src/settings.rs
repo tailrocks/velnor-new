@@ -32,6 +32,10 @@ pub(crate) struct Document {
 }
 
 impl Settings {
+    pub(crate) fn publishes_to_crates_io(&self) -> bool {
+        self.publish != Some(false) && self.git_only != Some(true)
+    }
+
     pub(crate) fn over(&self, base: &Settings) -> Settings {
         Settings {
             git_tag_name: self

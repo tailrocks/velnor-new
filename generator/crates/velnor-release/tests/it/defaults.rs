@@ -39,3 +39,21 @@ fn binaries_get_default_platforms_and_the_tag_pattern_of_their_package() -> Test
     assert_eq!(plan.binaries[1].tag_pattern.as_str(), "tool-v{{ version }}");
     Ok(())
 }
+
+#[test]
+fn a_root_publishes_to_crates_io_unless_every_released_package_opts_out() -> TestResult {
+    assert!(ReleasePlan::read(&files())?.roots[0].publishes_to_crates_io);
+    for opt_out in [
+        ("publish_no_verify = true", "git_only = true"),
+        ("publish_no_verify = true", "publish = false"),
+    ] {
+        let plan = ReleasePlan::read(&plz_edited(opt_out.0, opt_out.1)?)?;
+        assert!(!plan.roots[0].publishes_to_crates_io, "{}", opt_out.1);
+    }
+    let one_of_two = plz_edited(
+        "name = \"app\"",
+        "name = \"app\"\ngit_only = true\n\n[[package]]\nname = \"tool\"",
+    )?;
+    assert!(ReleasePlan::read(&one_of_two)?.roots[0].publishes_to_crates_io);
+    Ok(())
+}

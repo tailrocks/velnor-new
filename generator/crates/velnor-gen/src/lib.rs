@@ -3,11 +3,13 @@
 
 pub mod cli;
 pub mod io;
+mod release;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
+use velnor_release::ReleaseError;
 use velnor_render::{Owner, RuleViolation, owner_of, render};
 use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
 
@@ -17,6 +19,9 @@ pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub enum GenerateError {
     Detect(DetectError),
     IncompatibleHelper(HelperVersion),
+    Release(ReleaseError),
+    ReleaseNeedsHelper,
+    ReleaseFileNotUtf8(RepoPath),
     Rules(Vec<RuleViolation>),
 }
 
@@ -29,6 +34,11 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
                 COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
             ),
+            Self::Release(error) => error.fmt(f),
+            Self::ReleaseNeedsHelper => f.write_str(
+                "release.yml runs velnor-ci; pin a release with `velnor-gen pin-helper <version>`",
+            ),
+            Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {
@@ -54,7 +64,9 @@ pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Gen
     check_tools(&facts)?;
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
-    render(&plan).map_err(GenerateError::Rules)
+    let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    files.extend(release::release_workflow(view, &facts)?);
+    Ok(files)
 }
 
 fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {

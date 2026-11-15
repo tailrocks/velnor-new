@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod header;
+mod release;
 mod rules;
 mod steps;
 mod workflow;
@@ -13,9 +14,10 @@ use velnor_model::{
     Access, PermissionScope, Permissions, RepoPath, Triggers, WORKFLOW_PATH, WorkflowPlan,
 };
 
+pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rules::{
-    ALLOWED_ACTIONS, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob,
+    RenderedStep, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;

@@ -4,7 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::toml_file::table;
-use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain};
+use velnor_model::{
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    RustCiConfig, RustRoot, Toolchain,
+};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
@@ -23,6 +26,7 @@ const CARGO_MANIFEST: &str = "Cargo.toml";
 pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
+        RELEASE_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
@@ -34,7 +38,17 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
     .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_release_plz_config(path))
+            .cloned(),
+    )
     .collect()
+}
+
+fn is_release_plz_config(path: &RepoPath) -> bool {
+    path.as_str().rsplit('/').next() == Some(RELEASE_PLZ_FILE)
 }
 
 pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {

@@ -17,6 +17,7 @@ pub(crate) struct Package {
 pub(crate) struct RootConfig {
     pub(crate) root: String,
     pub(crate) pr_branch_prefix: String,
+    pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
 }
 
@@ -34,10 +35,7 @@ fn check_package(
         let (root, package) = owned();
         return Err(ReleaseError::SemverCheckNotFalse { root, package });
     }
-    if settings.publish != Some(false)
-        && settings.git_only != Some(true)
-        && settings.publish_no_verify != Some(true)
-    {
+    if settings.publishes_to_crates_io() && settings.publish_no_verify != Some(true) {
         let (root, package) = owned();
         return Err(ReleaseError::PublishWithoutNoVerify { root, package });
     }
@@ -120,8 +118,16 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
+    let publishes_to_crates_io = if released.is_empty() {
+        workspace.publishes_to_crates_io()
+    } else {
+        released
+            .iter()
+            .any(|(_, settings)| settings.publishes_to_crates_io())
+    };
     Ok(RootConfig {
         root: root.to_owned(),
+        publishes_to_crates_io,
         pr_branch_prefix: workspace
             .pr_branch_prefix
             .clone()

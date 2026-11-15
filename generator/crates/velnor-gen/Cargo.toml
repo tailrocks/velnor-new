@@ -31,6 +31,7 @@ path = "tests/it/main.rs"
 velnor-model.workspace = true
 velnor-rust.workspace = true
 velnor-render.workspace = true
+velnor-release.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 

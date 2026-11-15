@@ -21,6 +21,7 @@ pub struct ReleaseFiles {
 pub struct RootPlan {
     pub root: String,
     pub pr_branch_prefix: String,
+    pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
 }
 
@@ -124,6 +125,7 @@ impl ReleasePlan {
                 .map(|config| RootPlan {
                     root: config.root,
                     pr_branch_prefix: config.pr_branch_prefix,
+                    publishes_to_crates_io: config.publishes_to_crates_io,
                     packages: config
                         .packages
                         .into_iter()

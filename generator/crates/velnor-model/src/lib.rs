@@ -21,6 +21,6 @@ pub use repo::{
     Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };
 pub use selection::{
-    AllTrigger, ChangeSet, OptionalSteps, RustSelection, SelectionReason, SkipReason, StepNeed,
-    WORKFLOW_PATH,
+    AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
