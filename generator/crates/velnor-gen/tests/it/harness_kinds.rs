@@ -271,3 +271,18 @@ fn a_build_dependency_feature_reaches_the_tests_only_when_the_resolver_unifies_i
     assert!(unified.contains("--test=gated"), "{unified}");
     Ok(())
 }
+
+#[test]
+fn a_feature_forwarded_through_a_workspace_inherited_alias_enables_the_gated_harness() -> TestResult
+{
+    let inherited = "[package]\nname = \"b\"\n[features]\ndefault = [\"aa/x\"]\n[dependencies]\naa.workspace = true\n";
+    let mut view = forwarding_view(inherited, DependencyKind::Normal, &[], WORKSPACE)?;
+    view.rust_metadata
+        .values_mut()
+        .flat_map(|metadata| metadata.members.iter_mut())
+        .filter(|member| member.name.as_str() == "b")
+        .for_each(|member| member.dependencies[0].rename = Some("aa".to_owned()));
+    let text = workflow(&view)?;
+    assert!(text.contains("--test=gated"), "{text}");
+    Ok(())
+}

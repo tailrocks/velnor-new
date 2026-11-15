@@ -33,6 +33,7 @@ pub struct PackageDependency {
     pub kind: DependencyKind,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
+    pub rename: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

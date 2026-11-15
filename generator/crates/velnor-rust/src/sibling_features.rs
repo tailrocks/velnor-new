@@ -57,6 +57,7 @@ pub(crate) fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> V
                 if let (Some(parsed), Some(enabled)) = (own, &enabled) {
                     let mut keys =
                         dependency_keys(parsed, dependency.name.as_str(), dependency.kind);
+                    keys.extend(dependency.rename.clone());
                     if keys.is_empty() {
                         keys.insert(dependency.name.to_string());
                     }
