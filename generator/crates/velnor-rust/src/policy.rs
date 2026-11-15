@@ -7,10 +7,12 @@ use std::path::Path;
 use velnor_model::{PolicyTools, RepoPath};
 
 use crate::mise::MISE_CONFIGS;
+use crate::roots::is_cargo_config;
 
 pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
 
 const DEPENDENCY_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "deny.toml"];
+const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PolicyRuns {
@@ -28,14 +30,17 @@ pub fn policy_runs(
     let dependency = everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
-            DEPENDENCY_FILES.contains(&name)
+            DEPENDENCY_FILES.contains(&name) || is_cargo_config(path)
         });
     let license = changed
         .iter()
         .any(|path| license_text(path.as_str().rsplit('/').next().unwrap_or_default()));
-    let unused_possible = changed
-        .iter()
-        .any(|path| (selected && rust_source(path)) || MISE_CONFIGS.contains(path));
+    let unused_possible = changed.iter().any(|path| {
+        let name = path.as_str().rsplit('/').next().unwrap_or_default();
+        (selected && rust_source(path))
+            || MISE_CONFIGS.contains(path)
+            || IGNORE_FILES.contains(&name)
+    });
     PolicyRuns {
         deny: tools.deny && (dependency || license),
         machete: tools.machete && (dependency || unused_possible),

@@ -7,7 +7,7 @@ use std::process::Output;
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo, plan_with_bases};
 
-fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
+pub(crate) fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
     let outputs = repo.root().join("policy");
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
@@ -82,6 +82,10 @@ fn plan_runs_machete_for_a_source_change_and_leaves_deny_skipped() {
     assert_eq!(
         policy_lines(&repo, Some("pull_request"), &["README.md"]),
         "rust_deny=skip rust_machete=skip "
+    );
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["b/.gitignore"]),
+        "rust_deny=skip rust_machete=run "
     );
 }
 
@@ -201,4 +205,22 @@ fn plan_warns_on_the_pull_request_about_a_setting_the_change_adds_that_makes_a_c
     assert!(warnings_of(&untouched).is_empty(), "{untouched:?}");
     let written = fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!written.contains("::warning"), "{written}");
+}
+
+#[test]
+fn plan_keeps_deny_skipped_for_a_source_change_in_a_single_crate_repository() {
+    let repo = Repo::new("policy-single");
+    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write(
+        "Cargo.toml",
+        "[package]\nname = \"only\"\nedition = \"2024\"\n",
+    );
+    repo.write("Cargo.lock", "version = 4\n");
+    repo.write("src/lib.rs", "");
+    repo.write("deny.toml", "");
+    pin_machete(&repo);
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["src/lib.rs"]),
+        "rust_deny=skip rust_machete=run "
+    );
 }

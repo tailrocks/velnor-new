@@ -134,12 +134,13 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         deny: true,
         machete: true,
     };
-    let cases: [(&[&str], bool, bool, (bool, bool)); 10] = [
+    let cases: [(&[&str], bool, bool, (bool, bool)); 11] = [
         (&["README.md"], false, false, (false, false)),
         (&[], false, false, (false, false)),
         (&["Cargo.lock"], false, true, (true, true)),
         (&["crates/a/Cargo.toml"], false, true, (true, true)),
         (&["deny.toml"], false, true, (true, true)),
+        (&[".cargo/config.toml"], false, true, (true, true)),
         (
             &["docs/deny.toml.md", "src/Cargo.tomls"],
             false,
@@ -283,5 +284,52 @@ fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResu
         );
     }
     assert!(!policy_runs(deny, &changed("docs/readme.md")?, false, true).deny);
+    Ok(())
+}
+
+#[test]
+fn the_policy_lane_checks_every_cargo_root_in_its_own_folder() -> TestResult {
+    let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    let deny = RepoPath::new("deny.toml")?;
+    view.tracked_paths.insert(deny.clone());
+    view.files.insert(deny, Vec::new());
+    view.files
+        .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+    let text = workflow(&view)?;
+    let policy = text
+        .split("\n  policy:\n")
+        .nth(1)
+        .ok_or("no policy job")?
+        .split("\n  required:\n")
+        .next()
+        .ok_or("no policy job end")?;
+    assert_eq!(policy.matches("Dependency policy").count(), 2, "{policy}");
+    assert!(policy.contains("cargo-deny check"), "{policy}");
+    assert!(
+        policy.contains("cargo-deny --manifest-path ''tools/Cargo.toml'' check"),
+        "{policy}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
+    let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    let mise = RepoPath::new("mise.toml")?;
+    view.files.insert(
+        mise,
+        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n"
+            .to_vec(),
+    );
+    let text = workflow(&view)?;
+    let policy = text
+        .split("\n  policy:\n")
+        .nth(1)
+        .ok_or("no policy job")?
+        .split("\n  required:\n")
+        .next()
+        .ok_or("no policy job end")?;
+    assert_eq!(policy.matches("cargo-machete").count(), 1, "{policy}");
+    assert!(!policy.contains("working-directory"), "{policy}");
     Ok(())
 }
