@@ -128,7 +128,10 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
         .lines()
         .filter(|line| line.contains("cargo test --doc"))
     {
-        assert!(line.contains("velnor-ci run -- cargo test --doc"), "{line}");
+        assert!(
+            line.contains("velnor-ci run --require-doctests -- cargo test --doc"),
+            "{line}"
+        );
     }
     Ok(())
 }
@@ -184,7 +187,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     assert_ne!(runs.len(), 0);
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
-        assert!(!cargo || run.starts_with("velnor-ci run -- "), "{run}");
+        assert!(!cargo || run.starts_with("velnor-ci run "), "{run}");
     }
     Ok(())
 }

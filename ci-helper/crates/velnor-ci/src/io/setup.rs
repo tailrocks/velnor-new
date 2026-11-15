@@ -14,7 +14,7 @@ use velnor_rust::{mise_files, tool_pins};
 use super::{append_outputs, append_to, current_dir};
 use crate::cli::RunArgs;
 use crate::error::CiError;
-use crate::setup::{check_tools, env_lines, output_lines, parse_reported};
+use crate::setup::{DoctestCount, check_tools, env_lines, output_lines, parse_reported};
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -89,20 +89,36 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             (code, format!("cannot run {}: {e}", args.command[0]))
         })?;
     let log = Mutex::new(log);
+    let doctests = Mutex::new(DoctestCount::default());
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     thread::scope(|scope| {
         if let Some(from) = stdout {
-            scope.spawn(|| pump(from, std::io::stdout(), &log));
+            scope.spawn(|| {
+                pump(
+                    from,
+                    std::io::stdout(),
+                    &log,
+                    args.require_doctests.then_some(&doctests),
+                );
+            });
         }
         if let Some(from) = stderr {
-            scope.spawn(|| pump(from, std::io::stderr(), &log));
+            scope.spawn(|| pump(from, std::io::stderr(), &log, None));
         }
     });
     let status = child
         .wait()
         .map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
-    let code = exit_code(status);
+    let mut code = exit_code(status);
+    let ran = doctests
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .finish();
+    if code == 0 && args.require_doctests && ran == 0 {
+        eprintln!("velnor-ci: the command ran 0 doctests, so this step checked nothing");
+        code = 1;
+    }
     let mut log = log
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -124,7 +140,12 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
+fn pump(
+    mut from: impl Read,
+    mut to: impl Write,
+    log: &Mutex<std::fs::File>,
+    count: Option<&Mutex<DoctestCount>>,
+) {
     let mut buffer = [0_u8; CHUNK];
     while let Ok(read) = from.read(&mut buffer) {
         if read == 0 {
@@ -134,6 +155,9 @@ fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
         to.write_all(chunk).and_then(|()| to.flush()).ok();
         if let Ok(mut file) = log.lock() {
             file.write_all(chunk).ok();
+        }
+        if let Some(Ok(mut seen)) = count.map(Mutex::lock) {
+            seen.feed(chunk);
         }
     }
 }

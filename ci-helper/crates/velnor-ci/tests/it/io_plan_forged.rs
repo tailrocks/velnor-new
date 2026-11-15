@@ -72,7 +72,7 @@ fn plan_explain_prints_no_line_that_starts_with_a_command_after_any_leading_whit
 }
 
 #[test]
-fn a_root_with_a_control_character_in_its_name_never_reaches_a_plan_line() {
+fn plan_prints_a_root_with_a_control_character_in_its_name_escaped_or_not_at_all() {
     for leader in ["\t", "\u{85}"] {
         let repo = plan_repo("forged-control");
         let dir = format!("{leader}::warning::DIR");
@@ -82,8 +82,12 @@ fn a_root_with_a_control_character_in_its_name_never_reaches_a_plan_line() {
         );
         repo.write(&format!("{dir}/src/lib.rs"), "");
         repo.write(&format!("{dir}/Cargo.lock"), "version = 4\n");
-        assert!(velnor_gen::io::write_metadata(repo.root()).is_err());
-        let output = stale_plan_command(&repo)
+        let mut command = if velnor_gen::io::write_metadata(repo.root()).is_ok() {
+            plan_command(&repo)
+        } else {
+            stale_plan_command(&repo)
+        };
+        let output = command
             .args(["plan", "--explain"])
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"));

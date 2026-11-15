@@ -8,6 +8,7 @@ use velnor_model::{ChangeSet, RepoFacts};
 use velnor_rust::{DetectError, detect, introduced};
 
 use crate::facts::{TestResult, lib, path, repo};
+use crate::pipeline::HELPER_LOCK;
 
 const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
@@ -179,6 +180,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
             std::slice::from_ref(&want),
             "{file}: {text}"
         );
+        let lock = path(".velnor/rust-ci.lock")?;
+        view.tracked_paths.insert(lock.clone());
+        view.files.insert(lock, HELPER_LOCK.to_vec());
         assert!(expected_files(&view).is_ok(), "{want}");
     }
     Ok(())

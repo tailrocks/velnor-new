@@ -184,7 +184,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
     assert!(
         !commands
             .iter()
-            .any(|c| matches!(c, CargoCommand::NextestRun { .. })),
+            .any(|c| matches!(c, CargoCommand::NextestRun)),
         "{commands:?}"
     );
     no_tests.config.shape = Some(Shape::LintAndTest);

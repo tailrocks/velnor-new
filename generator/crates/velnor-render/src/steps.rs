@@ -12,6 +12,7 @@ use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
 
 const PREPARE_STEP: &str = "prepare";
 const RUN: &str = "velnor-ci run --";
+const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests --";
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
@@ -195,10 +196,15 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
     };
+    let prefix = if matches!(command, CargoCommand::Doctest) {
+        RUN_DOCTESTS
+    } else {
+        RUN
+    };
     RenderedStep {
         name,
         env,
-        run: Some(format!("{RUN} {run}")),
+        run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
     }
 }

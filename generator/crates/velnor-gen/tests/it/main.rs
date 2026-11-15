@@ -31,3 +31,4 @@ mod toolchain;
 mod unowned;
 mod version;
 mod weaken;
+mod wiring;

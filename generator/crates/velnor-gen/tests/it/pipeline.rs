@@ -11,7 +11,7 @@ use velnor_rust::{CONFIG_PATH, DetectError};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const HELPER_LOCK: &[u8] =
+pub(crate) const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";

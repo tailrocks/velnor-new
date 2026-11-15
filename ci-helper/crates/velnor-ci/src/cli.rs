@@ -60,6 +60,11 @@ pub enum Command {
 #[derive(Debug, Args)]
 pub struct RunArgs {
     #[arg(
+        long,
+        help = "Exit 1 when the command succeeds but its output reports no doctest ran"
+    )]
+    pub require_doctests: bool,
+    #[arg(
         last = true,
         required = true,
         num_args = 1..,
