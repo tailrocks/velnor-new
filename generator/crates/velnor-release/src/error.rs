@@ -99,6 +99,13 @@ pub enum ReleaseError {
     CargoRedirectsCratesIo {
         file: String,
     },
+    CargoConfigInclude {
+        file: String,
+    },
+    CargoConfigKeyNotAllowed {
+        file: String,
+        key: String,
+    },
     SymlinkOnCargoConfigPath {
         root: String,
         path: String,
@@ -300,6 +307,14 @@ impl ReleaseError {
             Self::CargoRedirectsCratesIo { file } => write!(
                 f,
                 "{file}: a cargo proxy or CA override would redirect the crates.io publish token"
+            ),
+            Self::CargoConfigInclude { file } => write!(
+                f,
+                "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"
+            ),
+            Self::CargoConfigKeyNotAllowed { file, key } => write!(
+                f,
+                "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
             ),
             Self::ToolchainFromPath { file } => write!(
                 f,

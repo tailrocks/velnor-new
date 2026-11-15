@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use toml::Value;
 
+use crate::cargo_allowlist::unknown_key;
 use crate::error::ReleaseError;
 
 const COMMAND_KEYS: [&str; 2] = ["replace_command", "changelog_config"];
@@ -105,6 +106,13 @@ pub(crate) fn cargo_config(
             message: error.to_string(),
         })?;
     let document = Value::Table(document);
+    if let Value::Table(table) = &document
+        && table.keys().any(|key| key.eq_ignore_ascii_case("include"))
+    {
+        return Err(ReleaseError::CargoConfigInclude {
+            file: file.to_owned(),
+        });
+    }
     let key = if document.get("env").is_some() {
         Some("env")
     } else {
@@ -124,6 +132,12 @@ pub(crate) fn cargo_config(
     if publishes_to_crates_io && redirects_crates_io(&document) {
         return Err(ReleaseError::CargoRedirectsCratesIo {
             file: file.to_owned(),
+        });
+    }
+    if let Some(key) = unknown_key(&document) {
+        return Err(ReleaseError::CargoConfigKeyNotAllowed {
+            file: file.to_owned(),
+            key,
         });
     }
     Ok(())

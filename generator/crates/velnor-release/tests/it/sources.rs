@@ -261,3 +261,48 @@ fn cargo_proxy_and_ca_overrides_are_refused_when_publishing_to_crates_io() {
         );
     }
 }
+
+#[test]
+fn a_cargo_config_include_or_unknown_key_is_refused_for_every_root() {
+    for (config, include) in [
+        ("include = [\"../cfg/extra.toml\"]\n", true),
+        ("Include = \"extra.toml\"\n", true),
+        ("[[include]]\npath = \"extra.toml\"\n", true),
+        ("[alias]\nb = \"build\"\n", false),
+        ("[target.x.runner]\nk = 1\n", false),
+    ] {
+        let mut files = files();
+        files
+            .cargo_configs
+            .insert(".cargo/config.toml".to_owned(), config.to_owned());
+        let got = refusal(&files);
+        if include {
+            assert!(
+                matches!(got, Some(ReleaseError::CargoConfigInclude { .. })),
+                "{config}: {got:?}"
+            );
+        } else {
+            assert!(
+                matches!(got, Some(ReleaseError::CargoConfigKeyNotAllowed { .. })),
+                "{config}: {got:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_refusal_of_an_unknown_cargo_key_names_the_file_and_the_key_path() {
+    let mut files = files();
+    files.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[profile.release.package.dep]\nopt-level = 3\nrustflags = [\"x\"]\n".to_owned(),
+    );
+    let message = refusal(&files).map(|error| error.to_string());
+    assert!(
+        message
+            .as_deref()
+            .is_some_and(|text| text.contains(".cargo/config.toml")
+                && text.contains("profile.release.package.dep.rustflags")),
+        "{message:?}"
+    );
+}
