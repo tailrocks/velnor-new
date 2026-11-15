@@ -44,7 +44,7 @@ pub(super) async fn start(dir: &Path) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
     fs::create_dir_all(&authority).await?;
-    fs::create_dir_all(dir.join("keys")).await?;
+    keys::folder(&dir.join("keys")).await?;
     for file in [LEDGER, "address", "pid"] {
         forget(&authority.join(file)).await?;
     }
@@ -82,11 +82,12 @@ pub(super) async fn start(dir: &Path) -> io::Result<Endpoint> {
 }
 
 async fn ours(pid: &str, dir: &Path) -> bool {
+    let Ok(binary) = std::env::current_exe() else {
+        return false;
+    };
+    let expected = format!("{} supervise --dir {}", binary.display(), dir.display());
     let command = program("ps", &["-p", pid, "-o", "command="], None).await;
-    command.is_ok_and(|bytes| {
-        let line = String::from_utf8_lossy(&bytes);
-        line.contains(" supervise --dir ") && line.contains(&dir.display().to_string())
-    })
+    command.is_ok_and(|bytes| String::from_utf8_lossy(&bytes).trim() == expected)
 }
 
 pub(super) async fn stop(dir: &Path) -> io::Result<()> {

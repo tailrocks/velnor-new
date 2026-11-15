@@ -16,4 +16,5 @@ mod restore;
 mod side;
 mod standin;
 mod store;
+mod supervisor;
 mod support;

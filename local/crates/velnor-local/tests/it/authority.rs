@@ -74,6 +74,19 @@ async fn authority_refuses_a_run_that_matches_no_dispatched_event_as_not_dispatc
 }
 
 #[tokio::test]
+async fn authority_refuses_a_run_of_the_same_event_and_ref_but_another_sha_as_not_dispatched() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-other-sha", &runners).await;
+    let mut dispatched = entry("1-push", "trusted", "push", "refs/heads/main");
+    dispatched["sha"] = json!("1a2b3c4");
+    assert_eq!(post(&authority, dispatched).await, 200);
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    let (_, run) = run_facts(&authority, "trusted", 1).await;
+    assert_eq!(run["ledger"], Value::Null, "{run}");
+    assert_eq!(run["refusal"], "not_dispatched", "{run}");
+}
+
+#[tokio::test]
 async fn authority_refuses_a_ledger_entry_on_the_wrong_side_as_wrong_side() {
     let runners = FakeRunners::default();
     let authority = authority("authority-wrong-side", &runners).await;
