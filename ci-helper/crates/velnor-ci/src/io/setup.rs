@@ -5,8 +5,9 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
+use std::time::Duration;
 
 use velnor_gen::io::read_files;
 use velnor_model::ToolPins;
@@ -24,6 +25,7 @@ const NOT_FOUND: u8 = 127;
 const NOT_RUNNABLE: u8 = 126;
 const SIGNAL_BASE: i32 = 128;
 const CHUNK: usize = 8192;
+const PUMP_GRACE: Duration = Duration::from_secs(2);
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
@@ -108,24 +110,31 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             };
             (code, format!("cannot run {}: {e}", args.command[0]))
         })?;
-    let log = Mutex::new(log);
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let pumped = thread::scope(|scope| {
-        let out = stdout.map(|from| scope.spawn(|| pump(from, std::io::stdout(), &log)));
-        let err = stderr.map(|from| scope.spawn(|| pump(from, std::io::stderr(), &log)));
-        [out, err]
-            .into_iter()
-            .flatten()
-            .filter_map(|handle| handle.join().ok().flatten())
-            .next()
-    });
+    let log = Arc::new(Mutex::new(log));
+    let (sender, receiver) = mpsc::channel();
+    let mut streams = 0;
+    if let Some(from) = child.stdout.take() {
+        streams += 1;
+        spawn_pump(from, std::io::stdout(), &log, sender.clone());
+    }
+    if let Some(from) = child.stderr.take() {
+        streams += 1;
+        spawn_pump(from, std::io::stderr(), &log, sender.clone());
+    }
+    drop(sender);
     let status = child
         .wait()
         .map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let code = exit_code(status);
+    let mut pumped = None;
+    for _ in 0..streams {
+        match receiver.recv_timeout(PUMP_GRACE) {
+            Ok(failure) => pumped = pumped.or(failure),
+            Err(_) => break,
+        }
+    }
     let mut log = log
-        .into_inner()
+        .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     writeln!(log, "velnor-ci run: exit {code}").map_err(write_error)?;
     if let Some(error) = pumped {
@@ -146,6 +155,18 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 #[cfg(not(unix))]
 fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
+}
+
+fn spawn_pump(
+    from: impl Read + Send + 'static,
+    to: impl Write + Send + 'static,
+    log: &Arc<Mutex<std::fs::File>>,
+    done: mpsc::Sender<Option<std::io::Error>>,
+) {
+    let log = Arc::clone(log);
+    thread::spawn(move || {
+        done.send(pump(from, to, &log)).ok();
+    });
 }
 
 fn pump(

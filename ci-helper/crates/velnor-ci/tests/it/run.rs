@@ -203,3 +203,13 @@ fn run_fails_when_the_log_cannot_take_the_output() {
         "{output:?}"
     );
 }
+
+#[test]
+fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
+    let temp = scratch("background");
+    let started = std::time::Instant::now();
+    let output = run(&temp, &["sh", "-c", "sleep 30 & echo started; exit 4"]);
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    assert_eq!(output.status.code(), Some(4));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
+}

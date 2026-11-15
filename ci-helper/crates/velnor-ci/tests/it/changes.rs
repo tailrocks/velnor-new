@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_ci::changes::{BASE_READ_CAP, FILE_LIST_CAP, base_files, changed_files};
+use velnor_ci::changes::{BASE_BYTES_CAP, BASE_READ_CAP, FILE_LIST_CAP, base_files, changed_files};
 use velnor_ci::error::CiError;
 use velnor_ci::event::{Event, PullRequest, check_default_branch, parse_event};
 use velnor_ci::github::{GitHub, Repo, contents_path, pull_files_path};
@@ -171,4 +171,23 @@ fn base_reads_are_capped_and_the_files_past_the_cap_are_left_out() {
     let base = base_files(&github, &repo(), &pull(), &wanted);
     assert_eq!(github.0.get(), BASE_READ_CAP);
     assert_eq!(base.len(), BASE_READ_CAP);
+}
+
+struct Big(usize);
+
+impl GitHub for Big {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        Err(CiError::new(format!("404 {path}")))
+    }
+
+    fn get_raw(&self, _path: &str) -> Result<String, CiError> {
+        Ok("x".repeat(self.0))
+    }
+}
+
+#[test]
+fn base_texts_stop_being_kept_once_their_total_passes_the_byte_budget() {
+    let wanted: Vec<RepoPath> = (0..8).map(|n| path(&format!("d{n}/Cargo.lock"))).collect();
+    let base = base_files(&Big(BASE_BYTES_CAP / 3 + 1), &repo(), &pull(), &wanted);
+    assert_eq!(base.len(), 2);
 }
