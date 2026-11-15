@@ -79,6 +79,16 @@ fn concurrency(concurrency: Concurrency) -> Yaml {
     ])
 }
 
+fn branch_filter(branch: &str) -> String {
+    branch.chars().fold(String::new(), |mut out, c| {
+        if matches!(c, '+' | '!' | ']') {
+            out.push('\\');
+        }
+        out.push(c);
+        out
+    })
+}
+
 fn triggers(triggers: &Triggers) -> Yaml {
     let mut items = Vec::new();
     if !triggers.pull_request.is_empty() {
@@ -100,7 +110,10 @@ fn triggers(triggers: &Triggers) -> Yaml {
     if let Some(branch) = &triggers.push_branch {
         items.push(entry(
             "push",
-            Yaml::Map(vec![entry("branches", Yaml::Seq(vec![text(branch)]))]),
+            Yaml::Map(vec![entry(
+                "branches",
+                Yaml::Seq(vec![text(&branch_filter(branch))]),
+            )]),
         ));
     }
     if triggers.merge_group {
