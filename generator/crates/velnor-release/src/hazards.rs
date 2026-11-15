@@ -33,7 +33,7 @@ pub(crate) fn external_command(root: &str, document: &Value) -> Result<(), Relea
 fn runs_a_program(value: &Value) -> bool {
     match value {
         Value::Table(table) => table.iter().any(|(key, inner)| match key.as_str() {
-            "credential-alias" => true,
+            "credential-alias" | "proxy" | "cainfo" | "global-credential-providers" => true,
             "credential-provider" => !is_builtin(inner),
             _ => runs_a_program(inner),
         }),

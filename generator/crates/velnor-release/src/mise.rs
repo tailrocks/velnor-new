@@ -28,16 +28,35 @@ fn plugin_for_release_plz(table: &Table) -> Option<&String> {
         .and_then(|plugins| plugins.keys().find(|key| names_release_plz(key)))
 }
 
+const APPROVED_DOWNLOADS: &str = "https://github.com/release-plz/release-plz/";
+
+fn urls_approved(value: &toml::Value) -> bool {
+    match value {
+        toml::Value::Table(table) => table.iter().all(|(key, inner)| {
+            if key == "url" {
+                inner
+                    .as_str()
+                    .is_some_and(|url| url.starts_with(APPROVED_DOWNLOADS))
+            } else {
+                urls_approved(inner)
+            }
+        }),
+        toml::Value::Array(items) => items.iter().all(urls_approved),
+        _ => true,
+    }
+}
+
 fn locked_backend_approved(value: &toml::Value) -> bool {
     let entries = match value {
         toml::Value::Array(entries) => entries.iter().collect(),
         other => vec![other],
     };
     entries.into_iter().all(|entry| {
-        entry
-            .get("backend")
-            .and_then(toml::Value::as_str)
-            .is_none_or(|backend| APPROVED_KEYS.contains(&backend))
+        urls_approved(entry)
+            && entry
+                .get("backend")
+                .and_then(toml::Value::as_str)
+                .is_none_or(|backend| APPROVED_KEYS.contains(&backend))
     })
 }
 
