@@ -31,6 +31,7 @@ pub(crate) fn package(
                 Ok(PackageDependency {
                     name: PackageName::new(*name)?,
                     kind: *kind,
+                    platform: None,
                     manifest: Some(path(manifest)?),
                 })
             })

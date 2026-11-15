@@ -53,6 +53,7 @@ struct Package {
 struct Dependency {
     name: String,
     kind: Option<String>,
+    target: Option<String>,
     path: Option<PathBuf>,
 }
 
@@ -111,6 +112,7 @@ fn dependency_of(
     Ok(PackageDependency {
         name: PackageName::new(dependency.name).map_err(invalid)?,
         kind,
+        platform: dependency.target,
         manifest: dependency
             .path
             .map(|path| repo_path(repository, &path.join("Cargo.toml")))

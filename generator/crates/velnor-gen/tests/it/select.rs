@@ -28,6 +28,7 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
             .map(|(package, directory)| MemberDependency {
                 name: name(package),
                 kind: DependencyKind::Normal,
+                platform: None,
                 manifest: path(&format!("{directory}/Cargo.toml")),
             })
             .collect(),

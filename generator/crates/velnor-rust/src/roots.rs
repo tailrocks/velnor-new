@@ -273,6 +273,7 @@ fn member(package: &RustPackage, targets: &Targets) -> RustMember {
                 manifests.into_iter().map(|manifest| MemberDependency {
                     name: dependency.name.clone(),
                     kind: dependency.kind,
+                    platform: dependency.platform.clone(),
                     manifest,
                 })
             })

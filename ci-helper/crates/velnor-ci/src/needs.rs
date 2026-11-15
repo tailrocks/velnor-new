@@ -9,6 +9,7 @@ use velnor_model::{
 };
 
 use crate::coverage::{UnitKind, crate_name};
+use crate::platform::Platform;
 
 pub(crate) enum Need<'f> {
     Unit {
@@ -33,8 +34,9 @@ pub(crate) fn groups<'f>(
     root: &'f RustRoot,
     paths: &'f Paths<'f>,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+    platform: &Platform,
 ) -> Vec<Group<'f>> {
-    let hosted = hosted(root, reached);
+    let hosted = hosted(root, reached, platform);
     let mut groups: Vec<Group<'f>> = root
         .members
         .iter()
@@ -69,6 +71,7 @@ pub(crate) fn groups<'f>(
 fn hosted<'f>(
     root: &'f RustRoot,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+    platform: &Platform,
 ) -> BTreeSet<&'f RepoPath> {
     let edges = |manifest: &RepoPath| -> &'f [MemberDependency] {
         match (member_of(root, manifest), reached.get(manifest)) {
@@ -83,7 +86,9 @@ fn hosted<'f>(
         .map(|member| &member.manifest)
         .chain(reached.keys().copied())
         .flat_map(&edges)
-        .filter(|dependency| dependency.kind == DependencyKind::Build)
+        .filter(|dependency| {
+            dependency.kind == DependencyKind::Build && applies(dependency, platform)
+        })
         .map(|dependency| &dependency.manifest)
         .collect();
     let mut hosted = BTreeSet::new();
@@ -92,12 +97,21 @@ fn hosted<'f>(
             pending.extend(
                 edges(manifest)
                     .iter()
-                    .filter(|dependency| dependency.kind != DependencyKind::Dev)
+                    .filter(|dependency| {
+                        dependency.kind != DependencyKind::Dev && applies(dependency, platform)
+                    })
                     .map(|dependency| &dependency.manifest),
             );
         }
     }
     hosted
+}
+
+fn applies(dependency: &MemberDependency, platform: &Platform) -> bool {
+    dependency
+        .platform
+        .as_deref()
+        .is_none_or(|predicate| platform.holds(predicate))
 }
 
 fn member_of<'f>(root: &'f RustRoot, manifest: &RepoPath) -> Option<&'f RustMember> {

@@ -31,6 +31,7 @@ pub struct RustPackage {
 pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
+    pub platform: Option<String>,
     pub manifest: Option<RepoPath>,
 }
 
@@ -144,6 +145,7 @@ impl RustMember {
 pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
+    pub platform: Option<String>,
     pub manifest: RepoPath,
 }
 

@@ -12,6 +12,7 @@ use velnor_rust::normalize;
 use super::audit::Audit;
 use crate::coverage::{Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
+use crate::platform::Platform;
 
 #[derive(Deserialize)]
 pub(super) struct Workspace {
@@ -183,6 +184,30 @@ pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
         }
     }
     Ok(())
+}
+
+pub(super) fn host_platform(root: &Path) -> Result<Platform, CiError> {
+    let run = |args: &[&str]| -> Result<String, CiError> {
+        let output = Command::new("rustc")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .map_err(|e| CiError::new(format!("cannot run rustc: {e}")))?;
+        if !output.status.success() {
+            return Err(CiError::new(format!(
+                "rustc {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    };
+    let version = run(&["-vV"])?;
+    let triple = version
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .unwrap_or_default();
+    Ok(Platform::parse(triple, &run(&["--print", "cfg"])?))
 }
 
 pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {

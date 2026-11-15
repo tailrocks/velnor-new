@@ -7,15 +7,16 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, RepoFacts, RepoPath};
+use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
     locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
+use super::units::{UnitFile, Workspace, apart, host_platform, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
+use crate::platform::Platform;
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
@@ -87,7 +88,12 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
     audit.orphans();
-    complete(&facts, &workspaces, &audit.built)?;
+    let platform = if gated(&facts) {
+        host_platform(&checkout.root)?
+    } else {
+        Platform::default()
+    };
+    complete(&facts, &workspaces, &audit.built, &platform)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -97,23 +103,47 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     compare(&audit.found, &listed, &summary)
 }
 
-fn complete(facts: &RepoFacts, workspaces: &[Workspace], built: &[Built]) -> Result<(), CiError> {
+fn gated(facts: &RepoFacts) -> bool {
+    let platformed = |dependencies: &[MemberDependency]| {
+        dependencies
+            .iter()
+            .any(|dependency| dependency.platform.is_some())
+    };
+    facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .any(|member| platformed(&member.dependencies))
+        || facts
+            .unowned
+            .values()
+            .any(|package| platformed(&package.dependencies))
+}
+
+fn complete(
+    facts: &RepoFacts,
+    workspaces: &[Workspace],
+    built: &[Built],
+    platform: &Platform,
+) -> Result<(), CiError> {
     let gaps: Vec<String> = facts
         .rust_roots
         .iter()
         .zip(workspaces)
         .zip(built)
         .flat_map(|((root, workspace), built)| {
-            gaps(root, &facts.unowned, built).into_iter().map(|gap| {
-                format!(
-                    "in {} for {}",
-                    workspace
-                        .target_directory
-                        .join(&gap.configuration)
-                        .display(),
-                    gap.missing.join(", ")
-                )
-            })
+            gaps(root, &facts.unowned, built, platform)
+                .into_iter()
+                .map(|gap| {
+                    format!(
+                        "in {} for {}",
+                        workspace
+                            .target_directory
+                            .join(&gap.configuration)
+                            .display(),
+                        gap.missing.join(", ")
+                    )
+                })
         })
         .collect();
     if gaps.is_empty() {

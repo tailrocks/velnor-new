@@ -19,6 +19,7 @@ fn uses(
         package.dependencies.push(PackageDependency {
             name: PackageName::new(*name)?,
             kind: DependencyKind::Normal,
+            platform: None,
             manifest: None,
         });
     }
