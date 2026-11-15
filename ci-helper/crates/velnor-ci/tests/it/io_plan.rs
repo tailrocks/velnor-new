@@ -30,8 +30,14 @@ pub(crate) fn plan_repo(name: &str) -> Repo {
     repo
 }
 
+static METADATA: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub(crate) fn plan_command(repo: &Repo) -> Command {
+    let writing = METADATA
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     velnor_gen::io::write_metadata(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    drop(writing);
     stale_plan_command(repo)
 }
 
