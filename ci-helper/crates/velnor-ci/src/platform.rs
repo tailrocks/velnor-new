@@ -111,6 +111,8 @@ impl Platform {
 
     fn evaluate(&self, expression: &Expression) -> Truth {
         match expression {
+            Expression::Name(name) if name == "true" => Truth::Yes,
+            Expression::Name(name) if name == "false" => Truth::No,
             Expression::Name(name) if FIXED_NAMES.contains(&name.as_str()) => {
                 Truth::of(self.names.contains(name))
             }

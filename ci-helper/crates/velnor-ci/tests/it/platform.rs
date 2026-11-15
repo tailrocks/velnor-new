@@ -23,6 +23,12 @@ fn a_cfg_predicate_holds_when_rustc_prints_the_name_or_the_pair() {
         ("cfg(any(windows, target_arch = \"x86_64\"))", true),
         ("cfg(all())", true),
         ("cfg(any())", false),
+        ("cfg(true)", true),
+        ("cfg(false)", false),
+        ("cfg(not(true))", false),
+        ("cfg(not(false))", true),
+        ("cfg(all(unix, true))", true),
+        ("cfg(any(false, windows))", false),
     ] {
         assert_eq!(platform.holds(predicate), expected, "{predicate}");
     }

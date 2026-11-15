@@ -83,6 +83,30 @@ fn unowned(platform: &str) -> Repo {
     repo
 }
 
+fn behind_an_inactive_edge() -> Repo {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/Cargo.toml",
+        &package(
+            "app",
+            &format!("[target.'{INACTIVE}'.dependencies]\nmid = {{ path = \"../../mid\" }}\n"),
+        ),
+    );
+    unit(
+        &repo,
+        "mid/Cargo.toml",
+        &package(
+            "mid",
+            "[build-dependencies]\nlib = { path = \"../rust/lib\" }\n",
+        ),
+    );
+    unit(&repo, "mid/src/lib.rs", "");
+    unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"mid\"]\n");
+    finish(&repo);
+    repo
+}
+
 fn passes(repo: &Repo) {
     let output = audit(repo, &["--write"]);
     assert!(output.status.success(), "{output:?}");
@@ -128,18 +152,20 @@ fn a_package_outside_the_workspaces_with_an_inactive_build_dependency_needs_no_h
 }
 
 #[test]
+fn a_package_outside_the_workspaces_reached_only_through_an_inactive_edge_hosts_nothing() {
+    passes(&behind_an_inactive_edge());
+}
+
+#[test]
 fn a_package_outside_the_workspaces_with_an_active_build_dependency_needs_its_host_units() {
     needs_the_host_units_of_lib(&unowned(ACTIVE));
 }
 
-#[test]
-fn a_rustc_that_prints_no_host_triple_fails_the_audit() {
-    let repo = direct(INACTIVE);
+fn audit_with_rustc(repo: &Repo, script: &str) -> std::process::Output {
     let shims = repo.root().join("shims");
     fs::create_dir_all(&shims).unwrap_or_else(|e| unreachable!("{e}"));
     let rustc = shims.join("rustc");
-    fs::write(&rustc, "#!/bin/sh\necho 'release: 1.99.1'\n")
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&rustc, script).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&rustc, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let path = format!(
@@ -147,15 +173,27 @@ fn a_rustc_that_prints_no_host_triple_fails_the_audit() {
         shims.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .env("PATH", path)
         .args(["inputs", "audit", "--write"])
         .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_rustc_that_prints_no_host_triple_fails_the_audit() {
+    let output = audit_with_rustc(&direct(INACTIVE), "#!/bin/sh\necho 'release: 1.99.1'\n");
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("no host triple"),
         "{output:?}"
     );
+}
+
+#[test]
+fn rustc_is_queried_from_the_workspace_root_so_its_own_toolchain_answers() {
+    let script = "#!/bin/sh\ncase \"$PWD\" in\n*/rust) ;;\n*) echo 'toolchain not installed here' >&2; exit 1;;\nesac\ncase \"$1\" in\n-vV) echo 'host: x86_64-unknown-linux-gnu';;\n*) printf 'unix\\ntarget_os=\"linux\"\\n';;\nesac\n";
+    let output = audit_with_rustc(&direct(INACTIVE), script);
+    assert!(output.status.success(), "{output:?}");
 }

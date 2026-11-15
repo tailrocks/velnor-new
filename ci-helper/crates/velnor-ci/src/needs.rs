@@ -80,11 +80,34 @@ fn hosted<'f>(
             (None, None) => &[],
         }
     };
+    let mut live: BTreeSet<&RepoPath> = BTreeSet::new();
+    let mut walk: Vec<&RepoPath> = root
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| applies(dependency, platform))
+        .map(|dependency| &dependency.manifest)
+        .collect();
+    while let Some(manifest) = walk.pop() {
+        if let Some(package) = reached.get(manifest)
+            && live.insert(manifest)
+        {
+            walk.extend(
+                package
+                    .dependencies
+                    .iter()
+                    .filter(|dependency| {
+                        dependency.kind != DependencyKind::Dev && applies(dependency, platform)
+                    })
+                    .map(|dependency| &dependency.manifest),
+            );
+        }
+    }
     let mut pending: Vec<&RepoPath> = root
         .members
         .iter()
         .map(|member| &member.manifest)
-        .chain(reached.keys().copied())
+        .chain(live.iter().copied())
         .flat_map(&edges)
         .filter(|dependency| {
             dependency.kind == DependencyKind::Build && applies(dependency, platform)

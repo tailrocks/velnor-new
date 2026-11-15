@@ -88,12 +88,17 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
     audit.orphans();
-    let platform = if gated(&facts) {
-        host_platform(&checkout.root)?
-    } else {
-        Platform::default()
-    };
-    complete(&facts, &workspaces, &audit.built, &platform)?;
+    let platforms = workspaces
+        .iter()
+        .map(|workspace| {
+            if gated(&facts) {
+                host_platform(&workspace.workspace_root)
+            } else {
+                Ok(Platform::default())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    complete(&facts, &workspaces, &audit.built, &platforms)?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -124,14 +129,15 @@ fn complete(
     facts: &RepoFacts,
     workspaces: &[Workspace],
     built: &[Built],
-    platform: &Platform,
+    platforms: &[Platform],
 ) -> Result<(), CiError> {
     let gaps: Vec<String> = facts
         .rust_roots
         .iter()
         .zip(workspaces)
         .zip(built)
-        .flat_map(|((root, workspace), built)| {
+        .zip(platforms)
+        .flat_map(|(((root, workspace), built), platform)| {
             gaps(root, &facts.unowned, built, platform)
                 .into_iter()
                 .map(|gap| {
