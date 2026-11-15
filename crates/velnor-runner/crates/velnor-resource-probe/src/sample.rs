@@ -24,11 +24,11 @@ const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const MEMINFO_LIMIT: usize = 16 * 1024;
 const LOADAVG_LIMIT: usize = 256;
 const PRESSURE_LIMIT: usize = 4096;
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo_io::read_mountinfo;
 const SMALL_LIMIT: usize = 4096;
 
 pub fn sample() -> Result<ProbeRecord, ProbeError> {
-    let mountinfo = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let mountinfo = read_mountinfo(MOUNTINFO_PATH, "mountinfo")?;
     let cgroup_mount = cgroup2_root(&mountinfo)?;
     let filesystem = observe_docker_root(&mountinfo)?;
     let docker_root_fs_type_name = filesystem_name(&filesystem.mount, filesystem.fs_type_magic)?;
@@ -115,7 +115,7 @@ fn observe_process_cgroup(
         return Err(ProbeError::Invalid("cgroup_cpu_changed"));
     }
     let path_after = probe_cgroup_path(&read_bounded(CGROUP_PATH, SMALL_LIMIT, "proc_cgroup")?)?;
-    let mount_after = cgroup2_root(&read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?)?;
+    let mount_after = cgroup2_root(&read_mountinfo(MOUNTINFO_PATH, "mountinfo")?)?;
     let status_after = read_bounded(STATUS_PATH, SMALL_LIMIT, "proc_status")?;
     let pids_after = namespace_pids(&status_after, process_id)?;
     verify_process_membership(&cgroup_path, pids.namespace_pid)?;
