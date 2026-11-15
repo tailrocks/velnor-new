@@ -48,7 +48,10 @@ pub(super) fn prepare() -> Result<String, CiError> {
     )?;
     let declared = read_files(&root, &[TOOLCHAIN_PLAIN, TOOLCHAIN_TOML])
         .map_err(|e| CiError::new(e.to_string()))?;
-    if let Some(declared) = toolchain(&declared).map_err(|e| CiError::new(e.to_string()))? {
+    if let Some(declared) = toolchain(&declared)
+        .map_err(|e| CiError::new(e.to_string()))?
+        .filter(|declared| declared.path.is_none())
+    {
         install_declared(&root, &declared)?;
     }
     append_to(ENV_VARIABLE, &env_lines())?;

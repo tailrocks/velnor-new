@@ -281,3 +281,19 @@ fn prepare_passes_a_minimal_profile_with_nothing_more_declared() {
     );
     assert!(run.output.status.success(), "{:?}", run.output);
 }
+
+#[test]
+fn prepare_does_not_run_rustup_for_a_path_toolchain() {
+    let file = "[toolchain]\npath = \"/opt/custom-rust\"\n";
+    let run = prepare_declared(
+        "path",
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&Declared {
+            file,
+            components: "",
+            targets: "",
+            rustup: Some("echo rustup must not run >&2\nexit 1\n"),
+        }),
+    );
+    assert!(run.output.status.success(), "{:?}", run.output);
+}
