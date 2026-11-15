@@ -124,3 +124,28 @@ fn a_proc_macro_library_with_a_custom_harness_runs_with_cargo_test_lib() -> Test
     assert!(!text.contains("nextest"), "{text}");
     Ok(())
 }
+
+#[test]
+fn a_dependency_feature_enables_a_local_feature_only_through_an_implicit_optional_dependency_feature()
+-> TestResult {
+    let manifest = |dependency: &str, local: &str| {
+        format!(
+            "[package]\nname = \"a\"\n[features]\ndefault = [\"foo/bar\"]\n{local}[dependencies]\nfoo = {dependency}\n[[test]]\nname = \"custom\"\nharness = false\nrequired-features = [\"foo\"]\n"
+        )
+    };
+    let render = |dependency: &str, local: &str| -> Result<String, Box<dyn std::error::Error>> {
+        let a = package(
+            "a",
+            "a/Cargo.toml",
+            &[],
+            &[("custom", TargetKind::Test, true)],
+        )?;
+        workflow(&view(
+            &[("a/Cargo.toml", &manifest(dependency, local))],
+            vec![a],
+        )?)
+    };
+    assert!(!render("{ version = \"1\" }", "foo = []\n")?.contains("--test=custom"));
+    assert!(render("{ version = \"1\", optional = true }", "")?.contains("--test=custom"));
+    Ok(())
+}

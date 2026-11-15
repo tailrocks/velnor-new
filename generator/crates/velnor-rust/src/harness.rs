@@ -132,6 +132,7 @@ fn gated_on(entry: &toml::Value, defaults: &BTreeSet<String>) -> bool {
 
 fn enabled_features(manifest: &toml::Table, requested: &[String]) -> BTreeSet<String> {
     let features = manifest.get("features").and_then(toml::Value::as_table);
+    let implicit = implicit_features(manifest);
     let mut enabled = BTreeSet::new();
     let mut pending = vec!["default".to_owned()];
     pending.extend(requested.iter().cloned());
@@ -149,10 +150,43 @@ fn enabled_features(manifest: &toml::Table, requested: &[String]) -> BTreeSet<St
             match member.split_once('/') {
                 _ if member.starts_with("dep:") => {}
                 Some((prefix, _)) if prefix.ends_with('?') => {}
-                Some((prefix, _)) => pending.push(prefix.to_owned()),
+                Some((prefix, _)) if implicit.contains(prefix) => pending.push(prefix.to_owned()),
+                Some(_) => {}
                 None => pending.push(member.to_owned()),
             }
         }
     }
     enabled
+}
+
+fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
+    const TABLES: [&str; 2] = ["dependencies", "build-dependencies"];
+    let targets = manifest
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::Table::values)
+        .filter_map(toml::Value::as_table);
+    let optional: BTreeSet<String> = std::iter::once(manifest)
+        .chain(targets)
+        .flat_map(|scope| TABLES.iter().filter_map(|key| scope.get(*key)))
+        .filter_map(toml::Value::as_table)
+        .flat_map(toml::Table::iter)
+        .filter(|(_, spec)| spec.get("optional").and_then(toml::Value::as_bool) == Some(true))
+        .map(|(name, _)| name.clone())
+        .collect();
+    let explicit: BTreeSet<&str> = manifest
+        .get("features")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::Table::values)
+        .filter_map(toml::Value::as_array)
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .filter_map(|member| member.strip_prefix("dep:"))
+        .collect();
+    optional
+        .into_iter()
+        .filter(|name| !explicit.contains(name.as_str()))
+        .collect()
 }
