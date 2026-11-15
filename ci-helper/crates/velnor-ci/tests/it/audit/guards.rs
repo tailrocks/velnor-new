@@ -225,6 +225,11 @@ fn a_unit_of_another_profile_triple_or_kind_does_not_stand_in_for_a_missing_test
             "",
         );
     }
+    unit(
+        &repo,
+        "rust/target/x86_64-unknown-linux-gnu/CACHEDIR.TAG",
+        "",
+    );
     own_units(&repo, target, &[]);
     let partial_triple = audit(&repo, &["--write"]);
     assert_eq!(partial_triple.status.code(), Some(1), "{partial_triple:?}");
