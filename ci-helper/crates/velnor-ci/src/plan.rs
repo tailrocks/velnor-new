@@ -101,10 +101,13 @@ fn escape(text: &str, property: bool) -> String {
             '\n' => "%0A".to_owned(),
             ':' if property => "%3A".to_owned(),
             ',' if property => "%2C".to_owned(),
-            control if control.is_control() => format!("%{:02X}", u32::from(control)),
+            odd if odd.is_control() || (odd.is_whitespace() && odd != ' ') => {
+                format!("%{:02X}", u32::from(odd))
+            }
             other => other.to_string(),
         })
-        .collect()
+        .collect::<String>()
+        .replace("##[", "#%23[")
 }
 
 #[must_use]
