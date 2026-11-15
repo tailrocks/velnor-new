@@ -13,7 +13,7 @@ use tokio::task::JoinSet;
 use crate::error::HostError;
 
 use super::authority::Client;
-use super::pair::ENVIRONMENT_LABEL;
+use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
 use super::remove::{labelled_agents, remove_labelled};
 use super::request::{LocalPairRequest, validate};
@@ -80,7 +80,8 @@ impl Supervisor {
     async fn sweep(&self) -> Result<(), HostError> {
         let label = format!("{ENVIRONMENT_LABEL}={}", self.plan.environment);
         let agents = labelled_agents(&self.docker, &label).await?;
-        let removed = remove_labelled(&self.docker, &label).await?;
+        let pairs = [label.clone(), PAIR_LABEL.to_owned()];
+        let removed = remove_labelled(&self.docker, &pairs).await?;
         let mut cleanup = Ok(());
         for (side, name) in agents {
             let Some(side) = Side::parse(&side) else {

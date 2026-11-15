@@ -18,8 +18,11 @@ pub struct Removed {
     pub volumes: usize,
 }
 
-pub(super) async fn remove_labelled(docker: &Docker, label: &str) -> Result<Removed, HostError> {
-    let filters = HashMap::from([("label".to_owned(), vec![label.to_owned()])]);
+pub(super) async fn remove_labelled(
+    docker: &Docker,
+    labels: &[String],
+) -> Result<Removed, HostError> {
+    let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
     let containers = docker_deadline(docker.list_containers(Some(ListContainersOptions {
         all: true,
         filters: Some(filters.clone()),

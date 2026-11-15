@@ -23,7 +23,7 @@ use super::request::{LocalPairRequest, Validated, validate};
 use super::{layout, storage};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
-const PAIR_LABEL: &str = "velnor-local.pair";
+pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
 const ROLE_LABEL: &str = "velnor-local.role";
 pub(super) const SIDE_LABEL: &str = "velnor-local.side";
 pub(super) const AGENT_LABEL: &str = "velnor-local.agent";
@@ -84,14 +84,14 @@ pub async fn start_pair(
                 .volume_name(WorkerVolumeRole::RunnerMetadata),
         }),
         Err(error) => {
-            let _removed = remove_labelled(docker, &format!("{PAIR_LABEL}={pair}")).await;
+            let _removed = remove_labelled(docker, &[format!("{PAIR_LABEL}={pair}")]).await;
             Err(error)
         }
     }
 }
 
 pub async fn remove_pair(docker: &Docker, pair: &LocalPair) -> Result<Removed, HostError> {
-    remove_labelled(docker, &format!("{PAIR_LABEL}={}", pair.name)).await
+    remove_labelled(docker, &[format!("{PAIR_LABEL}={}", pair.name)]).await
 }
 
 async fn create_and_start(

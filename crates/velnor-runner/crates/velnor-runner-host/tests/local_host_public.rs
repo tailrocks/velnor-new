@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
-use bollard::models::ContainerInspectResponse;
-use bollard::query_parameters::ListContainersOptions;
+use bollard::models::{ContainerCreateBody, ContainerInspectResponse};
+use bollard::query_parameters::{
+    CreateContainerOptions, ListContainersOptions, RemoveContainerOptions,
+};
 use velnor_runner_host::HostError;
 use velnor_runner_host::local::{LoopbackAuthority, check_state, run_local, start_pair};
 
@@ -346,6 +348,21 @@ async fn local_start_sweeps_the_leftover_pairs_of_its_environment() -> TestResul
     let mut scenario = Scenario::new().await?;
     let docker = scenario.fixture.docker.clone();
     let leftover = Box::pin(start_pair(&docker, &scenario.fixture.request())).await?;
+    let label = HashMap::from([(
+        "velnor-local".to_owned(),
+        scenario.fixture.environment.clone(),
+    )]);
+    let service = docker
+        .create_container(
+            None::<CreateContainerOptions>,
+            ContainerCreateBody {
+                image: Some(scenario.fixture.image.clone()),
+                labels: Some(label),
+                ..Default::default()
+            },
+        )
+        .await?
+        .id;
     let before = labelled(&docker, &scenario.fixture.environment).await?;
     let plan = scenario.plan(1, 0)?;
     scenario.start(plan);
@@ -361,13 +378,20 @@ async fn local_start_sweeps_the_leftover_pairs_of_its_environment() -> TestResul
     let stopped = scenario.stop().await?;
     let events = scenario.fake().events();
     let left = labelled(&docker, &scenario.fixture.environment).await?;
+    let kept = docker.inspect_container(&service, None).await.is_ok();
+    let force = RemoveContainerOptions {
+        force: true,
+        ..Default::default()
+    };
+    docker.remove_container(&service, Some(force)).await?;
     let agent = format!("delete:trusted:{}-agent", scenario.fixture.environment);
     scenario.finish().await?;
     let (_live, gone) = run?;
-    assert_eq!(before, (2, 5));
+    assert!(kept, "the sweep removed a container that is not a pair");
+    assert_eq!(before, (3, 5));
     assert!(gone);
     assert!(position(&events, &agent).is_some(), "{events:?}");
     assert_eq!(stopped, Ok(()));
-    assert_eq!(left, (0, 0));
+    assert_eq!(left, (1, 0));
     Ok(())
 }

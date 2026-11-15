@@ -47,12 +47,14 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
     if args.runner == RunnerMode::Plain {
         return Ok(None);
     }
-    let host = fs::canonicalize(&args.velnor_host).await.map_err(|error| {
+    let missing = |error: io::Error| {
         io::Error::other(format!(
             "velnor-host {}: {error}; fix: velnor-local build, or --runner plain",
             args.velnor_host.display()
         ))
-    })?;
+    };
+    let host = std::path::absolute(&args.velnor_host).map_err(missing)?;
+    fs::metadata(&host).await.map_err(missing)?;
     for tag in [RUNNER_TAG, DIND_TAG] {
         image(tag).await?;
     }
