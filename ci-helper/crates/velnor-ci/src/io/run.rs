@@ -10,7 +10,7 @@ use std::thread;
 
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
-use signal_hook::consts::SIGTERM;
+use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::cli::RunArgs;
@@ -61,8 +61,8 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         args.command.len() - 1
     )
     .map_err(|e| (2, format!("cannot write {}: {e}", path.display())))?;
-    let mut signals =
-        Signals::new([SIGTERM]).map_err(|e| (2, format!("cannot watch for SIGTERM: {e}")))?;
+    let mut signals = Signals::new([SIGINT, SIGTERM])
+        .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
     let mut child = Command::new(&args.command[0])
         .args(&args.command[1..])
         .stdout(Stdio::piped())
@@ -89,9 +89,9 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             scope.spawn(|| pump(from, std::io::stderr(), &log));
         }
         scope.spawn(|| {
-            for _ in signals.forever() {
-                if let Some(pid) = pid {
-                    kill(pid, Signal::SIGTERM).ok();
+            for received in signals.forever() {
+                if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
+                    kill(pid, signal).ok();
                 }
             }
         });

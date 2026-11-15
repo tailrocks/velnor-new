@@ -114,6 +114,7 @@ struct Node<'a> {
     name: &'a PackageName,
     directory: Option<RepoPath>,
     whole: bool,
+    sources: Vec<&'a RepoPath>,
 }
 
 pub(crate) fn claims(directory: Option<&RepoPath>, whole: bool, path: &RepoPath) -> bool {
@@ -163,6 +164,11 @@ impl<'a> Graph<'a> {
                         name: &member.name,
                         directory: member.directory.clone(),
                         whole: member.manifest != root.manifest,
+                        sources: member
+                            .targets
+                            .iter()
+                            .filter_map(|target| target.source.as_ref())
+                            .collect(),
                     },
                 );
             }
@@ -178,6 +184,7 @@ impl<'a> Graph<'a> {
                 name: &package.name,
                 directory: manifest.parent(),
                 whole: true,
+                sources: Vec::new(),
             });
             for dependency in &package.dependencies {
                 graph.depend(manifest, dependency);
@@ -208,6 +215,7 @@ impl<'a> Graph<'a> {
             name: &dependency.name,
             directory: dependency.manifest.parent(),
             whole: true,
+            sources: Vec::new(),
         });
     }
 
@@ -239,7 +247,8 @@ impl<'a> Graph<'a> {
             .filter(|(_, node)| {
                 root.is_some()
                     && node.root == root
-                    && claims(node.directory.as_ref(), node.whole, path)
+                    && (claims(node.directory.as_ref(), node.whole, path)
+                        || node.sources.contains(&path))
             })
             .max_by_key(|(_, node)| depth(node.directory.as_ref()))
             .map(|(manifest, _)| *manifest);

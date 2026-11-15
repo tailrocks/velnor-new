@@ -241,6 +241,17 @@ fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_writ
 #[cfg(unix)]
 #[test]
 fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
+    forwards("TERM", 5);
+}
+
+#[cfg(unix)]
+#[test]
+fn run_forwards_sigint_to_the_command_and_exits_with_its_code() {
+    forwards("INT", 6);
+}
+
+#[cfg(unix)]
+fn forwards(signal: &str, code: i32) {
     use std::io::{BufRead, BufReader};
     use std::os::unix::process::CommandExt;
     use std::process::Stdio;
@@ -248,10 +259,12 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
     use nix::sys::signal::{Signal, killpg};
     use nix::unistd::Pid;
 
-    let temp = scratch("sigterm");
-    let script = "trap 'echo got-term; exit 5' TERM; echo ready; i=0; while [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; exit 9";
+    let temp = scratch(&format!("sig{signal}"));
+    let script = format!(
+        "trap 'echo got-{signal}; exit {code}' {signal}; echo ready; i=0; while [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; exit 9"
+    );
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["run", "--", "sh", "-c", script])
+        .args(["run", "--", "sh", "-c", &script])
         .env("RUNNER_TEMP", &temp)
         .stdout(Stdio::piped())
         .process_group(0)
@@ -261,7 +274,7 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
     let mut lines = BufReader::new(stdout).lines();
     assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("ready"));
     let sent = Command::new("kill")
-        .args(["-TERM", &child.id().to_string()])
+        .args([&format!("-{signal}"), &child.id().to_string()])
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(sent.success());
@@ -282,9 +295,9 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
             child.wait().unwrap_or_else(|e| unreachable!("{e}"))
         }
     };
-    assert_eq!(status.code(), Some(5));
+    assert_eq!(status.code(), Some(code));
     assert_eq!(
         lines.next().and_then(Result::ok).as_deref(),
-        Some("got-term")
+        Some(format!("got-{signal}").as_str())
     );
 }
