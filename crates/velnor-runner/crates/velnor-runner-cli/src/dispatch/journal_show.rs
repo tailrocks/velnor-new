@@ -6,10 +6,6 @@ use std::process::ExitCode;
 
 pub(super) fn show(state: &Path, reservation: Option<i64>) -> ExitCode {
     match velnor_runner_host::show_reservations(state, reservation) {
-        Ok(rows) if rows.is_empty() && reservation.is_some() => {
-            eprintln!("reservation not found");
-            ExitCode::from(1)
-        }
         Ok(rows) => {
             for row in rows {
                 println!("{}", row.render());
