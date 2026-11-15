@@ -108,6 +108,23 @@ impl VerifiedWorkerImages {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn for_test(
+        expected: &SelectedEngineContext,
+        source_sha: &str,
+        runner: &str,
+        dind: &str,
+    ) -> Result<Self, HostError> {
+        Self::from_developer(
+            expected,
+            DeveloperWorkerImages {
+                source_sha: source_sha.to_owned(),
+                runner: runner.to_owned(),
+                dind: dind.to_owned(),
+            },
+        )
+    }
+
     pub(crate) async fn verify_for_engine(
         &self,
         docker: &Docker,
