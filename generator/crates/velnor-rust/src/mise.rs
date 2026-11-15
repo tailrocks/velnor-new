@@ -20,7 +20,12 @@ const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<String>>;
 
-pub(crate) fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, DetectError> {
+#[must_use]
+pub fn mise_files() -> Vec<RepoPath> {
+    MISE_CONFIGS.iter().cloned().chain([MISE_LOCK]).collect()
+}
+
+pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, DetectError> {
     let present: Vec<(&RepoPath, &Vec<u8>)> = MISE_CONFIGS
         .iter()
         .filter_map(|path| files.get(path).map(|bytes| (path, bytes)))

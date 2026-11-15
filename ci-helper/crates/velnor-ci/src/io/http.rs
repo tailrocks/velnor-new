@@ -9,6 +9,7 @@ use ureq::http::Response;
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite};
 
+pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug)]
@@ -19,9 +20,9 @@ pub(super) struct HttpGitHub {
 }
 
 impl HttpGitHub {
-    pub(super) fn new(api: String, token: String) -> Self {
+    pub(super) fn new(api: String, token: String, timeout: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(300)))
+            .timeout_global(Some(timeout))
             .build()
             .into();
         Self { agent, api, token }
@@ -40,7 +41,14 @@ fn body(
     what: &str,
     response: Result<Response<ureq::Body>, ureq::Error>,
 ) -> Result<String, CiError> {
-    let mut response = response.map_err(|e| CiError::new(format!("{what}: {e}")))?;
+    let mut response = response.map_err(|e| {
+        let message = format!("{what}: {e}");
+        if matches!(e, ureq::Error::StatusCode(404 | 410)) {
+            CiError::missing(message)
+        } else {
+            CiError::new(message)
+        }
+    })?;
     let bytes = super::read_limited(response.body_mut().as_reader(), BODY_LIMIT)
         .map_err(|e| CiError::new(format!("{what}: {e}")))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())

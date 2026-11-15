@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_gen::expected_files;
 use velnor_model::{PolicyTools, RepoPath};
-use velnor_rust::{CONFIG_PATH, policy_needed};
+use velnor_rust::{CONFIG_PATH, PolicyRuns, policy_runs};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -25,15 +25,14 @@ const EVENTS: &str = r"on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ";
 
-const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
+pub(crate) const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
 
-const DRAFT: &str = "if: ${{ github.event.pull_request.draft != true }}";
+const DRAFT: &str = "github.event.pull_request.draft != true";
 
 fn with(files: &[(&str, &str)], config: Option<&[u8]>) -> TestResult2 {
     let mut view = view(&["Cargo.toml"], config)?;
@@ -53,7 +52,7 @@ fn unquoted(text: &str) -> String {
 
 #[test]
 fn the_workflow_starts_on_the_four_events_and_cancels_only_older_pull_request_runs() -> TestResult {
-    let text = unquoted(&with(&[], None)?);
+    let text = unquoted(&with(&[], Some(b"full_run = \"off\"\n"))?);
     assert!(text.contains(&unquoted(EVENTS)), "{text}");
     Ok(())
 }
@@ -78,6 +77,24 @@ fn the_default_branch_comes_from_the_config_and_a_malformed_name_is_refused() ->
         let mut bad = view(&["Cargo.toml"], Some(config.as_bytes()))?;
         bad.files.entry(CONFIG_PATH).or_default();
         assert!(expected_files(&bad).is_err(), "{name:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_default_branch_with_a_filter_character_is_escaped_so_the_push_filter_matches_it_literally()
+-> TestResult {
+    for (name, filter) in [
+        ("release/c++", "release/c\\+\\+"),
+        ("!hotfix", "\\!hotfix"),
+        ("v1]", "v1\\]"),
+    ] {
+        let config = format!("default_branch = \"{name}\"\n");
+        let text = with(&[], Some(config.as_bytes()))?;
+        assert!(
+            text.contains(&format!("    branches:\n      - '{filter}'\n")),
+            "{name}: {text}"
+        );
     }
     Ok(())
 }
@@ -141,10 +158,7 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
             .join("\n")
     };
     assert!(!job("rust-lint").contains("draft"), "{on}");
-    assert!(
-        unquoted(&job("rust-test")).contains(&unquoted(DRAFT)),
-        "{on}"
-    );
+    assert!(unquoted(&job("rust-test")).contains(DRAFT), "{on}");
     assert!(!job("required").contains("draft != true"), "{on}");
     Ok(())
 }
@@ -152,7 +166,12 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
 #[test]
 fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestResult {
     let none = with(&[], None)?;
-    assert!(!none.contains("rust-policy"), "{none}");
+    assert!(!none.contains("  policy:\n"), "{none}");
+    let unpinned = with(&[("deny.toml", "")], None);
+    assert!(
+        unpinned.is_err_and(|error| error.to_string().contains("cargo-deny is not pinned")),
+        "a deny.toml without a pinned cargo-deny must be refused"
+    );
     let deny = with(&[("deny.toml", ""), ("mise.toml", DENY_MISE)], None)?;
     assert!(deny.contains("  policy:\n"), "{deny}");
     assert!(deny.contains("cargo-deny check"), "{deny}");
@@ -171,36 +190,49 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     Ok(())
 }
 
+type Case<'a> = (&'a [&'a str], bool, bool, (bool, bool));
+
 #[test]
-fn the_policy_lane_runs_for_a_dependency_file_a_schedule_or_everything_and_not_for_sources()
--> TestResult {
+fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
     let changed = |paths: &[&str]| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
         Ok(paths
             .iter()
             .map(|path| RepoPath::new(*path))
             .collect::<Result<_, _>>()?)
     };
-    let cases: [(&[&str], bool, bool); 8] = [
+    let both = PolicyTools {
+        deny: true,
+        machete: true,
+    };
+    let cases: [Case<'_>; 11] = [
+        (&["README.md"], false, false, (false, false)),
+        (&[], false, false, (false, false)),
+        (&["Cargo.lock"], false, true, (true, true)),
+        (&["crates/a/Cargo.toml"], false, true, (true, true)),
+        (&["deny.toml"], false, true, (true, true)),
+        (&[".cargo/config.toml"], false, true, (true, true)),
         (
-            &["src/lib.rs", "crates/a/src/main.rs", "README.md"],
+            &["docs/deny.toml.md", "src/Cargo.tomls"],
             false,
             false,
+            (false, false),
         ),
-        (&[], false, false),
-        (&["Cargo.lock"], false, true),
-        (&["crates/a/Cargo.toml"], false, true),
-        (&["deny.toml"], false, true),
-        (&["docs/deny.toml.md", "src/Cargo.tomls"], false, false),
-        (&["src/lib.rs"], true, true),
-        (&[], true, true),
+        (&["src/lib.rs", "README.md"], false, true, (false, true)),
+        (&["docs/example.rs"], false, false, (false, false)),
+        (&["mise.toml"], false, false, (false, true)),
+        (&[], true, true, (true, true)),
     ];
-    for (paths, everything, run) in cases {
-        assert_eq!(
-            policy_needed(&changed(paths)?, everything, PolicyTools::default()),
-            run,
-            "{paths:?}"
-        );
+    for (paths, everything, selected, (deny, machete)) in cases {
+        let runs = policy_runs(both, &changed(paths)?, everything, selected);
+        assert_eq!((runs.deny, runs.machete), (deny, machete), "{paths:?}");
     }
+    let no_tools = policy_runs(
+        PolicyTools::default(),
+        &changed(&["Cargo.lock"])?,
+        true,
+        true,
+    );
+    assert_eq!(no_tools, PolicyRuns::default());
     Ok(())
 }
 
@@ -215,8 +247,11 @@ fn a_source_change_runs_the_policy_lane_when_machete_is_pinned() -> TestResult {
         deny: false,
         machete: true,
     };
-    assert!(!policy_needed(&changed, false, deny_only));
-    assert!(policy_needed(&changed, false, machete));
+    assert_eq!(
+        policy_runs(deny_only, &changed, false, true),
+        PolicyRuns::default()
+    );
+    assert!(policy_runs(machete, &changed, false, true).machete);
     Ok(())
 }
 
@@ -261,57 +296,5 @@ fn a_draft_run_fails_the_verdict_and_a_conversion_to_draft_starts_a_run() -> Tes
         unquoted(verdict).contains("if: ${{ github.event.pull_request.draft == true }}"),
         "{on}"
     );
-    Ok(())
-}
-
-#[test]
-fn the_policy_lane_installs_no_helper_it_never_runs() -> TestResult {
-    let mut multi = view(&["Cargo.toml"], None)?;
-    for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
-        let path = RepoPath::new(path)?;
-        multi.tracked_paths.insert(path.clone());
-        multi.files.insert(path, text.as_bytes().to_vec());
-    }
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    multi.tracked_paths.insert(lock.clone());
-    multi.files.insert(
-        lock,
-        std::fs::read(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../samples/helper-lock/view/.velnor/rust-ci.lock"),
-        )?,
-    );
-    let text = workflow(&multi)?;
-    assert!(text.contains("Install velnor-ci"), "{text}");
-    let policy = text.split("\n  policy:\n").nth(1).unwrap_or_default();
-    let policy = policy.split("\n  required:\n").next().unwrap_or_default();
-    assert!(policy.contains("cargo-deny"), "{policy}");
-    assert!(!policy.contains("Install velnor-ci"), "{policy}");
-    Ok(())
-}
-
-#[test]
-fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResult {
-    let changed = |path: &str| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
-        Ok(BTreeSet::from([RepoPath::new(path)?]))
-    };
-    let deny = PolicyTools {
-        deny: true,
-        machete: false,
-    };
-    let machete = PolicyTools {
-        deny: false,
-        machete: true,
-    };
-    for path in [
-        "LICENSE",
-        "LICENSE-MIT",
-        "crates/a/LICENSE.md",
-        "licence.txt",
-    ] {
-        assert!(policy_needed(&changed(path)?, false, deny), "{path}");
-        assert!(!policy_needed(&changed(path)?, false, machete), "{path}");
-    }
-    assert!(!policy_needed(&changed("docs/readme.md")?, false, deny));
     Ok(())
 }

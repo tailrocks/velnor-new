@@ -24,6 +24,7 @@ fn dependency(
     Ok(PackageDependency {
         name: PackageName::new(name)?,
         kind,
+        platform: None,
         manifest: manifest.map(path).transpose()?,
         features: Vec::new(),
         rename: None,

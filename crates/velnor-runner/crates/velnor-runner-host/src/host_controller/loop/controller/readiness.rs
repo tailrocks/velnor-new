@@ -19,6 +19,11 @@ mod worker;
 
 pub(super) use worker::ReadinessWorker;
 
+struct RefreshDependencies<'a> {
+    remote_audit: &'a audit::RemoteRunnerAudit,
+    settling: &'a audit::SettlingAges,
+}
+
 async fn refresh(
     state: &std::path::Path,
     docker: &Docker,
@@ -26,6 +31,7 @@ async fn refresh(
     selected: &SelectedEngineContext,
     control: &ControlState,
     secret: &ImageAuthority,
+    settling: &audit::SettlingAges,
 ) -> Result<(), HostError> {
     Box::pin(refresh_with_dependencies(
         state,
@@ -34,7 +40,10 @@ async fn refresh(
         selected,
         control,
         Some(secret),
-        &audit::audit_remote_runner,
+        &RefreshDependencies {
+            remote_audit: &audit::audit_remote_runner,
+            settling,
+        },
     ))
     .await
 }
@@ -46,7 +55,7 @@ async fn refresh_with_dependencies(
     selected: &SelectedEngineContext,
     control: &ControlState,
     secret: Option<&ImageAuthority>,
-    remote_audit: &audit::RemoteRunnerAudit,
+    dependencies: &RefreshDependencies<'_>,
 ) -> Result<(), HostError> {
     if !control.admission_ready() {
         control.clear_readiness()?;
@@ -82,7 +91,7 @@ async fn refresh_with_dependencies(
         &config,
         &polls,
         &sample,
-        remote_audit,
+        dependencies,
     )
     .await?
     else {
@@ -132,7 +141,7 @@ async fn validated_inventory(
     config: &crate::config::HostConfig,
     polls: &[crate::controller_ipc::SessionPollReceipt],
     sample: &crate::launch::ReadinessSample,
-    remote_audit: &audit::RemoteRunnerAudit,
+    dependencies: &RefreshDependencies<'_>,
 ) -> Result<Option<(crate::journal::ReadinessCapacityUsage, String)>, HostError> {
     if journal.engine_id().await? != selected.engine_id() {
         return Ok(None);
@@ -145,9 +154,12 @@ async fn validated_inventory(
     ) {
         return Ok(None);
     }
-    let inventory =
-        audit::audit_inventory_with_remote(docker, journal, config, selected, polls, remote_audit)
-            .await?;
+    let Some(inventory) =
+        audit::audit_inventory_with_remote(docker, journal, config, selected, polls, dependencies)
+            .await?
+    else {
+        return Ok(None);
+    };
 
     let error_to_host = |_| HostError::Docker;
     let live = docker_deadline(docker.info())

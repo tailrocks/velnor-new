@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod gated;
 mod guards;
 mod identity;
 mod partial;
 mod reads;
+mod stand_ins;
 
 use std::fs;
 use std::process::{Command, Output};

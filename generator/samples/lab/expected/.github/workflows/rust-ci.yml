@@ -12,16 +12,57 @@ on:
     branches:
       - main
   merge_group: {}
+  schedule:
+    - cron: '20 0 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
 jobs:
+  rust-plan:
+    permissions:
+      contents: read
+    outputs:
+      rust_lab_mode: '${{ steps.plan.outputs.rust_lab_mode }}'
+      rust_lab_docs: '${{ steps.plan.outputs.rust_lab_docs }}'
+      rust_lab_test_filter: '${{ steps.plan.outputs.rust_lab_test_filter }}'
+      rust_lab_package_args: '${{ steps.plan.outputs.rust_lab_package_args }}'
+      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_doctests_known: '${{ steps.plan.outputs.rust_root_doctests_known }}'
+      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
+      rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - id: plan
+        name: velnor-ci plan
+        run: velnor-ci plan --explain
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
+    permissions:
+      contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -30,6 +71,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -39,38 +87,82 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - id: prepare
+        name: velnor-ci prepare
+        run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        run: velnor-ci check-metadata
+      - name: Restore the sources cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+      - name: Restore the target cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target
+          key: 'velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          restore-keys: |
+            velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
-        run: cargo-fmt --all --check
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
-      - name: Test
-        if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
+      - id: test
+        name: Test
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
-        if: '${{ !cancelled() }}'
-        run: cargo test --doc --workspace --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+          DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
       - name: Documentation
-        if: '${{ !cancelled() }}'
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p app --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p app '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p core --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p core '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        run: velnor-ci run -- cargo check -p core --locked
       - name: Check lib alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p lib --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p lib '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        run: velnor-ci run -- cargo check -p lib --locked
       - name: Check macros alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p macros --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p macros '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        run: velnor-ci run -- cargo check -p macros --locked
       - name: Check tool alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p tool --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p tool '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        run: velnor-ci run -- cargo check -p tool --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-lab:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_lab_mode != ''none'' }}'
+    permissions:
+      contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -79,6 +171,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -90,32 +189,69 @@ jobs:
       - name: Add Rust targets
         working-directory: lab
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - id: prepare
+        name: velnor-ci prepare
+        run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: lab
+        run: velnor-ci check-metadata
+      - name: Restore the sources cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ hashFiles(''lab/Cargo.lock'') }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-'
+      - name: Restore the target cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: lab/target
+          key: 'velnor-tgt-rust-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          restore-keys: |
+            velnor-tgt-rust-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
+            velnor-tgt-rust-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: cargo-fmt --all --check
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
-      - name: Test
-        if: '${{ !cancelled() }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
+      - id: test
+        name: Test
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_lab_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'' && needs.rust-plan.outputs.rust_lab_docs == ''run'' && needs.rust-plan.outputs.rust_lab_package_args != '''' }}'
         working-directory: lab
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check lab alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_lab_package_args), '' -p lab '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_lab_package_args), '' --workspace '')) }}'
         working-directory: lab
-        run: cargo check -p lab --locked
+        run: velnor-ci run -- cargo check -p lab --locked
   required:
     name: Required
     needs:
+      - rust-plan
       - rust-root
       - rust-lab
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

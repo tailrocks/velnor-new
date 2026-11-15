@@ -47,6 +47,6 @@ fn plan_follows_the_edges_of_unowned_packages_and_explains_a_package_it_cannot_r
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         selected(&output),
-        "Cargo.toml: some\n  b depends-on-unread:remote\n  c changed:c/src/lib.rs\nunread package: vendor/remote/Cargo.toml\n  it has the git dependency far, so Velnor cannot follow its dependencies and a change to any package selects every package that depends on it\n"
+        "Cargo.toml: some\n  b depends-on-unread:remote\n  c changed:c/src/lib.rs\nunread package: vendor/remote/Cargo.toml\n  it has the git dependency far, so Velnor cannot follow its dependencies and a change to any package selects every package that depends on it\ncheck does less: .velnor/rust-ci.toml: exclude = \"vendor\": leaves vendor out of the checks\n"
     );
 }

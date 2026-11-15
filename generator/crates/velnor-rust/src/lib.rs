@@ -1,49 +1,68 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod build_profile;
 mod cargo_lock;
 mod classify;
+mod compat;
 mod config;
 mod credentials;
 mod detect;
 mod doc_steps;
 mod error;
 mod harness;
+mod lane;
 mod lock;
 mod lock_affected;
 mod manifest_diff;
 mod metadata;
+mod metadata_file;
 mod mise;
 mod os_pins;
 mod owners;
 mod plan;
 mod policy;
 mod reads;
+mod root_jobs;
 mod roots;
+mod schedule;
 mod select;
+mod select_event;
+mod sha256;
 mod shape;
 mod sibling_features;
 mod timings;
 mod toml_file;
 mod toolchain;
 mod unowned;
+mod weaken;
+mod weaken_nextest;
+mod weaken_scope;
+mod weaken_targets;
 
-pub use config::CONFIG_PATH;
+pub use build_profile::{BuildProfile, build_profile};
+pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
+pub use config::{CONFIG_PATH, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
-pub use doc_steps::{optional_steps, root_sources};
+pub use doc_steps::{member_sources, optional_steps, root_sources};
 pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
-pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools};
+pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata};
+pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
-pub use policy::policy_needed;
+pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
 };
-pub use select::{root_slug, select, unknown_paths, unread_packages};
+pub use select::{select, unknown_paths, unread_packages};
+pub use select_event::{select_event, selects_by_diff};
+pub use sha256::sha256_hex;
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
-pub use timings::TIMINGS_PATH;
+pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
+pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
+pub use weaken::introduced;

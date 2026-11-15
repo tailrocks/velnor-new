@@ -3,14 +3,15 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
-use velnor_model::{RepoPath, Timings};
+use serde::{Deserialize, Serialize};
+use velnor_model::{JobId, RepoPath, RootSlug, RustRoot, Timings};
 
 use crate::error::{DetectError, Reason};
+use crate::plan::{LINT_JOB, RUST_JOB, TEST_JOB};
 
 pub const TIMINGS_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci-timings.json");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct RawTimings {
     #[serde(rename = "lint_build_seconds")]
@@ -46,4 +47,62 @@ pub(crate) fn parse_timings(bytes: &[u8]) -> Result<BTreeMap<RepoPath, Timings>,
             ))
         })
         .collect()
+}
+
+#[must_use]
+pub fn render_timings(timings: &BTreeMap<RepoPath, Timings>) -> String {
+    let raw: BTreeMap<&str, RawTimings> = timings
+        .iter()
+        .map(|(root, timings)| {
+            (
+                root.as_str(),
+                RawTimings {
+                    lint_build: timings.lint_build_seconds,
+                    test_build: timings.test_build_seconds,
+                    tests: timings.test_seconds,
+                    binaries: timings.test_binary_seconds.clone(),
+                },
+            )
+        })
+        .collect();
+    let mut text = serde_json::to_string_pretty(&raw).unwrap_or_default();
+    text.push('\n');
+    text
+}
+
+#[must_use]
+pub fn root_job_ids(manifest: &RepoPath, several_roots: bool) -> [JobId; 3] {
+    [RUST_JOB, LINT_JOB, TEST_JOB].map(|id| {
+        if several_roots {
+            id.suffixed(RootSlug::of(manifest).as_str())
+        } else {
+            id
+        }
+    })
+}
+
+pub(crate) fn usable_timings(
+    bytes: Option<&Vec<u8>>,
+    roots: &[RustRoot],
+) -> (BTreeMap<RepoPath, Timings>, Vec<String>) {
+    let Some(bytes) = bytes else {
+        return (BTreeMap::new(), Vec::new());
+    };
+    let parsed = match parse_timings(bytes) {
+        Ok(parsed) => parsed,
+        Err(error) => return (BTreeMap::new(), vec![format!("{error}; ignored")]),
+    };
+    let (known, gone): (BTreeMap<_, _>, BTreeMap<_, _>) = parsed
+        .into_iter()
+        .partition(|(root, _)| roots.iter().any(|known| known.manifest == *root));
+    let notes = gone
+        .into_keys()
+        .map(|root| {
+            format!(
+                "{}; entry ignored",
+                DetectError::invalid(&TIMINGS_PATH, Reason::UnknownRoot(root))
+            )
+        })
+        .collect();
+    (known, notes)
 }

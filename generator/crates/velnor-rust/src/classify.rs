@@ -6,6 +6,7 @@ use std::path::Path;
 use velnor_model::{AllTrigger, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH};
 
 use crate::config::{CONFIG_PATH, rule_matches};
+use crate::metadata_file::METADATA_PATH;
 use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::timings::TIMINGS_PATH;
@@ -68,8 +69,9 @@ fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
     } else if TOOL_PIN_FILES.contains(&name)
         || name == CARGO_LOCK.as_str()
         || *path == CONFIG_PATH
-        || *path == INPUTS_LOCK
         || *path == TIMINGS_PATH
+        || *path == INPUTS_LOCK
+        || *path == METADATA_PATH
     {
         Some(AllTrigger::Global(path.clone()))
     } else {

@@ -12,21 +12,27 @@ pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{
-    LOCK_PATH, commit_url, manifests, metadata_roots, pin_lock, reduce_metadata, release_version,
-    sums_url, wanted_files,
-};
+use velnor_rust::{METADATA_PATH, manifests, metadata_roots, reduce_metadata, wanted_files};
 
+mod check;
 mod error;
+mod identity;
+mod pin;
+mod recorded;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, check_tag, drift, expected_files, require_compatible};
+use crate::{Drift, check_tag, notes, plan_generate};
+use check::cargo_metadata;
+pub use check::check_metadata;
 pub use error::Error;
+use pin::pin_helper;
+pub use pin::write_lock;
+pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
-    write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
+    relocate_metadata, write_sample,
 };
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
@@ -121,58 +127,21 @@ pub fn main() -> Exit {
     }
 }
 
-fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
-    let version = release_version(version).map_err(Error::Lock)?;
-    require_compatible(&version).map_err(Error::Generate)?;
-    let root = toplevel(root)?;
-    let sums = download(&root, &sums_url(&version))?;
-    let commit = download(&root, &commit_url(&version))?;
-    let lock = pin_lock(
-        version.as_str(),
-        &String::from_utf8_lossy(&commit),
-        &String::from_utf8_lossy(&sums),
-    )
-    .map_err(Error::Lock)?;
-    write_lock(&root, &lock)?;
-    program(
-        &root,
-        "git",
-        &[
-            OsStr::new("add"),
-            OsStr::new("--"),
-            OsStr::new(LOCK_PATH.as_str()),
-        ],
-    )?;
-    Ok(format!(
-        "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH} and staged it"
-    ))
-}
-
-fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
-    program(
-        root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new(url),
-        ],
-    )
-}
-
-pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
-    regular_file(root, &LOCK_PATH)?;
-    replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())
-}
-
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
-    let workflows = read_files(&root, &workflow_paths(&root)?)?;
+    let mut wanted = workflow_paths(&root)?;
+    wanted.push(METADATA_PATH);
+    let workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
-    let drifts = drift(&expected, &workflows, engine_configured);
+    let view = read_view(&root, false)?.0;
+    let (expected, drifts) =
+        plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
+            .map_err(Error::Generate)?;
+    if cli.command == Command::Generate {
+        for note in notes(&view).map_err(Error::Generate)? {
+            eprintln!("velnor-gen: note: {note}");
+        }
+    }
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
@@ -260,8 +229,8 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
+fn tracked_paths(root: &Path) -> Result<BTreeSet<RepoPath>, Error> {
+    program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
         .map(|entry| {
@@ -273,8 +242,24 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             })?;
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    view_of(root, tracked_paths, keep_metadata)
+        .collect()
+}
+
+fn view_from(root: &Path, tracked_paths: BTreeSet<RepoPath>) -> Result<RepoView, Error> {
+    Ok(RepoView {
+        repository: identity::repository_name(root),
+        files: read_files(root, &wanted_files(&tracked_paths))?,
+        tracked_paths,
+        rust_metadata: BTreeMap::new(),
+    })
+}
+
+fn read_tracked(root: &Path) -> Result<RepoView, Error> {
+    view_from(root, tracked_paths(root)?)
+}
+
+fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+    view_of(root, tracked_paths(root)?, keep_metadata)
 }
 
 pub fn view_of(
@@ -282,11 +267,7 @@ pub fn view_of(
     tracked_paths: BTreeSet<RepoPath>,
     keep_metadata: bool,
 ) -> Result<Recorded, Error> {
-    let mut view = RepoView {
-        files: read_files(root, &wanted_files(&tracked_paths))?,
-        tracked_paths,
-        rust_metadata: BTreeMap::new(),
-    };
+    let mut view = view_from(root, tracked_paths)?;
     let mut recorded = BTreeMap::new();
     for manifest in metadata_roots(&view).map_err(Error::Detect)? {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
@@ -295,21 +276,7 @@ pub fn view_of(
         if known {
             continue;
         }
-        let path = manifest_file(root, &manifest)?;
-        let directory = path.parent().unwrap_or(root);
-        let output = program(
-            directory,
-            "cargo",
-            &[
-                OsStr::new("metadata"),
-                OsStr::new("--format-version"),
-                OsStr::new("1"),
-                OsStr::new("--no-deps"),
-                OsStr::new("--offline"),
-                OsStr::new("--manifest-path"),
-                path.as_os_str(),
-            ],
-        )?;
+        let output = cargo_metadata(root, &manifest)?;
         let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
         if keep_metadata {
             recorded.insert(workspace.clone(), output);

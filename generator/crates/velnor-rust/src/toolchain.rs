@@ -11,12 +11,12 @@ use crate::toml_file::table;
 
 const KEYS: [&str; 5] = ["channel", "path", "components", "targets", "profile"];
 
-pub(crate) const TOOLCHAIN_TOML: RepoPath = RepoPath::from_static("rust-toolchain.toml");
-pub(crate) const TOOLCHAIN_PLAIN: RepoPath = RepoPath::from_static("rust-toolchain");
+const PROFILES: [&str; 3] = ["minimal", "default", "complete"];
 
-pub(crate) fn toolchain(
-    files: &BTreeMap<RepoPath, Vec<u8>>,
-) -> Result<Option<Toolchain>, DetectError> {
+pub const TOOLCHAIN_TOML: RepoPath = RepoPath::from_static("rust-toolchain.toml");
+pub const TOOLCHAIN_PLAIN: RepoPath = RepoPath::from_static("rust-toolchain");
+
+pub fn toolchain(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<Option<Toolchain>, DetectError> {
     [TOOLCHAIN_PLAIN, TOOLCHAIN_TOML]
         .iter()
         .find_map(|path| files.get(path).map(|bytes| (path, bytes)))
@@ -89,6 +89,15 @@ fn structured(bytes: &[u8]) -> Result<Toolchain, Reason> {
         .get("profile")
         .map(|value| text(value, "toolchain.profile"))
         .transpose()?;
+    if let Some(profile) = profile
+        .as_ref()
+        .filter(|profile| !PROFILES.contains(&profile.as_str()))
+    {
+        return Err(Reason::InvalidValue {
+            key: "toolchain.profile",
+            value: profile.clone(),
+        });
+    }
     Ok(Toolchain {
         channel,
         path,

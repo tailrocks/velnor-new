@@ -3,7 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
+    CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
+    RunnerLabel, RustCiConfig, Shape, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -11,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 11] = [
+const KEYS: [&str; 15] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -23,6 +24,10 @@ const KEYS: [&str; 11] = [
     "nextest_harnesses",
     "default_branch",
     "skip_draft_pull_requests",
+    "on_main",
+    "full_run",
+    "helper",
+    "ci_debuginfo",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -43,6 +48,16 @@ struct RawConfig {
     nextest_harnesses: Vec<String>,
     default_branch: Option<String>,
     skip_draft_pull_requests: Option<bool>,
+    on_main: Option<String>,
+    full_run: Option<String>,
+    helper: Option<RawHelper>,
+    ci_debuginfo: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHelper {
+    path: String,
 }
 
 #[derive(Deserialize)]
@@ -72,18 +87,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         }));
     }
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
-    let shape = match raw.shape.as_deref() {
-        None | Some("auto") => None,
-        Some("one-job") => Some(Shape::OneJob),
-        Some("lint-test") => Some(Shape::LintAndTest),
-        Some("groups") => Some(Shape::BuildThenGroups),
-        Some(other) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "shape",
-                value: other.to_owned(),
-            }));
-        }
-    };
+    let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check = match raw.required_check {
         None => defaults.required_check,
         Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
@@ -97,26 +101,34 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let full_run = match raw.full_run {
+        None => defaults.full_run,
+        Some(value) => full_run(value).map_err(invalid)?,
+    };
+    let helper = raw
+        .helper
+        .map(|helper| helper_path(helper.path))
+        .transpose()
+        .map_err(invalid)?;
+    let ci_debuginfo =
+        debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     Ok(RustCiConfig {
         nextest_harnesses,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
             .unwrap_or(defaults.skip_draft_pull_requests),
+        on_main,
+        full_run,
+        helper,
         shape,
+        ci_debuginfo,
         required_check,
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: match raw.runner {
-            Some(label) => RunnerLabel::new(label.clone()).map_err(|_| {
-                invalid(Reason::InvalidValue {
-                    key: "runner",
-                    value: label,
-                })
-            })?,
-            None => defaults.runner,
-        },
+        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
         timeout_minutes,
         exclude: raw
             .exclude
@@ -150,8 +162,80 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         .collect()
 }
 
-fn default_branch(raw: Option<String>, default: String) -> Result<String, Reason> {
-    match raw {
+fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
+    match configured {
+        None | Some("auto") => Ok(None),
+        Some("one-job") => Ok(Some(Shape::OneJob)),
+        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
+        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "shape",
+            value: other.to_owned(),
+        }),
+    }
+}
+
+fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+    let Some(label) = configured else {
+        return Ok(default);
+    };
+    RunnerLabel::new(label.clone())
+        .ok()
+        .filter(|runner| !without_helper_build(runner.as_str()))
+        .ok_or(Reason::InvalidValue {
+            key: "runner",
+            value: label,
+        })
+}
+
+fn helper_path(path: String) -> Result<RepoPath, Reason> {
+    RepoPath::new(path.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
+        key: "helper.path",
+        value: path,
+    })
+}
+
+fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
+    match configured {
+        None => Ok(default),
+        Some("affected") => Ok(OnMain::Affected),
+        Some("everything") => Ok(OnMain::Everything),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "on_main",
+            value: other.to_owned(),
+        }),
+    }
+}
+
+fn full_run(value: String) -> Result<FullRun, Reason> {
+    Ok(match value.as_str() {
+        "off" => FullRun::Off,
+        "hourly" => FullRun::Hourly,
+        "nightly" => FullRun::Nightly,
+        "weekly" => FullRun::Weekly,
+        _ => FullRun::Cron(
+            CronExpr::new(value.clone()).map_err(|_| Reason::InvalidValue {
+                key: "full_run",
+                value,
+            })?,
+        ),
+    })
+}
+fn without_helper_build(label: &str) -> bool {
+    let label = label.to_ascii_lowercase();
+    let Some(version) = label.strip_prefix("macos-") else {
+        return label.starts_with("windows");
+    };
+    let major: u32 = version
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(u32::MAX);
+    major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
+}
+
+fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
+    match configured {
         None => Ok(default),
         Some(name) if branch_name(&name) => Ok(name),
         Some(name) => Err(Reason::InvalidValue {
@@ -163,16 +247,18 @@ fn default_branch(raw: Option<String>, default: String) -> Result<String, Reason
 
 fn branch_name(name: &str) -> bool {
     !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
         && !name.starts_with(['/', '-'])
         && !name.ends_with(['/', '.'])
         && !name.contains("..")
         && !name.contains("//")
-        && name.split('/').all(|part| {
-            !part.starts_with('.') && part.rsplit_once('.').is_none_or(|(_, ext)| ext != "lock")
+        && !name.contains("@{")
+        && name != "HEAD"
+        && !name.split('/').any(|part| {
+            part.starts_with('.') || part.rsplit_once('.').is_some_and(|(_, ext)| ext == "lock")
         })
+        && !name
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {
@@ -274,4 +360,26 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
             (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
+}
+
+fn debuginfo(configured: Option<&str>, default: CiDebugInfo) -> Result<CiDebugInfo, Reason> {
+    match configured {
+        None => Ok(default),
+        Some("full") => Ok(CiDebugInfo::Full),
+        Some("line-tables-only") => Ok(CiDebugInfo::LineTablesOnly),
+        Some("none") => Ok(CiDebugInfo::None),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "ci_debuginfo",
+            value: other.to_owned(),
+        }),
+    }
+}
+
+pub fn ci_debuginfo(
+    files: &std::collections::BTreeMap<RepoPath, Vec<u8>>,
+) -> Result<CiDebugInfo, DetectError> {
+    files.get(&CONFIG_PATH).map_or_else(
+        || Ok(RustCiConfig::default().ci_debuginfo),
+        |bytes| parse(bytes).map(|config| config.ci_debuginfo),
+    )
 }

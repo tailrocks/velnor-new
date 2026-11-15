@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AllTrigger, InputRule, RepoFacts, RustSelection, SelectionReason};
+use std::collections::BTreeMap;
+
+use velnor_model::{
+    AllTrigger, InputRule, RepoFacts, RustMember, RustSelection, SelectionReason, Target,
+    TargetKind, TargetName,
+};
 
 use crate::select::{
     all, assert_selects, changed, depends_on, facts, glob, member, name, path, some, two_roots,
@@ -75,12 +80,16 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
             AllTrigger::Global(path(".velnor/rust-ci.toml")),
         ),
         (
+            ".velnor/rust-ci-timings.json",
+            AllTrigger::Global(path(".velnor/rust-ci-timings.json")),
+        ),
+        (
             ".velnor/rust-inputs.lock",
             AllTrigger::Global(path(".velnor/rust-inputs.lock")),
         ),
         (
-            ".velnor/rust-ci-timings.json",
-            AllTrigger::Global(path(".velnor/rust-ci-timings.json")),
+            ".velnor/rust-metadata.json",
+            AllTrigger::Global(path(".velnor/rust-metadata.json")),
         ),
         (
             ".github/workflows/rust-ci.yml",
@@ -315,5 +324,68 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
                 ],
             ),
         ],
+    );
+}
+
+#[test]
+fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_that_package() {
+    let root_package = RustMember {
+        name: name("tool"),
+        manifest: path("Cargo.toml"),
+        directory: None,
+        dependencies: Vec::new(),
+        targets: vec![Target {
+            name: TargetName::new("tool").unwrap_or_else(|e| unreachable!("{e}")),
+            kinds: vec![TargetKind::Bin],
+            tests: false,
+            doctest: false,
+            source: Some(path("docs/tool.rs")),
+            requires_features: false,
+        }],
+        custom_harnesses: Vec::new(),
+    };
+    let facts = facts(vec![("Cargo.toml", vec![root_package])]);
+    assert_selects(
+        &facts,
+        vec![
+            (
+                &["docs/tool.rs"],
+                vec![all(AllTrigger::MostPackages(BTreeMap::from([(
+                    name("tool"),
+                    changed("docs/tool.rs"),
+                )])))],
+            ),
+            (&["docs/other.rs"], vec![RustSelection::None]),
+        ],
+    );
+}
+
+#[test]
+fn a_source_two_roots_name_as_a_target_selects_the_package_of_every_root() {
+    let reader = |package: &str, directory: &str| {
+        let mut member = member(package, directory, &[]);
+        member.targets = vec![Target {
+            name: TargetName::new(package).unwrap_or_else(|e| unreachable!("{e}")),
+            kinds: vec![TargetKind::Bin],
+            tests: false,
+            doctest: false,
+            source: Some(path("a/shared/tool.rs")),
+            requires_features: false,
+        }];
+        member
+    };
+    let facts = facts(vec![
+        ("a/Cargo.toml", vec![reader("first", "a")]),
+        ("b/Cargo.toml", vec![reader("second", "b")]),
+    ]);
+    let hit = |package: &str| {
+        all(AllTrigger::MostPackages(BTreeMap::from([(
+            name(package),
+            changed("a/shared/tool.rs"),
+        )])))
+    };
+    assert_selects(
+        &facts,
+        vec![(&["a/shared/tool.rs"], vec![hit("first"), hit("second")])],
     );
 }

@@ -36,7 +36,7 @@ pub(super) async fn run(
     )
     .await;
     if result.is_err() {
-        Box::pin(recover_current(docker, journal, deadline, projection)).await;
+        Box::pin(recover_current(docker, journal, projection)).await;
     }
     result
 }
@@ -143,28 +143,53 @@ async fn verify_created(
     }
 }
 
-async fn recover_current(
+const RECOVERY_ATTEMPTS: u32 = 2;
+
+async fn recover_current(docker: &Docker, journal: &Journal, projection: &ProbeProjection) {
+    for _attempt in 0..RECOVERY_ATTEMPTS {
+        let deadline = Deadline::new();
+        if matches!(
+            recover_once(docker, journal, &deadline, projection).await,
+            RecoveryOutcome::Settled
+        ) {
+            return;
+        }
+    }
+}
+
+enum RecoveryOutcome {
+    Settled,
+    Retry,
+}
+
+async fn recover_once(
     docker: &Docker,
     journal: &Journal,
     deadline: &Deadline,
     projection: &ProbeProjection,
-) {
-    let Ok(Ok(Some(row))) = deadline.within(journal.active_probe()).await else {
-        return;
+) -> RecoveryOutcome {
+    let Ok(Ok(row)) = deadline.within(journal.active_probe()).await else {
+        return RecoveryOutcome::Retry;
+    };
+    let Some(row) = row else {
+        return RecoveryOutcome::Settled;
     };
     if !same_projection(&row, projection) {
-        return;
+        return RecoveryOutcome::Settled;
     }
     if row.phase == ProbePhase::Prepared {
-        let _aborted = deadline
+        return match deadline
             .within(journal.abort_prepared_probe(&row.operation_id))
-            .await;
-        return;
+            .await
+        {
+            Ok(Ok(())) => RecoveryOutcome::Settled,
+            _ => RecoveryOutcome::Retry,
+        };
     }
     let Ok(Ok(current)) = deadline.within(docker.info()).await else {
-        return;
+        return RecoveryOutcome::Retry;
     };
-    let _recovered = Box::pin(recover::active(
+    match Box::pin(recover::active(
         docker,
         journal,
         &current,
@@ -172,7 +197,11 @@ async fn recover_current(
         deadline,
         row,
     ))
-    .await;
+    .await
+    {
+        Ok(()) => RecoveryOutcome::Settled,
+        Err(_) => RecoveryOutcome::Retry,
+    }
 }
 
 fn same_projection(row: &ProbeRow, projection: &ProbeProjection) -> bool {

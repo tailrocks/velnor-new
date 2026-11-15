@@ -17,17 +17,20 @@ use crate::{
 
 use super::{RemoteRunnerAudit, inspect_owned_container, inspect_owned_volume};
 
+#[path = "inventory/settling.rs"]
+mod settling;
+use settling::Inventory;
+pub(in crate::host_controller::loop_driver::controller) use settling::SettlingAges;
+
 pub(in crate::host_controller::loop_driver::controller) async fn audit_inventory_with_remote(
     docker: &Docker,
     journal: &Journal,
     config: &HostConfig,
     selected: &SelectedEngineContext,
     polls: &[crate::controller_ipc::SessionPollReceipt],
-    remote_audit: &RemoteRunnerAudit,
-) -> Result<String, HostError> {
-    use sha2::Digest;
-
-    let mut entries = Vec::new();
+    dependencies: &super::super::RefreshDependencies<'_>,
+) -> Result<Option<String>, HostError> {
+    let mut inventory = Inventory::default();
     for binding in config.connections() {
         let poll = polls
             .iter()
@@ -39,18 +42,40 @@ pub(in crate::host_controller::loop_driver::controller) async fn audit_inventory
             binding,
             selected,
             poll,
-            remote_audit,
-            &mut entries,
+            dependencies.remote_audit,
+            &mut inventory,
         )
         .await?;
     }
-    let bytes = serde_json::to_vec(&entries).map_err(|_| HostError::Identity)?;
-    let mut digest = String::with_capacity(64);
-    for byte in sha2::Sha256::digest(bytes) {
-        use std::fmt::Write as _;
-        write!(digest, "{byte:02x}").map_err(|_| HostError::Identity)?;
+    inventory.finish(dependencies.settling, std::time::Instant::now())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PairStage {
+    Running,
+    Settling,
+}
+
+fn pair_stage(
+    ownership: &PhysicalRunnerOwnership,
+    state: PhysicalRunnerJitState,
+) -> Result<PairStage, HostError> {
+    let resolved = match state {
+        PhysicalRunnerJitState::Ready | PhysicalRunnerJitState::Started => PairStage::Running,
+        PhysicalRunnerJitState::Absent
+        | PhysicalRunnerJitState::Claimed
+        | PhysicalRunnerJitState::Bound
+        | PhysicalRunnerJitState::StartRequested
+        | PhysicalRunnerJitState::Completed
+        | PhysicalRunnerJitState::Cleaned => PairStage::Settling,
+        PhysicalRunnerJitState::Uncertain
+        | PhysicalRunnerJitState::StartUncertain
+        | PhysicalRunnerJitState::Unknown => return Err(HostError::Ownership),
+    };
+    if resolved == PairStage::Running && *ownership == PhysicalRunnerOwnership::Unknown {
+        return Err(HostError::Ownership);
     }
-    Ok(digest)
+    Ok(resolved)
 }
 
 async fn audit_connection(
@@ -60,11 +85,15 @@ async fn audit_connection(
     selected: &SelectedEngineContext,
     poll: &crate::controller_ipc::SessionPollReceipt,
     remote_audit: &RemoteRunnerAudit,
-    entries: &mut Vec<InventoryEntry>,
+    inventory: &mut Inventory,
 ) -> Result<(), HostError> {
     let scope = journal.existing_connection_scope(binding).await?;
     validate_session_scope(&scope, binding, poll).await?;
     for row in scope.physical_runner_reservations().await? {
+        if pair_stage(&row.ownership, row.jit_state)? == PairStage::Settling {
+            inventory.settle(binding.connection_id.as_str(), row.reservation_id);
+            continue;
+        }
         let PhysicalRunnerOwnership::Known(assignment) = &row.ownership else {
             return Err(HostError::Ownership);
         };
@@ -81,44 +110,32 @@ async fn audit_connection(
         {
             return Err(HostError::Ownership);
         }
-        match row.jit_state {
-            PhysicalRunnerJitState::Absent => {
-                return Err(HostError::Ownership);
-            }
-            PhysicalRunnerJitState::Ready | PhysicalRunnerJitState::Started => {
-                if row.reservation.state != ReservationState::Reserved
-                    || row.intent_state != Some(IntentState::Pending)
-                    || row.completion_cleanup_pending
-                    || row.worker_cleanup_proven()
-                    || row.remote_cleanup_proven()
-                    || row.local_cleanup_proven()
-                {
-                    return Err(HostError::Ownership);
-                }
-                let identity = scope
-                    .storage_cleanup_identity(row.reservation_id)
-                    .await?
-                    .ok_or(HostError::Ownership)?;
-                audit_started_pair(docker, binding, selected, &row, &identity).await?;
-                remote_audit(binding, row.runner.as_ref(), poll.scale_set_id())?;
-                entries.push(InventoryEntry::started(
-                    binding.connection_id.as_str(),
-                    row.reservation_id,
-                    assignment,
-                    &row,
-                    identity.runner_container_id(),
-                    identity.dind_container_id(),
-                ));
-            }
-            PhysicalRunnerJitState::Claimed
-            | PhysicalRunnerJitState::Uncertain
-            | PhysicalRunnerJitState::Bound
-            | PhysicalRunnerJitState::StartRequested
-            | PhysicalRunnerJitState::StartUncertain
-            | PhysicalRunnerJitState::Completed
-            | PhysicalRunnerJitState::Cleaned
-            | PhysicalRunnerJitState::Unknown => return Err(HostError::Ownership),
+        if row.reservation.state != ReservationState::Reserved
+            || row.intent_state != Some(IntentState::Pending)
+            || row.completion_cleanup_pending
+            || row.worker_cleanup_proven()
+            || row.remote_cleanup_proven()
+            || row.local_cleanup_proven()
+        {
+            return Err(HostError::Ownership);
         }
+        let identity = scope
+            .storage_cleanup_identity(row.reservation_id)
+            .await?
+            .ok_or(HostError::Ownership)?;
+        audit_started_pair(docker, binding, selected, &row, &identity).await?;
+        let remote_present = remote_audit(binding, row.runner.as_ref(), poll.scale_set_id())?;
+        inventory.admit(
+            remote_present,
+            InventoryEntry::started(
+                binding.connection_id.as_str(),
+                row.reservation_id,
+                assignment,
+                &row,
+                identity.runner_container_id(),
+                identity.dind_container_id(),
+            ),
+        );
     }
     Ok(())
 }
@@ -229,3 +246,7 @@ impl InventoryEntry {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "inventory/tests.rs"]
+mod tests;

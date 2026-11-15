@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache;
+mod cargo;
+mod events;
+mod gate;
 mod header;
 mod release;
 mod rules;
@@ -10,22 +14,19 @@ mod yaml;
 
 use std::collections::BTreeMap;
 
-use velnor_model::{
-    Access, Concurrency, PermissionScope, Permissions, PullRequestType, RepoPath, Triggers,
-    WORKFLOW_PATH, WorkflowPlan,
-};
+use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
+pub use crate::cache::{RenderedKey, render_key};
+use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rules::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob,
-    RenderedStep, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS,
+    RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
+    SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
-
-const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
-const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' }}";
 
 pub use crate::header::{Owner, VELNOR_GEN_MARKER, owner_of};
 pub const GENERATED_HEADER: &str =
@@ -65,67 +66,30 @@ pub fn render_workflow(
     )]))
 }
 
-fn concurrency(concurrency: Concurrency) -> Yaml {
-    let (group, cancel) = match concurrency {
-        Concurrency::CancelOlderPullRequestRuns => (PULL_REQUEST_GROUP, CANCEL_PULL_REQUEST_RUNS),
-    };
-    Yaml::Map(vec![
-        entry("group", Yaml::Expr(group.to_owned())),
-        entry("cancel-in-progress", Yaml::Expr(cancel.to_owned())),
-    ])
+pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {
+    permissions
+        .0
+        .iter()
+        .map(|(scope, access)| {
+            let scope = match scope {
+                PermissionScope::Actions => "actions",
+                PermissionScope::Contents => "contents",
+            };
+            let access = match access {
+                Access::None => "none",
+                Access::Read => "read",
+                Access::Write => "write",
+            };
+            (scope.to_owned(), access.to_owned())
+        })
+        .collect()
 }
 
-fn triggers(triggers: &Triggers) -> Yaml {
-    let mut items = Vec::new();
-    if !triggers.pull_request.is_empty() {
-        let types = triggers.pull_request.iter().map(|kind| {
-            text(match kind {
-                PullRequestType::Opened => "opened",
-                PullRequestType::Synchronize => "synchronize",
-                PullRequestType::Reopened => "reopened",
-                PullRequestType::ReadyForReview => "ready_for_review",
-                PullRequestType::Edited => "edited",
-                PullRequestType::ConvertedToDraft => "converted_to_draft",
-            })
-        });
-        items.push(entry(
-            "pull_request",
-            Yaml::Map(vec![entry("types", Yaml::Seq(types.collect()))]),
-        ));
-    }
-    if let Some(branch) = &triggers.push_branch {
-        items.push(entry(
-            "push",
-            Yaml::Map(vec![entry("branches", Yaml::Seq(vec![text(branch)]))]),
-        ));
-    }
-    if triggers.merge_group {
-        items.push(entry("merge_group", Yaml::Map(Vec::new())));
-    }
-    if triggers.workflow_dispatch {
-        items.push(entry("workflow_dispatch", Yaml::Map(Vec::new())));
-    }
-    Yaml::Map(items)
-}
-
-fn permissions(permissions: &Permissions) -> Yaml {
+pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
     Yaml::Map(
-        permissions
-            .0
+        permission_pairs(permissions)
             .iter()
-            .map(|(scope, access)| {
-                let scope = match scope {
-                    PermissionScope::Actions => "actions",
-                    PermissionScope::Contents => "contents",
-                    PermissionScope::PullRequests => "pull-requests",
-                };
-                let access = match access {
-                    Access::None => "none",
-                    Access::Read => "read",
-                    Access::Write => "write",
-                };
-                entry(scope, text(access))
-            })
+            .map(|(scope, access)| entry(scope, text(access)))
             .collect(),
     )
 }

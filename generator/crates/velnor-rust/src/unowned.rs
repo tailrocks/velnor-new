@@ -24,7 +24,7 @@ enum Source {
     Inherited,
 }
 
-type Section<'t> = Result<(String, &'t Table, DependencyKind), Unread>;
+type Section<'t> = Result<(String, Option<String>, &'t Table, DependencyKind), Unread>;
 
 pub(crate) fn unowned(
     view: &RepoView,
@@ -85,7 +85,7 @@ fn package(
         unread: None,
     };
     for section in sections(&own) {
-        let (scope, entries, kind) = match section {
+        let (scope, platform, entries, kind) = match section {
             Ok(section) => section,
             Err(unread) => {
                 package.unread.get_or_insert(unread);
@@ -108,6 +108,7 @@ fn package(
                         .extend(edges.into_iter().map(|(manifest, name)| MemberDependency {
                             name,
                             kind,
+                            platform: platform.clone(),
                             manifest,
                         }));
                 }
@@ -121,14 +122,14 @@ fn package(
 }
 
 fn sections(own: &Table) -> Vec<Section<'_>> {
-    let mut scopes = vec![Ok((String::new(), own))];
+    let mut scopes = vec![Ok((String::new(), None, own))];
     match own.get("target") {
         None => {}
         Some(Value::Table(platforms)) => {
             scopes.extend(platforms.iter().map(|(platform, scope)| {
                 scope
                     .as_table()
-                    .map(|scope| (format!("target.{platform}."), scope))
+                    .map(|scope| (format!("target.{platform}."), Some(platform.clone()), scope))
                     .ok_or_else(|| Unread::Invalid(format!("target.{platform}")))
             }));
         }
@@ -138,7 +139,7 @@ fn sections(own: &Table) -> Vec<Section<'_>> {
         .into_iter()
         .flat_map(|scope| match scope {
             Err(unread) => vec![Err(unread)],
-            Ok((prefix, table)) => SECTIONS
+            Ok((prefix, platform, table)) => SECTIONS
                 .iter()
                 .filter_map(|(name, kind)| {
                     let at = format!("{prefix}{name}");
@@ -146,7 +147,7 @@ fn sections(own: &Table) -> Vec<Section<'_>> {
                     Some(
                         entries
                             .as_table()
-                            .map(|entries| (at.clone(), entries, *kind))
+                            .map(|entries| (at.clone(), platform.clone(), entries, *kind))
                             .ok_or(Unread::Invalid(at)),
                     )
                 })

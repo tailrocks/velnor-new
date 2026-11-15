@@ -3,6 +3,7 @@
 
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
+use velnor_model::TESTS_RUN_OUTPUT;
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
@@ -42,7 +43,17 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             Yaml::Map(
                 job.outputs
                     .iter()
-                    .map(|(key, value)| entry(key, Yaml::Expr(value.clone())))
+                    .map(|(name, value)| {
+                        let value = value.clone();
+                        entry(
+                            name,
+                            if name == TESTS_RUN_OUTPUT {
+                                Yaml::Unread(value)
+                            } else {
+                                Yaml::Expr(value)
+                            },
+                        )
+                    })
                     .collect(),
             ),
         ));
@@ -50,11 +61,11 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-        entry(
-            "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-        ),
     ]);
+    items.extend([entry(
+        "steps",
+        Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+    )]);
     match &job.comment {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),

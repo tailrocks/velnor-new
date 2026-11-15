@@ -28,6 +28,64 @@ impl PreparationCause {
     }
 }
 
+const ERROR_DETAIL_BYTES: u8 = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorDetail {
+    text: [u8; ERROR_DETAIL_BYTES as usize],
+    len: u8,
+}
+
+impl ErrorDetail {
+    #[must_use]
+    pub fn from_bytes(raw: &[u8]) -> Self {
+        let mut text = [0_u8; ERROR_DETAIL_BYTES as usize];
+        let mut len = 0_u8;
+        let mut bytes = raw.iter().copied().peekable();
+        let mut gap = false;
+        while let Some(byte) = bytes.next() {
+            if len == ERROR_DETAIL_BYTES {
+                break;
+            }
+            if byte == 0x1b && bytes.peek() == Some(&b'[') {
+                bytes.next();
+                for next in bytes.by_ref() {
+                    if (0x40..=0x7e).contains(&next) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if byte == b'\r' || byte == b'\n' {
+                gap = len > 0;
+                continue;
+            }
+            if !(byte.is_ascii_graphic() || byte == b' ') {
+                continue;
+            }
+            if gap {
+                text[usize::from(len)] = b' ';
+                len += 1;
+                gap = false;
+                if len == ERROR_DETAIL_BYTES {
+                    break;
+                }
+            }
+            text[usize::from(len)] = byte;
+            len += 1;
+        }
+        Self { text, len }
+    }
+}
+
+impl std::fmt::Display for ErrorDetail {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&String::from_utf8_lossy(
+            &self.text[..usize::from(self.len)],
+        ))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum HostError {
     #[error("invalid config")]
@@ -45,8 +103,29 @@ pub enum HostError {
     #[error("daemon lock held")]
     Lock,
 
+    #[error(
+        "control socket path {path} is {length} bytes but must be under the {limit}-byte limit; use a shorter --state folder"
+    )]
+    SocketPathTooLong {
+        path: &'static str,
+        length: usize,
+        limit: usize,
+    },
+
+    #[error("cannot bind control socket {path}: {kind}")]
+    SocketBind {
+        path: &'static str,
+        kind: std::io::ErrorKind,
+    },
+
     #[error("journal")]
     Journal,
+
+    #[error("worker helper failed: {0}")]
+    Helper(ErrorDetail),
+
+    #[error("poll failed: {0}")]
+    Poll(ErrorDetail),
 
     #[error("forbidden mount")]
     ForbiddenMount,
@@ -74,6 +153,9 @@ pub enum HostError {
 
     #[error("Docker resource ownership mismatch")]
     Ownership,
+
+    #[error("a runner pair stayed in setup or teardown longer than the allowed time")]
+    SettlingTimeout,
 
     #[error("runner is still active")]
     RunnerActive,
@@ -114,6 +196,11 @@ pub enum HostError {
 
 impl HostError {
     #[must_use]
+    pub fn poll(cause: &impl std::fmt::Display) -> Self {
+        Self::Poll(ErrorDetail::from_bytes(cause.to_string().as_bytes()))
+    }
+
+    #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
             Self::Config => "config",
@@ -121,7 +208,11 @@ impl HostError {
             Self::DeveloperImages => "developer_images",
             Self::Path => "path",
             Self::Lock => "lock",
+            Self::SocketPathTooLong { .. } => "socket_path_too_long",
+            Self::SocketBind { .. } => "socket_bind",
             Self::Journal => "journal",
+            Self::Helper(_) => "helper_failed",
+            Self::Poll(_) => "poll",
             Self::ForbiddenMount => "forbidden_mount",
             Self::PrivilegedRunner => "privileged_runner",
             Self::Frame => "frame",
@@ -131,6 +222,7 @@ impl HostError {
             Self::DindStorage => "dind_storage",
             Self::PreparationFailedClean(cause) => cause.code(),
             Self::Ownership => "ownership",
+            Self::SettlingTimeout => "settling_timeout",
             Self::RunnerActive => "runner_active",
             Self::Cleanup => "cleanup",
             Self::ContainerCreateUncertain => "container_create_uncertain",

@@ -4,7 +4,8 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
-use super::setup_action::{Install, TestResult, program, seed_entry};
+use super::setup_action::{Install, TestResult, program};
+use super::setup_action_tool_cache::seed_entry;
 
 fn shim(install: &Install, name: &str, body: &str) -> Result<std::path::PathBuf, std::io::Error> {
     let shims = install.work.join("shims");

@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::error::CiError;
 use crate::github::{
-    ApiJob, ApiJobs, ApiRun, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
+    ApiJob, ApiJobs, ApiRun, ApiStep, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
 };
 use crate::logscan;
 use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
@@ -63,6 +65,19 @@ pub fn collect(
     })
 }
 
+const RESTORED_STEP: &str = "velnor-ci restored";
+const PLAN_STEP: &str = "velnor-ci plan";
+
+#[must_use]
+pub fn setup_seconds(job: &ApiJob) -> Option<u64> {
+    let started = job.started_at.as_deref()?;
+    let ended_by = |name: &str| job.steps.iter().find(|step| step.name == name);
+    let step = ended_by(RESTORED_STEP).or_else(|| ended_by(PLAN_STEP))?;
+    let done = step.completed_at.as_deref()?;
+    (step.conclusion.as_deref() == Some("success"))
+        .then(|| seconds_between(Some(started), Some(done)))
+}
+
 fn fetch_jobs(
     github: &dyn GitHub,
     repo: &Repo,
@@ -105,13 +120,13 @@ fn job_metrics(
         .as_deref()
         .is_some_and(|at| !predates(at, attempt_start));
     let ran = conclusion != "skipped" && started;
-    let log = if ran {
+    let (log, step_logs) = if ran {
         let text = github
             .get(&job_log_path(repo, job.id))
-            .map_err(|e| CiError::new(format!("log of job `{}`: {e}", job.name)))?;
-        logscan::scan(&text)
+            .map_err(|e| e.context(&format!("log of job `{}`", job.name)))?;
+        (logscan::scan(&text), step_logs(job, &text))
     } else {
-        logscan::LogScan::default()
+        (logscan::LogScan::default(), BTreeMap::new())
     };
     let (queue_seconds, duration_seconds) = if ran {
         (
@@ -124,7 +139,9 @@ fn job_metrics(
     let steps = job
         .steps
         .iter()
-        .map(|step| StepMetrics {
+        .enumerate()
+        .map(|(index, step)| StepMetrics {
+            log: step_logs.get(&index).cloned().unwrap_or_default(),
             name: step.name.clone(),
             seconds: if step.conclusion.as_deref() == Some("skipped") {
                 0
@@ -135,11 +152,35 @@ fn job_metrics(
         .collect();
     Ok(JobMetrics {
         name: job.name.clone(),
+        labels: job.labels.clone(),
         conclusion,
         started,
         queue_seconds,
         duration_seconds,
+        setup_seconds: if ran { setup_seconds(job) } else { None },
         steps,
         log,
     })
+}
+
+fn is_user_step(step: &ApiStep) -> bool {
+    step.conclusion.as_deref() != Some("skipped")
+        && step.name != "Set up job"
+        && step.name != "Complete job"
+        && !step.name.starts_with("Post ")
+}
+
+fn step_logs(job: &ApiJob, text: &str) -> BTreeMap<usize, logscan::LogScan> {
+    let indexes: Vec<usize> = (0..job.steps.len())
+        .filter(|index| is_user_step(&job.steps[*index]))
+        .collect();
+    let segments = logscan::split_steps(text);
+    if segments.len() != indexes.len() {
+        return BTreeMap::new();
+    }
+    indexes
+        .into_iter()
+        .zip(segments)
+        .map(|(index, segment)| (index, logscan::scan(segment)))
+        .collect()
 }

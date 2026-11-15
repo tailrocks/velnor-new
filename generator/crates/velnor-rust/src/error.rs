@@ -14,11 +14,11 @@ pub enum DetectError {
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
     NextestRequired { path: RepoPath },
-    DenyRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
     NoRustRoot,
+    JobIdTaken(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +60,8 @@ pub enum Reason {
     CargoEnv(String),
     UndeclaredTarget(String),
     BuildExecutable,
+    UnpinnedTool(&'static str),
+    HelperBox(RepoPath),
     CargoCredentialProvider(String),
 }
 
@@ -73,6 +75,20 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnpinnedTool(tool) => write!(
+                f,
+                "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
+            ),
+            Self::HelperBox(path) => write!(
+                f,
+                "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BuildExecutable => f.write_str(
@@ -138,7 +154,7 @@ impl fmt::Display for Reason {
             ),
             Self::UnknownRoot(root) => write!(
                 f,
-                "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
@@ -158,6 +174,7 @@ impl fmt::Display for Reason {
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
+            Self::UnpinnedTool(_) | Self::HelperBox(_) => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
@@ -188,10 +205,6 @@ impl fmt::Display for DetectError {
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
             ),
-            Self::DenyRequired { path } => write!(
-                f,
-                "deny.toml is tracked, so the generated policy job runs cargo-deny; pin it in {path}, for example \"aqua:EmbarkStudios/cargo-deny\" = \"<version>\""
-            ),
             Self::SameSlug { first, second } => write!(
                 f,
                 "the Cargo roots {first} and {second} get the same job and output names; rename one of their folders or add one to exclude in {CONFIG_PATH}"
@@ -205,6 +218,10 @@ impl fmt::Display for DetectError {
                 "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
+            Self::JobIdTaken(id) => write!(
+                f,
+                "two generated jobs get the id {id}; rename the folder of a Cargo root or add it to exclude in {CONFIG_PATH}"
+            ),
         }
     }
 }

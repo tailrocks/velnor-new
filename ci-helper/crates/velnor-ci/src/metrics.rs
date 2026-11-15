@@ -21,10 +21,14 @@ pub struct RunMetrics {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JobMetrics {
     pub name: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
     pub conclusion: String,
     pub started: bool,
     pub queue_seconds: u64,
     pub duration_seconds: u64,
+    #[serde(default)]
+    pub setup_seconds: Option<u64>,
     pub steps: Vec<StepMetrics>,
     pub log: LogScan,
 }
@@ -33,6 +37,8 @@ pub struct JobMetrics {
 pub struct StepMetrics {
     pub name: String,
     pub seconds: u64,
+    #[serde(default)]
+    pub log: LogScan,
 }
 
 impl JobMetrics {
@@ -86,8 +92,11 @@ impl RunMetrics {
             ),
         ];
         lines.extend(self.jobs.iter().map(|job| {
+            let setup = job
+                .setup_seconds
+                .map_or_else(String::new, |seconds| format!(", setup {seconds}s"));
             format!(
-                "  {} [{}] {}s, crates compiled {}, downloaded {}",
+                "  {} [{}] {}s{setup}, crates compiled {}, downloaded {}",
                 job.name,
                 job.conclusion,
                 job.duration_seconds,

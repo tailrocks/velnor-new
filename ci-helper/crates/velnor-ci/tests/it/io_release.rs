@@ -15,18 +15,13 @@ use velnor_ci::github::{GitHub, GitHubWrite};
 
 use crate::release_fake::{FakeReleases, REPO, TAG, all_files, published_digests};
 use crate::release_record::{CI, NOTHING};
+use crate::support::fresh_dir;
 
 struct Dir(PathBuf);
 
 impl Dir {
     fn new(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("velnor-ci-release-{}-{name}", std::process::id()));
-        if root.exists() {
-            fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        Self(root)
+        Self(fresh_dir("velnor-ci-release", name))
     }
 
     fn write(&self, name: &str, text: &str) -> PathBuf {
@@ -133,6 +128,17 @@ fn publish(api: &Path, dir: &Dir) -> Output {
     ];
     args.extend(all_files().iter().map(|(name, _)| *name).take(3));
     velnor_ci(&args, &[("GITHUB_API_URL", api)])
+}
+
+#[test]
+fn a_folder_named_by_pid_alone_is_not_removed_by_a_new_dir() {
+    let leftover =
+        Dir(std::env::temp_dir().join(format!("velnor-ci-release-{}-publish", std::process::id())));
+    fs::create_dir_all(&leftover.0).unwrap_or_else(|e| unreachable!("{e}"));
+    leftover.write("marker.txt", "left behind\n");
+    let dir = Dir::new("publish");
+    assert_ne!(dir.0, leftover.0);
+    assert!(leftover.0.join("marker.txt").is_file());
 }
 
 #[test]

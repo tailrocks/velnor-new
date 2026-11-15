@@ -31,6 +31,7 @@ pub(crate) fn package(
                 Ok(PackageDependency {
                     name: PackageName::new(*name)?,
                     kind: *kind,
+                    platform: None,
                     manifest: Some(path(manifest)?),
                     features: Vec::new(),
                     rename: None,
@@ -76,6 +77,12 @@ pub(crate) fn repo(
     for (name, text) in [("mise.toml", MISE)].iter().chain(files) {
         view.tracked_paths.insert(path(name)?);
         view.files.insert(path(name)?, text.as_bytes().to_vec());
+    }
+    let lock = path(".velnor/rust-ci.lock")?;
+    if !view.files.contains_key(&lock) {
+        view.tracked_paths.insert(lock.clone());
+        view.files
+            .insert(lock, crate::pipeline::HELPER_LOCK.to_vec());
     }
     Ok(view)
 }

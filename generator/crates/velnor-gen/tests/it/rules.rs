@@ -12,8 +12,8 @@ use velnor_model::{
     WorkflowPlan,
 };
 use velnor_render::{
-    MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
-    check_rules, render, render_workflow,
+    HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow,
+    Rule, RuleViolation, check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -75,6 +75,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             pull_request: vec![PullRequestType::Opened],
             push_branch: None,
             merge_group: false,
+            schedule: None,
             workflow_dispatch: false,
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
@@ -87,13 +88,19 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             when: When::Success,
             skip_on_draft: false,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
+            permissions: Permissions::default(),
             timeout_minutes: 10,
+            gate: None,
+            plan_outputs: Vec::new(),
             steps: kinds
                 .into_iter()
                 .map(|kind| Step {
                     kind,
                     directory: None,
                     when: When::Success,
+                    skip_on_draft: false,
+                    gate: None,
+                    reads: None,
                 })
                 .collect(),
         }],
@@ -338,7 +345,10 @@ fn multi_line_runs(text: &str) -> Vec<String> {
                 .take_while(|next| next.starts_with(&" ".repeat(indent + 1)))
                 .map(|next| next.trim_start())
                 .collect();
-            found.push(block.join("\n"));
+            let block = block.join("\n");
+            if block != HELPER_FROM_ARTIFACT_RUN {
+                found.push(block);
+            }
         } else if value.is_empty() || quoted_open {
             found.push(value.to_owned());
         }
@@ -347,7 +357,16 @@ fn multi_line_runs(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_golden_workflow_has_a_multi_line_run() -> TestResult {
+fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_constant()
+-> TestResult {
+    let allowed = format!(
+        "run: |\n{}\n",
+        HELPER_FROM_ARTIFACT_RUN
+            .lines()
+            .map(|line| format!("  {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     let rejected = [
         "run: |\n  echo one\n  echo two\n",
         "run: >\n  echo one\n",
@@ -358,6 +377,7 @@ fn no_golden_workflow_has_a_multi_line_run() -> TestResult {
         multi_line_runs("run: cargo-fmt --all --check\n"),
         Vec::<String>::new()
     );
+    assert_eq!(multi_line_runs(&allowed), Vec::<String>::new());
     for text in rejected {
         assert_eq!(multi_line_runs(text).len(), 1, "{text}");
     }

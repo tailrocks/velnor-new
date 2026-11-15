@@ -68,6 +68,8 @@ pub struct ApiJobs {
 pub struct ApiJob {
     pub id: u64,
     pub name: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
     pub conclusion: Option<String>,
     pub created_at: String,
     pub started_at: Option<String>,
@@ -159,6 +161,27 @@ pub struct ApiWorkflowRun {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ApiListedRun {
+    pub id: u64,
+    pub event: String,
+    pub run_attempt: u32,
+    pub head_branch: Option<String>,
+    #[serde(default)]
+    pub pull_requests: Vec<ApiListedPullRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiListedPullRequest {
+    pub base: ApiBase,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiBase {
+    #[serde(rename = "ref")]
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiCommitStatus {
     pub context: String,
     pub state: String,
@@ -241,4 +264,12 @@ pub fn jobs_path(repo: &Repo, run_id: u64, attempt: u32, page: u32) -> String {
 #[must_use]
 pub fn job_log_path(repo: &Repo, job_id: u64) -> String {
     format!("/repos/{repo}/actions/jobs/{job_id}/logs")
+}
+
+#[must_use]
+pub fn workflow_runs_path(repo: &Repo, workflow_file: &str, page: u32) -> String {
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?status=success&per_page=100&page={page}",
+        encode(workflow_file)
+    )
 }

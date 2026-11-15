@@ -88,24 +88,6 @@ fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     walk
 }
 
-#[must_use]
-pub fn root_slug(manifest: &RepoPath) -> String {
-    match manifest.parent() {
-        None => "root".to_owned(),
-        Some(directory) => directory
-            .as_str()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() {
-                    c.to_ascii_lowercase()
-                } else {
-                    '_'
-                }
-            })
-            .collect(),
-    }
-}
-
 const OWN_FOLDERS: [&str; 4] = ["src/", "tests/", "benches/", "examples/"];
 const BUILD_SCRIPT: &str = "build.rs";
 
@@ -114,6 +96,7 @@ struct Node<'a> {
     name: &'a PackageName,
     directory: Option<RepoPath>,
     whole: bool,
+    sources: Vec<&'a RepoPath>,
 }
 
 pub(crate) fn claims(directory: Option<&RepoPath>, whole: bool, path: &RepoPath) -> bool {
@@ -163,6 +146,11 @@ impl<'a> Graph<'a> {
                         name: &member.name,
                         directory: member.directory.clone(),
                         whole: member.manifest != root.manifest,
+                        sources: member
+                            .targets
+                            .iter()
+                            .filter_map(|target| target.source.as_ref())
+                            .collect(),
                     },
                 );
             }
@@ -178,6 +166,7 @@ impl<'a> Graph<'a> {
                 name: &package.name,
                 directory: manifest.parent(),
                 whole: true,
+                sources: Vec::new(),
             });
             for dependency in &package.dependencies {
                 graph.depend(manifest, dependency);
@@ -208,6 +197,7 @@ impl<'a> Graph<'a> {
             name: &dependency.name,
             directory: dependency.manifest.parent(),
             whole: true,
+            sources: Vec::new(),
         });
     }
 
@@ -233,18 +223,38 @@ impl<'a> Graph<'a> {
             .filter(|(_, root)| contains(root.manifest.parent().as_ref(), path))
             .max_by_key(|(_, root)| depth(root.manifest.parent().as_ref()))
             .map(|(index, _)| index);
-        let package = self
+        let in_root = |node: &Node<'a>| root.is_some() && node.root == root;
+        let claimed = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| in_root(node) && claims(node.directory.as_ref(), node.whole, path))
+            .max_by_key(|(_, node)| depth(node.directory.as_ref()))
+            .map(|(manifest, _)| *manifest);
+        let sourced: Vec<&RepoPath> = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| in_root(node) && node.sources.contains(&path))
+            .map(|(manifest, _)| *manifest)
+            .collect();
+        let package: Vec<&RepoPath> = claimed.into_iter().chain(sourced).collect();
+        let shared: Vec<&RepoPath> = self
             .nodes
             .iter()
             .filter(|(_, node)| {
-                root.is_some()
-                    && node.root == root
-                    && claims(node.directory.as_ref(), node.whole, path)
+                node.root.is_some() && node.root != root && node.sources.contains(&path)
             })
-            .max_by_key(|(_, node)| depth(node.directory.as_ref()))
-            .map(|(manifest, _)| *manifest);
-        if let Some(manifest) = package {
+            .map(|(manifest, _)| *manifest)
+            .collect();
+        for manifest in &shared {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
+        }
+        if !package.is_empty() {
+            for manifest in package {
+                walk.seed(manifest, SelectionReason::Changed(path.clone()));
+            }
+            return;
+        }
+        if !shared.is_empty() {
             return;
         }
         let is_root_manifest = self.roots.iter().any(|root| root.manifest == *path);

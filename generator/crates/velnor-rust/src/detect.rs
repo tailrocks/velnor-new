@@ -6,22 +6,23 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::toml_file::table;
 use velnor_model::{
     PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RustCiConfig, RustRoot, Toolchain,
+    RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIG, MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
-use crate::select::root_slug;
-use crate::timings::{TIMINGS_PATH, parse_timings};
+use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
+use crate::weaken::{is_nextest_config, weakenings};
 
+pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
 #[must_use]
@@ -39,7 +40,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .into_iter()
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
-    .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_cargo_config(path) || is_nextest_config(path))
+            .cloned(),
+    )
     .chain(
         tracked
             .iter()
@@ -69,7 +75,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let unowned = unowned(view, &rust_roots, &targets);
     let mut slugs = BTreeMap::new();
     for root in &rust_roots {
-        if let Some(first) = slugs.insert(root_slug(&root.manifest), &root.manifest) {
+        if let Some(first) = slugs.insert(RootSlug::of(&root.manifest), &root.manifest) {
             return Err(DetectError::SameSlug {
                 first: first.clone(),
                 second: root.manifest.clone(),
@@ -94,6 +100,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         ));
     }
     check_nextest_harnesses(&config, &rust_roots)?;
+    check_helper_box(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -106,23 +113,14 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
-    let timings = view
-        .files
-        .get(&TIMINGS_PATH)
-        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_timings(bytes))?;
-    if let Some(root) = timings
-        .keys()
-        .find(|root| !rust_roots.iter().any(|known| known.manifest == **root))
-    {
-        return Err(DetectError::invalid(
-            &TIMINGS_PATH,
-            Reason::UnknownRoot(root.clone()),
-        ));
-    }
-    let policy = policy_tools(view, config.runner.as_str(), &tools.configs)?;
+    let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
+    let policy = policy_tools(view, config.runner.as_str())?;
+    let weakenings = weakenings(&view.files, &rust_roots);
     Ok(RepoFacts {
         policy,
+        repository: view.repository.clone(),
         timings,
+        timings_notes,
         rust_roots,
         toolchain,
         tools,
@@ -130,20 +128,20 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
+        weakenings,
     })
 }
 
-fn policy_tools(
-    view: &RepoView,
-    runner: &str,
-    configs: &[RepoPath],
-) -> Result<PolicyTools, DetectError> {
+const DENY_TOOL: &str = "cargo-deny";
+
+fn policy_tools(view: &RepoView, runner: &str) -> Result<PolicyTools, DetectError> {
     let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
     let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !pinned("cargo-deny") {
-        return Err(DetectError::DenyRequired {
-            path: configs.first().cloned().unwrap_or(MISE_CONFIG),
-        });
+    if deny && !pinned(DENY_TOOL) {
+        return Err(DetectError::invalid(
+            &DENY_CONFIG,
+            Reason::UnpinnedTool(DENY_TOOL),
+        ));
     }
     Ok(PolicyTools {
         deny,
@@ -153,6 +151,27 @@ fn policy_tools(
 
 fn is_tool(name: &str, tool: &str) -> bool {
     name.rsplit(['/', ':']).next() == Some(tool)
+}
+
+fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
+    let Some(path) = &config.helper else {
+        return Ok(());
+    };
+    let holds_helper = rust_roots.iter().any(|root| {
+        root.manifest.parent().as_ref() == Some(path)
+            && root
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == HELPER_PACKAGE)
+    });
+    if holds_helper {
+        Ok(())
+    } else {
+        Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::HelperBox(path.clone()),
+        ))
+    }
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {

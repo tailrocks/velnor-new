@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -11,6 +13,8 @@ pub struct LogScan {
     pub downloaded: u64,
     pub finished_seconds: Vec<f64>,
     pub nextest: Vec<NextestSummary>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub binary_seconds: BTreeMap<String, f64>,
     pub caches: Vec<CacheEvent>,
 }
 
@@ -93,6 +97,8 @@ fn scan_line(line: &str, result: &mut LogScan, pending_size: &mut Option<u64>) {
         result.finished_seconds.push(seconds);
     } else if let Some(summary) = nextest_summary(line) {
         result.nextest.push(summary);
+    } else if let Some((binary, seconds)) = nextest_test(line) {
+        *result.binary_seconds.entry(binary).or_insert(0.0) += seconds;
     } else if line.starts_with("Cache ") {
         scan_cache_line(line, result, pending_size);
     }
@@ -134,7 +140,23 @@ fn parse_duration(text: &str) -> Option<f64> {
     (tokens > 0).then_some(total)
 }
 
-fn nextest_summary(line: &str) -> Option<NextestSummary> {
+fn nextest_test(line: &str) -> Option<(String, f64)> {
+    let rest = line
+        .strip_prefix("PASS [")
+        .or_else(|| line.strip_prefix("FAIL ["))?;
+    let (seconds, rest) = rest.split_once("s]")?;
+    let seconds = seconds.trim().parse().ok()?;
+    let rest = rest.trim_start();
+    let rest = match rest.strip_prefix('(') {
+        Some(counted) => counted.split_once(')')?.1,
+        None => rest,
+    };
+    let binary = rest.split_whitespace().next()?;
+    Some((binary.to_owned(), seconds))
+}
+
+#[must_use]
+pub fn nextest_summary(line: &str) -> Option<NextestSummary> {
     let rest = line.strip_prefix("Summary [")?;
     let (seconds, rest) = rest.split_once("s]")?;
     let seconds = seconds.trim().parse().ok()?;
@@ -182,4 +204,25 @@ fn set_cache_key(result: &mut LogScan, kind: CacheKind, key: &str) {
             size_bytes: None,
         }),
     }
+}
+
+#[must_use]
+pub fn split_steps(log: &str) -> Vec<&str> {
+    let mut starts: Vec<usize> = Vec::new();
+    let mut at = 0;
+    for raw in log.split_inclusive('\n') {
+        if strip_ansi(strip_timestamp(raw.trim_end_matches(['\n', '\r'])))
+            .starts_with("##[group]Run ")
+        {
+            starts.push(at);
+        }
+        at += raw.len();
+    }
+    let ends = starts.iter().skip(1).copied().chain([log.len()]);
+    starts
+        .iter()
+        .copied()
+        .zip(ends)
+        .map(|(from, to)| &log[from..to])
+        .collect()
 }

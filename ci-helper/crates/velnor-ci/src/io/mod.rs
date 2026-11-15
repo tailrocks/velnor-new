@@ -2,44 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod git;
 mod http;
 mod inputs;
+mod plan;
 mod release;
+mod run;
+mod setup;
+mod timings;
 mod units;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::{CommandFactory, FromArgMatches};
-use velnor_gen::io::{Checkout, Error as GenError, read_checkout, read_files};
-use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
-use velnor_rust::{
-    cargo_files, detect, optional_steps, policy_needed, root_sources, select, unknown_paths,
-    unread_packages,
-};
-
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::timings::write_report;
 use crate::cli::{
-    AuditArgs, BaseFile, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    InputsCommand, PlanArgs, ReleaseCommand, ReleaseGateArgs,
+    AuditArgs, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
+    ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
 use crate::error::CiError;
+use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
-use crate::plan::{Steps, explain, outputs};
+use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
+const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
@@ -68,15 +67,22 @@ where
 pub fn main() -> ExitCode {
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
+        Err(error) if error.use_stderr() => {
+            eprintln!("{}", stderr_line(&error.render().to_string()));
+            return ExitCode::from(2);
+        }
         Err(error) => error.exit(),
     };
+    if let Command::Run(args) = &cli.command {
+        return run::run(args);
+    }
     match run(cli) {
         Ok(output) => {
             print!("{output}");
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("velnor-ci: {error}");
+            eprintln!("{}", stderr_line(&error.to_string()));
             ExitCode::FAILURE
         }
     }
@@ -95,104 +101,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
-        Command::Plan(args) => run_plan(&args),
+        Command::Plan(args) => plan::run_plan(&args),
+        Command::Timings(args) => timings::run_timings(&args),
+        Command::Prepare => setup::prepare(),
+        Command::CheckMetadata => setup::check_metadata(),
+        Command::Restored => Ok(String::new()),
+        Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
-}
-
-fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
-    let checkout = read_checkout(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
-    let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
-    let paths: BTreeSet<RepoPath> = args.changed.iter().cloned().collect();
-    let changes = ChangeSet {
-        base_files: read_base_files(&args.base_files)?,
-        head_files: read_head_files(&checkout, &paths)?,
-        paths,
-    };
-    let full = std::env::var(EVENT_VARIABLE).is_ok_and(|event| event == SCHEDULED);
-    let selections = if full {
-        facts
-            .rust_roots
-            .iter()
-            .map(|root| (root.manifest.clone(), RustSelection::All(AllTrigger::Event)))
-            .collect()
-    } else {
-        select(&facts, &changes)
-    };
-    let steps = facts
-        .rust_roots
-        .iter()
-        .map(|root| {
-            let steps = match root_sources(&facts, root, &checkout.view.tracked_paths) {
-                None => optional_steps(root, &BTreeMap::new(), true),
-                Some(paths) => match read_sources(&checkout.root, &paths) {
-                    Ok(Some(sources)) => optional_steps(root, &sources, full),
-                    Ok(None) | Err(GenError::NotRegular(_)) => {
-                        optional_steps(root, &BTreeMap::new(), true)
-                    }
-                    Err(error) => return Err(CiError::new(error.to_string())),
-                },
-            };
-            Ok((root.manifest.clone(), steps))
-        })
-        .collect::<Result<Steps, CiError>>()?;
-    let everything = selections
-        .values()
-        .any(|selection| {
-            matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
-        });
-    let policy = policy_needed(&changes.paths, everything, facts.policy);
-    let outputs = outputs(&selections, &steps, policy)?;
-    append_outputs(&outputs)?;
-    Ok(if args.explain {
-        explain(
-            &selections,
-            &steps,
-            &unknown_paths(&facts, &changes),
-            &unread_packages(&facts, &changes),
-        )
-    } else {
-        outputs
-    })
-}
-
-fn read_sources(
-    root: &Path,
-    paths: &[RepoPath],
-) -> Result<Option<BTreeMap<RepoPath, Vec<u8>>>, GenError> {
-    let oversized = paths.iter().any(|path| {
-        fs::symlink_metadata(root.join(path.as_str()))
-            .is_ok_and(|metadata| metadata.len() > SOURCE_LIMIT)
-    });
-    if oversized {
-        return Ok(None);
-    }
-    read_files(root, paths).map(Some)
-}
-
-fn read_base_files(files: &[BaseFile]) -> Result<BTreeMap<RepoPath, String>, CiError> {
-    files
-        .iter()
-        .map(|base| {
-            fs::read_to_string(&base.file)
-                .map(|text| (base.path.clone(), text))
-                .map_err(|e| CiError::new(format!("cannot read {}: {e}", base.file.display())))
-        })
-        .collect()
-}
-
-fn read_head_files(
-    checkout: &Checkout,
-    changed: &BTreeSet<RepoPath>,
-) -> Result<BTreeMap<RepoPath, String>, CiError> {
-    let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
-        .into_iter()
-        .filter(|path| changed.contains(path))
-        .collect();
-    let files = read_files(&checkout.root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
-    Ok(files
-        .into_iter()
-        .filter_map(|(path, bytes)| Some((path, String::from_utf8(bytes).ok()?)))
-        .collect())
 }
 
 fn current_dir() -> Result<std::path::PathBuf, CiError> {
@@ -208,7 +123,7 @@ fn token() -> Result<String, CiError> {
 fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     let token = token()?;
     let repo = Repo::parse(&args.repo)?;
-    let github = http::HttpGitHub::new(api_url(), token);
+    let github = http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT);
     let metrics = collect(&github, &repo, args.run_id, args.allow_rerun)?;
     if let Some(path) = &args.output {
         write_metrics(path, &metrics)?;
@@ -223,13 +138,21 @@ fn api_url() -> String {
 fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
     let token = token()?;
     let repo = Repo::parse(&args.repo)?;
-    let verdict = release_gate(&http::HttpGitHub::new(api_url(), token), &repo, &args.sha)?;
+    let verdict = release_gate(
+        &http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT),
+        &repo,
+        &args.sha,
+    )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)
 }
 
 fn append_outputs(outputs: &str) -> Result<(), CiError> {
-    if let Some(file) = std::env::var_os(OUTPUT_VARIABLE).filter(|file| !file.is_empty()) {
+    append_to(OUTPUT_VARIABLE, outputs)
+}
+
+fn append_to(variable: &str, outputs: &str) -> Result<(), CiError> {
+    if let Some(file) = std::env::var_os(variable).filter(|file| !file.is_empty()) {
         OpenOptions::new()
             .append(true)
             .create(true)

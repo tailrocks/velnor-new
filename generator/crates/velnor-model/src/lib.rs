@@ -1,26 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache;
+mod cron;
 mod ids;
 mod plan;
 mod repo;
 mod selection;
 
+pub use cache::{CacheKey, CachePath, CacheRoot, Host};
+pub use cron::CronExpr;
 pub use ids::{
-    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
-    Sha256, TargetName,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
+    RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, PullRequestType, Shape, ShapeDecision, Step, StepKind,
-    Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
+    Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
+    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers, When,
+    WorkflowPlan,
 };
 pub use repo::{
-    CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
-    PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
-    RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
+    MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
+    ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
-    AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };

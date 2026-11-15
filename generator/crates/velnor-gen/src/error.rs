@@ -6,7 +6,7 @@ use std::fmt;
 use velnor_model::{HelperVersion, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
-use velnor_rust::DetectError;
+use velnor_rust::{DetectError, MetadataFileError};
 
 use crate::COMPATIBLE_HELPER_SERIES;
 
@@ -15,10 +15,11 @@ pub enum GenerateError {
     Detect(DetectError),
     IncompatibleHelper(HelperVersion),
     Release(ReleaseError),
-    ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
     ReleaseRootWithoutCargoToml(String),
     ReleaseToolchainPath,
+    HelperNotPinned,
+    Metadata(MetadataFileError),
     ReleasePackageNotInRoot { root: String, package: String },
     Rules(Vec<RuleViolation>),
 }
@@ -33,9 +34,6 @@ impl fmt::Display for GenerateError {
                 COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
             ),
             Self::Release(error) => error.fmt(f),
-            Self::ReleaseNeedsHelper => f.write_str(
-                "release.yml runs velnor-ci; pin a release with `velnor-gen pin-helper <version>`",
-            ),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
             Self::ReleaseRootWithoutCargoToml(root) => write!(
                 f,
@@ -44,6 +42,10 @@ impl fmt::Display for GenerateError {
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
+            Self::HelperNotPinned => f.write_str(
+                "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
+            ),
+            Self::Metadata(error) => error.fmt(f),
             Self::ReleasePackageNotInRoot { root, package } => write!(
                 f,
                 "release-plz.toml in {root:?} releases package {package:?}, which is not a member of that Cargo root"

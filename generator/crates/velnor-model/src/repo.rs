@@ -4,11 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::cron::CronExpr;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
 use crate::plan::{HelperRelease, Shape};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
+    pub repository: String,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
@@ -31,6 +33,7 @@ pub struct RustPackage {
 pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
+    pub platform: Option<String>,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -66,6 +69,7 @@ pub enum TargetKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoFacts {
+    pub repository: String,
     pub rust_roots: Vec<RustRoot>,
     pub toolchain: Option<Toolchain>,
     pub tools: ToolPins,
@@ -73,8 +77,10 @@ pub struct RepoFacts {
     pub helper: Option<HelperRelease>,
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
+    pub timings_notes: Vec<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub weakenings: Vec<Weakening>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -87,6 +93,19 @@ impl PolicyTools {
     #[must_use]
     pub fn any(self) -> bool {
         self.deny || self.machete
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Weakening {
+    pub file: RepoPath,
+    pub setting: String,
+    pub effect: String,
+}
+
+impl fmt::Display for Weakening {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}: {}", self.file, self.setting, self.effect)
     }
 }
 
@@ -138,6 +157,7 @@ pub struct RustRoot {
     pub manifest: RepoPath,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
+    pub external_dependencies: Vec<PackageName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,6 +188,7 @@ impl RustMember {
 pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
+    pub platform: Option<String>,
     pub manifest: RepoPath,
 }
 
@@ -205,6 +226,32 @@ pub struct RustCiConfig {
     pub nextest_harnesses: Vec<(PackageName, TargetName)>,
     pub default_branch: String,
     pub skip_draft_pull_requests: bool,
+    pub on_main: OnMain,
+    pub full_run: FullRun,
+    pub helper: Option<RepoPath>,
+    pub ci_debuginfo: CiDebugInfo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnMain {
+    Affected,
+    Everything,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FullRun {
+    Off,
+    Hourly,
+    Nightly,
+    Weekly,
+    Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CiDebugInfo {
+    Full,
+    LineTablesOnly,
+    None,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,6 +274,10 @@ impl Default for RustCiConfig {
             nextest_harnesses: Vec::new(),
             default_branch: "main".to_owned(),
             skip_draft_pull_requests: false,
+            on_main: OnMain::Affected,
+            full_run: FullRun::Nightly,
+            helper: None,
+            ci_debuginfo: CiDebugInfo::LineTablesOnly,
         }
     }
 }
