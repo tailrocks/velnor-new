@@ -17,18 +17,27 @@ fn names_release_plz(key: &str) -> bool {
     key.rsplit(['/', ':']).next() == Some("release-plz")
 }
 
-fn has_tool(table: &Table) -> bool {
+fn release_plz_keys(table: &Table) -> Vec<String> {
     table
         .get("tools")
         .and_then(toml::Value::as_table)
-        .is_some_and(|tools| tools.keys().any(|key| names_release_plz(key)))
+        .map(|tools| {
+            tools
+                .keys()
+                .filter(|key| names_release_plz(key))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError> {
-    if !has_tool(&parse("mise.toml", mise_toml)?) {
+    let configured = release_plz_keys(&parse("mise.toml", mise_toml)?);
+    if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
-    if !has_tool(&parse("mise.lock", mise_lock)?) {
+    let locked = release_plz_keys(&parse("mise.lock", mise_lock)?);
+    if !configured.iter().any(|key| locked.contains(key)) {
         return Err(ReleaseError::ReleasePlzNotInMiseLock);
     }
     Ok(())

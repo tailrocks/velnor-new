@@ -34,14 +34,12 @@ fn check_package(
         let (root, package) = owned();
         return Err(ReleaseError::SemverCheckNotFalse { root, package });
     }
-    if let Some(package) = package
-        && settings.publish != Some(false)
+    if settings.publish != Some(false)
+        && settings.git_only != Some(true)
         && settings.publish_no_verify != Some(true)
     {
-        return Err(ReleaseError::PublishWithoutNoVerify {
-            root: root.to_owned(),
-            package: package.to_owned(),
-        });
+        let (root, package) = owned();
+        return Err(ReleaseError::PublishWithoutNoVerify { root, package });
     }
     Ok(())
 }

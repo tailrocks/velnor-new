@@ -299,3 +299,82 @@ fn errors_read_as_messages_naming_the_file_and_package() {
         "{message}"
     );
 }
+
+fn without_packages() -> String {
+    PLZ.replace("[[package]]\nname = \"app\"\n", "")
+}
+
+#[test]
+fn workspace_only_publishing_needs_publish_no_verify_unless_git_only() -> TestResult {
+    let mut files = files();
+    let text = edit(&without_packages(), "publish_no_verify = true\n", "")?;
+    files.release_plz_toml.insert(".".to_owned(), text.clone());
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::PublishWithoutNoVerify { package: None, .. })
+    ));
+    let git_only = edit(&text, "[workspace]\n", "[workspace]\ngit_only = true\n")?;
+    files.release_plz_toml.insert(".".to_owned(), git_only);
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn the_locked_tool_must_be_the_configured_one() {
+    let mut files = files();
+    files.mise_lock =
+        "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(refusal(&files), Some(ReleaseError::ReleasePlzNotInMiseLock));
+}
+
+#[test]
+fn overlapping_pr_branch_prefixes_are_refused() -> TestResult {
+    let mut files = files();
+    files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    let base = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"release-plz-\"\n",
+    )?;
+    let nested = edit(&base, "release-plz-\"", "release-plz-tools-\"")?;
+    files.release_plz_toml.insert(".".to_owned(), base);
+    files.release_plz_toml.insert(
+        "tools".to_owned(),
+        edit(&nested, "name = \"app\"", "name = \"cli\"")?,
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicatePrBranchPrefix { .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn release_config_with_an_empty_after_or_unknown_platform_is_refused() {
+    let mut files = files();
+    files.release_toml = Some("after = []\n".to_owned());
+    assert_eq!(refusal(&files), Some(ReleaseError::EmptyAfter));
+    files.release_toml =
+        Some("[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-amd64\"]\n".to_owned());
+    assert!(
+        matches!(refusal(&files), Some(ReleaseError::UnknownPlatform { platform, .. }) if platform == "linux-amd64")
+    );
+}
+
+#[test]
+fn a_binary_released_from_two_roots_is_refused() -> TestResult {
+    let mut files = files();
+    files.release_toml =
+        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n".to_owned());
+    let tools = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"tools-\"\n",
+    )?;
+    let tools = edit(&tools, "{{ package }}-v", "tools-{{ package }}-v")?;
+    files.release_plz_toml.insert("tools".to_owned(), tools);
+    assert!(
+        matches!(refusal(&files), Some(ReleaseError::AmbiguousBinary { package, .. }) if package == "app")
+    );
+    Ok(())
+}

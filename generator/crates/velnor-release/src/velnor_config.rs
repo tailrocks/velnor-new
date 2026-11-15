@@ -48,9 +48,26 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             binaries: Vec::new(),
         },
     };
+    let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    if after.is_empty() {
+        return Err(ReleaseError::EmptyAfter);
+    }
+    for binary in &raw.binaries {
+        if let Some(platform) = binary
+            .platforms
+            .iter()
+            .flatten()
+            .find(|platform| !DEFAULT_PLATFORMS.contains(&platform.as_str()))
+        {
+            return Err(ReleaseError::UnknownPlatform {
+                package: binary.package.clone(),
+                platform: platform.clone(),
+            });
+        }
+    }
     Ok(VelnorConfig {
         roots: raw.roots.unwrap_or_else(|| vec![".".to_owned()]),
-        after: raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]),
+        after,
         binaries: raw
             .binaries
             .into_iter()

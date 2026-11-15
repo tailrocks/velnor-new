@@ -41,12 +41,7 @@ pub struct ReleasePlan {
 
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
-    let mut prefixes: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for config in configs {
-        prefixes
-            .entry(&config.pr_branch_prefix)
-            .or_default()
-            .push(config.root.clone());
         for package in &config.packages {
             tags.entry(&package.tag_pattern)
                 .or_default()
@@ -59,11 +54,25 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             packages,
         });
     }
-    if let Some((prefix, roots)) = prefixes.into_iter().find(|(_, roots)| roots.len() > 1) {
-        return Err(ReleaseError::DuplicatePrBranchPrefix {
-            prefix: prefix.to_owned(),
-            roots,
-        });
+    let prefixes: Vec<(&str, &str)> = configs
+        .iter()
+        .map(|config| (config.pr_branch_prefix.as_str(), config.root.as_str()))
+        .collect();
+    for (index, (prefix, root)) in prefixes.iter().enumerate() {
+        if let Some((other, other_root)) = prefixes[index + 1..]
+            .iter()
+            .find(|(other, _)| other.starts_with(prefix) || prefix.starts_with(other))
+        {
+            let shorter = if prefix.len() <= other.len() {
+                prefix
+            } else {
+                other
+            };
+            return Err(ReleaseError::DuplicatePrBranchPrefix {
+                prefix: (*shorter).to_owned(),
+                roots: vec![(*root).to_owned(), (*other_root).to_owned()],
+            });
+        }
     }
     Ok(())
 }
@@ -83,18 +92,25 @@ impl ReleasePlan {
         mise::check(&files.mise_toml, &files.mise_lock)?;
         let mut binaries = Vec::new();
         for binary in &config.binaries {
-            let (root, package) = configs
-                .iter()
-                .find_map(|candidate| {
-                    candidate
-                        .packages
-                        .iter()
-                        .find(|package| package.name == binary.package)
-                        .map(|package| (candidate.root.clone(), package))
-                })
+            let mut found = configs.iter().filter_map(|candidate| {
+                candidate
+                    .packages
+                    .iter()
+                    .find(|package| package.name == binary.package)
+                    .map(|package| (candidate.root.clone(), package))
+            });
+            let (root, package) = found
+                .next()
                 .ok_or_else(|| ReleaseError::BinaryNotReleased {
                     package: binary.package.clone(),
                 })?;
+            let others: Vec<String> = found.map(|(other, _)| other).collect();
+            if !others.is_empty() {
+                return Err(ReleaseError::AmbiguousBinary {
+                    package: binary.package.clone(),
+                    roots: std::iter::once(root).chain(others).collect(),
+                });
+            }
             binaries.push(BinaryPlan {
                 package: binary.package.clone(),
                 root,

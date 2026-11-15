@@ -10,6 +10,7 @@ pub(crate) struct Settings {
     pub(crate) release_always: Option<bool>,
     pub(crate) semver_check: Option<bool>,
     pub(crate) publish: Option<bool>,
+    pub(crate) git_only: Option<bool>,
     pub(crate) publish_no_verify: Option<bool>,
     pub(crate) pr_branch_prefix: Option<String>,
     pub(crate) release: Option<bool>,
@@ -41,6 +42,7 @@ impl Settings {
             release_always: self.release_always.or(base.release_always),
             semver_check: self.semver_check.or(base.semver_check),
             publish: self.publish.or(base.publish),
+            git_only: self.git_only.or(base.git_only),
             publish_no_verify: self.publish_no_verify.or(base.publish_no_verify),
             pr_branch_prefix: self
                 .pr_branch_prefix

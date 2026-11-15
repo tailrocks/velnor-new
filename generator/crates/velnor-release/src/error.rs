@@ -35,8 +35,17 @@ pub enum ReleaseError {
     },
     PublishWithoutNoVerify {
         root: String,
-        package: String,
+        package: Option<String>,
     },
+    AmbiguousBinary {
+        package: String,
+        roots: Vec<String>,
+    },
+    UnknownPlatform {
+        package: String,
+        platform: String,
+    },
+    EmptyAfter,
     DuplicateTagPattern {
         pattern: String,
         packages: Vec<String>,
@@ -95,7 +104,8 @@ impl fmt::Display for ReleaseError {
             ),
             Self::PublishWithoutNoVerify { root, package } => write!(
                 f,
-                "{root}/release-plz.toml: package {package} publishes to crates.io and needs publish_no_verify = true"
+                "{root}/release-plz.toml: {} publishes to crates.io and needs publish_no_verify = true",
+                subject(package.as_ref())
             ),
             Self::DuplicateTagPattern { pattern, packages } => write!(
                 f,
@@ -110,6 +120,19 @@ impl fmt::Display for ReleaseError {
             Self::BinaryNotReleased { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
+            ),
+            Self::AmbiguousBinary { package, roots } => write!(
+                f,
+                ".velnor/release.toml: binary {package} is released from several roots: {}",
+                roots.join(", ")
+            ),
+            Self::UnknownPlatform { package, platform } => write!(
+                f,
+                ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
+            ),
+            Self::EmptyAfter => write!(
+                f,
+                ".velnor/release.toml: after must name at least one workflow"
             ),
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
