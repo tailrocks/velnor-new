@@ -99,7 +99,7 @@ impl fmt::Display for Reason {
             ),
             Self::AmbiguousNextestHarness(entry) => write!(
                 f,
-                "nextest_harnesses names {entry}, which more than one workspace member declares"
+                "nextest_harnesses names {entry}, which more than one test target declares"
             ),
             Self::UnknownNextestHarness(entry) => write!(
                 f,

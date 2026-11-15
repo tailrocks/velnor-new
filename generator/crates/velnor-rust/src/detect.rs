@@ -260,17 +260,18 @@ fn check_nextest_harnesses(
     rust_roots: &[RustRoot],
 ) -> Result<(), DetectError> {
     for (package, target) in &config.nextest_harnesses {
-        let declared = rust_roots
+        let declared: usize = rust_roots
             .iter()
             .flat_map(|root| &root.members)
-            .filter(|member| {
-                member.name == *package
-                    && member
-                        .custom_harnesses
-                        .iter()
-                        .any(|harness| harness.name == *target)
+            .filter(|member| member.name == *package)
+            .map(|member| {
+                member
+                    .custom_harnesses
+                    .iter()
+                    .filter(|harness| harness.name == *target)
+                    .count()
             })
-            .count();
+            .sum();
         let entry = format!("{package}:{target}");
         let reason = match declared {
             0 => Reason::UnknownNextestHarness(entry),

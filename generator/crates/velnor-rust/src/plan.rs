@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
@@ -12,7 +12,7 @@ use velnor_model::{
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
-use crate::harness::{runs_in_direct_step, uses_nextest};
+use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -133,16 +133,19 @@ fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
             filter: nextest_filter(facts, root),
         });
     }
+    let mut seen = BTreeSet::new();
     test.extend(root.members.iter().flat_map(|member| {
         member
             .custom_harnesses
             .iter()
             .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+            .filter(|harness| seen.insert(selector_id(harness)))
             .map(|harness| CargoCommand::TestTarget {
                 package: member.name.clone(),
                 target: harness.name.clone(),
                 kind: harness.kind,
             })
+            .collect::<Vec<_>>()
     }));
     if has_doctest_library(root) {
         test.push(CargoCommand::Doctest);
