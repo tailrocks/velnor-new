@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
 use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
@@ -13,6 +13,7 @@ use crate::GenerateError;
 pub(crate) fn release_workflow(
     view: &RepoView,
     facts: &RepoFacts,
+    generated: &BTreeMap<RepoPath, String>,
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
@@ -21,7 +22,9 @@ pub(crate) fn release_workflow(
         .helper
         .as_ref()
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
-    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    let reality = Reality { facts, generated };
+    let plan =
+        ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
     render_release(&plan, facts.config.runner.as_str(), helper).map_err(GenerateError::Rules)
 }
 
@@ -29,11 +32,55 @@ pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
     Ok(ruleset_json(&plan))
 }
 
-fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
+struct Reality<'a> {
+    facts: &'a RepoFacts,
+    generated: &'a BTreeMap<RepoPath, String>,
+}
+
+fn cargo_manifests(facts: &RepoFacts) -> BTreeSet<String> {
+    facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| {
+            std::iter::once(root.manifest.to_string()).chain(
+                root.members
+                    .iter()
+                    .map(|member| member.manifest.to_string()),
+            )
+        })
+        .collect()
+}
+
+fn workflow_name(text: &str) -> Option<String> {
+    text.lines()
+        .find_map(|line| line.strip_prefix("name:"))
+        .map(|name| name.trim().trim_matches(['"', '\'']).to_owned())
+}
+
+fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {
+    let tracked = view
+        .files
+        .iter()
+        .filter(|(path, _)| {
+            let name = path.as_str();
+            name.starts_with(".github/workflows/")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        })
+        .filter_map(|(_, bytes)| workflow_name(&String::from_utf8_lossy(bytes)));
+    let made = generated.values().filter_map(|text| workflow_name(text));
+    tracked.chain(made).collect()
+}
+
+fn release_files(
+    view: &RepoView,
+    reality: Option<&Reality<'_>>,
+) -> Result<ReleaseFiles, GenerateError> {
     let text = |path: &RepoPath| -> Result<Option<String>, GenerateError> {
         view.files
             .get(path)
@@ -72,6 +119,8 @@ fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
         release_plz_toml,
         mise_tomls,
         cargo_configs,
+        cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
+        workflow_names: reality.map(|known| workflow_names(view, known.generated)),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

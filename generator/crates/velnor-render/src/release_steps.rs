@@ -42,10 +42,6 @@ pub(crate) fn checkout(reference: &str, depth: u64) -> RenderedStep {
     }
 }
 
-pub(crate) fn install_release_plz() -> RenderedStep {
-    install_tool("release-plz")
-}
-
 pub(crate) fn install_tool(tool: &str) -> RenderedStep {
     RenderedStep {
         name: format!("Install {tool}"),

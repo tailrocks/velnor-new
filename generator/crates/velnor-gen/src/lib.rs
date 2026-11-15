@@ -74,7 +74,8 @@ pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Gen
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    files.extend(release::release_workflow(view, &facts)?);
+    let release = release::release_workflow(view, &facts, &files)?;
+    files.extend(release);
     Ok(files)
 }
 

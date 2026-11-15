@@ -22,6 +22,7 @@ pub(crate) struct RootConfig {
     pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
     pub(crate) workspace_tags: Vec<TagPattern>,
+    pub(crate) workspace_tag: Option<TagPattern>,
 }
 
 fn check_package(
@@ -185,6 +186,10 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         publishes_to_crates_io,
         pr_branch_prefix: prefix,
         packages,
+        workspace_tag: workspace_tags
+            .first()
+            .filter(|_| workspace.git_tag_name.is_some())
+            .cloned(),
         workspace_tags,
     })
 }

@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::Platform;
 
 use crate::error::ReleaseError;
 use crate::hazards::credential_provider;
 use crate::mise;
-use crate::release_plz::{Package, RootConfig, read};
-use crate::tag::TagPattern;
+use crate::release_plz::{RootConfig, read};
+use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::velnor_config::parse;
 
 #[derive(Debug, Clone, Default)]
@@ -18,6 +18,8 @@ pub struct ReleaseFiles {
     pub release_plz_toml: BTreeMap<String, String>,
     pub mise_tomls: Vec<String>,
     pub cargo_configs: BTreeMap<String, String>,
+    pub cargo_manifests: Option<BTreeSet<String>>,
+    pub workflow_names: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
 
@@ -44,6 +46,7 @@ pub struct ReleasePlan {
     pub roots: Vec<RootPlan>,
     pub after: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
+    pub release_plz_tool: String,
 }
 
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
@@ -61,22 +64,39 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             packages,
         });
     }
-    let all: Vec<(&str, &Package)> = configs
-        .iter()
-        .flat_map(|config| config.packages.iter().map(|p| (config.root.as_str(), p)))
-        .collect();
-    for (index, (root, package)) in all.iter().enumerate() {
-        for (other_root, other) in &all[index + 1..] {
-            if other.name == package.name {
+    let mut all: Vec<(&str, &TagPattern, Option<&str>)> = Vec::new();
+    for config in configs {
+        let root = config.root.as_str();
+        all.extend(
+            config
+                .packages
+                .iter()
+                .map(|package| (root, &package.tag_pattern, Some(package.name.as_str()))),
+        );
+        all.extend(
+            config
+                .workspace_tag
+                .iter()
+                .filter(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
+                .map(|pattern| (root, pattern, None)),
+        );
+    }
+    for (index, (root, pattern, name)) in all.iter().enumerate() {
+        for (other_root, other_pattern, other_name) in &all[index + 1..] {
+            let same_root = root == other_root;
+            if let (Some(name), Some(other_name)) = (name, other_name)
+                && name == other_name
+            {
                 return Err(ReleaseError::DuplicatePackageName {
-                    package: package.name.clone(),
+                    package: (*name).to_owned(),
                     roots: vec![(*root).to_owned(), (*other_root).to_owned()],
                 });
             }
-            if other.tag_pattern.may_collide(&package.tag_pattern) {
+            let both_listed = name.is_some() && other_name.is_some();
+            if (both_listed || !same_root) && other_pattern.may_collide(pattern) {
                 return Err(ReleaseError::TagsMayCollide {
-                    first: package.tag_pattern.as_str().to_owned(),
-                    second: other.tag_pattern.as_str().to_owned(),
+                    first: pattern.as_str().to_owned(),
+                    second: other_pattern.as_str().to_owned(),
                 });
             }
         }
@@ -107,6 +127,25 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
+        if let Some(manifests) = &files.cargo_manifests {
+            for root in &config.roots {
+                let manifest = if root == "." {
+                    "Cargo.toml".to_owned()
+                } else {
+                    format!("{root}/Cargo.toml")
+                };
+                if !manifests.contains(&manifest) {
+                    return Err(ReleaseError::RootWithoutCargoManifest { root: root.clone() });
+                }
+            }
+        }
+        if let Some(names) = &files.workflow_names
+            && let Some(unknown) = config.after.iter().find(|name| !names.contains(*name))
+        {
+            return Err(ReleaseError::UnknownWorkflow {
+                name: unknown.clone(),
+            });
+        }
         let mut configs = Vec::new();
         for root in &config.roots {
             let text = files
@@ -116,7 +155,7 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        mise::check(&files.mise_tomls, &files.mise_lock)?;
+        let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
         if configs.iter().any(|config| config.publishes_to_crates_io) {
             for (file, text) in &files.cargo_configs {
                 credential_provider(file, text)?;
@@ -161,6 +200,7 @@ impl ReleasePlan {
                 .collect(),
             after: config.after,
             binaries,
+            release_plz_tool,
         })
     }
 }

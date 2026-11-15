@@ -5,7 +5,10 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_gen::expected_files;
-use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView};
+use velnor_model::{
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView, Target,
+    TargetKind, TargetName,
+};
 use velnor_rust::LOCK_PATH;
 
 use crate::pipeline::view;
@@ -68,11 +71,42 @@ pub(crate) fn release_plz(root: &Root) -> String {
     )
 }
 
+fn join_manifest(dir: &str) -> String {
+    if dir == "." {
+        "Cargo.toml".to_owned()
+    } else {
+        format!("{dir}/Cargo.toml")
+    }
+}
+
 pub(crate) fn release_view(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<RepoView, Box<dyn Error>> {
-    let mut view = view(&["Cargo.toml"], None)?;
+    let manifests: Vec<String> = if roots.is_empty() {
+        vec!["Cargo.toml".to_owned()]
+    } else {
+        roots.iter().map(|root| join_manifest(root.dir)).collect()
+    };
+    let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let mut view = view(&refs, None)?;
+    for (root, manifest) in roots.iter().zip(&manifests) {
+        let metadata = view
+            .rust_metadata
+            .get_mut(&RepoPath::new(manifest.as_str())?)
+            .ok_or("no metadata for the root")?;
+        metadata.members[0].name = PackageName::new(root.package)?;
+        for name in [root.package, "rg"] {
+            metadata.members[0].targets.push(Target {
+                name: TargetName::new(name)?,
+                kinds: vec![TargetKind::Bin],
+                tests: false,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            });
+        }
+    }
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     view.files.insert(
@@ -82,6 +116,10 @@ pub(crate) fn release_view(
     view.files.insert(
         RepoPath::new("mise.lock")?,
         b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_vec(),
+    );
+    view.files.insert(
+        RepoPath::new(".github/workflows/lint.yml")?,
+        b"name: Lint\non: push\n".to_vec(),
     );
     if let Some(text) = release_toml {
         view.files

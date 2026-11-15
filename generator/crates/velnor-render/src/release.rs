@@ -8,8 +8,8 @@ use velnor_release::ReleasePlan;
 
 use crate::release_binaries::binary_jobs;
 use crate::release_steps::{
-    app_token, checkout, expression, install_release_plz, label, permissions,
-    release_plz_arguments, release_plz_step, variables,
+    app_token, checkout, expression, install_tool, label, permissions, release_plz_arguments,
+    release_plz_step, variables,
 };
 use crate::rules::{
     RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, RuleViolation, check_rules,
@@ -140,7 +140,7 @@ pub(crate) fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
 fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT, 0),
-        install_release_plz(),
+        install_tool(&plan.release_plz_tool),
         app_token(&[("contents", "write"), ("pull-requests", "write")]),
     ];
     steps.extend(plan.roots.iter().map(|root| {
@@ -166,7 +166,7 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
 fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT, 0),
-        install_release_plz(),
+        install_tool(&plan.release_plz_tool),
         install_helper(helper),
         app_token(&[("contents", "write"), ("pull-requests", "read")]),
     ];

@@ -104,6 +104,15 @@ pub enum ReleaseError {
         first: String,
         second: String,
     },
+    ReleasePlzSource {
+        key: String,
+    },
+    RootWithoutCargoManifest {
+        root: String,
+    },
+    UnknownWorkflow {
+        name: String,
+    },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
     ReleasePlzLockMismatch {
@@ -253,6 +262,18 @@ impl ReleaseError {
             Self::CargoCredentialProvider { file } => write!(
                 f,
                 "{file}: a cargo credential provider would run next to the crates.io publish token"
+            ),
+            Self::ReleasePlzSource { key } => write!(
+                f,
+                "mise.toml: tool {key} is not release-plz from its release-plz/release-plz source, or sets options other than version"
+            ),
+            Self::RootWithoutCargoManifest { root } => write!(
+                f,
+                ".velnor/release.toml: root {root} has no tracked Cargo.toml"
+            ),
+            Self::UnknownWorkflow { name } => write!(
+                f,
+                ".velnor/release.toml: after names workflow {name:?}, which no tracked or generated workflow has as its name"
             ),
             Self::DuplicatePackageName { package, roots } => write!(
                 f,

@@ -76,3 +76,25 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
     );
     Ok(())
 }
+
+#[test]
+fn an_after_name_that_no_workflow_has_is_refused_when_rendering() {
+    let rendered = render(
+        &[crate::release_fixture::APP],
+        Some("after = [\"Rust CI\", \"Linter\"]\n"),
+    );
+    assert!(
+        rendered
+            .err()
+            .is_some_and(|error| error.to_string().contains("Linter"))
+    );
+}
+
+#[test]
+fn a_root_without_a_tracked_cargo_manifest_is_refused_when_rendering() {
+    let rendered = render(
+        &[crate::release_fixture::APP],
+        Some("roots = [\".\", \"gone\"]\n"),
+    );
+    assert!(rendered.is_err());
+}
