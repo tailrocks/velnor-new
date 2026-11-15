@@ -260,4 +260,20 @@ pub(super) const ADDED: &[Case] = &[
         RUN,
         RUN,
     ),
+    (
+        "indented code inside a blockquote",
+        Kind::Doctested,
+        "/// >     assert!(false);\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "the legacy name of the crate-level docs lint",
+        Kind::Doctested,
+        "#![deny(missing_crate_level_docs)]\npub fn f() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
 ];

@@ -3,7 +3,7 @@
 
 use super::tokens::{Token, tokens};
 
-const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
+const RUSTDOC_SETTINGS: [&str; 3] = ["rustdoc", "missing_docs", "missing_crate_level_docs"];
 
 #[derive(Default)]
 pub(crate) struct Found {

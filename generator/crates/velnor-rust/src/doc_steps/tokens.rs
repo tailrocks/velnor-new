@@ -193,6 +193,19 @@ fn is_word(byte: u8) -> bool {
 }
 
 pub(crate) fn code_block(rest: &str) -> bool {
-    let indent: &str = &rest[..rest.len() - rest.trim_start_matches([' ', '\t']).len()];
-    rest.contains("```") || rest.contains("~~~") || indent.contains('\t') || indent.len() >= 4
+    if rest.contains("```") || rest.contains("~~~") {
+        return true;
+    }
+    let mut text = rest;
+    loop {
+        let trimmed = text.trim_start_matches([' ', '\t']);
+        let indent = &text[..text.len() - trimmed.len()];
+        if indent.contains('\t') || indent.len() >= 4 {
+            return true;
+        }
+        match trimmed.strip_prefix('>') {
+            Some(after) => text = after,
+            None => return false,
+        }
+    }
 }
