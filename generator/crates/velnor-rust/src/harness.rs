@@ -1,18 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use velnor_model::{RepoView, RustPackage, TargetKind, TargetName};
 
-use velnor_model::{RepoPath, RustPackage, TargetKind, TargetName};
-
-use crate::error::DetectError;
+use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub(crate) fn custom_harnesses(
-    files: &BTreeMap<RepoPath, Vec<u8>>,
+    view: &RepoView,
     package: &RustPackage,
 ) -> Result<Vec<TargetName>, DetectError> {
-    let Some(bytes) = files.get(&package.manifest) else {
+    if !view.tracked_paths.contains(&package.manifest) {
+        return Err(DetectError::invalid(
+            &package.manifest,
+            Reason::UntrackedManifest,
+        ));
+    }
+    let Some(bytes) = view.files.get(&package.manifest) else {
         return Ok(Vec::new());
     };
     let manifest =

@@ -46,6 +46,7 @@ pub enum Reason {
     },
     UnknownInputPackage(String),
     UnknownNextestHarness(String),
+    UntrackedManifest,
     LockLine(usize),
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
@@ -98,6 +99,9 @@ impl fmt::Display for Reason {
             Self::UnknownNextestHarness(entry) => write!(
                 f,
                 "nextest_harnesses names {entry}, which is not a test target with harness = false"
+            ),
+            Self::UntrackedManifest => f.write_str(
+                "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(

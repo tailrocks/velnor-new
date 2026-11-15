@@ -330,10 +330,18 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
-    for (manifest, bytes) in read_files(root, &manifests(&view.tracked_paths))? {
+    add_manifests(&mut view, |paths| read_files(root, paths))?;
+    Ok((view, recorded))
+}
+
+pub fn add_manifests(
+    view: &mut RepoView,
+    read: impl FnOnce(&[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error>,
+) -> Result<(), Error> {
+    for (manifest, bytes) in read(&manifests(&view.tracked_paths))? {
         view.files.entry(manifest).or_insert(bytes);
     }
-    Ok((view, recorded))
+    Ok(())
 }
 
 pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {

@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 
 use velnor_gen::Drift;
 use velnor_gen::io::{
-    Error as IoError, Recording, SAMPLE_REPOSITORY, apply, manifest_file, read_files,
-    relocate_metadata, write_lock, write_sample,
+    Error as IoError, Recording, SAMPLE_REPOSITORY, add_manifests, apply, manifest_file,
+    read_files, relocate_metadata, write_lock, write_sample,
 };
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -377,5 +377,21 @@ fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic
     let result = write_lock(&file_link.repo(), "pinned\n");
     assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     assert_eq!(fs::read_to_string(&target)?, "theirs\n");
+    Ok(())
+}
+
+#[test]
+fn a_tracked_manifest_that_cannot_be_read_fails_the_view() -> TestResult {
+    let manifest = RepoPath::new("b/Cargo.toml")?;
+    let mut view = RepoView::default();
+    view.tracked_paths.insert(manifest.clone());
+    let result = add_manifests(&mut view, |_| Err(IoError::NotRegular(manifest.clone())));
+    assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
+    let mut read = RepoView::default();
+    read.tracked_paths.insert(manifest.clone());
+    add_manifests(&mut read, |paths| {
+        Ok(paths.iter().map(|p| (p.clone(), b"x".to_vec())).collect())
+    })?;
+    assert!(read.files.contains_key(&manifest));
     Ok(())
 }

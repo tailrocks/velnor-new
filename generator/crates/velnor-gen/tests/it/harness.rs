@@ -98,3 +98,20 @@ fn a_member_manifest_that_does_not_parse_is_an_error_not_a_package_without_harne
     ));
     Ok(())
 }
+
+#[test]
+fn a_member_manifest_git_does_not_track_is_an_error_not_a_package_without_harnesses() -> TestResult
+{
+    let mut view = view(None)?;
+    let manifest = path("a/Cargo.toml")?;
+    view.tracked_paths.remove(&manifest);
+    view.files.remove(&manifest);
+    assert_eq!(
+        detect(&view).err(),
+        Some(DetectError::Invalid {
+            path: manifest,
+            reason: Reason::UntrackedManifest,
+        })
+    );
+    Ok(())
+}
