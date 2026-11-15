@@ -387,6 +387,31 @@ fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+const TRACKED: [&str; 22] = [
+    "app/src/main.rs",
+    "app/README.md",
+    "vendor/ext/src/lib.rs",
+    "shared/gen.rs",
+    "macros/x.rs",
+    "other/only.rs",
+    "tools/tool/src/main.rs",
+    "tools/tool/src/lib.txt",
+    "tools/tool/src/notes.txt",
+    "build.RS",
+    "shared/gen.inc",
+    "macros/template.txt",
+    "app/notes.txt",
+    "Cargo.toml",
+    "app/Cargo.toml",
+    "tools/Cargo.toml",
+    "tools/tool/Cargo.toml",
+    "vendor/ext/Cargo.toml",
+    "other/Cargo.toml",
+    ".cargo/config.toml",
+    "tools/.cargo/config.toml",
+    "other/.cargo/config.toml",
+];
+
 #[test]
 fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a_nested_root() {
     let mut facts = facts(vec![
@@ -409,33 +434,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         (Some(path("macros")), BTreeSet::from([name("tool")])),
         (Some(path("other/only.rs")), BTreeSet::from([name("app")])),
     ]);
-    let tracked: BTreeSet<_> = [
-        "app/src/main.rs",
-        "app/README.md",
-        "vendor/ext/src/lib.rs",
-        "shared/gen.rs",
-        "macros/x.rs",
-        "other/only.rs",
-        "tools/tool/src/main.rs",
-        "tools/tool/src/lib.txt",
-        "tools/tool/src/notes.txt",
-        "build.RS",
-        "shared/gen.inc",
-        "macros/template.txt",
-        "app/notes.txt",
-        "Cargo.toml",
-        "app/Cargo.toml",
-        "tools/Cargo.toml",
-        "tools/tool/Cargo.toml",
-        "vendor/ext/Cargo.toml",
-        "other/Cargo.toml",
-        ".cargo/config.toml",
-        "tools/.cargo/config.toml",
-        "other/.cargo/config.toml",
-    ]
-    .into_iter()
-    .map(path)
-    .collect();
+    let tracked: BTreeSet<_> = TRACKED.into_iter().map(path).collect();
     let sources = |index: usize| -> Vec<String> {
         root_sources(&facts, &facts.rust_roots[index], &tracked)
             .unwrap_or_default()
