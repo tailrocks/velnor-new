@@ -28,6 +28,7 @@ fn text_of(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
 
 fn job_ids(text: &str) -> Vec<&str> {
     text.lines()
+        .skip_while(|line| *line != "jobs:")
         .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
         .map(|line| line.trim().trim_end_matches(':'))
         .collect()
