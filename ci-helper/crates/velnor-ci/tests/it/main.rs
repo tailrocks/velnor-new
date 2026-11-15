@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
-mod changes;
 mod collect;
 mod compare;
+mod event;
 mod gate;
 mod inputs;
 mod io;
@@ -16,6 +16,7 @@ mod io_restore;
 mod logscan;
 mod plan;
 mod plan_api;
+mod plan_git;
 mod prepare;
 mod release_fake;
 mod release_publish;

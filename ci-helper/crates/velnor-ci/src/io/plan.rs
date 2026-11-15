@@ -12,19 +12,13 @@ use velnor_rust::{
     unknown_paths, unread_packages,
 };
 
-use super::{
-    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, TOKEN_VARIABLE, api_url, append_outputs, current_dir,
-    http,
-};
-use crate::changes::{base_files, changed_files};
+use super::{EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, append_outputs, current_dir, git};
 use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
-use crate::event::{Event, PullRequest, check_default_branch, parse_event};
-use crate::github::Repo;
+use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{Steps, explain, outputs, warnings, weakened};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
-const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const PULL_REQUEST: &str = "pull_request";
 const LOCK_FILE: &str = "Cargo.lock";
 
@@ -41,7 +35,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
     let full = name.as_deref() == Some(SCHEDULED);
-    let (selections, changes) = choose(args, &checkout, &facts, event.as_ref(), name.as_deref())?;
+    let (selections, changes) = choose(args, &checkout, &facts, name.as_deref())?;
     let steps = facts
         .rust_roots
         .iter()
@@ -95,7 +89,6 @@ fn choose(
     args: &PlanArgs,
     checkout: &Checkout,
     facts: &RepoFacts,
-    event: Option<&Event>,
     name: Option<&str>,
 ) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet), CiError> {
     if name == Some(SCHEDULED) {
@@ -105,10 +98,7 @@ fn choose(
         if name != Some(PULL_REQUEST) {
             return Ok(everything(facts, &AllTrigger::Event));
         }
-        let pull = event
-            .and_then(|event| event.pull_request.as_ref())
-            .ok_or_else(|| CiError::new("the pull_request event payload has no pull_request"))?;
-        match pull_request_changes(checkout, facts, pull) {
+        match pull_request_changes(checkout, facts) {
             Ok(found) => found,
             Err(error) => {
                 eprintln!("velnor-ci: {error}; every package is selected");
@@ -131,20 +121,8 @@ fn choose(
 
 type Found = (BTreeSet<RepoPath>, BTreeMap<RepoPath, String>);
 
-fn pull_request_changes(
-    checkout: &Checkout,
-    facts: &RepoFacts,
-    pull: &PullRequest,
-) -> Result<Found, CiError> {
-    let token = std::env::var(TOKEN_VARIABLE)
-        .map_err(|_| CiError::new(format!("{TOKEN_VARIABLE} is not set")))?;
-    let repository = std::env::var(REPOSITORY_VARIABLE)
-        .map_err(|_| CiError::new(format!("{REPOSITORY_VARIABLE} is not set")))?;
-    let repo = Repo::parse(&repository)?;
-    let github = http::HttpGitHub::new(api_url(), token, http::PLAN_TIMEOUT);
-    let paths = changed_files(&github, &repo, pull)?.ok_or_else(|| {
-        CiError::new("the pull request has too many files for the GitHub API to list")
-    })?;
+fn pull_request_changes(checkout: &Checkout, facts: &RepoFacts) -> Result<Found, CiError> {
+    let paths = git::changed_files(&checkout.root)?;
     let roots: BTreeSet<&RepoPath> = facts.rust_roots.iter().map(|root| &root.manifest).collect();
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
@@ -160,7 +138,7 @@ fn pull_request_changes(
         .collect::<BTreeSet<RepoPath>>()
         .into_iter()
         .collect();
-    let base = base_files(&github, &repo, pull, &wanted);
+    let base = git::base_files(&checkout.root, &wanted);
     Ok((paths, base))
 }
 

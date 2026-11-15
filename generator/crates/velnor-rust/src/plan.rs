@@ -20,6 +20,8 @@ const RUST_JOB: JobId = JobId::from_static("rust");
 const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
 const VERDICT_JOB: JobId = JobId::from_static("required");
+pub(crate) const CHECKOUT_DEPTH: u32 = 1;
+pub(crate) const PLAN_DEPTH: u32 = 2;
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -187,8 +189,8 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-pub(crate) fn head(facts: &RepoFacts) -> Vec<Step> {
-    let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
+pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
+    let mut steps = vec![step(StepKind::Checkout { depth })];
     steps.extend(
         facts
             .helper
@@ -199,7 +201,14 @@ pub(crate) fn head(facts: &RepoFacts) -> Vec<Step> {
 }
 
 fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
-    let mut steps = head(facts);
+    let mut steps = head(
+        facts,
+        if lane.plan.is_none() {
+            PLAN_DEPTH
+        } else {
+            CHECKOUT_DEPTH
+        },
+    );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }

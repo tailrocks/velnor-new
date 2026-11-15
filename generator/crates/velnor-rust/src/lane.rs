@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use velnor_model::{
-    Access, CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PermissionScope, Permissions,
-    PlanFrom, PlanRef, RepoFacts, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PlanFrom, PlanRef, RepoFacts, Step,
+    StepKind, When,
 };
 
-use crate::plan::{head, job, step};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, head, job, step};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("rust-policy");
@@ -100,22 +100,25 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(String, GateNeed)> {
 }
 
 pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
-    let mut steps = head(facts);
+    let mut steps = head(facts, PLAN_DEPTH);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
         skip_on_draft: false,
         steps,
-        permissions: Permissions(BTreeMap::from([
-            (PermissionScope::Contents, Access::Read),
-            (PermissionScope::PullRequests, Access::Read),
-        ])),
         ..job(facts, PLAN_JOB)
     }
 }
 
 pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
-    let mut steps = head(facts);
+    let mut steps = head(
+        facts,
+        if lane.plan.is_none() {
+            PLAN_DEPTH
+        } else {
+            CHECKOUT_DEPTH
+        },
+    );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
