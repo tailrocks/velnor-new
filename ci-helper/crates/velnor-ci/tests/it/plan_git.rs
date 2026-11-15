@@ -89,6 +89,19 @@ fn a_renamed_and_a_deleted_file_each_select_their_package_with_no_token() {
 }
 
 #[test]
+fn a_modified_file_selects_its_package_with_no_token() {
+    let repo = merged_pull_request("git-modified", |repo| {
+        repo.write("b/src/lib.rs", "pub fn changed() {}\n");
+    });
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        selected(&output),
+        "Cargo.toml: some\n  b changed:b/src/lib.rs\ntools/Cargo.toml: none\n"
+    );
+}
+
+#[test]
 fn a_changed_lockfile_is_compared_with_its_text_at_the_first_parent() {
     let repo = merged_pull_request("git-lock", |repo| {
         repo.write("Cargo.lock", &plan_lock("1.0.6"));

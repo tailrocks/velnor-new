@@ -195,7 +195,7 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
         facts
             .helper
             .iter()
-            .map(|release| step(StepKind::FetchHelper(release.clone()))),
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
     steps
 }
