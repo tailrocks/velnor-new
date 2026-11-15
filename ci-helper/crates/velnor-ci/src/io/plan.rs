@@ -12,8 +12,8 @@ use velnor_rust::{
 };
 
 use super::{
-    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, TOKEN_VARIABLE, api_url, append_outputs, current_dir,
-    http,
+    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, SOURCE_TOTAL_LIMIT, TOKEN_VARIABLE, api_url,
+    append_outputs, current_dir, http,
 };
 use crate::changes::{base_files, changed_files};
 use crate::cli::{BaseFile, PlanArgs};
@@ -164,9 +164,12 @@ fn read_sources(
     root: &Path,
     paths: &[RepoPath],
 ) -> Result<Option<BTreeMap<RepoPath, Vec<u8>>>, GenError> {
+    let mut total = 0_u64;
     let oversized = paths.iter().any(|path| {
-        fs::symlink_metadata(root.join(path.as_str()))
-            .is_ok_and(|metadata| metadata.len() > SOURCE_LIMIT)
+        let size =
+            fs::symlink_metadata(root.join(path.as_str())).map_or(0, |metadata| metadata.len());
+        total = total.saturating_add(size);
+        size > SOURCE_LIMIT || total > SOURCE_TOTAL_LIMIT
     });
     if oversized {
         return Ok(None);

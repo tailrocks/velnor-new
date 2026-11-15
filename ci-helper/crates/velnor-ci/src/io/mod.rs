@@ -33,6 +33,7 @@ const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
+const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_ci::changes::{FILE_LIST_CAP, base_files, changed_files};
+use velnor_ci::changes::{BASE_READ_CAP, FILE_LIST_CAP, base_files, changed_files};
 use velnor_ci::error::CiError;
 use velnor_ci::event::{Event, PullRequest, check_default_branch, parse_event};
 use velnor_ci::github::{GitHub, Repo, contents_path, pull_files_path};
@@ -147,4 +147,28 @@ fn a_configured_default_branch_that_differs_from_the_repositorys_is_refused_nami
         "{message}"
     );
     assert!(check_default_branch("main", &event(None)).is_err());
+}
+
+struct Counting(std::cell::Cell<usize>);
+
+impl GitHub for Counting {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        Err(CiError::new(format!("404 {path}")))
+    }
+
+    fn get_raw(&self, _path: &str) -> Result<String, CiError> {
+        self.0.set(self.0.get() + 1);
+        Ok("text".to_owned())
+    }
+}
+
+#[test]
+fn base_reads_are_capped_and_the_files_past_the_cap_are_left_out() {
+    let wanted: Vec<RepoPath> = (0..BASE_READ_CAP + 40)
+        .map(|n| path(&format!("d{n}/Cargo.lock")))
+        .collect();
+    let github = Counting(std::cell::Cell::new(0));
+    let base = base_files(&github, &repo(), &pull(), &wanted);
+    assert_eq!(github.0.get(), BASE_READ_CAP);
+    assert_eq!(base.len(), BASE_READ_CAP);
 }
