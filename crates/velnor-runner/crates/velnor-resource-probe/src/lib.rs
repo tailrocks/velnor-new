@@ -33,6 +33,7 @@ pub mod job_hook;
 mod load;
 mod memory;
 mod mountinfo;
+pub mod mountinfo_io;
 mod pressure;
 mod record;
 mod sample;
