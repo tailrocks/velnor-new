@@ -140,7 +140,8 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
         let Some(prepared) = prepared else {
             return Ok(ScopedRuntimeOutcome::NoStart);
         };
-        Box::pin(prepare_started_and_bound(
+        let reservation_id = prepared.acquired().reservation_id();
+        let outcome = Box::pin(prepare_started_and_bound(
             prepared,
             context.docker,
             context.scoped,
@@ -149,7 +150,21 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
             context.engine,
             context.images,
         ))
-        .await
+        .await?;
+        if matches!(outcome, ScopedRuntimeOutcome::Pending(_))
+            && let Err(error) = Box::pin(super::bootstrap::abandon_and_retire_unbound_pair(
+                context.docker,
+                context.scoped,
+                context.engine,
+                reservation_id,
+            ))
+            .await
+        {
+            eprintln!(
+                "host controller kept an unbound pair charged reservation={reservation_id} reason={error}"
+            );
+        }
+        Ok(outcome)
     })
 }
 

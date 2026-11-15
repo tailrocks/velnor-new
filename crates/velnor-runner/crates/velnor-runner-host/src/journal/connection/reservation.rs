@@ -206,9 +206,11 @@ pub(crate) use provisioning::PreJitCapacityProbeClaim;
 pub(crate) use provisioning::PreJitCleanupClaim;
 pub(crate) use provisioning::PreJitCleanupSettlementResult;
 pub(crate) use provisioning::StorageCleanupObserverWitness;
+pub(in crate::journal) use provisioning::recover_unbound_pairs_at_startup;
 pub(crate) use provisioning::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
 };
+pub(crate) use provisioning::{UnboundRetirementClaim, UnboundRetirementPhase};
 
 pub(crate) use provisioning::{
     CreateInterruptionOutcome, PhysicalSuccessorReservationResult,

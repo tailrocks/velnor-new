@@ -15,7 +15,7 @@ use crate::journal::{
 use crate::launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages};
 use crate::worker::storage_initialization::recover_absent;
 
-use super::recover_pre_jit_reservation;
+use super::{recover_pre_jit_reservation, retire_unbound_pair};
 
 const INITIALIZER_RECOVERY_BUDGET: Duration = Duration::from_secs(30);
 
@@ -122,6 +122,21 @@ async fn recover_pre_jit(
             recovery.scope,
             reservation.reservation_id,
             "an uncertain pre-JIT reservation",
+            error,
+        );
+    }
+    if let Err(error) = Box::pin(retire_unbound_pair(
+        recovery.docker,
+        recovery.scope,
+        recovery.engine,
+        reservation.reservation_id,
+    ))
+    .await
+    {
+        report(
+            recovery.scope,
+            reservation.reservation_id,
+            "an unbound pair",
             error,
         );
     }

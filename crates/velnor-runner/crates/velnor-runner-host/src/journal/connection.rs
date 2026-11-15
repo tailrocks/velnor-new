@@ -45,10 +45,12 @@ pub(crate) use reservation::MetadataSettlementResult;
 pub(crate) use reservation::PreJitCapacityProbeClaim;
 pub(crate) use reservation::PreJitCleanupClaim;
 pub(crate) use reservation::PreJitCleanupSettlementResult;
+pub(in crate::journal) use reservation::recover_unbound_pairs_at_startup;
 pub(crate) use reservation::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
     PreJitNetworkIdentity, PreJitStorageObject,
 };
+pub(crate) use reservation::{UnboundRetirementClaim, UnboundRetirementPhase};
 
 pub(in crate::journal) async fn validate_resources_bound(
     connection: &turso::Connection,
