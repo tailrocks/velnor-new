@@ -9,7 +9,9 @@ use velnor_model::{
     CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
     TargetKind, TargetName, Timings, When,
 };
-use velnor_rust::{CONFIG_PATH, DetectError, TIMINGS_PATH, decide_shape, plan, render_timings};
+use velnor_rust::{
+    CONFIG_PATH, DetectError, METADATA_PATH, TIMINGS_PATH, decide_shape, plan, render_timings,
+};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -313,7 +315,16 @@ fn a_malformed_timings_file_is_named_and_the_default_shape_is_written() -> TestR
 #[test]
 fn generate_names_a_malformed_timings_file_in_a_note_and_writes_the_default_shape() -> TestResult {
     let mut out = Vec::new();
-    let (files, _) = plan_generate(&timed_view("{", "")?, &BTreeMap::new(), false, &mut out)?;
+    let mut view = timed_view("{", "")?;
+    for (workspace, metadata) in view.rust_metadata.clone() {
+        for manifest in
+            std::iter::once(workspace).chain(metadata.members.into_iter().map(|m| m.manifest))
+        {
+            view.files.entry(manifest).or_default();
+        }
+    }
+    let (mut files, _) = plan_generate(&view, &BTreeMap::new(), false, &mut out)?;
+    files.remove(&METADATA_PATH);
     let text = String::from_utf8(out)?;
     assert!(
         text.lines().any(
