@@ -16,7 +16,8 @@ use super::{
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
 use crate::cleanup_observer_wire::{
-    descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices, owned_mountinfo_projection,
+    descriptor_has_owned_tmpfs, observer_outside_pair_namespaces, observer_runtime_tmpfs_devices,
+    owned_mountinfo_projection,
 };
 
 const PROC: &str = "/proc";
@@ -42,6 +43,7 @@ struct ScanContext<'a> {
     namespace_ids: [([u32; 2], u64); 2],
     tmpfs_devices: HashSet<u64>,
     observer_namespace: Option<([u32; 2], u64)>,
+    observer_in_pair_namespace: bool,
     observer_tmpfs_devices: HashSet<u64>,
 }
 
@@ -55,6 +57,9 @@ pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Invent
         namespaces: BTreeSet::new(),
     };
     let context = context(request, started);
+    if context.observer_in_pair_namespace {
+        add_issue(&mut inventory.issues, "observer_in_pair_namespace");
+    }
     let Ok(entries) = fs::read_dir(PROC) else {
         add_issue(&mut inventory.issues, "proc_list_unreadable");
         return inventory;
@@ -86,7 +91,8 @@ pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Invent
 fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_> {
     let binding = &request.binding;
     let observer_pid = std::process::id();
-    let observer_namespace = namespace_identity("/proc/self/ns/mnt").ok();
+    let own_namespace = namespace_identity("/proc/self/ns/mnt").ok();
+    let observer_namespace = observer_outside_pair_namespaces(own_namespace, binding);
     let self_mountinfo = read_bounded(
         "/proc/self/mountinfo",
         MOUNTINFO_LIMIT,
@@ -111,6 +117,7 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
             .map(|device| linux_device(u64::from(device[0]), u64::from(device[1])))
             .collect(),
         observer_namespace,
+        observer_in_pair_namespace: own_namespace.is_some() && observer_namespace.is_none(),
         observer_tmpfs_devices,
     }
 }

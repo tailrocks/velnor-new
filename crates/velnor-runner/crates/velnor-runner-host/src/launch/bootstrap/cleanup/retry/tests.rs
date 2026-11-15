@@ -6,20 +6,32 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use super::while_refused;
 use crate::error::HostError;
 
-async fn refuse_until(accepted_on: u32, error: HostError) -> (Result<u32, HostError>, u32) {
+async fn refuse_until_reporting(
+    accepted_on: u32,
+    error: HostError,
+) -> (Result<u32, HostError>, u32, Vec<(u32, HostError)>) {
     let calls = AtomicU32::new(0);
-    let outcome = while_refused(|| {
-        let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
-        async move {
-            if call >= accepted_on {
-                Ok(call)
-            } else {
-                Err(error)
+    let mut reported = Vec::new();
+    let outcome = while_refused(
+        || {
+            let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+            async move {
+                if call >= accepted_on {
+                    Ok(call)
+                } else {
+                    Err(error)
+                }
             }
-        }
-    })
+        },
+        |attempt, error| reported.push((attempt, error)),
+    )
     .await;
-    (outcome, calls.load(Ordering::SeqCst))
+    (outcome, calls.load(Ordering::SeqCst), reported)
+}
+
+async fn refuse_until(accepted_on: u32, error: HostError) -> (Result<u32, HostError>, u32) {
+    let (outcome, calls, _reported) = refuse_until_reporting(accepted_on, error).await;
+    (outcome, calls)
 }
 
 #[tokio::test]
@@ -41,4 +53,19 @@ async fn an_error_that_is_not_a_refusal_is_not_retried() {
         refuse_until(99, HostError::Docker).await,
         (Err(HostError::Docker), 1)
     );
+}
+
+#[tokio::test]
+async fn every_refused_attempt_is_reported_with_its_error() {
+    let (_outcome, _calls, reported) = refuse_until_reporting(99, HostError::Identity).await;
+    assert_eq!(
+        reported,
+        vec![(1, HostError::Identity), (2, HostError::Identity)]
+    );
+}
+
+#[tokio::test]
+async fn an_accepted_observation_reports_nothing() {
+    let (_outcome, _calls, reported) = refuse_until_reporting(1, HostError::Identity).await;
+    assert_eq!(reported, Vec::new());
 }

@@ -75,6 +75,9 @@ pub enum HostError {
     #[error("Docker resource ownership mismatch")]
     Ownership,
 
+    #[error("a runner pair stayed in setup or teardown longer than the allowed time")]
+    SettlingTimeout,
+
     #[error("runner is still active")]
     RunnerActive,
 
@@ -131,6 +134,7 @@ impl HostError {
             Self::DindStorage => "dind_storage",
             Self::PreparationFailedClean(cause) => cause.code(),
             Self::Ownership => "ownership",
+            Self::SettlingTimeout => "settling_timeout",
             Self::RunnerActive => "runner_active",
             Self::Cleanup => "cleanup",
             Self::ContainerCreateUncertain => "container_create_uncertain",

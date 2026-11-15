@@ -17,16 +17,19 @@ use crate::{
 
 use super::{RemoteRunnerAudit, inspect_owned_container, inspect_owned_volume};
 
+#[path = "inventory/settling.rs"]
+mod settling;
+pub(in crate::host_controller::loop_driver::controller) use settling::SettlingAges;
+use settling::Inventory;
+
 pub(in crate::host_controller::loop_driver::controller) async fn audit_inventory_with_remote(
     docker: &Docker,
     journal: &Journal,
     config: &HostConfig,
     selected: &SelectedEngineContext,
     polls: &[crate::controller_ipc::SessionPollReceipt],
-    remote_audit: &RemoteRunnerAudit,
+    dependencies: &super::super::RefreshDependencies<'_>,
 ) -> Result<Option<String>, HostError> {
-    use sha2::Digest;
-
     let mut inventory = Inventory::default();
     for binding in config.connections() {
         let poll = polls
@@ -39,27 +42,12 @@ pub(in crate::host_controller::loop_driver::controller) async fn audit_inventory
             binding,
             selected,
             poll,
-            remote_audit,
+            dependencies.remote_audit,
             &mut inventory,
         )
         .await?;
     }
-    if inventory.settling {
-        return Ok(None);
-    }
-    let bytes = serde_json::to_vec(&inventory.entries).map_err(|_| HostError::Identity)?;
-    let mut digest = String::with_capacity(64);
-    for byte in sha2::Sha256::digest(bytes) {
-        use std::fmt::Write as _;
-        write!(digest, "{byte:02x}").map_err(|_| HostError::Identity)?;
-    }
-    Ok(Some(digest))
-}
-
-#[derive(Default)]
-struct Inventory {
-    entries: Vec<InventoryEntry>,
-    settling: bool,
+    inventory.finish(dependencies.settling, std::time::Instant::now())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,7 +90,7 @@ async fn audit_connection(
     validate_session_scope(&scope, binding, poll).await?;
     for row in scope.physical_runner_reservations().await? {
         if pair_stage(&row.ownership, row.jit_state)? == PairStage::Settling {
-            inventory.settling = true;
+            inventory.settle(binding.connection_id.as_str(), row.reservation_id);
             continue;
         }
         let PhysicalRunnerOwnership::Known(assignment) = &row.ownership else {
@@ -135,18 +123,18 @@ async fn audit_connection(
             .await?
             .ok_or(HostError::Ownership)?;
         audit_started_pair(docker, binding, selected, &row, &identity).await?;
-        if !remote_audit(binding, row.runner.as_ref(), poll.scale_set_id())? {
-            inventory.settling = true;
-            continue;
-        }
-        inventory.entries.push(InventoryEntry::started(
-            binding.connection_id.as_str(),
-            row.reservation_id,
-            assignment,
-            &row,
-            identity.runner_container_id(),
-            identity.dind_container_id(),
-        ));
+        let remote_present = remote_audit(binding, row.runner.as_ref(), poll.scale_set_id())?;
+        inventory.admit(
+            remote_present,
+            InventoryEntry::started(
+                binding.connection_id.as_str(),
+                row.reservation_id,
+                assignment,
+                &row,
+                identity.runner_container_id(),
+                identity.dind_container_id(),
+            ),
+        );
     }
     Ok(())
 }

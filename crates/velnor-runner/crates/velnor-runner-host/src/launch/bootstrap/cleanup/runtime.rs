@@ -125,14 +125,17 @@ impl NativeCleanupRuntime {
             image_authority: self.image_authority.as_ref(),
         };
 
-        let guest = retry::while_refused(|| {
-            crate::launch::resource_probe::observe_cleanup_binding(
-                observer_context,
-                pending.identity.reservation_id(),
-                witness.binding(),
-                Instant::now() + CLEANUP_OBSERVER_TIMEOUT,
-            )
-        })
+        let guest = retry::while_refused(
+            || {
+                crate::launch::resource_probe::observe_cleanup_binding(
+                    observer_context,
+                    pending.identity.reservation_id(),
+                    witness.binding(),
+                    Instant::now() + CLEANUP_OBSERVER_TIMEOUT,
+                )
+            },
+            retry::log_refusal,
+        )
         .await?;
         let after = super::production::observe_docker_cleanup_absence(
             &self.docker,

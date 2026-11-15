@@ -6,7 +6,7 @@ use std::{collections::HashSet, path::Path};
 use velnor_resource_probe::cleanup_observer_wire::{
     CleanupDockerRootIdentity, CleanupObserverBinding, CleanupVolume, ProcessIdentity,
     descriptor_has_owned_tmpfs, linux_device, mountinfo_line_has_owned_tmpfs,
-    observer_runtime_tmpfs_devices,
+    observer_outside_pair_namespaces, observer_runtime_tmpfs_devices,
 };
 
 const TMPFS_MAGIC: i64 = 0x0102_1994;
@@ -170,4 +170,20 @@ fn public_cleanup_observer_does_not_count_its_own_recycled_runtime_mounts_but_st
             &HashSet::new()
         ));
     }
+}
+
+#[test]
+fn public_cleanup_observer_is_not_outside_a_namespace_that_belongs_to_the_pair() {
+    let binding = sample_binding();
+    for pair_namespace in [4001, 4002, 4003] {
+        assert_eq!(
+            observer_outside_pair_namespaces(Some(([0, 4], pair_namespace)), &binding),
+            None
+        );
+    }
+    assert_eq!(
+        observer_outside_pair_namespaces(Some(([0, 4], 4999)), &binding),
+        Some(([0, 4], 4999))
+    );
+    assert_eq!(observer_outside_pair_namespaces(None, &binding), None);
 }

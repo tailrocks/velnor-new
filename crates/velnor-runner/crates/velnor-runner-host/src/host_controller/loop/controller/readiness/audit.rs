@@ -28,9 +28,11 @@ pub(super) type RemoteRunnerAudit = dyn Fn(
     + Send
     + Sync;
 
+const IMAGE_KIND_LABEL: &str = "io.velnor.image.kind";
+
 #[path = "audit/inventory.rs"]
 mod inventory;
-pub(super) use inventory::audit_inventory_with_remote;
+pub(super) use inventory::{SettlingAges, audit_inventory_with_remote};
 
 pub(super) fn audit_remote_runner(
     binding: &RepositoryConnection,
@@ -173,11 +175,16 @@ fn validate_owned_container(
         || expected
             .iter()
             .any(|(key, value)| labels.get(*key) != Some(value))
+        || labels.keys().any(|key| unknown_velnor_label(key, &expected))
         || inspected.state.as_ref().and_then(|state| state.running) != Some(true)
     {
         return Err(HostError::Ownership);
     }
     Ok(())
+}
+
+fn unknown_velnor_label(key: &str, expected: &std::collections::HashMap<&str, String>) -> bool {
+    key.starts_with("io.velnor.") && key != IMAGE_KIND_LABEL && !expected.contains_key(key)
 }
 
 async fn inspect_owned_volume(

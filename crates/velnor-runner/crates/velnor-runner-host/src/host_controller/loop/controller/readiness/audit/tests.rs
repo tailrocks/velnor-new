@@ -77,3 +77,11 @@ fn a_stopped_pair_container_is_refused() {
         Err(HostError::Ownership)
     );
 }
+
+#[test]
+fn a_container_with_an_unknown_velnor_label_is_refused() {
+    let mut labels = pair_labels();
+    labels.extend(image_labels());
+    labels.insert("io.velnor.extra".to_owned(), "1".to_owned());
+    assert_eq!(check(&inspected(labels, true)), Err(HostError::Ownership));
+}

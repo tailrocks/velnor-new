@@ -19,7 +19,7 @@ use crate::{
     launch::{ImageAuthority, SelectedEngineContext},
 };
 
-use super::refresh;
+use super::{audit::SettlingAges, refresh};
 
 const REFRESH_PAUSE: Duration = Duration::from_secs(2);
 
@@ -37,7 +37,9 @@ impl ReadinessWorker {
         control: ControlState,
         secret: Arc<ImageAuthority>,
     ) -> Result<Self, HostError> {
+        let settling = Arc::new(SettlingAges::default());
         spawn_refresh_worker(move || {
+            let settling = Arc::clone(&settling);
             let state = state.clone();
             let docker = docker.clone();
             let journal = journal.clone();
@@ -46,7 +48,7 @@ impl ReadinessWorker {
             let secret = Arc::clone(&secret);
             async move {
                 if let Err(error) =
-                    refresh(&state, &docker, &journal, &selected, &control, &secret).await
+                    refresh(&state, &docker, &journal, &selected, &control, &secret, &settling).await
                 {
                     eprintln!(
                         "The controller could not refresh readiness evidence. Error: {error}."
