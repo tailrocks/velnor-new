@@ -71,8 +71,7 @@ pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> io::Result<Min
 }
 
 pub async fn write_private(path: &Path, content: &str) -> io::Result<()> {
-    let fresh = path.with_extension("new");
-    let _ = fs::remove_file(&fresh).await;
+    let fresh = path.with_extension(format!("{}.new", random_hex(8)?));
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)

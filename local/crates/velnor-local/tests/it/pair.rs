@@ -126,6 +126,15 @@ fn the_image_plan_builds_three_arm64_images_from_the_arm64_pins_of_the_lock() {
 }
 
 #[test]
+fn the_helpers_build_is_locked_and_reads_the_checkout_read_only() {
+    let steps = steps();
+    let helpers = steps[0].join(" ");
+    assert!(helpers.contains("-v /repo:/src:ro"));
+    assert!(helpers.contains("cargo build --locked"));
+    assert!(helpers.contains("--platform linux/arm64"));
+}
+
+#[test]
 fn the_image_plan_names_the_lock_entry_that_is_missing() {
     let lock = Lock::parse("base_image = \"ubuntu:26.04@sha256:00\"\n");
     let refused = plan(&lock, Path::new("/r"), Path::new("/s"), "abc");
@@ -163,6 +172,8 @@ async fn a_minted_jit_packs_the_three_files_registration_wrote() {
     assert!(call.contains(&format!("--network {}-fork", env.name)));
     assert!(call.contains(&format!("--label velnor-local={}", env.name)));
     assert!(call.contains("--ephemeral"));
+    assert!(call.contains("--platform linux/arm64"));
+    assert!(call.contains("-e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1"));
     assert!(call.contains(&format!("--name {}", minted.name)));
     assert!(minted.name.starts_with(&format!("{}-jit-", env.name)));
 }
@@ -195,4 +206,27 @@ async fn a_jit_file_is_private_and_replaces_the_one_before() {
         .permissions()
         .mode();
     assert_eq!(mode & 0o777, 0o600);
+}
+
+#[tokio::test]
+async fn concurrent_jit_writes_to_one_path_all_succeed() {
+    let dir = temp_dir("pair-concurrent");
+    let path = dir.join("jit");
+    let writes = (0..16).map(|n| {
+        let path = path.clone();
+        tokio::spawn(async move { write_private(&path, &format!("jit-{n}")).await })
+    });
+    for write in writes.collect::<Vec<_>>() {
+        write
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .starts_with("jit-")
+    );
+    let names = std::fs::read_dir(&dir).map_or(0, Iterator::count);
+    assert_eq!(names, 1);
 }
