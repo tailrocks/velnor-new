@@ -122,7 +122,8 @@ pub(super) async fn reservation_at_storage_initialization(
     let scope = journal.connection_scope(&binding).await?;
     let binding_digest: String = Sha256::digest(binding.canonical_identity_bytes()?)
         .iter()
-        .map(|byte| format!("{byte:02x}"))
+        .flat_map(|byte| [byte >> 4, byte & 0x0f])
+        .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
         .collect();
     execute(journal, BINDING).await?;
     let selected = scope.engine_context().await?.ok_or("engine context")?;
