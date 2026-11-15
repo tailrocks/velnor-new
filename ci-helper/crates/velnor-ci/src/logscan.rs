@@ -134,7 +134,7 @@ fn parse_duration(text: &str) -> Option<f64> {
     (tokens > 0).then_some(total)
 }
 
-fn nextest_summary(line: &str) -> Option<NextestSummary> {
+pub fn nextest_summary(line: &str) -> Option<NextestSummary> {
     let rest = line.strip_prefix("Summary [")?;
     let (seconds, rest) = rest.split_once("s]")?;
     let seconds = seconds.trim().parse().ok()?;

@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const SELECTED_IGNORE: &str = "# jactionlint ignore=obfuscation";
+const UNREAD_IGNORE: &str = "# jactionlint ignore=unused-job-output";
 
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
     Selected(String),
+    Unread(String),
     Block(String),
     Int(u64),
     Bool(bool),
@@ -35,9 +37,14 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
             }
             other => other,
         };
-        if matches!(value, Yaml::Selected(_)) {
+        let ignore = match value {
+            Yaml::Selected(_) => Some(SELECTED_IGNORE),
+            Yaml::Unread(_) => Some(UNREAD_IGNORE),
+            _ => None,
+        };
+        if let Some(ignore) = ignore {
             out.push_str(&" ".repeat(indent));
-            out.push_str(SELECTED_IGNORE);
+            out.push_str(ignore);
             out.push('\n');
         }
         out.push_str(&" ".repeat(indent));
@@ -88,7 +95,9 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 fn inline(value: &Yaml) -> String {
     match value {
         Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
-        Yaml::Expr(text) | Yaml::Selected(text) | Yaml::Block(text) => scalar(text),
+        Yaml::Expr(text) | Yaml::Selected(text) | Yaml::Unread(text) | Yaml::Block(text) => {
+            scalar(text)
+        }
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),

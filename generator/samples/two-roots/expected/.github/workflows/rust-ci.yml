@@ -53,6 +53,9 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -90,8 +93,9 @@ jobs:
         if: '${{ !cancelled() }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
+        id: test
         if: '${{ !cancelled() }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'' --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
         run: velnor-ci run -- cargo test --doc --workspace --locked
@@ -113,6 +117,9 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -153,9 +160,10 @@ jobs:
         working-directory: xtask
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
+        id: test
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'' --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' }}'
         working-directory: xtask

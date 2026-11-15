@@ -16,6 +16,7 @@ mod mise;
 mod owners;
 mod plan;
 mod reads;
+mod root_jobs;
 mod roots;
 mod select;
 mod sha256;

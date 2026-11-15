@@ -19,4 +19,5 @@ pub mod plan;
 pub mod publish;
 pub mod release;
 pub mod setup;
+pub mod tests_run;
 pub mod time;

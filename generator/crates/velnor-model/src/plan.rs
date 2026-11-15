@@ -7,6 +7,8 @@ use crate::ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
 };
 
+pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
     pub name: String,
@@ -96,10 +98,22 @@ pub enum When {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
-    Checkout { depth: u32 },
-    InstallTools,
+    Checkout {
+        depth: u32,
+    },
+    InstallTools {
+        only: Option<String>,
+    },
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
+    UploadArchive {
+        name: String,
+        file: RepoPath,
+    },
+    DownloadArchive {
+        name: String,
+        into: Option<RepoPath>,
+    },
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,
@@ -189,6 +203,7 @@ pub enum CargoCommand {
     CheckAlone { package: PackageName },
     NextestRun { filter: FilterRef },
     NextestArchive { file: RepoPath },
+    NextestRunArchive { file: RepoPath, filter: FilterRef },
     Doctest,
     Doc,
     Deny,

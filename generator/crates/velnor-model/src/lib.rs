@@ -13,7 +13,7 @@ pub use ids::{
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperBinary, HelperCommand,
     HelperRelease, Job, PermissionScope, Permissions, PlanFrom, Platform, Shape, ShapeDecision,
-    Step, StepKind, Triggers, When, WorkflowPlan,
+    Step, StepKind, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,

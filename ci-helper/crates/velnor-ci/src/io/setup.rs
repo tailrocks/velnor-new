@@ -15,6 +15,7 @@ use super::{append_outputs, append_to, current_dir};
 use crate::cli::RunArgs;
 use crate::error::CiError;
 use crate::setup::{check_tools, env_lines, output_lines, parse_reported};
+use crate::tests_run::{SummaryTap, output_line, runs_nextest};
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -104,18 +105,27 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let log = Mutex::new(log);
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    thread::scope(|scope| {
-        if let Some(from) = stdout {
-            scope.spawn(|| pump(from, std::io::stdout(), &log));
-        }
-        if let Some(from) = stderr {
-            scope.spawn(|| pump(from, std::io::stderr(), &log));
-        }
+    let counts = thread::scope(|scope| {
+        let readers = [
+            stdout.map(|from| scope.spawn(|| pump(from, std::io::stdout(), &log))),
+            stderr.map(|from| scope.spawn(|| pump(from, std::io::stderr(), &log))),
+        ];
+        readers
+            .into_iter()
+            .flatten()
+            .map(|reader| reader.join().ok().flatten())
+            .collect::<Vec<_>>()
     });
     let status = child
         .wait()
         .map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let code = exit_code(status);
+    if runs_nextest(&args.command) {
+        if let Some(tests_run) = counts.into_iter().flatten().next_back() {
+            append_outputs(&output_line(tests_run))
+                .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
+        }
+    }
     let mut log = log
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -137,16 +147,19 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
+fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) -> Option<u64> {
+    let mut tap = SummaryTap::default();
     let mut buffer = [0_u8; CHUNK];
     while let Ok(read) = from.read(&mut buffer) {
         if read == 0 {
             break;
         }
         let chunk = &buffer[..read];
+        tap.feed(chunk);
         to.write_all(chunk).and_then(|()| to.flush()).ok();
         if let Ok(mut file) = log.lock() {
             file.write_all(chunk).ok();
         }
     }
+    tap.finish()
 }

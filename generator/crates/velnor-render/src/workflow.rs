@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_model::TESTS_RUN_OUTPUT;
+
 use crate::permissions;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
@@ -30,7 +32,17 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             Yaml::Map(
                 job.outputs
                     .iter()
-                    .map(|(name, value)| entry(name, Yaml::Expr(value.clone())))
+                    .map(|(name, value)| {
+                        let value = value.clone();
+                        entry(
+                            name,
+                            if name == TESTS_RUN_OUTPUT {
+                                Yaml::Unread(value)
+                            } else {
+                                Yaml::Expr(value)
+                            },
+                        )
+                    })
                     .collect(),
             ),
         ));

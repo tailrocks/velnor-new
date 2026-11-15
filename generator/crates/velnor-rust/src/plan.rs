@@ -4,53 +4,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision,
-    Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, Concurrency, GateNeed, HelperCommand, Job, JobId, PermissionScope, Permissions,
+    RepoFacts, RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
-use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::root_jobs::{Lane, root_jobs};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
-const RUST_JOB: JobId = JobId::from_static("rust");
-const LINT_JOB: JobId = JobId::from_static("rust-lint");
-const TEST_JOB: JobId = JobId::from_static("rust-test");
 const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const VERDICT_JOB: JobId = JobId::from_static("required");
-
-struct Lane {
-    slug: String,
-    plan: Option<JobId>,
-}
-
-impl Lane {
-    fn gate(&self, need: GateNeed) -> Gate {
-        Gate {
-            slug: self.slug.clone(),
-            need,
-            from: self.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job),
-        }
-    }
-
-    fn steps(&self) -> Option<Gate> {
-        self.plan.is_none().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn job(&self) -> Option<Gate> {
-        self.plan.is_some().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn cargo(&self, command: &CargoCommand) -> Option<Gate> {
-        match command {
-            CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
-            _ => self.steps(),
-        }
-    }
-}
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -130,87 +95,6 @@ fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
     }
 }
 
-fn root_jobs(
-    facts: &RepoFacts,
-    root: &RustRoot,
-    decision: ShapeDecision,
-    suffixed: bool,
-    lane: &Lane,
-) -> Vec<Job> {
-    let id = |base: JobId| {
-        if suffixed {
-            base.suffixed(&lane.slug)
-        } else {
-            base
-        }
-    };
-    let cargo = |commands: Vec<CargoCommand>| {
-        commands.into_iter().map(|command| Step {
-            gate: lane.cargo(&command),
-            kind: StepKind::Cargo(command),
-            directory: root.manifest.parent(),
-            when: When::NotCancelled,
-        })
-    };
-    let lane_job = |id: JobId, steps: Vec<Step>| Job {
-        needs: lane.plan.clone().into_iter().collect(),
-        gate: lane.job(),
-        steps,
-        ..job(facts, id)
-    };
-    let alone = check_alone(root);
-    let lint = [
-        CargoCommand::FmtCheck,
-        CargoCommand::Clippy { extra: Vec::new() },
-    ];
-    let nextest = root.members.iter().any(RustMember::has_test_target);
-    let mut test = Vec::new();
-    if nextest {
-        test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
-        });
-    }
-    if has_doctest_library(root) {
-        test.push(CargoCommand::Doctest);
-    }
-    let comment = Some(decision.reason);
-    match decision.shape {
-        Shape::OneJob => {
-            let mut steps = setup(facts, root, true, lane);
-            steps.extend(cargo(
-                lint.into_iter()
-                    .chain(test)
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
-            ));
-            vec![Job {
-                comment,
-                ..lane_job(id(RUST_JOB), steps)
-            }]
-        }
-        Shape::LintAndTest | Shape::BuildThenGroups => {
-            let mut lint_steps = setup(facts, root, true, lane);
-            lint_steps.extend(cargo(
-                lint.into_iter()
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
-            ));
-            let mut jobs = vec![Job {
-                comment,
-                ..lane_job(id(LINT_JOB), lint_steps)
-            }];
-            if !test.is_empty() {
-                let mut test_steps = setup(facts, root, false, lane);
-                test_steps.extend(cargo(test));
-                jobs.push(lane_job(id(TEST_JOB), test_steps));
-            }
-            jobs
-        }
-    }
-}
-
 pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
     let mut ids = BTreeSet::new();
     if let Some(job) = plan.jobs.iter().find(|job| !ids.insert(job.id.as_str())) {
@@ -233,27 +117,7 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
-    root.members
-        .iter()
-        .filter(|member| {
-            member.targets.iter().any(|target| {
-                !target.requires_features
-                    && target.kinds.iter().any(|kind| {
-                        matches!(
-                            kind,
-                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                        )
-                    })
-            })
-        })
-        .map(|member| CargoCommand::CheckAlone {
-            package: member.name.clone(),
-        })
-        .collect()
-}
-
-fn head(facts: &RepoFacts) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
     steps.extend(
         facts
@@ -264,14 +128,14 @@ fn head(facts: &RepoFacts) -> Vec<Step> {
     steps
 }
 
-fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
+pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
     let mut steps = head(facts);
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let mut toolchain = Vec::new();
     if !facts.tools.tools.is_empty() {
-        toolchain.push(step(StepKind::InstallTools));
+        toolchain.push(step(StepKind::InstallTools { only: None }));
     }
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
@@ -309,7 +173,7 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
     steps
 }
 
-fn job(facts: &RepoFacts, id: JobId) -> Job {
+pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
     Job {
         id,
         name: None,
@@ -325,7 +189,7 @@ fn job(facts: &RepoFacts, id: JobId) -> Job {
     }
 }
 
-fn step(kind: StepKind) -> Step {
+pub(crate) fn step(kind: StepKind) -> Step {
     Step {
         kind,
         directory: None,
