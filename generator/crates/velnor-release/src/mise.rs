@@ -15,8 +15,16 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
+const RELEASE_PLZ_KEYS: [&str; 5] = [
+    "release-plz",
+    "cargo:release-plz",
+    "aqua:release-plz/release-plz",
+    "github:release-plz/release-plz",
+    "ubi:release-plz/release-plz",
+];
+
 fn names_release_plz(key: &str) -> bool {
-    key.rsplit(['/', ':']).next() == Some("release-plz")
+    RELEASE_PLZ_KEYS.contains(&key)
 }
 
 fn release_plz_tools(table: &Table) -> Vec<(&String, &toml::Value)> {
@@ -76,6 +84,15 @@ pub(crate) fn check(
     }
     let locked = release_plz_tools(&mise_lock);
     for (key, value) in configured {
+        if let Some(field) = value
+            .as_table()
+            .and_then(|table| table.keys().find(|field| *field != "version"))
+        {
+            return Err(ReleaseError::ReleasePlzToolOverride {
+                tool: key.clone(),
+                field: field.clone(),
+            });
+        }
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };

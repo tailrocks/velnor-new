@@ -13,6 +13,7 @@ use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
@@ -113,18 +114,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         })
         .transpose()?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
-    let pinned = |tool: &str| tools.tools.keys().any(|name| is_tool(name, tool));
-    let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !pinned(DENY_TOOL) {
-        return Err(DetectError::invalid(
-            &DENY_CONFIG,
-            Reason::UnpinnedTool(DENY_TOOL),
-        ));
-    }
-    let policy = PolicyTools {
-        deny,
-        machete: pinned("cargo-machete"),
-    };
+    let policy = policy_tools(view, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
     Ok(RepoFacts {
         policy,
@@ -143,6 +133,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
 }
 
 const DENY_TOOL: &str = "cargo-deny";
+
+fn policy_tools(view: &RepoView, runner: &str) -> Result<PolicyTools, DetectError> {
+    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
+    let deny = view.tracked_paths.contains(&DENY_CONFIG);
+    if deny && !pinned(DENY_TOOL) {
+        return Err(DetectError::invalid(
+            &DENY_CONFIG,
+            Reason::UnpinnedTool(DENY_TOOL),
+        ));
+    }
+    Ok(PolicyTools {
+        deny,
+        machete: pinned("cargo-machete"),
+    })
+}
 
 fn is_tool(name: &str, tool: &str) -> bool {
     name.rsplit(['/', ':']).next() == Some(tool)

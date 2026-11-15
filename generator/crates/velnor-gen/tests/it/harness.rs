@@ -73,9 +73,9 @@ fn view(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
 fn a_harness_false_test_target_runs_with_cargo_test_unless_the_config_says_it_follows_nextest()
 -> TestResult {
     let silent = workflow(&view(None)?)?;
-    assert!(silent.contains("cargo test --workspace --locked --test=custom"));
-    assert!(silent.contains("cargo test --workspace --locked --test=defaulted"));
-    assert!(silent.contains("cargo test --workspace --locked --bin=tool"));
+    assert!(silent.contains("cargo test -p a --locked --test=custom"));
+    assert!(silent.contains("cargo test -p a --locked --test=defaulted"));
+    assert!(silent.contains("cargo test -p a --locked --bin=tool"));
     for excluded in ["a::custom", "a::defaulted", "a::bin/tool"] {
         assert!(
             silent.contains(&format!("- binary_id(={excluded})")),

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
 use velnor_release::{ReleaseFiles, ReleasePlan};
 use velnor_render::render_release;
-use velnor_rust::{MISE_CONFIGS, MISE_LOCK};
+use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
 use crate::GenerateError;
 
@@ -28,17 +28,25 @@ pub(crate) fn release_workflow(
         } else {
             format!("{}/Cargo.toml", root.root)
         };
-        let is_cargo_root = facts
+        let detected = facts
             .rust_roots
             .iter()
-            .any(|detected| detected.manifest.as_str() == manifest);
-        if !is_cargo_root {
-            return Err(GenerateError::ReleaseRootWithoutCargoToml(
-                root.root.clone(),
-            ));
+            .find(|detected| detected.manifest.as_str() == manifest)
+            .ok_or_else(|| GenerateError::ReleaseRootWithoutCargoToml(root.root.clone()))?;
+        reject_release_credential_hooks(view, &detected.manifest)?;
+        if let Some((package, _)) = root.packages.iter().find(|(package, _)| {
+            !detected
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == package)
+        }) {
+            return Err(GenerateError::ReleasePackageNotInRoot {
+                root: root.root.clone(),
+                package: package.clone(),
+            });
         }
     }
-    render_release(&plan, helper).map_err(GenerateError::Rules)
+    render_release(&plan, helper, &facts.config.default_branch).map_err(GenerateError::Rules)
 }
 
 fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {

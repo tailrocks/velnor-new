@@ -13,7 +13,6 @@ use ring::hmac;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 pub use runners::Runners;
@@ -134,20 +133,13 @@ impl<B: Backend> Authority<B> {
         }
         let runs: Vec<Run> = self.fetch(posted.side, RUNS_PATH).await?;
         let entry = posted.entry(run_ids(&runs))?;
-        let line = format!("{}\n", json!(entry));
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&ledger.path)
-            .await
-            .map_err(Error::internal)?;
-        file.write_all(line.as_bytes())
-            .await
-            .map_err(Error::internal)?;
-        file.flush().await.map_err(Error::internal)?;
+        ledger.entries.push(entry.clone());
+        if let Err(error) = ledger.save().await {
+            ledger.entries.pop();
+            return Err(Error::internal(error));
+        }
         let reply =
             json!({"id": entry.id, "side": entry.side.name(), "existing": entry.existing.len()});
-        ledger.entries.push(entry);
         Ok(json_response(200, &reply))
     }
 
@@ -164,10 +156,14 @@ impl<B: Backend> Authority<B> {
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
         let mut ledger = self.ledger.lock().await;
         let admitted = admit(&ledger.entries, side, &found).cloned();
-        if let Ok(entry) = &admitted
-            && claim(&mut ledger.entries, &entry.id, &found)
-        {
-            ledger.save().await.map_err(Error::internal)?;
+        if let Ok(entry) = &admitted {
+            let before = ledger.entries.clone();
+            if claim(&mut ledger.entries, &entry.id, &found)
+                && let Err(error) = ledger.save().await
+            {
+                ledger.entries = before;
+                return Err(Error::internal(error));
+            }
         }
         let verdict = admitted.as_ref().map_err(|refusal| *refusal);
         Ok(json_response(200, &answer(side, &found, verdict)))

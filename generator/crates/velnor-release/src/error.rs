@@ -101,6 +101,10 @@ pub enum ReleaseError {
         configured: String,
         locked: Vec<String>,
     },
+    ReleasePlzToolOverride {
+        tool: String,
+        field: String,
+    },
 }
 
 fn subject(package: Option<&String>) -> String {
@@ -234,12 +238,24 @@ impl ReleaseError {
             Self::EmptyRoots => {
                 write!(f, ".velnor/release.toml: roots must name at least one root")
             }
+            _ => self.fmt_mise(f),
+        }
+    }
+}
+
+impl ReleaseError {
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
             Self::ReleasePlzLockMismatch { configured, locked } => write!(
                 f,
                 "mise.toml requests release-plz {configured} but mise.lock locks {}",
                 locked.join(", ")
+            ),
+            Self::ReleasePlzToolOverride { tool, field } => write!(
+                f,
+                "mise.toml: the release-plz tool {tool} sets {field}, which can point mise at repository code or run a script while the release App token is in scope; give it only a version"
             ),
             _ => Ok(()),
         }

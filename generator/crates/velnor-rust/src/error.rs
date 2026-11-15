@@ -59,8 +59,10 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
+    CargoCredentialProvider(String),
 }
 
 impl DetectError {
@@ -68,6 +70,27 @@ impl DetectError {
         Self::Invalid {
             path: path.clone(),
             reason,
+        }
+    }
+}
+
+impl Reason {
+    fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BuildExecutable => f.write_str(
+                "build.rustc, build.rustdoc and the build wrappers replace the programs the checks run; remove them",
+            ),
+            Self::CargoCredentialProvider(key) => write!(
+                f,
+                "{key} names a program or alias that cargo runs when it publishes, with the release token in its environment; remove it, or use one of cargo:token, cargo:wincred, cargo:macos-keychain or cargo:libsecret"
+            ),
+            Self::CapLints => f.write_str(
+                "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
+            ),
+            Self::CargoConfigInclude => f.write_str(
+                "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
+            ),
+            _ => Ok(()),
         }
     }
 }
@@ -142,15 +165,13 @@ impl fmt::Display for Reason {
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
-            Self::CapLints => f.write_str(
-                "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
-            ),
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
-            Self::CargoConfigInclude => f.write_str(
-                "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
-            ),
+            Self::BuildExecutable
+            | Self::CargoCredentialProvider(_)
+            | Self::CapLints
+            | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => {
                 write!(
                     f,

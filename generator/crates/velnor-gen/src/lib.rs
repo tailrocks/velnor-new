@@ -30,6 +30,7 @@ pub enum GenerateError {
     ReleaseRootWithoutCargoToml(String),
     HelperNotPinned,
     Metadata(MetadataFileError),
+    ReleasePackageNotInRoot { root: String, package: String },
     Rules(Vec<RuleViolation>),
 }
 
@@ -55,6 +56,10 @@ impl fmt::Display for GenerateError {
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
             Self::Metadata(error) => error.fmt(f),
+            Self::ReleasePackageNotInRoot { root, package } => write!(
+                f,
+                "release-plz.toml in {root:?} releases package {package:?}, which is not a member of that Cargo root"
+            ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

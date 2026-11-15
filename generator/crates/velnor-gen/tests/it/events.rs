@@ -61,12 +61,62 @@ fn the_workflow_starts_on_the_four_events_and_cancels_only_older_pull_request_ru
 fn the_default_branch_comes_from_the_config_and_a_malformed_name_is_refused() -> TestResult {
     let text = with(&[], Some(b"default_branch = \"trunk\"\n"))?;
     assert!(text.contains("    branches:\n      - trunk\n"), "{text}");
-    for name in ["", "a..b", "/main", "main/", "ma in", "x\\ny"] {
+    for name in [
+        "",
+        "a..b",
+        "/main",
+        "main/",
+        "ma in",
+        "x\\ny",
+        ".release",
+        "feature/.hidden",
+        "release.lock",
+        "feature/x.lock/y",
+    ] {
         let config = format!("default_branch = \"{name}\"\n");
         let mut bad = view(&["Cargo.toml"], Some(config.as_bytes()))?;
         bad.files.entry(CONFIG_PATH).or_default();
         assert!(expected_files(&bad).is_err(), "{name:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> TestResult {
+    let mise = |os: &str| {
+        format!(
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
+        )
+    };
+    let elsewhere = with(&[("mise.toml", &mise("macos"))], None)?;
+    assert!(!elsewhere.contains("cargo-machete"), "{elsewhere}");
+    let here = with(&[("mise.toml", &mise("linux"))], None)?;
+    assert!(here.contains("cargo-machete"), "{here}");
+    let mac = with(
+        &[("mise.toml", &mise("macos"))],
+        Some(b"runner = \"macos-latest\"\n"),
+    )?;
+    assert!(mac.contains("cargo-machete"), "{mac}");
+    Ok(())
+}
+
+#[test]
+fn a_machete_pin_reads_mise_os_arch_filters_and_darwin_as_macos() -> TestResult {
+    let mise = |os: &str| {
+        format!(
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
+        )
+    };
+    let linux_arch = with(
+        &[("mise.toml", &mise("linux/x64"))],
+        Some(b"runner = \"ubuntu-latest\"\n"),
+    )?;
+    assert!(linux_arch.contains("cargo-machete"), "{linux_arch}");
+    let darwin = with(
+        &[("mise.toml", &mise("darwin"))],
+        Some(b"runner = \"macos-latest\"\n"),
+    )?;
+    assert!(darwin.contains("cargo-machete"), "{darwin}");
     Ok(())
 }
 

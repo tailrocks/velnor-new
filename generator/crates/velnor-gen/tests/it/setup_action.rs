@@ -8,13 +8,13 @@ use std::path::Path;
 
 use velnor_render::SETUP_VELNOR_ACTION;
 
-type TestResult = Result<(), Box<dyn Error>>;
+pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 const REPOSITORY: &str = "tailrocks/velnor-new/";
 const INSTALL_STEP: &str = "      - name: Install velnor-ci";
 const TOOLS: &str = "/usr/bin:/bin";
 
-fn program(name: &str) -> String {
+pub(crate) fn program(name: &str) -> String {
     ["/usr/bin", "/bin"]
         .iter()
         .map(|dir| format!("{dir}/{name}"))
@@ -150,13 +150,13 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     Ok(())
 }
 
-struct Install {
-    work: std::path::PathBuf,
-    binary: &'static [u8],
+pub(crate) struct Install {
+    pub(crate) work: std::path::PathBuf,
+    pub(crate) binary: &'static [u8],
 }
 
 impl Install {
-    fn new(name: &str) -> Result<Self, Box<dyn Error>> {
+    pub(crate) fn new(name: &str) -> Result<Self, Box<dyn Error>> {
         let work = std::env::temp_dir().join(format!("velnor-gen-{name}-{}", std::process::id()));
         let release = work.join("releases/rust-ci-v1.2.3");
         fs::create_dir_all(&release)?;
@@ -170,7 +170,7 @@ impl Install {
 
     const BINARY: &'static [u8] = b"#!/bin/sh\necho genuine\n";
 
-    fn run(
+    pub(crate) fn run(
         &self,
         cache: Option<&Path>,
         shim_dir: Option<&Path>,
@@ -246,7 +246,7 @@ impl Install {
         Ok(command.spawn()?)
     }
 
-    fn installed(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub(crate) fn installed(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         let on_path = fs::read_to_string(self.work.join("path"))?;
         Ok(fs::read(Path::new(on_path.trim()).join("velnor-ci"))?)
     }
@@ -296,7 +296,7 @@ fn a_read_only_cache_entry_directory_does_not_stop_the_private_install() -> Test
     )
 }
 
-fn seed_entry(
+pub(crate) fn seed_entry(
     install: &Install,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dyn Error>> {
     let cache = install.work.join("cache");

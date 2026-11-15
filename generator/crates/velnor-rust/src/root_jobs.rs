@@ -114,7 +114,7 @@ impl RootJobs<'_> {
                     .custom_harnesses
                     .iter()
                     .filter(|harness| runs_in_direct_step(&self.facts.config, member, harness))
-                    .filter(|harness| seen.insert(selector_id(harness)))
+                    .filter(|harness| seen.insert((member.name.clone(), selector_id(harness))))
                     .map(|harness| CargoCommand::TestTarget {
                         package: member.name.clone(),
                         target: harness.name.clone(),

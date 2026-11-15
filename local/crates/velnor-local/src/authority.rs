@@ -197,7 +197,7 @@ pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a 
         entries
             .iter()
             .filter(own)
-            .find(|entry| entry.open_for(facts))
+            .rfind(|entry| entry.open_for(facts))
     };
     if let Some(entry) = held.or_else(free) {
         return Ok(entry);

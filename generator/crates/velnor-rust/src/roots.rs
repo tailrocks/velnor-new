@@ -131,7 +131,7 @@ pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     })
 }
 
-fn patch_files<'v>(
+pub(crate) fn patch_files<'v>(
     view: &'v RepoView,
     manifest: &RepoPath,
 ) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
