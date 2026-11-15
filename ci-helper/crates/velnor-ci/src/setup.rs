@@ -105,9 +105,11 @@ fn same_version(wanted: &str, installed: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('.'))
 }
 
+const MINIMAL_PROFILE: [&str; 3] = ["cargo", "rust-std", "rustc"];
 const DEFAULT_PROFILE: [&str; 3] = ["rust-docs", "rustfmt", "clippy"];
 const COMPLETE_PROFILE: &str = "complete";
 const DEFAULT_PROFILE_NAME: &str = "default";
+const MINIMAL_PROFILE_NAME: &str = "minimal";
 const PREVIEW: &str = "-preview";
 const TARGETLESS: &str = "rust-src";
 
@@ -166,7 +168,11 @@ pub fn missing_toolchain(
     }
     let mut required: BTreeSet<String> = declared.components.iter().map(|c| short(c)).collect();
     match declared.profile.as_deref() {
-        Some(DEFAULT_PROFILE_NAME) => required.extend(DEFAULT_PROFILE.map(str::to_owned)),
+        Some(DEFAULT_PROFILE_NAME) => {
+            required.extend(MINIMAL_PROFILE.map(str::to_owned));
+            required.extend(DEFAULT_PROFILE.map(str::to_owned));
+        }
+        Some(MINIMAL_PROFILE_NAME) => required.extend(MINIMAL_PROFILE.map(str::to_owned)),
         Some(COMPLETE_PROFILE) => required.extend(offered),
         _ => {}
     }

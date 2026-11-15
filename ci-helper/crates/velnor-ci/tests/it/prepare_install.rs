@@ -5,8 +5,8 @@ use std::fs;
 
 use super::prepare::{Declared, Run, prepare_declared};
 
-const BEFORE: &str = "clippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu\nrust-src";
-const AFTER: &str = "clippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu (installed)\nrust-src (installed)";
+const BEFORE: &str = "cargo-x86_64-unknown-linux-gnu (installed)\nrustc-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu\nrust-src";
+const AFTER: &str = "cargo-x86_64-unknown-linux-gnu (installed)\nrustc-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu (installed)\nrust-src (installed)";
 const REPORT: &str = "{\"rust\":[{\"version\":\"1.99.1\",\"installed\":true}],\"aqua:nextest-rs/nextest/cargo-nextest\":[{\"version\":\"0.9.151\",\"installed\":true}]}";
 const HOST_ONLY: &str = "x86_64-unknown-linux-gnu";
 const WITH_WASM: &str = "x86_64-unknown-linux-gnu\nwasm32-unknown-unknown";
