@@ -17,7 +17,8 @@ pub(super) async fn folder(path: &Path) -> io::Result<()> {
         .recursive(true)
         .mode(0o700)
         .create(path)
-        .await
+        .await?;
+    fs::set_permissions(path, Permissions::from_mode(0o700)).await
 }
 
 pub(super) async fn control(path: &Path) -> io::Result<()> {

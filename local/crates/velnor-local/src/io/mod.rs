@@ -13,7 +13,7 @@ pub mod pair;
 mod proxy;
 mod reply;
 mod run;
-mod supervisor;
+pub mod supervisor;
 
 pub use run::{RestoreOnly, guarded, open};
 

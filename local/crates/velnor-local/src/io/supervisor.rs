@@ -24,7 +24,7 @@ const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
-pub(super) struct Endpoint {
+pub struct Endpoint {
     pub(super) address: String,
     pub(super) token: String,
 }
@@ -40,17 +40,18 @@ async fn forget(path: &Path) -> io::Result<()> {
     }
 }
 
-pub(super) async fn start(dir: &Path) -> io::Result<Endpoint> {
+pub async fn start(dir: &Path) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
     fs::create_dir_all(&authority).await?;
     keys::folder(&dir.join("keys")).await?;
-    for file in [LEDGER, "address", "pid"] {
+    for file in [LEDGER, "address", "pid", "binary"] {
         forget(&authority.join(file)).await?;
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
     let log = std::fs::File::create(authority.join("supervise.log"))?;
-    let mut child = Command::new(std::env::current_exe()?)
+    let binary = std::env::current_exe()?;
+    let mut child = Command::new(&binary)
         .args(["supervise", "--dir"])
         .arg(dir)
         .stdin(Stdio::null())
@@ -59,6 +60,7 @@ pub(super) async fn start(dir: &Path) -> io::Result<Endpoint> {
         .process_group(0)
         .spawn()?;
     if let Some(pid) = child.id() {
+        write_private(&authority.join("binary"), &binary.display().to_string()).await?;
         write_private(&authority.join("pid"), &pid.to_string()).await?;
     }
     let deadline = tokio::time::Instant::now() + START_TIMEOUT;
@@ -81,11 +83,8 @@ pub(super) async fn start(dir: &Path) -> io::Result<Endpoint> {
     }
 }
 
-async fn ours(pid: &str, dir: &Path) -> bool {
-    let Ok(binary) = std::env::current_exe() else {
-        return false;
-    };
-    let expected = format!("{} supervise --dir {}", binary.display(), dir.display());
+async fn ours(pid: &str, dir: &Path, binary: &str) -> bool {
+    let expected = format!("{binary} supervise --dir {}", dir.display());
     let command = program("ps", &["-p", pid, "-o", "command="], None).await;
     command.is_ok_and(|bytes| String::from_utf8_lossy(&bytes).trim() == expected)
 }
@@ -98,23 +97,31 @@ pub(super) async fn stop(dir: &Path) -> io::Result<()> {
         .map(|pid| pid.trim().to_owned())
         .filter(|pid| pid.parse::<u32>().is_ok())
     {
+        let binary = fs::read_to_string(authority.join("binary"))
+            .await
+            .map_err(|error| {
+                io::Error::other(format!(
+                    "authority/binary is missing, so process {pid} cannot be verified: {error}"
+                ))
+            })?;
         for signal in ["-TERM", "-KILL"] {
-            if !ours(&pid, dir).await {
+            if !ours(&pid, dir, &binary).await {
                 break;
             }
             program("kill", &[signal, &pid], None).await?;
             let deadline = tokio::time::Instant::now() + STOP_TIMEOUT;
-            while ours(&pid, dir).await && tokio::time::Instant::now() < deadline {
+            while ours(&pid, dir, &binary).await && tokio::time::Instant::now() < deadline {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
-        if ours(&pid, dir).await {
+        if ours(&pid, dir, &binary).await {
             return Err(io::Error::other(format!(
                 "the authority, process {pid}, did not stop"
             )));
         }
     }
     forget(&authority.join("pid")).await?;
+    forget(&authority.join("binary")).await?;
     forget(&authority.join("address")).await
 }
 
