@@ -126,6 +126,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     };
     Ok(RepoFacts {
         policy,
+        repository: view.repository.clone(),
         timings,
         timings_notes,
         rust_roots,

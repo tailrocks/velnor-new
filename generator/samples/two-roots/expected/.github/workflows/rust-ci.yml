@@ -12,6 +12,8 @@ on:
     branches:
       - main
   merge_group: {}
+  schedule:
+    - cron: '2 10 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -108,6 +110,9 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
           DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
@@ -175,6 +180,9 @@ jobs:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_xtask_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_xtask_package_args }}'
         run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' && needs.rust-plan.outputs.rust_xtask_package_args != '''' }}'
         working-directory: xtask

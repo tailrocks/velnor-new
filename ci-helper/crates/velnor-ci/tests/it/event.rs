@@ -17,6 +17,7 @@ fn the_event_payload_gives_the_default_branch() {
 fn a_configured_default_branch_that_differs_from_the_repositorys_is_refused_naming_both() {
     let event = |branch: Option<&str>| Event {
         default_branch: branch.map(str::to_owned),
+        ..Event::default()
     };
     assert_eq!(check_default_branch("main", &event(Some("main"))), Ok(()));
     let message = check_default_branch("main", &event(Some("trunk")))

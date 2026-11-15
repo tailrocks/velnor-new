@@ -103,6 +103,12 @@ fn triggers(triggers: &Triggers) -> Yaml {
     if triggers.merge_group {
         items.push(entry("merge_group", Yaml::Map(Vec::new())));
     }
+    if let Some(cron) = &triggers.schedule {
+        items.push(entry(
+            "schedule",
+            Yaml::Seq(vec![Yaml::Map(vec![entry("cron", text(cron.as_str()))])]),
+        ));
+    }
     if triggers.workflow_dispatch {
         items.push(entry("workflow_dispatch", Yaml::Map(Vec::new())));
     }

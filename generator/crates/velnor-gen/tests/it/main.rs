@@ -20,6 +20,7 @@ mod job_shape;
 mod lock;
 mod lock_affected;
 mod lock_consistency;
+mod main_and_scheduled;
 mod metadata_file;
 mod no_programs;
 mod patch;

@@ -6,14 +6,30 @@ use velnor_rust::CONFIG_PATH;
 
 use crate::error::CiError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Event {
     pub default_branch: Option<String>,
+    pub range: Option<Range>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Range {
+    pub base: String,
+    pub head: String,
 }
 
 #[derive(Deserialize)]
 struct Payload {
     repository: Option<Repository>,
+    before: Option<String>,
+    after: Option<String>,
+    merge_group: Option<MergeGroup>,
+}
+
+#[derive(Deserialize)]
+struct MergeGroup {
+    base_sha: Option<String>,
+    head_sha: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -24,8 +40,13 @@ struct Repository {
 pub fn parse_event(text: &str) -> Result<Event, CiError> {
     let payload: Payload = serde_json::from_str(text)
         .map_err(|error| CiError::new(format!("the event payload is not readable: {error}")))?;
+    let range = match payload.merge_group {
+        Some(group) => group.base_sha.zip(group.head_sha),
+        None => payload.before.zip(payload.after),
+    };
     Ok(Event {
         default_branch: payload.repository.and_then(|repo| repo.default_branch),
+        range: range.map(|(base, head)| Range { base, head }),
     })
 }
 

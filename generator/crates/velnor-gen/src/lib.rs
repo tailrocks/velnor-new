@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
 
-use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
+use velnor_model::{FullRun, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
 use velnor_release::ReleaseError;
 use velnor_render::{Owner, RuleViolation, owner_of, render};
 use velnor_rust::{
@@ -17,6 +17,7 @@ use velnor_rust::{
     metadata_file, plan,
 };
 
+pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +87,15 @@ pub fn generated_with_notes(
         metadata_file(view).map_err(GenerateError::Metadata)?,
     );
     Ok((files, notes))
+}
+
+pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
+    let config = detect(view)?.config;
+    let blind = config.on_main == OnMain::Affected && config.full_run == FullRun::Off;
+    Ok(blind
+        .then(|| NO_FULL_RUN_NOTE.to_owned())
+        .into_iter()
+        .collect())
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {

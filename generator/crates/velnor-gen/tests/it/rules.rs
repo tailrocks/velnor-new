@@ -75,6 +75,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             pull_request: vec![PullRequestType::Opened],
             push_branch: None,
             merge_group: false,
+            schedule: None,
             workflow_dispatch: false,
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,

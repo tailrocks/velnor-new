@@ -3,7 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
+    CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath, RunnerLabel,
+    RustCiConfig, Shape, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -11,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 11] = [
+const KEYS: [&str; 13] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -23,6 +24,8 @@ const KEYS: [&str; 11] = [
     "nextest_harnesses",
     "default_branch",
     "skip_draft_pull_requests",
+    "on_main",
+    "full_run",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -43,6 +46,8 @@ struct RawConfig {
     nextest_harnesses: Vec<String>,
     default_branch: Option<String>,
     skip_draft_pull_requests: Option<bool>,
+    on_main: Option<String>,
+    full_run: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -97,29 +102,25 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let full_run = match raw.full_run {
+        None => defaults.full_run,
+        Some(value) => full_run(value).map_err(invalid)?,
+    };
     Ok(RustCiConfig {
         nextest_harnesses,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
             .unwrap_or(defaults.skip_draft_pull_requests),
+        on_main,
+        full_run,
         shape,
         required_check,
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: match raw.runner {
-            Some(label) => RunnerLabel::new(label.clone())
-                .ok()
-                .filter(|runner| !without_helper_build(runner.as_str()))
-                .ok_or_else(|| {
-                    invalid(Reason::InvalidValue {
-                        key: "runner",
-                        value: label,
-                    })
-                })?,
-            None => defaults.runner,
-        },
+        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
         timeout_minutes,
         exclude: raw
             .exclude
@@ -151,6 +152,46 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
             ))
         })
         .collect()
+}
+
+fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+    let Some(label) = configured else {
+        return Ok(default);
+    };
+    RunnerLabel::new(label.clone())
+        .ok()
+        .filter(|runner| !without_helper_build(runner.as_str()))
+        .ok_or(Reason::InvalidValue {
+            key: "runner",
+            value: label,
+        })
+}
+
+fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
+    match configured {
+        None => Ok(default),
+        Some("affected") => Ok(OnMain::Affected),
+        Some("everything") => Ok(OnMain::Everything),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "on_main",
+            value: other.to_owned(),
+        }),
+    }
+}
+
+fn full_run(value: String) -> Result<FullRun, Reason> {
+    Ok(match value.as_str() {
+        "off" => FullRun::Off,
+        "hourly" => FullRun::Hourly,
+        "nightly" => FullRun::Nightly,
+        "weekly" => FullRun::Weekly,
+        _ => FullRun::Cron(
+            CronExpr::new(value.clone()).map_err(|_| Reason::InvalidValue {
+                key: "full_run",
+                value,
+            })?,
+        ),
+    })
 }
 fn without_helper_build(label: &str) -> bool {
     let label = label.to_ascii_lowercase();

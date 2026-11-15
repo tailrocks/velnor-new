@@ -19,6 +19,7 @@ mod logscan;
 mod plan;
 mod plan_api;
 mod plan_git;
+mod plan_main;
 mod prepare;
 mod prepare_install;
 mod release_fake;

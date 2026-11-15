@@ -82,6 +82,11 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         rust_metadata.insert(workspace, metadata);
     }
     let view = RepoView {
+        repository: sample
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
         files,
         tracked_paths,
         rust_metadata,

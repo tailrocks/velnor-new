@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cron;
 mod ids;
 mod plan;
 mod repo;
 mod selection;
 
+pub use cron::CronExpr;
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
     Sha256, TargetName,
@@ -16,12 +18,12 @@ pub use plan::{
     Shape, ShapeDecision, Step, StepKind, TEST_STEP, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
-    CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
-    PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
-    RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
-    Weakening,
+    CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule, MemberDependency, OnMain,
+    PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata,
+    RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain,
+    UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
-    AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };

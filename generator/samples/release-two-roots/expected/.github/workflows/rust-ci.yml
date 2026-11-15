@@ -12,6 +12,8 @@ on:
     branches:
       - main
   merge_group: {}
+  schedule:
+    - cron: '9 13 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -100,6 +102,9 @@ jobs:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
         run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
@@ -164,6 +169,9 @@ jobs:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_tools_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_tools_package_args }}'
         run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_tools_mode != ''none'' && needs.rust-plan.outputs.rust_tools_docs == ''run'' && needs.rust-plan.outputs.rust_tools_package_args != '''' }}'
         working-directory: tools

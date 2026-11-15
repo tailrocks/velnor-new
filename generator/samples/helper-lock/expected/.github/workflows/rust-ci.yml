@@ -12,6 +12,8 @@ on:
     branches:
       - main
   merge_group: {}
+  schedule:
+    - cron: '22 12 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -81,6 +83,9 @@ jobs:
           PACKAGE_ARGS: '${{ steps.plan.outputs.rust_root_package_args }}'
           DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'
         run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:

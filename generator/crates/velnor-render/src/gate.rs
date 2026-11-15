@@ -7,6 +7,8 @@ const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
+const SCHEDULE: &str = "schedule";
+const PUSH: &str = "push";
 
 pub(crate) fn output(slug: &str, need: GateNeed) -> String {
     if need.is_global() {
@@ -44,11 +46,18 @@ pub(crate) fn condition(
     skip_draft: bool,
 ) -> Option<String> {
     let mut parts = Vec::new();
-    if when == When::NotCancelled {
-        parts.push(NOT_CANCELLED.to_owned());
-        if after_setup {
-            parts.push(SETUP_DONE.to_owned());
+    match when {
+        When::Success => {}
+        When::NotCancelled => {
+            parts.push(NOT_CANCELLED.to_owned());
+            if after_setup {
+                parts.push(SETUP_DONE.to_owned());
+            }
         }
+        When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
+        When::ScheduledOrPush => parts.push(format!(
+            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
+        )),
     }
     if skip_draft {
         parts.push(NOT_DRAFT.to_owned());

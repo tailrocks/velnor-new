@@ -14,19 +14,23 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, METADATA_PATH, MetadataError, MetadataFileError, commit_url,
-    manifests, metadata_roots, pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
+    DetectError, LockError, METADATA_PATH, MetadataError, MetadataFileError, manifests,
+    metadata_roots, reduce_metadata, wanted_files,
 };
 
 mod check;
+mod identity;
+mod pin;
 mod recorded;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, plan_generate, require_compatible};
+use crate::{Drift, GenerateError, check_tag, notes, plan_generate};
 use check::cargo_metadata;
 pub use check::check_metadata;
+use pin::pin_helper;
+pub use pin::write_lock;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
@@ -161,65 +165,21 @@ pub fn main() -> Exit {
     }
 }
 
-fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
-    let version = release_version(version).map_err(Error::Lock)?;
-    require_compatible(&version).map_err(Error::Generate)?;
-    let root = toplevel(root)?;
-    let sums = download(&root, &sums_url(&version))?;
-    let commit = download(&root, &commit_url(&version))?;
-    let lock = pin_lock(
-        version.as_str(),
-        &String::from_utf8_lossy(&commit),
-        &String::from_utf8_lossy(&sums),
-    )
-    .map_err(Error::Lock)?;
-    write_lock(&root, &lock)?;
-    program(
-        &root,
-        "git",
-        &[
-            OsStr::new("add"),
-            OsStr::new("--"),
-            OsStr::new(LOCK_PATH.as_str()),
-        ],
-    )?;
-    Ok(format!(
-        "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH} and staged it"
-    ))
-}
-
-fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
-    program(
-        root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new(url),
-        ],
-    )
-}
-
-pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
-    regular_file(root, &LOCK_PATH)?;
-    replace(&root.join(LOCK_PATH.as_str()), lock.as_bytes())
-}
-
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
     let workflows = read_files(&root, &wanted)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
-    let (expected, drifts) = plan_generate(
-        &read_view(&root, false)?.0,
-        &workflows,
-        engine_configured,
-        &mut std::io::stderr(),
-    )
-    .map_err(Error::Generate)?;
+    let view = read_view(&root, false)?.0;
+    let (expected, drifts) =
+        plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
+            .map_err(Error::Generate)?;
+    if cli.command == Command::Generate {
+        for note in notes(&view).map_err(Error::Generate)? {
+            eprintln!("velnor-gen: note: {note}");
+        }
+    }
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
@@ -325,6 +285,7 @@ fn tracked_paths(root: &Path) -> Result<BTreeSet<RepoPath>, Error> {
 
 fn view_from(root: &Path, tracked_paths: BTreeSet<RepoPath>) -> Result<RepoView, Error> {
     Ok(RepoView {
+        repository: identity::repository_name(root),
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
         rust_metadata: BTreeMap::new(),

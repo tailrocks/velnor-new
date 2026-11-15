@@ -17,9 +17,9 @@ pub(crate) fn event(repo: &Repo, default_branch: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn an_event_other_than_a_pull_request_selects_everything() {
+fn an_event_that_is_neither_a_pull_request_nor_a_push_to_the_default_branch_selects_everything() {
     let repo = plan_repo("api-push");
-    for name in ["push", "workflow_dispatch", "merge_group"] {
+    for name in ["schedule", "workflow_dispatch"] {
         let output = plan_command(&repo)
             .args(["plan", "--explain"])
             .env("GITHUB_EVENT_NAME", name)
