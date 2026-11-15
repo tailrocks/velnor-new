@@ -55,8 +55,8 @@ runs:
         for source in cache download; do
           rm -f "$staging/velnor-ci"
           if [ "$source" = cache ]; then
-            { [ -f "$dir.complete" ] && [ -x "$dir/velnor-ci" ]; } || continue
-            cp "$dir/velnor-ci" "$staging/velnor-ci"
+            [ -x "$dir/velnor-ci" ] || continue
+            cp "$dir/velnor-ci" "$staging/velnor-ci" 2> /dev/null || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
             curl --fail --silent --show-error --location --retry 3 --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
@@ -79,10 +79,13 @@ runs:
           echo "velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
           chmod +x "$staging/velnor-ci"
-          rm -rf "$dir" "$dir.complete"
-          mkdir -p "$dir"
-          cp "$staging/velnor-ci" "$dir/velnor-ci"
-          touch "$dir.complete"
+          {
+            mkdir -p "$dir"
+            entry="$(mktemp "$dir/.velnor-ci.XXXXXX")"
+            cp "$staging/velnor-ci" "$entry"
+            chmod +x "$entry"
+            mv -f "$entry" "$dir/velnor-ci"
+          } || echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache at $dir; this job is not affected"
           echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
         fi
         echo "$bin" >> "$GITHUB_PATH"
