@@ -218,3 +218,23 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
     assert_eq!(removed, [1, 1, 0]);
     assert_eq!(docker.left(), ["volume:other"]);
 }
+
+#[test]
+fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
+    use velnor_local::event::{NO_COMMIT, Push, Repository};
+    let repository = |full_name| Repository {
+        full_name,
+        default_branch: "main",
+    };
+    let push = Push {
+        branch: "main",
+        before: NO_COMMIT,
+        after: "a77d1f28282df9e2cd35df73548b9b9362d9549e",
+        commits: &[],
+    };
+    let id = |full_name| repository(full_name).push(&push)["repository"]["id"].as_u64();
+    let lab = id("tailrocks/velnor-lab");
+    assert!(lab.is_some_and(|id| id > 0), "{lab:?}");
+    assert_eq!(lab, id("tailrocks/velnor-lab"));
+    assert_ne!(lab, id("tailrocks/velnor-new"));
+}

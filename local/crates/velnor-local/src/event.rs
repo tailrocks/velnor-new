@@ -99,8 +99,24 @@ impl Repository<'_> {
         self.full_name.split('/').next().unwrap_or_default()
     }
 
+    fn id(&self) -> u64 {
+        let digest = ring::digest::digest(&ring::digest::SHA256, self.full_name.as_bytes());
+        let bytes = digest.as_ref();
+        u64::from_be_bytes([
+            0,
+            0,
+            0,
+            bytes[0] & 0x7f,
+            bytes[1],
+            bytes[2],
+            bytes[3],
+            bytes[4],
+        ]) + 1
+    }
+
     fn json(&self) -> Value {
         json!({
+            "id": self.id(),
             "full_name": self.full_name,
             "name": self.full_name.split('/').nth(1).unwrap_or_default(),
             "owner": {"login": self.owner()},
