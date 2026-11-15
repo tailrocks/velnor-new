@@ -8,7 +8,7 @@ use super::scenario::Scenario;
 use super::support::TestResult;
 
 #[tokio::test]
-async fn local_pair_start_failures_are_retried_three_times_before_the_host_gives_up()
+async fn local_pair_docker_failures_are_retried_three_times_before_the_host_gives_up()
 -> TestResult<()> {
     let scenario = Scenario::new().await?;
     let mut plan = scenario.plan(1, 0)?;
