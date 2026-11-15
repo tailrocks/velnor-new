@@ -99,12 +99,42 @@ const DEFAULT_PROFILE_NAME: &str = "default";
 const PREVIEW: &str = "-preview";
 const TARGETLESS: &str = "rust-src";
 
-pub fn check_toolchain(
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Missing {
+    pub components: Vec<String>,
+    pub targets: Vec<String>,
+}
+
+impl Missing {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.components.is_empty() && self.targets.is_empty()
+    }
+
+    pub fn ensure_none(&self) -> Result<(), CiError> {
+        if self.is_empty() {
+            return Ok(());
+        }
+        let names: Vec<String> = self
+            .components
+            .iter()
+            .map(|name| format!("component {name}"))
+            .chain(self.targets.iter().map(|name| format!("target {name}")))
+            .collect();
+        Err(CiError::new(format!(
+            "the installed toolchain lacks what the toolchain file declares: {}",
+            names.join(", ")
+        )))
+    }
+}
+
+#[must_use]
+pub fn missing_toolchain(
     declared: &Toolchain,
     host: &str,
     components: &str,
     targets: &str,
-) -> Result<(), CiError> {
+) -> Missing {
     let suffix = format!("-{host}");
     let short = |name: &str| {
         let bare = name.strip_suffix(&suffix).unwrap_or(name);
@@ -129,24 +159,16 @@ pub fn check_toolchain(
         _ => {}
     }
     let present: BTreeSet<&str> = targets.lines().map(str::trim).collect();
-    let missing: Vec<String> = required
-        .iter()
-        .filter(|name| !installed.contains(*name))
-        .map(|name| format!("component {name}"))
-        .chain(
-            declared
-                .targets
-                .iter()
-                .filter(|target| !present.contains(target.as_str()))
-                .map(|target| format!("target {target}")),
-        )
-        .collect();
-    if missing.is_empty() {
-        Ok(())
-    } else {
-        Err(CiError::new(format!(
-            "the installed toolchain lacks what the toolchain file declares: {}",
-            missing.join(", ")
-        )))
+    Missing {
+        components: required
+            .into_iter()
+            .filter(|name| !installed.contains(name))
+            .collect(),
+        targets: declared
+            .targets
+            .iter()
+            .filter(|target| !present.contains(target.as_str()))
+            .cloned()
+            .collect(),
     }
 }

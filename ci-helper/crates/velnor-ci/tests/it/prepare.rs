@@ -34,16 +34,18 @@ fn reported(rust: &str, nextest: Option<&str>) -> String {
     format!("{{{}}}", tools.join(","))
 }
 
-struct Run {
-    output: Output,
+pub(crate) struct Run {
+    pub bin: PathBuf,
+    pub output: Output,
     env_file: String,
     outputs: String,
 }
 
-struct Declared<'a> {
-    file: &'a str,
-    components: &'a str,
-    targets: &'a str,
+pub(crate) struct Declared<'a> {
+    pub file: &'a str,
+    pub components: &'a str,
+    pub targets: &'a str,
+    pub rustup: Option<&'a str>,
 }
 
 fn script(path: &Path, body: &str) {
@@ -56,7 +58,7 @@ fn prepare(name: &str, json: &str) -> Run {
     prepare_declared(name, json, None)
 }
 
-fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> Run {
+pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> Run {
     let dir = scratch(name);
     let checkout = dir.join("checkout");
     fs::create_dir_all(&checkout).unwrap_or_else(|e| unreachable!("{e}"));
@@ -75,13 +77,11 @@ fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> 
             &bin.join("rustc"),
             "echo 'host: x86_64-unknown-linux-gnu'\n",
         );
-        script(
-            &bin.join("rustup"),
-            &format!(
-                "if [ \"$1\" = component ]; then cat <<'EOF'\n{}\nEOF\nelse cat <<'EOF'\n{}\nEOF\nfi\n",
-                declared.components, declared.targets
-            ),
+        let fixed = format!(
+            "if [ \"$1\" = component ]; then cat <<'EOF'\n{}\nEOF\nelse cat <<'EOF'\n{}\nEOF\nfi\n",
+            declared.components, declared.targets
         );
+        script(&bin.join("rustup"), declared.rustup.unwrap_or(&fixed));
     }
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -94,6 +94,7 @@ fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> 
         .unwrap_or_else(|e| unreachable!("{e}"));
     let read = |file: &Path| fs::read_to_string(file).unwrap_or_default();
     Run {
+        bin,
         output,
         env_file: read(&env_file),
         outputs: read(&outputs),
@@ -162,6 +163,7 @@ fn declared(file: &'static str) -> Declared<'static> {
         file,
         components: LISTING,
         targets: "x86_64-unknown-linux-gnu",
+        rustup: None,
     }
 }
 
@@ -207,6 +209,7 @@ fn prepare_passes_a_complete_profile_whose_components_are_all_installed() {
             file,
             components: &all,
             targets: "x86_64-unknown-linux-gnu",
+            rustup: None,
         }),
     );
     assert!(run.output.status.success(), "{:?}", run.output);
@@ -261,6 +264,7 @@ fn prepare_matches_a_legacy_preview_component_name_to_its_renamed_component() {
             file,
             components: listing,
             targets: "x86_64-unknown-linux-gnu",
+            rustup: None,
         }),
     );
     assert!(run.output.status.success(), "{:?}", run.output);

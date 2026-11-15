@@ -9,12 +9,15 @@ use std::sync::Mutex;
 use std::thread;
 
 use velnor_gen::io::read_files;
+use velnor_model::Toolchain;
 use velnor_rust::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, mise_files, tool_pins, toolchain};
 
 use super::{append_outputs, append_to, current_dir};
 use crate::cli::RunArgs;
 use crate::error::CiError;
-use crate::setup::{check_toolchain, check_tools, env_lines, output_lines, parse_reported};
+use crate::setup::{
+    Missing, check_tools, env_lines, missing_toolchain, output_lines, parse_reported,
+};
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -46,17 +49,38 @@ pub(super) fn prepare() -> Result<String, CiError> {
     let declared = read_files(&root, &[TOOLCHAIN_PLAIN, TOOLCHAIN_TOML])
         .map_err(|e| CiError::new(e.to_string()))?;
     if let Some(declared) = toolchain(&declared).map_err(|e| CiError::new(e.to_string()))? {
-        let host = host_triple(&root)?;
-        check_toolchain(
-            &declared,
-            &host,
-            &tool_output(&root, "rustup", &["component", "list"])?,
-            &tool_output(&root, "rustup", &["target", "list", "--installed"])?,
-        )?;
+        install_declared(&root, &declared)?;
     }
     append_to(ENV_VARIABLE, &env_lines())?;
     append_outputs(&output_lines())?;
     Ok(String::new())
+}
+
+fn install_declared(root: &std::path::Path, declared: &Toolchain) -> Result<(), CiError> {
+    let host = host_triple(root)?;
+    let survey = || -> Result<Missing, CiError> {
+        Ok(missing_toolchain(
+            declared,
+            &host,
+            &tool_output(root, "rustup", &["component", "list"])?,
+            &tool_output(root, "rustup", &["target", "list", "--installed"])?,
+        ))
+    };
+    let missing = survey()?;
+    if missing.is_empty() {
+        return Ok(());
+    }
+    for (kind, names) in [
+        ("component", &missing.components),
+        ("target", &missing.targets),
+    ] {
+        if !names.is_empty() {
+            let mut args = vec![kind, "add"];
+            args.extend(names.iter().map(String::as_str));
+            tool_output(root, "rustup", &args)?;
+        }
+    }
+    survey()?.ensure_none()
 }
 
 fn tool_output(root: &std::path::Path, program: &str, args: &[&str]) -> Result<String, CiError> {
