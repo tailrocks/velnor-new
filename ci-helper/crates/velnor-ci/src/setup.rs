@@ -22,8 +22,8 @@ pub struct Installed {
     version: String,
     #[serde(default)]
     requested_version: Option<String>,
-    #[serde(default)]
-    installed: bool,
+    #[serde(default, rename = "installed")]
+    present: bool,
 }
 
 impl Installed {
@@ -65,7 +65,7 @@ pub fn check_tools(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> 
                 .get(name)
                 .into_iter()
                 .flatten()
-                .filter(|entry| entry.installed)
+                .filter(|entry| entry.present)
                 .collect();
             let agrees = found
                 .iter()

@@ -184,10 +184,10 @@ fn pump(
         };
         let chunk = &buffer[..read];
         to.write_all(chunk).and_then(|()| to.flush()).ok();
-        if let Ok(mut file) = log.lock() {
-            if let Err(error) = file.write_all(chunk) {
-                failed.get_or_insert(error);
-            }
+        if let Ok(mut file) = log.lock()
+            && let Err(error) = file.write_all(chunk)
+        {
+            failed.get_or_insert(error);
         }
     }
 }
