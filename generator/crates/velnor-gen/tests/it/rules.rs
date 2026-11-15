@@ -372,6 +372,7 @@ fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_c
         multi_line_runs("run: cargo-fmt --all --check\n"),
         Vec::<String>::new()
     );
+    assert_eq!(multi_line_runs(&allowed), Vec::<String>::new());
     for text in rejected {
         assert_eq!(multi_line_runs(text).len(), 1, "{text}");
     }
