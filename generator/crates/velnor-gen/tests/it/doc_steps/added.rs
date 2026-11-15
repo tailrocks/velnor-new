@@ -220,4 +220,20 @@ pub(super) const ADDED: &[Case] = &[
         RUN,
         RUN,
     ),
+    (
+        "indented code after an unindented doc line",
+        Kind::Doctested,
+        "///text\n///    assert!(true);\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "code indented by a tab after the marker",
+        Kind::Doctested,
+        "///  \tassert!(true);\n",
+        false,
+        RUN,
+        RUN,
+    ),
 ];
