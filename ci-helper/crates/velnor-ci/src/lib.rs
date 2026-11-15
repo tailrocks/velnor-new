@@ -18,5 +18,6 @@ pub mod plan;
 pub mod publish;
 pub mod release;
 pub mod setup;
+pub mod stream;
 pub mod time;
 pub mod timings;

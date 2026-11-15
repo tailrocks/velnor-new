@@ -139,6 +139,7 @@ pub enum StepKind {
 pub enum HelperCommand {
     Plan,
     Prepare,
+    CheckMetadata,
     Restored,
     InputsSave,
     InputsRestore,

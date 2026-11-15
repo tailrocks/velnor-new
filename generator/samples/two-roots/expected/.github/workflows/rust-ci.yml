@@ -78,6 +78,8 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -135,6 +137,9 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: xtask
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored

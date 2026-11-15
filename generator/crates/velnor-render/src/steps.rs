@@ -219,6 +219,7 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
     match command {
         HelperCommand::Plan => "plan",
         HelperCommand::Prepare => "prepare",
+        HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored => "restored",
         HelperCommand::InputsSave => "inputs save",
         HelperCommand::InputsRestore => "inputs restore",

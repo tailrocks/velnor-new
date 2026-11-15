@@ -85,6 +85,8 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -178,6 +180,9 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: ci-helper
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -237,6 +242,9 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: crates/velnor-runner
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -324,6 +332,9 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: generator
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -395,6 +406,9 @@ jobs:
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
+      - name: velnor-ci check-metadata
+        working-directory: local
+        run: velnor-ci check-metadata
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored

@@ -406,6 +406,10 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
     }
     toolchain.extend([
         step(StepKind::Helper(HelperCommand::Prepare)),
+        Step {
+            directory: root.manifest.parent(),
+            ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+        },
         step(StepKind::Helper(HelperCommand::Restored)),
     ]);
     steps.extend(toolchain.into_iter().map(|step| Step {

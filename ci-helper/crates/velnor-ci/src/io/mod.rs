@@ -7,6 +7,7 @@ mod http;
 mod inputs;
 mod plan;
 mod release;
+mod run;
 mod setup;
 mod timings;
 mod units;
@@ -68,7 +69,7 @@ pub fn main() -> ExitCode {
         Err(error) => error.exit(),
     };
     if let Command::Run(args) = &cli.command {
-        return setup::run(args);
+        return run::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -98,6 +99,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::Prepare => setup::prepare(),
+        Command::CheckMetadata => setup::check_metadata(),
         Command::Restored => Ok(String::new()),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }

@@ -18,12 +18,15 @@ use velnor_rust::{
     manifests, metadata_roots, pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
+mod check;
 mod recorded;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
 use crate::{Drift, GenerateError, check_tag, plan_generate, require_compatible};
+use check::cargo_metadata;
+pub use check::check_metadata;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
@@ -350,21 +353,7 @@ pub fn view_of(
         if known {
             continue;
         }
-        let path = manifest_file(root, &manifest)?;
-        let directory = path.parent().unwrap_or(root);
-        let output = program(
-            directory,
-            "cargo",
-            &[
-                OsStr::new("metadata"),
-                OsStr::new("--format-version"),
-                OsStr::new("1"),
-                OsStr::new("--no-deps"),
-                OsStr::new("--offline"),
-                OsStr::new("--manifest-path"),
-                path.as_os_str(),
-            ],
-        )?;
+        let output = cargo_metadata(root, &manifest)?;
         let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
         if keep_metadata {
             recorded.insert(workspace.clone(), output);

@@ -21,6 +21,7 @@ pub enum MetadataFileError {
     Unreadable(String),
     Changed(RepoPath),
     Unlisted(RepoPath),
+    Differs(RepoPath),
     Layout,
 }
 
@@ -31,6 +32,10 @@ impl fmt::Display for MetadataFileError {
             Self::Unreadable(detail) => write!(f, "{METADATA_PATH} is unreadable: {detail}"),
             Self::Changed(path) => write!(f, "{path} changed after {METADATA_PATH} was written"),
             Self::Unlisted(path) => write!(f, "{path} is not in {METADATA_PATH}"),
+            Self::Differs(path) => write!(
+                f,
+                "{METADATA_PATH} differs from what cargo reports for {path}"
+            ),
             Self::Layout => write!(
                 f,
                 "a file Cargo discovers as a target was added or removed after {METADATA_PATH} was written"
