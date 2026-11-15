@@ -156,8 +156,34 @@ fn a_warning_annotation_escapes_the_characters_a_workflow_command_reads() {
         "::warning file=a%2Cb/c%3Ad.toml::this pull request runs it%0D (x = \"100%25\"%0Ay)\n"
     );
     assert_eq!(warnings(&[]), "");
-    assert_eq!(
-        weakened(std::slice::from_ref(&weakening), &[]),
-        "check does less: a,b/c:d.toml: x = \"100%\"\ny: runs it\r\n"
+}
+
+#[test]
+fn a_weakening_printed_by_explain_cannot_forge_a_workflow_command() {
+    let hostile = Weakening {
+        file: path("a/Cargo.toml"),
+        setting: "p\n::warning::FORGED\r::error::FORGED2\n::stop-commands::tok 100%".to_owned(),
+        effect: "\n::warning::FORGED3\u{1b}[0m".to_owned(),
+    };
+    let text = weakened(
+        std::slice::from_ref(&hostile),
+        std::slice::from_ref(&hostile),
+    );
+    assert_eq!(text.matches('\n').count(), 1, "{text:?}");
+    assert!(!text.contains('\r') && !text.contains('\u{1b}'), "{text:?}");
+    assert!(text.starts_with("check does less: "), "{text:?}");
+    assert!(text.contains("100%25"), "{text:?}");
+    assert!(text.contains("%0A::warning::FORGED"), "{text:?}");
+
+    let selections = BTreeMap::from([(path("::warning::x/Cargo.toml"), RustSelection::None)]);
+    let explained = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::new(),
+        &BTreeMap::new(),
+    );
+    assert!(
+        explained.lines().all(|line| !line.starts_with("::")),
+        "{explained:?}"
     );
 }

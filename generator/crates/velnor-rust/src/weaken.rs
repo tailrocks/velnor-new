@@ -104,22 +104,55 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
 type Make<'a> = dyn Fn(String, String) -> Weakening + 'a;
 
 fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
-    let off = parsed
-        .get("lib")
-        .and_then(|lib| lib.get("doctest"))
-        .and_then(Value::as_bool)
-        == Some(false);
-    let name = parsed
-        .get("package")
+    let package = parsed.get("package");
+    let name = package
         .and_then(|package| package.get("name"))
         .and_then(Value::as_str);
-    match (off, name) {
-        (true, Some(name)) => vec![make(
+    let lib = parsed.get("lib");
+    let off = |table: Option<&Value>, key: &str| {
+        table
+            .and_then(|table| table.get(key))
+            .and_then(Value::as_bool)
+            == Some(false)
+    };
+    let mut found = Vec::new();
+    if let (true, Some(name)) = (off(lib, "doctest"), name) {
+        found.push(make(
             "[lib] doctest = false".to_owned(),
             format!("turns off doctests for {name}"),
-        )],
-        _ => Vec::new(),
+        ));
     }
+    let owner = name.unwrap_or("this manifest");
+    if off(lib, "test") {
+        found.push(make(
+            "[lib] test = false".to_owned(),
+            format!("leaves the library unit tests of {owner} out of the test run"),
+        ));
+    }
+    if off(package, "autotests") {
+        found.push(make(
+            "autotests = false".to_owned(),
+            format!("stops {owner} from finding the files in tests/ as tests"),
+        ));
+    }
+    for kind in ["test", "bench", "bin", "example"] {
+        let targets = parsed
+            .get(kind)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten();
+        for target in targets.filter(|target| off(Some(target), "test")) {
+            let target_name = target
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unnamed");
+            found.push(make(
+                format!("[[{kind}]] name = \"{target_name}\" test = false"),
+                format!("leaves the {kind} target {target_name} of {owner} out of the test run"),
+            ));
+        }
+    }
+    found
 }
 
 fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
@@ -200,6 +233,24 @@ fn nextest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .and_then(Value::as_table)
         .into_iter()
         .flatten();
+    let filters: Vec<Weakening> = parsed
+        .get("profile")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten()
+        .filter(|(profile, _)| matches!(profile.as_str(), "default" | "ci"))
+        .filter_map(|(profile, section)| {
+            section
+                .get("default-filter")
+                .map(|filter| (profile, filter))
+        })
+        .map(|(profile, filter)| {
+            make(
+                format!("profile.{profile}.default-filter = {filter}"),
+                format!("runs only the tests matching {filter} unless a filter is given"),
+            )
+        })
+        .collect();
     profiles
         .flat_map(|(profile, section)| {
             section
@@ -224,5 +275,6 @@ fn nextest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
                 format!("runs test binaries through the wrapper {name}, command {command}"),
             )
         })
+        .chain(filters)
         .collect()
 }

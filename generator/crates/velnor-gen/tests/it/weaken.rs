@@ -30,7 +30,7 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 
 #[test]
 fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 11] = [
+    let cases: [(&str, &str, &str, &str); 17] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -97,6 +97,42 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
             "build.rustdoc = \"/bin/true\"",
             "runs \"/bin/true\" instead of rustdoc",
         ),
+        (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\n\n[lib]\ntest = false\n",
+            "[lib] test = false",
+            "leaves the library unit tests of foo out of the test run",
+        ),
+        (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\nautotests = false\n",
+            "autotests = false",
+            "stops foo from finding the files in tests/ as tests",
+        ),
+        (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\n\n[[test]]\nname = \"slow\"\ntest = false\n",
+            "[[test]] name = \"slow\" test = false",
+            "leaves the test target slow of foo out of the test run",
+        ),
+        (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\n\n[[bench]]\nname = \"b\"\ntest = false\n",
+            "[[bench]] name = \"b\" test = false",
+            "leaves the bench target b of foo out of the test run",
+        ),
+        (
+            ".config/nextest.toml",
+            "[profile.default]\ndefault-filter = \"not all()\"\n",
+            "profile.default.default-filter = \"not all()\"",
+            "runs only the tests matching \"not all()\" unless a filter is given",
+        ),
+        (
+            ".config/nextest.toml",
+            "[profile.ci]\ndefault-filter = \"none()\"\n",
+            "profile.ci.default-filter = \"none()\"",
+            "runs only the tests matching \"none()\" unless a filter is given",
+        ),
     ];
     for (file, text, setting, effect) in cases {
         let files = vec![("mise.toml", MISE), (file, text)];
@@ -137,11 +173,11 @@ fn ordinary_settings_name_nothing() -> TestResult {
         ),
         (
             ".config/nextest.toml",
-            "[profile.default]\nretries = 2\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
+            "[profile.default]\nretries = 2\n\n[profile.ci]\nfail-fast = false\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
         ),
         (
             "crates/foo/Cargo.toml",
-            "[package]\nname = \"foo\"\n\n[lib]\ndoctest = true\n",
+            "[package]\nname = \"foo\"\nautotests = true\n\n[lib]\ndoctest = true\ntest = true\n\n[[test]]\nname = \"t\"\n",
         ),
         (".velnor/rust-ci.toml", "timeout_minutes = 20\n"),
     ])?;

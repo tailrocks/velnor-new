@@ -58,7 +58,12 @@ pub fn weakened(all: &[Weakening], new: &[Weakening]) -> String {
         } else {
             ""
         };
-        lines.push(format!("check does less: {weakening}{marker}\n"));
+        lines.push(format!(
+            "check does less: {}: {}: {}{marker}\n",
+            escape(weakening.file.as_str(), false),
+            escape(&weakening.setting, false),
+            escape(&weakening.effect, false),
+        ));
     }
     lines.concat()
 }
@@ -77,6 +82,14 @@ pub fn warnings(new: &[Weakening]) -> String {
     lines.concat()
 }
 
+fn line_start(text: &str) -> String {
+    let escaped = escape(text, false);
+    match escaped.strip_prefix("::") {
+        Some(rest) => format!("%3A:{rest}"),
+        None => escaped,
+    }
+}
+
 fn escape(text: &str, property: bool) -> String {
     text.chars()
         .map(|c| match c {
@@ -85,6 +98,7 @@ fn escape(text: &str, property: bool) -> String {
             '\n' => "%0A".to_owned(),
             ':' if property => "%3A".to_owned(),
             ',' if property => "%2C".to_owned(),
+            control if control.is_control() => format!("%{:02X}", u32::from(control)),
             other => other.to_string(),
         })
         .collect()
@@ -107,7 +121,7 @@ pub fn explain(
             }
             RustSelection::All(trigger) => (trigger.to_string(), None),
         };
-        lines.push(format!("{root}: {header}\n"));
+        lines.push(format!("{}: {header}\n", line_start(root.as_str())));
         for (package, reason) in packages.into_iter().flatten() {
             lines.push(format!("  {package} {reason}\n"));
         }
