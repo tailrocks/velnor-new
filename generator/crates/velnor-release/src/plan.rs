@@ -39,30 +39,6 @@ pub struct ReleasePlan {
     pub binaries: Vec<BinaryPlan>,
 }
 
-fn assigned_root(package: &str, roots: &[String], files: &ReleaseFiles) -> String {
-    let listed = roots.iter().find(|root| {
-        files
-            .release_plz_toml
-            .get(*root)
-            .and_then(|text| text.parse::<toml::Table>().ok())
-            .and_then(|table| {
-                table
-                    .get("package")
-                    .and_then(toml::Value::as_array)
-                    .cloned()
-            })
-            .is_some_and(|entries| {
-                entries
-                    .iter()
-                    .any(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(package))
-            })
-    });
-    listed
-        .or_else(|| roots.first())
-        .cloned()
-        .unwrap_or_default()
-}
-
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
     let mut prefixes: BTreeMap<&str, Vec<String>> = BTreeMap::new();
@@ -101,33 +77,30 @@ impl ReleasePlan {
                 .release_plz_toml
                 .get(root)
                 .ok_or_else(|| ReleaseError::MissingReleasePlzToml { root: root.clone() })?;
-            let extra: Vec<&str> = config
-                .binaries
-                .iter()
-                .filter(|binary| assigned_root(&binary.package, &config.roots, files) == *root)
-                .map(|binary| binary.package.as_str())
-                .collect();
-            configs.push(read(root, text, &extra)?);
+            configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
         mise::check(&files.mise_toml, &files.mise_lock)?;
         let mut binaries = Vec::new();
         for binary in &config.binaries {
-            let root = assigned_root(&binary.package, &config.roots, files);
-            let tag_pattern = configs
+            let (root, package) = configs
                 .iter()
-                .filter(|candidate| candidate.root == root)
-                .flat_map(|candidate| &candidate.packages)
-                .find(|package| package.name == binary.package)
-                .map(|package| package.tag_pattern.clone());
-            if let Some(tag_pattern) = tag_pattern {
-                binaries.push(BinaryPlan {
+                .find_map(|candidate| {
+                    candidate
+                        .packages
+                        .iter()
+                        .find(|package| package.name == binary.package)
+                        .map(|package| (candidate.root.clone(), package))
+                })
+                .ok_or_else(|| ReleaseError::BinaryNotReleased {
                     package: binary.package.clone(),
-                    root,
-                    platforms: binary.platforms.clone(),
-                    tag_pattern,
-                });
-            }
+                })?;
+            binaries.push(BinaryPlan {
+                package: binary.package.clone(),
+                root,
+                platforms: binary.platforms.clone(),
+                tag_pattern: package.tag_pattern.clone(),
+            });
         }
         Ok(ReleasePlan {
             roots: configs

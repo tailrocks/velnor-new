@@ -211,3 +211,91 @@ fn release_plz_missing_from_mise_is_refused() {
     aqua.mise_lock = "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
     assert_eq!(refusal(&aqua), None);
 }
+
+#[test]
+fn a_binary_that_release_plz_does_not_release_is_refused() -> TestResult {
+    let binaries = "[[binaries]]\npackage = \"tool\"\n";
+    let mut absent = files();
+    absent.release_toml = Some(binaries.to_owned());
+    assert!(
+        matches!(refusal(&absent), Some(ReleaseError::BinaryNotReleased { package }) if package == "tool")
+    );
+
+    let mut unreleased = plz_edited(
+        "name = \"app\"",
+        "name = \"app\"\n\n[[package]]\nname = \"tool\"\nrelease = false",
+    )?;
+    unreleased.release_toml = Some(binaries.to_owned());
+    assert!(matches!(
+        refusal(&unreleased),
+        Some(ReleaseError::BinaryNotReleased { .. })
+    ));
+
+    let mut listed = plz_edited(
+        "name = \"app\"",
+        "name = \"app\"\n\n[[package]]\nname = \"tool\"",
+    )?;
+    listed.release_toml = Some(binaries.to_owned());
+    assert_eq!(refusal(&listed), None);
+    Ok(())
+}
+
+#[test]
+fn a_root_without_package_entries_is_checked_at_the_workspace_level() -> TestResult {
+    let mut empty = files();
+    empty.release_plz_toml.insert(
+        ".".to_owned(),
+        PLZ.replace("[[package]]\nname = \"app\"\n", ""),
+    );
+    assert_eq!(refusal(&empty), None);
+
+    let no_tag = edit(
+        &empty.release_plz_toml["."],
+        "git_tag_name = \"{{ package }}-v{{ version }}\"\n",
+        "",
+    )?;
+    empty.release_plz_toml.insert(".".to_owned(), no_tag);
+    assert!(matches!(
+        refusal(&empty),
+        Some(ReleaseError::MissingGitTagName { package: None, .. })
+    ));
+
+    let mut draft = files();
+    draft.release_plz_toml.insert(
+        ".".to_owned(),
+        edit(
+            &PLZ.replace("[[package]]\nname = \"app\"\n", ""),
+            "git_release_draft = true",
+            "git_release_draft = false",
+        )?,
+    );
+    assert!(matches!(
+        refusal(&draft),
+        Some(ReleaseError::GitReleaseDraftNotTrue { package: None, .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn errors_read_as_messages_naming_the_file_and_package() {
+    let mut files = files();
+    files.release_toml = Some("[[binaries]]\npackage = \"tool\"\n".to_owned());
+    let message = refusal(&files)
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    assert!(
+        message.contains("tool") && message.contains(".velnor/release.toml"),
+        "{message}"
+    );
+    let message = plz_refusal("semver_check = false", "semver_check = true")
+        .ok()
+        .flatten()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    assert!(
+        message.contains("./release-plz.toml")
+            && message.contains("semver_check")
+            && message.contains("app"),
+        "{message}"
+    );
+}

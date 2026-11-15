@@ -3,7 +3,7 @@
 
 use velnor_release::ReleasePlan;
 
-use crate::fixture::{TestResult, files};
+use crate::fixture::{TestResult, files, plz_edited};
 
 #[test]
 fn valid_files_without_velnor_config_use_the_defaults() -> TestResult {
@@ -20,7 +20,10 @@ fn valid_files_without_velnor_config_use_the_defaults() -> TestResult {
 
 #[test]
 fn binaries_get_default_platforms_and_the_tag_pattern_of_their_package() -> TestResult {
-    let mut files = files();
+    let mut files = plz_edited(
+        "name = \"app\"",
+        "name = \"app\"\n\n[[package]]\nname = \"tool\"",
+    )?;
     files.release_toml = Some(
         "after = [\"CI\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tool\"\nplatforms = [\"linux-x64\"]\n"
             .to_owned(),

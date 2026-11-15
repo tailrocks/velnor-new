@@ -46,11 +46,7 @@ fn check_package(
     Ok(())
 }
 
-pub(crate) fn read(
-    root: &str,
-    text: &str,
-    extra_packages: &[&str],
-) -> Result<RootConfig, ReleaseError> {
+pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
         message: error.to_string(),
@@ -66,11 +62,6 @@ pub(crate) fn read(
         let effective = entry.settings.over(workspace);
         if effective.release != Some(false) {
             released.push((entry.name.clone(), effective));
-        }
-    }
-    for name in extra_packages {
-        if !released.iter().any(|(existing, _)| existing == name) {
-            released.push(((*name).to_owned(), workspace.clone()));
         }
     }
     if released.is_empty() {
