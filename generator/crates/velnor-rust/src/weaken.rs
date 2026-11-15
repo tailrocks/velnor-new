@@ -227,17 +227,23 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             .into_iter()
             .flat_map(|targets| targets.values().filter_map(Value::as_table)),
     );
-    let flags: Vec<String> = sections
+    let flags: Vec<(String, Vec<String>)> = sections
         .filter_map(|section| section.get("rustdocflags"))
-        .map(ToString::to_string)
+        .map(|value| (value.to_string(), flag_tokens(value)))
         .collect();
-    if let Some(flags) = flags.iter().find(|flags| flags.contains("--test-args")) {
+    if let Some((flags, _)) = flags
+        .iter()
+        .find(|(_, tokens)| tokens.iter().any(|token| is_flag(token, "--test-args")))
+    {
         found.push(make(
             format!("rustdocflags {flags} with --test-args"),
             "passes --test-args to rustdoc, which can leave out every doctest".to_owned(),
         ));
     }
-    if let Some(flags) = flags.iter().find(|flags| flags.contains("--no-run")) {
+    if let Some((flags, _)) = flags
+        .iter()
+        .find(|(_, tokens)| tokens.iter().any(|token| is_flag(token, "--no-run")))
+    {
         found.push(make(
             format!("rustdocflags {flags} with --no-run"),
             "passes --no-run to rustdoc, which compiles every doctest without running it"
@@ -245,6 +251,25 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         ));
     }
     found
+}
+
+fn flag_tokens(value: &Value) -> Vec<String> {
+    match value {
+        Value::Array(items) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        Value::String(text) => text.split_whitespace().map(str::to_owned).collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_flag(token: &str, flag: &str) -> bool {
+    token == flag
+        || token
+            .strip_prefix(flag)
+            .is_some_and(|rest| rest.starts_with('='))
 }
 
 fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {

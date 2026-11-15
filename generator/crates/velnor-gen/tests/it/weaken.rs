@@ -305,3 +305,16 @@ fn only_a_weakening_a_change_adds_is_new() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_rustdoc_flag_value_that_contains_a_bypass_flag_is_not_a_bypass() -> TestResult {
+    let names = named(&[(
+        ".cargo/config.toml",
+        "[build]\nrustdocflags = [\"--cfg\", \"mode=\\\"--no-run\\\"\", \"--test-args-note\"]\n",
+    )])?;
+    assert!(
+        names.iter().all(|name| !name.contains("rustdocflags")),
+        "{names:?}"
+    );
+    Ok(())
+}
