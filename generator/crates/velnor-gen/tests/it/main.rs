@@ -18,6 +18,7 @@ mod lock_affected;
 mod lock_consistency;
 mod patch;
 mod pipeline;
+mod release_cargo_include;
 mod release_fixture;
 mod release_nested_toolchain;
 mod release_sample_names;
