@@ -189,7 +189,7 @@ impl<E: Engine> Environment<E> {
     }
 
     async fn start_all(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
-        super::keys::folder(&self.dir.join("keys")).await?;
+        super::pair::private_folder(&self.dir.join("keys")).await?;
         for directory in ["cache", "api"] {
             fs::create_dir_all(self.dir.join(directory)).await?;
         }

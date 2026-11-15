@@ -12,15 +12,6 @@ use super::pair::{random_hex, write_private};
 
 const TOKEN_HEX_LEN: usize = 64;
 
-pub(super) async fn folder(path: &Path) -> io::Result<()> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)
-        .await?;
-    fs::set_permissions(path, Permissions::from_mode(0o700)).await
-}
-
 pub(super) async fn control(path: &Path) -> io::Result<()> {
     let kept = fs::read_to_string(path).await.unwrap_or_default();
     if !(kept.len() == TOKEN_HEX_LEN && kept.bytes().all(|byte| byte.is_ascii_hexdigit())) {

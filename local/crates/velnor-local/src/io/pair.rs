@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
+use std::fs::Permissions;
 use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -68,6 +70,15 @@ pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> io::Result<Min
         jit,
         took: started.elapsed(),
     })
+}
+
+pub(super) async fn private_folder(path: &Path) -> io::Result<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+        .await?;
+    fs::set_permissions(path, Permissions::from_mode(0o700)).await
 }
 
 pub async fn write_private(path: &Path, content: &str) -> io::Result<()> {

@@ -16,7 +16,7 @@ use tokio::signal::unix::{SignalKind, signal};
 use super::authority::{Authority, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};
 use super::keys;
-use super::pair::write_private;
+use super::pair::{private_folder, write_private};
 use super::run::accept;
 use crate::cli::SuperviseArgs;
 
@@ -40,11 +40,12 @@ async fn forget(path: &Path) -> io::Result<()> {
     }
 }
 
+/// Public only for the integration tests of this crate.
 pub async fn start(dir: &Path) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
-    fs::create_dir_all(&authority).await?;
-    keys::folder(&dir.join("keys")).await?;
+    private_folder(&authority).await?;
+    private_folder(&dir.join("keys")).await?;
     for file in [LEDGER, "address", "pid", "binary"] {
         forget(&authority.join(file)).await?;
     }
@@ -89,6 +90,29 @@ async fn ours(pid: &str, dir: &Path, binary: &str) -> bool {
     command.is_ok_and(|bytes| String::from_utf8_lossy(&bytes).trim() == expected)
 }
 
+async fn alive(pid: &str) -> bool {
+    program("kill", &["-0", pid], None).await.is_ok()
+}
+
+async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
+    for signal in ["-TERM", "-KILL"] {
+        if !ours(pid, dir, binary).await {
+            break;
+        }
+        program("kill", &[signal, pid], None).await?;
+        let deadline = tokio::time::Instant::now() + STOP_TIMEOUT;
+        while ours(pid, dir, binary).await && tokio::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+    if ours(pid, dir, binary).await {
+        return Err(io::Error::other(format!(
+            "the authority, process {pid}, did not stop"
+        )));
+    }
+    Ok(())
+}
+
 pub(super) async fn stop(dir: &Path) -> io::Result<()> {
     let authority = authority_dir(dir);
     let pid = fs::read_to_string(authority.join("pid")).await;
@@ -97,27 +121,20 @@ pub(super) async fn stop(dir: &Path) -> io::Result<()> {
         .map(|pid| pid.trim().to_owned())
         .filter(|pid| pid.parse::<u32>().is_ok())
     {
-        let binary = fs::read_to_string(authority.join("binary"))
-            .await
-            .map_err(|error| {
-                io::Error::other(format!(
-                    "authority/binary is missing, so process {pid} cannot be verified: {error}"
-                ))
-            })?;
-        for signal in ["-TERM", "-KILL"] {
-            if !ours(&pid, dir, &binary).await {
-                break;
+        let binary = match fs::read_to_string(authority.join("binary")).await {
+            Ok(binary) => Some(binary),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
+        };
+        match binary {
+            Some(binary) => terminate(dir, &pid, &binary).await?,
+            None if alive(&pid).await => {
+                return Err(io::Error::other(format!(
+                    "process {pid} may be the authority, but its binary record is missing; stop process {pid} or remove {}, then run this again",
+                    authority.join("pid").display()
+                )));
             }
-            program("kill", &[signal, &pid], None).await?;
-            let deadline = tokio::time::Instant::now() + STOP_TIMEOUT;
-            while ours(&pid, dir, &binary).await && tokio::time::Instant::now() < deadline {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        }
-        if ours(&pid, dir, &binary).await {
-            return Err(io::Error::other(format!(
-                "the authority, process {pid}, did not stop"
-            )));
+            None => {}
         }
     }
     forget(&authority.join("pid")).await?;

@@ -116,3 +116,77 @@ async fn start_tightens_a_keys_folder_that_is_looser() {
     let _ = supervisor::start(&dir).await;
     assert_eq!(mode(&dir.join("keys")), 0o700);
 }
+
+fn recorded_pid(dir: &Path, pid: u32) {
+    std::fs::create_dir_all(dir.join("authority")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(dir.join("authority/pid"), pid.to_string())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn exited_pid() -> u32 {
+    let mut child = Command::new("/usr/bin/true")
+        .spawn()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let _ = child.wait();
+    child.id()
+}
+
+#[tokio::test]
+async fn down_forgets_a_pid_with_no_binary_record_when_that_process_is_gone() {
+    let dir = temp_dir("supervisor-pid-gone");
+    recorded_pid(&dir, exited_pid());
+    let env = Environment::at(&dir, Silent)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let down = env.down().await;
+    assert!(down.is_ok(), "{down:?}");
+    assert!(!dir.join("authority/pid").exists(), "the stale pid is kept");
+}
+
+#[tokio::test]
+async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
+    let dir = temp_dir("supervisor-pid-live");
+    let mut live = Command::new("/bin/sleep")
+        .arg("30")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let pid = live.id();
+    recorded_pid(&dir, pid);
+    let env = Environment::at(&dir, Silent)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let down = env.down().await;
+    let alive = live.try_wait().map_or(true, |status| status.is_none());
+    let _ = live.kill();
+    let _ = live.wait();
+    let message = down.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(alive, "down stopped a process without a binary record");
+    assert!(
+        message.contains(&format!("stop process {pid}")),
+        "{message}"
+    );
+    assert!(message.contains("authority/pid"), "{message}");
+}
+
+#[tokio::test]
+async fn start_creates_the_authority_folder_private() {
+    let dir = temp_dir("supervisor-authority-fresh");
+    let _ = supervisor::start(&dir).await;
+    assert_eq!(mode(&dir.join("authority")), 0o700);
+}
+
+#[tokio::test]
+async fn start_tightens_an_authority_folder_that_is_looser() {
+    let dir = temp_dir("supervisor-authority-loose");
+    std::fs::create_dir_all(dir.join("authority")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::set_permissions(
+        dir.join("authority"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let _ = supervisor::start(&dir).await;
+    assert_eq!(mode(&dir.join("authority")), 0o700);
+}
