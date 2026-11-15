@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use bollard::container::LogOutput;
 use futures_util::stream;
 
-use super::read_stdout_line;
+use super::{drain_empty_output, read_stdout_line};
 use crate::error::HostError;
 
 type Frames = Vec<Result<LogOutput, bollard::errors::Error>>;
@@ -63,4 +63,29 @@ async fn a_record_line_on_stdout_is_returned() -> Result<(), HostError> {
     .await?;
     assert_eq!(line, b"{}\n");
     Ok(())
+}
+
+async fn drain(frames: Frames) -> Result<(), HostError> {
+    let mut output = Box::pin(stream::iter(frames));
+    drain_empty_output(&mut output, Instant::now() + Duration::from_secs(5)).await
+}
+
+#[tokio::test]
+async fn a_helper_that_fails_after_its_record_reports_its_own_message()
+-> Result<(), Box<dyn std::error::Error>> {
+    let Err(error) = drain(vec![Ok(stderr(b"late_probe_failure\n"))]).await else {
+        return Err("the late helper failure was not reported".into());
+    };
+    let text = error.to_string();
+    assert!(text.contains("late_probe_failure"), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_empty_drain_succeeds_and_stray_output_is_a_frame_error() {
+    assert_eq!(drain(Vec::new()).await, Ok(()));
+    let stray = LogOutput::StdOut {
+        message: b"x".to_vec().into(),
+    };
+    assert_eq!(drain(vec![Ok(stray)]).await, Err(HostError::Frame));
 }

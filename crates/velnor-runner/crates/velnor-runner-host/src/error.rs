@@ -41,12 +41,37 @@ impl ErrorDetail {
     pub fn from_bytes(raw: &[u8]) -> Self {
         let mut text = [0_u8; ERROR_DETAIL_BYTES];
         let mut len = 0;
-        for byte in raw
-            .iter()
-            .filter(|byte| byte.is_ascii_graphic() || **byte == b' ')
-            .take(ERROR_DETAIL_BYTES)
-        {
-            text[len] = *byte;
+        let mut bytes = raw.iter().copied().peekable();
+        let mut gap = false;
+        while let Some(byte) = bytes.next() {
+            if len == ERROR_DETAIL_BYTES {
+                break;
+            }
+            if byte == 0x1b && bytes.peek() == Some(&b'[') {
+                bytes.next();
+                for next in bytes.by_ref() {
+                    if (0x40..=0x7e).contains(&next) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if byte == b'\r' || byte == b'\n' {
+                gap = len > 0;
+                continue;
+            }
+            if !(byte.is_ascii_graphic() || byte == b' ') {
+                continue;
+            }
+            if gap {
+                text[len] = b' ';
+                len += 1;
+                gap = false;
+                if len == ERROR_DETAIL_BYTES {
+                    break;
+                }
+            }
+            text[len] = byte;
             len += 1;
         }
         Self { text, len }
