@@ -138,10 +138,6 @@ impl CompletionWorker {
         } = input;
         let token = Zeroizing::new(admin_token);
         let admin = CompletionAdminClient::new(admin_base, &token)?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| HostError::Journal)?;
         let stopping = Arc::new(AtomicBool::new(false));
         let thread_stopping = Arc::clone(&stopping);
         let (wake, receiver) = mpsc::sync_channel(1);
@@ -163,13 +159,7 @@ impl CompletionWorker {
         let thread = thread::Builder::new()
             .name("velnor-completion-reconciler".to_owned())
             .spawn(move || {
-                completion_thread(
-                    &runtime,
-                    resources,
-                    &thread_stopping,
-                    &receiver,
-                    finished_tx,
-                );
+                completion_thread(resources, &thread_stopping, &receiver, finished_tx);
             })
             .map_err(|_| HostError::Journal)?;
         Ok(Self {
@@ -250,13 +240,18 @@ impl Drop for CompletionWorker {
 }
 
 fn completion_thread(
-    runtime: &tokio::runtime::Runtime,
     resources: Resources,
     stopping: &Arc<AtomicBool>,
     receiver: &mpsc::Receiver<()>,
     finished: oneshot::Sender<Result<(), HostError>>,
 ) {
-    let result = cleanup::run(runtime, resources, stopping, receiver);
+    let result = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => cleanup::run(&runtime, resources, stopping, receiver),
+        Err(_) => Err(HostError::Journal),
+    };
     if let Err(Err(error)) = finished.send(result) {
         eprintln!("completion worker failed phase=shutdown reason={error}");
     }
