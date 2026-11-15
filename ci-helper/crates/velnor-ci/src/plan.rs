@@ -10,6 +10,8 @@ use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
 
+const WORKSPACE: &str = "--workspace";
+
 pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
 
 pub fn outputs(
@@ -25,9 +27,9 @@ pub fn outputs(
                 "the roots {other} and {root} both get the output name rust_{slug}; move one of them"
             )));
         }
-        let (mode, packages, filter) = match selection {
-            RustSelection::None => ("none", Vec::new(), String::new()),
-            RustSelection::All(_) => ("all", Vec::new(), "all()".to_owned()),
+        let (mode, packages, filter, package_args) = match selection {
+            RustSelection::None => ("none", Vec::new(), String::new(), String::new()),
+            RustSelection::All(_) => ("all", Vec::new(), "all()".to_owned(), WORKSPACE.to_owned()),
             RustSelection::Some(packages) => {
                 let names: Vec<&str> = packages.keys().map(PackageName::as_str).collect();
                 let filter = names
@@ -35,18 +37,39 @@ pub fn outputs(
                     .map(|name| format!("package({name})"))
                     .collect::<Vec<_>>()
                     .join(" | ");
-                ("some", names, filter)
+                let package_args = package_args(&names);
+                ("some", names, filter, package_args)
             }
         };
         lines.push(format!("rust_{slug}_mode={mode}\n"));
         lines.push(format!("rust_{slug}_packages={}\n", packages.join(" ")));
         lines.push(format!("rust_{slug}_test_filter={filter}\n"));
+        lines.push(format!("rust_{slug}_package_args={package_args}\n"));
         if let Some(steps) = steps.get(root) {
             lines.push(format!("rust_{slug}_doctests={}\n", flag(steps.doctests)));
             lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
         }
     }
     Ok(lines.concat())
+}
+
+fn package_args(names: &[&str]) -> String {
+    if names.iter().all(|name| cargo_name(name)) {
+        names
+            .iter()
+            .map(|name| format!("-p {name}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        WORKSPACE.to_owned()
+    }
+}
+
+fn cargo_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
 #[must_use]
