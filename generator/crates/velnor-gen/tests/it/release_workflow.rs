@@ -17,7 +17,7 @@ const PINNED: (&str, &str) = (
     "0.1.79",
     "a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386",
 );
-const ACTION_COMMIT: &str = "46dde57f398db48e54bd2721aa1c7d75a10b28c5";
+const ACTION_COMMIT: &str = "9ee3aedc9d3a9ebf90a212d960c9a5cfaae6c46b";
 
 fn read() -> Result<String, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
