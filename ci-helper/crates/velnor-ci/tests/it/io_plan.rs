@@ -181,6 +181,18 @@ fn plan_treats_a_source_over_the_size_bound_as_possibly_holding_docs() {
     );
 }
 
+#[test]
+fn plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs() {
+    let repo = plan_repo("doc-flags-total");
+    for n in 0..10 {
+        repo.write(&format!("a/src/m{n}.rs"), &"// pad\n".repeat(140_000));
+    }
+    assert_eq!(
+        doc_flags(&repo, None),
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+    );
+}
+
 fn explain(repo: &Repo, changed: &str) -> String {
     explain_all(repo, &[changed])
 }
