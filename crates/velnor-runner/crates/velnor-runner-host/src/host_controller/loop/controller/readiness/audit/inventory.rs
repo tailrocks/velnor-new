@@ -19,8 +19,8 @@ use super::{RemoteRunnerAudit, inspect_owned_container, inspect_owned_volume};
 
 #[path = "inventory/settling.rs"]
 mod settling;
-pub(in crate::host_controller::loop_driver::controller) use settling::SettlingAges;
 use settling::Inventory;
+pub(in crate::host_controller::loop_driver::controller) use settling::SettlingAges;
 
 pub(in crate::host_controller::loop_driver::controller) async fn audit_inventory_with_remote(
     docker: &Docker,

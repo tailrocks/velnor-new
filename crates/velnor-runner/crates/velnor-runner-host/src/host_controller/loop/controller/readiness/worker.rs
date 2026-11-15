@@ -47,8 +47,10 @@ impl ReadinessWorker {
             let control = control.clone();
             let secret = Arc::clone(&secret);
             async move {
-                if let Err(error) =
-                    refresh(&state, &docker, &journal, &selected, &control, &secret, &settling).await
+                if let Err(error) = refresh(
+                    &state, &docker, &journal, &selected, &control, &secret, &settling,
+                )
+                .await
                 {
                     eprintln!(
                         "The controller could not refresh readiness evidence. Error: {error}."

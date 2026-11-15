@@ -126,10 +126,7 @@ fn a_pair_settling_longer_than_the_bound_is_a_failure() {
     let ages = SettlingAges::default();
     let start = Instant::now();
     assert_eq!(settling_pair(&ages, start), Ok(None));
-    assert_eq!(
-        settling_pair(&ages, start + SETTLING_BOUND),
-        Ok(None)
-    );
+    assert_eq!(settling_pair(&ages, start + SETTLING_BOUND), Ok(None));
     assert_eq!(
         settling_pair(&ages, start + SETTLING_BOUND + Duration::from_secs(1)),
         Err(HostError::SettlingTimeout)

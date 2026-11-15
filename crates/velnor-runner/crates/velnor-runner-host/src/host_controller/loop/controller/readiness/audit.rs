@@ -175,7 +175,9 @@ fn validate_owned_container(
         || expected
             .iter()
             .any(|(key, value)| labels.get(*key) != Some(value))
-        || labels.keys().any(|key| unknown_velnor_label(key, &expected))
+        || labels
+            .keys()
+            .any(|key| unknown_velnor_label(key, &expected))
         || inspected.state.as_ref().and_then(|state| state.running) != Some(true)
     {
         return Err(HostError::Ownership);

@@ -29,9 +29,7 @@ where
 }
 
 pub(super) fn log_refusal(attempt: u32, error: HostError) {
-    eprintln!(
-        "cleanup_observer=refused attempt={attempt} of={OBSERVATION_ATTEMPTS} error={error}"
-    );
+    eprintln!("cleanup_observer=refused attempt={attempt} of={OBSERVATION_ATTEMPTS} error={error}");
 }
 
 #[cfg(test)]

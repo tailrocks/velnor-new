@@ -3,6 +3,7 @@
 
 use std::{
     error::Error,
+    fmt::Write as _,
     fs,
     io::{BufRead, BufReader},
     os::unix::fs::MetadataExt,
@@ -159,11 +160,17 @@ fn request(scenario: Scenario) -> TestResult<CleanupObserverRequest> {
             [4000, u32::try_from(index + 1).unwrap_or(1)]
         }),
     };
-    let digest = Sha256::digest(serde_json::to_vec(&binding)?);
+    let digest = Sha256::digest(serde_json::to_vec(&binding)?).iter().fold(
+        String::new(),
+        |mut hex, byte| {
+            let _written = write!(hex, "{byte:02x}");
+            hex
+        },
+    );
     Ok(CleanupObserverRequest {
         schema_version: 1,
         operation_id: "0123456789abcdef0123456789abcdef".to_owned(),
-        binding_sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
+        binding_sha256: digest,
         binding,
     })
 }
