@@ -150,7 +150,7 @@ pub struct PublishArgs {
 }
 
 fn tag(text: &str) -> Result<PlainName, CiError> {
-    PlainName::new("tag", text)
+    PlainName::tag(text)
 }
 
 fn app(text: &str) -> Result<PlainName, CiError> {

@@ -34,5 +34,6 @@ ring = { version = "=0.17.14", default-features = false }
 serde_json = { version = "=1.0.154" }
 velnor-gen = { version = "=0.1.79", path = "../../../generator/crates/velnor-gen" }
 velnor-model = { version = "=0.0.0", path = "../../../generator/crates/velnor-model" }
+velnor-release = { version = "=0.0.0", path = "../../../generator/crates/velnor-release" }
 velnor-rust = { version = "=0.0.0", path = "../../../generator/crates/velnor-rust" }
 ureq = { version = "=3.5.2", default-features = false, features = ["rustls"] }

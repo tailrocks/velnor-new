@@ -485,6 +485,7 @@ dependencies = [
  "ureq",
  "velnor-gen",
  "velnor-model",
+ "velnor-release",
  "velnor-rust",
 ]
 
@@ -502,6 +503,14 @@ dependencies = [
 [[package]]
 name = "velnor-model"
 version = "0.0.0"
+
+[[package]]
+name = "velnor-release"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "velnor-render"
