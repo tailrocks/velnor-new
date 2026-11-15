@@ -16,7 +16,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const PLATFORMS: [&str; 3] = ["linux-x64", "linux-arm64", "macos-arm64"];
 
-fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
+pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
     Ok(tree
         .at(&["jobs", id])
         .ok_or_else(|| format!("no job {id}"))?)
@@ -35,7 +35,7 @@ fn permissions(job: &Node) -> Vec<(String, String)> {
     })
 }
 
-fn runs(job: &Node) -> Vec<&str> {
+pub(crate) fn runs(job: &Node) -> Vec<&str> {
     steps(job)
         .iter()
         .filter_map(|step| step.get("run").and_then(Node::text))
