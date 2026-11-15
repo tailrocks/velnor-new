@@ -9,31 +9,25 @@ use velnor_rust::{optional_steps, root_sources};
 use crate::select::{facts, member, name, path};
 
 fn library(doctest: bool) -> RustMember {
+    target_of("a", TargetKind::Lib, doctest, "a/src/lib.rs")
+}
+
+fn target_of(name: &str, kind: TargetKind, doctest: bool, source: &str) -> RustMember {
     RustMember {
         targets: vec![Target {
-            name: TargetName::new("a").unwrap_or_else(|e| unreachable!("{e}")),
-            kinds: vec![TargetKind::Lib],
+            name: TargetName::new(name).unwrap_or_else(|e| unreachable!("{e}")),
+            kinds: vec![kind],
             tests: true,
             doctest,
-            source: None,
+            source: Some(path(source)),
             requires_features: false,
         }],
-        ..member("a", "a", &[])
+        ..member(name, "a", &[])
     }
 }
 
 fn binary() -> RustMember {
-    RustMember {
-        targets: vec![Target {
-            name: TargetName::new("b").unwrap_or_else(|e| unreachable!("{e}")),
-            kinds: vec![TargetKind::Bin],
-            tests: true,
-            doctest: false,
-            source: None,
-            requires_features: false,
-        }],
-        ..member("b", "b", &[])
-    }
+    target_of("b", TargetKind::Bin, false, "a/src/lib.rs")
 }
 
 fn root(members: Vec<RustMember>) -> RustRoot {
@@ -41,6 +35,7 @@ fn root(members: Vec<RustMember>) -> RustRoot {
         manifest: path("Cargo.toml"),
         members,
         depends_on: Vec::new(),
+        external_dependencies: Vec::new(),
     }
 }
 
@@ -54,11 +49,17 @@ enum Kind {
     Doctested,
     NoDoctest,
     Binary,
+    DependsOutside,
+    BinaryDependsOutside,
+    Macros,
+    TextTarget,
 }
+
+const TEXT_TARGET: &str = "a/src/lib.txt";
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 23] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 39] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -213,6 +214,134 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 23] = [
         NO_FENCE,
         RUN,
     ),
+    (
+        "a macro from a dependency outside the root",
+        Kind::DependsOutside,
+        "#[derive(Builder)]\nstruct S;\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "a dependency outside the root without a doctest library",
+        Kind::BinaryDependsOutside,
+        "",
+        false,
+        NO_LIBRARY,
+        RUN,
+    ),
+    (
+        "inner block doc after code on its line",
+        Kind::Doctested,
+        "pub mod m { /*! x */ }\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "outer block doc after code on its line",
+        Kind::Doctested,
+        "pub mod m { /** x */ fn f() {} }\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "line doc after code on its line",
+        Kind::Doctested,
+        "pub mod m { /// Adds one.\n fn f() {} }\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "doc attribute whose equals sign starts the next line",
+        Kind::Doctested,
+        "#[doc\n= \"x\"]\nfn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "doc attribute spread over five lines",
+        Kind::Doctested,
+        "#[\n    doc\n    =\n    \"x\"\n]\nfn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "doc argument of a macro",
+        Kind::Doctested,
+        "m!(doc = \"x\");\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "a target whose path has no rs extension",
+        Kind::TextTarget,
+        "pub mod m { /*! x */ }\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "docs written into a string by a proc-macro crate",
+        Kind::Macros,
+        "fn f() -> &'static str {\n    \"/// Generated\\npub fn g() {}\"\n}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "a proc-macro crate that never mentions docs",
+        Kind::Macros,
+        "fn f() {}\n",
+        false,
+        NO_FENCE,
+        NO_DOCS,
+    ),
+    (
+        "a doc marker in a string of a crate without macros",
+        Kind::Doctested,
+        "const A: &str = \"/// x\";\n",
+        false,
+        NO_FENCE,
+        NO_DOCS,
+    ),
+    (
+        "a module file named by a path attribute",
+        Kind::Doctested,
+        "#[path = \"gen.txt\"]\nmod g;\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "include with a space before the bang",
+        Kind::Doctested,
+        "include !(\"gen.rs\");\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "literals that could hide a doc comment",
+        Kind::Doctested,
+        "const A: &str = \"/*\";\nconst B: &str = r#\"a \" b\"#;\nconst Q: char = '\"';\nfn f<'a>(x: &'a str) {}\n/// Adds.\nfn g() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "a variable named path and a cfg naming a docs-only flag",
+        Kind::Doctested,
+        "fn f() {\n    let path = 1;\n    let doc = 2;\n}\n#[cfg(docsrs)]\nfn g() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
     ("scheduled full run", Kind::Doctested, "", true, RUN, RUN),
     (
         "scheduled run without a library",
@@ -226,16 +355,36 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 23] = [
 
 #[test]
 fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
+    let mut wrong = Vec::new();
     for (case, kind, source, full, doctests, docs) in CASES {
-        let member = match kind {
-            Kind::Doctested => library(true),
-            Kind::NoDoctest => library(false),
-            Kind::Binary => binary(),
+        let (member, file) = match kind {
+            Kind::Doctested | Kind::DependsOutside => (library(true), "a/src/lib.rs"),
+            Kind::NoDoctest => (library(false), "a/src/lib.rs"),
+            Kind::Binary | Kind::BinaryDependsOutside => (binary(), "a/src/lib.rs"),
+            Kind::Macros => (
+                target_of("a", TargetKind::ProcMacro, true, "a/src/lib.rs"),
+                "a/src/lib.rs",
+            ),
+            Kind::TextTarget => (
+                target_of("a", TargetKind::Lib, true, TEXT_TARGET),
+                TEXT_TARGET,
+            ),
         };
-        let sources = BTreeMap::from([(path("a/src/lib.rs"), source.as_bytes().to_vec())]);
-        let steps = optional_steps(&root(vec![member]), &sources, full);
-        assert_eq!((steps.doctests, steps.docs), (doctests, docs), "{case}");
+        let sources = BTreeMap::from([(path(file), source.as_bytes().to_vec())]);
+        let mut root = root(vec![member]);
+        if matches!(kind, Kind::DependsOutside | Kind::BinaryDependsOutside) {
+            root.external_dependencies = vec![name("serde_derive")];
+        }
+        let steps = optional_steps(&root, &sources, full);
+        if (steps.doctests, steps.docs) != (doctests, docs) {
+            wrong.push(format!(
+                "{case}: got {:?}, want {:?}",
+                (steps.doctests, steps.docs),
+                (doctests, docs)
+            ));
+        }
     }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 #[test]
@@ -245,7 +394,11 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         (
             "tools/Cargo.toml",
             vec![
-                member("tool", "tools/tool", &[]),
+                RustMember {
+                    targets: target_of("tool", TargetKind::Lib, true, "tools/tool/src/lib.txt")
+                        .targets,
+                    ..member("tool", "tools/tool", &[])
+                },
                 member("ext", "vendor/ext", &[]),
             ],
         ),
@@ -264,6 +417,8 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         "macros/x.rs",
         "other/only.rs",
         "tools/tool/src/main.rs",
+        "tools/tool/src/lib.txt",
+        "tools/tool/src/notes.txt",
         "build.RS",
         "shared/gen.inc",
         "macros/template.txt",
@@ -313,6 +468,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             "tools/.cargo/config.toml",
             "tools/Cargo.toml",
             "tools/tool/Cargo.toml",
+            "tools/tool/src/lib.txt",
             "tools/tool/src/main.rs",
             "vendor/ext/Cargo.toml",
             "vendor/ext/src/lib.rs",
@@ -338,4 +494,19 @@ fn a_package_that_reads_the_whole_repository_reads_no_file_and_runs_both_steps()
     };
     let steps = optional_steps(&binary_root, &BTreeMap::new(), true);
     assert_eq!((steps.doctests, steps.docs), (NO_LIBRARY, RUN));
+}
+
+#[test]
+fn a_target_source_the_checkout_cannot_show_reads_no_file_and_runs_both_steps() {
+    let tracked: BTreeSet<_> = ["a/src/lib.rs", "a/Cargo.toml", "Cargo.toml"]
+        .into_iter()
+        .map(path)
+        .collect();
+    for source in [None, Some(path("generated/lib.rs"))] {
+        let mut member = library(true);
+        member.targets[0].source = source;
+        let facts = facts(vec![("Cargo.toml", vec![member])]);
+        let root = &facts.rust_roots[0];
+        assert_eq!(root_sources(&facts, root, &tracked), None);
+    }
 }

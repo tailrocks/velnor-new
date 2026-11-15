@@ -42,6 +42,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
             manifest: path(manifest),
             members,
             depends_on: Vec::new(),
+            external_dependencies: Vec::new(),
         })
         .collect();
     let members: Vec<&RustMember> = rust_roots.iter().flat_map(|root| &root.members).collect();

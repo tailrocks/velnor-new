@@ -122,6 +122,7 @@ pub struct RustRoot {
     pub manifest: RepoPath,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
+    pub external_dependencies: Vec<PackageName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

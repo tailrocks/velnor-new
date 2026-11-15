@@ -8,6 +8,10 @@ use velnor_model::{
     OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, TargetKind,
 };
 
+mod scan;
+mod tokens;
+
+use self::scan::Found;
 use crate::roots::is_cargo_config;
 use crate::select::relative;
 
@@ -45,6 +49,20 @@ pub fn root_sources(
         .map(|member| &member.manifest)
         .chain([&root.manifest])
         .collect();
+    let targets = target_sources(root);
+    if root
+        .members
+        .iter()
+        .flat_map(|member| &member.targets)
+        .any(|target| {
+            target
+                .source
+                .as_ref()
+                .is_none_or(|source| !tracked.contains(source))
+        })
+    {
+        return None;
+    }
     let sources = tracked
         .iter()
         .filter(|path| {
@@ -57,6 +75,7 @@ pub fn root_sources(
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"));
             manifests.contains(path)
+                || targets.contains(path)
                 || read
                     .iter()
                     .any(|input| under(input) || input.as_ref() == Some(*path))
@@ -89,17 +108,29 @@ pub fn optional_steps(
     full: bool,
 ) -> OptionalSteps {
     let mut found = Found::default();
-    for bytes in sources.values() {
-        found.scan(&String::from_utf8_lossy(bytes));
+    let rust = target_sources(root);
+    let macros = root
+        .members
+        .iter()
+        .flat_map(|member| &member.targets)
+        .any(|target| target.kinds.contains(&TargetKind::ProcMacro));
+    for (path, bytes) in sources {
+        let text = String::from_utf8_lossy(bytes);
+        if is_rust(path, &rust) {
+            found.scan_rust(&text, macros);
+        } else {
+            found.scan_text(&text);
+        }
     }
+    let unseen = !root.external_dependencies.is_empty();
     let doctests = if !has_doctest_library(root) {
         StepNeed::Skip(SkipReason::NoDoctestLibrary)
-    } else if full || found.fenced {
+    } else if full || unseen || found.fenced {
         StepNeed::Run
     } else {
         StepNeed::Skip(SkipReason::NoFencedDocs)
     };
-    let docs = if full || found.docs {
+    let docs = if full || unseen || found.docs {
         StepNeed::Run
     } else {
         StepNeed::Skip(SkipReason::NoDocs)
@@ -107,79 +138,17 @@ pub fn optional_steps(
     OptionalSteps { doctests, docs }
 }
 
-#[derive(Default)]
-struct Found {
-    docs: bool,
-    fenced: bool,
+fn target_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {
+    root.members
+        .iter()
+        .flat_map(|member| &member.targets)
+        .filter_map(|target| target.source.as_ref())
+        .collect()
 }
 
-impl Found {
-    fn scan(&mut self, text: &str) {
-        let mut attribute_depth = 0_usize;
-        for line in text.lines().map(str::trim_start) {
-            self.docs |= RUSTDOC_SETTINGS
-                .iter()
-                .any(|setting| line.contains(setting))
-                || (line.contains("cfg") && has_word(line, "doc"))
-                || line
-                    .strip_prefix("include")
-                    .is_some_and(|rest| rest.trim_start().starts_with('='));
-            if let Some((rest, block)) = doc_comment(line) {
-                self.docs = true;
-                self.fenced |= block || code_block(rest);
-            } else if line.contains("include!(") {
-                self.docs = true;
-                self.fenced = true;
-            } else if attribute_depth > 0 || line.starts_with("#[") || line.starts_with("#![") {
-                let opened = line.matches('[').count();
-                let closed = line.matches(']').count();
-                attribute_depth = (attribute_depth + opened).saturating_sub(closed);
-                if doc_attribute(line) {
-                    self.docs = true;
-                    self.fenced = true;
-                }
-            }
-        }
-    }
-}
-
-const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
-
-fn code_block(rest: &str) -> bool {
-    let text = rest.strip_prefix(' ').unwrap_or(rest);
-    text.contains("```")
-        || text.contains("~~~")
-        || text.starts_with("    ")
-        || text.starts_with('\t')
-}
-
-fn doc_comment(line: &str) -> Option<(&str, bool)> {
-    if let Some(rest) = line.strip_prefix("///") {
-        (!rest.starts_with('/')).then_some((rest, false))
-    } else if let Some(rest) = line.strip_prefix("//!") {
-        Some((rest, false))
-    } else if let Some(rest) = line.strip_prefix("/**") {
-        (!rest.starts_with(['*', '/'])).then_some((rest, true))
-    } else {
-        line.strip_prefix("/*!").map(|rest| (rest, true))
-    }
-}
-
-fn has_word(line: &str, word: &str) -> bool {
-    line.match_indices(word).any(|(at, _)| {
-        let identifier = |c: char| c.is_alphanumeric() || c == '_';
-        !line[..at].chars().next_back().is_some_and(identifier)
-            && !line[at + word.len()..]
-                .chars()
-                .next()
-                .is_some_and(identifier)
-    })
-}
-
-fn doc_attribute(line: &str) -> bool {
-    line.match_indices("doc").any(|(at, _)| {
-        let before = line[..at].chars().next_back();
-        let after = line[at + 3..].trim_start();
-        !before.is_some_and(|c| c.is_alphanumeric() || c == '_') && after.starts_with('=')
-    })
+fn is_rust(path: &RepoPath, targets: &BTreeSet<&RepoPath>) -> bool {
+    targets.contains(path)
+        || Path::new(path.as_str())
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
 }

@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{DependencyKind, PathGlob, RepoView, TargetKind};
+use velnor_model::{
+    DependencyKind, PackageDependency, PackageName, PathGlob, RepoView, TargetKind,
+};
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 
 use crate::facts::{Shape, TestResult, lib, package, path, repo, root, shape};
@@ -328,5 +330,54 @@ fn a_repository_without_a_mise_configuration_is_an_error() -> TestResult {
             path: path("mise.toml")?,
         })
     );
+    Ok(())
+}
+
+#[test]
+fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> TestResult {
+    let dependency =
+        |name: &str, manifest: Option<&str>| -> Result<_, Box<dyn std::error::Error>> {
+            Ok(PackageDependency {
+                name: PackageName::new(name)?,
+                kind: DependencyKind::Normal,
+                manifest: manifest.map(path).transpose()?,
+            })
+        };
+    let mut app = lib("app", "app/Cargo.toml")?;
+    app.dependencies = vec![
+        dependency("core", Some("core/Cargo.toml"))?,
+        dependency("serde", None)?,
+        dependency("shared", Some("shared/Cargo.toml"))?,
+        dependency("macros", None)?,
+    ];
+    let view = repo(
+        vec![
+            (
+                "Cargo.toml",
+                vec![
+                    app,
+                    lib("core", "core/Cargo.toml")?,
+                    lib("macros", "macros/Cargo.toml")?,
+                ],
+            ),
+            (
+                "shared/Cargo.toml",
+                vec![lib("shared", "shared/Cargo.toml")?],
+            ),
+        ],
+        &[],
+    )?;
+    let facts = detect(&view)?;
+    let external: Vec<Vec<String>> = facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            root.external_dependencies
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        })
+        .collect();
+    assert_eq!(external, [vec!["serde", "shared"], Vec::<&str>::new()]);
     Ok(())
 }

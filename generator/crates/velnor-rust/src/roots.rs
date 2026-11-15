@@ -87,6 +87,26 @@ fn root(
         .filter(|root| **root != manifest)
         .map(|root| (*root).clone())
         .collect();
+    let member_manifests: BTreeSet<&RepoPath> = metadata
+        .members
+        .iter()
+        .map(|package| &package.manifest)
+        .collect();
+    let member_names: BTreeSet<&PackageName> = metadata
+        .members
+        .iter()
+        .map(|package| &package.name)
+        .collect();
+    let external_dependencies: BTreeSet<PackageName> = metadata
+        .members
+        .iter()
+        .flat_map(|package| &package.dependencies)
+        .filter(|dependency| match &dependency.manifest {
+            Some(manifest) => !member_manifests.contains(manifest),
+            None => !member_names.contains(&dependency.name),
+        })
+        .map(|dependency| dependency.name.clone())
+        .collect();
     let mut members: Vec<RustMember> = metadata
         .members
         .iter()
@@ -97,6 +117,7 @@ fn root(
         manifest: manifest.clone(),
         members,
         depends_on: depends_on.into_iter().collect(),
+        external_dependencies: external_dependencies.into_iter().collect(),
     }
 }
 
