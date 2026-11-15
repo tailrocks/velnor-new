@@ -10,7 +10,7 @@ use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 const PREPARE_STEP: &str = "prepare";
 const RUN: &str = "velnor-ci run --";
-const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests --";
+const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
@@ -65,6 +65,7 @@ fn rendered_step(step: &Step) -> RenderedStep {
 fn variable(need: GateNeed) -> &'static str {
     match need {
         GateNeed::TestFilter => "TEST_FILTER",
+        GateNeed::DoctestsKnown => "DOCTESTS_KNOWN",
         _ => "PACKAGE_ARGS",
     }
 }

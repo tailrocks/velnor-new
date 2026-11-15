@@ -120,14 +120,14 @@ fn nextest_reads_the_packages_and_the_filter_the_plan_selected() -> TestResult {
 }
 
 #[test]
-fn the_doctest_step_fails_when_it_ran_no_doctest() -> TestResult {
+fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     with_doctest_library(&mut files)?;
     let text = text(&files)?;
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests -- cargo test --doc $PACKAGE_ARGS --locked"
+        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked"
     );
     Ok(())
 }

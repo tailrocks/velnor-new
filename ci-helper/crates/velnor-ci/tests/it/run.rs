@@ -152,6 +152,19 @@ fn a_doctest_step_that_ran_a_doctest_passes_and_a_failing_one_keeps_its_code() {
 }
 
 #[test]
+fn a_doctest_flag_set_to_false_does_not_require_a_doctest() {
+    let temp = scratch("doctests-false");
+    for (value, code) in [("false", 0), ("true", 1)] {
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["run", &format!("--require-doctests={value}"), "--", "true"])
+            .env("RUNNER_TEMP", &temp)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(output.status.code(), Some(code), "{value} {output:?}");
+    }
+}
+
+#[test]
 fn a_run_without_the_flag_does_not_count_doctests() {
     let temp = scratch("doctests-off");
     let output = run(&temp, &["sh", "-c", "printf 'running 0 tests\\n'"]);

@@ -20,7 +20,11 @@ fn name(text: &str) -> PackageName {
 }
 
 fn steps(doctests: StepNeed, docs: StepNeed) -> OptionalSteps {
-    OptionalSteps { doctests, docs }
+    OptionalSteps {
+        doctests,
+        doctests_known: doctests == StepNeed::Run,
+        docs,
+    }
 }
 
 const SKIP_DOCS: StepNeed = StepNeed::Skip(SkipReason::NoDocs);
@@ -72,18 +76,21 @@ fn each_root_gets_its_mode_its_packages_a_nextest_filter_and_the_cargo_package_a
          rust_root_test_filter=all()\n\
          rust_root_package_args=--workspace\n\
          rust_root_doctests=run\n\
+         rust_root_doctests_known=true\n\
          rust_root_docs=run\n\
          rust_ci_helper_mode=some\n\
          rust_ci_helper_packages=support velnor-ci\n\
          rust_ci_helper_test_filter=package(support) | package(velnor-ci)\n\
          rust_ci_helper_package_args=-p support -p velnor-ci\n\
          rust_ci_helper_doctests=skip\n\
+         rust_ci_helper_doctests_known=false\n\
          rust_ci_helper_docs=skip\n\
          rust_crates_velnor_runner_mode=none\n\
          rust_crates_velnor_runner_packages=\n\
          rust_crates_velnor_runner_test_filter=\n\
          rust_crates_velnor_runner_package_args=\n\
          rust_crates_velnor_runner_doctests=skip\n\
+         rust_crates_velnor_runner_doctests_known=false\n\
          rust_crates_velnor_runner_docs=skip\n\
          rust_deny=run\n\
          rust_machete=skip\n"

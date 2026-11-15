@@ -59,7 +59,7 @@ fn the_doc_flags_of_a_root_come_from_the_selected_packages_only() {
             &["a/src/lib.rs"],
             &["root_mode", "root_doctests", "root_docs"]
         ),
-        "rust_root_mode=some rust_root_doctests=skip rust_root_docs=skip "
+        "rust_root_mode=some rust_root_doctests=skip rust_root_doctests_known=false rust_root_docs=skip "
     );
 }
 

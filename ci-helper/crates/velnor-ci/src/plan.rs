@@ -48,6 +48,10 @@ pub fn outputs(
         lines.push(format!("rust_{slug}_package_args={package_args}\n"));
         if let Some(steps) = steps.get(root) {
             lines.push(format!("rust_{slug}_doctests={}\n", flag(steps.doctests)));
+            lines.push(format!(
+                "rust_{slug}_doctests_known={}\n",
+                steps.doctests_known
+            ));
             lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
         }
     }

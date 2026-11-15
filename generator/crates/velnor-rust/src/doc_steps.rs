@@ -156,7 +156,12 @@ pub fn optional_steps(
     } else {
         StepNeed::Skip(SkipReason::NoDocs)
     };
-    OptionalSteps { doctests, docs }
+    let doctests_known = has_doctest_library(root) && found.fenced;
+    OptionalSteps {
+        doctests,
+        doctests_known,
+        docs,
+    }
 }
 
 fn documented(kind: TargetKind) -> bool {

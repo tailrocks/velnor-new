@@ -40,7 +40,7 @@ pub enum Command {
     )]
     Release(ReleaseCommand),
     #[command(
-        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_package_args (the package selection for cargo doc: --workspace for all, -p <name> for each selected package, empty for none), rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout. Reads .velnor/rust-metadata.json instead of running cargo and fails when a Cargo.toml changed after velnor-gen generate wrote it. Fails when default_branch in .velnor/rust-ci.toml differs from repository.default_branch of the event payload. On a pull_request event it lists the changed files and reads the base text of a changed Cargo.lock or root Cargo.toml from the GitHub API with GITHUB_TOKEN; any other event selects everything. --changed replaces the API"
+        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_package_args (the package selection for cargo doc: --workspace for all, -p <name> for each selected package, empty for none), rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) and rust_<root>_doctests_known (true when a fenced doctest was found, false otherwise) for each Cargo root to $GITHUB_OUTPUT; run in the checkout. Reads .velnor/rust-metadata.json instead of running cargo and fails when a Cargo.toml changed after velnor-gen generate wrote it. Fails when default_branch in .velnor/rust-ci.toml differs from repository.default_branch of the event payload. On a pull_request event it lists the changed files and reads the base text of a changed Cargo.lock or root Cargo.toml from the GitHub API with GITHUB_TOKEN; any other event selects everything. --changed replaces the API"
     )]
     Plan(PlanArgs),
     #[command(
@@ -61,7 +61,13 @@ pub enum Command {
 pub struct RunArgs {
     #[arg(
         long,
-        help = "Exit 1 when the command succeeds but its output reports no doctest ran"
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        default_value = "false",
+        value_parser = clap::value_parser!(bool),
+        value_name = "BOOL",
+        help = "Exit 1 when the command succeeds but its output reports no doctest ran; --require-doctests=false turns the check off"
     )]
     pub require_doctests: bool,
     #[arg(

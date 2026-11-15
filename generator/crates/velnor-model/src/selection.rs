@@ -60,6 +60,7 @@ pub enum AllTrigger {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OptionalSteps {
     pub doctests: StepNeed,
+    pub doctests_known: bool,
     pub docs: StepNeed,
 }
 

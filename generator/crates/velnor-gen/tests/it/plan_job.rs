@@ -124,12 +124,16 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     let docs = "steps.plan.outputs.rust_root_docs == ''run''";
     assert!(text.contains(doctests), "{text}");
     assert!(text.contains(docs), "{text}");
-    for line in text
+    let known = "DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'";
+    assert!(text.contains(known), "{text}");
+    let steps: Vec<&str> = text
         .lines()
         .filter(|line| line.contains("cargo test --doc"))
-    {
+        .collect();
+    assert!(!steps.is_empty());
+    for line in steps {
         assert!(
-            line.contains("velnor-ci run --require-doctests -- cargo test --doc"),
+            line.contains("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"),
             "{line}"
         );
     }
@@ -160,6 +164,7 @@ fn the_plan_job_exposes_only_the_outputs_a_lane_reads() -> TestResult {
         [
             "lab_mode",
             "lab_doctests",
+            "lab_doctests_known",
             "lab_docs",
             "lab_test_filter",
             "lab_package_args",

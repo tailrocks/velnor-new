@@ -26,6 +26,7 @@ fn need_name(need: GateNeed) -> &'static str {
     match need {
         GateNeed::Selected => "mode",
         GateNeed::Doctests => "doctests",
+        GateNeed::DoctestsKnown => "doctests_known",
         GateNeed::Docs => "docs",
         GateNeed::TestFilter => "test_filter",
         GateNeed::PackageArgs => "package_args",
@@ -79,7 +80,7 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
             runs(GateNeed::Deny),
             runs(GateNeed::Machete)
         )),
-        GateNeed::TestFilter | GateNeed::PackageArgs => {
+        GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
             parts.push(format!("{} != ''", read(gate.need)));
         }
     }

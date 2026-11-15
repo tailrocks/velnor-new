@@ -77,7 +77,8 @@ jobs:
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_doctests == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:
           PACKAGE_ARGS: '${{ steps.plan.outputs.rust_root_package_args }}'
-        run: 'velnor-ci run --require-doctests -- cargo test --doc $PACKAGE_ARGS --locked'
+          DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'
+        run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
       - name: Documentation
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:

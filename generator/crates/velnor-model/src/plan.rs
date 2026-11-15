@@ -117,7 +117,9 @@ impl Gate {
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter | GateNeed::PackageArgs => vec![own(self.need)],
+            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+                vec![own(self.need)]
+            }
         }
     }
 }
@@ -126,6 +128,7 @@ impl Gate {
 pub enum GateNeed {
     Selected,
     Doctests,
+    DoctestsKnown,
     Docs,
     TestFilter,
     PackageArgs,
@@ -265,8 +268,8 @@ impl CargoCommand {
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
             Self::NextestRun => &[GateNeed::TestFilter, GateNeed::PackageArgs],
-            Self::Clippy { .. } => &[GateNeed::PackageArgs],
-            Self::Doc | Self::Doctest => &[GateNeed::PackageArgs],
+            Self::Clippy { .. } | Self::Doc => &[GateNeed::PackageArgs],
+            Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
             _ => &[],
         }
     }

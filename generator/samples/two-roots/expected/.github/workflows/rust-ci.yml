@@ -27,6 +27,7 @@ jobs:
     outputs:
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_doctests_known: '${{ steps.plan.outputs.rust_root_doctests_known }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
       rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
@@ -104,7 +105,8 @@ jobs:
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
-        run: 'velnor-ci run --require-doctests -- cargo test --doc $PACKAGE_ARGS --locked'
+          DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
