@@ -83,6 +83,13 @@ pub fn warnings(new: &[Weakening]) -> String {
     lines.concat()
 }
 
+fn inert_reason(reason: &str) -> String {
+    reason.split_once(':').map_or_else(
+        || inert(reason),
+        |(kind, rest)| format!("{kind}:{}", inert(rest)),
+    )
+}
+
 #[must_use]
 pub fn explain(
     selections: &BTreeMap<RepoPath, RustSelection>,
@@ -102,7 +109,11 @@ pub fn explain(
         };
         lines.push(format!("{}: {header}\n", inert(root.as_str())));
         for (package, reason) in packages.into_iter().flatten() {
-            lines.push(format!("  {} {reason}\n", inert(&package.to_string())));
+            lines.push(format!(
+                "  {} {}\n",
+                inert(&package.to_string()),
+                inert_reason(&reason.to_string())
+            ));
         }
         let selected = !matches!(selection, RustSelection::None);
         for (step, need) in steps
