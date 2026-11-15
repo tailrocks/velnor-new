@@ -81,7 +81,7 @@ pub(crate) fn targets(parsed: &toml::Table, owner: &str, make: &Make<'_>) -> Vec
                 .and_then(Value::as_str)
                 .map_or_else(|| format!("unnamed #{index}"), ToOwned::to_owned);
             let head = format!("[[{kind}]] name = \"{name}\"");
-            if is_false(Some(target), "doc") {
+            if kind == "bin" && is_false(Some(target), "doc") {
                 found.push(make(
                     format!("{head} doc = false"),
                     format!("leaves the {kind} target {name} of {owner} out of cargo doc"),

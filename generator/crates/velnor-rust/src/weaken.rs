@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
 use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
@@ -100,6 +100,8 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                         .packages
                         .iter()
                         .map(|package| format!("\"{package}\""))
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
                         .collect::<Vec<_>>();
                     make(
                         format!(
@@ -225,8 +227,13 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .flatten();
     for (triple, section) in targets {
         if let Some(runner) = section.get("runner") {
+            let selected = if selects(build, triple) {
+                " (selected by build.target)"
+            } else {
+                ""
+            };
             found.push(make(
-                format!("target.{triple}.runner = {runner}"),
+                format!("target.{triple}.runner = {runner}{selected}"),
                 format!("runs test binaries through {runner}"),
             ));
         }
@@ -272,6 +279,14 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         ));
     }
     found
+}
+
+fn selects(build: Option<&toml::Table>, triple: &str) -> bool {
+    match build.and_then(|build| build.get("target")) {
+        Some(Value::String(one)) => one == triple,
+        Some(Value::Array(many)) => many.iter().any(|item| item.as_str() == Some(triple)),
+        _ => false,
+    }
 }
 
 fn flag_tokens(value: &Value) -> Vec<String> {

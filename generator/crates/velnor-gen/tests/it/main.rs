@@ -51,6 +51,7 @@ mod version;
 mod weaken;
 mod weaken_more;
 mod weaken_nextest;
+mod weaken_review;
 mod weaken_scope;
 mod wiring;
 mod yaml_tree;
