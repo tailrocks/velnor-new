@@ -29,8 +29,8 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 }
 
 #[test]
-fn a_setting_that_makes_a_check_do_less_is_followed_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 10] = [
+fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
+    let cases: [(&str, &str, &str, &str); 11] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -84,6 +84,12 @@ fn a_setting_that_makes_a_check_do_less_is_followed_and_named() -> TestResult {
             "[build]\nrustc-workspace-wrapper = \"sccache\"\n",
             "build.rustc-workspace-wrapper = \"sccache\"",
             "runs the compiler through \"sccache\"",
+        ),
+        (
+            "mise.toml",
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-nextest]\ncommand = \"true\"\n",
+            "[wrappers.cargo-nextest] command = \"true\"",
+            "runs cargo-nextest through \"true\"",
         ),
         (
             ".cargo/config.toml",

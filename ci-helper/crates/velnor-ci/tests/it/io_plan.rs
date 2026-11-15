@@ -352,6 +352,21 @@ fn plan_warns_on_the_pull_request_about_a_setting_the_change_adds_that_makes_a_c
         "{text}"
     );
 
+    let base = repo.root().join("base-a");
+    fs::write(&base, before).unwrap_or_else(|e| unreachable!("{e}"));
+    let plain = plan_command(&repo)
+        .args(["plan", "--changed", "a/Cargo.toml", "--base-file"])
+        .arg(format!("a/Cargo.toml={}", base.display()))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let text = String::from_utf8_lossy(&plain.stdout);
+    assert!(
+        text.starts_with("rust_root_mode=")
+            && text.ends_with("turns off doctests for a ([lib] doctest = false)\n"),
+        "{text}"
+    );
+    assert!(!text.contains("check does less"), "{text}");
+
     let untouched = plan_command(&repo)
         .args(["plan", "--changed", "README.md"])
         .env("GITHUB_OUTPUT", &outputs)
