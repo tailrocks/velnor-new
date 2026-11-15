@@ -200,3 +200,46 @@ fn a_cargo_config_in_a_roots_folder_or_above_it_is_named_but_not_a_sibling() -> 
     assert_eq!(files, [".cargo/config.toml", "sub/.cargo/config.toml"]);
     Ok(())
 }
+
+fn cargo_config_named(
+    root: &str,
+    member: &str,
+    config: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut view = repo(vec![(root, vec![lib("r", member)?])], &[(config, RUNNER)])?;
+    view.tracked_paths.insert(path(config)?);
+    Ok(detect(&view)?
+        .weakenings
+        .iter()
+        .map(|w| w.file.to_string())
+        .collect())
+}
+
+#[test]
+fn a_cargo_config_above_a_root_is_named_and_one_sharing_only_a_name_prefix_is_not() -> TestResult {
+    assert_eq!(
+        cargo_config_named(
+            "sub/inner/Cargo.toml",
+            "sub/inner/r/Cargo.toml",
+            "sub/.cargo/config.toml"
+        )?,
+        ["sub/.cargo/config.toml"]
+    );
+    assert_eq!(
+        cargo_config_named(
+            "sub/inner2/Cargo.toml",
+            "sub/inner2/r/Cargo.toml",
+            "sub/inner/.cargo/config.toml"
+        )?,
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        cargo_config_named(
+            "sub/inner/Cargo.toml",
+            "sub/inner/r/Cargo.toml",
+            "sub/in/.cargo/config.toml"
+        )?,
+        Vec::<String>::new()
+    );
+    Ok(())
+}
