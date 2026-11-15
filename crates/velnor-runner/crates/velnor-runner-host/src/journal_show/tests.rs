@@ -117,12 +117,15 @@ async fn prints_one_exact_line_per_reservation() -> TestResult<()> {
     Ok(())
 }
 
-fn snapshot(state: &Path) -> TestResult<Vec<(String, Vec<u8>)>> {
+type FileState = (String, Vec<u8>, std::time::SystemTime);
+
+fn snapshot(state: &Path) -> TestResult<Vec<FileState>> {
     let mut files = std::fs::read_dir(state)?
         .map(|entry| {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
-            Ok((name, std::fs::read(entry.path()).unwrap_or_default()))
+            let modified = entry.metadata()?.modified()?;
+            Ok((name, std::fs::read(entry.path())?, modified))
         })
         .collect::<TestResult<Vec<_>>>()?;
     files.sort();
@@ -168,6 +171,29 @@ async fn reading_leaves_every_journal_file_byte_identical() -> TestResult<()> {
     let before = snapshot(state.path())?;
     let path = state.path().to_owned();
     tokio::task::spawn_blocking(move || show_reservations(&path, None)).await??;
+    assert_eq!(snapshot(state.path())?, before);
+    Ok(())
+}
+
+#[tokio::test]
+async fn reading_a_journal_with_uncheckpointed_wal_frames_changes_nothing() -> TestResult<()> {
+    let state = tempfile::tempdir()?;
+    let journal = fixture(state.path()).await?;
+    journal
+        .connection()
+        .await?
+        .execute("PRAGMA wal_autocheckpoint = 0", ())
+        .await?;
+    drop(journal);
+    let before = snapshot(state.path())?;
+    assert!(
+        before
+            .iter()
+            .any(|(name, bytes, _)| name == "launch.db-wal" && !bytes.is_empty())
+    );
+    let path = state.path().to_owned();
+    let shown = tokio::task::spawn_blocking(move || show_reservations(&path, None)).await??;
+    assert_eq!(lines(&shown), [recovered_line(), BARE_LINE.to_owned()]);
     assert_eq!(snapshot(state.path())?, before);
     Ok(())
 }
