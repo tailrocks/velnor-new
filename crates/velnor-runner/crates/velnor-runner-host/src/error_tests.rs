@@ -23,3 +23,14 @@ fn a_poll_failure_keeps_its_own_message() {
     let error = HostError::poll(&EnsureError::Rejected);
     assert_eq!(error.to_string(), "poll failed: registration rejected");
 }
+
+#[test]
+fn a_host_error_stays_small_enough_to_return_by_value() {
+    assert!(std::mem::size_of::<HostError>() <= 72);
+}
+
+#[test]
+fn the_probe_reason_fits_whole() {
+    let message = b"resource probe: helper_source_revision_missing_invalid";
+    assert_eq!(shown(message).as_bytes(), message);
+}

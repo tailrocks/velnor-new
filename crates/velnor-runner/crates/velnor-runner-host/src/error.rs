@@ -28,19 +28,19 @@ impl PreparationCause {
     }
 }
 
-const ERROR_DETAIL_BYTES: usize = 96;
+const ERROR_DETAIL_BYTES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorDetail {
     text: [u8; ERROR_DETAIL_BYTES],
-    len: usize,
+    len: u8,
 }
 
 impl ErrorDetail {
     #[must_use]
     pub fn from_bytes(raw: &[u8]) -> Self {
         let mut text = [0_u8; ERROR_DETAIL_BYTES];
-        let mut len = 0;
+        let mut len = 0_usize;
         let mut bytes = raw.iter().copied().peekable();
         let mut gap = false;
         while let Some(byte) = bytes.next() {
@@ -74,13 +74,16 @@ impl ErrorDetail {
             text[len] = byte;
             len += 1;
         }
-        Self { text, len }
+        Self {
+            text,
+            len: u8::try_from(len).unwrap_or(u8::MAX),
+        }
     }
 }
 
 impl std::fmt::Display for ErrorDetail {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&String::from_utf8_lossy(&self.text[..self.len]))
+        formatter.write_str(&String::from_utf8_lossy(&self.text[..usize::from(self.len)]))
     }
 }
 
