@@ -13,10 +13,12 @@ use bollard::query_parameters::{
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
+#[path = "program.rs"]
+mod program;
+pub(crate) use program::Program;
+
 pub(crate) type TestResult<T> = Result<T, Box<dyn Error>>;
 
-const BASE: &str =
-    "busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec";
 pub(crate) fn docker() -> TestResult<Docker> {
     let socket =
         std::env::var("DOCKER_HOST").unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
@@ -41,15 +43,34 @@ pub(crate) fn platform() -> &'static str {
     }
 }
 
-pub(crate) async fn build_sleeper(docker: &Docker, tag: &str) -> TestResult<String> {
-    let dockerfile = format!("FROM {BASE}\nCMD [\"sleep\", \"600\"]\n");
+fn append(
+    context: &mut tar::Builder<Vec<u8>>,
+    path: &str,
+    mode: u32,
+    bytes: &[u8],
+) -> TestResult<()> {
     let mut header = tar::Header::new_ustar();
-    header.set_path("Dockerfile")?;
-    header.set_size(u64::try_from(dockerfile.len())?);
-    header.set_mode(0o644);
+    header.set_path(path)?;
+    header.set_size(u64::try_from(bytes.len())?);
+    header.set_mode(mode);
     header.set_cksum();
+    context.append(&header, bytes)?;
+    Ok(())
+}
+
+pub(crate) async fn build_program(
+    docker: &Docker,
+    tag: &str,
+    program: Program,
+) -> TestResult<String> {
     let mut context = tar::Builder::new(Vec::new());
-    context.append(&header, dockerfile.as_bytes())?;
+    append(
+        &mut context,
+        "Dockerfile",
+        0o644,
+        b"FROM scratch\nCOPY program /program\nCMD [\"/program\"]\n",
+    )?;
+    append(&mut context, "program", 0o755, &program::elf(program))?;
     let options = BuildImageOptions {
         dockerfile: "Dockerfile".to_owned(),
         t: Some(tag.to_owned()),
@@ -118,11 +139,15 @@ pub(crate) struct Fixture {
 
 impl Fixture {
     pub(crate) async fn new() -> TestResult<Self> {
+        Self::running(Program::Sleep).await
+    }
+
+    pub(crate) async fn running(program: Program) -> TestResult<Self> {
         let docker = docker()?;
         let suffix = suffix()?;
         let tag = format!("velnor-local-test-sleeper:{suffix}");
         let network = format!("velnor-local-test-{suffix}");
-        let image = build_sleeper(&docker, &tag).await?;
+        let image = build_program(&docker, &tag, program).await?;
         docker
             .create_network(NetworkCreateRequest {
                 name: network.clone(),

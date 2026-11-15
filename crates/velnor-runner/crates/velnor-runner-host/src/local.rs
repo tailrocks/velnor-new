@@ -13,7 +13,9 @@ mod remove;
 mod request;
 mod storage;
 
-pub use pair::{ENVIRONMENT_LABEL, LocalPair, remove_pair, start_pair};
+pub use pair::{
+    ENVIRONMENT_LABEL, LocalPair, StartFailure, remove_pair, remove_pair_named, start_pair,
+};
 pub use remove::Removed;
 pub use request::LocalPairRequest;
 
@@ -39,7 +41,14 @@ pub fn run_one_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
         .enable_all()
         .build()
         .map_err(|_| HostError::Docker)?;
-    let pair = runtime.block_on(start_pair(&docker, &request.pair))?;
+    let pair = runtime
+        .block_on(start_pair(&docker, &request.pair))
+        .map_err(|failure| {
+            if let Some(name) = &failure.leftover {
+                let _retried = runtime.block_on(remove_pair_named(&docker, name));
+            }
+            failure.error
+        })?;
     let started = writeln!(
         output,
         "pair {} started on {}",
@@ -47,9 +56,12 @@ pub fn run_one_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
         request.pair.network
     )
     .and_then(|()| output.flush());
+    if started.is_err() {
+        runtime.block_on(remove_pair(&docker, &pair))?;
+        return Err(HostError::Path);
+    }
     let drained = std::io::copy(input, &mut std::io::sink());
     let removed = runtime.block_on(remove_pair(&docker, &pair))?;
-    started.map_err(|_| HostError::Path)?;
     drained.map_err(|_| HostError::Path)?;
     writeln!(
         output,
