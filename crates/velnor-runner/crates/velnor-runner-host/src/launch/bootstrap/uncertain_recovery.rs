@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bollard::Docker;
 use tokio::time::Instant;
@@ -30,7 +30,7 @@ pub(crate) struct UncertainRecovery<'a> {
 pub(crate) async fn recover_uncertain_reservations(
     recovery: &UncertainRecovery<'_>,
 ) -> Result<(), HostError> {
-    let initializer_deadline = Instant::now() + INITIALIZER_RECOVERY_BUDGET;
+    let mut initializers = Vec::new();
     for reservation in recovery.scope.physical_runner_reservations().await? {
         if reservation.reservation.state != ReservationState::Uncertain
             || reservation.intent_state != Some(IntentState::Uncertain)
@@ -38,30 +38,50 @@ pub(crate) async fn recover_uncertain_reservations(
         {
             continue;
         }
-        let id = reservation.reservation_id;
         if recovery
             .scope
-            .storage_initializer_abort_candidate(id)
+            .storage_initializer_abort_candidate(reservation.reservation_id)
             .await?
             .is_some()
         {
-            let remaining = initializer_deadline.saturating_duration_since(Instant::now());
-            if !remaining.is_zero()
-                && let Err(error) =
-                    recover_absent(recovery.docker, recovery.scope, id, remaining).await
-            {
-                report(
-                    recovery.scope,
-                    id,
-                    "an interrupted storage initializer",
-                    error,
-                );
-            }
+            initializers.push(reservation.reservation_id);
             continue;
         }
         recover_pre_jit(recovery, &reservation).await;
     }
+    recover_initializers(recovery, &initializers).await;
     Ok(())
+}
+
+async fn recover_initializers(recovery: &UncertainRecovery<'_>, initializers: &[i64]) {
+    let deadline = Instant::now() + INITIALIZER_RECOVERY_BUDGET;
+    let first = rotation(initializers.len());
+    for &id in initializers
+        .iter()
+        .cycle()
+        .skip(first)
+        .take(initializers.len())
+    {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return;
+        }
+        if let Err(error) = recover_absent(recovery.docker, recovery.scope, id, remaining).await {
+            report(
+                recovery.scope,
+                id,
+                "an interrupted storage initializer",
+                error,
+            );
+        }
+    }
+}
+
+fn rotation(candidates: usize) -> usize {
+    let seconds = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    usize::try_from(seconds).unwrap_or(0) % candidates.max(1)
 }
 
 async fn recover_pre_jit(
