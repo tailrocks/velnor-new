@@ -137,3 +137,24 @@ fn a_merge_group_runs_every_lane_when_on_main_is_everything() {
         "Cargo.toml: all:event\ntools/Cargo.toml: all:event\n"
     );
 }
+
+const LOCK: &str = "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"0.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"0.0.0\"\n";
+
+fn lock_edit(name: &str, padding: &str) -> Repo {
+    let repo = plan_repo(name);
+    repo.write("Cargo.lock", &format!("{LOCK}{padding}"));
+    repo.commit();
+    repo.git(&["branch", "-M", "main"]);
+    repo.write("Cargo.lock", &format!("{LOCK}{padding}# edited\n"));
+    repo.commit();
+    repo
+}
+
+#[test]
+fn a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget() {
+    let small = lock_edit("main-push-lock-small", "# padding\n");
+    assert_eq!(selection(&push(&small, &rev(&small, "HEAD^1"))), NOTHING);
+    let large = lock_edit("main-push-lock-large", &"# padding\n".repeat(450_000));
+    let text = selection(&push(&large, &rev(&large, "HEAD^1")));
+    assert!(text.starts_with("Cargo.toml: all:"), "{text}");
+}
