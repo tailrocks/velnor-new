@@ -1,0 +1,147 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+min_version = "2026.10.18"
+
+[tools]
+# Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
+# every `cargo` through MBX. rust-toolchain.toml mirrors this rust entry
+# exactly (channel, components, targets): Mise ignores the file's options,
+# rustup-only tools read only the file, and generation fails on drift. Generated CI reads every version in this table
+# at run time (hard decision 4); clean checkouts resolve MBX from this file
+# via `mise install`, never globally.
+rust = { version = "1.99.1", profile = "minimal", components = [
+  "clippy",
+  "rustfmt",
+], targets = [
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+], mr_boxington = true }
+mr-boxington = { version = "1.29.2", workflow = "release.yml@refs/heads/main" }
+bun = "1.4.4"
+hk = "2.8.0"
+cargo-binstall = "1.26.0"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.151"
+# Workflow linting (hard decision 10): CI reads these versions at run time,
+# and hk's check-only jactionlint step runs the same binaries locally.
+jactionlint = "2.4.0"
+shellcheck = "0.11.0"
+# Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
+# security-audit hooks, and the tools behind the stack builtins.
+kingfisher = "2.14.0"
+betterleaks = "1.9.0"
+gitleaks = "8.30.1"
+rumdl = "0.3.0"
+cargo-deny = "0.20.2"
+opentofu = "1.13.8"
+
+[settings]
+cargo.binstall = true
+idiomatic_version_file_enable_tools = ["rust"]
+lockfile = true
+
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+
+[tasks.lint-generator-samples]
+description = "Lint the workflows in the expected output of the generator samples"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+FILES="$(find generator/samples -path '*/expected/*' \( -name '*.yml' -o -name '*.yaml' \) | sort)"
+test -n "$FILES"
+echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=
+'''
+
+[tasks.test-maintenance-helpers]
+description = "Run repository-only maintenance helper test suites"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+printf "maintenance-phase: pin-mirror\n"
+VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=pin-mirror \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
+printf "maintenance-phase: native-image-inventory\n"
+python3 scripts/test-native-image-candidate-inventory.py
+printf "maintenance-phase: diagnostics-build\n"
+ARTIFACT_MESSAGES="$(mktemp)"
+trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
+cargo --config build.jobs=2 build --locked -p velnor-actions-cli \
+  --example qualification-diagnostics --message-format=json >"$ARTIFACT_MESSAGES"
+DIAGNOSTICS_FIXTURE="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=artifact-executable \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
+  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
+  VELNOR_REPO_POLICY_TARGET=qualification-diagnostics \
+  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
+    --bin velnor-actions)"
+case "$DIAGNOSTICS_FIXTURE" in
+  /*) ;;
+  *) echo "qualification diagnostics artifact is missing" >&2; exit 1 ;;
+esac
+if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
+  echo "qualification diagnostics artifact is not executable" >&2
+  exit 1
+fi
+export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
+cargo --config build.jobs=2 build --locked -p velnor-archive-guard \
+  --example golden_collector_clock --message-format=json >"$ARTIFACT_MESSAGES"
+CLOCK_DRIVER="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=artifact-executable \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
+  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
+  VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
+  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
+    --bin velnor-actions)"
+case "$CLOCK_DRIVER" in
+  /*) ;;
+  *) echo "qualification clock driver is missing" >&2; exit 1 ;;
+esac
+test -x "$CLOCK_DRIVER"
+export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
+printf "maintenance-phase: test-members\n"
+TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=test-members \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_MANIFEST_PATH='' \
+  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
+printf "maintenance-phase: source-fetch\n"
+cargo fetch --locked
+(
+  cd "$ROOT/crates/velnor-runner"
+  cargo fetch --locked
+)
+(
+  cd "$ROOT/ci-helper"
+  cargo fetch --locked
+)
+(
+  cd "$ROOT/generator"
+  cargo fetch --locked
+)
+(
+  cd "$ROOT/local"
+  cargo fetch --locked
+)
+for package in velnor-actions-freshness velnor-archive-guard; do
+  printf "maintenance-phase: %s\n" "$package"
+  case " $TEST_MEMBERS " in
+    *" $package "*)
+      cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package "$package" --no-tests fail --jobs 2
+      ;;
+    *)
+      echo "skip: $package (Cargo metadata has no test-enabled targets)"
+      ;;
+  esac
+done
+'''

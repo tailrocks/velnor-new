@@ -9,7 +9,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 9] = [
+const KEYS: [&str; 10] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -19,6 +19,7 @@ const KEYS: [&str; 9] = [
     "shape",
     "required_check",
     "default_branch",
+    "helper",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -36,6 +37,13 @@ struct RawConfig {
     shape: Option<String>,
     required_check: Option<String>,
     default_branch: Option<String>,
+    helper: Option<RawHelper>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHelper {
+    path: String,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +97,13 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     };
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+    let helper = raw
+        .helper
+        .map(|helper| helper_path(helper.path))
+        .transpose()
+        .map_err(invalid)?;
     Ok(RustCiConfig {
+        helper,
         shape,
         required_check,
         default_branch,
@@ -118,6 +132,13 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
                 })
             })
             .collect::<Result<_, _>>()?,
+    })
+}
+
+fn helper_path(path: String) -> Result<RepoPath, Reason> {
+    RepoPath::new(path.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
+        key: "helper.path",
+        value: path,
     })
 }
 

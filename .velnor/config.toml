@@ -937,6 +937,7 @@ id = "generator-samples"
 task = "lint-generator-samples"
 inputs = [
   "generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/helper-source/expected/.github/workflows/rust-ci.yml",
   "generator/samples/lab-150/expected/.github/workflows/rust-ci.yml",
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",

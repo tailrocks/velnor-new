@@ -12,6 +12,10 @@ shasum -a 256 -c \"$RUNNER_TEMP/velnor-ci.sha\"
 chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
 echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
 
+pub const HELPER_FROM_ARTIFACT_RUN: &str = "\
+chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
+echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
+
 pub const ALLOWED_ACTIONS: [&str; 6] = [
     "actions/checkout",
     "actions/cache/restore",
@@ -136,7 +140,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     let mut rules = Vec::new();
-    if let Some(run) = step.run.as_deref().filter(|run| *run != FETCH_HELPER_RUN) {
+    if let Some(run) = step
+        .run
+        .as_deref()
+        .filter(|run| *run != FETCH_HELPER_RUN && *run != HELPER_FROM_ARTIFACT_RUN)
+    {
         run_rules(run, &mut rules);
     }
     if step.run.is_some() == step.uses.is_some() {

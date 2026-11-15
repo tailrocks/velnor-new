@@ -104,6 +104,8 @@ pub enum StepKind {
     Helper(HelperCommand),
     GeneratorCheck,
     FetchHelper(HelperRelease),
+    HelperFromArtifact,
+    PublishHelper { binary: RepoPath },
     FailWhenANeedFailed,
 }
 
@@ -187,6 +189,7 @@ pub enum CargoCommand {
     FmtCheck,
     Clippy { extra: Vec<String> },
     CheckAlone { package: PackageName },
+    Build { package: PackageName },
     NextestRun { filter: FilterRef },
     NextestArchive { file: RepoPath },
     Doctest,

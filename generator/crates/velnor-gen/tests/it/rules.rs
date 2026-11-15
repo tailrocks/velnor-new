@@ -12,8 +12,8 @@ use velnor_model::{
     When, WorkflowPlan,
 };
 use velnor_render::{
-    FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value, check_rules, render, render_workflow,
+    FETCH_HELPER_RUN, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value, check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -319,8 +319,9 @@ fn multi_line_runs(text: &str) -> Vec<String> {
                 .take_while(|next| next.starts_with(&" ".repeat(indent + 1)))
                 .map(|next| next.trim_start())
                 .collect();
-            if block.join("\n") != FETCH_HELPER_RUN {
-                found.push(block.join("\n"));
+            let block = block.join("\n");
+            if block != FETCH_HELPER_RUN && block != HELPER_FROM_ARTIFACT_RUN {
+                found.push(block);
             }
         } else if value.is_empty() || quoted_open {
             found.push(value.to_owned());
@@ -330,7 +331,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_golden_workflow_has_a_multi_line_run_other_than_the_fetch_constant() -> TestResult {
+fn no_golden_workflow_has_a_multi_line_run_other_than_the_two_helper_constants() -> TestResult {
     let allowed = format!(
         "run: |\n{}\n",
         FETCH_HELPER_RUN

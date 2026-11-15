@@ -17,6 +17,7 @@ use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
 
+pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
 #[must_use]
@@ -77,6 +78,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownLockedPackage(package),
         ));
     }
+    check_helper_box(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -112,6 +114,27 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
+    let Some(path) = &config.helper else {
+        return Ok(());
+    };
+    let holds_helper = rust_roots.iter().any(|root| {
+        root.manifest.parent().as_ref() == Some(path)
+            && root
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == HELPER_PACKAGE)
+    });
+    if holds_helper {
+        Ok(())
+    } else {
+        Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::HelperBox(path.clone()),
+        ))
+    }
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {

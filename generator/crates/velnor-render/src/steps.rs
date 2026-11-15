@@ -4,17 +4,22 @@
 use std::fmt;
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
+    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, RepoPath, Step,
+    StepKind,
 };
 
 use crate::gate::{PLAN_STEP, condition, output};
-use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
+use crate::rules::{FETCH_HELPER_RUN, HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, Value};
 
 const PREPARE_STEP: &str = "prepare";
 const RUN: &str = "velnor-ci run --";
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
+const DOWNLOAD_ARTIFACT: &str =
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
+const HELPER_ARTIFACT: &str = "velnor-ci";
 const MISE_VERSION: &str = "2026.11.1";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
@@ -38,16 +43,25 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 (key, value)
             })
             .collect(),
-        steps: job.steps.iter().map(rendered_step).collect(),
+        steps: job.steps.iter().flat_map(rendered_steps).collect(),
     }
 }
 
-fn rendered_step(step: &Step) -> RenderedStep {
-    let mut rendered = step_body(&step.kind);
-    if let Some(condition) = condition(step.when, step.gate.as_ref()) {
-        rendered.condition = Some(condition);
+fn rendered_steps(step: &Step) -> Vec<RenderedStep> {
+    let mut rendered = vec![step_body(&step.kind)];
+    if step.kind == StepKind::HelperFromArtifact {
+        rendered.push(RenderedStep {
+            name: "Make velnor-ci executable".to_owned(),
+            run: Some(HELPER_FROM_ARTIFACT_RUN.to_owned()),
+            ..RenderedStep::default()
+        });
     }
-    rendered.working_directory = step.directory.as_ref().map(ToString::to_string);
+    for body in &mut rendered {
+        if let Some(condition) = condition(step.when, step.gate.as_ref()) {
+            body.condition = Some(condition);
+        }
+        body.working_directory = step.directory.as_ref().map(ToString::to_string);
+    }
     rendered
 }
 
@@ -108,24 +122,63 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some("velnor-gen check".to_owned()),
             ..RenderedStep::default()
         },
-        StepKind::FetchHelper(release) => RenderedStep {
-            name: format!("Fetch velnor-ci {}", release.version()),
-            env: vec![
-                (
-                    "SHA".to_owned(),
-                    by_platform(release, |binary| &binary.sha256),
-                ),
-                ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
-            ],
-            run: Some(FETCH_HELPER_RUN.to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::FetchHelper(release) => fetch_helper(release),
+        StepKind::HelperFromArtifact => download_helper(),
+        StepKind::PublishHelper { binary } => publish_helper(binary),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn fetch_helper(release: &HelperRelease) -> RenderedStep {
+    RenderedStep {
+        name: format!("Fetch velnor-ci {}", release.version()),
+        env: vec![
+            (
+                "SHA".to_owned(),
+                by_platform(release, |binary| &binary.sha256),
+            ),
+            ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
+        ],
+        run: Some(FETCH_HELPER_RUN.to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+fn download_helper() -> RenderedStep {
+    RenderedStep {
+        name: "Download velnor-ci".to_owned(),
+        uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
+            (
+                "path".to_owned(),
+                Value::Expr("${{ runner.temp }}/vbin".to_owned()),
+            ),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+fn publish_helper(binary: &RepoPath) -> RenderedStep {
+    RenderedStep {
+        name: "Upload velnor-ci".to_owned(),
+        uses: Some(UPLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
+            ("path".to_owned(), Value::Text(binary.to_string())),
+            (
+                "if-no-files-found".to_owned(),
+                Value::Text("error".to_owned()),
+            ),
+            ("retention-days".to_owned(), Value::Int(1)),
+            ("overwrite".to_owned(), Value::Bool(true)),
+        ],
+        ..RenderedStep::default()
     }
 }
 
@@ -173,6 +226,11 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
             format!("cargo check -p {package} --locked"),
+            vec![],
+        ),
+        CargoCommand::Build { package } => (
+            format!("Build {package}"),
+            format!("cargo build -p {package} --locked"),
             vec![],
         ),
         CargoCommand::Deny => (

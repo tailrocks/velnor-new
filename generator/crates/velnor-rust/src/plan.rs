@@ -5,11 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision,
-    Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    PackageName, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RustMember, RustRoot,
+    Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
+use crate::detect::HELPER_PACKAGE;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
 use crate::select::root_slug;
@@ -19,11 +20,14 @@ const RUST_JOB: JobId = JobId::from_static("rust");
 const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
 const PLAN_JOB: JobId = JobId::from_static("rust-plan");
+const HELPER_JOB: JobId = JobId::from_static("rust-helper");
+const HELPER_BINARY: RepoPath = RepoPath::from_static("target/debug/velnor-ci");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
 struct Lane {
     slug: String,
     plan: Option<JobId>,
+    from_source: bool,
 }
 
 impl Lane {
@@ -60,7 +64,14 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .map(|root| decide_shape(facts.config.shape, facts.timings.get(&root.manifest)))
         .collect();
-    let single = facts.rust_roots.len() == 1 && decisions[0].shape == Shape::OneJob;
+    let helper_root = facts.config.helper.as_ref().and_then(|path| {
+        facts
+            .rust_roots
+            .iter()
+            .find(|root| root.manifest.parent().as_ref() == Some(path))
+    });
+    let single =
+        facts.rust_roots.len() == 1 && decisions[0].shape == Shape::OneJob && helper_root.is_none();
     let mut jobs: Vec<Job> = facts
         .rust_roots
         .iter()
@@ -69,6 +80,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             let lane = Lane {
                 slug: root_slug(&root.manifest),
                 plan: (!single).then_some(PLAN_JOB),
+                from_source: helper_root.is_some(),
             };
             root_jobs(facts, root, decision, suffixed, &lane)
         })
@@ -76,6 +88,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if !single {
         let used = used_outputs(&jobs);
         jobs.insert(0, plan_job(facts, used));
+    }
+    if let Some(root) = helper_root {
+        jobs.insert(1, helper_job(facts, root));
     }
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
@@ -117,7 +132,7 @@ fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
 }
 
 fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
-    let mut steps = head(facts);
+    let mut steps = head(facts, false);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
@@ -127,6 +142,28 @@ fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
             (PermissionScope::PullRequests, Access::Read),
         ])),
         ..job(facts, PLAN_JOB)
+    }
+}
+
+fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
+    let lane = Lane {
+        slug: root_slug(&root.manifest),
+        plan: Some(PLAN_JOB),
+        from_source: false,
+    };
+    let mut steps = setup(facts, root, false, &lane);
+    steps.push(Step {
+        directory: root.manifest.parent(),
+        ..step(StepKind::Cargo(CargoCommand::Build {
+            package: PackageName::from_static(HELPER_PACKAGE),
+        }))
+    });
+    steps.push(step(StepKind::PublishHelper {
+        binary: root.manifest.sibling(&HELPER_BINARY),
+    }));
+    Job {
+        steps,
+        ..job(facts, HELPER_JOB)
     }
 }
 
@@ -153,7 +190,12 @@ fn root_jobs(
         })
     };
     let lane_job = |id: JobId, steps: Vec<Step>| Job {
-        needs: lane.plan.clone().into_iter().collect(),
+        needs: lane
+            .plan
+            .clone()
+            .into_iter()
+            .chain(lane.from_source.then_some(HELPER_JOB))
+            .collect(),
         gate: lane.job(),
         steps,
         ..job(facts, id)
@@ -253,19 +295,23 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn head(facts: &RepoFacts) -> Vec<Step> {
+fn head(facts: &RepoFacts, from_source: bool) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
-    steps.extend(
-        facts
-            .helper
-            .iter()
-            .map(|release| step(StepKind::FetchHelper(release.clone()))),
-    );
+    if from_source {
+        steps.push(step(StepKind::HelperFromArtifact));
+    } else {
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::FetchHelper(release.clone()))),
+        );
+    }
     steps
 }
 
 fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
-    let mut steps = head(facts);
+    let mut steps = head(facts, lane.from_source);
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }

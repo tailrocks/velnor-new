@@ -180,6 +180,7 @@ pub struct RustCiConfig {
     pub shape: Option<Shape>,
     pub required_check: String,
     pub default_branch: String,
+    pub helper: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,6 +201,7 @@ impl Default for RustCiConfig {
             shape: None,
             required_check: "Required".to_owned(),
             default_branch: "main".to_owned(),
+            helper: None,
         }
     }
 }
