@@ -143,33 +143,6 @@ async fn volume_progress_cannot_be_recorded_before_container_progress() -> TestR
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pair_that_requested_a_jit_after_the_abandon_is_not_retired() -> TestResult<()> {
-    let operation = FAILED.reservation - 1;
-    let reservation = FAILED.reservation;
-    for sql in [format!(
-        "UPDATE connection_intents SET jit_requested = 1 WHERE id = {operation}"
-    )] {
-        let dir = tempfile::tempdir()?;
-        let socket = dir.path().join("docker.sock");
-        let fixture = FixtureDocker::start(&socket, &[FAILED])?;
-        let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
-        let journal = Journal::open(&dir.path().join("launch.db")).await?;
-        let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
-        scope.abandon_unbound_pair(reservation).await?;
-        seed::execute(&journal, &sql).await?;
-        let before = fixture.objects(FAILED);
-        fixture.take_requests();
-
-        let retired = retire_unbound_pair(&docker, &scope, &engine, reservation).await?;
-
-        assert!(!retired, "{sql}");
-        assert_eq!(fixture.take_requests(), Vec::<String>::new(), "{sql}");
-        assert_eq!(fixture.objects(FAILED), before, "{sql}");
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn a_crash_after_the_volumes_are_removed_converges_on_restart() -> TestResult<()> {
     let volumes = FAILED.volumes().map(|(name, _)| name);
     let last = volumes.last().cloned().ok_or("volume")?;

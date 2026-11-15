@@ -174,6 +174,30 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
     Ok(saved)
 }
 
+pub(super) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
+            (),
+        )
+        .await?;
+    let mut saved = Vec::new();
+    while let Some(row) = rows.next().await? {
+        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
+    }
+    for (name, _) in &saved {
+        execute(journal, &format!("DROP TRIGGER {name}")).await?;
+    }
+    for sql in statements {
+        execute(journal, sql).await?;
+    }
+    for (_, sql) in saved {
+        execute(journal, &sql).await?;
+    }
+    Ok(())
+}
+
 const ROOT_BACKING: &str = "INSERT INTO capacity_reservation_root_backing_mappings (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, sample_generation_id, role, container_id, image_runtime_id, image_source_sha, logical_mount_id, logical_filesystem_digest, backing_filesystem_digest, mapping_record, mapping_digest) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', '{hex32}', '{role}', '{container}', 'image-test', '{sha40}', 1, '{hex64}', '{hex64}', '{}', '{hex64}')";
 
 const WITNESS: &str = "INSERT INTO capacity_reservation_cleanup_observer_witnesses (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, runner_container_id, dind_container_id, instance_binding_digest, guest_boot_id, binding_json, binding_sha256) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', '{runner}', '{dind}', '{digest}', '{boot}', '{}', '{hex64}')";
