@@ -64,3 +64,19 @@ fn a_pair_whose_state_is_uncertain_is_still_an_ownership_error() {
         assert_eq!(pair_stage(&known(), state), Err(HostError::Ownership));
     }
 }
+
+#[test]
+fn a_running_pair_without_a_known_assignment_is_an_ownership_error() {
+    for state in [
+        PhysicalRunnerJitState::Ready,
+        PhysicalRunnerJitState::Started,
+        PhysicalRunnerJitState::Uncertain,
+        PhysicalRunnerJitState::StartUncertain,
+        PhysicalRunnerJitState::Unknown,
+    ] {
+        assert_eq!(
+            pair_stage(&PhysicalRunnerOwnership::Unknown, state),
+            Err(HostError::Ownership)
+        );
+    }
+}
