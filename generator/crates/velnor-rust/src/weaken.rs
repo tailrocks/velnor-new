@@ -252,6 +252,16 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
                 .to_owned(),
         ));
     }
+    if let Some((flags, _)) = flags
+        .iter()
+        .find(|(_, tokens)| tokens.iter().any(|token| is_flag(token, "--test-runtool")))
+    {
+        found.push(make(
+            format!("rustdocflags {flags} with --test-runtool"),
+            "passes --test-runtool to rustdoc, which runs every doctest through another program"
+                .to_owned(),
+        ));
+    }
     found
 }
 

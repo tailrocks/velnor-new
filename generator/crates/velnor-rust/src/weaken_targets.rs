@@ -9,7 +9,8 @@ use velnor_model::Weakening;
 use crate::weaken::Make;
 
 const KINDS: [&str; 4] = ["test", "bench", "bin", "example"];
-const DISCOVERY: [(&str, &str); 3] = [
+const DISCOVERY: [(&str, &str); 4] = [
+    ("autolib", "src/lib.rs"),
     ("autoexamples", "examples/"),
     ("autobenches", "benches/"),
     ("autobins", "src/bin/"),

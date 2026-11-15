@@ -71,3 +71,47 @@ fn a_manifest_that_drops_docs_discovery_harness_or_a_default_off_feature_is_name
     assert!(!joined.contains("name = \"fine\""), "{joined}");
     Ok(())
 }
+
+#[test]
+fn autolib_false_a_test_runtool_and_an_override_platform_change_are_named() -> TestResult {
+    let manifest = named(
+        &[(MANIFEST, "[package]\nname = \"bar\"\nautolib = false\n")],
+        false,
+    )?;
+    assert!(
+        manifest.join("\n").contains("autolib = false"),
+        "{manifest:?}"
+    );
+    let runtool = named(
+        &[(
+            ".cargo/config.toml",
+            "[build]\nrustdocflags = [\"--test-runtool\", \"true\"]\n",
+        )],
+        false,
+    )?;
+    assert!(runtool.join("\n").contains("--test-runtool"), "{runtool:?}");
+    let platform = |host: &str| {
+        format!(
+            "[[profile.default.overrides]]\nfilter = \"all()\"\nplatform = \"{host}\"\nretries = 2\n"
+        )
+    };
+    let before = facts(&[(NEXTEST, &platform("cfg(windows)"))])?;
+    assert_eq!(
+        introduced_files(&before, &[NEXTEST], &[(NEXTEST, &platform("cfg(unix)"))])?,
+        [NEXTEST]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_zero_retry_override_and_a_wrapper_in_an_inactive_profile_are_not_named() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[scripts.wrapper.w]\ncommand = \"true\"\n\n[profile.local]\nscripts = [{ filter = \"all()\", run-wrapper = \"w\" }]\n\n[[profile.default.overrides]]\nfilter = \"all()\"\nretries = 0\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named, Vec::<String>::new());
+    Ok(())
+}

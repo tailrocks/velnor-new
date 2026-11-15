@@ -50,7 +50,7 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
         .and_then(|scripts| scripts.get("wrapper"))
         .and_then(Value::as_table);
     let mut found = Vec::new();
-    for (profile, section) in profiles(parsed) {
+    for (profile, section) in checked(parsed) {
         for entry in entries(section, "scripts") {
             let Some(name) = entry.get("run-wrapper").and_then(Value::as_str) else {
                 continue;
@@ -111,8 +111,11 @@ fn overrides(profile: &str, section: &Value, make: &Make<'_>) -> Vec<Weakening> 
         let selector = entry
             .get("filter")
             .map_or_else(|| "every test".to_owned(), ToString::to_string);
-        let head = format!("profile.{profile}.overrides filter = {selector}");
-        if let Some(retries) = entry.get("retries") {
+        let platform = entry
+            .get("platform")
+            .map_or_else(String::new, |platform| format!(" platform = {platform}"));
+        let head = format!("profile.{profile}.overrides filter = {selector}{platform}");
+        if let Some(retries) = entry.get("retries").filter(|r| retries_tests(r)) {
             found.push(make(
                 format!("{head} retries = {retries}{}", flaky_result(entry)),
                 format!("retries the tests matching {selector}, so a flaky failure there passes"),
