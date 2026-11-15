@@ -136,6 +136,13 @@ pub(super) async fn reconcile_assigned_population(
     assigned_population::reconcile(prepared, context).await
 }
 
+pub(super) async fn reconcile_removed_pre_jit(
+    prepared: &PreparedConnection,
+    context: &PositivePollContext<'_>,
+) -> Result<(), HostError> {
+    Box::pin(pre_jit::reconcile(prepared, context)).await
+}
+
 async fn positive_poll_message(
     prepared: &mut PreparedConnection,
     allocation: &crate::journal::HeaderAllocation,

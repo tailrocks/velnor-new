@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::HostError;
@@ -32,8 +36,8 @@ pub(crate) struct UnboundRetirementClaim {
     operation_id: i64,
     engine_id: String,
     docker_root_digest: String,
-    generation: i64,
-    lease_until: i64,
+    generation: Arc<AtomicI64>,
+    lease_until: Arc<AtomicI64>,
     containers: Vec<UnboundContainer>,
     volumes: Vec<UnboundVolume>,
 }
@@ -163,8 +167,8 @@ impl ConnectionJournal {
                 operation_id: context.operation_id,
                 engine_id: context.engine_id,
                 docker_root_digest: context.docker_root_digest,
-                generation,
-                lease_until,
+                generation: Arc::new(AtomicI64::new(generation)),
+                lease_until: Arc::new(AtomicI64::new(lease_until)),
                 containers: containers(connection, reservation_id).await?,
                 volumes: volumes(connection, reservation_id).await?,
             }))
@@ -182,6 +186,34 @@ impl ConnectionJournal {
             validate_claim_in_transaction(connection, claim).await
         })
         .await
+    }
+
+    pub(crate) async fn renew_unbound_retirement_claim(
+        &self,
+        claim: &UnboundRetirementClaim,
+    ) -> Result<(), HostError> {
+        self.validate_claim_identity(claim)?;
+        let now = unix_seconds()?;
+        let renewed = now.checked_add(CLAIM_SECONDS).ok_or(HostError::Journal)?;
+        let generation = claim.generation.load(Ordering::Acquire);
+        let next = generation.checked_add(1).ok_or(HostError::Journal)?;
+        let current = claim.lease_until.load(Ordering::Acquire);
+        in_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            validate_claim_in_transaction(connection, claim).await?;
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_unbound_retirement_claims SET claim_generation = ?1, lease_until = ?2 WHERE reservation_id = ?3 AND connection_id = ?4 AND operation_id = ?5 AND claim_generation = ?6 AND lease_until = ?7",
+                    (next, renewed, claim.reservation_id, claim.connection_id.as_str(), claim.operation_id, generation, current),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed == 1 { Ok(()) } else { Err(HostError::Ownership) }
+        })
+        .await?;
+        claim.generation.store(next, Ordering::Release);
+        claim.lease_until.store(renewed, Ordering::Release);
+        Ok(())
     }
 
     pub(crate) async fn unbound_retirement_phase_recorded(
@@ -217,7 +249,7 @@ impl ConnectionJournal {
             let changed = connection
                 .execute(
                     "INSERT INTO capacity_reservation_unbound_retirement_progress (reservation_id, phase, claim_generation, evidence_sha256) SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_progress WHERE reservation_id = ?1 AND phase = ?2)",
-                    (claim.reservation_id, phase.as_str(), claim.generation, evidence_sha256),
+                    (claim.reservation_id, phase.as_str(), claim.generation.load(Ordering::Acquire), evidence_sha256),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
@@ -245,7 +277,7 @@ impl ConnectionJournal {
     fn validate_claim_identity(&self, claim: &UnboundRetirementClaim) -> Result<(), HostError> {
         if self.connection_id().as_str() != claim.connection_id
             || claim.reservation_id <= 0
-            || claim.generation <= 0
+            || claim.generation.load(Ordering::Acquire) <= 0
         {
             return Err(HostError::Identity);
         }
@@ -297,8 +329,8 @@ async fn validate_claim_in_transaction(
                 claim.operation_id,
                 claim.engine_id.as_str(),
                 claim.docker_root_digest.as_str(),
-                claim.generation,
-                claim.lease_until,
+                claim.generation.load(Ordering::Acquire),
+                claim.lease_until.load(Ordering::Acquire),
             ),
         )
         .await

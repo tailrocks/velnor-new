@@ -236,7 +236,7 @@ async fn record_removed_in_transaction(
 ) -> Result<(), HostError> {
     let changed = connection
         .execute(
-            "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state = 'requested'",
+            "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state IN ('requested', 'uncertain')",
             (
                 claim.reservation_id,
                 claim.connection_id.as_str(),

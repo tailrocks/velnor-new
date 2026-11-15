@@ -112,7 +112,7 @@ impl Effects<'_> {
         F: Future<Output = Result<T, HostError>>,
     {
         self.scope
-            .validate_unbound_retirement_claim(self.claim)
+            .renew_unbound_retirement_claim(self.claim)
             .await?;
         self.verify_engine().await?;
         effect.await
