@@ -154,3 +154,22 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
     assert_eq!(no_tools, PolicyRuns::default());
     Ok(())
 }
+
+#[test]
+fn the_policy_lane_checks_every_cargo_root_in_its_own_folder() -> TestResult {
+    let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    let deny = RepoPath::new("deny.toml")?;
+    view.tracked_paths.insert(deny.clone());
+    view.files.insert(deny, Vec::new());
+    let text = workflow(&view)?;
+    let policy = text
+        .split("\n  rust-policy:\n")
+        .nth(1)
+        .ok_or("no policy job")?
+        .split("\n  required:\n")
+        .next()
+        .ok_or("no policy job end")?;
+    assert_eq!(policy.matches("cargo-deny check").count(), 2, "{policy}");
+    assert!(policy.contains("working-directory: tools"), "{policy}");
+    Ok(())
+}

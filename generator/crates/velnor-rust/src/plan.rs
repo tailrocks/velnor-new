@@ -183,15 +183,18 @@ fn policy_job(facts: &RepoFacts) -> Job {
         (facts.policy.machete, CargoCommand::Machete),
     ];
     let mut steps = base_steps(facts);
-    steps.extend(
-        commands
-            .into_iter()
-            .filter(|(wanted, _)| *wanted)
-            .map(|(_, command)| Step {
-                when: When::NotCancelled,
-                ..step(StepKind::Cargo(command))
-            }),
-    );
+    for root in &facts.rust_roots {
+        steps.extend(
+            commands
+                .iter()
+                .filter(|(wanted, _)| *wanted)
+                .map(|(_, command)| Step {
+                    kind: StepKind::Cargo(command.clone()),
+                    directory: root.manifest.parent(),
+                    when: When::NotCancelled,
+                }),
+        );
+    }
     Job {
         steps,
         ..job(facts, POLICY_JOB)
