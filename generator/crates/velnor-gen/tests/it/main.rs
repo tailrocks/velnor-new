@@ -45,6 +45,7 @@ mod release_yml;
 mod release_yml_binaries;
 mod release_yml_cargo;
 mod release_yml_isolation;
+mod release_yml_quoting;
 mod release_yml_security;
 mod repo_sample;
 mod restored_term;

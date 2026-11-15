@@ -7,8 +7,21 @@ use toml::Value;
 
 use crate::cargo_allowlist::unknown_key;
 use crate::error::ReleaseError;
+use crate::settings::executable_key;
 
 const BUILTIN_PROVIDER: &str = "cargo:token";
+
+pub fn refuse_external_commands(file: &str, text: &str) -> Result<(), String> {
+    let document = text
+        .parse::<toml::Table>()
+        .map_err(|error| format!("{file} is not valid TOML: {error}"))?;
+    match executable_key(&Value::Table(document)) {
+        Some(key) => Err(format!(
+            "{file}: {key} runs an external command with the release token in reach"
+        )),
+        None => Ok(()),
+    }
+}
 
 const PROGRAM_KEYS: [&str; 3] = ["rustc-wrapper", "rustc-workspace-wrapper", "rustc"];
 
@@ -53,6 +66,10 @@ fn is_builtin(value: &Value) -> bool {
         Value::Array(items) => !items.is_empty() && items.iter().all(is_builtin),
         _ => false,
     }
+}
+
+pub fn refuse_cargo_config(file: &str, text: &str) -> Result<(), String> {
+    cargo_config(file, text, true).map_err(|error| error.to_string())
 }
 
 pub(crate) fn cargo_config(

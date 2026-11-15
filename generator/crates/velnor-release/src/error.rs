@@ -142,6 +142,14 @@ pub enum ReleaseError {
         file: String,
         key: String,
     },
+    ExpressionInValue {
+        key: String,
+        value: String,
+    },
+    InvalidPrBranchPrefix {
+        root: String,
+        prefix: String,
+    },
     ReleasePlzVersionNotExact {
         version: String,
     },
@@ -327,69 +335,6 @@ impl ReleaseError {
                 "mise.lock: {tool} downloads from {url}, which is not a release-plz release on GitHub, so the downloaded program would run with the release App token in scope; run `mise lock` again"
             ),
             _ => self.fmt_cargo(f),
-        }
-    }
-
-    fn fmt_cargo(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CargoCredentialProvider { file } => write!(
-                f,
-                "{file}: a cargo credential provider or alias makes cargo run a program while release-plz holds the release App token"
-            ),
-            Self::SymlinkOnCargoConfigPath { root, path } => write!(
-                f,
-                "{path}: a tracked symbolic link on the cargo config path of release root {root} can hide a cargo config from velnor-gen while cargo follows it"
-            ),
-            Self::CargoRedirectsCratesIo { file } => write!(
-                f,
-                "{file}: a cargo proxy or CA override would redirect the crates.io publish token"
-            ),
-            Self::CargoConfigInclude { file } => write!(
-                f,
-                "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"
-            ),
-            Self::CargoConfigKeyNotAllowed { file, key } => write!(
-                f,
-                "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
-            ),
-            Self::ToolchainFromPath { file } => write!(
-                f,
-                "{file}: a toolchain taken from a path makes rustup run repository code while release-plz holds the release App token"
-            ),
-            Self::CargoRunsProgram { file, key } => write!(
-                f,
-                "{file}: {key} makes cargo run a program while release-plz holds the release App token"
-            ),
-            Self::ReleasePlzVersionNotExact { version } => write!(
-                f,
-                "mise.toml: release-plz must be pinned to an exact MAJOR.MINOR.PATCH version, not {version:?}"
-            ),
-            Self::RootWithoutCargoManifest { root } => write!(
-                f,
-                ".velnor/release.toml: root {root} has no tracked Cargo.toml"
-            ),
-            Self::UnknownWorkflow { name } => write!(
-                f,
-                ".velnor/release.toml: after names workflow {name:?}, which no tracked or generated workflow has as its name"
-            ),
-            Self::PackageNotInRoot { root, package } => write!(
-                f,
-                "{root}/release-plz.toml: [[package]] {package} is not a package of the Cargo workspace at {root}"
-            ),
-            Self::BinaryTargetMissing { package, bin } => write!(
-                f,
-                ".velnor/release.toml: package {package} has no binary target {bin} that builds without extra features in its release root"
-            ),
-            Self::DuplicatePackageName { package, roots } => write!(
-                f,
-                "package {package} is released from several roots: {}",
-                roots.join(", ")
-            ),
-            Self::TagsMayCollide { first, second } => write!(
-                f,
-                "tag patterns {first} and {second} can render the same tag"
-            ),
-            _ => Ok(()),
         }
     }
 }

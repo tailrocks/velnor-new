@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
+use crate::git_ref;
 use crate::settings::{Document, Settings, executable_key};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
 
@@ -165,6 +166,12 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     if prefix.trim().is_empty() {
         return Err(ReleaseError::EmptyPrBranchPrefix {
             root: root.to_owned(),
+        });
+    }
+    if !git_ref::is_valid(&format!("refs/heads/{prefix}x")) {
+        return Err(ReleaseError::InvalidPrBranchPrefix {
+            root: root.to_owned(),
+            prefix,
         });
     }
     let released = released_packages(root, &document)?;

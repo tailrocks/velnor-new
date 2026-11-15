@@ -38,6 +38,16 @@ struct Raw {
     binaries: Vec<RawBinary>,
 }
 
+fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
+    match values.iter().find(|value| value.contains("${{")) {
+        Some(value) => Err(ReleaseError::ExpressionInValue {
+            key: key.to_owned(),
+            value: (*value).to_owned(),
+        }),
+        None => Ok(()),
+    }
+}
+
 pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     let raw = match text {
         Some(text) => toml::from_str::<Raw>(text).map_err(|error| ReleaseError::InvalidToml {
@@ -51,6 +61,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
     }
@@ -58,6 +69,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     if roots.is_empty() {
         return Err(ReleaseError::EmptyRoots);
     }
+    refuse_expressions("roots", &text_refs(&roots))?;
     if let Some(root) = roots.iter().find(|root| {
         root.as_str() != "."
             && (root.is_empty()
@@ -88,8 +100,14 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     })
 }
 
+fn text_refs(values: &[String]) -> Vec<&str> {
+    values.iter().map(String::as_str).collect()
+}
+
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
+    refuse_expressions("binaries.package", &[&raw.package])?;
     let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
+    refuse_expressions("binaries.bin", &[&bin])?;
     if !valid_package_name(&bin) {
         return Err(ReleaseError::InvalidBinName {
             package: raw.package,

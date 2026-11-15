@@ -8,7 +8,7 @@ use velnor_release::ReleasePlan;
 
 use crate::release_binaries::binary_jobs;
 use crate::release_steps::{
-    app_token, checkout, expression, install_release_plz, label, permissions,
+    app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
     release_plz_arguments, release_plz_step, variables,
 };
 use crate::rules::{
@@ -36,7 +36,11 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![gate(helper), release_pr(plan, branch), tag(plan, helper)];
+    let mut jobs = vec![
+        gate(helper),
+        release_pr(plan, branch, helper),
+        tag(plan, helper),
+    ];
     jobs.extend(binary_jobs(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
@@ -73,7 +77,8 @@ pub fn render_release(
 
 fn trigger(plan: &ReleasePlan, branch: &str) -> Yaml {
     let names = |items: &[&str]| Yaml::Seq(items.iter().map(|item| text(item)).collect());
-    let after: Vec<&str> = plan.after.iter().map(String::as_str).collect();
+    let after: Vec<String> = plan.after.iter().map(|name| escape_filter(name)).collect();
+    let after: Vec<&str> = after.iter().map(String::as_str).collect();
     Yaml::Map(vec![entry(
         "workflow_run",
         Yaml::Noted(
@@ -81,10 +86,19 @@ fn trigger(plan: &ReleasePlan, branch: &str) -> Yaml {
             Box::new(Yaml::Map(vec![
                 entry("workflows", names(&after)),
                 entry("types", names(&["completed"])),
-                entry("branches", names(&[branch])),
+                entry("branches", names(&[&escape_filter(branch)])),
             ])),
         ),
     )])
+}
+
+fn escape_filter(name: &str) -> String {
+    name.chars()
+        .flat_map(|ch| {
+            let escaped = matches!(ch, '\\' | '*' | '?' | '+' | '[' | ']' | '!');
+            escaped.then_some('\\').into_iter().chain([ch])
+        })
+        .collect()
 }
 
 fn gate(helper: &HelperRelease) -> RenderedJob {
@@ -136,11 +150,13 @@ fn after_the_gate(id: &str) -> RenderedJob {
     }
 }
 
-fn release_pr(plan: &ReleasePlan, branch: &str) -> RenderedJob {
+fn release_pr(plan: &ReleasePlan, branch: &str, helper: &HelperRelease) -> RenderedJob {
     let mut steps = install_release_plz(&plan.release_plz_version);
+    steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check(branch));
     steps.push(on_the_default_branch(branch));
+    steps.push(refuse_commands(&plan.roots));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "write"),
@@ -177,6 +193,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = install_release_plz(&plan.release_plz_version);
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
+    steps.push(refuse_commands(&plan.roots));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -205,6 +222,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         scopes.push(("id-token", "write"));
     }
     RenderedJob {
+        concurrency: Some(RenderedConcurrency {
+            group: "release-tag".to_owned(),
+            cancel_in_progress: false,
+        }),
         permissions: permissions(&scopes),
         outputs: plan
             .binaries
