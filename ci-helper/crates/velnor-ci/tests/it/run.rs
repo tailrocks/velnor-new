@@ -242,7 +242,11 @@ fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_writ
 #[test]
 fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
     use std::io::{BufRead, BufReader};
+    use std::os::unix::process::CommandExt;
     use std::process::Stdio;
+
+    use nix::sys::signal::{Signal, killpg};
+    use nix::unistd::Pid;
 
     let temp = scratch("sigterm");
     let script = "trap 'echo got-term; exit 5' TERM; echo ready; i=0; while [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; exit 9";
@@ -250,6 +254,7 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
         .args(["run", "--", "sh", "-c", script])
         .env("RUNNER_TEMP", &temp)
         .stdout(Stdio::piped())
+        .process_group(0)
         .spawn()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = child.stdout.take().unwrap_or_else(|| unreachable!("piped"));
@@ -270,10 +275,14 @@ fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
-    if status.is_none() {
-        child.kill().ok();
-    }
-    assert_eq!(status.and_then(|status| status.code()), Some(5));
+    let status = match status {
+        Some(status) => status,
+        None => {
+            killpg(Pid::from_raw(child.id() as i32), Signal::SIGKILL).ok();
+            child.wait().unwrap_or_else(|e| unreachable!("{e}"))
+        }
+    };
+    assert_eq!(status.code(), Some(5));
     assert_eq!(
         lines.next().and_then(Result::ok).as_deref(),
         Some("got-term")
