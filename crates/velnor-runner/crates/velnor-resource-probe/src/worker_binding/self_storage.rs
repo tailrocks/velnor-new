@@ -17,7 +17,7 @@ const CGROUP_PATH: &str = "/proc/self/cgroup";
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const PROC_LIMIT: usize = 4096;
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo_io::read_mountinfo;
 const CGROUP_FILE_LIMIT: usize = 4096;
 
 pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservation, ProbeError> {
@@ -30,7 +30,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
     let cgroup_namespace_id = namespace_inode("cgroup")?;
     let cgroup_path_in_self_namespace = self_cgroup_path()?;
     let self_leaf_limits = observe_leaf(&cgroup_path_in_self_namespace, process_pid)?;
-    let mountinfo = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let mountinfo = read_mountinfo(MOUNTINFO_PATH, "mountinfo")?;
     let attachments = super::storage::observe_attachments(request.role, &mountinfo)?;
     let guest_boot_id = parse_boot_id(&read_bounded(BOOT_ID_PATH, 128, "boot_id")?)?;
 
@@ -39,7 +39,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
         || super::observer::mount_namespace_identity(process_pid)? != mount_namespace
         || namespace_inode("cgroup")? != cgroup_namespace_id
         || self_cgroup_path()? != cgroup_path_in_self_namespace
-        || read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")? != mountinfo
+        || read_mountinfo(MOUNTINFO_PATH, "mountinfo")? != mountinfo
         || parse_boot_id(&read_bounded(BOOT_ID_PATH, 128, "boot_id")?)? != guest_boot_id
     {
         return Err(ProbeError::Invalid("self_observation_changed"));
