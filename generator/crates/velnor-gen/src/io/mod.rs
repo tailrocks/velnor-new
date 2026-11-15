@@ -14,17 +14,18 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, METADATA_PATH, MetadataError, MetadataFileError, manifests,
-    metadata_file, metadata_roots, pin_lock, recorded_metadata, reduce_metadata, release_version,
-    sums_url, wanted_files,
+    DetectError, LOCK_PATH, LockError, MetadataError, MetadataFileError, manifests, metadata_roots,
+    pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
+mod recorded;
 mod sample;
 
 use crate::cli::{Cli, Command};
 use crate::{
     Drift, GENERATED_PATHS, GenerateError, check_tag, drift, generated_files, require_compatible,
 };
+pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -279,23 +280,6 @@ pub struct Checkout {
 pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
     let view = read_view(&root, false)?.0;
-    Ok(Checkout { root, view })
-}
-
-pub fn write_metadata(path: &Path) -> Result<(), Error> {
-    let root = toplevel(path)?;
-    let view = read_view(&root, false)?.0;
-    let text = metadata_file(&view).map_err(Error::MetadataFile)?;
-    replace(&root.join(METADATA_PATH.as_str()), text.as_bytes())
-}
-
-pub fn read_recorded_checkout(path: &Path) -> Result<Checkout, Error> {
-    let root = toplevel(path)?;
-    let mut view = read_tracked(&root)?;
-    read_manifests(&root, &mut view);
-    let mut recorded = read_files(&root, &[METADATA_PATH])?;
-    view.rust_metadata = recorded_metadata(&view, recorded.remove(&METADATA_PATH).as_deref())
-        .map_err(Error::MetadataFile)?;
     Ok(Checkout { root, view })
 }
 
