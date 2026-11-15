@@ -170,3 +170,27 @@ async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
         .len();
     assert_eq!((status, left), (502, 0));
 }
+
+#[tokio::test]
+async fn authority_records_an_entry_only_when_the_whole_ledger_is_written() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let runners = FakeRunners::default();
+    let dir = temp_dir("authority-record-unsaved");
+    let at = dir.join("authority");
+    let authority = Authority::open(&runners, TOKEN.to_owned(), &at)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let first = entry("1-push", "trusted", "push", "refs/heads/main");
+    let second = entry("2-push", "trusted", "push", "refs/heads/main");
+    assert_eq!(post(&authority, first).await, 200);
+    let set = |mode| std::fs::set_permissions(&at, std::fs::Permissions::from_mode(mode));
+    set(0o500).unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = post(&authority, second.clone()).await;
+    set(0o700).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused, 500);
+    assert_eq!(post(&authority, second).await, 200);
+    let kept =
+        std::fs::read_to_string(at.join("ledger.jsonl")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(kept.lines().count(), 2, "{kept}");
+}

@@ -13,7 +13,6 @@ use ring::hmac;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 pub use runners::Runners;
@@ -134,20 +133,13 @@ impl<B: Backend> Authority<B> {
         }
         let runs: Vec<Run> = self.fetch(posted.side, RUNS_PATH).await?;
         let entry = posted.entry(run_ids(&runs))?;
-        let line = format!("{}\n", json!(entry));
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&ledger.path)
-            .await
-            .map_err(Error::internal)?;
-        file.write_all(line.as_bytes())
-            .await
-            .map_err(Error::internal)?;
-        file.flush().await.map_err(Error::internal)?;
+        ledger.entries.push(entry.clone());
+        if let Err(error) = ledger.save().await {
+            ledger.entries.pop();
+            return Err(Error::internal(error));
+        }
         let reply =
             json!({"id": entry.id, "side": entry.side.name(), "existing": entry.existing.len()});
-        ledger.entries.push(entry);
         Ok(json_response(200, &reply))
     }
 
