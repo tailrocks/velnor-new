@@ -264,6 +264,7 @@ platform = "linux/amd64"
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"
 inputs = [
+  "actions/setup-velnor/action.yml",
   ".config/nextest.toml",
   ".mise-version",
   ".velnor/freshness-inventory.json",
@@ -920,6 +921,7 @@ inputs = [
   "scripts/runner-family-root-inventory.py",
   "scripts/runner-family-host-inventory.py",
   "scripts/test-native-image-candidate-inventory.py",
+  "scripts/test-setup-velnor-action.py",
   "scripts/build-owned-archive-guard.sh",
   "scripts/check-owned-archive-guard-sources.sh",
   "scripts/owned_archive_preflight.py",
