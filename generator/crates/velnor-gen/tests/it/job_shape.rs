@@ -208,6 +208,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
     let text = workflow(&timed_view(entry, "required_check = \"CI passed\"\n")?)?;
     let jobs: Vec<&str> = text
         .lines()
+        .skip_while(|line| *line != "jobs:")
         .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
         .collect();
     assert_eq!(

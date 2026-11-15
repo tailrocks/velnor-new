@@ -4,14 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision,
-    Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, FullRun, Gate, GateNeed, HelperCommand, Job,
+    JobId, OnMain, PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape,
+    ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::schedule::schedule;
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -90,6 +91,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
             pull_request: true,
+            push_branch: Some(facts.config.default_branch.clone()),
+            merge_group: true,
+            schedule: schedule(facts),
             workflow_dispatch: true,
         },
         concurrency: Concurrency {
@@ -172,15 +176,14 @@ fn root_jobs(
         test.push(CargoCommand::Doctest);
     }
     let comment = Some(decision.reason);
+    let audit = audit_step(facts, lane);
     match decision.shape {
         Shape::OneJob => {
             let mut steps = setup(facts, root, true, lane);
+            steps.extend(cargo(lint.into_iter().chain(test).collect()));
+            steps.extend(audit);
             steps.extend(cargo(
-                lint.into_iter()
-                    .chain(test)
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
+                [CargoCommand::Doc].into_iter().chain(alone).collect(),
             ));
             vec![Job {
                 comment,
@@ -195,6 +198,9 @@ fn root_jobs(
                     .chain(alone)
                     .collect(),
             ));
+            if test.is_empty() {
+                lint_steps.extend(audit.clone());
+            }
             let mut jobs = vec![Job {
                 comment,
                 ..lane_job(id(LINT_JOB), lint_steps)
@@ -202,6 +208,7 @@ fn root_jobs(
             if !test.is_empty() {
                 let mut test_steps = setup(facts, root, false, lane);
                 test_steps.extend(cargo(test));
+                test_steps.extend(audit);
                 jobs.push(lane_job(id(TEST_JOB), test_steps));
             }
             jobs
@@ -249,6 +256,19 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
             package: member.name.clone(),
         })
         .collect()
+}
+
+fn audit_step(facts: &RepoFacts, lane: &Lane) -> Option<Step> {
+    let when = match (facts.config.on_main, &facts.config.full_run) {
+        (OnMain::Everything, _) => When::ScheduledOrPush,
+        (OnMain::Affected, FullRun::Off) => return None,
+        (OnMain::Affected, _) => When::Scheduled,
+    };
+    Some(Step {
+        when,
+        gate: lane.steps(),
+        ..step(StepKind::Helper(HelperCommand::InputsAudit))
+    })
 }
 
 fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {

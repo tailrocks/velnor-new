@@ -4,11 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::cron::CronExpr;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
 use crate::plan::{HelperRelease, Shape};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
+    pub repository: String,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
@@ -64,6 +66,7 @@ pub enum TargetKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoFacts {
+    pub repository: String,
     pub rust_roots: Vec<RustRoot>,
     pub toolchain: Option<Toolchain>,
     pub tools: ToolPins,
@@ -180,6 +183,23 @@ pub struct RustCiConfig {
     pub shape: Option<Shape>,
     pub required_check: String,
     pub default_branch: String,
+    pub on_main: OnMain,
+    pub full_run: FullRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnMain {
+    Affected,
+    Everything,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FullRun {
+    Off,
+    Hourly,
+    Nightly,
+    Weekly,
+    Cron(CronExpr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,6 +220,8 @@ impl Default for RustCiConfig {
             shape: None,
             required_check: "Required".to_owned(),
             default_branch: "main".to_owned(),
+            on_main: OnMain::Affected,
+            full_run: FullRun::Nightly,
         }
     }
 }

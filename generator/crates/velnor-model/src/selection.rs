@@ -15,6 +15,15 @@ pub struct ChangeSet {
     pub head_files: BTreeMap<RepoPath, String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventKind {
+    PullRequest,
+    Push,
+    MergeGroup,
+    Schedule,
+    WorkflowDispatch,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RustSelection {
     None,

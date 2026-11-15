@@ -6,9 +6,10 @@ use std::fs;
 use std::path::Path;
 
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
-use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection};
+use velnor_model::{ChangeSet, EventKind, RepoFacts, RepoPath, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, root_sources, select, unknown_paths, unread_packages,
+    cargo_files, detect, optional_steps, root_sources, select_event, selects_by_diff,
+    unknown_paths, unread_packages,
 };
 
 use super::{EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, append_outputs, current_dir, git};
@@ -18,7 +19,6 @@ use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{Steps, explain, outputs};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
-const PULL_REQUEST: &str = "pull_request";
 const LOCK_FILE: &str = "Cargo.lock";
 
 fn ci(error: impl std::fmt::Display) -> CiError {
@@ -34,7 +34,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
     let full = name.as_deref() == Some(SCHEDULED);
-    let (selections, changes) = choose(args, &checkout, &facts, name.as_deref())?;
+    let (selections, changes) = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let steps = facts
         .rust_roots
         .iter()
@@ -66,16 +66,16 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     })
 }
 
-fn everything(
-    facts: &RepoFacts,
-    trigger: &AllTrigger,
-) -> (BTreeMap<RepoPath, RustSelection>, ChangeSet) {
-    let selections = facts
-        .rust_roots
-        .iter()
-        .map(|root| (root.manifest.clone(), RustSelection::All(trigger.clone())))
-        .collect();
-    (selections, ChangeSet::default())
+fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
+    match name {
+        Some("pull_request") => EventKind::PullRequest,
+        Some("push") => EventKind::Push,
+        Some("merge_group") => EventKind::MergeGroup,
+        Some(SCHEDULED) => EventKind::Schedule,
+        Some("workflow_dispatch") => EventKind::WorkflowDispatch,
+        _ if manual => EventKind::PullRequest,
+        _ => EventKind::WorkflowDispatch,
+    }
 }
 
 fn choose(
@@ -83,19 +83,30 @@ fn choose(
     checkout: &Checkout,
     facts: &RepoFacts,
     name: Option<&str>,
+    event: Option<&Event>,
 ) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet), CiError> {
-    if name == Some(SCHEDULED) {
-        return Ok(everything(facts, &AllTrigger::Event));
-    }
+    let kind = event_kind(name, !args.changed.is_empty());
+    let diff = if selects_by_diff(kind, &facts.config) {
+        changes(args, checkout, facts, kind, event)?
+    } else {
+        None
+    };
+    Ok(select_event(facts, kind, || diff))
+}
+
+fn changes(
+    args: &PlanArgs,
+    checkout: &Checkout,
+    facts: &RepoFacts,
+    kind: EventKind,
+    event: Option<&Event>,
+) -> Result<Option<ChangeSet>, CiError> {
     let (paths, base_files) = if args.changed.is_empty() {
-        if name != Some(PULL_REQUEST) {
-            return Ok(everything(facts, &AllTrigger::Event));
-        }
-        match pull_request_changes(checkout, facts) {
+        match event_changes(checkout, facts, kind, event) {
             Ok(found) => found,
             Err(error) => {
                 eprintln!("velnor-ci: {error}; every package is selected");
-                return Ok(everything(facts, &AllTrigger::BaseUnavailable));
+                return Ok(None);
             }
         }
     } else {
@@ -104,25 +115,38 @@ fn choose(
             read_base_files(&args.base_files)?,
         )
     };
-    let changes = ChangeSet {
+    Ok(Some(ChangeSet {
         base_files,
         head_files: read_head_files(checkout, &paths)?,
         paths,
-    };
-    Ok((select(facts, &changes), changes))
+    }))
 }
 
 type Found = (BTreeSet<RepoPath>, BTreeMap<RepoPath, String>);
 
-fn pull_request_changes(checkout: &Checkout, facts: &RepoFacts) -> Result<Found, CiError> {
-    let paths = git::changed_files(&checkout.root)?;
+fn event_changes(
+    checkout: &Checkout,
+    facts: &RepoFacts,
+    kind: EventKind,
+    event: Option<&Event>,
+) -> Result<Found, CiError> {
+    let base = match kind {
+        EventKind::PullRequest => git::pull_request_base(&checkout.root)?,
+        _ => {
+            let range = event
+                .and_then(|event| event.range.as_ref())
+                .ok_or_else(|| CiError::new("the event payload names no commit range"))?;
+            git::range_base(&checkout.root, &range.base, &range.head)?
+        }
+    };
+    let paths = git::changed_files(&checkout.root, &base)?;
     let roots: BTreeSet<&RepoPath> = facts.rust_roots.iter().map(|root| &root.manifest).collect();
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
         .filter(|path| paths.contains(path) && (is_lock(path) || roots.contains(path)))
         .collect();
-    let base = git::base_files(&checkout.root, &wanted);
-    Ok((paths, base))
+    let files = git::base_files(&checkout.root, &base, &wanted);
+    Ok((paths, files))
 }
 
 fn is_lock(path: &RepoPath) -> bool {

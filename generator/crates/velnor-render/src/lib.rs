@@ -73,6 +73,21 @@ fn triggers(triggers: &Triggers) -> Yaml {
     if triggers.pull_request {
         items.push(entry("pull_request", Yaml::Map(Vec::new())));
     }
+    if let Some(branch) = &triggers.push_branch {
+        items.push(entry(
+            "push",
+            Yaml::Map(vec![entry("branches", Yaml::Seq(vec![text(branch)]))]),
+        ));
+    }
+    if triggers.merge_group {
+        items.push(entry("merge_group", Yaml::Map(Vec::new())));
+    }
+    if let Some(cron) = &triggers.schedule {
+        items.push(entry(
+            "schedule",
+            Yaml::Seq(vec![Yaml::Map(vec![entry("cron", text(cron.as_str()))])]),
+        ));
+    }
     if triggers.workflow_dispatch {
         items.push(entry("workflow_dispatch", Yaml::Map(Vec::new())));
     }

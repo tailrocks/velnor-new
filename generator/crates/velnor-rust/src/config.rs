@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape};
+use velnor_model::{
+    CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath, RunnerLabel,
+    RustCiConfig, Shape,
+};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 9] = [
+const KEYS: [&str; 11] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -19,6 +22,8 @@ const KEYS: [&str; 9] = [
     "shape",
     "required_check",
     "default_branch",
+    "on_main",
+    "full_run",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -36,6 +41,8 @@ struct RawConfig {
     shape: Option<String>,
     required_check: Option<String>,
     default_branch: Option<String>,
+    on_main: Option<String>,
+    full_run: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +96,14 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     };
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let full_run = match raw.full_run {
+        None => defaults.full_run,
+        Some(value) => full_run(value).map_err(invalid)?,
+    };
     Ok(RustCiConfig {
+        on_main,
+        full_run,
         shape,
         required_check,
         default_branch,
@@ -118,6 +132,33 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
                 })
             })
             .collect::<Result<_, _>>()?,
+    })
+}
+
+fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
+    match configured {
+        None => Ok(default),
+        Some("affected") => Ok(OnMain::Affected),
+        Some("everything") => Ok(OnMain::Everything),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "on_main",
+            value: other.to_owned(),
+        }),
+    }
+}
+
+fn full_run(value: String) -> Result<FullRun, Reason> {
+    Ok(match value.as_str() {
+        "off" => FullRun::Off,
+        "hourly" => FullRun::Hourly,
+        "nightly" => FullRun::Nightly,
+        "weekly" => FullRun::Weekly,
+        _ => FullRun::Cron(
+            CronExpr::new(value.clone()).map_err(|_| Reason::InvalidValue {
+                key: "full_run",
+                value,
+            })?,
+        ),
     })
 }
 

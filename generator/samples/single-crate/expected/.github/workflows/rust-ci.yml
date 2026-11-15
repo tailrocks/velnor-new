@@ -2,6 +2,12 @@
 name: Rust CI
 on:
   pull_request: {}
+  push:
+    branches:
+      - main
+  merge_group: {}
+  schedule:
+    - cron: '36 16 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -63,6 +69,9 @@ jobs:
       - name: Test
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''

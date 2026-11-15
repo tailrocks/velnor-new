@@ -7,7 +7,7 @@ pub mod io;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView, WORKFLOW_PATH};
+use velnor_model::{FullRun, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView, WORKFLOW_PATH};
 use velnor_render::{GENERATED_HEADER, RuleViolation, render};
 use velnor_rust::{
     DetectError, METADATA_PATH, MetadataFileError, check_required_check, check_tools, detect,
@@ -15,6 +15,8 @@ use velnor_rust::{
 };
 
 pub const GENERATED_PATHS: [RepoPath; 2] = [WORKFLOW_PATH, METADATA_PATH];
+
+pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
@@ -66,6 +68,15 @@ pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Ge
         metadata_file(view).map_err(GenerateError::Metadata)?,
     );
     Ok(files)
+}
+
+pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
+    let config = detect(view)?.config;
+    let blind = config.on_main == OnMain::Affected && config.full_run == FullRun::Off;
+    Ok(blind
+        .then(|| NO_FULL_RUN_NOTE.to_owned())
+        .into_iter()
+        .collect())
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {

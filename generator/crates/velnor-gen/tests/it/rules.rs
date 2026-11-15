@@ -76,6 +76,9 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
             pull_request: true,
+            push_branch: None,
+            merge_group: false,
+            schedule: None,
             workflow_dispatch: false,
         },
         concurrency: Concurrency {

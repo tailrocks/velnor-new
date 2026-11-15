@@ -5,6 +5,8 @@ use velnor_model::{Gate, GateNeed, PlanFrom, When};
 
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
+const SCHEDULE: &str = "schedule";
+const PUSH: &str = "push";
 
 pub(crate) fn output(slug: &str, need: GateNeed) -> String {
     format!("rust_{slug}_{}", need_name(need))
@@ -20,8 +22,13 @@ fn need_name(need: GateNeed) -> &'static str {
 
 pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
     let mut parts = Vec::new();
-    if when == When::NotCancelled {
-        parts.push(NOT_CANCELLED.to_owned());
+    match when {
+        When::Success => {}
+        When::NotCancelled => parts.push(NOT_CANCELLED.to_owned()),
+        When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
+        When::ScheduledOrPush => parts.push(format!(
+            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
+        )),
     }
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate));

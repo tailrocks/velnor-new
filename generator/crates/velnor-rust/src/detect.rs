@@ -103,6 +103,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         ));
     }
     Ok(RepoFacts {
+        repository: view.repository.clone(),
         timings,
         rust_roots,
         toolchain,

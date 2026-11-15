@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::cron::CronExpr;
 use crate::ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
 };
@@ -19,6 +20,9 @@ pub struct WorkflowPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Triggers {
     pub pull_request: bool,
+    pub push_branch: Option<String>,
+    pub merge_group: bool,
+    pub schedule: Option<CronExpr>,
     pub workflow_dispatch: bool,
 }
 
@@ -91,6 +95,8 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Scheduled,
+    ScheduledOrPush,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +119,7 @@ pub enum HelperCommand {
     Restored,
     InputsSave,
     InputsRestore,
+    InputsAudit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

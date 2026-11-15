@@ -197,6 +197,7 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
         HelperCommand::Restored => "restored",
         HelperCommand::InputsSave => "inputs save",
         HelperCommand::InputsRestore => "inputs restore",
+        HelperCommand::InputsAudit => "inputs audit",
     }
 }
 

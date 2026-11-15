@@ -77,6 +77,7 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let jobs: Vec<&str> = text
         .lines()
+        .skip_while(|line| *line != "jobs:")
         .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
         .collect();
     assert_eq!(
@@ -147,7 +148,7 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
     let config = b"runner = \"${{ secrets.TOKEN }}\"\n";
     let text = workflow(&view(&[root], Some(config))?)?;
     assert!(text.contains("    runs-on: '${{ ''${{'' }} secrets.TOKEN }}'\n"));
-    assert!(!text.contains("${{ github.event"), "{text}");
+    assert!(!text.contains("${{ github.event."), "{text}");
     assert!(text.contains(
         "        working-directory: 'a${{ ''${{'' }} github.event.pull_request.title }}'\n"
     ));

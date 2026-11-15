@@ -2,6 +2,12 @@
 name: Rust CI
 on:
   pull_request: {}
+  push:
+    branches:
+      - main
+  merge_group: {}
+  schedule:
+    - cron: '15 8 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -98,6 +104,9 @@ jobs:
       - name: Test
         if: '${{ !cancelled() }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
@@ -198,6 +207,9 @@ jobs:
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' && needs.rust-plan.outputs.rust_ci_helper_docs == ''run'' }}'
         working-directory: ci-helper
@@ -261,6 +273,9 @@ jobs:
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' && needs.rust-plan.outputs.rust_crates_velnor_runner_docs == ''run'' }}'
         working-directory: crates/velnor-runner
@@ -352,6 +367,9 @@ jobs:
         if: '${{ !cancelled() }}'
         working-directory: generator
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_generator_mode != ''none'' && needs.rust-plan.outputs.rust_generator_docs == ''run'' }}'
         working-directory: generator
@@ -427,6 +445,9 @@ jobs:
         if: '${{ !cancelled() }}'
         working-directory: local
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+      - name: velnor-ci inputs audit
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: velnor-ci inputs audit
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_local_mode != ''none'' && needs.rust-plan.outputs.rust_local_docs == ''run'' }}'
         working-directory: local

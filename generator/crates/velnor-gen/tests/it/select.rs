@@ -60,6 +60,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         })
         .collect();
     RepoFacts {
+        repository: String::new(),
         rust_roots,
         toolchain: None,
         tools: ToolPins {
