@@ -244,3 +244,28 @@ fn a_manifest_without_a_digest_in_the_file_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn only_a_rust_file_in_a_discovered_folder_changes_the_recorded_layout() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let mut notes = files.clone();
+    notes.tracked_paths.insert(path("core/tests/notes.txt")?);
+    notes
+        .files
+        .insert(path("core/tests/notes.txt")?, b"notes\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&notes, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    let mut extra = files.clone();
+    extra.tracked_paths.insert(path("core/tests/extra.rs")?);
+    extra
+        .files
+        .insert(path("core/tests/extra.rs")?, b"fn main() {}\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&extra, Some(text.as_bytes())),
+        Err(MetadataFileError::Layout)
+    );
+    Ok(())
+}
