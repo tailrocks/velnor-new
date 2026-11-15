@@ -13,7 +13,7 @@ use nix::sys::signal::kill;
 use nix::unistd::Pid;
 use tokio::fs;
 use tokio::net::TcpListener;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::signal::unix::{SignalKind, signal};
 
 use super::authority::{Authority, LEDGER, Runners};
@@ -43,7 +43,33 @@ async fn forget(path: &Path) -> io::Result<()> {
     }
 }
 
+struct Starting(Option<Child>);
+
+impl Starting {
+    fn child(&mut self) -> io::Result<&mut Child> {
+        self.0
+            .as_mut()
+            .ok_or_else(|| io::Error::other("the authority process was released"))
+    }
+
+    fn release(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for Starting {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.as_mut() {
+            let _ = child.start_kill();
+        }
+    }
+}
+
 pub async fn start(dir: &Path) -> io::Result<Endpoint> {
+    start_binary(dir, &std::env::current_exe()?).await
+}
+
+pub async fn start_binary(dir: &Path, binary: &Path) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
     private_folder(&authority).await?;
@@ -53,28 +79,30 @@ pub async fn start(dir: &Path) -> io::Result<Endpoint> {
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
     let log = std::fs::File::create(authority.join("supervise.log"))?;
-    let binary = std::env::current_exe()?;
-    let mut child = Command::new(&binary)
-        .args(["supervise", "--dir"])
-        .arg(dir)
-        .stdin(Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log)
-        .process_group(0)
-        .spawn()?;
-    if let Some(pid) = child.id() {
+    let mut starting = Starting(Some(
+        Command::new(binary)
+            .args(["supervise", "--dir"])
+            .arg(dir)
+            .stdin(Stdio::null())
+            .stdout(log.try_clone()?)
+            .stderr(log)
+            .process_group(0)
+            .spawn()?,
+    ));
+    if let Some(pid) = starting.child()?.id() {
         write_private(&authority.join("binary"), &binary.display().to_string()).await?;
         write_private(&authority.join("pid"), &pid.to_string()).await?;
     }
     let deadline = tokio::time::Instant::now() + START_TIMEOUT;
     loop {
         if let Ok(address) = fs::read_to_string(authority.join("address")).await {
+            starting.release();
             return Ok(Endpoint {
                 address: address.trim().to_owned(),
                 token,
             });
         }
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = starting.child()?.try_wait()? {
             let message =
                 format!("the authority exited with {status}; see authority/supervise.log");
             return Err(io::Error::other(message));

@@ -16,7 +16,7 @@ use tokio::process::Command;
 
 use super::env::{DockerCli, Engine, Environment, RUNNER_LABELS, program, words};
 use crate::cli::{BuildArgs, JitArgs};
-use crate::images::{Lock, TARGETS, plan};
+use crate::images::{Lock, TARGETS, plan, refuse_dirty};
 use crate::jit::{pack, register_script};
 use crate::side::Side;
 
@@ -27,6 +27,26 @@ pub struct Minted {
     pub name: String,
     pub jit: String,
     pub took: Duration,
+}
+
+#[derive(Debug)]
+pub struct MintError {
+    pub name: String,
+    pub source: io::Error,
+}
+
+impl std::fmt::Display for MintError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "registering {}: {}", self.name, self.source)
+    }
+}
+
+impl std::error::Error for MintError {}
+
+impl From<MintError> for io::Error {
+    fn from(error: MintError) -> Self {
+        Self::other(error.to_string())
+    }
 }
 
 #[must_use]
@@ -48,8 +68,19 @@ pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
     }))
 }
 
-pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> io::Result<Minted> {
-    let name = format!("{}-jit-{}", env.name, random_hex(4)?);
+pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> Result<Minted, MintError> {
+    let name = format!(
+        "{}-jit-{}",
+        env.name,
+        random_hex(4).map_err(|e| MintError {
+            name: String::new(),
+            source: e
+        })?
+    );
+    let failed = |source: io::Error| MintError {
+        name: name.clone(),
+        source,
+    };
     let label = format!("velnor-local={}", env.name);
     let network = env.network(side);
     let script = register_script(&name, RUNNER_LABELS);
@@ -63,10 +94,11 @@ pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> io::Result<Min
             ]
             .concat(),
         )
-        .await?;
-    let jit = pack(&output).map_err(io::Error::other)?;
+        .await
+        .map_err(failed)?;
+    let jit = pack(&output).map_err(|error| failed(io::Error::other(error)))?;
     Ok(Minted {
-        name,
+        name: name.clone(),
         jit,
         took: started.elapsed(),
     })
@@ -126,12 +158,25 @@ async fn streamed(args: &[String]) -> io::Result<()> {
 pub async fn build(args: BuildArgs) -> io::Result<()> {
     let root = fs::canonicalize(&args.root).await?;
     let lock = fs::read_to_string(root.join(".velnor/runner.lock")).await?;
-    let sha = program(
+    let git_root = root.display().to_string();
+    let dirty = program(
         "git",
-        &["-C", &root.display().to_string(), "rev-parse", "HEAD"],
+        &[
+            "-C",
+            &git_root,
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--",
+            "crates/velnor-runner",
+            "images",
+            ".velnor",
+        ],
         None,
     )
     .await?;
+    refuse_dirty(&String::from_utf8_lossy(&dirty)).map_err(io::Error::other)?;
+    let sha = program("git", &["-C", &git_root, "rev-parse", "HEAD"], None).await?;
     let sha = String::from_utf8_lossy(&sha).trim().to_owned();
     let stages = std::env::temp_dir().join(format!("velnor-local-build-{}", random_hex(8)?));
     fs::create_dir_all(&stages).await?;

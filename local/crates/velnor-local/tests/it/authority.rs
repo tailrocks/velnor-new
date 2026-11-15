@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod claims;
 mod fake;
 
 use serde_json::{Value, json};
@@ -312,6 +313,7 @@ fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
         sha: SHA.to_owned(),
         workflow: workflow.map(str::to_owned),
         existing,
+        claims: Vec::new(),
     };
     let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
     assert!(admit(&entries, Side::Trusted, &facts(1, "a.yml")).is_ok());

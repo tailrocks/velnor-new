@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::Value;
-use velnor_local::images::{DIND_TAG, Lock, PROBE_TAG, RUNNER_TAG, plan};
+use velnor_local::images::{DIND_TAG, Lock, PROBE_TAG, RUNNER_TAG, plan, refuse_dirty};
 use velnor_local::io::env::{Engine, Environment};
 use velnor_local::io::pair::{mint, write_private};
 use velnor_local::jit::pack;
@@ -229,4 +229,75 @@ async fn concurrent_jit_writes_to_one_path_all_succeed() {
     );
     let names = std::fs::read_dir(&dir).map_or(0, Iterator::count);
     assert_eq!(names, 1);
+}
+
+#[test]
+fn the_helpers_compile_the_source_revision_and_keep_their_download_caches() {
+    let helpers = steps()[0].join(" ");
+    let image = helpers.find(" rust:").unwrap_or(0);
+    let revision = helpers.find("-e VELNOR_SOURCE_SHA=abc123");
+    assert!(revision.is_some_and(|at| at < image), "{helpers}");
+    assert!(helpers.contains("-v velnor-arm64-cargo:/cargo-home"));
+    assert!(helpers.contains("-e CARGO_HOME=/cargo-home"));
+    assert!(helpers.contains(":/usr/local/rustup"));
+}
+
+#[test]
+fn a_dirty_source_tree_is_refused_with_the_files_named() {
+    assert!(refuse_dirty("").is_ok());
+    let refused = refuse_dirty(" M crates/velnor-runner/a.rs\n?? images/dind/new\n");
+    let message = refused.err().unwrap_or_default();
+    assert!(message.contains("crates/velnor-runner/a.rs"), "{message}");
+    assert!(message.contains("images/dind/new"), "{message}");
+}
+
+#[tokio::test]
+async fn build_refuses_a_checkout_whose_images_would_not_match_head() {
+    let root = temp_dir("pair-dirty-build");
+    let git = |args: &[&str]| {
+        let status = std::process::Command::new("git")
+            .args(["-C", &root.display().to_string()])
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .status()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(status.success(), "{args:?}");
+    };
+    git(&["init", "-q"]);
+    std::fs::create_dir_all(root.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::create_dir_all(root.join("crates/velnor-runner"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(root.join(".velnor/runner.lock"), REAL_LOCK)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(root.join("crates/velnor-runner/lib.rs"), "a")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "x"]);
+    std::fs::write(root.join("crates/velnor-runner/lib.rs"), "b")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refused =
+        velnor_local::io::pair::build(velnor_local::cli::BuildArgs { root: root.clone() }).await;
+    let message = refused.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(message.contains("crates/velnor-runner/lib.rs"), "{message}");
+}
+
+#[tokio::test]
+async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registered() {
+    let dir = temp_dir("pair-mint-broken");
+    let docker = Registration::new("garbage");
+    let env = Environment::at(&dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let failure = mint(&env, Side::Trusted).await.err();
+    let call = docker.calls().concat().join(" ");
+    let name = failure.map(|failure| failure.name).unwrap_or_default();
+    assert!(name.starts_with(&format!("{}-jit-", env.name)), "{name}");
+    assert!(call.contains(&format!("--name {name}")), "{call}");
 }

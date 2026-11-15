@@ -10,7 +10,10 @@ pub const PROBE_TAG: &str = "velnor-local/pair-probe";
 pub const TARGETS: [&str; 3] = [RUNNER_TAG, DIND_TAG, PROBE_TAG];
 const RUST_IMAGE: &str =
     "rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
+const RUST_DIGEST: &str = "8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
 const TARGET_VOLUME: &str = "velnor-arm64-target";
+const CARGO_VOLUME: &str = "velnor-arm64-cargo";
+const CARGO_HOME: &str = "/cargo-home";
 const HELPERS: &str = r##"rustup target add aarch64-unknown-linux-musl \
     && cargo build --locked --release --manifest-path /src/crates/velnor-runner/Cargo.toml --target aarch64-unknown-linux-musl \
       -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook \
@@ -71,6 +74,17 @@ fn build(tag: &str, mut args: Vec<String>, path: String) -> Vec<String> {
     command
 }
 
+pub fn refuse_dirty(porcelain: &str) -> Result<(), String> {
+    let changed: Vec<&str> = porcelain.lines().collect();
+    if changed.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the images are built from the working tree but named for HEAD; commit or stash these first: {}",
+        changed.join("; ")
+    ))
+}
+
 pub fn plan(
     lock: &Lock,
     root: &Path,
@@ -96,8 +110,19 @@ pub fn plan(
         &format!("{TARGET_VOLUME}:/target"),
         "-v",
         &format!("{stages}:/out"),
+        "-v",
+        &format!("{CARGO_VOLUME}:{CARGO_HOME}"),
+        "-v",
+        &format!(
+            "velnor-arm64-rustup-{}:/usr/local/rustup",
+            &RUST_DIGEST[..12]
+        ),
         "-e",
         "CARGO_TARGET_DIR=/target",
+        "-e",
+        &format!("CARGO_HOME={CARGO_HOME}"),
+        "-e",
+        &format!("VELNOR_SOURCE_SHA={source_sha}"),
         RUST_IMAGE,
         "sh",
         "-c",
