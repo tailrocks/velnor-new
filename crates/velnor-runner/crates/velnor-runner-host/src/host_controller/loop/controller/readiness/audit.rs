@@ -3,7 +3,10 @@
 
 use std::time::{Duration, Instant};
 
-use bollard::{Docker, models::Volume};
+use bollard::{
+    Docker,
+    models::{ContainerInspectResponse, Volume},
+};
 use velnor_runner_github::{
     AdminConnectionCall, RegistrationScope, RegistrationTokenCall, Transport, admin_connection,
     get_runner_by_name, registration_token,
@@ -133,6 +136,24 @@ async fn inspect_owned_container(
     let inspected = docker_deadline(docker.inspect_container(id, None))
         .await?
         .map_err(error_to_host)?;
+    validate_owned_container(
+        &inspected,
+        id,
+        name,
+        role,
+        (identity.reservation_id(), identity.operation_id()),
+        connection_id,
+    )
+}
+
+fn validate_owned_container(
+    inspected: &ContainerInspectResponse,
+    id: &str,
+    name: &str,
+    role: &str,
+    (reservation_id, operation_id): (i64, i64),
+    connection_id: &str,
+) -> Result<(), HostError> {
     let labels = inspected
         .config
         .as_ref()
@@ -140,20 +161,13 @@ async fn inspect_owned_container(
         .ok_or(HostError::Ownership)?;
     let expected = std::collections::HashMap::from([
         ("io.velnor.managed", "true".to_owned()),
-        (
-            "io.velnor.reservation-id",
-            identity.reservation_id().to_string(),
-        ),
-        (
-            "io.velnor.operation-id",
-            identity.operation_id().to_string(),
-        ),
+        ("io.velnor.reservation-id", reservation_id.to_string()),
+        ("io.velnor.operation-id", operation_id.to_string()),
         ("io.velnor.connection-id", connection_id.to_owned()),
         ("io.velnor.role", role.to_owned()),
     ]);
     if inspected.id.as_deref() != Some(id)
         || inspected.name.as_deref() != Some(format!("/{name}").as_str())
-        || expected.len() != labels.len()
         || expected
             .iter()
             .any(|(key, value)| labels.get(*key) != Some(value))
@@ -192,3 +206,7 @@ async fn inspect_owned_volume(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "audit/tests.rs"]
+mod tests;

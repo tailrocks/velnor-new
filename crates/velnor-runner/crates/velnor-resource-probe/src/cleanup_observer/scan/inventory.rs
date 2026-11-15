@@ -15,7 +15,9 @@ use super::{
     },
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
-use crate::cleanup_observer_wire::{descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices};
+use crate::cleanup_observer_wire::{
+    descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices, owned_mountinfo_projection,
+};
 
 const PROC: &str = "/proc";
 use crate::mountinfo_io::MOUNTINFO_LIMIT;
@@ -217,7 +219,8 @@ fn scan_task_mounts(
         &mut inventory.issues,
     );
     if let Some(after) = read_task_mountinfo(pid, tid, &mut inventory.issues)
-        && after != bytes
+        && owned_mountinfo_projection(&after, &context.request.binding)
+            != owned_mountinfo_projection(&bytes, &context.request.binding)
     {
         add_issue(&mut inventory.issues, "task_mountinfo_changed");
     }
