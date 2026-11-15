@@ -8,6 +8,7 @@ mod detect;
 mod doc_steps;
 mod error;
 mod harness;
+mod lane;
 mod lock;
 mod lock_affected;
 mod manifest_diff;
@@ -26,10 +27,11 @@ mod timings;
 mod toml_file;
 mod toolchain;
 mod unowned;
+mod weaken;
 
 pub use config::CONFIG_PATH;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
-pub use doc_steps::{optional_steps, root_sources};
+pub use doc_steps::{member_sources, optional_steps, root_sources};
 pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
@@ -38,7 +40,7 @@ pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorde
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
-pub use policy::policy_needed;
+pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
@@ -48,3 +50,4 @@ pub use sha256::sha256_hex;
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
+pub use weaken::introduced;

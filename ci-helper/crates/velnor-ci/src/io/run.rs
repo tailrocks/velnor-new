@@ -15,7 +15,8 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::cli::RunArgs;
-use crate::stream::pump;
+use crate::setup::DoctestCount;
+use crate::stream::pump_counted;
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -81,15 +82,17 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         })?;
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
+    let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let (sender, receiver) = mpsc::channel();
     let mut streams = 0;
     if let Some(from) = child.stdout.take() {
         streams += 1;
-        spawn_pump(from, std::io::stdout(), &log, sender.clone());
+        let counted = args.require_doctests.then(|| Arc::clone(&doctests));
+        spawn_pump(from, std::io::stdout(), &log, counted, sender.clone());
     }
     if let Some(from) = child.stderr.take() {
         streams += 1;
-        spawn_pump(from, std::io::stderr(), &log, sender.clone());
+        spawn_pump(from, std::io::stderr(), &log, None, sender.clone());
     }
     drop(sender);
     let handle = signals.handle();
@@ -103,13 +106,21 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
-    let code = exit_code(status);
+    let mut code = exit_code(status);
     let mut lost = None;
     for _ in 0..streams {
         match receiver.recv_timeout(PUMP_GRACE) {
             Ok(failure) => lost = lost.or(failure),
             Err(_) => break,
         }
+    }
+    let ran = doctests
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .finish();
+    if code == 0 && args.require_doctests && ran == 0 {
+        eprintln!("velnor-ci: the command ran 0 doctests, so this step checked nothing");
+        code = 1;
     }
     let mut log = log
         .lock()
@@ -145,10 +156,12 @@ fn spawn_pump(
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
+    count: Option<Arc<Mutex<DoctestCount>>>,
     done: mpsc::Sender<Option<std::io::Error>>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
-        done.send(pump(from, to, &log)).ok();
+        done.send(pump_counted(from, to, &log, count.as_deref()))
+            .ok();
     });
 }

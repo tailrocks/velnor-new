@@ -14,7 +14,6 @@ pub enum DetectError {
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
     NextestRequired { path: RepoPath },
-    DenyRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
@@ -60,7 +59,7 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
-    BuildExecutable,
+    UnpinnedTool(&'static str),
 }
 
 impl DetectError {
@@ -110,6 +109,10 @@ impl fmt::Display for Reason {
             Self::UntrackedManifest => f.write_str(
                 "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),
+            Self::UnpinnedTool(tool) => write!(
+                f,
+                "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
+            ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(
                 f,
@@ -133,9 +136,6 @@ impl fmt::Display for Reason {
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
-            ),
-            Self::BuildExecutable => f.write_str(
-                "build.rustc, build.rustdoc and the build wrappers replace the programs the checks run; remove them",
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
@@ -171,10 +171,6 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
-            ),
-            Self::DenyRequired { path } => write!(
-                f,
-                "deny.toml is tracked, so the generated policy job runs cargo-deny; pin it in {path}, for example \"aqua:EmbarkStudios/cargo-deny\" = \"<version>\""
             ),
             Self::SameSlug { first, second } => write!(
                 f,

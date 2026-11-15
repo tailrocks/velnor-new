@@ -4,57 +4,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Gate, GateNeed, HelperCommand,
-    Job, JobId, PackageName, PermissionScope, Permissions, PlanFrom, PullRequestType, RepoFacts,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, HelperCommand, Job, JobId,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RustRoot, Shape,
+    ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
+use crate::lane::{Lane, plan_job, policy_job, used_outputs};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
-const POLICY_JOB: JobId = JobId::from_static("policy");
-const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const VERDICT_JOB: JobId = JobId::from_static("required");
-const CHECKOUT_DEPTH: u32 = 1;
-const PLAN_DEPTH: u32 = 2;
-
-struct Lane {
-    slug: String,
-    plan: Option<JobId>,
-}
-
-impl Lane {
-    fn gate(&self, need: GateNeed) -> Gate {
-        Gate {
-            slug: self.slug.clone(),
-            need,
-            from: self.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job),
-        }
-    }
-
-    fn steps(&self) -> Option<Gate> {
-        self.plan.is_none().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn job(&self) -> Option<Gate> {
-        self.plan.is_some().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn cargo(&self, command: &CargoCommand) -> Option<Gate> {
-        match command {
-            CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
-            _ => self.steps(),
-        }
-    }
-}
+pub(crate) const CHECKOUT_DEPTH: u32 = 1;
+pub(crate) const PLAN_DEPTH: u32 = 2;
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -70,15 +38,12 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane {
-                slug: root_slug(&root.manifest),
-                plan: (!single).then_some(PLAN_JOB),
-            };
+            let lane = Lane::root(root_slug(&root.manifest), single);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
     if facts.policy.any() {
-        jobs.push(policy_job(facts));
+        jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     let draft_guard = facts
         .config
@@ -121,35 +86,6 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
-    let used: BTreeSet<(String, GateNeed)> = lanes
-        .iter()
-        .flat_map(|job| {
-            job.gate
-                .iter()
-                .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
-        })
-        .flat_map(|gate| {
-            [
-                (gate.slug.clone(), GateNeed::Selected),
-                (gate.slug.clone(), gate.need),
-            ]
-        })
-        .collect();
-    used.into_iter().collect()
-}
-
-fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
-    let mut steps = head(facts, PLAN_DEPTH);
-    steps.push(step(StepKind::Helper(HelperCommand::Plan)));
-    Job {
-        plan_outputs: outputs,
-        skip_on_draft: false,
-        steps,
-        ..job(facts, PLAN_JOB)
-    }
-}
-
 fn root_jobs(
     facts: &RepoFacts,
     root: &RustRoot,
@@ -165,12 +101,9 @@ fn root_jobs(
         }
     };
     let cargo = |commands: Vec<CargoCommand>| {
-        commands.into_iter().map(|command| Step {
-            gate: lane.cargo(&command),
-            kind: StepKind::Cargo(command),
-            directory: root.manifest.parent(),
-            when: When::NotCancelled,
-        })
+        commands
+            .into_iter()
+            .map(|command| lane.cargo(command, root.manifest.parent()))
     };
     let lane_job = |id: JobId, steps: Vec<Step>| Job {
         needs: lane.plan.clone().into_iter().collect(),
@@ -187,16 +120,32 @@ fn root_jobs(
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
+            let draft = facts.config.skip_draft_pull_requests;
             let mut steps = setup(facts, root, true, lane);
-            steps.extend(cargo(
-                lint.into_iter()
-                    .chain(test)
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
-            ));
+            steps.extend(
+                cargo(
+                    lint.into_iter()
+                        .chain(test)
+                        .chain([CargoCommand::Doc])
+                        .chain(alone)
+                        .collect(),
+                )
+                .map(|step| Step {
+                    skip_on_draft: draft
+                        && matches!(
+                            step.kind,
+                            StepKind::Cargo(
+                                CargoCommand::NextestRun { .. }
+                                    | CargoCommand::TestTarget { .. }
+                                    | CargoCommand::Doctest
+                            )
+                        ),
+                    ..step
+                }),
+            );
             vec![Job {
                 comment,
+                skip_on_draft: false,
                 ..lane_job(id(RUST_JOB), steps)
             }]
         }
@@ -326,29 +275,7 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn policy_job(facts: &RepoFacts) -> Job {
-    let commands = [
-        (facts.policy.deny, CargoCommand::Deny),
-        (facts.policy.machete, CargoCommand::Machete),
-    ];
-    let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
-    steps.extend(tools_steps(facts));
-    steps.extend(
-        commands
-            .into_iter()
-            .filter(|(wanted, _)| *wanted)
-            .map(|(_, command)| Step {
-                when: When::NotCancelled,
-                ..step(StepKind::Cargo(command))
-            }),
-    );
-    Job {
-        steps,
-        ..job(facts, POLICY_JOB)
-    }
-}
-
-fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth })];
     steps.extend(
         facts
@@ -419,7 +346,7 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
     steps
 }
 
-fn job(facts: &RepoFacts, id: JobId) -> Job {
+pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
     Job {
         id,
         name: None,
@@ -436,11 +363,13 @@ fn job(facts: &RepoFacts, id: JobId) -> Job {
     }
 }
 
-fn step(kind: StepKind) -> Step {
+pub(crate) fn step(kind: StepKind) -> Step {
     Step {
         kind,
         directory: None,
         when: When::Success,
+        skip_on_draft: false,
         gate: None,
+        reads: None,
     }
 }

@@ -97,7 +97,9 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
                     kind,
                     directory: None,
                     when: When::Success,
+                    skip_on_draft: false,
                     gate: None,
+                    reads: None,
                 })
                 .collect(),
         }],

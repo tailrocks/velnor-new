@@ -143,3 +143,28 @@ fn a_checkout_with_no_git_history_selects_everything() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(selected(&output), EVERYTHING);
 }
+
+#[test]
+fn the_outputs_a_job_reads_from_git_name_only_the_changed_packages_and_skip_policy_tools() {
+    let repo = merged_pull_request("git-outputs", |repo| {
+        repo.write("a/src/new.rs", "pub fn new() {}\n");
+    });
+    let outputs = repo.root().join("github-output");
+    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .arg("plan")
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_EVENT_PATH", event(&repo, "main"))
+        .env("GITHUB_SHA", rev(&repo, "HEAD"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let text = fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(text.contains("rust_root_packages=a\n"), "{text}");
+    assert!(text.contains("rust_root_package_args=-p a\n"), "{text}");
+    assert!(
+        text.contains("rust_deny=skip\nrust_machete=skip\n"),
+        "{text}"
+    );
+}

@@ -6,19 +6,40 @@ use std::path::Path;
 
 use velnor_model::{PolicyTools, RepoPath};
 
+use crate::mise::MISE_CONFIGS;
+
 pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
 
 const DEPENDENCY_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "deny.toml"];
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PolicyRuns {
+    pub deny: bool,
+    pub machete: bool,
+}
+
 #[must_use]
-pub fn policy_needed(changed: &BTreeSet<RepoPath>, everything: bool, tools: PolicyTools) -> bool {
-    everything
+pub fn policy_runs(
+    tools: PolicyTools,
+    changed: &BTreeSet<RepoPath>,
+    everything: bool,
+    selected: bool,
+) -> PolicyRuns {
+    let dependency = everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
             DEPENDENCY_FILES.contains(&name)
-                || (tools.machete && rust_source(path))
-                || (tools.deny && license_text(name))
-        })
+        });
+    let license = changed
+        .iter()
+        .any(|path| license_text(path.as_str().rsplit('/').next().unwrap_or_default()));
+    let unused_possible = changed
+        .iter()
+        .any(|path| (selected && rust_source(path)) || MISE_CONFIGS.contains(path));
+    PolicyRuns {
+        deny: tools.deny && (dependency || license),
+        machete: tools.machete && (dependency || unused_possible),
+    }
 }
 
 fn rust_source(path: &RepoPath) -> bool {

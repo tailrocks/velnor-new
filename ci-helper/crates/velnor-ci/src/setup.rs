@@ -15,6 +15,8 @@ pub const BUILD_ENV: [(&str, &str); 4] = [
     ("SOURCE_DATE_EPOCH", "0"),
 ];
 
+const LINE_LIMIT: usize = 4096;
+
 pub const COMPAT: &str = "compat";
 
 #[derive(Debug, Deserialize)]
@@ -179,4 +181,38 @@ pub fn missing_toolchain(
             .cloned()
             .collect(),
     }
+}
+
+#[derive(Debug, Default)]
+pub struct DoctestCount {
+    line: Vec<u8>,
+    pub ran: u64,
+}
+
+impl DoctestCount {
+    pub fn feed(&mut self, chunk: &[u8]) {
+        for byte in chunk {
+            if *byte == b'\n' {
+                self.ran += doctests_in(&String::from_utf8_lossy(&self.line));
+                self.line.clear();
+            } else if self.line.len() < LINE_LIMIT {
+                self.line.push(*byte);
+            }
+        }
+    }
+
+    pub fn finish(&mut self) -> u64 {
+        self.feed(b"\n");
+        self.ran
+    }
+}
+
+fn doctests_in(line: &str) -> u64 {
+    let clean = crate::logscan::strip_ansi(line);
+    clean
+        .trim()
+        .strip_prefix("running ")
+        .and_then(|rest| rest.split(' ').next())
+        .and_then(|count| count.parse().ok())
+        .unwrap_or(0)
 }

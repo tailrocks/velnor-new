@@ -4,18 +4,20 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread,
+    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread, Weakening,
 };
-use velnor_rust::{CONFIG_PATH, root_slug};
+use velnor_rust::{CONFIG_PATH, PolicyRuns, root_slug};
 
 use crate::error::CiError;
+
+const WORKSPACE: &str = "--workspace";
 
 pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
 
 pub fn outputs(
     selections: &BTreeMap<RepoPath, RustSelection>,
     steps: &Steps,
-    policy: bool,
+    policy: PolicyRuns,
 ) -> Result<String, CiError> {
     let mut owners = BTreeMap::new();
     let mut lines = Vec::new();
@@ -26,32 +28,107 @@ pub fn outputs(
                 "the roots {other} and {root} both get the output name rust_{slug}; move one of them"
             )));
         }
-        let (mode, packages, filter) = match selection {
-            RustSelection::None => ("none", Vec::new(), String::new()),
-            RustSelection::All(_) => ("all", Vec::new(), "all()".to_owned()),
+        let (mode, packages, filter, package_args) = match selection {
+            RustSelection::None => ("none", Vec::new(), String::new(), String::new()),
+            RustSelection::All(_) => ("all", Vec::new(), "all()".to_owned(), WORKSPACE.to_owned()),
             RustSelection::Some(packages) => {
                 let names: Vec<&str> = packages.keys().map(PackageName::as_str).collect();
                 let filter = names
                     .iter()
-                    .map(|name| format!("package({name})"))
+                    .map(|name| format!("package({})", inert(name)))
                     .collect::<Vec<_>>()
                     .join(" | ");
-                ("some", names, filter)
+                let package_args = package_args(&names);
+                ("some", names, filter, package_args)
             }
         };
         lines.push(format!("rust_{slug}_mode={mode}\n"));
         lines.push(format!("rust_{slug}_packages={}\n", packages.join(" ")));
         lines.push(format!("rust_{slug}_test_filter={filter}\n"));
+        lines.push(format!("rust_{slug}_package_args={package_args}\n"));
         if let Some(steps) = steps.get(root) {
             lines.push(format!("rust_{slug}_doctests={}\n", flag(steps.doctests)));
+            lines.push(format!(
+                "rust_{slug}_doctests_known={}\n",
+                steps.doctests_known
+            ));
             lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
         }
     }
-    lines.push(format!(
-        "rust_policy={}\n",
-        if policy { "run" } else { "skip" }
-    ));
+    lines.push(format!("rust_deny={}\n", lane(policy.deny)));
+    lines.push(format!("rust_machete={}\n", lane(policy.machete)));
     Ok(lines.concat())
+}
+
+fn package_args(names: &[&str]) -> String {
+    if names.iter().all(|name| cargo_name(name)) {
+        names
+            .iter()
+            .map(|name| format!("-p {name}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        WORKSPACE.to_owned()
+    }
+}
+
+fn cargo_name(name: &str) -> bool {
+    !name.starts_with('-')
+        && !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+#[must_use]
+pub fn weakened(all: &[Weakening], new: &[Weakening]) -> String {
+    let mut lines = Vec::new();
+    for weakening in all {
+        let marker = if new.contains(weakening) {
+            " (new in this change)"
+        } else {
+            ""
+        };
+        lines.push(format!(
+            "check does less: {}: {}: {}{marker}\n",
+            escape(weakening.file.as_str(), false),
+            escape(&weakening.setting, false),
+            escape(&weakening.effect, false),
+        ));
+    }
+    lines.concat()
+}
+
+#[must_use]
+pub fn warnings(new: &[Weakening]) -> String {
+    let mut lines = Vec::new();
+    for weakening in new {
+        lines.push(format!(
+            "::warning file={}::this pull request {} ({})\n",
+            escape(weakening.file.as_str(), true),
+            escape(&weakening.effect, false),
+            escape(&weakening.setting, false),
+        ));
+    }
+    lines.concat()
+}
+
+fn inert(text: &str) -> String {
+    escape(text, false).replace(':', "%3A")
+}
+
+fn escape(text: &str, property: bool) -> String {
+    text.chars()
+        .map(|c| match c {
+            '%' => "%25".to_owned(),
+            '\r' => "%0D".to_owned(),
+            '\n' => "%0A".to_owned(),
+            ':' if property => "%3A".to_owned(),
+            ',' if property => "%2C".to_owned(),
+            control if control.is_control() => format!("%{:02X}", u32::from(control)),
+            other => other.to_string(),
+        })
+        .collect()
 }
 
 #[must_use]
@@ -71,9 +148,9 @@ pub fn explain(
             }
             RustSelection::All(trigger) => (trigger.to_string(), None),
         };
-        lines.push(format!("{root}: {header}\n"));
+        lines.push(format!("{}: {header}\n", inert(root.as_str())));
         for (package, reason) in packages.into_iter().flatten() {
-            lines.push(format!("  {package} {reason}\n"));
+            lines.push(format!("  {} {reason}\n", inert(&package.to_string())));
         }
         let selected = !matches!(selection, RustSelection::None);
         for (step, need) in steps
@@ -105,6 +182,10 @@ pub fn explain(
         ));
     }
     lines.concat()
+}
+
+fn lane(run: bool) -> &'static str {
+    if run { "run" } else { "skip" }
 }
 
 fn flag(need: StepNeed) -> &'static str {

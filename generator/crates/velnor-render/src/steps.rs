@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, LINT_STEP, Step, StepKind,
-    TEST_STEP, TargetKind, TargetName,
+    CargoCommand, FilterRef, GateNeed, HelperCommand, HelperRelease, Job, LINT_STEP, RepoPath,
+    Step, StepKind, TEST_STEP, TargetKind, TargetName,
 };
 
-use crate::gate::{PLAN_STEP, condition, output};
+use crate::gate::{PLAN_STEP, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 const PREPARE_STEP: &str = "prepare";
 const RESTORED_STEP: &str = "restored";
 const RUN: &str = "velnor-ci run --";
+const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
@@ -47,11 +48,31 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 
 fn rendered_step(step: &Step) -> RenderedStep {
     let mut rendered = step_body(&step.kind);
-    if let Some(condition) = condition(step.when, step.gate.as_ref(), true, false) {
+    if let Some(condition) = condition(step.when, step.gate.as_ref(), true, step.skip_on_draft) {
         rendered.condition = Some(condition);
     }
     rendered.working_directory = step.directory.as_ref().map(ToString::to_string);
+    if let (Some(plan), StepKind::Cargo(command)) = (&step.reads, &step.kind) {
+        let source = plan_source(&plan.from);
+        rendered
+            .env
+            .extend(command.plan_values().iter().map(|need| {
+                let key = output(&plan.slug, *need);
+                (
+                    variable(*need).to_owned(),
+                    Value::Expr(format!("${{{{ {source}.{key} }}}}")),
+                )
+            }));
+    }
     rendered
+}
+
+fn variable(need: GateNeed) -> &'static str {
+    match need {
+        GateNeed::TestFilter => "TEST_FILTER",
+        GateNeed::DoctestsKnown => "DOCTESTS_KNOWN",
+        _ => "PACKAGE_ARGS",
+    }
 }
 
 fn step_body(kind: &StepKind) -> RenderedStep {
@@ -130,7 +151,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
             LINT_STEP.into(),
-            ["cargo-clippy clippy --workspace --all-targets --locked -- -D warnings"]
+            ["cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings"]
                 .into_iter()
                 .chain(extra.iter().map(String::as_str))
                 .collect::<Vec<_>>()
@@ -140,7 +161,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestRun { filter } => (
             TEST_STEP.into(),
             format!(
-                "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
+                "cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E \"{}\"",
                 nextest_filter(filter)
             ),
             vec![],
@@ -167,12 +188,12 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Doctest => (
             "Doctests".into(),
-            "cargo test --doc --workspace --locked".into(),
+            "cargo test --doc $PACKAGE_ARGS --locked".into(),
             vec![],
         ),
         CargoCommand::Doc => (
             "Documentation".into(),
-            "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
+            "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
                 .into(),
             vec![],
         ),
@@ -181,27 +202,30 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             format!("cargo check -p {package} --locked"),
             vec![],
         ),
-        CargoCommand::Deny => (
-            "Dependency policy".into(),
-            "cargo-deny check".into(),
-            vec![],
-        ),
+        CargoCommand::Deny { manifest } => deny(manifest),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+    };
+    let prefix = if matches!(command, CargoCommand::Doctest) {
+        RUN_DOCTESTS
+    } else {
+        RUN
     };
     RenderedStep {
         name,
         env,
-        run: Some(format!("{RUN} {run}")),
+        run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
     }
 }
 
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
-        FilterRef::All => "all()".to_owned(),
-        FilterRef::AllExcept(binaries) => binaries.iter().fold("all()".to_owned(), |text, id| {
-            format!("{text} - binary_id(={id})")
-        }),
+        FilterRef::All => "$TEST_FILTER".to_owned(),
+        FilterRef::AllExcept(binaries) => binaries
+            .iter()
+            .fold("($TEST_FILTER)".to_owned(), |text, id| {
+                format!("{text} - binary_id(={id})")
+            }),
     }
 }
 
@@ -212,6 +236,24 @@ fn test_selector(kind: TargetKind, target: &TargetName) -> String {
         TargetKind::Bench => format!("--bench={target}"),
         TargetKind::Example => format!("--example={target}"),
         TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
+    }
+}
+
+fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
+    match manifest.parent() {
+        None => (
+            "Dependency policy".into(),
+            "cargo-deny check".into(),
+            vec![],
+        ),
+        Some(directory) => (
+            format!("Dependency policy ({directory})"),
+            format!(
+                "cargo-deny --manifest-path '{}' check",
+                manifest.as_str().replace('\'', "'\\''")
+            ),
+            vec![],
+        ),
     }
 }
 

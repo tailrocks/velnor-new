@@ -12,7 +12,7 @@ use velnor_model::{
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIG, MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
@@ -20,6 +20,7 @@ use crate::select::root_slug;
 use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
+use crate::weaken::{is_nextest_config, weakenings};
 
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
@@ -38,7 +39,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .into_iter()
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
-    .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_cargo_config(path) || is_nextest_config(path))
+            .cloned(),
+    )
     .chain(
         tracked
             .iter()
@@ -106,18 +112,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         })
         .transpose()?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
+    let pinned = |tool: &str| tools.tools.keys().any(|name| is_tool(name, tool));
     let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !tools.tools.keys().any(|name| is_tool(name, "cargo-deny")) {
-        return Err(DetectError::DenyRequired {
-            path: tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
-        });
+    if deny && !pinned(DENY_TOOL) {
+        return Err(DetectError::invalid(
+            &DENY_CONFIG,
+            Reason::UnpinnedTool(DENY_TOOL),
+        ));
     }
     let policy = PolicyTools {
         deny,
-        machete: tools
-            .tools
-            .keys()
-            .any(|name| is_tool(name, "cargo-machete")),
+        machete: pinned("cargo-machete"),
     };
     Ok(RepoFacts {
         policy,
@@ -130,9 +135,11 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
+        weakenings: weakenings(&view.files),
     })
 }
 
+const DENY_TOOL: &str = "cargo-deny";
 fn is_tool(name: &str, tool: &str) -> bool {
     name.rsplit(['/', ':']).next() == Some(tool)
 }

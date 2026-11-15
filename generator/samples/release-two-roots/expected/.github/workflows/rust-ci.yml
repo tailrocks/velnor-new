@@ -25,8 +25,12 @@ jobs:
     outputs:
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
+      rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
       rust_tools_mode: '${{ steps.plan.outputs.rust_tools_mode }}'
       rust_tools_docs: '${{ steps.plan.outputs.rust_tools_docs }}'
+      rust_tools_test_filter: '${{ steps.plan.outputs.rust_tools_test_filter }}'
+      rust_tools_package_args: '${{ steps.plan.outputs.rust_tools_package_args }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -87,13 +91,20 @@ jobs:
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
-        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p app --locked
@@ -143,15 +154,22 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_tools_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_tools_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_tools_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_tools_mode != ''none'' && needs.rust-plan.outputs.rust_tools_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_tools_mode != ''none'' && needs.rust-plan.outputs.rust_tools_docs == ''run'' && needs.rust-plan.outputs.rust_tools_package_args != '''' }}'
         working-directory: tools
-        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_tools_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check tools alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools

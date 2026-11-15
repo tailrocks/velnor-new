@@ -135,11 +135,18 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     let docs = "steps.plan.outputs.rust_root_docs == ''run''";
     assert!(text.contains(doctests), "{text}");
     assert!(text.contains(docs), "{text}");
-    for line in text
+    let known = "DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'";
+    assert!(text.contains(known), "{text}");
+    let steps: Vec<&str> = text
         .lines()
         .filter(|line| line.contains("cargo test --doc"))
-    {
-        assert!(line.contains("velnor-ci run -- cargo test --doc"), "{line}");
+        .collect();
+    assert!(!steps.is_empty());
+    for line in steps {
+        assert!(
+            line.contains("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"),
+            "{line}"
+        );
     }
     Ok(())
 }
@@ -168,9 +175,14 @@ fn the_plan_job_exposes_only_the_outputs_a_lane_reads() -> TestResult {
         [
             "lab_mode",
             "lab_doctests",
+            "lab_doctests_known",
             "lab_docs",
+            "lab_test_filter",
+            "lab_package_args",
             "root_mode",
-            "root_docs"
+            "root_docs",
+            "root_test_filter",
+            "root_package_args"
         ]
     );
     for output in &outputs {
@@ -191,7 +203,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     assert_ne!(runs.len(), 0);
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
-        assert!(!cargo || run.starts_with("velnor-ci run -- "), "{run}");
+        assert!(!cargo || run.starts_with("velnor-ci run "), "{run}");
     }
     Ok(())
 }
@@ -324,6 +336,32 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
         }
         assert!(text.contains("id: restored"), "{text}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestResult {
+    let mut files = view(&["Cargo.toml"], None)?;
+    let deny = RepoPath::new("deny.toml")?;
+    files.tracked_paths.insert(deny.clone());
+    files.files.insert(deny, Vec::new());
+    files.files.insert(
+        RepoPath::new("mise.toml")?,
+        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n".to_vec(),
+    );
+    let text = workflow(&files)?;
+    assert!(!text.contains("rust-plan"), "{text}");
+    assert!(
+        steps_of(&text, "policy").contains(&"velnor-ci plan"),
+        "{text}"
+    );
+    assert_eq!(checkout_depths(&text, "policy"), ["2"], "{text}");
+    assert_eq!(
+        job_permissions(&text, "policy"),
+        ["contents: read"],
+        "{text}"
+    );
+    assert!(!text.contains("pull-requests"), "{text}");
     Ok(())
 }
 

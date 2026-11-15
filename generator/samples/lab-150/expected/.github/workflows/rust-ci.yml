@@ -25,9 +25,14 @@ jobs:
     outputs:
       rust_lab_mode: '${{ steps.plan.outputs.rust_lab_mode }}'
       rust_lab_docs: '${{ steps.plan.outputs.rust_lab_docs }}'
+      rust_lab_test_filter: '${{ steps.plan.outputs.rust_lab_test_filter }}'
+      rust_lab_package_args: '${{ steps.plan.outputs.rust_lab_package_args }}'
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_doctests_known: '${{ steps.plan.outputs.rust_root_doctests_known }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
+      rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -90,16 +95,26 @@ jobs:
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Doctests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
-        run: velnor-ci run -- cargo test --doc --workspace --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+          DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
-        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p app --locked
@@ -614,15 +629,22 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        env:
+          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_lab_test_filter }}'
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'' && needs.rust-plan.outputs.rust_lab_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'' && needs.rust-plan.outputs.rust_lab_docs == ''run'' && needs.rust-plan.outputs.rust_lab_package_args != '''' }}'
         working-directory: lab
-        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check lab alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab

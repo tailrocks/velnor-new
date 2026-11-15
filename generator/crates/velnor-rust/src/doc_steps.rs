@@ -21,6 +21,24 @@ pub fn root_sources(
     root: &RustRoot,
     tracked: &BTreeSet<RepoPath>,
 ) -> Option<Vec<RepoPath>> {
+    sources_of(facts, root, tracked, true)
+}
+
+#[must_use]
+pub fn member_sources(
+    facts: &RepoFacts,
+    root: &RustRoot,
+    tracked: &BTreeSet<RepoPath>,
+) -> Option<Vec<RepoPath>> {
+    sources_of(facts, root, tracked, false)
+}
+
+fn sources_of(
+    facts: &RepoFacts,
+    root: &RustRoot,
+    tracked: &BTreeSet<RepoPath>,
+    whole_folder: bool,
+) -> Option<Vec<RepoPath>> {
     let own = root.manifest.parent();
     let nested: Vec<Option<RepoPath>> = facts
         .rust_roots
@@ -81,7 +99,8 @@ pub fn root_sources(
                     .iter()
                     .any(|input| under(input) || input.as_ref() == Some(*path))
                 || (rust
-                    && ((under(&own) && !nested.iter().any(under)) || members.iter().any(under)))
+                    && ((whole_folder && under(&own) && !nested.iter().any(under))
+                        || members.iter().any(under)))
         })
         .cloned()
         .collect();
@@ -137,7 +156,12 @@ pub fn optional_steps(
     } else {
         StepNeed::Skip(SkipReason::NoDocs)
     };
-    OptionalSteps { doctests, docs }
+    let doctests_known = has_doctest_library(root) && found.fenced;
+    OptionalSteps {
+        doctests,
+        doctests_known,
+        docs,
+    }
 }
 
 fn documented(kind: TargetKind) -> bool {

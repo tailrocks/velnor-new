@@ -87,6 +87,27 @@ fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+#[test]
+fn a_doctest_is_known_only_when_a_source_has_a_fenced_example() {
+    let fenced = "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
+    let plain = "/// Adds one.\npub fn f() {}\n";
+    for (source, dependencies, known) in [
+        (plain, false, false),
+        (plain, true, false),
+        (fenced, false, true),
+        (fenced, true, true),
+    ] {
+        let mut root = root(vec![library(true)]);
+        if dependencies {
+            root.external_dependencies = vec![name("serde_derive")];
+        }
+        let sources = BTreeMap::from([(path("a/src/lib.rs"), source.as_bytes().to_vec())]);
+        let steps = optional_steps(&root, &sources, false);
+        assert_eq!(steps.doctests_known, known, "{source} {dependencies}");
+        assert_eq!(steps.doctests == RUN, known || dependencies);
+    }
+}
+
 const TRACKED: [&str; 22] = [
     "app/src/main.rs",
     "app/README.md",

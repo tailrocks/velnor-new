@@ -91,7 +91,15 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub when: When,
+    pub skip_on_draft: bool,
     pub gate: Option<Gate>,
+    pub reads: Option<PlanRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanRef {
+    pub slug: String,
+    pub from: PlanFrom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,11 +109,45 @@ pub struct Gate {
     pub from: PlanFrom,
 }
 
+impl Gate {
+    #[must_use]
+    pub fn outputs(&self) -> Vec<(String, GateNeed)> {
+        let own = |need| (self.slug.clone(), need);
+        match self.need {
+            GateNeed::Selected => vec![own(GateNeed::Selected)],
+            GateNeed::Doctests | GateNeed::Docs => vec![
+                own(GateNeed::Selected),
+                own(self.need),
+                own(GateNeed::PackageArgs),
+            ],
+            GateNeed::Deny => vec![own(GateNeed::Deny)],
+            GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
+            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+                vec![own(self.need)]
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GateNeed {
     Selected,
     Doctests,
+    DoctestsKnown,
     Docs,
+    TestFilter,
+    PackageArgs,
+    Deny,
+    Machete,
+    Policy,
+}
+
+impl GateNeed {
+    #[must_use]
+    pub fn is_global(self) -> bool {
+        matches!(self, Self::Deny | Self::Machete | Self::Policy)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,8 +280,22 @@ pub enum CargoCommand {
     },
     Doctest,
     Doc,
-    Deny,
+    Deny {
+        manifest: RepoPath,
+    },
     Machete,
+}
+
+impl CargoCommand {
+    #[must_use]
+    pub fn plan_values(&self) -> &'static [GateNeed] {
+        match self {
+            Self::NextestRun { .. } => &[GateNeed::TestFilter, GateNeed::PackageArgs],
+            Self::Clippy { .. } | Self::Doc => &[GateNeed::PackageArgs],
+            Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
+            _ => &[],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -76,7 +76,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=run\nrust_policy=skip\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_doctests_known=false\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_doctests_known=false\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\n"
     );
 }
 
@@ -99,7 +99,9 @@ fn doc_flags_of(repo: &Repo, event: Option<&str>, changed: &str) -> String {
     fs::read_to_string(&outputs)
         .unwrap_or_else(|e| unreachable!("{e}"))
         .lines()
-        .filter(|line| line.contains("_doc") || line.contains("_mode"))
+        .filter(|line| {
+            (line.contains("_doc") && !line.contains("_known")) || line.contains("_mode")
+        })
         .flat_map(|line| [line, " "])
         .collect()
 }
@@ -261,7 +263,7 @@ pub(crate) fn plan_lock(fnv: &str) -> String {
     )
 }
 
-fn plan_with_bases(repo: &Repo, changed: &[&str], bases: &[(&str, &str)]) -> Output {
+pub(crate) fn plan_with_bases(repo: &Repo, changed: &[&str], bases: &[(&str, &str)]) -> Output {
     let mut command = plan_command(repo);
     command
         .args(["plan", "--explain", "--changed"])
@@ -345,64 +347,41 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     );
 }
 
-fn policy_output(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
-    let outputs = repo.root().join("policy");
-    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
-    let mut command = plan_command(repo);
-    command
-        .args(["plan", "--changed"])
-        .args(changed)
-        .env("GITHUB_OUTPUT", &outputs);
-    if let Some(event) = event {
-        command.env("GITHUB_EVENT_NAME", event);
-    }
-    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(output.status.success(), "{output:?}");
-    fs::read_to_string(&outputs)
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .lines()
-        .filter(|line| line.starts_with("rust_policy="))
-        .collect()
-}
-
-fn policy_case(name: &str, event: &str, changed: &str) -> String {
-    let repo = plan_repo(name);
-    policy_output(&repo, Some(event), &[changed])
-}
-
 #[test]
-fn plan_skips_the_policy_lane_for_a_pull_request_that_changes_only_sources() {
+fn plan_says_a_doctest_is_known_only_when_a_fenced_example_was_found() {
+    let repo = plan_repo("doctests-known");
+    let known = |repo: &Repo| {
+        let outputs = repo.root().join("known");
+        fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+        let output = plan_command(repo)
+            .args(["plan", "--changed", "rust-toolchain.toml"])
+            .env("GITHUB_OUTPUT", &outputs)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        fs::read_to_string(&outputs)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .lines()
+            .filter(|line| line.contains("_doctests"))
+            .flat_map(|line| [line, " "])
+            .collect::<String>()
+    };
+    repo.write("a/src/lib.rs", "/// Adds one.\npub fn f() {}\n");
     assert_eq!(
-        policy_case("policy-src", "pull_request", "b/src/lib.rs"),
-        "rust_policy=skip"
+        known(&repo),
+        "rust_root_doctests=skip rust_root_doctests_known=false rust_tools_doctests=skip rust_tools_doctests_known=false "
     );
-}
-
-#[test]
-fn plan_runs_the_policy_lane_for_a_changed_lock_file() {
-    assert_eq!(
-        policy_case("policy-lock", "pull_request", "Cargo.lock"),
-        "rust_policy=run"
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\nserde_derive = \"1\"\n",
     );
-}
-
-#[test]
-fn plan_runs_the_policy_lane_on_a_schedule() {
-    assert_eq!(
-        policy_case("policy-schedule", "schedule", "b/src/lib.rs"),
-        "rust_policy=run"
+    repo.write(
+        "a/src/lib.rs",
+        "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
     );
-}
-
-#[test]
-fn plan_skips_the_policy_lane_when_source_edits_only_select_most_packages() {
-    let repo = plan_repo("policy-most");
-    assert_eq!(
-        policy_output(
-            &repo,
-            Some("pull_request"),
-            &["a/src/lib.rs", "b/src/lib.rs"]
-        ),
-        "rust_policy=skip"
+    assert!(
+        known(&repo).contains("rust_root_doctests=run rust_root_doctests_known=true "),
+        "{}",
+        known(&repo)
     );
 }

@@ -152,7 +152,6 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         })
         .collect()
 }
-
 fn without_helper_build(label: &str) -> bool {
     let label = label.to_ascii_lowercase();
     let Some(version) = label.strip_prefix("macos-") else {

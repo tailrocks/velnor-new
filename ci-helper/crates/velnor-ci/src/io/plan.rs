@@ -6,10 +6,10 @@ use std::fs;
 use std::path::Path;
 
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
-use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection};
+use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustRoot, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, policy_needed, root_sources, select, unknown_paths,
-    unread_packages,
+    cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
+    select, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -18,7 +18,7 @@ use super::{
 use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
 use crate::event::{Event, check_default_branch, parse_event};
-use crate::plan::{Steps, explain, outputs};
+use crate::plan::{Steps, explain, outputs, warnings, weakened};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const PULL_REQUEST: &str = "pull_request";
@@ -41,14 +41,21 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let steps = facts
         .rust_roots
         .iter()
-        .map(|root| {
-            if matches!(selections.get(&root.manifest), Some(RustSelection::None)) {
+        .map(|whole| {
+            let selection = selections.get(&whole.manifest);
+            if matches!(selection, Some(RustSelection::None)) {
                 return Ok((
-                    root.manifest.clone(),
-                    optional_steps(root, &BTreeMap::new(), true),
+                    whole.manifest.clone(),
+                    optional_steps(whole, &BTreeMap::new(), true),
                 ));
             }
-            let steps = match root_sources(&facts, root, &checkout.view.tracked_paths) {
+            let root = &scoped(whole, selection);
+            let found = if matches!(selection, Some(RustSelection::Some(_))) {
+                member_sources(&facts, root, &checkout.view.tracked_paths)
+            } else {
+                root_sources(&facts, root, &checkout.view.tracked_paths)
+            };
+            let steps = match found {
                 None => optional_steps(root, &BTreeMap::new(), true),
                 Some(paths) => match read_sources(&checkout.root, &paths) {
                     Ok(Some(sources)) => optional_steps(root, &sources, full),
@@ -58,25 +65,30 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
                     Err(error) => return Err(ci(error)),
                 },
             };
-            Ok((root.manifest.clone(), steps))
+            Ok((whole.manifest.clone(), steps))
         })
         .collect::<Result<Steps, CiError>>()?;
-    let all_selected = selections.values().any(|selection| {
+    let everything = selections.values().any(|selection| {
         matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
     });
-    let policy = policy_needed(&changes.paths, all_selected, facts.policy);
+    let selected = selections
+        .values()
+        .any(|selection| !matches!(selection, RustSelection::None));
+    let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
     let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
-    Ok(if args.explain {
+    let new = introduced(&facts, &changes);
+    let report = if args.explain {
         explain(
             &selections,
             &steps,
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
-        )
+        ) + &weakened(&facts.weakenings, &new)
     } else {
         outputs
-    })
+    };
+    Ok(report + &warnings(&new))
 }
 
 fn everything(
@@ -133,9 +145,34 @@ fn pull_request_changes(checkout: &Checkout, facts: &RepoFacts) -> Result<Found,
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
         .filter(|path| paths.contains(path) && (is_lock(path) || roots.contains(path)))
+        .chain(
+            facts
+                .weakenings
+                .iter()
+                .map(|weakening| &weakening.file)
+                .filter(|file| paths.contains(file))
+                .cloned(),
+        )
+        .collect::<BTreeSet<RepoPath>>()
+        .into_iter()
         .collect();
     let base = git::base_files(&checkout.root, &wanted);
     Ok((paths, base))
+}
+
+fn scoped(root: &RustRoot, selection: Option<&RustSelection>) -> RustRoot {
+    match selection {
+        Some(RustSelection::Some(packages)) => RustRoot {
+            members: root
+                .members
+                .iter()
+                .filter(|member| packages.contains_key(&member.name))
+                .cloned()
+                .collect(),
+            ..root.clone()
+        },
+        _ => root.clone(),
+    }
 }
 
 fn is_lock(path: &RepoPath) -> bool {

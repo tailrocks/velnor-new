@@ -40,4 +40,6 @@ mod toolchain;
 mod toolchain_components;
 mod unowned;
 mod version;
+mod weaken;
+mod wiring;
 mod yaml_tree;
