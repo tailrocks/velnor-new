@@ -98,6 +98,52 @@ async fn authority_gives_two_identical_events_one_entry_each() {
 }
 
 #[tokio::test]
+async fn authority_binds_two_identical_events_by_dispatch_order_whatever_the_query_order() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-claims-order", &runners).await;
+    post(
+        &authority,
+        entry("1-push", "trusted", "push", "refs/heads/main"),
+    )
+    .await;
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    post(
+        &authority,
+        entry("2-push", "trusted", "push", "refs/heads/main"),
+    )
+    .await;
+    runners.create(Side::Trusted, 2, "push", "refs/heads/main", SHA);
+    let (_, two) = run_facts(&authority, "trusted", 2).await;
+    let (_, one) = run_facts(&authority, "trusted", 1).await;
+    assert_eq!(
+        (one["ledger"].as_str(), two["ledger"].as_str()),
+        (Some("1-push"), Some("2-push"))
+    );
+}
+
+#[tokio::test]
+async fn authority_keeps_no_claim_the_ledger_could_not_persist() {
+    let runners = FakeRunners::default();
+    let dir = temp_dir("authority-claims-unsaved");
+    let at = dir.join("authority");
+    let authority = Authority::open(&runners, TOKEN.to_owned(), &at)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    post(
+        &authority,
+        entry("1-push", "trusted", "push", "refs/heads/main"),
+    )
+    .await;
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    let ledger = at.join("ledger.jsonl");
+    std::fs::remove_file(&ledger).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::create_dir(&ledger).unwrap_or_else(|e| unreachable!("{e}"));
+    let (first, _) = run_facts(&authority, "trusted", 1).await;
+    let (retry, body) = run_facts(&authority, "trusted", 1).await;
+    assert_eq!((first, retry), (500, 500), "{body}");
+}
+
+#[tokio::test]
 async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
     let runners = FakeRunners {
         mint_fails: true,

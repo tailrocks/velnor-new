@@ -164,10 +164,14 @@ impl<B: Backend> Authority<B> {
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
         let mut ledger = self.ledger.lock().await;
         let admitted = admit(&ledger.entries, side, &found).cloned();
-        if let Ok(entry) = &admitted
-            && claim(&mut ledger.entries, &entry.id, &found)
-        {
-            ledger.save().await.map_err(Error::internal)?;
+        if let Ok(entry) = &admitted {
+            let before = ledger.entries.clone();
+            if claim(&mut ledger.entries, &entry.id, &found)
+                && let Err(error) = ledger.save().await
+            {
+                ledger.entries = before;
+                return Err(Error::internal(error));
+            }
         }
         let verdict = admitted.as_ref().map_err(|refusal| *refusal);
         Ok(json_response(200, &answer(side, &found, verdict)))
