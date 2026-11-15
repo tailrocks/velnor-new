@@ -158,7 +158,7 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
 
 #[test]
 fn an_invalid_config_is_rejected() -> TestResult {
-    let cases: [&[u8]; 7] = [
+    let cases: [&[u8]; 11] = [
         b"runnr = \"ubuntu-latest\"\n",
         b"exclude = [\"lba\"]\n",
         b"runner = \n",
@@ -166,6 +166,10 @@ fn an_invalid_config_is_rejected() -> TestResult {
         b"timeout_minutes = 0\n",
         b"timeout_minutes = 361\n",
         b"exclude = [\"../lab\"]\n",
+        b"runner = \"macos-13\"\n",
+        b"runner = \"macos-14-large\"\n",
+        b"runner = \"macos-15-intel\"\n",
+        b"runner = \"windows-latest\"\n",
     ];
     for config in cases {
         let result = expected_files(&view(&["Cargo.toml"], Some(config))?);

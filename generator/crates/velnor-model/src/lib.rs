@@ -9,13 +9,13 @@ mod selection;
 
 pub use cron::CronExpr;
 pub use ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
     Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperBinary, HelperCommand,
-    HelperRelease, Job, PermissionScope, Permissions, PlanFrom, Platform, Shape, ShapeDecision,
-    Step, StepKind, Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
+    Job, PermissionScope, Permissions, PlanFrom, Platform, Shape, ShapeDecision, Step, StepKind,
+    Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, DependencyKind, FullRun, InputRule, MemberDependency, OnMain, PackageDependency,

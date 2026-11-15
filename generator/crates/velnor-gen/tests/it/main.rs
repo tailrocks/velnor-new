@@ -26,6 +26,7 @@ mod repo_sample;
 mod rule_config;
 mod rules;
 mod select;
+mod setup_action;
 mod tool_pins;
 mod toolchain;
 mod unowned;
