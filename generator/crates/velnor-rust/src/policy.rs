@@ -10,6 +10,7 @@ use crate::mise::MISE_CONFIGS;
 pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
 
 const DEPENDENCY_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "deny.toml"];
+const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PolicyRuns {
@@ -28,9 +29,10 @@ pub fn policy_runs(
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
             DEPENDENCY_FILES.contains(&name)
         });
-    let unused_possible = changed
-        .iter()
-        .any(|path| is_rust_source(path) || MISE_CONFIGS.contains(path));
+    let unused_possible = changed.iter().any(|path| {
+        let name = path.as_str().rsplit('/').next().unwrap_or_default();
+        is_rust_source(path) || MISE_CONFIGS.contains(path) || IGNORE_FILES.contains(&name)
+    });
     PolicyRuns {
         deny: tools.deny && dependency,
         machete: tools.machete && (dependency || unused_possible),

@@ -178,22 +178,21 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
 }
 
 fn policy_job(facts: &RepoFacts) -> Job {
-    let commands = [
-        (facts.policy.deny, CargoCommand::Deny),
-        (facts.policy.machete, CargoCommand::Machete),
-    ];
     let mut steps = base_steps(facts);
-    for root in &facts.rust_roots {
-        steps.extend(
-            commands
-                .iter()
-                .filter(|(wanted, _)| *wanted)
-                .map(|(_, command)| Step {
-                    kind: StepKind::Cargo(command.clone()),
-                    directory: root.manifest.parent(),
-                    when: When::NotCancelled,
-                }),
-        );
+    if facts.policy.deny {
+        for root in &facts.rust_roots {
+            steps.push(Step {
+                kind: StepKind::Cargo(CargoCommand::Deny),
+                directory: root.manifest.parent(),
+                when: When::NotCancelled,
+            });
+        }
+    }
+    if facts.policy.machete {
+        steps.push(Step {
+            when: When::NotCancelled,
+            ..step(StepKind::Cargo(CargoCommand::Machete))
+        });
     }
     Job {
         steps,

@@ -340,6 +340,10 @@ fn plan_runs_machete_for_a_source_change_and_leaves_deny_skipped() {
         policy_lines(&repo, Some("pull_request"), &["README.md"]),
         "rust_deny=skip rust_machete=skip "
     );
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["b/.gitignore"]),
+        "rust_deny=skip rust_machete=run "
+    );
 }
 
 #[test]
@@ -368,5 +372,23 @@ fn plan_runs_both_policy_tools_for_a_changed_lock_file_and_on_a_schedule() {
     assert_eq!(
         policy_lines(&repo, Some("schedule"), &["b/src/lib.rs"]),
         "rust_deny=run rust_machete=run "
+    );
+}
+
+#[test]
+fn plan_keeps_deny_skipped_for_a_source_change_in_a_single_crate_repository() {
+    let repo = Repo::new("policy-single");
+    repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write(
+        "Cargo.toml",
+        "[package]\nname = \"only\"\nedition = \"2024\"\n",
+    );
+    repo.write("Cargo.lock", "version = 4\n");
+    repo.write("src/lib.rs", "");
+    repo.write("deny.toml", "");
+    pin_machete(&repo);
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["src/lib.rs"]),
+        "rust_deny=skip rust_machete=run "
     );
 }

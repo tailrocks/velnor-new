@@ -173,3 +173,25 @@ fn the_policy_lane_checks_every_cargo_root_in_its_own_folder() -> TestResult {
     assert!(policy.contains("working-directory: tools"), "{policy}");
     Ok(())
 }
+
+#[test]
+fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
+    let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    let mise = RepoPath::new("mise.toml")?;
+    view.files.insert(
+        mise,
+        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n"
+            .to_vec(),
+    );
+    let text = workflow(&view)?;
+    let policy = text
+        .split("\n  rust-policy:\n")
+        .nth(1)
+        .ok_or("no policy job")?
+        .split("\n  required:\n")
+        .next()
+        .ok_or("no policy job end")?;
+    assert_eq!(policy.matches("cargo-machete").count(), 1, "{policy}");
+    assert!(!policy.contains("working-directory"), "{policy}");
+    Ok(())
+}
