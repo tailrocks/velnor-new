@@ -19,7 +19,7 @@ fn profile_retries_a_passing_slow_timeout_and_extra_run_args_are_named() -> Test
         named,
         [
             ".config/nextest.toml: profile.ci retries = 2: retries every test in the profile, so a flaky failure passes",
-            ".config/nextest.toml: profile.ci slow-timeout on-timeout = \"pass\": counts a test that times out as passed",
+            ".config/nextest.toml: profile.ci slow-timeout = { on-timeout = \"pass\", period = \"60s\" }: counts a test that times out as passed",
             ".config/nextest.toml: profile.default.overrides filter = \"test(a)\" run-extra-args = [\"--skip\", \"a\"]: passes extra arguments to the test binaries matching \"test(a)\"",
         ]
     );
@@ -118,7 +118,7 @@ fn an_override_that_passes_a_slow_timeout_and_a_table_form_profile_retry_are_nam
         named,
         [
             ".config/nextest.toml: profile.default retries = { backoff = \"fixed\", count = 2 }: retries every test in the profile, so a flaky failure passes",
-            ".config/nextest.toml: profile.default.overrides filter = \"test(slow)\" slow-timeout on-timeout = \"pass\": counts a test matching \"test(slow)\" that times out as passed",
+            ".config/nextest.toml: profile.default.overrides filter = \"test(slow)\" slow-timeout = { on-timeout = \"pass\", period = \"1s\" }: counts a test matching \"test(slow)\" that times out as passed",
         ]
     );
     Ok(())

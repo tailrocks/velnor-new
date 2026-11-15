@@ -25,6 +25,7 @@ mod unowned;
 mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
+mod weaken_targets;
 
 pub use config::CONFIG_PATH;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};

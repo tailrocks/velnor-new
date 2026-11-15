@@ -34,6 +34,12 @@ fn retries_tests(value: &Value) -> bool {
     value.as_integer() != Some(0)
 }
 
+fn flaky_result(section: &Value) -> String {
+    section
+        .get("flaky-result")
+        .map_or_else(String::new, |result| format!(" flaky-result = {result}"))
+}
+
 fn passes_on_timeout(value: &Value) -> bool {
     value.get("on-timeout").and_then(Value::as_str) == Some("pass")
 }
@@ -75,14 +81,23 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
         }
         if let Some(retries) = section.get("retries").filter(|r| retries_tests(r)) {
             found.push(make(
-                format!("profile.{profile} retries = {retries}"),
+                format!(
+                    "profile.{profile} retries = {retries}{}",
+                    flaky_result(section)
+                ),
                 "retries every test in the profile, so a flaky failure passes".to_owned(),
             ));
         }
-        if section.get("slow-timeout").is_some_and(passes_on_timeout) {
+        if let Some(timeout) = section.get("slow-timeout").filter(|t| passes_on_timeout(t)) {
             found.push(make(
-                format!("profile.{profile} slow-timeout on-timeout = \"pass\""),
+                format!("profile.{profile} slow-timeout = {timeout}"),
                 "counts a test that times out as passed".to_owned(),
+            ));
+        }
+        if let Some(args) = section.get("run-extra-args") {
+            found.push(make(
+                format!("profile.{profile} run-extra-args = {args}"),
+                "passes extra arguments to every test binary in the profile".to_owned(),
             ));
         }
         found.extend(overrides(profile, section, make));
@@ -99,13 +114,13 @@ fn overrides(profile: &str, section: &Value, make: &Make<'_>) -> Vec<Weakening> 
         let head = format!("profile.{profile}.overrides filter = {selector}");
         if let Some(retries) = entry.get("retries") {
             found.push(make(
-                format!("{head} retries = {retries}"),
+                format!("{head} retries = {retries}{}", flaky_result(entry)),
                 format!("retries the tests matching {selector}, so a flaky failure there passes"),
             ));
         }
-        if entry.get("slow-timeout").is_some_and(passes_on_timeout) {
+        if let Some(timeout) = entry.get("slow-timeout").filter(|t| passes_on_timeout(t)) {
             found.push(make(
-                format!("{head} slow-timeout on-timeout = \"pass\""),
+                format!("{head} slow-timeout = {timeout}"),
                 format!("counts a test matching {selector} that times out as passed"),
             ));
         }

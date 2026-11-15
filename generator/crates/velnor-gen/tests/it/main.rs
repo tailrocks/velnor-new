@@ -28,5 +28,6 @@ mod toolchain;
 mod unowned;
 mod version;
 mod weaken;
+mod weaken_more;
 mod weaken_nextest;
 mod weaken_scope;

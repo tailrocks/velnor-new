@@ -12,6 +12,7 @@ use crate::roots::is_cargo_config;
 use crate::toml_file::table;
 use crate::weaken_nextest::nextest;
 use crate::weaken_scope::reaches_a_check;
+use crate::weaken_targets::targets;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
@@ -191,6 +192,7 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             ));
         }
     }
+    found.extend(targets(parsed, owner, make));
     found
 }
 
