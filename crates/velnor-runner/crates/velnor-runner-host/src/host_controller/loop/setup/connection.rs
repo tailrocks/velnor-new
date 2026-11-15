@@ -152,6 +152,7 @@ async fn finish_connection_preparation(
         pending_acquired_recovery: BTreeMap::new(),
         unkeyed_acquired_recovery: Vec::new(),
         admin_refresh: AdminRefreshSchedule::due_at(std::time::Instant::now()),
+        recovery_pass: 0,
     })
 }
 

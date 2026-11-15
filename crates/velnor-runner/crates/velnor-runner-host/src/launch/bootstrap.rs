@@ -8,6 +8,7 @@ mod delivery;
 mod pre_jit_recovery;
 mod publication;
 mod storage;
+mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;
 pub(crate) use cleanup::{
@@ -30,6 +31,7 @@ pub(crate) use pre_jit_recovery::{
     recover_pre_jit_reservation, remove_bootstrap_after_terminal_failure,
 };
 pub(crate) use publication::JobFactsPublication;
+pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
 
 pub(crate) use publication::job_facts_publication;
 pub(in crate::launch) use storage::StorageObservationContext;
