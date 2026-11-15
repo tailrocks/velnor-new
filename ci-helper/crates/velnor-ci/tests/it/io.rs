@@ -3,18 +3,19 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, FileTimes, Permissions};
-use std::io::{Cursor, ErrorKind, Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::SystemTime;
 
 use velnor_ci::io::read_limited;
 
 use crate::gate::{AHEAD, GATE, GREEN, RED, RUNNING};
+use crate::support::{CREATED, fresh_dir};
 
 #[test]
 fn a_body_at_the_limit_is_read_whole() {
@@ -53,6 +54,21 @@ fn a_folder_left_by_an_earlier_run_is_not_removed_by_a_new_repo() {
     let repo = Repo::new("audit");
     repo.write("a.txt", "a\n");
     assert!(leftover.root().join("marker.txt").is_file());
+}
+
+#[test]
+fn a_folder_of_a_process_that_is_gone_is_removed_and_one_of_a_live_process_is_kept() {
+    let temp = std::env::temp_dir();
+    let stale = Repo(temp.join("velnor-ci-inputs-2000000000-0-stale"));
+    let init = Repo(temp.join("velnor-ci-inputs-1-0-init"));
+    let own = Repo(temp.join(format!("velnor-ci-inputs-{}-live-own", std::process::id())));
+    for folder in [&stale, &init, &own] {
+        fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let _repo = Repo::new("sweep");
+    assert!(!stale.root().exists());
+    assert!(init.root().is_dir());
+    assert!(own.root().is_dir());
 }
 
 #[test]
@@ -96,25 +112,11 @@ fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
     );
 }
 
-static CREATED: AtomicU64 = AtomicU64::new(0);
-
 pub(crate) struct Repo(PathBuf);
 
 impl Repo {
     pub(crate) fn new(name: &str) -> Self {
-        let root = loop {
-            let candidate = std::env::temp_dir().join(format!(
-                "velnor-ci-inputs-{}-{}-{name}",
-                std::process::id(),
-                CREATED.fetch_add(1, Ordering::Relaxed)
-            ));
-            match fs::create_dir(&candidate) {
-                Ok(()) => break candidate,
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
-                Err(error) => unreachable!("{error}"),
-            }
-        };
-        let repo = Self(root);
+        let repo = Self(fresh_dir("velnor-ci-inputs", name));
         repo.git(&["init", "--quiet"]);
         repo.write(".gitignore", "/target/\n");
         repo

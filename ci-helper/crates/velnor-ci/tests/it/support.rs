@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use nix::errno::Errno;
+use nix::sys::signal::kill;
+use nix::unistd::Pid;
 use velnor_ci::collect::collect;
 use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, Repo, job_log_path, jobs_path, run_path};
@@ -63,4 +70,47 @@ pub(crate) fn error_text(result: Result<RunMetrics, CiError>) -> String {
 
 pub(crate) fn recorded_metrics() -> RunMetrics {
     collect(&FakeGitHub::recorded(), &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(crate) static CREATED: AtomicU64 = AtomicU64::new(0);
+
+pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
+    sweep_dead(prefix);
+    loop {
+        let candidate = std::env::temp_dir().join(format!(
+            "{prefix}-{}-{}-{name}",
+            std::process::id(),
+            CREATED.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&candidate) {
+            Ok(()) => break candidate,
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) => unreachable!("{error}"),
+        }
+    }
+}
+
+fn sweep_dead(prefix: &str) {
+    let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(prefix))
+            .and_then(|rest| rest.strip_prefix('-'))
+            .and_then(|rest| rest.split('-').next())
+            .and_then(|pid| pid.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        if !is_running(pid) && entry.path().is_dir() {
+            let _ignored = fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+fn is_running(pid: i32) -> bool {
+    kill(Pid::from_raw(pid), None) != Err(Errno::ESRCH)
 }
