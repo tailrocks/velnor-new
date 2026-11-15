@@ -417,6 +417,7 @@ fn upload_step(name: &str, file: &RepoPath) -> RenderedStep {
                 "if-no-files-found".to_owned(),
                 Value::Text("error".to_owned()),
             ),
+            ("overwrite".to_owned(), Value::Bool(true)),
         ],
         ..RenderedStep::default()
     }

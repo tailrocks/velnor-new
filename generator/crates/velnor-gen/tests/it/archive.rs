@@ -158,3 +158,18 @@ fn a_groups_root_whose_only_tests_are_doctests_keeps_one_test_job_and_builds_no_
         .collect();
     assert_eq!(commands, [CargoCommand::Doctest]);
 }
+
+#[test]
+fn an_archive_upload_replaces_the_artifact_a_failed_attempt_left_in_the_same_run() -> TestResult {
+    let jobs = rendered("shape = \"groups\"\n")?;
+    let uploads: Vec<&str> = jobs
+        .iter()
+        .flat_map(|(_, block)| block.split("      - name: ").skip(1))
+        .filter(|step| step.starts_with("Upload the tests"))
+        .collect();
+    assert_eq!(uploads.len(), 2, "{jobs:?}");
+    for step in uploads {
+        assert!(step.contains("          overwrite: true\n"), "{step}");
+    }
+    Ok(())
+}
