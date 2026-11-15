@@ -37,7 +37,11 @@ pub(super) fn check_path_length(path: &Path, limit: usize) -> Result<(), HostErr
 }
 
 fn leaked_path(path: &Path) -> &'static str {
-    Box::leak(path.display().to_string().into_boxed_str())
+    let text = path.to_str().map_or_else(
+        || path.as_os_str().as_bytes().escape_ascii().to_string(),
+        ToOwned::to_owned,
+    );
+    Box::leak(text.into_boxed_str())
 }
 
 #[cfg(test)]
