@@ -15,7 +15,7 @@ use std::time::SystemTime;
 use velnor_ci::io::read_limited;
 
 use crate::gate::{AHEAD, GATE, GREEN, RED, RUNNING};
-use crate::support::{CREATED, fresh_dir};
+use crate::support::{CREATED, DEAD_PID, assert_dead, fresh_dir};
 
 #[test]
 fn a_body_at_the_limit_is_read_whole() {
@@ -69,6 +69,29 @@ fn a_folder_of_a_process_that_is_gone_is_removed_and_one_of_a_live_process_is_ke
     assert!(!stale.root().exists());
     assert!(init.root().is_dir());
     assert!(own.root().is_dir());
+}
+
+#[test]
+fn a_folder_with_no_dash_after_its_pid_is_left_alone() {
+    assert_dead(DEAD_PID);
+    let folder = Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{DEAD_PID}")));
+    fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let _repo = Repo::new("sweep-bare");
+    assert!(folder.root().is_dir());
+}
+
+#[test]
+fn a_dead_pid_folder_that_only_resembles_the_prefix_is_left_alone() {
+    assert_dead(DEAD_PID);
+    let temp = std::env::temp_dir();
+    let contains = Repo(temp.join(format!("x-velnor-ci-inputs-{DEAD_PID}-a")));
+    let longer = Repo(temp.join(format!("velnor-ci-inputs-x-{DEAD_PID}-a")));
+    for folder in [&contains, &longer] {
+        fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let _repo = Repo::new("sweep-resembles");
+    assert!(contains.root().is_dir());
+    assert!(longer.root().is_dir());
 }
 
 #[test]

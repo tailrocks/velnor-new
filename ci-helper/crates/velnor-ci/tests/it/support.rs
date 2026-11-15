@@ -72,6 +72,12 @@ pub(crate) fn recorded_metrics() -> RunMetrics {
     collect(&FakeGitHub::recorded(), &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+pub(crate) const DEAD_PID: i32 = 2_000_000_000;
+
+pub(crate) fn assert_dead(pid: i32) {
+    assert_eq!(kill(Pid::from_raw(pid), None), Err(Errno::ESRCH));
+}
+
 pub(crate) static CREATED: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
@@ -98,10 +104,7 @@ fn sweep_dead(prefix: &str) {
         let name = entry.file_name();
         let Some(pid) = name
             .to_str()
-            .and_then(|name| name.strip_prefix(prefix))
-            .and_then(|rest| rest.strip_prefix('-'))
-            .and_then(|rest| rest.split('-').next())
-            .and_then(|pid| pid.parse::<i32>().ok())
+            .and_then(|name| dead_pid_candidate(name, prefix))
         else {
             continue;
         };
@@ -109,6 +112,15 @@ fn sweep_dead(prefix: &str) {
             let _ignored = fs::remove_dir_all(entry.path());
         }
     }
+}
+
+fn dead_pid_candidate(name: &str, prefix: &str) -> Option<i32> {
+    let rest = name.strip_prefix(prefix)?.strip_prefix('-')?;
+    let (pid, tail) = rest.split_once('-')?;
+    if tail.is_empty() || pid.is_empty() || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    pid.parse().ok()
 }
 
 fn is_running(pid: i32) -> bool {
