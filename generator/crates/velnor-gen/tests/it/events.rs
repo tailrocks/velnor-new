@@ -4,8 +4,9 @@
 use std::collections::BTreeSet;
 
 use velnor_gen::expected_files;
+use velnor_model::PolicyTools;
 use velnor_model::RepoPath;
-use velnor_rust::{CONFIG_PATH, policy_needed};
+use velnor_rust::{CONFIG_PATH, PolicyRuns, policy_runs};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -119,34 +120,37 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
 }
 
 #[test]
-fn the_policy_lane_runs_for_a_dependency_file_a_schedule_or_everything_and_not_for_sources()
--> TestResult {
+fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
     let changed = |paths: &[&str]| -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Error>> {
         Ok(paths
             .iter()
             .map(|path| RepoPath::new(*path))
             .collect::<Result<_, _>>()?)
     };
-    let cases: [(&[&str], bool, bool); 8] = [
+    let both = PolicyTools {
+        deny: true,
+        machete: true,
+    };
+    let cases: [(&[&str], bool, (bool, bool)); 9] = [
+        (&["README.md"], false, (false, false)),
+        (&[], false, (false, false)),
+        (&["Cargo.lock"], false, (true, true)),
+        (&["crates/a/Cargo.toml"], false, (true, true)),
+        (&["deny.toml"], false, (true, true)),
         (
-            &["src/lib.rs", "crates/a/src/main.rs", "README.md"],
+            &["docs/deny.toml.md", "src/Cargo.tomls"],
             false,
-            false,
+            (false, false),
         ),
-        (&[], false, false),
-        (&["Cargo.lock"], false, true),
-        (&["crates/a/Cargo.toml"], false, true),
-        (&["deny.toml"], false, true),
-        (&["docs/deny.toml.md", "src/Cargo.tomls"], false, false),
-        (&["src/lib.rs"], true, true),
-        (&[], true, true),
+        (&["src/lib.rs", "README.md"], false, (false, true)),
+        (&["mise.toml"], false, (false, true)),
+        (&[], true, (true, true)),
     ];
-    for (paths, everything, run) in cases {
-        assert_eq!(
-            policy_needed(&changed(paths)?, everything),
-            run,
-            "{paths:?}"
-        );
+    for (paths, everything, (deny, machete)) in cases {
+        let runs = policy_runs(both, &changed(paths)?, everything);
+        assert_eq!((runs.deny, runs.machete), (deny, machete), "{paths:?}");
     }
+    let no_tools = policy_runs(PolicyTools::default(), &changed(&["Cargo.lock"])?, true);
+    assert_eq!(no_tools, PolicyRuns::default());
     Ok(())
 }
