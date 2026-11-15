@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::future::Future;
+use std::time::Duration;
 
 use bollard::Docker;
 use tokio::time::Instant;
@@ -25,6 +26,7 @@ pub(crate) struct UncertainRecovery<'a> {
     pub(crate) engine: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
     pub(crate) image_authority: &'a ImageAuthority,
+    pub(crate) pass: usize,
 }
 
 pub(crate) async fn recover_uncertain_reservations(
@@ -54,8 +56,36 @@ pub(crate) async fn recover_uncertain_reservations(
 }
 
 async fn recover_initializers(recovery: &UncertainRecovery<'_>, initializers: &[i64]) {
-    let deadline = Instant::now() + INITIALIZER_RECOVERY_BUDGET;
-    let first = rotation(initializers.len());
+    recover_in_rotation(
+        initializers,
+        recovery.pass,
+        INITIALIZER_RECOVERY_BUDGET,
+        |id, remaining| async move {
+            if let Err(error) = recover_absent(recovery.docker, recovery.scope, id, remaining).await
+            {
+                report(
+                    recovery.scope,
+                    id,
+                    "an interrupted storage initializer",
+                    error,
+                );
+            }
+        },
+    )
+    .await;
+}
+
+async fn recover_in_rotation<Recover, Pending>(
+    initializers: &[i64],
+    pass: usize,
+    budget: Duration,
+    mut recover: Recover,
+) where
+    Recover: FnMut(i64, Duration) -> Pending,
+    Pending: Future<Output = ()>,
+{
+    let deadline = Instant::now() + budget;
+    let first = pass % initializers.len().max(1);
     for &id in initializers
         .iter()
         .cycle()
@@ -66,22 +96,8 @@ async fn recover_initializers(recovery: &UncertainRecovery<'_>, initializers: &[
         if remaining.is_zero() {
             return;
         }
-        if let Err(error) = recover_absent(recovery.docker, recovery.scope, id, remaining).await {
-            report(
-                recovery.scope,
-                id,
-                "an interrupted storage initializer",
-                error,
-            );
-        }
+        recover(id, remaining).await;
     }
-}
-
-fn rotation(candidates: usize) -> usize {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs());
-    usize::try_from(seconds).unwrap_or(0) % candidates.max(1)
 }
 
 async fn recover_pre_jit(
@@ -117,3 +133,7 @@ fn report(scope: &ConnectionJournal, reservation_id: i64, work: &str, error: Hos
         scope.connection_id().as_str()
     );
 }
+
+#[cfg(test)]
+#[path = "uncertain_recovery/tests.rs"]
+mod tests;

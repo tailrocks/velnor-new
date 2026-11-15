@@ -11,6 +11,7 @@ use crate::journal::ConnectionJournal;
 
 pub(super) async fn reconcile(
     scope: &ConnectionJournal,
+    pass: usize,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
     Box::pin(recover_uncertain_reservations(&UncertainRecovery {
@@ -20,6 +21,7 @@ pub(super) async fn reconcile(
         engine: context.selected_engine,
         images: context.worker_images,
         image_authority: context.image_authority,
+        pass,
     }))
     .await
 }

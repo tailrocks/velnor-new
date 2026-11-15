@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "restart_tests/controller.rs"]
+mod controller;
 #[path = "restart_tests/docker.rs"]
 mod docker;
 #[path = "restart_tests/seed.rs"]
@@ -12,17 +14,16 @@ use bollard::Docker;
 
 use crate::config::RunnerPlatform;
 use crate::journal::{ConnectionJournal, Journal, StorageRole};
-use std::sync::Arc;
 
-use crate::config::HostConfig;
+use crate::launch::SelectedEngineContext;
 use crate::launch::bootstrap::VerifiedCreatedStorageObject;
-use crate::launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages};
 use crate::worker::ResourceBudgetConfig;
 use crate::worker::storage_initialization::{
     StorageInitializationImage, StorageInitializationLimits, initialize,
 };
 
 use super::PositivePollContext;
+use controller::Controller;
 use docker::{FixtureDocker, HELPER_ID};
 use seed::{ENGINE_ID, IMAGE_ID, LIVE_RESERVATIONS, PRIVATE_VOLUME};
 
@@ -116,38 +117,14 @@ platform = "linux/amd64"
 endpoint = "unix:///docker.sock"
 "#;
 
-async fn controller_turn(
-    journal: &Journal,
-    docker: &Docker,
-    scope: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-) -> TestResult<()> {
-    let config = HostConfig::parse(HOST_CONFIG)?;
-    let images = VerifiedWorkerImages::for_test(engine, &"1".repeat(40), IMAGE_ID, IMAGE_ID)?;
-    let image_authority = Arc::new(ImageAuthority::parse("token")?);
-    let state = tempfile::tempdir()?;
-    let context = PositivePollContext {
-        config: &config,
-        journal,
-        docker,
-        selected_engine: engine,
-        worker_images: &images,
-        state: state.path(),
-        image_authority: &image_authority,
-        admission_ready: true,
-    };
-    super::pre_jit::reconcile(scope, &context).await?;
-    Ok(())
-}
-
 async fn restart(
     journal: &Journal,
     docker: &Docker,
-    scope: &ConnectionJournal,
+    controller: &mut Controller,
     engine: &SelectedEngineContext,
 ) -> TestResult<()> {
     journal.recover_after_restart_without_authority().await?;
-    controller_turn(journal, docker, scope, engine).await
+    controller.turn(journal, docker, engine).await
 }
 
 async fn live_reservations(journal: &Journal) -> TestResult<Vec<Recorded>> {
@@ -170,6 +147,7 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
         &docker.info().await?,
     )?;
     kill_at_hang(&docker, &scope, &root, &fixture).await?;
+    let mut controller = Controller::new(&scope, &engine)?;
     let helper = kill.helper_created.then_some(HELPER_ID);
     let stuck = recorded(kill.stuck, "not_requested", None);
     assert_eq!(seed::recorded(&journal, 2).await?, stuck);
@@ -177,11 +155,11 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     let live = live_reservations(&journal).await?;
 
     fixture.take_requests();
-    controller_turn(&journal, &docker, &scope, &engine).await?;
+    controller.turn(&journal, &docker, &engine).await?;
     assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(seed::recorded(&journal, 2).await?, stuck);
 
-    restart(&journal, &docker, &scope, &engine).await?;
+    restart(&journal, &docker, &mut controller, &engine).await?;
     let requests = fixture.take_requests();
     let image_inspect = format!("GET /images/{IMAGE_ID}/json");
     let removal = format!("DELETE /containers/{HELPER_ID}");
@@ -192,16 +170,17 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(seed::recorded(&journal, 2).await?, recovered);
     assert_eq!(live_reservations(&journal).await?, live);
 
-    restart(&journal, &docker, &scope, &engine).await?;
+    restart(&journal, &docker, &mut controller, &engine).await?;
     assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(seed::recorded(&journal, 2).await?, recovered);
     assert_eq!(live_reservations(&journal).await?, live);
+    assert_eq!(controller.prepared.recovery_pass, 3);
     Ok(())
 }
 
 #[tokio::test]
 async fn restart_recovers_a_crash_before_the_create_request() -> TestResult<()> {
-    restart_recovers(KillPoint {
+    Box::pin(restart_recovers(KillPoint {
         hang_on: format!("GET /images/{IMAGE_ID}/json"),
         stuck: [
             "reserved",
@@ -218,13 +197,13 @@ async fn restart_recovers_a_crash_before_the_create_request() -> TestResult<()> 
             "not_requested",
         ],
         helper_created: false,
-    })
+    }))
     .await
 }
 
 #[tokio::test]
 async fn restart_recovers_a_crash_while_the_create_request_is_in_flight() -> TestResult<()> {
-    restart_recovers(KillPoint {
+    Box::pin(restart_recovers(KillPoint {
         hang_on: "POST /containers/create".to_owned(),
         stuck: [
             "reserved",
@@ -241,13 +220,13 @@ async fn restart_recovers_a_crash_while_the_create_request_is_in_flight() -> Tes
             "not_requested",
         ],
         helper_created: true,
-    })
+    }))
     .await
 }
 
 #[tokio::test]
 async fn restart_recovers_a_crash_after_docker_answered_the_create() -> TestResult<()> {
-    restart_recovers(KillPoint {
+    Box::pin(restart_recovers(KillPoint {
         hang_on: format!("GET /containers/{HELPER_ID}/json"),
         stuck: [
             "reserved",
@@ -264,13 +243,13 @@ async fn restart_recovers_a_crash_after_docker_answered_the_create() -> TestResu
             "not_requested",
         ],
         helper_created: true,
-    })
+    }))
     .await
 }
 
 #[tokio::test]
 async fn restart_recovers_a_crash_while_the_helper_is_being_started() -> TestResult<()> {
-    restart_recovers(KillPoint {
+    Box::pin(restart_recovers(KillPoint {
         hang_on: format!("POST /containers/{HELPER_ID}/attach"),
         stuck: [
             "reserved",
@@ -287,6 +266,6 @@ async fn restart_recovers_a_crash_while_the_helper_is_being_started() -> TestRes
             "uncertain",
         ],
         helper_created: true,
-    })
+    }))
     .await
 }

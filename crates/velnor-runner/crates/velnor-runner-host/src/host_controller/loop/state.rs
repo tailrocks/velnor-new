@@ -64,6 +64,7 @@ pub(super) struct PreparedConnection {
     pub(super) pending_acquired_recovery: BTreeMap<i64, PendingAcquiredRecovery>,
     pub(super) unkeyed_acquired_recovery: Vec<PendingAcquiredRecovery>,
     pub(super) admin_refresh: AdminRefreshSchedule,
+    pub(super) recovery_pass: usize,
 }
 
 pub(super) struct PreparedSetup {
@@ -79,6 +80,12 @@ pub(super) fn session_assigned_total(
 }
 
 impl PreparedConnection {
+    pub(super) fn next_recovery_pass(&mut self) -> usize {
+        let pass = self.recovery_pass;
+        self.recovery_pass = pass.wrapping_add(1);
+        pass
+    }
+
     pub(super) fn record_assigned_total(&mut self, assigned_total: Option<i64>) {
         record_assigned_total(&mut self.assigned_total, assigned_total);
     }

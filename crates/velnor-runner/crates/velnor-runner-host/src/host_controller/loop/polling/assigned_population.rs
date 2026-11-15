@@ -38,7 +38,8 @@ pub(super) async fn reconcile(
     if jit_conflict::reconcile(prepared, context).await? {
         return Ok(());
     }
-    Box::pin(pre_jit::reconcile(&prepared.scope, context)).await?;
+    let pass = prepared.next_recovery_pass();
+    Box::pin(pre_jit::reconcile(&prepared.scope, pass, context)).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());
     };
