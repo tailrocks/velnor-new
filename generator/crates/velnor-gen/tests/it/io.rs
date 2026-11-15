@@ -92,6 +92,22 @@ fn generate_writes_and_removes_only_real_files_inside_the_repository() -> TestRe
 }
 
 #[test]
+fn generate_keeps_an_unmarked_file() -> TestResult {
+    let scratch = Scratch::new("unmarked")?;
+    write(&scratch.repo().join(WORKFLOW), "name: Mine\n")?;
+    apply(
+        &scratch.repo(),
+        &BTreeMap::new(),
+        &[Drift::Unmarked(workflow()?)],
+    )?;
+    assert_eq!(
+        fs::read_to_string(scratch.repo().join(WORKFLOW))?,
+        "name: Mine\n"
+    );
+    Ok(())
+}
+
+#[test]
 fn generate_never_writes_or_removes_through_a_symbolic_link() -> TestResult {
     let file_link = Scratch::new("file-link")?;
     let target = file_link.outside().join("victim.yml");
