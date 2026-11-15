@@ -20,12 +20,14 @@ use zeroize::Zeroize;
 
 mod aggregate;
 mod provider_entry;
+#[cfg(test)]
+mod tests;
 use aggregate::observe_storage_resources as observe_storage_resources_core;
 pub use aggregate::observed_cgroups;
 pub(in crate::launch) use provider_entry::observe_storage_resources_with_provider;
 
 use crate::{
-    error::HostError,
+    error::{ErrorDetail, HostError},
     journal::{ConnectionJournal, Journal},
     launch::{SelectedEngineContext, VerifiedWorkerImages, resource_probe::ImageProvider},
 };
@@ -300,8 +302,10 @@ where
         let frame = frame.map_err(|_| HostError::Docker)?;
         let chunk = match frame {
             bollard::container::LogOutput::StdOut { message } => message,
-            bollard::container::LogOutput::StdErr { .. }
-            | bollard::container::LogOutput::Console { .. }
+            bollard::container::LogOutput::StdErr { message } => {
+                return Err(HostError::Helper(ErrorDetail::from_bytes(&message)));
+            }
+            bollard::container::LogOutput::Console { .. }
             | bollard::container::LogOutput::StdIn { .. } => return Err(HostError::Frame),
         };
         if let Some(newline) = chunk.iter().position(|byte| *byte == b'\n') {
@@ -327,6 +331,9 @@ where
 {
     while let Some(frame) = within(deadline, output.next()).await? {
         let frame = frame.map_err(|_| HostError::Docker)?;
+        if let bollard::container::LogOutput::StdErr { message } = &frame {
+            return Err(HostError::Helper(ErrorDetail::from_bytes(message)));
+        }
         if !frame.as_ref().is_empty() {
             return Err(HostError::Frame);
         }

@@ -234,7 +234,10 @@ fn pending_with_initialization(
     initialization: Option<VerifiedStorageInitializationReady>,
     failure: HostError,
 ) -> ScopedRuntimeOutcome {
-    let _ = &failure;
+    eprintln!(
+        "host controller pair preparation held reservation={} reason={failure}",
+        prepared.acquired().reservation_id()
+    );
     ScopedRuntimeOutcome::Pending(Box::new(PendingScopedBootstrap {
         prepared,
         _network: network,

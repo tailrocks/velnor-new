@@ -98,7 +98,7 @@ pub(super) async fn poll_zero_header_connection(
         },
     )
     .await
-    .map_err(|_| HostError::Journal)
+    .map_err(|error| HostError::poll(&error))
 }
 
 pub(super) async fn poll_positive_connection(
@@ -194,5 +194,5 @@ async fn positive_poll_message(
         },
     ))
     .await
-    .map_err(|_| HostError::Journal)
+    .map_err(|error| HostError::poll(&error))
 }
