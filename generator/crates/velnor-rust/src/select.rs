@@ -234,8 +234,22 @@ impl<'a> Graph<'a> {
             })
             .max_by_key(|(_, node)| depth(node.directory.as_ref()))
             .map(|(manifest, _)| *manifest);
+        let shared: Vec<&RepoPath> = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.root.is_some() && node.root != root && node.sources.contains(&path)
+            })
+            .map(|(manifest, _)| *manifest)
+            .collect();
+        for manifest in &shared {
+            walk.seed(manifest, SelectionReason::Changed(path.clone()));
+        }
         if let Some(manifest) = package {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
+            return;
+        }
+        if !shared.is_empty() {
             return;
         }
         let is_root_manifest = self.roots.iter().any(|root| root.manifest == *path);
