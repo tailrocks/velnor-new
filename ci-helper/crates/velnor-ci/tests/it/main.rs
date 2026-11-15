@@ -10,6 +10,7 @@ mod inputs;
 mod io;
 mod io_plan;
 mod io_plan_forged;
+mod io_plan_policy;
 mod io_release;
 mod io_restore;
 mod logscan;

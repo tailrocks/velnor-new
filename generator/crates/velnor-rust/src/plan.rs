@@ -63,10 +63,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             workflow_dispatch: true,
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
-        permissions: Permissions(BTreeMap::from([
-            (PermissionScope::Contents, Access::Read),
-            (PermissionScope::PullRequests, Access::Read),
-        ])),
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         jobs,
     }
 }
@@ -255,6 +252,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         when: When::Success,
         skip_on_draft: facts.config.skip_draft_pull_requests,
         runs_on: facts.config.runner.clone(),
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         plan_outputs: Vec::new(),

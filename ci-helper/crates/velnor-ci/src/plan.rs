@@ -35,7 +35,7 @@ pub fn outputs(
                 let names: Vec<&str> = packages.keys().map(PackageName::as_str).collect();
                 let filter = names
                     .iter()
-                    .map(|name| format!("package({name})"))
+                    .map(|name| format!("package({})", inert(name)))
                     .collect::<Vec<_>>()
                     .join(" | ");
                 let package_args = package_args(&names);

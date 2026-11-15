@@ -218,3 +218,23 @@ fn a_weakening_printed_by_explain_cannot_forge_a_workflow_command() {
         "{explained:?}"
     );
 }
+
+#[test]
+fn a_package_name_that_reads_as_a_workflow_command_is_inert_in_the_test_filter() {
+    let hostile = "a::stop-commands::tok%";
+    let selected = BTreeMap::from([(
+        name(hostile),
+        SelectionReason::Changed(path("a/src/lib.rs")),
+    )]);
+    let selections = BTreeMap::from([(path("Cargo.toml"), RustSelection::Some(selected))]);
+    let written = outputs(&selections, &BTreeMap::new(), PolicyRuns::default())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let filter = written
+        .lines()
+        .find(|line| line.starts_with("rust_root_test_filter="))
+        .unwrap_or_default();
+    assert_eq!(
+        filter,
+        "rust_root_test_filter=package(a%3A%3Astop-commands%3A%3Atok%25)"
+    );
+}

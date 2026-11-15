@@ -141,7 +141,7 @@ fn pull_request_changes(
     let repository = std::env::var(REPOSITORY_VARIABLE)
         .map_err(|_| CiError::new(format!("{REPOSITORY_VARIABLE} is not set")))?;
     let repo = Repo::parse(&repository)?;
-    let github = http::HttpGitHub::new(api_url(), token);
+    let github = http::HttpGitHub::new(api_url(), token, http::PLAN_TIMEOUT);
     let paths = changed_files(&github, &repo, pull)?.ok_or_else(|| {
         CiError::new("the pull request has too many files for the GitHub API to list")
     })?;

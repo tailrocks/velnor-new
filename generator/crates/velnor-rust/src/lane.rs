@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PlanFrom, PlanRef, RepoFacts, Step,
-    StepKind, When,
+    Access, CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PermissionScope, Permissions,
+    PlanFrom, PlanRef, RepoFacts, Step, StepKind, When,
 };
 
 use crate::plan::{head, job, step};
@@ -106,6 +106,10 @@ pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> J
         plan_outputs: outputs,
         skip_on_draft: false,
         steps,
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Contents, Access::Read),
+            (PermissionScope::PullRequests, Access::Read),
+        ])),
         ..job(facts, PLAN_JOB)
     }
 }
