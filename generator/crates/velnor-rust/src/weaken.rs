@@ -247,7 +247,9 @@ fn nextest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .map(|(profile, filter)| {
             make(
                 format!("profile.{profile}.default-filter = {filter}"),
-                format!("runs only the tests matching {filter} unless a filter is given"),
+                format!(
+                    "limits a plain nextest run to the tests matching {filter}; the nextest step Velnor generates ignores it"
+                ),
             )
         })
         .collect();

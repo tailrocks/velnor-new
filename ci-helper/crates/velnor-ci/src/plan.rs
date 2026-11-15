@@ -82,12 +82,8 @@ pub fn warnings(new: &[Weakening]) -> String {
     lines.concat()
 }
 
-fn line_start(text: &str) -> String {
-    let escaped = escape(text, false);
-    match escaped.strip_prefix("::") {
-        Some(rest) => format!("%3A:{rest}"),
-        None => escaped,
-    }
+fn inert(text: &str) -> String {
+    escape(text, false).replace(':', "%3A")
 }
 
 fn escape(text: &str, property: bool) -> String {
@@ -121,9 +117,9 @@ pub fn explain(
             }
             RustSelection::All(trigger) => (trigger.to_string(), None),
         };
-        lines.push(format!("{}: {header}\n", line_start(root.as_str())));
+        lines.push(format!("{}: {header}\n", inert(root.as_str())));
         for (package, reason) in packages.into_iter().flatten() {
-            lines.push(format!("  {package} {reason}\n"));
+            lines.push(format!("  {} {reason}\n", inert(&package.to_string())));
         }
         let selected = !matches!(selection, RustSelection::None);
         for (step, need) in steps

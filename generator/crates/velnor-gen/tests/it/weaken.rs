@@ -30,7 +30,7 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 
 #[test]
 fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 17] = [
+    let cases: [(&str, &str, &str, &str); 19] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -122,16 +122,28 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
             "leaves the bench target b of foo out of the test run",
         ),
         (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\n\n[[bin]]\nname = \"tool\"\npath = \"src/tool.rs\"\ntest = false\n",
+            "[[bin]] name = \"tool\" test = false",
+            "leaves the bin target tool of foo out of the test run",
+        ),
+        (
+            "crates/foo/Cargo.toml",
+            "[package]\nname = \"foo\"\n\n[[example]]\nname = \"demo\"\ntest = false\n",
+            "[[example]] name = \"demo\" test = false",
+            "leaves the example target demo of foo out of the test run",
+        ),
+        (
             ".config/nextest.toml",
             "[profile.default]\ndefault-filter = \"not all()\"\n",
             "profile.default.default-filter = \"not all()\"",
-            "runs only the tests matching \"not all()\" unless a filter is given",
+            "limits a plain nextest run to the tests matching \"not all()\"; the nextest step Velnor generates ignores it",
         ),
         (
             ".config/nextest.toml",
             "[profile.ci]\ndefault-filter = \"none()\"\n",
             "profile.ci.default-filter = \"none()\"",
-            "runs only the tests matching \"none()\" unless a filter is given",
+            "limits a plain nextest run to the tests matching \"none()\"; the nextest step Velnor generates ignores it",
         ),
     ];
     for (file, text, setting, effect) in cases {
