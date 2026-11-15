@@ -40,7 +40,23 @@ struct Run {
     outputs: String,
 }
 
+struct Declared<'a> {
+    file: &'a str,
+    components: &'a str,
+    targets: &'a str,
+}
+
+fn script(path: &Path, body: &str) {
+    fs::write(path, format!("#!/bin/sh\n{body}")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
 fn prepare(name: &str, json: &str) -> Run {
+    prepare_declared(name, json, None)
+}
+
+fn prepare_declared(name: &str, json: &str, declared: Option<&Declared<'_>>) -> Run {
     let dir = scratch(name);
     let checkout = dir.join("checkout");
     fs::create_dir_all(&checkout).unwrap_or_else(|e| unreachable!("{e}"));
@@ -52,6 +68,21 @@ fn prepare(name: &str, json: &str) -> Run {
         .unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&mise, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
+    if let Some(declared) = declared {
+        fs::write(checkout.join("rust-toolchain.toml"), declared.file)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        script(
+            &bin.join("rustc"),
+            "echo 'host: x86_64-unknown-linux-gnu'\n",
+        );
+        script(
+            &bin.join("rustup"),
+            &format!(
+                "if [ \"$1\" = component ]; then cat <<'EOF'\n{}\nEOF\nelse cat <<'EOF'\n{}\nEOF\nfi\n",
+                declared.components, declared.targets
+            ),
+        );
+    }
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("prepare")
@@ -122,4 +153,106 @@ fn restored_exits_zero_and_writes_nothing() {
     assert!(output.status.success());
     assert!(output.stdout.is_empty() && output.stderr.is_empty());
     assert!(!dir.join("env").exists() && !dir.join("output").exists());
+}
+
+const LISTING: &str = "cargo-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-std-wasm32-unknown-unknown\nrustc-x86_64-unknown-linux-gnu (installed)\nrustfmt-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu\nrust-src\nrustc-dev-x86_64-unknown-linux-gnu\nrustc-dev-aarch64-apple-darwin";
+
+fn declared(file: &'static str) -> Declared<'static> {
+    Declared {
+        file,
+        components: LISTING,
+        targets: "x86_64-unknown-linux-gnu",
+    }
+}
+
+#[test]
+fn prepare_names_every_component_a_complete_profile_implies_that_is_not_installed() {
+    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
+    let run = prepare_declared(
+        "complete",
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&declared(file)),
+    );
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("component rust-docs, component rust-src, component rustc-dev"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("aarch64") && !stderr.contains("clippy"),
+        "{stderr}"
+    );
+    assert_eq!((run.env_file.as_str(), run.outputs.as_str()), ("", ""));
+}
+
+#[test]
+fn prepare_passes_a_complete_profile_whose_components_are_all_installed() {
+    let all = LISTING
+        .lines()
+        .map(|line| {
+            if line.contains("(installed)") {
+                line.to_owned()
+            } else {
+                format!("{line} (installed)")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
+    let run = prepare_declared(
+        "complete-ok",
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&Declared {
+            file,
+            components: &all,
+            targets: "x86_64-unknown-linux-gnu",
+        }),
+    );
+    assert!(run.output.status.success(), "{:?}", run.output);
+}
+
+#[test]
+fn prepare_checks_the_default_profile_the_listed_components_and_the_listed_targets() {
+    for (name, file, missing) in [
+        (
+            "default",
+            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
+            "component rust-docs",
+        ),
+        (
+            "listed",
+            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"rust-src\"]\n",
+            "component rust-src",
+        ),
+        (
+            "target",
+            "[toolchain]\nchannel = \"1.99.1\"\ntargets = [\"wasm32-unknown-unknown\"]\n",
+            "target wasm32-unknown-unknown",
+        ),
+    ] {
+        let run = prepare_declared(
+            name,
+            &reported("1.99.1", Some("0.9.151")),
+            Some(&declared(file)),
+        );
+        let stderr = String::from_utf8_lossy(&run.output.stderr);
+        assert_eq!(run.output.status.code(), Some(1), "{name}: {stderr}");
+        assert!(
+            stderr.ends_with(&format!("{missing}\n")),
+            "{name}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn prepare_passes_a_minimal_profile_with_nothing_more_declared() {
+    let file =
+        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"clippy\"]\n";
+    let run = prepare_declared(
+        "minimal",
+        &reported("1.99.1", Some("0.9.151")),
+        Some(&declared(file)),
+    );
+    assert!(run.output.status.success(), "{:?}", run.output);
 }

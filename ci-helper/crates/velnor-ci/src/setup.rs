@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
-use velnor_model::ToolPins;
+use velnor_model::{ToolPins, Toolchain};
 
 use crate::error::CiError;
 
@@ -91,4 +91,58 @@ fn same_version(wanted: &str, installed: &str) -> bool {
         || installed
             .strip_prefix(wanted)
             .is_some_and(|rest| rest.starts_with('.'))
+}
+
+const DEFAULT_PROFILE: [&str; 3] = ["rust-docs", "rustfmt", "clippy"];
+const COMPLETE_PROFILE: &str = "complete";
+const DEFAULT_PROFILE_NAME: &str = "default";
+const TARGETLESS: &str = "rust-src";
+
+pub fn check_toolchain(
+    declared: &Toolchain,
+    host: &str,
+    components: &str,
+    targets: &str,
+) -> Result<(), CiError> {
+    let suffix = format!("-{host}");
+    let short = |name: &str| name.strip_suffix(&suffix).unwrap_or(name).to_owned();
+    let mut offered = BTreeSet::new();
+    let mut installed = BTreeSet::new();
+    for line in components.lines() {
+        let mut fields = line.split_whitespace();
+        let Some(name) = fields.next() else { continue };
+        if name == TARGETLESS || name.ends_with(&suffix) {
+            offered.insert(short(name));
+            if fields.next().is_some() {
+                installed.insert(short(name));
+            }
+        }
+    }
+    let mut required: BTreeSet<String> = declared.components.iter().map(|c| short(c)).collect();
+    match declared.profile.as_deref() {
+        Some(DEFAULT_PROFILE_NAME) => required.extend(DEFAULT_PROFILE.map(str::to_owned)),
+        Some(COMPLETE_PROFILE) => required.extend(offered),
+        _ => {}
+    }
+    let present: BTreeSet<&str> = targets.lines().map(str::trim).collect();
+    let missing: Vec<String> = required
+        .iter()
+        .filter(|name| !installed.contains(*name))
+        .map(|name| format!("component {name}"))
+        .chain(
+            declared
+                .targets
+                .iter()
+                .filter(|target| !present.contains(target.as_str()))
+                .map(|target| format!("target {target}")),
+        )
+        .collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(CiError::new(format!(
+            "the installed toolchain lacks what the toolchain file declares: {}",
+            missing.join(", ")
+        )))
+    }
 }

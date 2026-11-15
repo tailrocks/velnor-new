@@ -315,6 +315,49 @@ fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> Te
     );
     Ok(())
 }
+fn profile_workflow(profile: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut declared = view(&["Cargo.toml"], Some(b"shape = \"lint-test\"\n"))?;
+    declared.tracked_paths.insert(file.clone());
+    declared.files.insert(
+        file,
+        format!("[toolchain]\nchannel = \"1.99.1\"\nprofile = \"{profile}\"\n").into_bytes(),
+    );
+    workflow(&declared)
+}
+
+#[test]
+fn a_default_profile_adds_its_docs_and_a_minimal_one_adds_nothing() -> TestResult {
+    let default = profile_workflow("default")?;
+    assert!(
+        default.contains("run: rustup component add clippy rust-docs rustfmt"),
+        "{default}"
+    );
+    let minimal = profile_workflow("minimal")?;
+    assert!(
+        minimal.contains("run: rustup component add clippy rustfmt\n"),
+        "{minimal}"
+    );
+    assert!(!minimal.contains("rust-docs"));
+    Ok(())
+}
+
+#[test]
+fn a_profile_rustup_does_not_know_is_an_error() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut declared = view(&["Cargo.toml"], None)?;
+    declared.tracked_paths.insert(file.clone());
+    declared.files.insert(
+        file,
+        b"[toolchain]\nchannel = \"1.99.1\"\nprofile = \"everything\"\n".to_vec(),
+    );
+    assert!(matches!(
+        expected_files(&declared),
+        Err(GenerateError::Detect(DetectError::Invalid { .. }))
+    ));
+    Ok(())
+}
+
 #[test]
 fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
     assert_eq!(
