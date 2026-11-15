@@ -27,6 +27,7 @@ use crate::cli::{
 use crate::collect::collect;
 use crate::compare::compare;
 use crate::error::CiError;
+use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
@@ -66,6 +67,10 @@ where
 pub fn main() -> ExitCode {
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
+        Err(error) if error.use_stderr() => {
+            eprintln!("{}", stderr_line(&error.render().to_string()));
+            return ExitCode::from(2);
+        }
         Err(error) => error.exit(),
     };
     if let Command::Run(args) = &cli.command {
@@ -77,7 +82,7 @@ pub fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("velnor-ci: {error}");
+            eprintln!("{}", stderr_line(&error.to_string()));
             ExitCode::FAILURE
         }
     }

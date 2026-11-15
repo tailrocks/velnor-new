@@ -16,6 +16,7 @@ mod io_plan_policy;
 mod io_policy;
 mod io_release;
 mod io_restore;
+mod io_stderr;
 mod logscan;
 mod plan;
 mod plan_api;

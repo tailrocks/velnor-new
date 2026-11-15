@@ -10,6 +10,7 @@ use velnor_model::{
 use velnor_rust::{CONFIG_PATH, PolicyRuns};
 
 use crate::error::CiError;
+use crate::escape::{escape, inert};
 
 const WORKSPACE: &str = "--workspace";
 
@@ -118,32 +119,11 @@ pub fn warnings(new: &[Weakening]) -> String {
     lines.concat()
 }
 
-fn inert(text: &str) -> String {
-    escape(text, false).replace(':', "%3A")
-}
-
 fn inert_reason(reason: &str) -> String {
     reason.split_once(':').map_or_else(
         || inert(reason),
         |(kind, rest)| format!("{kind}:{}", inert(rest)),
     )
-}
-
-fn escape(text: &str, property: bool) -> String {
-    text.chars()
-        .map(|c| match c {
-            '%' => "%25".to_owned(),
-            '\r' => "%0D".to_owned(),
-            '\n' => "%0A".to_owned(),
-            ':' if property => "%3A".to_owned(),
-            ',' if property => "%2C".to_owned(),
-            odd if odd.is_control() || (odd.is_whitespace() && odd != ' ') => {
-                format!("%{:02X}", u32::from(odd))
-            }
-            other => other.to_string(),
-        })
-        .collect::<String>()
-        .replace("##[", "#%23[")
 }
 
 #[must_use]
