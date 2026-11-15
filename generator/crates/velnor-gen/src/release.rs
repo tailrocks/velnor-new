@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
+use velnor_model::{
+    HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+};
 use velnor_release::{ReleaseFiles, ReleasePlan};
 use velnor_render::render_release;
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
@@ -13,14 +15,11 @@ use crate::GenerateError;
 pub(crate) fn release_workflow(
     view: &RepoView,
     facts: &RepoFacts,
+    helper: &HelperRelease,
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
     }
-    let helper = facts
-        .helper
-        .as_ref()
-        .ok_or(GenerateError::ReleaseNeedsHelper)?;
     let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
     for root in &plan.roots {
         let manifest = if root.root == "." {
