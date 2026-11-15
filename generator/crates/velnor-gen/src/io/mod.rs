@@ -3,7 +3,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
-use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -14,54 +13,22 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, commit_url, manifests, metadata_roots,
-    pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
+    LOCK_PATH, commit_url, manifests, metadata_roots, pin_lock, reduce_metadata, release_version,
+    sums_url, wanted_files,
 };
 
+mod error;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
+use crate::{Drift, check_tag, drift, expected_files, require_compatible};
+pub use error::Error;
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
     write_sample,
 };
 use workflows::{ENGINE_CONFIG, workflow_paths};
-
-#[derive(Debug)]
-pub enum Error {
-    File(PathBuf, std::io::Error),
-    NotRegular(RepoPath),
-    Foreign(RepoPath),
-    Program(String, String),
-    Repository(String),
-    Metadata(MetadataError),
-    Detect(DetectError),
-    Generate(GenerateError),
-    Lock(LockError),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::File(path, error) => write!(f, "{}: {error}", path.display()),
-            Self::NotRegular(path) => write!(
-                f,
-                "{path} goes through a symbolic link or is not a regular file"
-            ),
-            Self::Foreign(path) => Drift::Foreign(path.clone()).fmt(f),
-            Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
-            Self::Repository(message) => f.write_str(message),
-            Self::Metadata(error) => error.fmt(f),
-            Self::Detect(error) => error.fmt(f),
-            Self::Generate(error) => error.fmt(f),
-            Self::Lock(error) => error.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[must_use]
 pub fn version_text() -> String {

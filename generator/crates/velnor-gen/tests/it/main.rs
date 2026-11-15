@@ -15,6 +15,7 @@ mod harness;
 mod harness_kinds;
 mod inputs;
 mod io;
+mod io_files;
 mod io_manifests;
 mod job_setup;
 mod job_shape;
