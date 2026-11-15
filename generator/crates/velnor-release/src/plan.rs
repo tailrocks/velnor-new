@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::Platform;
 
@@ -18,6 +18,7 @@ pub struct ReleaseFiles {
     pub release_plz_toml: BTreeMap<String, String>,
     pub mise_tomls: Vec<String>,
     pub cargo_configs: BTreeMap<String, String>,
+    pub bin_targets: Option<BTreeSet<(String, String)>>,
     pub mise_lock: String,
 }
 
@@ -44,6 +45,7 @@ pub struct ReleasePlan {
     pub roots: Vec<RootPlan>,
     pub after: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
+    pub release_plz_tool: String,
 }
 
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
@@ -116,7 +118,7 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        mise::check(&files.mise_tomls, &files.mise_lock)?;
+        let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
         if configs.iter().any(|config| config.publishes_to_crates_io) {
             for (file, text) in &files.cargo_configs {
                 credential_provider(file, text)?;
@@ -136,6 +138,14 @@ impl ReleasePlan {
                 .ok_or_else(|| ReleaseError::BinaryNotReleased {
                     package: binary.package.clone(),
                 })?;
+            if let Some(targets) = &files.bin_targets
+                && !targets.contains(&(binary.package.clone(), binary.bin.clone()))
+            {
+                return Err(ReleaseError::BinaryTargetMissing {
+                    package: binary.package.clone(),
+                    bin: binary.bin.clone(),
+                });
+            }
             binaries.push(BinaryPlan {
                 package: binary.package.clone(),
                 bin: binary.bin.clone(),
@@ -161,6 +171,7 @@ impl ReleasePlan {
                 .collect(),
             after: config.after,
             binaries,
+            release_plz_tool,
         })
     }
 }

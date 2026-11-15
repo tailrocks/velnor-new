@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
+use velnor_model::{
+    RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
+};
 use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
 use velnor_render::render_release;
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK};
@@ -21,7 +23,8 @@ pub(crate) fn release_workflow(
         .helper
         .as_ref()
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
-    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    let plan =
+        ReleasePlan::read(&release_files(view, Some(facts))?).map_err(GenerateError::Release)?;
     render_release(&plan, facts.config.runner.as_str(), helper).map_err(GenerateError::Rules)
 }
 
@@ -29,11 +32,31 @@ pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
     Ok(ruleset_json(&plan))
 }
 
-fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
+fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String)> {
+    facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .flat_map(|member| {
+            member
+                .targets
+                .iter()
+                .filter(|target| {
+                    target.kinds.contains(&TargetKind::Bin) && !target.requires_features
+                })
+                .map(|target| (member.name.to_string(), target.name.to_string()))
+        })
+        .collect()
+}
+
+fn release_files(
+    view: &RepoView,
+    facts: Option<&RepoFacts>,
+) -> Result<ReleaseFiles, GenerateError> {
     let text = |path: &RepoPath| -> Result<Option<String>, GenerateError> {
         view.files
             .get(path)
@@ -72,6 +95,7 @@ fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
         release_plz_toml,
         mise_tomls,
         cargo_configs,
+        bin_targets: facts.map(bin_targets),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

@@ -25,8 +25,9 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_build_commands() -> Test
     assert_eq!(
         runs(job(&tree, "build-tools-linux-x64")?),
         [
+            "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
-            "cargo build --release --locked --manifest-path 'it'\\''s/Cargo.toml' --package tools --target x86_64-unknown-linux-musl",
+            "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
             "tar -czf tools-linux-x64.tar.gz -C 'it'\\''s/target/x86_64-unknown-linux-musl/release' tools",
         ]
     );

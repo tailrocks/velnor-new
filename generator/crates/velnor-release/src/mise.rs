@@ -13,6 +13,21 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
+const APPROVED_KEYS: [&str; 5] = [
+    "release-plz",
+    "aqua:release-plz/release-plz",
+    "github:release-plz/release-plz",
+    "ubi:release-plz/release-plz",
+    "cargo:release-plz",
+];
+
+fn approved(key: &str, value: &toml::Value) -> bool {
+    APPROVED_KEYS.contains(&key)
+        && value
+            .as_table()
+            .is_none_or(|options| options.keys().all(|option| option == "version"))
+}
+
 fn names_release_plz(key: &str) -> bool {
     key.rsplit(['/', ':']).next() == Some("release-plz")
 }
@@ -55,7 +70,7 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<(), ReleaseError> {
+pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, ReleaseError> {
     let mise_tomls = mise_tomls
         .iter()
         .map(|text| parse("mise.toml", text))
@@ -64,6 +79,11 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<(), Releas
     let configured: Vec<_> = mise_tomls.iter().flat_map(release_plz_tools).collect();
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
+    }
+    if let Some((key, _)) = configured.iter().find(|(key, value)| !approved(key, value)) {
+        return Err(ReleaseError::ReleasePlzSource {
+            key: (*key).clone(),
+        });
     }
     let locked = release_plz_tools(&mise_lock);
     let mut mismatch = None;
@@ -79,7 +99,7 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<(), Releas
                 .iter()
                 .all(|version| !version.is_empty() && version == wanted)
         {
-            return Ok(());
+            return Ok((*key).clone());
         }
         mismatch = Some(ReleaseError::ReleasePlzLockMismatch {
             configured: wanted.to_owned(),

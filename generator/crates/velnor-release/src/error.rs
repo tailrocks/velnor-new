@@ -108,6 +108,13 @@ pub enum ReleaseError {
         first: String,
         second: String,
     },
+    ReleasePlzSource {
+        key: String,
+    },
+    BinaryTargetMissing {
+        package: String,
+        bin: String,
+    },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
     ReleasePlzLockMismatch {
@@ -261,6 +268,14 @@ impl ReleaseError {
             Self::CargoCredentialProvider { file } => write!(
                 f,
                 "{file}: a cargo credential provider would run next to the crates.io publish token"
+            ),
+            Self::ReleasePlzSource { key } => write!(
+                f,
+                "mise.toml: tool {key} is not release-plz from its release-plz/release-plz source, or sets options other than version"
+            ),
+            Self::BinaryTargetMissing { package, bin } => write!(
+                f,
+                ".velnor/release.toml: package {package} has no binary target {bin} that builds without extra features"
             ),
             Self::DuplicatePackageName { package, roots } => write!(
                 f,

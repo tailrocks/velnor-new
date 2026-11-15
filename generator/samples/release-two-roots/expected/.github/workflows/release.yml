@@ -57,11 +57,11 @@ jobs:
           ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
-      - name: Install release-plz
+      - name: 'Install aqua:release-plz/release-plz'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
-          install_args: release-plz
+          install_args: 'aqua:release-plz/release-plz'
           cache: false
       - id: app
         name: Create the release App token
@@ -100,11 +100,11 @@ jobs:
           ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
-      - name: Install release-plz
+      - name: 'Install aqua:release-plz/release-plz'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
-          install_args: release-plz
+          install_args: 'aqua:release-plz/release-plz'
           cache: false
       - name: Install velnor-ci 0.1.79
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79

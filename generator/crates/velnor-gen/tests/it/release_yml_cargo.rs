@@ -76,3 +76,37 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
     );
     Ok(())
 }
+
+#[test]
+fn release_yml_installs_the_release_plz_tool_key_that_mise_toml_and_the_lock_name() -> TestResult {
+    let (_, tree) = two_binaries()?;
+    for id in ["release-pr", "tag"] {
+        let install = steps(job(&tree, id)?)
+            .iter()
+            .find(|step| {
+                step.get("name")
+                    .and_then(Node::text)
+                    .is_some_and(|name| name.starts_with("Install aqua:"))
+            })
+            .ok_or("no release-plz install step")?;
+        assert_eq!(
+            install.at(&["with", "install_args"]).and_then(Node::text),
+            Some("aqua:release-plz/release-plz"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_binary_whose_bin_target_does_not_exist_is_refused_when_rendering() {
+    let rendered = render(
+        &[crate::release_fixture::APP],
+        Some("[[binaries]]\npackage = \"app\"\nbin = \"nope\"\n"),
+    );
+    assert!(
+        rendered
+            .err()
+            .is_some_and(|error| error.to_string().contains("nope"))
+    );
+}
