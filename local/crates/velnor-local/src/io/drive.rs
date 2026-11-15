@@ -7,24 +7,23 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use serde::de::DeserializeOwned;
-use serde_json::Value;
 use tokio::fs;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use super::checkout::{changes, copy_checkout, git};
-use super::env::{Addresses, DockerCli, Environment, STANDIN_IMAGE, request, words};
+use super::env::{Addresses, DockerCli, Environment};
+use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
 };
-use crate::side::{Side, fork_heads, push_event, refuse_fork_branches};
-use crate::standin;
+use crate::side::{fork_heads, push_event, refuse_fork_branches};
 
 mod outcome;
 mod pulls;
+mod send;
 mod steps;
 
 #[derive(Debug)]
@@ -32,6 +31,7 @@ struct Driver<'a> {
     args: &'a RunArgs,
     env: &'a Environment<DockerCli>,
     addresses: Addresses,
+    authority: Proxy,
     repo: PathBuf,
     pushed: BTreeMap<String, String>,
     pulls: Vec<pulls::Pull>,
@@ -145,10 +145,23 @@ async fn run_one(
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
         session = session(args, &environment, &env, repo, &scenario, tag) => session,
-        _ = tokio::signal::ctrl_c() => (Vec::new(), 0, 0.0, Err(io::Error::other("interrupted"))),
+        _ = tokio::signal::ctrl_c() => (
+            Vec::new(), 0, 0.0, Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted")),
+        ),
     };
-    let stopped = env.down().await;
+    let interrupted = replayed
+        .as_ref()
+        .is_err_and(|error| error.kind() == io::ErrorKind::Interrupted);
+    let kept = args.keep && !interrupted && !outcomes.is_empty();
+    let stopped = if kept { Ok(()) } else { env.down().await };
     print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
+    if kept {
+        println!(
+            "velnor-local {tag}: {} is kept up; `velnor-local down --dir {}` removes it",
+            env.name,
+            env.dir.display()
+        );
+    }
     replayed?;
     stopped?;
     if !outcomes.iter().all(Outcome::passed) {
@@ -173,6 +186,13 @@ async fn session<'a>(
         Ok(addresses) => addresses,
         Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
     };
+    let authority = match super::supervisor::start(&env.dir).await {
+        Ok(authority) => Proxy::authorized(&authority.address, &authority.token),
+        Err(error) => {
+            let _ = env.down().await;
+            return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error));
+        }
+    };
     let up_seconds = clock.elapsed().as_secs_f64();
     println!(
         "velnor-local {tag}: {} is up in {up_seconds:.1} s",
@@ -182,6 +202,7 @@ async fn session<'a>(
         args,
         env,
         addresses,
+        authority,
         repo,
         pushed: BTreeMap::new(),
         pulls: Vec::new(),
@@ -307,71 +328,5 @@ impl Driver<'_> {
             );
         }
         self.synchronize(moved).await
-    }
-
-    async fn get<T: DeserializeOwned>(&self, side: Side, path: &str) -> io::Result<T> {
-        let proxy = self.addresses.standin(side)?;
-        let bytes = request(proxy, "GET", path, "")
-            .await
-            .ok_or_else(|| io::Error::other(format!("runner.server does not answer {path}")))?;
-        serde_json::from_slice(&bytes).map_err(io::Error::other)
-    }
-
-    async fn send(
-        &mut self,
-        event: &str,
-        payload: &Value,
-        git_ref: &str,
-        sha: &str,
-    ) -> io::Result<()> {
-        self.events += 1;
-        let name = format!("{}-{event}", self.events);
-        let dir = self.env.dir.display();
-        fs::write(format!("{dir}/events/{name}.json"), payload.to_string()).await?;
-        let runs = "/_apis/v1/Message/workflow/runs";
-        let side = Side::of(payload);
-        let known: Vec<standin::Run> = self.get(side, runs).await?;
-        let (repo, events) = (
-            format!("{}:/repo", self.repo.display()),
-            format!("{dir}/events:/events:ro"),
-        );
-        let payload_path = format!("/events/{name}.json");
-        let mut client = words("-w /repo --entrypoint dotnet");
-        client.extend(["-v", &repo, "-v", &events]);
-        client.push(STANDIN_IMAGE);
-        let call = standin::ClientCall {
-            event,
-            payload: &payload_path,
-            git_ref,
-            sha,
-            repository: &self.args.repository,
-            workflow: self.args.workflow.as_deref(),
-        };
-        client.extend(call.args());
-        let log = self.env.dir.join(format!("logs/{name}.log"));
-        let succeeded = self.env.client(payload, &client, &log).await?;
-        let mut created = false;
-        for run in self.get::<Vec<standin::Run>>(side, runs).await? {
-            if known.iter().any(|old| old.id == run.id) {
-                continue;
-            }
-            created = true;
-            if standin::conclusion(run.result.as_deref()) == Some("skipped") {
-                println!(
-                    "velnor-local {}: {event} does not trigger {}",
-                    self.tag, run.file_name
-                );
-                continue;
-            }
-            let outcome = self.outcome(run, side).await?;
-            println!("velnor-local {}: {}", self.tag, outcome.line());
-            self.outcomes.push(outcome);
-        }
-        if !succeeded && !created {
-            return Err(io::Error::other(format!(
-                "Runner.Client failed; see logs/{name}.log"
-            )));
-        }
-        Ok(())
     }
 }

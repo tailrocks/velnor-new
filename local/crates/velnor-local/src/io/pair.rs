@@ -35,7 +35,7 @@ pub fn jit_file(dir: &Path, side: Side) -> PathBuf {
     }
 }
 
-fn random_hex(bytes: usize) -> io::Result<String> {
+pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
     let mut random = vec![0_u8; bytes];
     SystemRandom::new()
         .fill(&mut random)

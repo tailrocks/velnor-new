@@ -10,6 +10,8 @@ pub struct Run {
     pub file_name: String,
     pub display_name: Option<String>,
     pub event_name: Option<String>,
+    #[serde(rename = "ref")]
+    pub git_ref: Option<String>,
     pub sha: Option<String>,
     pub result: Option<String>,
     pub status: Option<String>,
@@ -22,6 +24,7 @@ pub struct Job {
     pub job_id: String,
     pub time_line_id: Option<String>,
     pub name: String,
+    pub workflow_identifier: Option<String>,
     pub workflowname: String,
     pub result: Option<String>,
     pub attempt: u32,

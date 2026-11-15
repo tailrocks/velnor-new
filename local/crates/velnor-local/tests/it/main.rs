@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod api_stub;
+mod authority;
 mod cache_server;
 mod checkout;
 mod conformance;

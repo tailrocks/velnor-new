@@ -1,0 +1,215 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+use crate::protocol::Error;
+use crate::side::Side;
+use crate::standin::{Job, Run};
+
+pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are; --policy turns the check on (see FAST-L.8.6)";
+pub const RUNS_PATH: &str = "/_apis/v1/Message/workflow/runs";
+pub const AGENTS_PATH: &str = "/_apis/v1/Agent/0";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Entry {
+    pub id: String,
+    pub side: Side,
+    pub event: String,
+    #[serde(rename = "ref")]
+    pub git_ref: String,
+    pub sha: String,
+    pub workflow: Option<String>,
+    pub existing: Vec<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Posted {
+    pub id: String,
+    pub side: Side,
+    pub event: String,
+    #[serde(rename = "ref")]
+    pub git_ref: String,
+    pub sha: String,
+    pub workflow: Option<String>,
+}
+
+impl Posted {
+    pub fn entry(self, existing: Vec<u64>) -> Result<Entry, Error> {
+        let named = [&self.id, &self.event, &self.git_ref, &self.sha];
+        if named.iter().any(|value| value.is_empty()) {
+            return Err(Error::invalid("id, event, ref and sha must not be empty"));
+        }
+        let plain = |byte: u8| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte);
+        if self.id.len() > 64 || !self.id.bytes().all(plain) {
+            return Err(Error::invalid("id is 1 to 64 letters, digits, - _ or ."));
+        }
+        Ok(Entry {
+            id: self.id,
+            side: self.side,
+            event: self.event,
+            git_ref: self.git_ref,
+            sha: self.sha,
+            workflow: self.workflow,
+            existing,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JitRequest {
+    pub side: Side,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Call<'a> {
+    Ledger,
+    Jit,
+    Run { side: Side, id: u64, attempt: u32 },
+    Agent { side: Side, name: &'a str },
+    Unknown,
+}
+
+#[must_use]
+pub fn call<'a>(method: &str, path: &'a str) -> Call<'a> {
+    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    match (method, parts[..].as_ref()) {
+        ("POST", ["ledger"]) => Call::Ledger,
+        ("POST", ["jit"]) => Call::Jit,
+        ("GET", ["runs", side, id, attempt]) => {
+            match (Side::parse(side), id.parse(), attempt.parse()) {
+                (Some(side), Ok(id), Ok(attempt)) => Call::Run { side, id, attempt },
+                _ => Call::Unknown,
+            }
+        }
+        ("DELETE", ["agents", side, name]) if agent_name(name) => {
+            Side::parse(side).map_or(Call::Unknown, |side| Call::Agent { side, name })
+        }
+        _ => Call::Unknown,
+    }
+}
+
+fn agent_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Facts {
+    pub id: u64,
+    pub attempt: u32,
+    pub event: String,
+    pub git_ref: String,
+    pub sha: String,
+    pub workflow: String,
+    pub jobs: Vec<String>,
+}
+
+#[must_use]
+pub fn facts(runs: &[Run], jobs: &[Job], id: u64, attempt: u32) -> Option<Facts> {
+    let run = runs.iter().find(|run| run.id == id)?;
+    let ours: Vec<&Job> = jobs
+        .iter()
+        .filter(|job| job.runid == id && job.attempt == attempt)
+        .collect();
+    if ours.is_empty() {
+        return None;
+    }
+    Some(Facts {
+        id,
+        attempt,
+        event: run.event_name.clone().unwrap_or_default(),
+        git_ref: run.git_ref.clone().unwrap_or_default(),
+        sha: run.sha.clone().unwrap_or_default(),
+        workflow: run.file_name.clone(),
+        jobs: ours
+            .iter()
+            .map(|job| {
+                job.workflow_identifier
+                    .clone()
+                    .unwrap_or_else(|| job.name.clone())
+            })
+            .collect(),
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    NotDispatched,
+    WrongSide,
+}
+
+impl Refusal {
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::NotDispatched => "not_dispatched",
+            Self::WrongSide => "wrong_side",
+        }
+    }
+}
+
+fn describes(entry: &Entry, facts: &Facts) -> bool {
+    entry.event == facts.event
+        && entry.git_ref == facts.git_ref
+        && entry.sha == facts.sha
+        && entry
+            .workflow
+            .as_ref()
+            .is_none_or(|workflow| *workflow == facts.workflow)
+}
+
+pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a Entry, Refusal> {
+    let before_run = |entry: &&Entry| !entry.existing.contains(&facts.id);
+    let own = entries
+        .iter()
+        .filter(|entry| entry.side == side && describes(entry, facts))
+        .find(before_run);
+    if let Some(entry) = own {
+        return Ok(entry);
+    }
+    if entries
+        .iter()
+        .any(|entry| entry.side != side && describes(entry, facts))
+    {
+        return Err(Refusal::WrongSide);
+    }
+    Err(Refusal::NotDispatched)
+}
+
+#[must_use]
+pub fn answer(side: Side, facts: &Facts, admitted: Result<&Entry, Refusal>) -> Value {
+    json!({
+        "side": side.name(),
+        "id": facts.id,
+        "attempt": facts.attempt,
+        "event": facts.event,
+        "ref": facts.git_ref,
+        "sha": facts.sha,
+        "workflow": facts.workflow,
+        "jobs": facts.jobs,
+        "ledger": admitted.map(|entry| entry.id.as_str()).ok(),
+        "refusal": admitted.err().map(Refusal::code),
+    })
+}
+
+#[must_use]
+pub fn agent_id(listing: &[u8], name: &str) -> Option<u64> {
+    let listing: Value = serde_json::from_slice(listing).ok()?;
+    listing["value"]
+        .as_array()?
+        .iter()
+        .find(|agent| agent["name"] == name)
+        .and_then(|agent| agent["id"].as_u64())
+}
+
+#[must_use]
+pub fn run_ids(runs: &[Run]) -> Vec<u64> {
+    runs.iter().map(|run| run.id).collect()
+}

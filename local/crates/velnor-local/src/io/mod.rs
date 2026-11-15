@@ -2,15 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod api_stub;
+pub mod authority;
 pub mod checkout;
 mod drive;
 pub mod env;
 mod git;
 mod index_file;
+mod keys;
 pub mod pair;
 mod proxy;
 mod reply;
 mod run;
+mod supervisor;
 
 pub use run::{RestoreOnly, guarded, open};
 

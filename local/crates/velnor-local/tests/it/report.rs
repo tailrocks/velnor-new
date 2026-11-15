@@ -133,3 +133,12 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         "{text}"
     );
 }
+
+#[test]
+fn every_verdict_says_that_the_approved_workflows_check_is_off() {
+    let text = verdict("leaf", &[], 100, 4.5);
+    let warning = format!("velnor-local leaf: {}\n", velnor_local::authority::WARNING);
+    assert!(text.contains(&warning), "{text}");
+    assert!(warning.contains("approved-workflows check is off"));
+    assert!(warning.contains("--policy"));
+}

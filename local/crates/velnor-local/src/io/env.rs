@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
-use std::fs::Permissions;
 use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
 use http_body_util::{BodyExt, Full};
 use hyper::Request;
-use ring::rand::{SecureRandom, SystemRandom};
 use serde_json::Value;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -201,29 +198,7 @@ impl<E: Engine> Environment<E> {
         }
         let mount = |from: &str, to: &str| format!("{}:{to}", self.dir.join(from).display());
         let token = self.dir.join("keys/control");
-        let kept = fs::read_to_string(&token).await.unwrap_or_default();
-        if !(kept.len() == 64 && kept.bytes().all(|byte| byte.is_ascii_hexdigit())) {
-            let mut bytes = [0_u8; 32];
-            SystemRandom::new()
-                .fill(&mut bytes)
-                .map_err(|_| io::Error::other("no random bytes for the control token"))?;
-            let hex = bytes.iter().fold(String::new(), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
-            let fresh = self.dir.join("keys/control.new");
-            let _ = fs::remove_file(&fresh).await;
-            fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&fresh)
-                .await?
-                .write_all(hex.as_bytes())
-                .await?;
-            fs::rename(&fresh, &token).await?;
-        }
-        fs::set_permissions(&token, Permissions::from_mode(0o600)).await?;
+        super::keys::control(&token).await?;
         let checkout = format!("{}:/repo:ro", repo.display());
         let state = mount("api", "/api");
         let control = mount("keys/control", "/keys/control:ro");
@@ -323,7 +298,7 @@ impl<E: Engine> Environment<E> {
         Ok(())
     }
 
-    async fn published(&self, role: &str) -> io::Result<String> {
+    pub(super) async fn published(&self, role: &str) -> io::Result<String> {
         let container = format!("{}-{role}", self.name);
         let ports = self.docker("port", &[&container, "81/tcp"]).await?;
         let address = ports
@@ -379,6 +354,7 @@ impl<E: Engine> Environment<E> {
     }
 
     pub async fn down(&self) -> io::Result<()> {
+        super::supervisor::stop(&self.dir).await?;
         let filter = format!("label=velnor-local={}", self.name);
         let containers = self.docker("ps -aq --filter", &[&filter]).await?;
         if !containers.is_empty() {
