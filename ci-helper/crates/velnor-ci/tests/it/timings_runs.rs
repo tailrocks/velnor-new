@@ -251,12 +251,17 @@ fn only_runs_on_the_configured_runner_count() {
 }
 
 #[test]
-fn a_runner_with_fewer_than_three_runs_gets_no_entry() {
+fn a_runner_with_three_runs_gets_entries() {
     let fake = two_runners();
     let slow = velnor_model::RunnerLabel::from_static("slow-box");
     let report = gather(&fake, &lab(), &roots(), &slow).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report.timings.len(), 2);
     assert!(report.timings[&root("Cargo.toml")].lint_build_seconds > 1_000);
+}
+
+#[test]
+fn a_runner_seen_in_no_run_gets_no_entry() {
+    let fake = two_runners();
     let other = velnor_model::RunnerLabel::from_static("arm-box");
     let report = gather(&fake, &lab(), &roots(), &other).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
@@ -265,4 +270,49 @@ fn a_runner_with_fewer_than_three_runs_gets_no_entry() {
         "{:?}",
         report.notes
     );
+}
+
+fn relabel(fake: &mut FakeGitHub, labels: Option<Value>) {
+    for id in NEWEST {
+        let path = jobs_path(&lab(), id, 1, 1);
+        let mut value: Value =
+            serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
+        for job in value["jobs"].as_array_mut().into_iter().flatten() {
+            match &labels {
+                Some(labels) => job["labels"] = labels.clone(),
+                None => {
+                    if let Some(object) = job.as_object_mut() {
+                        object.remove("labels");
+                    }
+                }
+            }
+        }
+        fake.respond(path, &value.to_string());
+    }
+}
+
+#[test]
+fn a_label_differing_only_in_case_counts_for_the_runner() {
+    let mut fake = recorded(LIST);
+    relabel(&mut fake, Some(json!(["Ubuntu-Latest"])));
+    let report = gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(report.notes, Vec::<String>::new());
+    assert_eq!(report.timings, crate::timings::report(LIST).timings);
+}
+
+#[test]
+fn a_job_with_no_labels_counts_for_no_runner() {
+    for labels in [Some(json!([])), None] {
+        let mut fake = recorded(LIST);
+        relabel(&mut fake, labels);
+        let report =
+            gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(report.timings.is_empty());
+        assert_eq!(report.notes.len(), 2);
+        assert!(
+            report.notes[0].contains("0 of 3 runs on `ubuntu-latest`"),
+            "{:?}",
+            report.notes
+        );
+    }
 }
