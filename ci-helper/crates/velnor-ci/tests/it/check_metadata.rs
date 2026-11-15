@@ -53,6 +53,9 @@ fn check_metadata_passes_on_what_velnor_gen_wrote_and_fails_on_a_new_target() {
     let output = check(&dir);
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("rust-metadata.json differs"), "{stderr}");
+    assert!(
+        stderr.contains("a file Cargo discovers as a target was added or removed"),
+        "{stderr}"
+    );
     fs::remove_dir_all(&dir).ok();
 }

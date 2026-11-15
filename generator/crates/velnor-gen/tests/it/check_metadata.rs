@@ -101,7 +101,13 @@ fn a_new_auto_discovered_target_fails_although_no_manifest_changed() -> TestResu
         checkout.write(path, "fn main() {}\n")?;
         checkout.git(&["add", "."])?;
         let result = check_metadata(checkout.path());
-        assert!(differs(&result), "{path} was not noticed");
+        assert!(
+            matches!(
+                result,
+                Err(IoError::MetadataFile(MetadataFileError::Layout))
+            ),
+            "{path} was not noticed"
+        );
     }
     Ok(())
 }

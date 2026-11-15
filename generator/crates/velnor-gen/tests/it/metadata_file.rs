@@ -185,3 +185,43 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     assert_eq!(GENERATED_PATHS.len(), 2);
     Ok(())
 }
+
+#[test]
+fn a_file_cargo_would_discover_as_a_target_after_the_file_was_written_is_refused() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    for added in [
+        "core/src/lib.rs",
+        "core/src/main.rs",
+        "core/src/bin/tool.rs",
+        "core/src/bin/tool/main.rs",
+        "core/tests/it.rs",
+        "core/examples/demo/main.rs",
+        "core/benches/speed.rs",
+        "core/build.rs",
+        "src/main.rs",
+    ] {
+        let mut grown = files.clone();
+        grown.tracked_paths.insert(path(added)?);
+        assert_eq!(
+            recorded_metadata(&grown, Some(text.as_bytes())),
+            Err(MetadataFileError::Layout),
+            "{added}"
+        );
+    }
+    for added in [
+        "core/tests/common/mod.rs",
+        "core/src/util.rs",
+        "docs/example.rs",
+        "core/readme.md",
+    ] {
+        let mut grown = files.clone();
+        grown.tracked_paths.insert(path(added)?);
+        assert_eq!(
+            recorded_metadata(&grown, Some(text.as_bytes()))?,
+            files.rust_metadata,
+            "{added}"
+        );
+    }
+    Ok(())
+}

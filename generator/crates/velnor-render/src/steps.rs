@@ -1,14 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
-
-use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
-};
+use velnor_model::{CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind};
 
 use crate::gate::{PLAN_STEP, condition, output};
-use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 const PREPARE_STEP: &str = "prepare";
 const RUN: &str = "velnor-ci run --";
@@ -108,18 +104,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some("velnor-gen check".to_owned()),
             ..RenderedStep::default()
         },
-        StepKind::FetchHelper(release) => RenderedStep {
-            name: format!("Fetch velnor-ci {}", release.version()),
-            env: vec![
-                (
-                    "SHA".to_owned(),
-                    by_platform(release, |binary| &binary.sha256),
-                ),
-                ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
-            ],
-            run: Some(FETCH_HELPER_RUN.to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
@@ -201,17 +186,20 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
     }
 }
 
-fn by_platform<T: fmt::Display>(
-    release: &HelperRelease,
-    field: impl Fn(&HelperBinary) -> &T,
-) -> Value {
-    let table = release
-        .binaries()
-        .iter()
-        .map(|(platform, binary)| format!("\"{}\":\"{}\"", platform.runner_key(), field(binary)))
-        .collect::<Vec<_>>()
-        .join(",");
-    Value::Selected(format!(
-        "${{{{ fromJSON('{{{table}}}')[format('{{0}}-{{1}}', runner.os, runner.arch)] }}}}"
-    ))
+fn install_helper(release: &HelperRelease) -> RenderedStep {
+    let version = release.version();
+    let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
+    with.extend(release.digests().iter().map(|(platform, digest)| {
+        (
+            format!("sha256-{}", platform.file_suffix()),
+            Value::Text(digest.to_string()),
+        )
+    }));
+    RenderedStep {
+        name: format!("Install velnor-ci {version}"),
+        uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
+        uses_comment: Some(format!("rust-ci-v{version}")),
+        with,
+        ..RenderedStep::default()
+    }
 }

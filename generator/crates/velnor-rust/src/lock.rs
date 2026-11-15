@@ -5,9 +5,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use velnor_model::{
-    DownloadUrl, HelperBinary, HelperRelease, HelperVersion, Platform, RepoPath, Sha256,
-};
+use sha2::{Digest, Sha256 as Hasher};
+use velnor_model::{CommitSha, HelperRelease, HelperVersion, Platform, RepoPath, Sha256};
 
 pub const LOCK_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.lock");
 const RELEASES: &str = "https://github.com/tailrocks/velnor-new/releases/download";
@@ -35,6 +34,7 @@ impl LockError {
 #[serde(deny_unknown_fields)]
 struct Lock {
     version: String,
+    commit: String,
     #[serde(rename = "velnor-ci")]
     ci: BTreeMap<String, String>,
     #[serde(rename = "velnor-gen")]
@@ -59,34 +59,61 @@ pub fn sums_url(version: &HelperVersion) -> String {
     format!("{RELEASES}/rust-ci-v{version}/SHA256SUMS")
 }
 
-pub fn pin_lock(version: &str, sums: &str) -> Result<String, LockError> {
+#[must_use]
+pub fn commit_url(version: &HelperVersion) -> String {
+    format!("{RELEASES}/rust-ci-v{version}/COMMIT")
+}
+
+pub fn pin_lock(version: &str, commit: &str, sums: &str) -> Result<String, LockError> {
     let version = release_version(version)?;
+    let commit_text = commit;
+    let commit = release_commit(commit.trim_end())?;
     let listed = listed_sums(sums)?;
+    check_commit_digest(commit_text, &listed)?;
     let lock = Lock {
         version: version.to_string(),
+        commit: commit.to_string(),
         ci: digests(CI, &listed)?,
         generator: digests(GENERATOR, &listed)?,
     };
     toml::to_string(&lock).map_err(|error| LockError(error.to_string()))
 }
 
+fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<(), LockError> {
+    let expected = listed
+        .get("COMMIT")
+        .ok_or_else(|| LockError("SHA256SUMS lists no COMMIT".to_owned()))?;
+    let actual = Hasher::digest(commit.as_bytes())
+        .iter()
+        .flat_map(|byte| [byte >> 4, byte & 15])
+        .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
+        .collect::<String>();
+    if actual == *expected {
+        Ok(())
+    } else {
+        Err(LockError(format!(
+            "COMMIT has SHA-256 {actual} but SHA256SUMS lists {expected}"
+        )))
+    }
+}
+
+fn release_commit(text: &str) -> Result<CommitSha, LockError> {
+    CommitSha::new(text)
+        .map_err(|_| LockError(format!("commit {text:?} must be 40 lowercase hex digits")))
+}
+
 pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     let text = std::str::from_utf8(bytes).map_err(|error| LockError(error.to_string()))?;
     let lock: Lock = toml::from_str(text).map_err(|error| LockError(error.to_string()))?;
     let version = release_version(&lock.version)?;
+    let commit = release_commit(&lock.commit)?;
     check_digests(&lock.generator)?;
     check_digests(&lock.ci)?;
-    let mut binaries = BTreeMap::new();
+    let mut digests = BTreeMap::new();
     for platform in Platform::ALL {
-        let sha256 = digest(&lock.ci, platform)?;
-        let url = DownloadUrl::new(format!(
-            "{RELEASES}/rust-ci-v{version}/{CI}-{}",
-            platform.file_suffix()
-        ))
-        .map_err(|error| LockError(error.to_string()))?;
-        binaries.insert(platform, HelperBinary { url, sha256 });
+        digests.insert(platform, digest(&lock.ci, platform)?);
     }
-    HelperRelease::new(version, binaries).map_err(|error| LockError(error.to_string()))
+    HelperRelease::new(version, commit, digests).map_err(|error| LockError(error.to_string()))
 }
 
 fn listed_sums(sums: &str) -> Result<BTreeMap<&str, &str>, LockError> {
