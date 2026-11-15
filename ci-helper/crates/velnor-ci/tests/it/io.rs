@@ -3,11 +3,12 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File, FileTimes, Permissions};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, ErrorKind, Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::SystemTime;
 
@@ -31,16 +32,47 @@ fn a_body_over_the_limit_is_an_error_not_a_truncation() {
     );
 }
 
+#[test]
+fn repos_with_the_same_name_in_one_run_do_not_share_a_folder() {
+    let first = Repo::new("same-name");
+    let second = Repo::new("same-name");
+    first.write("first.txt", "first\n");
+    second.write("second.txt", "second\n");
+    assert_ne!(first.root(), second.root());
+    assert!(first.root().join("first.txt").is_file());
+    assert!(second.root().join("second.txt").is_file());
+}
+
+#[test]
+fn a_folder_left_by_an_earlier_run_is_not_removed_by_a_new_repo() {
+    let leftover =
+        Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{}-audit", std::process::id())));
+    fs::create_dir_all(leftover.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(leftover.root().join("marker.txt"), "left behind\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let repo = Repo::new("audit");
+    repo.write("a.txt", "a\n");
+    assert!(leftover.root().join("marker.txt").is_file());
+}
+
+static CREATED: AtomicU64 = AtomicU64::new(0);
+
 pub(crate) struct Repo(PathBuf);
 
 impl Repo {
     pub(crate) fn new(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("velnor-ci-inputs-{}-{name}", std::process::id()));
-        if root.exists() {
-            fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let root = loop {
+            let candidate = std::env::temp_dir().join(format!(
+                "velnor-ci-inputs-{}-{}-{name}",
+                std::process::id(),
+                CREATED.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+                Err(error) => unreachable!("{error}"),
+            }
+        };
         let repo = Self(root);
         repo.git(&["init", "--quiet"]);
         repo.write(".gitignore", "/target/\n");
