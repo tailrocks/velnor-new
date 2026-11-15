@@ -13,8 +13,10 @@ use velnor_runner_host::local::{
 
 #[path = "local_pair_public/failure.rs"]
 mod failure;
-#[path = "local_pair_public/leftover.rs"]
-mod leftover;
+#[expect(
+    dead_code,
+    reason = "Each test binary uses part of the shared pair fixtures."
+)]
 #[path = "local_pair_public/support.rs"]
 mod support;
 use support::{Fixture, TestResult, labelled, request};

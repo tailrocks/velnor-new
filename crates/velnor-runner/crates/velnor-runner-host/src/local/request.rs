@@ -16,6 +16,8 @@ const PRODUCTION_NETWORK_PREFIX: &str = "velnor-";
 #[serde(deny_unknown_fields)]
 pub struct LocalPairRequest {
     pub environment: String,
+    pub side: String,
+    pub agent: String,
     pub network: String,
     pub platform: String,
     pub runner_image: String,
@@ -36,6 +38,8 @@ pub(super) struct Validated {
 
 pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostError> {
     if !valid_environment(&request.environment)
+        || !matches!(request.side.as_str(), "trusted" | "untrusted")
+        || !valid_agent(&request.agent)
         || !valid_network(&request.network)
         || !image_id(&request.runner_image)
         || !image_id(&request.dind_image)
@@ -70,6 +74,13 @@ fn valid_environment(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn valid_agent(value: &str) -> bool {
+    (1..=128).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
 fn valid_network(value: &str) -> bool {

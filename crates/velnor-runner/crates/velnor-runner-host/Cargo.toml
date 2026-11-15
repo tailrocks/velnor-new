@@ -10,7 +10,7 @@ license.workspace = true
 autotests = false
 
 [features]
-local-mode = []
+local-mode = ["tokio/signal"]
 
 [[test]]
 name = "resource_probe_release_public"
@@ -59,6 +59,11 @@ path = "tests/release_lock_public.rs"
 [[test]]
 name = "local_pair_public"
 path = "tests/local_pair_public.rs"
+required-features = ["local-mode"]
+
+[[test]]
+name = "local_host_public"
+path = "tests/local_host_public.rs"
 required-features = ["local-mode"]
 
 [[bin]]
