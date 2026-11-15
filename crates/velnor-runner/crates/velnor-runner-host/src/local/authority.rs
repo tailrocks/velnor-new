@@ -26,7 +26,7 @@ pub(super) enum CallError {
     Malformed,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub(super) struct Minted {
     pub(super) name: String,
     pub(super) jit: String,

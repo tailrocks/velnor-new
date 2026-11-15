@@ -8,16 +8,24 @@ use std::time::Instant;
 use bollard::models::ContainerInspectResponse;
 use bollard::query_parameters::ListContainersOptions;
 use velnor_runner_host::HostError;
-use velnor_runner_host::local::{LoopbackAuthority, check_state, run_local, start_pair};
+use velnor_runner_host::local::{LoopbackAuthority, check_state, run_local};
 
+#[expect(
+    dead_code,
+    reason = "Each test binary uses part of the shared pair fixtures."
+)]
 #[path = "local_pair_public/support.rs"]
 mod support;
 use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/refusals.rs"]
+mod refusals;
 #[path = "local_host_public/scenario.rs"]
 mod scenario;
+#[path = "local_host_public/sweep.rs"]
+mod sweep;
 use authority::{JIT, Run, TOKEN};
 use scenario::{
     Live, Scenario, finish_job, live_runners, read_challenge, request, submit, wait_for_decision,
@@ -28,15 +36,15 @@ fn dispatched(job: &str) -> Run {
     Run {
         job: job.to_owned(),
         ledger: Some("1-push".to_owned()),
-        refusal: None,
+        ..Run::default()
     }
 }
 
 fn undispatched(refusal: &str) -> Run {
     Run {
         job: "ci".to_owned(),
-        ledger: None,
         refusal: Some(refusal.to_owned()),
+        ..Run::default()
     }
 }
 
@@ -338,36 +346,5 @@ fn local_state_must_be_a_marked_directory_without_daemon_files() -> TestResult<(
     ] {
         assert_eq!(marked(&[extra])?, Err(HostError::Config), "{extra}");
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn local_start_sweeps_the_leftover_pairs_of_its_environment() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
-    let docker = scenario.fixture.docker.clone();
-    let leftover = Box::pin(start_pair(&docker, &scenario.fixture.request())).await?;
-    let before = labelled(&docker, &scenario.fixture.environment).await?;
-    let plan = scenario.plan(1, 0)?;
-    scenario.start(plan);
-    let run = async {
-        let live = runner(&scenario, "trusted", &[]).await?;
-        let gone = docker
-            .inspect_container(leftover.runner_id(), None)
-            .await
-            .is_err();
-        TestResult::Ok((live, gone))
-    }
-    .await;
-    let stopped = scenario.stop().await?;
-    let events = scenario.fake().events();
-    let left = labelled(&docker, &scenario.fixture.environment).await?;
-    let agent = format!("delete:trusted:{}-agent", scenario.fixture.environment);
-    scenario.finish().await?;
-    let (_live, gone) = run?;
-    assert_eq!(before, (2, 5));
-    assert!(gone);
-    assert!(position(&events, &agent).is_some(), "{events:?}");
-    assert_eq!(stopped, Ok(()));
-    assert_eq!(left, (0, 0));
     Ok(())
 }

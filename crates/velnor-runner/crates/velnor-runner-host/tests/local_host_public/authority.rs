@@ -16,11 +16,14 @@ use super::TestResult;
 pub(crate) const TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 pub(crate) const JIT: &str = "ZmFrZS1qaXQtY29uZmlnLWZvci10aGUtdGVzdA==";
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct Run {
     pub(crate) job: String,
     pub(crate) ledger: Option<String>,
     pub(crate) refusal: Option<String>,
+    pub(crate) event: Option<String>,
+    pub(crate) git_ref: Option<String>,
+    pub(crate) sha: Option<String>,
 }
 
 pub(crate) struct Fake {
@@ -121,11 +124,13 @@ impl Fake {
         let refusal = run
             .refusal
             .map_or("null".to_owned(), |refusal| format!("\"{refusal}\""));
-        let sha = "a".repeat(40);
+        let sha = run.sha.unwrap_or_else(|| "a".repeat(40));
+        let event = run.event.unwrap_or_else(|| "push".to_owned());
+        let git_ref = run.git_ref.unwrap_or_else(|| "refs/heads/main".to_owned());
         (
             200,
             format!(
-                "{{\"side\":\"{side}\",\"id\":{id},\"attempt\":{attempt},\"event\":\"push\",\"ref\":\"refs/heads/main\",\"sha\":\"{sha}\",\"workflow\":\".github/workflows/ci.yml\",\"jobs\":[\"{}\"],\"ledger\":{ledger},\"refusal\":{refusal}}}",
+                "{{\"side\":\"{side}\",\"id\":{id},\"attempt\":{attempt},\"event\":\"{event}\",\"ref\":\"{git_ref}\",\"sha\":\"{sha}\",\"workflow\":\".github/workflows/ci.yml\",\"jobs\":[\"{}\"],\"ledger\":{ledger},\"refusal\":{refusal}}}",
                 run.job
             ),
         )
