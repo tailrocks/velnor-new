@@ -4,22 +4,130 @@ Read this file first, then `docs/roadmap.md`, `docs/goals.md`, `AGENTS.md`, and 
 
 ## 1. Where things stand
 
+Refreshed 2026-11-15 at 10:00 UTC. Sources: one `gh pr list` (saved as scratchpad `open-prs.json`), the 2026-11-15 rows of `.audit/velnor-roadmap.tsv`, and the draft state. CI results, behind counts and unresolved threads were not re-read in this refresh (API budget). Check them before each merge.
+
+**Merged today (2026-11-15):** #737 (PR 757), #716 (PR 758), #710 (PR 762).
+
 **Merged in the previous session** (each issue closed, with its Done-when boxes ticked and linked to proof):
 #594, #596, #595, #703, #694, #697, #719, #599, #632 (parts 3a, 3b, 3c and 4), #637 (two PRs), #640, #641, #639, #652, #582, #586,
 #701 (goals.md rule 2: lockfile), #741 (goals.md: Velnor's two parts), #674 (decided; the work is #717), #707 (decided; the work is #742–#748), #720 and #685 (owner steps, done).
 
-**Open PRs. Finish these first.** Each one is green or nearly green and has a reviewer verdict.
+### 1.1 Open PRs (40)
 
-| PR | Issue | State when handed over | What is left |
-|---|---|---|---|
-| #738 | #722 the engine leaves velnor-gen workflows | Reviewer approved. Codex rounds are capped. | Wait for `Required` and DCO, check it is not behind main, merge. |
-| #749 | #724 release-gate reads the required checks from the rules | Reviewer approved. The executor was adding two tests: a `diverged` compare status must exit 1, and a case that needs the `integration_id` -1 "any source" value. | Check those tests are pushed, red/green. Then merge. |
-| #756 | #725 release record and publish | Reviewer re-approved at `b6fa367` (all 6 mutations go red). | Wait for `Required`, then merge. |
-| #755 | #717 the setup-velnor action | The executor was still doing the velnor-lab proof runs: the wrong-SHA run had just failed as expected. It also had uncommitted, unverified golden updates, saved as branch `wip/717-goldens` (`3762185c01`, one commit on top of #755's head). No review yet. | Check the lab proof (install, cache hit, SHA mismatch fails). Run a reviewer (Opus 5.5, low). Merge the lab PR it opened, then this one. |
+"Approved at" is the SHA of the latest reviewer verdict, from the decision log. "Head" is the head at 10:00 UTC. When they differ, the gap is main merges unless the row says otherwise.
 
-These four issues carry the `in-progress` label. Every agent from the old session is stopped, and every branch is pushed. No velnor-lab workflow run is in progress, and only the pre-existing probe workflows and `Fetch helper` are enabled there. If you restart an issue with a new executor, give it the existing branch; don't open a second PR.
+| PR | Issue | Approved at | Head (10:00) | Stacked on | Next action |
+|---|---|---|---|---|---|
+| 738 | #722 | 59521243e7 | 59521243e7 | main | Wait for Required and DCO, merge. |
+| 755 | #717 | b47ac46678 (per draft) | 6129bede86 | main | Delta review of later commits. Lab proof (install, cache hit, wrong-SHA fails). Merge before 783 and 810. |
+| 759 | #748 | bd56e450d5 (comment 6886517542) | ff4de53fe3 | main | Head is main merges only. Fresh CI, merge. Before 809. |
+| 761 | #751 | f00a7108fe | 899201b209 | main | Main merge only. Fresh CI, merge. Before 816. Box 2 needs an owner Mac run (see #802). |
+| 763 | #726 | 87bdb75890 | 87bdb75890 | main | Fresh CI, merge. Before 810 and 797. |
+| 765 | #712 | 8b2c0248b9 | 02916d1258 | main | Main merges only. Fresh CI, resolve threads, merge. Before 798. |
+| 766 | #705 | 95e5f2e194 | b155286aed | main | Main merges only. Fresh CI, merge. Before 780 and 781. |
+| 767 | #718 | 03a1795a95 | 55b47de36f | main | Delta check on the head, then fresh CI and merge. Before 771. |
+| 770 | #760 | e66cba4024 | e66cba4024 | main | Fresh CI, merge. Before 810 (not a stack). |
+| 771 | #739 | 87c1dd7f21 | 87c1dd7f21 | main | Hold for 767. Then merge. |
+| 772 | #723 | d2bc24cdad | d2bc24cdad | main | Fresh CI, merge. Before 810. |
+| 773 | #736 | 2843fe1f0f | 2843fe1f0f | main | Fresh CI, merge. |
+| 774 | #750 | 041394a519 | 041394a519 | main | Fresh CI, merge. Before 788 and 789. |
+| 775 | #753 | cf2cf7cdf1 | cf2cf7cdf1 | main | Fresh CI, merge. Before 784. |
+| 776 | #603 | c535eaa7e2 | c535eaa7e2 | main | Fresh CI, merge. Before 791. |
+| 778 | #752 | b61a092b82 | b61a092b82 | main | Fresh CI, merge, then close #752 by hand (Refs). Before 805. |
+| 780 | #768 | a68230825e | a68230825e | main (held by 766) | Hold for 766. Resolve 1 thread, merge. |
+| 781 | #769 | 21016631a8 | 21016631a8 | main (held by 766) | Hold for 766. Fresh CI, merge. Close #769 by hand (no Closes line). |
+| 783 | #764 | 23d6f09515 | 23d6f09515 | 755 | Hold for 755. Fresh CI, resolve threads, merge. |
+| 784 | #779 | 366e602a7e | 366e602a7e | 775 | Still a draft. Hold for 775, mark ready, merge. |
+| 787 | #742 | 8340e3caf8 | 8340e3caf8 | main | Fresh CI, merge. Local-mode release lock. |
+| 788 | #786 | 69a8d8c31b | 69a8d8c31b | 774 | Hold for 774. Fresh CI, merge. |
+| 789 | #782 | cebfbba1a9 | cebfbba1a9 | 774 | Hold for 774. Fresh CI, merge. |
+| 791 | #777 | 485af91b53 | 485af91b53 | 776 | Hold for 776. Fresh CI, merge. |
+| 792 | #740 | 9be683fd20 | 9be683fd20 | main | Fresh CI, merge. Keep #740 open (Refs). Owner choice A/B/C (see 1.3). |
+| 793 | #790 | be840ea78c | be840ea78c | main | Fresh CI, merge. Keep #790 open for the three-runs box. Before 795. |
+| 795 | #794 | 63a6489187 | 63a6489187 | 793 | Hold for 793. Fresh CI, merge. |
+| 797 | #796 | 736b58a9bc | 736b58a9bc | 763 (held) | Hold for 763. Fresh CI, merge. |
+| 798 | #602 | 1be83cc929 | 1be83cc929 | 765 | Hold for 765. Fresh CI, merge. Before 812 and 804. |
+| 803 | #785 | none yet (review sent 09:02) | 3b12d3623e | 778 | Review, then CI. It was branched from an old #778 head: trial-merge current main and 778. |
+| 804 | #713 | ff3cf75287 | ff3cf75287 | 798 (held) | Hold for 798. Fresh CI, merge. |
+| 805 | #800 | 2719e66c68 | 2719e66c68 | 778 (held) | Hold for 778. Merge. |
+| 807 | #799 | d2674fad1c | d2674fad1c | main (held by 813) | Hold for 813. Then 807 merges 813 and drops pull-requests handling. Conflicts in 3 files. |
+| 809 | #743 | not approved | 1d57cccbaa | 759 | Changes requested at 09:50 (authority keys mode, exact-match positive case, current_exe at stop time). Haiku round 3 in progress. Then delta review. |
+| 810 | #727 | 85149f5f01 | 85149f5f01 | main (held by 755, 763, 772) | Hold for 755, 763, 772. Fresh CI, merge. Before 815. |
+| 812 | #801 | pre-round head (09:37) | 872f435661 | 798 | Round pushed at 8f80e70443 (09:47), not the head shown. Check the head, then delta review. |
+| 813 | #808 | approved 09:46 (head not logged) | 8889f6d13e | main | Small round pending (require HEAD == GITHUB_SHA, rename-only test). Check it, then CI. Before 807. |
+| 814 | #806 | none (changes requested 09:47) | c5b30a2c02 | main | Haiku round restores the stale-dir case. Then review. |
+| 815 | #728 | none yet (Opus review sent 09:50) | 284a1bdf82 | 810 | Hold for 810. Review, then CI. |
+| 816 | #802 | none yet | b97293cbde | 761 | Read-only `velnor-host journal show`. Review, then merge after 761. |
 
-**A research task that was running.** #750 (trust boundary for project config that weakens checks) needs an owner decision. An Opus agent was writing a recommendation. Re-run that research (Opus 5.5, high): what Velnor should follow, warn about or reject, with industry sources. Then bring the owner one rule, a table of cases, and a pick. Write it in plain, short sentences: the owner asked for ADHD-friendly explanations, one question at a time, with real examples.
+In progress with no PR: #754 (branch `fast/754-pair-cleanup`, local worktree exists).
+
+**Not ready (waiting for a fix or a review):** 809, 814, 803, 815, 816, 812 (round check), 813 (round check).
+
+### 1.2 Merge order
+
+Merge one PR at a time. After each merge, run `git merge --signoff origin/main` on every other open branch. Never squash a child before its parent: the squash would swallow the parent.
+
+Fixed constraints:
+- #767 before #771.
+- #813 before #807.
+- #755, #763 and #772 before #810; #810 before #815.
+- #755 before #783; #766 before #780 and #781; #774 before #788 and #789; #776 before #791; #775 before #784; #793 before #795; #765 before #798; #798 before #812 and #804; #761 before #816; #759 before #809; #778 before #803 and #805; #763 before #797.
+
+Roots that can merge after a fresh CI run, in no fixed order: 738, 759, 761, 763, 765, 766, 770, 772, 773, 774, 775, 776, 778, 787, 792, 793, 813 (after its small round).
+
+### 1.3 Owner decisions recorded today
+
+- **#750: option A.** Project settings that make a check do less are followed, and each one is named on the output. Forged workflow commands are made impossible (#782). Decided 2026-11-14 (comment 6885629093). PR 774 is approved.
+- **#740: waiting for the owner.** Box 2 ("no crate checked twice") is `needs-owner`. Choices:
+  - A: accept the duplicate doc check for crates with dependents, as a documented exception to rule 4;
+  - B: allow `RUSTC_WORKSPACE_WRAPPER=clippy-driver` on `cargo doc`;
+  - C: leave the box open until cargo#8143 is fixed.
+  PR 792 is approved, and #740 stays open (Refs). Hosted box 1 counts were proven on velnor-lab run 43696650241.
+- **#705: the command name.** The timings command is `velnor-ci timings`. Recorded as a plan change on #705 (08:34).
+- **#712: box 2 replaced.** The sound rule runs both doc steps on the lab by design. Recorded as a plan change (08:29).
+- **#786: box 3 replaced.** Nextest overrides cannot filter tests. Recorded as a plan change (08:19).
+- **#602: option B.** The plan reads changed files from git, with no token. Follow-up #808 (PR 813).
+- **#713: prepare installs missing components and targets itself** (rustup component/target add, no shell). Decided 09:22, so no owner question.
+
+### 1.4 Follow-up issues created today
+
+All open. Most carry `in-progress`.
+
+| Issue | Topic | Where it stands |
+|---|---|---|
+| #764 | setup-velnor refuses a wrong SHA-256 test | PR 783, held behind 755 |
+| #768 | stale or malformed timings file | PR 780, held behind 766 |
+| #769 | timings use only current-runner samples | PR 781, held behind 766. Close by hand after merge. |
+| #777 | machete on dependency changes | PR 791, held behind 776 |
+| #779 | every velnor-host state folder 0700 | PR 784, held behind 775 |
+| #782 | velnor-ci output cannot forge a workflow command | PR 789, held behind 774 |
+| #785 | retire a pair that started but never bound (Opus) | PR 803, under review. Also covers #761's capacity-release gap. |
+| #786 | weakening warnings | PR 788, held behind 774 |
+| #790 | velnor-ci audit tests in parallel | PR 793, approved |
+| #794 | remove killed test temp folders | PR 795, held behind 793 |
+| #796 | build metadata in release tags | PR 797, held behind 763 |
+| #799 | wire every plan output into steps | PR 807, held behind 813 |
+| #800 | long helper error is cut at the limit | PR 805, held behind 778 |
+| #801 | metadata check and run hardening | PR 812, stacked on 798 |
+| #802 | `velnor-host journal show` | PR 816, stacked on 761 |
+| #806 | ci-helper tests under the 2 s slow-timeout | PR 814, changes requested |
+| #808 | plan reads changed files from git | PR 813, approved |
+| #811 | document the local test recipe (Haiku) | Opened 09:30. Its status was not checked in this refresh. |
+
+Two issues are closed by hand after their PR merges: #769 (PR 781 has no Closes line) and #752 (PR 778 uses Refs).
+
+### 1.5 API rate-limit lesson
+
+- At 08:48 the GitHub core limit hit 5000/5000. Eleven single-PR watchers, four stale pollers and idle agents were stopped. Since then there is one combined merge watcher.
+- At 09:38 the limit was exhausted again (reset 09:50 UTC). The likely cause was `gh run watch` at its default 3 s polling in the lab agents.
+- Rule: `gh run watch <id> --interval 180` (300 s when GraphQL is low). Never `gh pr checks --watch` without `--interval 180`. Agents do not poll CI; the orchestrator watches and merges.
+- Use git for everything git can answer (`git ls-remote`, `git merge-base`, branch heads). Keep `gh` calls to one `gh pr list` per refresh, and no loops.
+
+### 1.6 Local test noise
+
+- Plain `cargo nextest run --workspace` fails about 100 tests in velnor-actions-cli, velnor-actions-mise and velnor-archive-guard. The fixtures are environment-only. Main CI passes them.
+- Run `bash scripts/verify-local.sh`, or the mise task `test-maintenance-helpers`. Run only the crates you touch otherwise.
+- The recipe is being documented by #811.
 
 ## 2. Ready-issue query, as of the handover
 
