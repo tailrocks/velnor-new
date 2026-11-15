@@ -75,7 +75,7 @@ fn dangling(text: &str) -> Vec<String> {
 #[test]
 fn no_step_condition_of_a_golden_job_reads_a_step_the_job_lacks() -> TestResult {
     let all = workflows()?;
-    assert!(!all.is_empty());
+    assert!(all.len() > 1);
     let found: Vec<String> = all
         .iter()
         .flat_map(|(path, text)| {
