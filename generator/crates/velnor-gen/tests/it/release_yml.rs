@@ -11,8 +11,8 @@ use velnor_render::{Owner, owner_of};
 use velnor_rust::{LOCK_PATH, wanted_files};
 
 use crate::release_fixture::{
-    APP, GREEN, PUSH, READY, app, conjuncts, dashed, jobs, release_plz, release_view, steps,
-    two_binaries, two_roots,
+    APP, DEFAULT_BRANCH, GREEN, PUSH, READY, app, conjuncts, dashed, jobs, release_plz,
+    release_view, steps, two_binaries, two_roots,
 };
 use crate::yaml_tree::Node;
 
@@ -36,7 +36,8 @@ fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Err
 }
 
 #[test]
-fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> TestResult {
+fn release_yml_triggers_after_the_named_workflows_and_leaves_the_branch_to_the_job_conditions()
+-> TestResult {
     let (_, tree) = two_roots()?;
     assert_eq!(tree.get("on").ok_or("no on")?.keys(), ["workflow_run"]);
     let run = tree.at(&["on", "workflow_run"]).ok_or("no workflow_run")?;
@@ -45,7 +46,7 @@ fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> Tes
         ["Rust CI", "Lint"]
     );
     assert_eq!(run.get("types").ok_or("no types")?.texts(), ["completed"]);
-    assert_eq!(run.get("branches").ok_or("no branches")?.texts(), ["main"]);
+    assert!(run.get("branches").is_none());
     for forbidden in [
         "tags",
         "tags-ignore",
@@ -85,7 +86,7 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
         assert_eq!(gate_id, "gate");
         assert_eq!(
             conjuncts(gate),
-            BTreeSet::from([PUSH.to_owned(), GREEN.to_owned()])
+            BTreeSet::from([PUSH.to_owned(), GREEN.to_owned(), DEFAULT_BRANCH.to_owned()])
         );
         for (id, job) in &all[1..] {
             assert!(
@@ -95,7 +96,12 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                     .contains(&"gate"),
                 "{id}"
             );
-            let mut want = BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]);
+            let mut want = BTreeSet::from([
+                READY.to_owned(),
+                PUSH.to_owned(),
+                GREEN.to_owned(),
+                DEFAULT_BRANCH.to_owned(),
+            ]);
             if *id == "release-pr" {
                 want.insert(NEWEST.to_owned());
             }

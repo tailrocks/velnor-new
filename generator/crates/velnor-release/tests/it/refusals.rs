@@ -237,7 +237,7 @@ fn errors_read_as_messages_naming_the_file_and_package() {
         message.contains("tool") && message.contains(".velnor/release.toml"),
         "{message}"
     );
-    let message = plz_refusal("semver_check = false", "semver_check = true")
+    let message = plz_refusal("name = \"app\"", "name = \"app\"\nsemver_check = true")
         .ok()
         .flatten()
         .map(|error| error.to_string())

@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 use velnor_model::Platform;
 
 use crate::error::ReleaseError;
+use crate::hazards::credential_provider;
 use crate::mise;
-use crate::release_plz::{RootConfig, read};
+use crate::release_plz::{Package, RootConfig, read};
 use crate::tag::TagPattern;
 use crate::velnor_config::parse;
 
@@ -15,7 +16,8 @@ use crate::velnor_config::parse;
 pub struct ReleaseFiles {
     pub release_toml: Option<String>,
     pub release_plz_toml: BTreeMap<String, String>,
-    pub mise_toml: String,
+    pub mise_tomls: Vec<String>,
+    pub cargo_configs: BTreeMap<String, String>,
     pub mise_lock: String,
 }
 
@@ -25,6 +27,7 @@ pub struct RootPlan {
     pub pr_branch_prefix: String,
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
+    pub workspace_tags: Vec<TagPattern>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +60,26 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             pattern: pattern.as_str().to_owned(),
             packages,
         });
+    }
+    let all: Vec<(&str, &Package)> = configs
+        .iter()
+        .flat_map(|config| config.packages.iter().map(|p| (config.root.as_str(), p)))
+        .collect();
+    for (index, (root, package)) in all.iter().enumerate() {
+        for (other_root, other) in &all[index + 1..] {
+            if other.name == package.name {
+                return Err(ReleaseError::DuplicatePackageName {
+                    package: package.name.clone(),
+                    roots: vec![(*root).to_owned(), (*other_root).to_owned()],
+                });
+            }
+            if other.tag_pattern.may_collide(&package.tag_pattern) {
+                return Err(ReleaseError::TagsMayCollide {
+                    first: package.tag_pattern.as_str().to_owned(),
+                    second: other.tag_pattern.as_str().to_owned(),
+                });
+            }
+        }
     }
     let prefixes: Vec<(&str, &str)> = configs
         .iter()
@@ -93,28 +116,26 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        mise::check(&files.mise_toml, &files.mise_lock)?;
+        mise::check(&files.mise_tomls, &files.mise_lock)?;
+        if configs.iter().any(|config| config.publishes_to_crates_io) {
+            for (file, text) in &files.cargo_configs {
+                credential_provider(file, text)?;
+            }
+        }
         let mut binaries = Vec::new();
         for binary in &config.binaries {
-            let mut found = configs.iter().filter_map(|candidate| {
-                candidate
-                    .packages
-                    .iter()
-                    .find(|package| package.name == binary.package)
-                    .map(|package| (candidate.root.clone(), package))
-            });
-            let (root, package) = found
-                .next()
+            let (root, package) = configs
+                .iter()
+                .find_map(|candidate| {
+                    candidate
+                        .packages
+                        .iter()
+                        .find(|package| package.name == binary.package)
+                        .map(|package| (candidate.root.clone(), package))
+                })
                 .ok_or_else(|| ReleaseError::BinaryNotReleased {
                     package: binary.package.clone(),
                 })?;
-            let others: Vec<String> = found.map(|(other, _)| other).collect();
-            if !others.is_empty() {
-                return Err(ReleaseError::AmbiguousBinary {
-                    package: binary.package.clone(),
-                    roots: std::iter::once(root).chain(others).collect(),
-                });
-            }
             binaries.push(BinaryPlan {
                 package: binary.package.clone(),
                 bin: binary.bin.clone(),
@@ -135,6 +156,7 @@ impl ReleasePlan {
                         .into_iter()
                         .map(|package| (package.name, package.tag_pattern))
                         .collect(),
+                    workspace_tags: config.workspace_tags,
                 })
                 .collect(),
             after: config.after,

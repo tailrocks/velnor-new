@@ -8,7 +8,7 @@ use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, plz_edited, refusa
 #[test]
 fn release_plz_missing_from_mise_is_refused() {
     let mut no_toml = files();
-    no_toml.mise_toml = "[tools]\nbun = \"1.4.4\"\n".to_owned();
+    no_toml.mise_tomls = vec!["[tools]\nbun = \"1.4.4\"\n".to_owned()];
     assert_eq!(
         refusal(&no_toml),
         Some(ReleaseError::ReleasePlzNotInMiseToml)
@@ -22,7 +22,8 @@ fn release_plz_missing_from_mise_is_refused() {
     );
 
     let mut aqua = files();
-    aqua.mise_toml = MISE_TOML.replace("release-plz =", "\"aqua:release-plz/release-plz\" =");
+    aqua.mise_tomls =
+        vec![MISE_TOML.replace("release-plz =", "\"aqua:release-plz/release-plz\" =")];
     aqua.mise_lock = "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
     assert_eq!(refusal(&aqua), None);
 }
@@ -74,7 +75,7 @@ fn the_locked_version_must_equal_the_configured_one() {
     ));
 
     let mut table = files();
-    table.mise_toml = "[tools.release-plz]\nversion = \"0.4.3\"\n".to_owned();
+    table.mise_tomls = vec!["[tools.release-plz]\nversion = \"0.4.3\"\n".to_owned()];
     assert_eq!(refusal(&table), None);
     table.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.2\"\n".to_owned();
     assert!(matches!(
@@ -106,7 +107,7 @@ fn the_locked_version_must_equal_the_configured_one() {
     ));
 
     let mut unversioned = files();
-    unversioned.mise_toml = "[tools.release-plz]\n".to_owned();
+    unversioned.mise_tomls = vec!["[tools.release-plz]\n".to_owned()];
     unversioned.mise_lock = "[[tools.release-plz]]\n".to_owned();
     assert!(matches!(
         refusal(&unversioned),
@@ -114,7 +115,7 @@ fn the_locked_version_must_equal_the_configured_one() {
     ));
 
     let mut blank = files();
-    blank.mise_toml = "[tools]\nrelease-plz = \"\"\n".to_owned();
+    blank.mise_tomls = vec!["[tools]\nrelease-plz = \"\"\n".to_owned()];
     blank.mise_lock = "[[tools.release-plz]]\nversion = \"\"\n".to_owned();
     assert!(matches!(
         refusal(&blank),
@@ -135,7 +136,7 @@ fn release_config_with_an_empty_after_or_unknown_platform_is_refused() {
 }
 
 #[test]
-fn a_binary_released_from_two_roots_is_refused() -> TestResult {
+fn a_package_released_from_two_roots_is_refused() -> TestResult {
     let mut files = files();
     files.release_toml =
         Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n".to_owned());
@@ -147,7 +148,7 @@ fn a_binary_released_from_two_roots_is_refused() -> TestResult {
     let tools = edit(&tools, "{{ package }}-v", "tools-{{ package }}-v")?;
     files.release_plz_toml.insert("tools".to_owned(), tools);
     assert!(
-        matches!(refusal(&files), Some(ReleaseError::AmbiguousBinary { package, .. }) if package == "app")
+        matches!(refusal(&files), Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app")
     );
     Ok(())
 }

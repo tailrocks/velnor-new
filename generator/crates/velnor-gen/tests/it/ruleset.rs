@@ -42,13 +42,16 @@ fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name(
     assert_eq!(tree["enforcement"], "active");
     assert_eq!(
         tree["conditions"]["ref_name"]["include"],
-        serde_json::json!(["refs/tags/app-v*", "refs/tags/tools-v*"])
+        serde_json::json!(["refs/tags/*-v*", "refs/tags/app-v*", "refs/tags/tools-v*"])
     );
     assert_eq!(
         tree["conditions"]["ref_name"]["exclude"],
         serde_json::json!([])
     );
-    assert_eq!(tree["rules"], serde_json::json!([{ "type": "creation" }]));
+    assert_eq!(
+        tree["rules"],
+        serde_json::json!([{ "type": "creation" }, { "type": "update" }, { "type": "deletion" }])
+    );
     assert_eq!(
         tree["bypass_actors"],
         serde_json::json!([{

@@ -139,3 +139,115 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     );
     Ok(())
 }
+
+struct Install {
+    work: std::path::PathBuf,
+    digest: String,
+}
+
+fn staged_install(tag: &str) -> Result<Install, Box<dyn Error>> {
+    use std::process::Command;
+
+    let work = std::env::temp_dir().join(format!("velnor-gen-setup-{tag}-{}", std::process::id()));
+    let release = work.join("releases/rust-ci-v1.2.3");
+    fs::create_dir_all(&release)?;
+    let file = release.join("velnor-ci-linux-x64");
+    fs::write(&file, b"#!/bin/sh\necho genuine\n")?;
+    let digest = Command::new("shasum")
+        .args(["-a", "256"])
+        .arg(&file)
+        .output()?
+        .stdout;
+    let digest = String::from_utf8(digest)?
+        .split_whitespace()
+        .next()
+        .ok_or("no digest")?
+        .to_owned();
+    fs::create_dir_all(work.join("temp"))?;
+    Ok(Install { work, digest })
+}
+
+fn run_install(install: &Install, cache: &Path) -> Result<bool, Box<dyn Error>> {
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
+    let script = install.work.join("install.sh");
+    fs::write(&script, install_script(&action))?;
+    let mut child = Command::new("bash")
+        .arg(&script)
+        .env("VERSION", "1.2.3")
+        .env("SHA256_LINUX_X64", &install.digest)
+        .env("SHA256_LINUX_ARM64", "")
+        .env("SHA256_MACOS_ARM64", "")
+        .env(
+            "RELEASES",
+            format!("file://{}", install.work.join("releases").display()),
+        )
+        .env("RUNNER_OS", "Linux")
+        .env("RUNNER_ARCH", "X64")
+        .env("RUNNER_TOOL_CACHE", cache)
+        .env("RUNNER_TEMP", install.work.join("temp"))
+        .env("GITHUB_PATH", install.work.join("path"))
+        .stdout(std::process::Stdio::null())
+        .spawn()?;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status.success());
+        }
+        if Instant::now() > deadline {
+            child.kill()?;
+            child.wait()?;
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_tool_cache_that_cannot_be_written_is_a_miss_and_not_a_failure() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+
+    let install = staged_install("readonly")?;
+    let cache = install.work.join("cache");
+    fs::create_dir_all(&cache)?;
+    fs::set_permissions(&cache, fs::Permissions::from_mode(0o555))?;
+    let installed = run_install(&install, &cache)?;
+    fs::set_permissions(&cache, fs::Permissions::from_mode(0o755))?;
+    fs::remove_dir_all(&install.work)?;
+    assert!(installed);
+    Ok(())
+}
+
+#[test]
+fn a_cache_entry_that_is_not_a_bounded_regular_file_is_a_miss() -> TestResult {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::process::Command;
+
+    for kind in ["fifo", "huge", "symlink"] {
+        let install = staged_install(kind)?;
+        let dir = install.work.join("cache/velnor-ci/1.2.3/x64");
+        fs::create_dir_all(&dir)?;
+        let entry = dir.join("velnor-ci");
+        match kind {
+            "fifo" => {
+                assert!(Command::new("mkfifo").arg(&entry).status()?.success());
+                fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
+            }
+            "huge" => {
+                let file = fs::File::create(&entry)?;
+                file.set_len(300 * 1024 * 1024)?;
+                fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
+            }
+            _ => symlink("/bin/sh", &entry)?,
+        }
+        let installed = run_install(&install, &install.work.join("cache"))?;
+        let from = fs::read(install.work.join("temp/velnor-ci-bin/velnor-ci")).unwrap_or_default();
+        fs::remove_dir_all(&install.work)?;
+        assert!(installed, "{kind}");
+        assert_eq!(from, b"#!/bin/sh\necho genuine\n", "{kind}");
+    }
+    Ok(())
+}

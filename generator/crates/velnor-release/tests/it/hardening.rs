@@ -1,0 +1,258 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_release::{ReleaseError, ReleasePlan, ruleset_json};
+
+use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, plz_edited, refusal};
+
+fn plz_refusal(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
+    Ok(refusal(&plz_edited(from, to)?))
+}
+
+fn ruleset(
+    files: &velnor_release::ReleaseFiles,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(serde_json::from_str(&ruleset_json(&ReleasePlan::read(
+        files,
+    )?))?)
+}
+
+#[test]
+fn the_ruleset_blocks_updating_and_deleting_the_tags_as_well_as_creating_them() -> TestResult {
+    let tree = ruleset(&files())?;
+    assert_eq!(
+        tree["rules"],
+        serde_json::json!([{"type": "creation"}, {"type": "update"}, {"type": "deletion"}])
+    );
+    Ok(())
+}
+
+#[test]
+fn the_ruleset_protects_the_tags_of_packages_that_inherit_the_workspace_settings() -> TestResult {
+    let only_workspace = PLZ.replace("[[package]]\nname = \"app\"\n", "");
+    let mut files = files();
+    files
+        .release_plz_toml
+        .insert(".".to_owned(), only_workspace);
+    assert_eq!(
+        ruleset(&files)?["conditions"]["ref_name"]["include"],
+        serde_json::json!(["refs/tags/*-v*"])
+    );
+    let listed = ruleset(&crate::fixture::files())?;
+    assert_eq!(
+        listed["conditions"]["ref_name"]["include"],
+        serde_json::json!(["refs/tags/*-v*", "refs/tags/app-v*"])
+    );
+    Ok(())
+}
+
+#[test]
+fn a_workspace_without_a_tag_name_protects_both_release_plz_defaults() -> TestResult {
+    let mut files = files();
+    let text = edit(PLZ, "git_tag_name = \"{{ package }}-v{{ version }}\"\n", "")?;
+    let text = edit(
+        &text,
+        "name = \"app\"",
+        "name = \"app\"\ngit_tag_name = \"app-v{{ version }}\"",
+    )?;
+    files.release_plz_toml.insert(".".to_owned(), text);
+    assert_eq!(
+        ruleset(&files)?["conditions"]["ref_name"]["include"],
+        serde_json::json!(["refs/tags/*-v*", "refs/tags/app-v*", "refs/tags/v*"])
+    );
+    Ok(())
+}
+
+#[test]
+fn settings_every_unlisted_package_inherits_are_checked_on_the_workspace() -> TestResult {
+    let error = plz_refusal("semver_check = false\n", "semver_check = true\n")?;
+    assert!(
+        matches!(
+            error,
+            Some(ReleaseError::SemverCheckNotFalse { package: None, .. })
+        ),
+        "{error:?}"
+    );
+    let listed = edit(
+        PLZ,
+        "name = \"app\"",
+        "name = \"app\"\nsemver_check = false",
+    )?;
+    let mut files = files();
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        edit(
+            &listed,
+            "semver_check = false\npublish_no_verify",
+            "publish_no_verify",
+        )?,
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::SemverCheckNotFalse { package: None, .. })
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_package_that_turns_release_always_back_on_is_refused() -> TestResult {
+    let error = plz_refusal("name = \"app\"", "name = \"app\"\nrelease_always = true")?;
+    assert!(
+        matches!(error, Some(ReleaseError::ReleaseAlwaysNotFalse { .. })),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn disabling_the_tag_or_the_github_release_is_refused() -> TestResult {
+    for (key, at_package) in [
+        ("git_tag_enable", false),
+        ("git_tag_enable", true),
+        ("git_release_enable", false),
+        ("git_release_enable", true),
+    ] {
+        let (from, to) = if at_package {
+            (
+                "name = \"app\"".to_owned(),
+                format!("name = \"app\"\n{key} = false"),
+            )
+        } else {
+            (
+                "[workspace]\n".to_owned(),
+                format!("[workspace]\n{key} = false\n"),
+            )
+        };
+        let error = plz_refusal(&from, &to)?;
+        let named = matches!(
+            (&error, key),
+            (Some(ReleaseError::GitTagDisabled { .. }), "git_tag_enable")
+                | (
+                    Some(ReleaseError::GitReleaseDisabled { .. }),
+                    "git_release_enable"
+                )
+        );
+        assert!(named, "{key} {at_package}: {error:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn an_empty_or_blank_release_branch_prefix_is_refused() -> TestResult {
+    for prefix in ["", "  "] {
+        let to = format!("[workspace]\npr_branch_prefix = \"{prefix}\"\n");
+        let error = plz_refusal("[workspace]\n", &to)?;
+        assert!(
+            matches!(error, Some(ReleaseError::EmptyPrBranchPrefix { .. })),
+            "{prefix:?}: {error:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn changelog_commands_and_external_changelog_configs_are_refused() {
+    let commands = [
+        "[changelog]\ncommit_preprocessors = [{ pattern = \"a\", replace_command = \"curl x\" }]\n",
+        "[changelog]\npostprocessors = [{ pattern = \"a\", replace_command = \"sh -c x\" }]\n",
+        "[[package]]\nname = \"other\"\nchangelog_config = \"cliff.toml\"\n",
+    ];
+    for extra in commands {
+        let mut files = files();
+        files
+            .release_plz_toml
+            .insert(".".to_owned(), format!("{PLZ}\n{extra}"));
+        let error = refusal(&files);
+        assert!(
+            matches!(error, Some(ReleaseError::ExternalCommand { .. })),
+            "{extra}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn an_executable_cargo_credential_provider_is_refused_only_when_publishing_to_crates_io()
+-> TestResult {
+    let provider = "[registry]\ncredential-provider = [\"./steal\"]\n";
+    let mut files = files();
+    files
+        .cargo_configs
+        .insert(".cargo/config.toml".to_owned(), provider.to_owned());
+    let got = refusal(&files);
+    assert!(
+        matches!(got, Some(ReleaseError::CargoCredentialProvider { .. })),
+        "{got:?}"
+    );
+    files.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[credential-alias]\nx = \"./steal\"\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::CargoCredentialProvider { .. })
+    ));
+    files.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[registry]\ncredential-provider = \"cargo:token\"\n".to_owned(),
+    );
+    assert_eq!(refusal(&files), None);
+    files
+        .cargo_configs
+        .insert(".cargo/config.toml".to_owned(), provider.to_owned());
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        edit(PLZ, "publish_no_verify = true", "git_only = true")?,
+    );
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn a_root_written_with_a_dot_or_an_empty_component_is_refused() {
+    for root in ["./tools", "tools/", "tools//sub", "tools/./sub", ""] {
+        let mut files = files();
+        files.release_toml = Some(format!("roots = [{root:?}]\n"));
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::UnsafeRoot { .. })),
+            "{root:?}"
+        );
+    }
+}
+
+#[test]
+fn tag_patterns_that_can_render_the_same_tag_are_refused() -> TestResult {
+    let text = edit(
+        PLZ,
+        "name = \"app\"",
+        "name = \"app\"\ngit_tag_name = \"v{{ version }}\"\n\n[[package]]\nname = \"tool\"\ngit_tag_name = \"v1{{ version }}\"",
+    )?;
+    let mut files = files();
+    files.release_plz_toml.insert(".".to_owned(), text);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::TagsMayCollide { .. })
+    ));
+    let apart = edit(
+        PLZ,
+        "name = \"app\"",
+        "name = \"app\"\n\n[[package]]\nname = \"app-cli\"",
+    )?;
+    files.release_plz_toml.insert(".".to_owned(), apart);
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn release_plz_may_sit_in_either_mise_file() {
+    let mut files = files();
+    files.mise_tomls = vec![
+        "[tools]\nbun = \"1.4.4\"\n".to_owned(),
+        MISE_TOML.to_owned(),
+    ];
+    assert_eq!(refusal(&files), None);
+    files.mise_tomls = vec![
+        MISE_TOML.to_owned(),
+        "[tools]\nbun = \"1.4.4\"\n".to_owned(),
+    ];
+    assert_eq!(refusal(&files), None);
+}

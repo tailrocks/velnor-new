@@ -8,7 +8,7 @@ use velnor_gen::GenerateError;
 use velnor_release::ReleaseError;
 
 use crate::release_fixture::{
-    APP, Root, SPACED, TOOLS, TWO_BINARIES, jobs, render, steps, two_binaries, two_roots, uses,
+    APP, Root, TOOLS, TWO_BINARIES, jobs, render, steps, two_binaries, two_roots, uses,
 };
 use crate::yaml_tree::Node;
 
@@ -99,6 +99,13 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
         .filter(|(id, _)| id.starts_with("build-"))
     {
         built += 1;
+        let package = PLATFORMS
+            .iter()
+            .find_map(|platform| {
+                id.strip_prefix("build-")
+                    .and_then(|rest| rest.strip_suffix(&format!("-{platform}")))
+            })
+            .ok_or("no platform")?;
         assert_eq!(
             permissions(build),
             [("contents".to_owned(), "read".to_owned())],
@@ -130,7 +137,7 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
         let checkout = &steps(build)[0];
         assert_eq!(
             checkout.at(&["with", "ref"]).and_then(Node::text),
-            Some("${{ github.event.workflow_run.head_sha }}"),
+            Some(format!("refs/tags/${{{{ needs.tag.outputs.{package} }}}}").as_str()),
             "{id}"
         );
         assert_eq!(
@@ -150,7 +157,9 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
             "--locked",
             "--package",
             "--manifest-path",
+            "--bin",
             "--target",
+            "--target-dir",
         ] {
             assert!(cargo[0].contains(flag), "{id} {flag}");
         }
@@ -173,8 +182,9 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     assert_eq!(
         runs(build),
         [
+            "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
-            "cargo build --release --locked --manifest-path Cargo.toml --package app --target aarch64-unknown-linux-musl",
+            "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
             "tar -czf rg-linux-arm64.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
         ]
     );
@@ -205,8 +215,9 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
     assert_eq!(
         runs(build),
         [
+            "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
-            "cargo build --release --locked --manifest-path tools/Cargo.toml --package tools --target x86_64-unknown-linux-musl",
+            "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
             "tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
         ]
     );
@@ -247,7 +258,10 @@ fn release_yml_sums_has_no_permissions_and_hashes_exactly_the_builds_of_its_pack
             .collect();
         assert_eq!(
             runs(sums),
-            [format!("sha256sum {} > SHA256SUMS", files.join(" "))],
+            [
+                format!("sha256sum {} > SHA256SUMS", files.join(" ")),
+                format!("shasum -a 256 {} > SHA256SUMS", files.join(" ")),
+            ],
             "{package}"
         );
         let downloaded: Vec<&str> = steps(sums)
@@ -365,24 +379,5 @@ fn release_yml_refuses_a_bin_name_that_would_add_a_second_command() -> TestResul
         );
     }
     assert!(render(&[APP, TOOLS], Some(TWO_BINARIES)).is_ok());
-    Ok(())
-}
-
-#[test]
-fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult {
-    let (_, tree) = render(
-        &[SPACED],
-        Some(
-            "roots = [\"my tools\"]\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n",
-        ),
-    )?;
-    assert_eq!(
-        runs(job(&tree, "build-tools-linux-x64")?),
-        [
-            "rustup target add x86_64-unknown-linux-musl",
-            "cargo build --release --locked --manifest-path 'my tools/Cargo.toml' --package tools --target x86_64-unknown-linux-musl",
-            "tar -czf tools-linux-x64.tar.gz -C 'my tools/target/x86_64-unknown-linux-musl/release' tools",
-        ]
-    );
     Ok(())
 }

@@ -16,9 +16,11 @@ impl PlainName {
         let plain = !text.is_empty()
             && !text.starts_with(['.', '-'])
             && !text.ends_with('.')
-            && text
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'));
+            && text.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric()
+                    || matches!(byte, b'.' | b'_' | b'-')
+                    || (what == "tag" && byte == b'+')
+            });
         if plain {
             Ok(Self(text.to_owned()))
         } else {

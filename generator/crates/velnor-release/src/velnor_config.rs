@@ -71,7 +71,10 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     }
     refuse_expressions("roots", &text_refs(&roots))?;
     if let Some(root) = roots.iter().find(|root| {
-        root.is_empty() || root.starts_with('/') || root.split('/').any(|part| part == "..")
+        root.as_str() != "."
+            && (root.is_empty()
+                || root.starts_with('/')
+                || root.split('/').any(|part| matches!(part, "" | "." | "..")))
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
     }

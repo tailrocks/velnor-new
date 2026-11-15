@@ -4,7 +4,7 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, VERIFIED_COMMIT};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY};
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
@@ -79,31 +79,46 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
         "{}/{triple}/release",
         join(&binary.root, "target")
     ));
+    let linux = triple.ends_with("linux-musl");
+    let mut steps = vec![checkout(&tagged_source(binary), 1)];
+    if linux {
+        steps.push(command(
+            "Install the musl C compiler".to_owned(),
+            "sudo apt-get install --yes musl-tools".to_owned(),
+        ));
+    }
+    steps.extend([
+        install_tool("rust"),
+        command(
+            format!("Add the {triple} target"),
+            format!("rustup target add {triple}"),
+        ),
+        RenderedStep {
+            working_directory: (binary.root != ".").then(|| binary.root.clone()),
+            env: if linux {
+                vec![("TARGET_CC".to_owned(), Value::Text("musl-gcc".to_owned()))]
+            } else {
+                Vec::new()
+            },
+            ..command(
+                format!("Build {} for {suffix}", binary.package),
+                format!(
+                    "cargo build --release --locked --manifest-path Cargo.toml --package {} --bin {} --target {triple} --target-dir target",
+                    binary.package, binary.bin
+                ),
+            )
+        },
+        command(
+            format!("Pack {file}"),
+            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
+        ),
+        upload(artifact(binary, platform), file),
+    ]);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
-        steps: vec![
-            checkout(VERIFIED_COMMIT, 1),
-            install_tool("rust"),
-            command(
-                format!("Add the {triple} target"),
-                format!("rustup target add {triple}"),
-            ),
-            command(
-                format!("Build {} for {suffix}", binary.package),
-                format!(
-                    "cargo build --release --locked --manifest-path {} --package {} --target {triple}",
-                    shell_word(&join(&binary.root, "Cargo.toml")),
-                    binary.package
-                ),
-            ),
-            command(
-                format!("Pack {file}"),
-                format!("tar -czf {file} -C {release_dir} {}", binary.bin),
-            ),
-            upload(artifact(binary, platform), file),
-        ],
+        steps,
         ..behind_the_gate(
             format!("build-{}-{suffix}", binary.package),
             binary,
@@ -112,19 +127,28 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
     }
 }
 
+fn tagged_source(binary: &BinaryPlan) -> String {
+    format!("refs/tags/${{{{ needs.tag.outputs.{} }}}}", binary.package)
+}
+
 fn sums(binary: &BinaryPlan, runner: &str) -> RenderedJob {
     let mut steps: Vec<RenderedStep> = binary
         .platforms
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
-    steps.push(RenderedStep {
-        working_directory: Some(DIST.to_owned()),
-        ..command(
-            format!("Write {SUMS_FILE}"),
-            format!("sha256sum {} > {SUMS_FILE}", assets(binary).join(" ")),
-        )
-    });
+    let names = assets(binary).join(" ");
+    for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
+        let comparison = if on_macos { "==" } else { "!=" };
+        steps.push(RenderedStep {
+            working_directory: Some(DIST.to_owned()),
+            condition: Some(expression(&format!("runner.os {comparison} 'macOS'"))),
+            ..command(
+                format!("Write {SUMS_FILE}"),
+                format!("{tool} {names} > {SUMS_FILE}"),
+            )
+        });
+    }
     steps.push(upload(
         format!("{}-sums", binary.package),
         format!("{DIST}/{SUMS_FILE}"),
