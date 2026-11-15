@@ -379,6 +379,9 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
         let mut components: Vec<String> = declared
             .map(|toolchain| toolchain.components.clone())
             .unwrap_or_default();
+        if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
+            components.push("rust-docs".to_owned());
+        }
         if lint {
             components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
         }

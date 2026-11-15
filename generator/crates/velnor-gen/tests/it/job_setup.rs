@@ -291,38 +291,6 @@ fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> Te
 }
 
 #[test]
-fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> TestResult {
-    let file = RepoPath::new("rust-toolchain.toml")?;
-    let mut declared = view(&["Cargo.toml"], Some(b"shape = \"lint-test\"\n"))?;
-    declared.tracked_paths.insert(file.clone());
-    declared.files.insert(
-        file,
-        b"[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"llvm-tools\"]\ntargets = [\"wasm32-unknown-unknown\"]\n"
-            .to_vec(),
-    );
-    let cargo_config = RepoPath::new(".cargo/config.toml")?;
-    declared.tracked_paths.insert(cargo_config.clone());
-    declared.files.insert(
-        cargo_config,
-        b"[build]\ntarget = \"wasm32-unknown-unknown\"\n".to_vec(),
-    );
-    let text = workflow(&declared)?;
-    let runs: Vec<&str> = text
-        .lines()
-        .filter_map(|line| line.trim().strip_prefix("run: rustup "))
-        .collect();
-    assert_eq!(
-        runs,
-        [
-            "component add clippy llvm-tools rustfmt",
-            "target add wasm32-unknown-unknown",
-            "component add llvm-tools",
-            "target add wasm32-unknown-unknown",
-        ]
-    );
-    Ok(())
-}
-#[test]
 fn two_roots_that_would_get_the_same_job_id_are_an_error() -> TestResult {
     assert_eq!(
         expected_with_notes(&view(&["a-b/Cargo.toml", "a_b/Cargo.toml"], None)?)

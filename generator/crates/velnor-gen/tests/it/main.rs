@@ -37,6 +37,7 @@ mod select;
 mod setup_action;
 mod tool_pins;
 mod toolchain;
+mod toolchain_components;
 mod unowned;
 mod version;
 mod yaml_tree;

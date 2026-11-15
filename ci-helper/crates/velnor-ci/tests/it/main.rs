@@ -15,6 +15,7 @@ mod logscan;
 mod plan;
 mod plan_api;
 mod prepare;
+mod prepare_install;
 mod release_fake;
 mod release_publish;
 mod release_publish_guards;
