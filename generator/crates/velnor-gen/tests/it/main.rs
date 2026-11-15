@@ -30,6 +30,7 @@ mod rules;
 mod ruleset;
 mod select;
 mod setup_action;
+mod setup_action_swap;
 mod tool_pins;
 mod toolchain;
 mod unowned;

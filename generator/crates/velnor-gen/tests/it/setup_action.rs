@@ -132,7 +132,7 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
     let script = install_script(&action);
-    assert!(!script.is_empty());
+    assert_ne!(script, "");
     assert!(
         !script.contains("${{"),
         "inputs must reach the script through env"
@@ -140,114 +140,238 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     Ok(())
 }
 
-struct Install {
-    work: std::path::PathBuf,
-    digest: String,
+pub(crate) struct Install {
+    pub(crate) work: std::path::PathBuf,
+    pub(crate) binary: &'static [u8],
 }
 
-fn staged_install(tag: &str) -> Result<Install, Box<dyn Error>> {
-    use std::process::Command;
+impl Install {
+    pub(crate) fn new(name: &str) -> Result<Self, Box<dyn Error>> {
+        let work = std::env::temp_dir().join(format!("velnor-gen-{name}-{}", std::process::id()));
+        let release = work.join("releases/rust-ci-v1.2.3");
+        fs::create_dir_all(&release)?;
+        fs::create_dir_all(work.join("temp"))?;
+        fs::write(release.join("velnor-ci-linux-x64"), Self::BINARY)?;
+        Ok(Self {
+            work,
+            binary: Self::BINARY,
+        })
+    }
 
-    let work = std::env::temp_dir().join(format!("velnor-gen-setup-{tag}-{}", std::process::id()));
-    let release = work.join("releases/rust-ci-v1.2.3");
-    fs::create_dir_all(&release)?;
-    let file = release.join("velnor-ci-linux-x64");
-    fs::write(&file, b"#!/bin/sh\necho genuine\n")?;
-    let digest = Command::new("shasum")
-        .args(["-a", "256"])
-        .arg(&file)
-        .output()?
-        .stdout;
-    let digest = String::from_utf8(digest)?
-        .split_whitespace()
-        .next()
-        .ok_or("no digest")?
-        .to_owned();
-    fs::create_dir_all(work.join("temp"))?;
-    Ok(Install { work, digest })
-}
+    const BINARY: &'static [u8] = b"#!/bin/sh\necho genuine\n";
 
-fn run_install(install: &Install, cache: &Path) -> Result<bool, Box<dyn Error>> {
-    use std::process::Command;
-    use std::time::{Duration, Instant};
+    pub(crate) fn run(
+        &self,
+        cache: Option<&Path>,
+        shim_dir: Option<&Path>,
+    ) -> Result<std::process::ExitStatus, Box<dyn Error>> {
+        let mut child = self.spawn_with(cache, shim_dir, |_| {})?;
+        Ok(child.wait()?)
+    }
 
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
-    let script = install.work.join("install.sh");
-    fs::write(&script, install_script(&action))?;
-    let mut child = Command::new("bash")
-        .arg(&script)
-        .env("VERSION", "1.2.3")
-        .env("SHA256_LINUX_X64", &install.digest)
-        .env("SHA256_LINUX_ARM64", "")
-        .env("SHA256_MACOS_ARM64", "")
-        .env(
-            "RELEASES",
-            format!("file://{}", install.work.join("releases").display()),
-        )
-        .env("RUNNER_OS", "Linux")
-        .env("RUNNER_ARCH", "X64")
-        .env("RUNNER_TOOL_CACHE", cache)
-        .env("RUNNER_TEMP", install.work.join("temp"))
-        .env("GITHUB_PATH", install.work.join("path"))
-        .stdout(std::process::Stdio::null())
-        .spawn()?;
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(status.success());
+    fn spawn(
+        &self,
+        cache: Option<&Path>,
+        configure: impl FnOnce(&mut std::process::Command),
+    ) -> Result<std::process::Child, Box<dyn Error>> {
+        self.spawn_with(cache, None, configure)
+    }
+
+    pub(crate) fn spawn_with(
+        &self,
+        cache: Option<&Path>,
+        shim_dir: Option<&Path>,
+        configure: impl FnOnce(&mut std::process::Command),
+    ) -> Result<std::process::Child, Box<dyn Error>> {
+        use std::process::Command;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
+        let digest = Command::new("shasum")
+            .args(["-a", "256"])
+            .arg(
+                self.work
+                    .join("releases/rust-ci-v1.2.3/velnor-ci-linux-x64"),
+            )
+            .output()?
+            .stdout;
+        let digest = String::from_utf8(digest)?;
+        let digest = digest.split_whitespace().next().ok_or("no digest")?;
+        let script = self.work.join("install.sh");
+        fs::write(&script, install_script(&action))?;
+        let mut command = Command::new("bash");
+        command
+            .arg(&script)
+            .env("VERSION", "1.2.3")
+            .env("SHA256_LINUX_X64", digest)
+            .env("SHA256_LINUX_ARM64", "")
+            .env("SHA256_MACOS_ARM64", "")
+            .env(
+                "RELEASES",
+                format!("file://{}", self.work.join("releases").display()),
+            )
+            .env("RUNNER_OS", "Linux")
+            .env("RUNNER_ARCH", "X64")
+            .env("RUNNER_TEMP", self.work.join("temp"))
+            .env("GITHUB_PATH", self.work.join("path"))
+            .env_remove("RUNNER_TOOL_CACHE");
+        if let Some(cache) = cache {
+            command.env("RUNNER_TOOL_CACHE", cache);
         }
-        if Instant::now() > deadline {
-            child.kill()?;
-            child.wait()?;
-            return Ok(false);
+        if let Some(shims) = shim_dir {
+            let path = std::env::var("PATH")?;
+            command.env("PATH", format!("{}:{path}", shims.display()));
         }
-        std::thread::sleep(Duration::from_millis(50));
+        configure(&mut command);
+        Ok(command.spawn()?)
+    }
+
+    pub(crate) fn installed(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        let on_path = fs::read_to_string(self.work.join("path"))?;
+        Ok(fs::read(Path::new(on_path.trim()).join("velnor-ci"))?)
     }
 }
 
-#[test]
-fn a_tool_cache_that_cannot_be_written_is_a_miss_and_not_a_failure() -> TestResult {
+fn read_only_cache_installs_privately(install: &Install, leaf: &str) -> TestResult {
     use std::os::unix::fs::PermissionsExt;
 
-    let install = staged_install("readonly")?;
-    let cache = install.work.join("cache");
-    fs::create_dir_all(&cache)?;
-    fs::set_permissions(&cache, fs::Permissions::from_mode(0o555))?;
-    let installed = run_install(&install, &cache)?;
-    fs::set_permissions(&cache, fs::Permissions::from_mode(0o755))?;
+    let cache = install.work.join(leaf.split('/').next().unwrap_or(leaf));
+    let locked = install.work.join(leaf);
+    fs::create_dir_all(&locked)?;
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o555))?;
+    if fs::write(locked.join("probe"), b"").is_ok() {
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755))?;
+        return Ok(());
+    }
+    let status = install.run(Some(&cache), None)?;
+    let copy = install.installed();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755))?;
     fs::remove_dir_all(&install.work)?;
-    assert!(installed);
+    assert!(status.success());
+    assert_eq!(copy?, install.binary);
     Ok(())
 }
 
 #[test]
-fn a_cache_entry_that_is_not_a_bounded_regular_file_is_a_miss() -> TestResult {
+fn an_unset_tool_cache_does_not_stop_the_private_install() -> TestResult {
+    let install = Install::new("cache-unset")?;
+    let status = install.run(None, None)?;
+    let copy = install.installed();
+    fs::remove_dir_all(&install.work)?;
+    assert!(status.success());
+    assert_eq!(copy?, install.binary);
+    Ok(())
+}
+
+#[test]
+fn a_read_only_tool_cache_does_not_stop_the_private_install() -> TestResult {
+    read_only_cache_installs_privately(&Install::new("cache-read-only")?, "read-only")
+}
+
+#[test]
+fn a_read_only_cache_entry_directory_does_not_stop_the_private_install() -> TestResult {
+    read_only_cache_installs_privately(
+        &Install::new("cache-read-only-leaf")?,
+        "read-only-leaf/velnor-ci/1.2.3/x64",
+    )
+}
+
+pub(crate) fn seed_entry(
+    install: &Install,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), Box<dyn Error>> {
+    let cache = install.work.join("cache");
+    let entry = cache.join("velnor-ci/1.2.3/x64");
+    fs::create_dir_all(&entry)?;
+    Ok((cache, entry.join("velnor-ci")))
+}
+
+#[test]
+fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> TestResult {
     use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::os::unix::process::CommandExt;
     use std::process::Command;
 
-    for kind in ["fifo", "huge", "symlink"] {
-        let install = staged_install(kind)?;
-        let dir = install.work.join("cache/velnor-ci/1.2.3/x64");
-        fs::create_dir_all(&dir)?;
-        let entry = dir.join("velnor-ci");
-        match kind {
-            "fifo" => {
-                assert!(Command::new("mkfifo").arg(&entry).status()?.success());
-                fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
-            }
-            "huge" => {
-                let file = fs::File::create(&entry)?;
-                file.set_len(300 * 1024 * 1024)?;
-                fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
-            }
-            _ => symlink("/bin/sh", &entry)?,
+    for kind in ["fifo", "symlink-to-fifo"] {
+        let install = Install::new(&format!("cache-{kind}"))?;
+        let (cache, entry) = seed_entry(&install)?;
+        let fifo = if kind == "fifo" {
+            entry.clone()
+        } else {
+            install.work.join("elsewhere")
+        };
+        assert!(Command::new("mkfifo").arg(&fifo).status()?.success());
+        fs::set_permissions(&fifo, fs::Permissions::from_mode(0o755))?;
+        if kind != "fifo" {
+            symlink(&fifo, &entry)?;
         }
-        let installed = run_install(&install, &install.work.join("cache"))?;
-        let from = fs::read(install.work.join("temp/velnor-ci-bin/velnor-ci")).unwrap_or_default();
+        let mut child = install.spawn(Some(&cache), |command| {
+            command.process_group(0);
+        })?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let status = loop {
+            if let Some(status) = child.try_wait()? {
+                break Some(status);
+            }
+            if std::time::Instant::now() > deadline {
+                let group = child.id().to_string();
+                Command::new("kill")
+                    .args(["-KILL", "--", &format!("-{group}")])
+                    .status()?;
+                child.wait()?;
+                break None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        let copy = install.installed();
         fs::remove_dir_all(&install.work)?;
-        assert!(installed, "{kind}");
-        assert_eq!(from, b"#!/bin/sh\necho genuine\n", "{kind}");
+        assert!(
+            status.is_some_and(|status| status.success()),
+            "{kind}: the install hung or failed"
+        );
+        assert_eq!(copy?, install.binary, "{kind}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_tampered_cache_entry_is_rejected_by_the_sha256_and_replaced_by_a_download() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+
+    let install = Install::new("cache-tampered")?;
+    let (cache, entry) = seed_entry(&install)?;
+    fs::write(&entry, b"#!/bin/sh\necho tampered\n")?;
+    fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
+    let status = install.run(Some(&cache), None)?;
+    let copy = install.installed();
+    let republished = fs::read(&entry);
+    fs::remove_dir_all(&install.work)?;
+    assert!(status.success());
+    assert_eq!(copy?, install.binary);
+    assert_eq!(republished?, install.binary);
+    Ok(())
+}
+
+#[test]
+fn a_failed_copy_into_the_tool_cache_publishes_no_entry() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+
+    let install = Install::new("cache-copy-fails")?;
+    let shims = install.work.join("shims");
+    fs::create_dir_all(&shims)?;
+    let cp = shims.join("cp");
+    fs::write(
+        &cp,
+        "#!/bin/sh\ncase \"$2\" in\n  */.velnor-ci.*) head -c 5 \"$1\" > \"$2\"; exit 1 ;;\nesac\nexec /bin/cp \"$@\"\n",
+    )?;
+    fs::set_permissions(&cp, fs::Permissions::from_mode(0o755))?;
+    let cache = install.work.join("cache");
+    let status = install.run(Some(&cache), Some(&shims))?;
+    let entries: Vec<_> = fs::read_dir(cache.join("velnor-ci/1.2.3/x64"))?
+        .map(|entry| entry.map(|e| e.file_name()))
+        .collect::<Result<_, _>>()?;
+    let copy = install.installed();
+    fs::remove_dir_all(&install.work)?;
+    assert!(status.success());
+    assert!(entries.is_empty(), "{entries:?}");
+    assert_eq!(copy?, install.binary);
     Ok(())
 }
