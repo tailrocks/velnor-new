@@ -275,10 +275,6 @@ impl GitHub for FakeReleases {
         let assets = release["assets"].as_array().cloned().unwrap_or_default();
         Ok(slice(&assets, page(query)?))
     }
-
-    fn get_raw(&self, path: &str) -> Result<String, CiError> {
-        self.get(path)
-    }
 }
 
 impl GitHubWrite for FakeReleases {

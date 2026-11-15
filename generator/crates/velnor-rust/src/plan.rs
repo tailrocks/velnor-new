@@ -20,6 +20,8 @@ const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
 const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const VERDICT_JOB: JobId = JobId::from_static("required");
+const CHECKOUT_DEPTH: u32 = 1;
+const PLAN_DEPTH: u32 = 2;
 
 struct Lane {
     slug: String,
@@ -117,15 +119,11 @@ fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
 }
 
 fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
-    let mut steps = head(facts);
+    let mut steps = head(facts, PLAN_DEPTH);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
         steps,
-        permissions: Permissions(BTreeMap::from([
-            (PermissionScope::Contents, Access::Read),
-            (PermissionScope::PullRequests, Access::Read),
-        ])),
         ..job(facts, PLAN_JOB)
     }
 }
@@ -253,8 +251,8 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn head(facts: &RepoFacts) -> Vec<Step> {
-    let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
+fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
+    let mut steps = vec![step(StepKind::Checkout { depth })];
     steps.extend(
         facts
             .helper
@@ -265,7 +263,14 @@ fn head(facts: &RepoFacts) -> Vec<Step> {
 }
 
 fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
-    let mut steps = head(facts);
+    let mut steps = head(
+        facts,
+        if lane.plan.is_none() {
+            PLAN_DEPTH
+        } else {
+            CHECKOUT_DEPTH
+        },
+    );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }

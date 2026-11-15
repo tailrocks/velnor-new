@@ -7,21 +7,13 @@ use velnor_rust::CONFIG_PATH;
 use crate::error::CiError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PullRequest {
-    pub number: u64,
-    pub base: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
     pub default_branch: Option<String>,
-    pub pull_request: Option<PullRequest>,
 }
 
 #[derive(Deserialize)]
 struct Payload {
     repository: Option<Repository>,
-    pull_request: Option<Pull>,
 }
 
 #[derive(Deserialize)]
@@ -29,26 +21,11 @@ struct Repository {
     default_branch: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct Pull {
-    number: u64,
-    base: Base,
-}
-
-#[derive(Deserialize)]
-struct Base {
-    sha: String,
-}
-
 pub fn parse_event(text: &str) -> Result<Event, CiError> {
     let payload: Payload = serde_json::from_str(text)
         .map_err(|error| CiError::new(format!("the event payload is not readable: {error}")))?;
     Ok(Event {
         default_branch: payload.repository.and_then(|repo| repo.default_branch),
-        pull_request: payload.pull_request.map(|pull| PullRequest {
-            number: pull.number,
-            base: pull.base.sha,
-        }),
     })
 }
 

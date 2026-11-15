@@ -1,0 +1,107 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::fs;
+use std::process::Output;
+
+use crate::io::Repo;
+use crate::io_plan::{plan_command, plan_lock, plan_repo, selected};
+use crate::plan_api::event;
+
+const EVERYTHING: &str =
+    "Cargo.toml: all:base-unavailable\ntools/Cargo.toml: all:base-unavailable\n";
+
+fn git(repo: &Repo, args: &[&str]) {
+    let mut full = vec![
+        "-c",
+        "user.name=lab",
+        "-c",
+        "user.email=lab@example.com",
+        "-c",
+        "commit.gpgsign=false",
+    ];
+    full.extend_from_slice(args);
+    repo.git(&full);
+}
+
+fn merged_pull_request(name: &str, edit: impl FnOnce(&Repo)) -> Repo {
+    let repo = plan_repo(name);
+    repo.write("a/src/old.rs", "pub fn old() {}\n");
+    repo.write("tools/src/gone.rs", "pub fn gone() {}\n");
+    repo.write("Cargo.lock", &plan_lock("1.0.5"));
+    repo.commit();
+    repo.git(&["branch", "-M", "main"]);
+    repo.git(&["checkout", "--quiet", "-b", "topic"]);
+    edit(&repo);
+    repo.git(&["add", "--all"]);
+    repo.commit();
+    repo.git(&["checkout", "--quiet", "main"]);
+    repo.write("a/src/later.rs", "pub fn later() {}\n");
+    repo.commit();
+    git(
+        &repo,
+        &["merge", "--quiet", "--no-ff", "--message", "merge", "topic"],
+    );
+    repo
+}
+
+fn pull_request(repo: &Repo) -> Output {
+    plan_command(repo)
+        .args(["plan", "--explain"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_EVENT_PATH", event(repo, "main"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn remove(repo: &Repo, path: &str) {
+    fs::remove_file(repo.root().join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_modified_renamed_and_deleted_file_each_select_their_package_with_no_token() {
+    let repo = merged_pull_request("git-merge", |repo| {
+        repo.write("a/src/lib.rs", "pub fn changed() {}\n");
+        repo.write("b/src/moved.rs", "pub fn old() {}\n");
+        remove(repo, "a/src/old.rs");
+        remove(repo, "tools/src/gone.rs");
+    });
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        selected(&output),
+        "Cargo.toml: all:most-packages:2\n  a changed:a/src/lib.rs\n  b changed:b/src/moved.rs\ntools/Cargo.toml: all:most-packages:1\n  t changed:tools/src/gone.rs\n"
+    );
+}
+
+#[test]
+fn a_changed_lockfile_is_compared_with_its_text_at_the_first_parent() {
+    let repo = merged_pull_request("git-lock", |repo| {
+        repo.write("Cargo.lock", &plan_lock("1.0.6"));
+    });
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        selected(&output),
+        "Cargo.toml: some\n  b lock:fnv\ntools/Cargo.toml: none\n"
+    );
+}
+
+#[test]
+fn a_checkout_that_is_not_a_merge_commit_selects_everything() {
+    let repo = plan_repo("git-plain");
+    repo.commit();
+    repo.write("a/src/lib.rs", "pub fn changed() {}\n");
+    repo.commit();
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn a_checkout_with_no_git_history_selects_everything() {
+    let repo = plan_repo("git-none");
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
