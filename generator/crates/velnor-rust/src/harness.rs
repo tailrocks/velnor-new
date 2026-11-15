@@ -111,13 +111,49 @@ pub(crate) fn selector_id(harness: &CustomHarness) -> String {
 }
 
 fn requested_by_siblings(view: &RepoView, package: &RustPackage) -> Vec<String> {
-    view.rust_metadata
-        .values()
-        .flat_map(|metadata| &metadata.members)
-        .filter(|member| member.manifest != package.manifest)
-        .flat_map(|member| &member.dependencies)
-        .filter(|dependency| dependency.manifest.as_ref() == Some(&package.manifest))
-        .flat_map(|dependency| dependency.features.iter().cloned())
+    let Some(workspace) = view.rust_metadata.values().find(|metadata| {
+        metadata
+            .members
+            .iter()
+            .any(|m| m.manifest == package.manifest)
+    }) else {
+        return Vec::new();
+    };
+    let siblings = workspace
+        .members
+        .iter()
+        .filter(|member| member.manifest != package.manifest);
+    let mut requested = Vec::new();
+    for member in siblings {
+        requested.extend(
+            member
+                .dependencies
+                .iter()
+                .filter(|dependency| dependency.manifest.as_ref() == Some(&package.manifest))
+                .flat_map(|dependency| dependency.features.iter().cloned()),
+        );
+        let forwarded = view
+            .files
+            .get(&member.manifest)
+            .and_then(|bytes| table(bytes).ok())
+            .map(|manifest| forwarded_features(&manifest, package.name.as_str()));
+        requested.extend(forwarded.into_iter().flatten());
+    }
+    requested
+}
+
+fn forwarded_features(manifest: &toml::Table, package: &str) -> Vec<String> {
+    manifest
+        .get("features")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::Table::values)
+        .filter_map(toml::Value::as_array)
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .filter_map(|member| member.split_once('/'))
+        .filter(|(name, _)| name.trim_end_matches('?') == package)
+        .map(|(_, feature)| feature.to_owned())
         .collect()
 }
 
