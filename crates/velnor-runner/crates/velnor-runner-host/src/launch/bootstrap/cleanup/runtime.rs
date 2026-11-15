@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     error::HostError,
@@ -126,12 +123,13 @@ impl NativeCleanupRuntime {
         };
 
         let guest = retry::while_refused(
-            || {
+            CLEANUP_OBSERVER_TIMEOUT,
+            |deadline| {
                 crate::launch::resource_probe::observe_cleanup_binding(
                     observer_context,
                     pending.identity.reservation_id(),
                     witness.binding(),
-                    Instant::now() + CLEANUP_OBSERVER_TIMEOUT,
+                    deadline,
                 )
             },
             retry::log_refusal,

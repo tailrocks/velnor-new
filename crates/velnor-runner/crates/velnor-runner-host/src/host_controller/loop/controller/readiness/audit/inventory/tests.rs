@@ -148,3 +148,19 @@ fn a_pair_that_stops_settling_starts_a_fresh_age_next_time() {
         Ok(None)
     );
 }
+
+#[test]
+fn a_running_pair_without_a_known_assignment_is_an_ownership_error() {
+    for state in [
+        PhysicalRunnerJitState::Ready,
+        PhysicalRunnerJitState::Started,
+        PhysicalRunnerJitState::Uncertain,
+        PhysicalRunnerJitState::StartUncertain,
+        PhysicalRunnerJitState::Unknown,
+    ] {
+        assert_eq!(
+            pair_stage(&PhysicalRunnerOwnership::Unknown, state),
+            Err(HostError::Ownership)
+        );
+    }
+}
