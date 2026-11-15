@@ -6,8 +6,10 @@ use std::collections::HashMap;
 use bollard::Docker;
 use bollard::models::{ContainerCreateBody, HostConfig, Mount, MountType, VolumeCreateRequest};
 use bollard::query_parameters::{
-    CreateContainerOptions, StartContainerOptions, UploadToContainerOptions,
+    CreateContainerOptions, InspectContainerOptions, StartContainerOptions,
+    UploadToContainerOptions, WaitContainerOptions,
 };
+use futures_util::StreamExt;
 
 use crate::config::RunnerPlatform;
 use crate::docker_client::docker_deadline;
@@ -27,6 +29,7 @@ const PAIR_LABEL: &str = "velnor-local.pair";
 const ROLE_LABEL: &str = "velnor-local.role";
 pub(super) const SIDE_LABEL: &str = "velnor-local.side";
 pub(super) const AGENT_LABEL: &str = "velnor-local.agent";
+const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalPair {
@@ -67,10 +70,26 @@ impl LocalPair {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{error}")]
+pub struct StartFailure {
+    pub error: HostError,
+    pub leftover: Option<String>,
+}
+
+impl From<HostError> for StartFailure {
+    fn from(error: HostError) -> Self {
+        Self {
+            error,
+            leftover: None,
+        }
+    }
+}
+
 pub async fn start_pair(
     docker: &Docker,
     request: &LocalPairRequest,
-) -> Result<LocalPair, HostError> {
+) -> Result<LocalPair, StartFailure> {
     let validated = validate(request)?;
     let pair = validated.pair.clone();
     match Box::pin(create_and_start(docker, request, &validated)).await {
@@ -84,14 +103,18 @@ pub async fn start_pair(
                 .volume_name(WorkerVolumeRole::RunnerMetadata),
         }),
         Err(error) => {
-            let _removed = remove_labelled(docker, &format!("{PAIR_LABEL}={pair}")).await;
-            Err(error)
+            let leftover = remove_pair_named(docker, &pair).await.err().map(|_| pair);
+            Err(StartFailure { error, leftover })
         }
     }
 }
 
 pub async fn remove_pair(docker: &Docker, pair: &LocalPair) -> Result<Removed, HostError> {
-    remove_labelled(docker, &format!("{PAIR_LABEL}={}", pair.name)).await
+    remove_pair_named(docker, &pair.name).await
+}
+
+pub async fn remove_pair_named(docker: &Docker, name: &str) -> Result<Removed, HostError> {
+    remove_labelled(docker, &format!("{PAIR_LABEL}={name}")).await
 }
 
 async fn create_and_start(
@@ -266,7 +289,26 @@ async fn create(docker: &Docker, create: PairCreate) -> Result<String, HostError
 async fn start(docker: &Docker, id: &str) -> Result<(), HostError> {
     docker_deadline(docker.start_container(id, None::<StartContainerOptions>))
         .await?
-        .map_err(|_| HostError::Docker)
+        .map_err(|_| HostError::Docker)?;
+    let mut exited = docker.wait_container(
+        id,
+        Some(WaitContainerOptions {
+            condition: "not-running".to_owned(),
+        }),
+    );
+    if tokio::time::timeout(START_GRACE, exited.next())
+        .await
+        .is_ok()
+    {
+        return Err(HostError::Ownership);
+    }
+    let inspected = docker_deadline(docker.inspect_container(id, None::<InspectContainerOptions>))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    match inspected.state.and_then(|state| state.running) {
+        Some(true) => Ok(()),
+        _ => Err(HostError::Ownership),
+    }
 }
 
 async fn upload(docker: &Docker, id: &str, path: &str, archive: Vec<u8>) -> Result<(), HostError> {
