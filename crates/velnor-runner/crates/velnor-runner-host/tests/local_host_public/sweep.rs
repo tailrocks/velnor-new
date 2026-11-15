@@ -13,12 +13,28 @@ use super::{position, runner};
 async fn orphan(scenario: &Scenario, environment: &str) -> TestResult<String> {
     let labels = HashMap::from([
         ("velnor-local".to_owned(), environment.to_owned()),
+        (
+            "velnor-local.pair".to_owned(),
+            format!("{environment}-pair"),
+        ),
         ("velnor-local.side".to_owned(), "trusted".to_owned()),
         (
             "velnor-local.agent".to_owned(),
             format!("{environment}-agent"),
         ),
     ]);
+    labelled_container(scenario, labels).await
+}
+
+async fn service(scenario: &Scenario, environment: &str) -> TestResult<String> {
+    let labels = HashMap::from([("velnor-local".to_owned(), environment.to_owned())]);
+    labelled_container(scenario, labels).await
+}
+
+async fn labelled_container(
+    scenario: &Scenario,
+    labels: HashMap<String, String>,
+) -> TestResult<String> {
     let created = scenario
         .fixture
         .docker
@@ -64,6 +80,7 @@ async fn local_start_sweeps_the_leftovers_of_its_environment_only() -> TestResul
     let other = format!("{environment}-other");
     let leftover = orphan(&scenario, &environment).await?;
     let neighbour = orphan(&scenario, &other).await?;
+    let services = service(&scenario, &environment).await?;
     let plan = scenario.plan(1, 0)?;
     scenario.start(plan);
     let run = async {
@@ -74,7 +91,9 @@ async fn local_start_sweeps_the_leftovers_of_its_environment_only() -> TestResul
     let stopped = scenario.stop().await?;
     let events = scenario.fake().events();
     let kept = exists(&scenario, &neighbour).await;
+    let service_kept = exists(&scenario, &services).await;
     discard(&scenario, &neighbour).await;
+    discard(&scenario, &services).await;
     discard(&scenario, &leftover).await;
     scenario.finish().await?;
     assert!(run?);
@@ -83,6 +102,10 @@ async fn local_start_sweeps_the_leftovers_of_its_environment_only() -> TestResul
     assert!(position(&events, &format!("delete:trusted:{other}")).is_none());
     assert_eq!(stopped, Ok(()));
     assert!(kept);
+    assert!(
+        service_kept,
+        "the sweep removed a container that is not a pair"
+    );
     Ok(())
 }
 

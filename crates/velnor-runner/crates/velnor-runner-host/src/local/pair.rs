@@ -114,7 +114,7 @@ pub async fn remove_pair(docker: &Docker, pair: &LocalPair) -> Result<Removed, H
 }
 
 pub async fn remove_pair_named(docker: &Docker, name: &str) -> Result<Removed, HostError> {
-    remove_labelled(docker, &format!("{PAIR_LABEL}={name}")).await
+    remove_labelled(docker, &[format!("{PAIR_LABEL}={name}")]).await
 }
 
 async fn create_and_start(

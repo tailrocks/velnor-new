@@ -4,9 +4,10 @@
 use std::path::{Path, PathBuf};
 
 use velnor_local::scenario::{
-    Outcome, distinct, inside, keeps_environment, plan, restores, summary, verdict,
+    Outcome, distinct, inside, keeps_environment, plan, restores, summary,
 };
 use velnor_local::standin::Job;
+use velnor_local::verdict::{Check, verdict};
 
 #[test]
 fn the_report_names_each_job_with_its_key_the_entry_it_restored_and_its_scope() {
@@ -120,7 +121,7 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         caches: vec!["job lint: key k found no entry".to_owned()],
         trusted: true,
     };
-    let text = verdict("leaf", &[outcome], 100, 4.5);
+    let text = verdict("leaf", &[outcome], (100, 4.5), &Check::Plain);
     assert!(
         text.lines()
             .all(|line| line.starts_with("velnor-local leaf: ")),
@@ -138,7 +139,7 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
 
 #[test]
 fn every_verdict_says_that_the_approved_workflows_check_is_off() {
-    let text = verdict("leaf", &[], 100, 4.5);
+    let text = verdict("leaf", &[], (100, 4.5), &Check::Plain);
     let warning = format!("velnor-local leaf: {}\n", velnor_local::authority::WARNING);
     assert!(text.contains(&warning), "{text}");
     assert!(warning.contains("approved-workflows check is off"));

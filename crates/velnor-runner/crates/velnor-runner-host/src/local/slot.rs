@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::WaitContainerOptions;
@@ -18,7 +19,7 @@ use super::channel::{
     REQUEST_POLL, challenge, deliver_jit, publish_challenge, publish_decision, read_request,
 };
 use super::decide::{Verdict, decide};
-use super::pair::{LocalPair, remove_pair, start_pair};
+use super::pair::{LocalPair, remove_pair, remove_pair_named, start_pair};
 use super::plan::Side;
 use super::supervisor::{Slot, Supervisor, stopped};
 
@@ -39,14 +40,65 @@ struct Line<'a> {
     sha: Option<&'a str>,
 }
 
+const PAIR_ATTEMPTS: u32 = 3;
+const PAIR_RETRY: Duration = Duration::from_secs(2);
+
+struct PairFailure {
+    error: HostError,
+    leftover: Option<String>,
+}
+
+impl From<HostError> for PairFailure {
+    fn from(error: HostError) -> Self {
+        Self {
+            error,
+            leftover: None,
+        }
+    }
+}
+
+async fn pause(stop: &mut watch::Receiver<bool>) {
+    tokio::select! {
+        () = tokio::time::sleep(PAIR_RETRY) => {}
+        () = stopped(stop) => {}
+    }
+}
+
 impl Supervisor {
     pub(super) async fn run_slot(
         &self,
         slot: Slot,
         mut stop: watch::Receiver<bool>,
     ) -> Result<(), HostError> {
+        let mut failed = 0;
+        let mut leftover: Option<String> = None;
         while !*stop.borrow() {
-            self.one_pair(&slot, &mut stop).await?;
+            if let Some(name) = leftover.take() {
+                if remove_pair_named(&self.docker, &name).await.is_err() {
+                    failed += 1;
+                    if failed >= PAIR_ATTEMPTS {
+                        return Err(HostError::Docker);
+                    }
+                    eprintln!("pair {} was not removed, attempt {failed}", slot.label);
+                    leftover = Some(name);
+                    pause(&mut stop).await;
+                    continue;
+                }
+                self.pairs_removed.fetch_add(1, Ordering::SeqCst);
+                println!("pair {} removed", slot.label);
+            }
+            match self.one_pair(&slot, &mut stop).await {
+                Err(failure)
+                    if failure.error == HostError::Docker && failed + 1 < PAIR_ATTEMPTS =>
+                {
+                    failed += 1;
+                    eprintln!("pair {} failed at Docker, attempt {failed}", slot.label);
+                    leftover = failure.leftover;
+                    pause(&mut stop).await;
+                }
+                Err(failure) => return Err(failure.error),
+                Ok(()) => failed = 0,
+            }
         }
         Ok(())
     }
@@ -55,31 +107,37 @@ impl Supervisor {
         &self,
         slot: &Slot,
         stop: &mut watch::Receiver<bool>,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), PairFailure> {
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
         let minted = self
             .client
             .mint(slot.side)
             .await
-            .map_err(|_| HostError::Endpoint)?;
+            .map_err(|_| PairFailure::from(HostError::Endpoint))?;
         let request = self.request(slot, &minted.name, sequence);
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
             Err(failure) => {
                 self.retire_agent(slot.side, &minted.name).await?;
-                return Err(failure.error);
+                return Err(PairFailure {
+                    error: failure.error,
+                    leftover: failure.leftover,
+                });
             }
         };
         let served = self.serve(slot, &pair, &minted, sequence, stop).await;
         let removed = remove_pair(&self.docker, &pair).await;
+        let leftover = removed.is_err().then(|| pair.name().to_owned());
         if removed.is_ok() {
             self.pairs_removed.fetch_add(1, Ordering::SeqCst);
             println!("pair {} removed", slot.label);
         }
         let retired = self.retire_agent(slot.side, &minted.name).await;
-        served?;
-        removed?;
-        retired
+        let error = served
+            .err()
+            .or_else(|| removed.err())
+            .or_else(|| retired.err());
+        error.map_or(Ok(()), |error| Err(PairFailure { error, leftover }))
     }
 
     async fn retire_agent(&self, side: Side, name: &str) -> Result<(), HostError> {

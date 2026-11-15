@@ -337,10 +337,12 @@ fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
 fn authority_has_no_address_option_and_run_takes_keep() {
     use clap::{CommandFactory, Parser};
     use velnor_local::cli::{Cli, Command};
-    let supervise = Cli::command()
-        .find_subcommand("supervise")
-        .map(|command| (command.is_hide_set(), command.get_arguments().count()));
-    assert_eq!(supervise, Some((true, 1)));
+    let supervise = Cli::command().find_subcommand("supervise").map(|command| {
+        let names = command.get_arguments().map(|arg| arg.get_id().to_string());
+        (command.is_hide_set(), names.collect::<Vec<_>>())
+    });
+    let names = ["dir", "velnor_host", "pairs", "fork_pairs"].map(str::to_owned);
+    assert_eq!(supervise, Some((true, names.to_vec())));
     let parsed = Cli::try_parse_from([
         "velnor-local",
         "run",
