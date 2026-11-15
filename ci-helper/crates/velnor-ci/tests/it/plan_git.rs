@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::Output;
+use std::process::{Command, Output};
 
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_lock, plan_repo, selected};
@@ -45,13 +45,28 @@ fn merged_pull_request(name: &str, edit: impl FnOnce(&Repo)) -> Repo {
     repo
 }
 
-fn pull_request(repo: &Repo) -> Output {
+fn rev(repo: &Repo, name: &str) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo.root())
+        .args(["rev-parse", name])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+fn pull_request_at(repo: &Repo, sha: &str) -> Output {
     plan_command(repo)
         .args(["plan", "--explain"])
         .env("GITHUB_EVENT_NAME", "pull_request")
         .env("GITHUB_EVENT_PATH", event(repo, "main"))
+        .env("GITHUB_SHA", sha)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn pull_request(repo: &Repo) -> Output {
+    pull_request_at(repo, &rev(repo, "HEAD"))
 }
 
 fn remove(repo: &Repo, path: &str) {
@@ -59,9 +74,8 @@ fn remove(repo: &Repo, path: &str) {
 }
 
 #[test]
-fn a_modified_renamed_and_deleted_file_each_select_their_package_with_no_token() {
+fn a_renamed_and_a_deleted_file_each_select_their_package_with_no_token() {
     let repo = merged_pull_request("git-merge", |repo| {
-        repo.write("a/src/lib.rs", "pub fn changed() {}\n");
         repo.write("b/src/moved.rs", "pub fn old() {}\n");
         remove(repo, "a/src/old.rs");
         remove(repo, "tools/src/gone.rs");
@@ -70,7 +84,7 @@ fn a_modified_renamed_and_deleted_file_each_select_their_package_with_no_token()
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         selected(&output),
-        "Cargo.toml: all:most-packages:2\n  a changed:a/src/lib.rs\n  b changed:b/src/moved.rs\ntools/Cargo.toml: all:most-packages:1\n  t changed:tools/src/gone.rs\n"
+        "Cargo.toml: all:most-packages:2\n  a changed:a/src/old.rs\n  b changed:b/src/moved.rs\ntools/Cargo.toml: all:most-packages:1\n  t changed:tools/src/gone.rs\n"
     );
 }
 
@@ -94,6 +108,17 @@ fn a_checkout_that_is_not_a_merge_commit_selects_everything() {
     repo.write("a/src/lib.rs", "pub fn changed() {}\n");
     repo.commit();
     let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn a_checkout_whose_head_is_not_the_events_merge_commit_selects_everything() {
+    let repo = merged_pull_request("git-other-sha", |repo| {
+        repo.write("a/src/lib.rs", "pub fn changed() {}\n");
+    });
+    let base = rev(&repo, "HEAD^1");
+    let output = pull_request_at(&repo, &base);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(selected(&output), EVERYTHING);
 }

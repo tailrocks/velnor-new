@@ -12,6 +12,7 @@ use crate::error::CiError;
 const BASE: &str = "HEAD^1";
 const HEAD: &str = "HEAD";
 const MERGED: &str = "HEAD^2";
+const SHA_VARIABLE: &str = "GITHUB_SHA";
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, CiError> {
     let output = Command::new("git")
@@ -35,6 +36,14 @@ pub(super) fn changed_files(root: &Path) -> Result<BTreeSet<RepoPath>, CiError> 
     git(root, &["rev-parse", "--verify", "--quiet", MERGED]).map_err(|_| {
         CiError::new("HEAD is not a merge commit, so git cannot tell which files the pull request changes; check out with fetch-depth: 2")
     })?;
+    let head = String::from_utf8_lossy(&git(root, &["rev-parse", "--verify", HEAD])?)
+        .trim()
+        .to_owned();
+    if std::env::var(SHA_VARIABLE).ok().as_deref() != Some(head.as_str()) {
+        return Err(CiError::new(format!(
+            "HEAD is not the pull request merge commit named by {SHA_VARIABLE}, so git cannot tell which files the pull request changes"
+        )));
+    }
     let listing = git(
         root,
         &["diff", "--no-renames", "--name-only", "-z", BASE, HEAD],
