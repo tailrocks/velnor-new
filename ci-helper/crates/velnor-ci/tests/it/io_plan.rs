@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use crate::io::Repo;
 
-fn plan_repo(name: &str) -> Repo {
+pub(crate) fn plan_repo(name: &str) -> Repo {
     let repo = Repo::new(name);
     repo.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     repo.write(
@@ -299,7 +299,7 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     );
 }
 
-fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
+pub(crate) fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
     let outputs = repo.root().join("policy");
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);

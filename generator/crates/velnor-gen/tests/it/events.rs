@@ -131,12 +131,13 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         deny: true,
         machete: true,
     };
-    let cases: [(&[&str], bool, (bool, bool)); 9] = [
+    let cases: [(&[&str], bool, (bool, bool)); 10] = [
         (&["README.md"], false, (false, false)),
         (&[], false, (false, false)),
         (&["Cargo.lock"], false, (true, true)),
         (&["crates/a/Cargo.toml"], false, (true, true)),
         (&["deny.toml"], false, (true, true)),
+        (&[".cargo/config.toml"], false, (true, true)),
         (
             &["docs/deny.toml.md", "src/Cargo.tomls"],
             false,

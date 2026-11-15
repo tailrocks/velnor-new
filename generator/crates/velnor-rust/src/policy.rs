@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 use velnor_model::{PolicyTools, RepoPath};
 
 use crate::mise::MISE_CONFIGS;
+use crate::roots::is_cargo_config;
 
 pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
 
@@ -27,7 +28,7 @@ pub fn policy_runs(
     let dependency = everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
-            DEPENDENCY_FILES.contains(&name)
+            DEPENDENCY_FILES.contains(&name) || is_cargo_config(path)
         });
     let unused_possible = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
