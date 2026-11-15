@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoPath;
 use velnor_rust::{MetadataError, cargo_files, wanted_files};
 
-use crate::expected_files;
+use crate::expected_with_notes;
 
 use super::{Error, read_view, regular_file, replace, toplevel};
 
@@ -21,7 +21,10 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
-    expected_files(&view).map_err(Error::Generate)?;
+    let (_, notes) = expected_with_notes(&view).map_err(Error::Generate)?;
+    for note in notes {
+        eprintln!("velnor-gen: {note}");
+    }
     let wanted = wanted_files(&view.tracked_paths);
     let recording = Recording {
         view: view
