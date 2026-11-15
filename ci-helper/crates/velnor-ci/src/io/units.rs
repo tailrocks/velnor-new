@@ -206,7 +206,7 @@ pub(super) fn host_platform(root: &Path) -> Result<Platform, CiError> {
     let triple = version
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
-        .unwrap_or_default();
+        .ok_or_else(|| CiError::new("rustc -vV printed no host triple"))?;
     Ok(Platform::parse(triple, &run(&["--print", "cfg"])?))
 }
 

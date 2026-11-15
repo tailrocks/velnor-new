@@ -28,6 +28,15 @@ enum Expression {
     Not(Box<Expression>),
 }
 
+const FLAG_SENSITIVE: [&str; 6] = [
+    "target_feature",
+    "panic",
+    "debug_assertions",
+    "overflow_checks",
+    "relocation_model",
+    "sanitize",
+];
+
 impl Platform {
     #[must_use]
     pub fn parse(triple: &str, printed: &str) -> Self {
@@ -61,7 +70,13 @@ impl Platform {
         let Some(inner) = rest.strip_suffix(')') else {
             return true;
         };
-        let mut tokens = tokens(inner).into_iter().peekable();
+        let tokens = tokens(inner);
+        if tokens.iter().any(
+            |token| matches!(token, Token::Word(word) if FLAG_SENSITIVE.contains(&word.as_str())),
+        ) {
+            return true;
+        }
+        let mut tokens = tokens.into_iter().peekable();
         match expression(&mut tokens) {
             Some(parsed) if tokens.peek().is_none() => self.evaluate(&parsed),
             _ => true,

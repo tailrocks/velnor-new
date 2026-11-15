@@ -47,3 +47,17 @@ fn a_predicate_that_cannot_be_read_is_taken_to_hold() {
         assert!(platform.holds(predicate), "{predicate}");
     }
 }
+
+#[test]
+fn a_predicate_on_a_cfg_key_that_rustflags_can_change_is_taken_to_hold() {
+    let platform = linux();
+    for predicate in [
+        "cfg(target_feature = \"avx2\")",
+        "cfg(not(target_feature = \"crt-static\"))",
+        "cfg(all(unix, target_feature = \"sse4.2\"))",
+        "cfg(panic = \"abort\")",
+        "cfg(debug_assertions)",
+    ] {
+        assert!(platform.holds(predicate), "{predicate}");
+    }
+}
