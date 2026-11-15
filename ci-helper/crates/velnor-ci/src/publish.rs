@@ -3,19 +3,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ring::digest::{SHA256, digest};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite, Repo, parse};
 use crate::release::PlainName;
+use velnor_rust::sha256_hex;
 
 pub const SUMS: &str = "SHA256SUMS";
 const PAGE: usize = 100;
 const UPLOAD_TEMPLATE: &str = "{?name,label}";
 const UPLOADED: &str = "uploaded";
-const HEX: &[u8; 16] = b"0123456789abcdef";
 
 #[derive(Debug)]
 pub struct Request {
@@ -146,7 +145,7 @@ fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
             problems.push(format!("{name}: missing"));
             continue;
         };
-        let actual = sha256(bytes);
+        let actual = sha256_hex(bytes);
         match sums.get(*name) {
             None => problems.push(format!("{name}: not listed in {SUMS}")),
             Some(listed) if *listed != actual => problems.push(format!(
@@ -169,7 +168,7 @@ fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
     }
     files.push(File {
         name: SUMS,
-        sha256: sha256(sums_bytes),
+        sha256: sha256_hex(sums_bytes),
         bytes: sums_bytes,
     });
     Ok(files)
@@ -205,15 +204,6 @@ fn sum_line(line: &str) -> Option<(&str, &str)> {
         .bytes()
         .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
     (hex && PlainName::new("file", name).is_ok()).then_some((sha256, name))
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    digest(&SHA256, bytes)
-        .as_ref()
-        .iter()
-        .flat_map(|byte| [HEX[usize::from(byte >> 4)], HEX[usize::from(byte & 0xf)]])
-        .map(char::from)
-        .collect()
 }
 
 fn draft(

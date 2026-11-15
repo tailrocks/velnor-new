@@ -3,7 +3,7 @@
 
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -107,11 +107,22 @@ fn host_triple(root: &std::path::Path) -> Result<String, CiError> {
         .ok_or_else(|| CiError::new("rustc -vV does not report a host".to_owned()))
 }
 
-fn log_path() -> PathBuf {
+fn log_path() -> Result<PathBuf, (u8, String)> {
     std::env::var_os(TEMP_VARIABLE)
         .filter(|dir| !dir.is_empty())
-        .map_or_else(std::env::temp_dir, PathBuf::from)
-        .join(LOG_FILE)
+        .map(|dir| PathBuf::from(dir).join(LOG_FILE))
+        .ok_or_else(|| (2, format!("{TEMP_VARIABLE} is not set")))
+}
+
+fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options.open(path)
 }
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
@@ -125,15 +136,17 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
 }
 
 fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
-    let path = log_path();
-    let mut log = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
-    let text = args.command.join(" ");
+    let path = log_path()?;
+    let mut log =
+        open_log(&path).map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
     let write_error = |e: std::io::Error| (2, format!("cannot write {}: {e}", path.display()));
-    writeln!(log, "velnor-ci run: {text}").map_err(write_error)?;
+    writeln!(
+        log,
+        "velnor-ci run: {} ({} arguments)",
+        args.command[0],
+        args.command.len() - 1
+    )
+    .map_err(write_error)?;
     let mut child = Command::new(&args.command[0])
         .args(&args.command[1..])
         .stdout(Stdio::piped())

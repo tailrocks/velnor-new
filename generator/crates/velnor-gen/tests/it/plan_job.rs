@@ -31,7 +31,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 
 const LANE_SETUP: [&str; 6] = [
     "Check out",
-    "Fetch velnor-ci 0.1.79",
+    "Install velnor-ci 0.1.79",
     "Install tools",
     "Add Rust components",
     "velnor-ci prepare",
@@ -46,7 +46,7 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     let steps = steps_of(&text, "rust");
     assert_eq!(
         steps[..3],
-        ["Check out", "Fetch velnor-ci 0.1.79", "velnor-ci plan"]
+        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
     );
     let condition =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
@@ -74,7 +74,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     assert_eq!(
         steps_of(&text, "rust-plan"),
-        ["Check out", "Fetch velnor-ci 0.1.79", "velnor-ci plan"]
+        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
     );
     let plan_job = &text[text.find("  rust-plan:").unwrap_or_default()
         ..text.find("  rust-root:").unwrap_or_default()];
@@ -231,5 +231,39 @@ fn the_default_branch_is_main_unless_the_config_names_another_valid_branch() -> 
             "{bad:?} gave {result:?}"
         );
     }
+    Ok(())
+}
+
+fn job_permissions(text: &str, job: &str) -> Vec<String> {
+    let header = format!("  {job}:\n");
+    let start = text
+        .find(&header)
+        .map_or(text.len(), |at| at + header.len());
+    let body = &text[start..];
+    let permissions = "    permissions:\n";
+    let Some(at) = body.find(permissions) else {
+        return Vec::new();
+    };
+    body[at + permissions.len()..]
+        .lines()
+        .take_while(|line| line.starts_with("      "))
+        .map(|line| line.trim().to_owned())
+        .collect()
+}
+
+#[test]
+fn only_the_plan_job_may_read_pull_requests_and_every_other_job_reads_contents_only() -> TestResult
+{
+    let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    assert_eq!(
+        job_permissions(&multi, "rust-plan"),
+        ["contents: read", "pull-requests: read"]
+    );
+    for job in ["rust-root", "rust-lab", "required"] {
+        assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
+    }
+    let single = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(!single.contains("pull-requests"), "{single}");
+    assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
     Ok(())
 }

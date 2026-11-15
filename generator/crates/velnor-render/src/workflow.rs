@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::permissions;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 
@@ -18,6 +19,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(condition) = &job.condition {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
+    items.push(entry("permissions", permissions(&job.permissions)));
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
@@ -52,7 +54,11 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(uses) = &step.uses {
-        items.push(entry("uses", text(uses)));
+        let value = match &step.uses_comment {
+            Some(comment) => Yaml::Trailed(comment.clone(), Box::new(text(uses))),
+            None => text(uses),
+        };
+        items.push(entry("uses", value));
     }
     if !step.with.is_empty() {
         items.push(entry("with", values(&step.with)));
@@ -85,7 +91,6 @@ fn values(items: &[(String, Value)]) -> Yaml {
                 let yaml = match value {
                     Value::Text(text) => Yaml::Str(text.clone()),
                     Value::Expr(text) => Yaml::Expr(text.clone()),
-                    Value::Selected(text) => Yaml::Selected(text.clone()),
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };

@@ -9,6 +9,8 @@ use ureq::http::Response;
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite};
 
+pub(super) const PLAN_TIMEOUT: Duration = Duration::from_secs(20);
+pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug)]
@@ -19,9 +21,9 @@ pub(super) struct HttpGitHub {
 }
 
 impl HttpGitHub {
-    pub(super) fn new(api: String, token: String) -> Self {
+    pub(super) fn new(api: String, token: String, timeout: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(300)))
+            .timeout_global(Some(timeout))
             .build()
             .into();
         Self { agent, api, token }

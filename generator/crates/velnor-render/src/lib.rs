@@ -14,8 +14,8 @@ use velnor_model::{
 };
 
 pub use crate::rules::{
-    ALLOWED_ACTIONS, FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
-    RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    ALLOWED_ACTIONS, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
@@ -79,7 +79,7 @@ fn triggers(triggers: &Triggers) -> Yaml {
     Yaml::Map(items)
 }
 
-fn permissions(permissions: &Permissions) -> Yaml {
+pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
     Yaml::Map(
         permissions
             .0
