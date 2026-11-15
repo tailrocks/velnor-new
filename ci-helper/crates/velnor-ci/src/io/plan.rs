@@ -8,7 +8,8 @@ use std::path::Path;
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
 use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, root_sources, select, unknown_paths, unread_packages,
+    cargo_files, detect, optional_steps, policy_runs, root_sources, select, unknown_paths,
+    unread_packages,
 };
 
 use super::{
@@ -58,7 +59,11 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             Ok((root.manifest.clone(), steps))
         })
         .collect::<Result<Steps, CiError>>()?;
-    let outputs = outputs(&selections, &steps)?;
+    let everything = selections
+        .values()
+        .any(|selection| matches!(selection, RustSelection::All(_)));
+    let policy = policy_runs(facts.policy, &changes.paths, everything);
+    let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
     Ok(if args.explain {
         explain(

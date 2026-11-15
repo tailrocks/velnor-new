@@ -4,53 +4,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision,
-    Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, HelperCommand, Job, JobId, PermissionScope, Permissions,
+    PullRequestType, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::lane::{Lane, plan_job, policy_job, used_outputs};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
 const RUST_JOB: JobId = JobId::from_static("rust");
 const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
-const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const VERDICT_JOB: JobId = JobId::from_static("required");
-
-struct Lane {
-    slug: String,
-    plan: Option<JobId>,
-}
-
-impl Lane {
-    fn gate(&self, need: GateNeed) -> Gate {
-        Gate {
-            slug: self.slug.clone(),
-            need,
-            from: self.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job),
-        }
-    }
-
-    fn steps(&self) -> Option<Gate> {
-        self.plan.is_none().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn job(&self) -> Option<Gate> {
-        self.plan.is_some().then(|| self.gate(GateNeed::Selected))
-    }
-
-    fn cargo(&self, command: &CargoCommand) -> Option<Gate> {
-        match command {
-            CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
-            _ => self.steps(),
-        }
-    }
-}
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -66,19 +35,20 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane {
-                slug: root_slug(&root.manifest),
-                plan: (!single).then_some(PLAN_JOB),
-            };
+            let lane = Lane::root(root_slug(&root.manifest), single);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
+    if facts.policy.any() {
+        jobs.push(policy_job(facts, &Lane::policy(single)));
+    }
     if !single {
         let used = used_outputs(&jobs);
         jobs.insert(0, plan_job(facts, used));
     }
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
+        skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::NotCancelled,
         steps: vec![step(StepKind::FailWhenANeedFailed)],
@@ -87,45 +57,17 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
-            pull_request: true,
+            pull_request: PullRequestType::ALL.to_vec(),
+            push_branch: Some(facts.config.default_branch.clone()),
+            merge_group: true,
             workflow_dispatch: true,
         },
-        concurrency: Concurrency {
-            cancel_in_progress: true,
-        },
+        concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Contents, Access::Read),
             (PermissionScope::PullRequests, Access::Read),
         ])),
         jobs,
-    }
-}
-
-fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
-    let used: BTreeSet<(String, GateNeed)> = lanes
-        .iter()
-        .flat_map(|job| {
-            job.gate
-                .iter()
-                .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
-        })
-        .flat_map(|gate| {
-            [
-                (gate.slug.clone(), GateNeed::Selected),
-                (gate.slug.clone(), gate.need),
-            ]
-        })
-        .collect();
-    used.into_iter().collect()
-}
-
-fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
-    let mut steps = head(facts);
-    steps.push(step(StepKind::Helper(HelperCommand::Plan)));
-    Job {
-        plan_outputs: outputs,
-        steps,
-        ..job(facts, PLAN_JOB)
     }
 }
 
@@ -144,12 +86,9 @@ fn root_jobs(
         }
     };
     let cargo = |commands: Vec<CargoCommand>| {
-        commands.into_iter().map(|command| Step {
-            gate: lane.cargo(&command),
-            kind: StepKind::Cargo(command),
-            directory: root.manifest.parent(),
-            when: When::NotCancelled,
-        })
+        commands
+            .into_iter()
+            .map(|command| lane.cargo(command, root.manifest.parent()))
     };
     let lane_job = |id: JobId, steps: Vec<Step>| Job {
         needs: lane.plan.clone().into_iter().collect(),
@@ -165,9 +104,7 @@ fn root_jobs(
     let nextest = root.members.iter().any(RustMember::has_test_target);
     let mut test = Vec::new();
     if nextest {
-        test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
-        });
+        test.push(CargoCommand::NextestRun);
     }
     if has_doctest_library(root) {
         test.push(CargoCommand::Doctest);
@@ -198,6 +135,7 @@ fn root_jobs(
             ));
             let mut jobs = vec![Job {
                 comment,
+                skip_on_draft: false,
                 ..lane_job(id(LINT_JOB), lint_steps)
             }];
             if !test.is_empty() {
@@ -252,7 +190,7 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn head(facts: &RepoFacts) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
     steps.extend(
         facts
@@ -308,13 +246,14 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
     steps
 }
 
-fn job(facts: &RepoFacts, id: JobId) -> Job {
+pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
     Job {
         id,
         name: None,
         comment: None,
         needs: Vec::new(),
         when: When::Success,
+        skip_on_draft: facts.config.skip_draft_pull_requests,
         runs_on: facts.config.runner.clone(),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
@@ -323,11 +262,12 @@ fn job(facts: &RepoFacts, id: JobId) -> Job {
     }
 }
 
-fn step(kind: StepKind) -> Step {
+pub(crate) fn step(kind: StepKind) -> Step {
     Step {
         kind,
         directory: None,
         when: When::Success,
         gate: None,
+        reads: None,
     }
 }

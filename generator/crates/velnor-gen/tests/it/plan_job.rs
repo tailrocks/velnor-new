@@ -158,8 +158,12 @@ fn the_plan_job_exposes_only_the_outputs_a_lane_reads() -> TestResult {
             "lab_mode",
             "lab_doctests",
             "lab_docs",
+            "lab_test_filter",
+            "lab_package_args",
             "root_mode",
-            "root_docs"
+            "root_docs",
+            "root_test_filter",
+            "root_package_args"
         ]
     );
     for output in &outputs {

@@ -9,6 +9,7 @@ use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, SelectionReason, SkipReason,
     StepNeed,
 };
+use velnor_rust::PolicyRuns;
 
 fn path(text: &str) -> RepoPath {
     RepoPath::new(text).unwrap_or_else(|e| unreachable!("{e}"))
@@ -57,7 +58,15 @@ fn each_root_gets_its_mode_its_packages_a_nextest_filter_and_the_cargo_package_a
         (path("crates/velnor-runner/Cargo.toml"), RustSelection::None),
     ]);
     assert_eq!(
-        outputs(&selections, &three_roots()).unwrap_or_else(|e| unreachable!("{e}")),
+        outputs(
+            &selections,
+            &three_roots(),
+            PolicyRuns {
+                deny: true,
+                machete: false
+            }
+        )
+        .unwrap_or_else(|e| unreachable!("{e}")),
         "rust_root_mode=all\n\
          rust_root_packages=\n\
          rust_root_test_filter=all()\n\
@@ -75,7 +84,9 @@ fn each_root_gets_its_mode_its_packages_a_nextest_filter_and_the_cargo_package_a
          rust_crates_velnor_runner_test_filter=\n\
          rust_crates_velnor_runner_package_args=\n\
          rust_crates_velnor_runner_doctests=skip\n\
-         rust_crates_velnor_runner_docs=skip\n"
+         rust_crates_velnor_runner_docs=skip\n\
+         rust_deny=run\n\
+         rust_machete=skip\n"
     );
     let text = explain(
         &selections,
@@ -101,7 +112,7 @@ fn two_roots_whose_output_names_would_collide_are_an_error() {
         (path("a-b/Cargo.toml"), RustSelection::None),
         (path("a_b/Cargo.toml"), RustSelection::None),
     ]);
-    assert!(outputs(&selections, &Steps::new()).is_err());
+    assert!(outputs(&selections, &Steps::new(), PolicyRuns::default()).is_err());
 }
 
 #[test]

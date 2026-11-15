@@ -7,6 +7,7 @@ mod config;
 mod detect;
 mod doc_steps;
 mod error;
+mod lane;
 mod lock;
 mod lock_affected;
 mod manifest_diff;
@@ -15,6 +16,7 @@ mod metadata_file;
 mod mise;
 mod owners;
 mod plan;
+mod policy;
 mod reads;
 mod roots;
 mod select;
@@ -36,6 +38,7 @@ pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorde
 pub use mise::{check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
+pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,

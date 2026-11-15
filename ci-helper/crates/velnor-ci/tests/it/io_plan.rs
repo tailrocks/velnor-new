@@ -76,7 +76,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_docs=run\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\n"
     );
 }
 
@@ -317,5 +317,77 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     assert_eq!(
         selected(&output),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
+}
+
+fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
+    let outputs = repo.root().join("policy");
+    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = plan_command(repo);
+    command
+        .args(["plan", "--changed"])
+        .args(changed)
+        .env("GITHUB_OUTPUT", &outputs);
+    if let Some(event) = event {
+        command.env("GITHUB_EVENT_NAME", event);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    fs::read_to_string(&outputs)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .lines()
+        .filter(|line| line.starts_with("rust_deny=") || line.starts_with("rust_machete="))
+        .flat_map(|line| [line, " "])
+        .collect()
+}
+
+fn pin_machete(repo: &Repo) {
+    repo.write(
+        "mise.toml",
+        "[tools]\nrust = \"1.99.1\"\n\"cargo:cargo-machete\" = \"0.9.1\"\n",
+    );
+}
+
+#[test]
+fn plan_runs_machete_for_a_source_change_and_leaves_deny_skipped() {
+    let repo = plan_repo("policy-src");
+    pin_machete(&repo);
+    repo.write("deny.toml", "");
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["b/src/lib.rs"]),
+        "rust_deny=skip rust_machete=run "
+    );
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["README.md"]),
+        "rust_deny=skip rust_machete=skip "
+    );
+}
+
+#[test]
+fn plan_runs_machete_when_a_changed_mise_config_pins_it() {
+    let repo = plan_repo("policy-mise");
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["mise.toml"]),
+        "rust_deny=skip rust_machete=skip "
+    );
+    pin_machete(&repo);
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["mise.toml"]),
+        "rust_deny=skip rust_machete=run "
+    );
+}
+
+#[test]
+fn plan_runs_both_policy_tools_for_a_changed_lock_file_and_on_a_schedule() {
+    let repo = plan_repo("policy-lock");
+    pin_machete(&repo);
+    repo.write("deny.toml", "");
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["Cargo.lock"]),
+        "rust_deny=run rust_machete=run "
+    );
+    assert_eq!(
+        policy_lines(&repo, Some("schedule"), &["b/src/lib.rs"]),
+        "rust_deny=run rust_machete=run "
     );
 }

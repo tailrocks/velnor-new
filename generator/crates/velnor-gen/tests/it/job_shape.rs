@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{
-    CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
-    TargetKind, TargetName, Timings, When,
+    CargoCommand, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target, TargetKind,
+    TargetName, Timings, When,
 };
 use velnor_rust::{CONFIG_PATH, DetectError, TIMINGS_PATH, decide_shape, plan};
 
@@ -147,9 +147,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
         [
             CargoCommand::FmtCheck,
             CargoCommand::Clippy { extra: Vec::new() },
-            CargoCommand::NextestRun {
-                filter: FilterRef::All
-            },
+            CargoCommand::NextestRun,
             CargoCommand::Doctest,
             CargoCommand::Doc,
             alone("bin"),
@@ -208,6 +206,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
     let text = workflow(&timed_view(entry, "required_check = \"CI passed\"\n")?)?;
     let jobs: Vec<&str> = text
         .lines()
+        .skip_while(|line| *line != "jobs:")
         .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
         .collect();
     assert_eq!(

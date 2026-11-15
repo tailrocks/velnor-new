@@ -4,10 +4,10 @@
 use std::fmt;
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
+    CargoCommand, GateNeed, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
 };
 
-use crate::gate::{PLAN_STEP, condition, output};
+use crate::gate::{PLAN_STEP, condition, output, plan_source};
 use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
 
 const PREPARE_STEP: &str = "prepare";
@@ -25,7 +25,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when, job.gate.as_ref()),
+        condition: condition(job.when, job.gate.as_ref(), job.skip_on_draft),
         runs_on: job.runs_on.as_str().to_owned(),
         timeout_minutes: job.timeout_minutes,
         outputs: job
@@ -43,11 +43,30 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 
 fn rendered_step(step: &Step) -> RenderedStep {
     let mut rendered = step_body(&step.kind);
-    if let Some(condition) = condition(step.when, step.gate.as_ref()) {
+    if let Some(condition) = condition(step.when, step.gate.as_ref(), false) {
         rendered.condition = Some(condition);
     }
     rendered.working_directory = step.directory.as_ref().map(ToString::to_string);
+    if let (Some(plan), StepKind::Cargo(command)) = (&step.reads, &step.kind) {
+        let source = plan_source(&plan.from);
+        rendered
+            .env
+            .extend(command.plan_values().iter().map(|need| {
+                let key = output(&plan.slug, *need);
+                (
+                    variable(*need).to_owned(),
+                    Value::Expr(format!("${{{{ {source}.{key} }}}}")),
+                )
+            }));
+    }
     rendered
+}
+
+fn variable(need: GateNeed) -> &'static str {
+    match need {
+        GateNeed::TestFilter => "TEST_FILTER",
+        _ => "PACKAGE_ARGS",
+    }
 }
 
 fn step_body(kind: &StepKind) -> RenderedStep {
@@ -140,14 +159,9 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
                 .join(" "),
             vec![],
         ),
-        CargoCommand::NextestRun { filter } => (
+        CargoCommand::NextestRun => (
             "Test".into(),
-            format!(
-                "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
-                match filter {
-                    FilterRef::All => "all()",
-                }
-            ),
+            "cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E \"$TEST_FILTER\"".into(),
             vec![],
         ),
         CargoCommand::NextestArchive { file } => (
@@ -165,7 +179,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Doc => (
             "Documentation".into(),
-            "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
+            "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
                 .into(),
             vec![],
         ),

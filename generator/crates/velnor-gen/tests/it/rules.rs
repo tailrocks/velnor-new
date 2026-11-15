@@ -8,8 +8,8 @@ use std::path::Path;
 
 use velnor_model::{
     Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease, HelperVersion, Job,
-    JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
-    When, WorkflowPlan,
+    JobId, Permissions, Platform, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{
     FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -75,12 +75,12 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
     Ok(WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
-            pull_request: true,
+            pull_request: vec![PullRequestType::Opened],
+            push_branch: None,
+            merge_group: false,
             workflow_dispatch: false,
         },
-        concurrency: Concurrency {
-            cancel_in_progress: true,
-        },
+        concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         jobs: vec![Job {
             id: JobId::new("format")?,
@@ -88,6 +88,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             comment: None,
             needs: Vec::new(),
             when: When::Success,
+            skip_on_draft: false,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             timeout_minutes: 10,
             gate: None,
@@ -99,6 +100,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
                     directory: None,
                     when: When::Success,
                     gate: None,
+                    reads: None,
                 })
                 .collect(),
         }],

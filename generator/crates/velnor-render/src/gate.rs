@@ -5,9 +5,21 @@ use velnor_model::{Gate, GateNeed, PlanFrom, When};
 
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
+const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 
 pub(crate) fn output(slug: &str, need: GateNeed) -> String {
-    format!("rust_{slug}_{}", need_name(need))
+    if need.is_global() {
+        format!("rust_{}", need_name(need))
+    } else {
+        format!("rust_{slug}_{}", need_name(need))
+    }
+}
+
+pub(crate) fn plan_source(from: &PlanFrom) -> String {
+    match from {
+        PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
+        PlanFrom::Job(job) => format!("needs.{job}.outputs"),
+    }
 }
 
 fn need_name(need: GateNeed) -> &'static str {
@@ -15,13 +27,21 @@ fn need_name(need: GateNeed) -> &'static str {
         GateNeed::Selected => "mode",
         GateNeed::Doctests => "doctests",
         GateNeed::Docs => "docs",
+        GateNeed::TestFilter => "test_filter",
+        GateNeed::PackageArgs => "package_args",
+        GateNeed::Deny => "deny",
+        GateNeed::Machete => "machete",
+        GateNeed::Policy => "policy",
     }
 }
 
-pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
+pub(crate) fn condition(when: When, gate: Option<&Gate>, skip_draft: bool) -> Option<String> {
     let mut parts = Vec::new();
     if when == When::NotCancelled {
         parts.push(NOT_CANCELLED.to_owned());
+    }
+    if skip_draft {
+        parts.push(NOT_DRAFT.to_owned());
     }
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate));
@@ -34,17 +54,35 @@ pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
 }
 
 fn gate_parts(gate: &Gate) -> Vec<String> {
-    let (source, mut parts) = match &gate.from {
-        PlanFrom::ThisJob => (
-            format!("steps.{PLAN_STEP}.outputs"),
-            vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
-        ),
-        PlanFrom::Job(job) => (format!("needs.{job}.outputs"), Vec::new()),
+    let source = plan_source(&gate.from);
+    let mut parts = match &gate.from {
+        PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
+        PlanFrom::Job(_) => Vec::new(),
     };
     let read = |need| format!("{source}.{}", output(&gate.slug, need));
-    parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
-    if gate.need != GateNeed::Selected {
-        parts.push(format!("{} == 'run'", read(gate.need)));
+    let runs = |need| format!("{} == 'run'", read(need));
+    match gate.need {
+        GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
+            parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
+            match gate.need {
+                GateNeed::Doctests => parts.push(runs(GateNeed::Doctests)),
+                GateNeed::Docs => {
+                    parts.push(runs(GateNeed::Docs));
+                    parts.push(format!("{} != ''", read(GateNeed::PackageArgs)));
+                }
+                _ => {}
+            }
+        }
+        GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
+        GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
+        GateNeed::Policy => parts.push(format!(
+            "({} || {})",
+            runs(GateNeed::Deny),
+            runs(GateNeed::Machete)
+        )),
+        GateNeed::TestFilter | GateNeed::PackageArgs => {
+            parts.push(format!("{} != ''", read(gate.need)));
+        }
     }
     parts
 }

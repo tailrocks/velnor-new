@@ -9,7 +9,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 9] = [
+const KEYS: [&str; 10] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -19,6 +19,7 @@ const KEYS: [&str; 9] = [
     "shape",
     "required_check",
     "default_branch",
+    "skip_draft_pull_requests",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -36,6 +37,7 @@ struct RawConfig {
     shape: Option<String>,
     required_check: Option<String>,
     default_branch: Option<String>,
+    skip_draft_pull_requests: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -90,6 +92,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     Ok(RustCiConfig {
+        skip_draft_pull_requests: raw
+            .skip_draft_pull_requests
+            .unwrap_or(defaults.skip_draft_pull_requests),
         shape,
         required_check,
         default_branch,

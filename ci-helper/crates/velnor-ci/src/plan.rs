@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread,
 };
-use velnor_rust::{CONFIG_PATH, root_slug};
+use velnor_rust::{CONFIG_PATH, PolicyRuns, root_slug};
 
 use crate::error::CiError;
 
@@ -17,6 +17,7 @@ pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
 pub fn outputs(
     selections: &BTreeMap<RepoPath, RustSelection>,
     steps: &Steps,
+    policy: PolicyRuns,
 ) -> Result<String, CiError> {
     let mut owners = BTreeMap::new();
     let mut lines = Vec::new();
@@ -50,6 +51,8 @@ pub fn outputs(
             lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
         }
     }
+    lines.push(format!("rust_deny={}\n", lane(policy.deny)));
+    lines.push(format!("rust_machete={}\n", lane(policy.machete)));
     Ok(lines.concat())
 }
 
@@ -124,6 +127,10 @@ pub fn explain(
         ));
     }
     lines.concat()
+}
+
+fn lane(run: bool) -> &'static str {
+    if run { "run" } else { "skip" }
 }
 
 fn flag(need: StepNeed) -> &'static str {

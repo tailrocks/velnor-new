@@ -18,13 +18,32 @@ pub struct WorkflowPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Triggers {
-    pub pull_request: bool,
+    pub pull_request: Vec<PullRequestType>,
+    pub push_branch: Option<String>,
+    pub merge_group: bool,
     pub workflow_dispatch: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Concurrency {
-    pub cancel_in_progress: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PullRequestType {
+    Opened,
+    Synchronize,
+    Reopened,
+    ReadyForReview,
+}
+
+impl PullRequestType {
+    pub const ALL: [Self; 4] = [
+        Self::Opened,
+        Self::Synchronize,
+        Self::Reopened,
+        Self::ReadyForReview,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Concurrency {
+    CancelOlderPullRequestRuns,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -51,6 +70,7 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
+    pub skip_on_draft: bool,
     pub runs_on: RunnerLabel,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
@@ -64,6 +84,13 @@ pub struct Step {
     pub directory: Option<RepoPath>,
     pub when: When,
     pub gate: Option<Gate>,
+    pub reads: Option<PlanRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanRef {
+    pub slug: String,
+    pub from: PlanFrom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,11 +100,43 @@ pub struct Gate {
     pub from: PlanFrom,
 }
 
+impl Gate {
+    #[must_use]
+    pub fn outputs(&self) -> Vec<(String, GateNeed)> {
+        let own = |need| (self.slug.clone(), need);
+        match self.need {
+            GateNeed::Selected => vec![own(GateNeed::Selected)],
+            GateNeed::Doctests => vec![own(GateNeed::Selected), own(GateNeed::Doctests)],
+            GateNeed::Docs => vec![
+                own(GateNeed::Selected),
+                own(GateNeed::Docs),
+                own(GateNeed::PackageArgs),
+            ],
+            GateNeed::Deny => vec![own(GateNeed::Deny)],
+            GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
+            GateNeed::TestFilter | GateNeed::PackageArgs => vec![own(self.need)],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GateNeed {
     Selected,
     Doctests,
     Docs,
+    TestFilter,
+    PackageArgs,
+    Deny,
+    Machete,
+    Policy,
+}
+
+impl GateNeed {
+    #[must_use]
+    pub fn is_global(self) -> bool {
+        matches!(self, Self::Deny | Self::Machete | Self::Policy)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,7 +245,7 @@ pub enum CargoCommand {
     FmtCheck,
     Clippy { extra: Vec<String> },
     CheckAlone { package: PackageName },
-    NextestRun { filter: FilterRef },
+    NextestRun,
     NextestArchive { file: RepoPath },
     Doctest,
     Doc,
@@ -194,9 +253,15 @@ pub enum CargoCommand {
     Machete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FilterRef {
-    All,
+impl CargoCommand {
+    #[must_use]
+    pub fn plan_values(&self) -> &'static [GateNeed] {
+        match self {
+            Self::NextestRun => &[GateNeed::TestFilter, GateNeed::PackageArgs],
+            Self::Doc => &[GateNeed::PackageArgs],
+            _ => &[],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
