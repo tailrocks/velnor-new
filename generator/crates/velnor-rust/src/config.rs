@@ -111,18 +111,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .map(|helper| helper_path(helper.path))
         .transpose()
         .map_err(invalid)?;
-    let ci_debuginfo = match raw.ci_debuginfo.as_deref() {
-        None => defaults.ci_debuginfo,
-        Some("full") => CiDebugInfo::Full,
-        Some("line-tables-only") => CiDebugInfo::LineTablesOnly,
-        Some("none") => CiDebugInfo::None,
-        Some(other) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "ci_debuginfo",
-                value: other.to_owned(),
-            }));
-        }
-    };
+    let ci_debuginfo =
+        debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     Ok(RustCiConfig {
         nextest_harnesses,
         default_branch,
@@ -370,6 +360,19 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
             (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
+}
+
+fn debuginfo(configured: Option<&str>, default: CiDebugInfo) -> Result<CiDebugInfo, Reason> {
+    match configured {
+        None => Ok(default),
+        Some("full") => Ok(CiDebugInfo::Full),
+        Some("line-tables-only") => Ok(CiDebugInfo::LineTablesOnly),
+        Some("none") => Ok(CiDebugInfo::None),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "ci_debuginfo",
+            value: other.to_owned(),
+        }),
+    }
 }
 
 pub fn ci_debuginfo(

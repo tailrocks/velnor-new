@@ -235,22 +235,13 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
                 .join(" "),
             vec![],
         ),
-        CargoCommand::NextestRun { filter } => (
-            TEST_STEP.into(),
-            format!(
-                "cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
-                nextest_filter(filter)
+        CargoCommand::NextestRun { filter } => nextest_run("$PACKAGE_ARGS --locked", filter),
+        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+            &format!(
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
+                file.as_str().replace('\'', "'\\''")
             ),
-            vec![],
-        ),
-        CargoCommand::NextestRunArchive { file, filter } => (
-            TEST_STEP.into(),
-            format!(
-                "cargo-nextest nextest run --archive-file '{}' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
-                file.as_str().replace('\'', "'\\''"),
-                nextest_filter(filter)
-            ),
-            vec![],
+            filter,
         ),
         CargoCommand::NextestArchive { file } => (
             "Build the tests".into(),
@@ -308,6 +299,17 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
     }
+}
+
+fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+    (
+        TEST_STEP.into(),
+        format!(
+            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
+            nextest_filter(filter)
+        ),
+        vec![],
+    )
 }
 
 fn nextest_filter(filter: &FilterRef) -> String {

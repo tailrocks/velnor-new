@@ -75,6 +75,20 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnpinnedTool(tool) => write!(
+                f,
+                "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
+            ),
+            Self::HelperBox(path) => write!(
+                f,
+                "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BuildExecutable => f.write_str(
@@ -133,10 +147,6 @@ impl fmt::Display for Reason {
             Self::UntrackedManifest => f.write_str(
                 "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),
-            Self::UnpinnedTool(tool) => write!(
-                f,
-                "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
-            ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(
                 f,
@@ -153,10 +163,6 @@ impl fmt::Display for Reason {
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
-            Self::HelperBox(path) => write!(
-                f,
-                "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
-            ),
             Self::UndeclaredTarget(target) => write!(
                 f,
                 "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
@@ -168,6 +174,7 @@ impl fmt::Display for Reason {
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
+            Self::UnpinnedTool(_) | Self::HelperBox(_) => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
