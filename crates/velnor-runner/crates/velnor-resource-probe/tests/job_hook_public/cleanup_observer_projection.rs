@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::owned_mountinfo_projection;
-use crate::cleanup_observer_wire::{
+use velnor_resource_probe::cleanup_observer_wire::{
     CleanupDockerRootIdentity, CleanupObserverBinding, CleanupVolume, ProcessIdentity,
+    owned_mountinfo_projection,
 };
 
 const RUNNER_NS: u64 = 4_026_532_605;

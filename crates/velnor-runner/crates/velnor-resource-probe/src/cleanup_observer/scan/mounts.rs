@@ -48,6 +48,7 @@ pub(super) fn check_owned_mounts(
     tid: u32,
     input: &[u8],
     request: &CleanupObserverRequest,
+    observer_devices: &HashSet<u64>,
     references: &mut u32,
     issues: &mut Vec<String>,
 ) {
@@ -82,6 +83,9 @@ pub(super) fn check_owned_mounts(
             add_issue(issues, "mountinfo_row_invalid");
             continue;
         };
+        if observer_devices.contains(&device) {
+            continue;
+        }
         for volume in request.binding.volume_mountpoints.iter().filter(|volume| {
             device
                 == super::helpers::linux_device(
@@ -184,7 +188,6 @@ fn root_stat(root: &rustix::fd::OwnedFd) -> Result<([u32; 2], u64), MountObserva
 pub(super) fn check_tmpfs_mounts(
     pid: u32,
     input: &[u8],
-    is_observer_task: bool,
     devices: (&HashSet<u64>, &HashSet<u64>),
     namespace_ids: &[([u32; 2], u64); 2],
     references: &mut u32,
@@ -225,9 +228,7 @@ pub(super) fn check_tmpfs_mounts(
             continue;
         };
         if crate::cleanup_observer_wire::mountinfo_line_has_owned_tmpfs(
-            &fields,
             device,
-            is_observer_task,
             owned_devices,
             observer_devices,
         ) {

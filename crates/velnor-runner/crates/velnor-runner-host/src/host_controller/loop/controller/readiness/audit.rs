@@ -24,7 +24,7 @@ pub(super) type RemoteRunnerAudit = dyn Fn(
         &RepositoryConnection,
         Option<&velnor_runner_github::RunnerReference>,
         i64,
-    ) -> Result<(), HostError>
+    ) -> Result<bool, HostError>
     + Send
     + Sync;
 
@@ -36,7 +36,7 @@ pub(super) fn audit_remote_runner(
     binding: &RepositoryConnection,
     expected: Option<&velnor_runner_github::RunnerReference>,
     scale_set_id: i64,
-) -> Result<(), HostError> {
+) -> Result<bool, HostError> {
     let expected = expected.ok_or(HostError::Ownership)?;
     if expected.runner_scale_set_id != scale_set_id {
         return Err(HostError::Ownership);
@@ -70,7 +70,7 @@ fn audit_remote_runner_with_transport<T: ReadinessTransport>(
     scale_set_id: i64,
     pat: &str,
     transport: &mut T,
-) -> Result<(), HostError> {
+) -> Result<bool, HostError> {
     if expected.runner_scale_set_id != scale_set_id {
         return Err(HostError::Ownership);
     }
@@ -115,13 +115,15 @@ fn audit_remote_runner_with_transport<T: ReadinessTransport>(
     )
     .map_err(|_| HostError::Endpoint)?;
     transport.set_origin(admin.expose_url())?;
-    let found = get_runner_by_name(transport, &expected.name, admin.expose_token())
+    let Some(found) = get_runner_by_name(transport, &expected.name, admin.expose_token())
         .map_err(|_| HostError::Endpoint)?
-        .ok_or(HostError::Ownership)?;
+    else {
+        return Ok(false);
+    };
     if found != *expected {
         return Err(HostError::Ownership);
     }
-    Ok(())
+    Ok(true)
 }
 
 async fn inspect_owned_container(

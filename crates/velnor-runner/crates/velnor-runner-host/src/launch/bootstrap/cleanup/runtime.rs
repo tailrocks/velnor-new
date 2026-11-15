@@ -16,7 +16,7 @@ use crate::{
 };
 use bollard::Docker;
 
-use super::{observer, production::ObservedDockerCleanupAbsence};
+use super::{observer, production::ObservedDockerCleanupAbsence, retry};
 
 const CLEANUP_OBSERVER_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -91,7 +91,6 @@ impl NativeCleanupRuntime {
         scope: &ConnectionJournal,
         pending: PendingStorageCleanupWitness,
     ) -> Result<super::VerifiedStorageCleanup, HostError> {
-        let deadline = Instant::now() + CLEANUP_OBSERVER_TIMEOUT;
         self.verify_cleanup_engine().await?;
         let current = scope
             .storage_cleanup_identity(pending.identity.reservation_id())
@@ -126,12 +125,14 @@ impl NativeCleanupRuntime {
             image_authority: self.image_authority.as_ref(),
         };
 
-        let guest = crate::launch::resource_probe::observe_cleanup_binding(
-            observer_context,
-            pending.identity.reservation_id(),
-            witness.binding(),
-            deadline,
-        )
+        let guest = retry::while_refused(|| {
+            crate::launch::resource_probe::observe_cleanup_binding(
+                observer_context,
+                pending.identity.reservation_id(),
+                witness.binding(),
+                Instant::now() + CLEANUP_OBSERVER_TIMEOUT,
+            )
+        })
         .await?;
         let after = super::production::observe_docker_cleanup_absence(
             &self.docker,

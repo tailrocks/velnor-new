@@ -66,6 +66,3 @@ fn line_is_owned(line: &str, devices: &HashSet<u64>, namespaces: &[u64; 3]) -> b
             })
             .is_none_or(|inode| namespaces.contains(&inode))
 }
-
-#[cfg(test)]
-mod tests;
