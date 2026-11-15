@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{PackageName, RepoPath, RustRoot, TargetKind, UnownedPackage};
 
 use crate::needs::{Group, Need, Paths, groups, reached};
-use crate::platform::Platform;
+use crate::platform::Platforms;
 
 pub const HOST: &str = "debug";
 
@@ -82,14 +82,14 @@ pub fn gaps(
     root: &RustRoot,
     unowned: &BTreeMap<RepoPath, UnownedPackage>,
     built: &Built,
-    platform: &Platform,
+    platforms: &Platforms,
 ) -> Vec<Gap> {
     let reached = reached(root, unowned);
     let mut paths: Paths<'_> = BTreeMap::new();
     for (manifest, package) in &reached {
         paths.entry(&package.name).or_default().push(manifest);
     }
-    let groups = groups(root, &paths, &reached, platform);
+    let groups = groups(root, &paths, &reached, platforms);
     let owned: BTreeSet<&str> = root
         .members
         .iter()

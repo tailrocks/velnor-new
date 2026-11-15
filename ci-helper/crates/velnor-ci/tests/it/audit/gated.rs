@@ -18,8 +18,12 @@ fn package(name: &str, extra: &str) -> String {
 }
 
 fn finish(repo: &Repo) {
+    finish_for(repo, TRIPLE);
+}
+
+fn finish_for(repo: &Repo, triple: &str) {
     repo.git(&["add", "--all"]);
-    own_units_in(repo, DEBUG, TRIPLE, &[]);
+    own_units_in(repo, DEBUG, triple, &[]);
 }
 
 fn direct(platform: &str) -> Repo {
@@ -107,6 +111,30 @@ fn behind_an_inactive_edge() -> Repo {
     repo
 }
 
+fn behind_a_target_edge(triple: &str) -> Repo {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/Cargo.toml",
+        &package(
+            "app",
+            "[target.'cfg(windows)'.dependencies]\nmid = { path = \"../../mid\" }\n",
+        ),
+    );
+    unit(
+        &repo,
+        "mid/Cargo.toml",
+        &package(
+            "mid",
+            "[build-dependencies]\nlib = { path = \"../rust/lib\" }\n",
+        ),
+    );
+    unit(&repo, "mid/src/lib.rs", "");
+    unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"mid\"]\n");
+    finish_for(&repo, triple);
+    repo
+}
+
 fn passes(repo: &Repo) {
     let output = audit(repo, &["--write"]);
     assert!(output.status.success(), "{output:?}");
@@ -154,6 +182,44 @@ fn a_package_outside_the_workspaces_with_an_inactive_build_dependency_needs_no_h
 #[test]
 fn a_package_outside_the_workspaces_reached_only_through_an_inactive_edge_hosts_nothing() {
     passes(&behind_an_inactive_edge());
+}
+
+#[test]
+fn an_ordinary_edge_that_holds_for_the_build_target_not_the_host_needs_its_host_units() {
+    needs_the_host_units_of_lib(&behind_a_target_edge(
+        "rust/target/x86_64-pc-windows-gnu/debug",
+    ));
+}
+
+#[test]
+fn an_ordinary_edge_that_holds_for_no_built_platform_needs_no_host_units() {
+    passes(&behind_a_target_edge(TRIPLE));
+}
+
+#[test]
+fn the_rustc_the_environment_selects_is_the_one_queried() {
+    let repo = direct(INACTIVE);
+    let shims = repo.root().join("env-shims");
+    fs::create_dir_all(&shims).unwrap_or_else(|e| unreachable!("{e}"));
+    let rustc = shims.join("configured-rustc");
+    fs::write(
+        &rustc,
+        "#!/bin/sh\necho 'configured compiler used' >&2\nexit 1\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&rustc, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .env("RUSTC", &rustc)
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("configured compiler used"),
+        "{output:?}"
+    );
 }
 
 #[test]

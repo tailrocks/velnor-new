@@ -9,7 +9,7 @@ use velnor_model::{
 };
 
 use crate::coverage::{UnitKind, crate_name};
-use crate::platform::Platform;
+use crate::platform::Platforms;
 
 pub(crate) enum Need<'f> {
     Unit {
@@ -34,9 +34,9 @@ pub(crate) fn groups<'f>(
     root: &'f RustRoot,
     paths: &'f Paths<'f>,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
-    platform: &Platform,
+    platforms: &Platforms,
 ) -> Vec<Group<'f>> {
-    let hosted = hosted(root, reached, platform);
+    let hosted = hosted(root, reached, platforms);
     let mut groups: Vec<Group<'f>> = root
         .members
         .iter()
@@ -71,7 +71,7 @@ pub(crate) fn groups<'f>(
 fn hosted<'f>(
     root: &'f RustRoot,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
-    platform: &Platform,
+    platforms: &Platforms,
 ) -> BTreeSet<&'f RepoPath> {
     let edges = |manifest: &RepoPath| -> &'f [MemberDependency] {
         match (member_of(root, manifest), reached.get(manifest)) {
@@ -85,7 +85,7 @@ fn hosted<'f>(
         .members
         .iter()
         .flat_map(|member| &member.dependencies)
-        .filter(|dependency| applies(dependency, platform))
+        .filter(|dependency| applies_to_target_build(dependency, platforms))
         .map(|dependency| &dependency.manifest)
         .collect();
     while let Some(manifest) = walk.pop() {
@@ -97,7 +97,8 @@ fn hosted<'f>(
                     .dependencies
                     .iter()
                     .filter(|dependency| {
-                        dependency.kind != DependencyKind::Dev && applies(dependency, platform)
+                        dependency.kind != DependencyKind::Dev
+                            && applies_to_target_build(dependency, platforms)
                     })
                     .map(|dependency| &dependency.manifest),
             );
@@ -110,7 +111,7 @@ fn hosted<'f>(
         .chain(live.iter().copied())
         .flat_map(&edges)
         .filter(|dependency| {
-            dependency.kind == DependencyKind::Build && applies(dependency, platform)
+            dependency.kind == DependencyKind::Build && applies_to_host_build(dependency, platforms)
         })
         .map(|dependency| &dependency.manifest)
         .collect();
@@ -121,7 +122,8 @@ fn hosted<'f>(
                 edges(manifest)
                     .iter()
                     .filter(|dependency| {
-                        dependency.kind != DependencyKind::Dev && applies(dependency, platform)
+                        dependency.kind != DependencyKind::Dev
+                            && applies_to_host_build(dependency, platforms)
                     })
                     .map(|dependency| &dependency.manifest),
             );
@@ -130,11 +132,21 @@ fn hosted<'f>(
     hosted
 }
 
-fn applies(dependency: &MemberDependency, platform: &Platform) -> bool {
+fn applies_to_host_build(dependency: &MemberDependency, platforms: &Platforms) -> bool {
     dependency
         .platform
         .as_deref()
-        .is_none_or(|predicate| platform.holds(predicate))
+        .is_none_or(|predicate| platforms.holds_for_host(predicate))
+}
+
+fn applies_to_target_build(dependency: &MemberDependency, platforms: &Platforms) -> bool {
+    dependency.platform.as_deref().is_none_or(|predicate| {
+        if dependency.kind == DependencyKind::Build {
+            platforms.holds_for_host(predicate)
+        } else {
+            platforms.holds_for_ordinary_edge(predicate)
+        }
+    })
 }
 
 fn member_of<'f>(root: &'f RustRoot, manifest: &RepoPath) -> Option<&'f RustMember> {

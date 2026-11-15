@@ -10,6 +10,24 @@ pub struct Platform {
     pairs: BTreeSet<(String, String)>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Platforms {
+    pub host: Platform,
+    pub targets: Vec<Platform>,
+}
+
+impl Platforms {
+    #[must_use]
+    pub fn holds_for_host(&self, predicate: &str) -> bool {
+        self.host.holds(predicate)
+    }
+
+    #[must_use]
+    pub fn holds_for_ordinary_edge(&self, predicate: &str) -> bool {
+        self.host.holds(predicate) || self.targets.iter().any(|target| target.holds(predicate))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Token {
     Word(String),

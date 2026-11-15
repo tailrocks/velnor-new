@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,7 +14,7 @@ use velnor_rust::normalize;
 use super::audit::Audit;
 use crate::coverage::{Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
-use crate::platform::Platform;
+use crate::platform::{Platform, Platforms};
 
 #[derive(Deserialize)]
 pub(super) struct Workspace {
@@ -186,9 +188,37 @@ pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
     Ok(())
 }
 
-pub(super) fn host_platform(root: &Path) -> Result<Platform, CiError> {
+fn rustc() -> OsString {
+    ["RUSTC", "CARGO_BUILD_RUSTC"]
+        .iter()
+        .find_map(|name| std::env::var_os(name).filter(|value| !value.is_empty()))
+        .unwrap_or_else(|| OsString::from("rustc"))
+}
+
+pub(super) fn platforms(root: &Path, directories: &BTreeSet<String>) -> Result<Platforms, CiError> {
+    let targets = directories
+        .iter()
+        .filter_map(|triple| {
+            let output = Command::new(rustc())
+                .args(["--print", "cfg", "--target", triple])
+                .current_dir(root)
+                .output()
+                .ok()?;
+            output
+                .status
+                .success()
+                .then(|| Platform::parse(triple, &String::from_utf8_lossy(&output.stdout)))
+        })
+        .collect();
+    Ok(Platforms {
+        host: host_platform(root)?,
+        targets,
+    })
+}
+
+fn host_platform(root: &Path) -> Result<Platform, CiError> {
     let run = |args: &[&str]| -> Result<String, CiError> {
-        let output = Command::new("rustc")
+        let output = Command::new(rustc())
             .args(args)
             .current_dir(root)
             .output()

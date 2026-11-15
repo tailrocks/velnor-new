@@ -13,10 +13,10 @@ use velnor_rust::{
     locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, host_platform, profile, unit_files, workspace};
+use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
-use crate::platform::Platform;
+use crate::platform::Platforms;
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
@@ -88,13 +88,15 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
     }
     audit.orphans();
+    let gated = gated(&facts);
     let platforms = workspaces
         .iter()
-        .map(|workspace| {
-            if gated(&facts) {
-                host_platform(&workspace.workspace_root)
+        .zip(&audit.built)
+        .map(|(workspace, built)| {
+            if gated {
+                platforms(&workspace.workspace_root, &built.placed)
             } else {
-                Ok(Platform::default())
+                Ok(Platforms::default())
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -129,7 +131,7 @@ fn complete(
     facts: &RepoFacts,
     workspaces: &[Workspace],
     built: &[Built],
-    platforms: &[Platform],
+    platforms: &[Platforms],
 ) -> Result<(), CiError> {
     let gaps: Vec<String> = facts
         .rust_roots
