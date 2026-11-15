@@ -15,8 +15,16 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
+const RELEASE_PLZ_KEYS: [&str; 5] = [
+    "release-plz",
+    "cargo:release-plz",
+    "aqua:release-plz/release-plz",
+    "github:release-plz/release-plz",
+    "ubi:release-plz/release-plz",
+];
+
 fn names_release_plz(key: &str) -> bool {
-    key.rsplit(['/', ':']).next() == Some("release-plz")
+    RELEASE_PLZ_KEYS.contains(&key)
 }
 
 fn release_plz_tools(table: &Table) -> Vec<(&String, &toml::Value)> {

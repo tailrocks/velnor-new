@@ -86,3 +86,23 @@ fn every_configured_release_plz_entry_must_be_locked_at_its_version() {
         Some(ReleaseError::ReleasePlzLockMismatch { .. })
     ));
 }
+
+#[test]
+fn a_release_plz_from_another_publisher_is_not_the_qualified_tool() {
+    for key in [
+        "ubi:attacker/release-plz",
+        "github:attacker/release-plz",
+        "aqua:attacker/release-plz",
+        "cargo:attacker-release-plz",
+        "attacker/release-plz",
+    ] {
+        let mut files = files();
+        files.mise_toml = format!("[tools]\n\"{key}\" = \"0.4.3\"\n");
+        files.mise_lock = format!("[[tools.\"{key}\"]]\nversion = \"0.4.3\"\n");
+        assert_eq!(
+            refusal(&files),
+            Some(ReleaseError::ReleasePlzNotInMiseToml),
+            "{key}"
+        );
+    }
+}
