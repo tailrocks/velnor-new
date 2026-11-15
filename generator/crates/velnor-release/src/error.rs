@@ -99,6 +99,10 @@ pub enum ReleaseError {
     CargoRedirectsCratesIo {
         file: String,
     },
+    SymlinkOnCargoConfigPath {
+        root: String,
+        path: String,
+    },
     ToolchainFromPath {
         file: String,
     },
@@ -280,6 +284,10 @@ impl ReleaseError {
             Self::CargoCredentialProvider { file } => write!(
                 f,
                 "{file}: a cargo credential provider or alias makes cargo run a program while release-plz holds the release App token"
+            ),
+            Self::SymlinkOnCargoConfigPath { root, path } => write!(
+                f,
+                "{path}: a tracked symbolic link on the cargo config path of release root {root} can hide a cargo config from velnor-gen while cargo follows it"
             ),
             Self::CargoRedirectsCratesIo { file } => write!(
                 f,

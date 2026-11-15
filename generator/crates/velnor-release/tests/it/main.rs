@@ -7,3 +7,4 @@ mod fixture;
 mod hardening;
 mod refusals;
 mod sources;
+mod symlinks;

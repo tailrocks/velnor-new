@@ -26,10 +26,11 @@ pub(super) fn print(root: &Path) -> Exit {
 
 fn ruleset(root: &Path) -> Result<String, Error> {
     let root = toplevel(root)?;
-    let tracked_paths = tracked(&root)?;
+    let (tracked_paths, symlinks) = tracked(&root)?;
     let view = RepoView {
         files: read_files(&root, &wanted_files(&tracked_paths))?,
         tracked_paths,
+        symlinks,
         rust_metadata: BTreeMap::new(),
     };
     release_ruleset(&view).map_err(Error::Generate)

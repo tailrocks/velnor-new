@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::Platform;
 
 use crate::error::ReleaseError;
-use crate::hazards::{cargo_config, toolchain_path};
+use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
 use crate::mise;
 use crate::release_plz::{RootConfig, read};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
@@ -19,6 +19,7 @@ pub struct ReleaseFiles {
     pub mise_tomls: Vec<String>,
     pub cargo_configs: BTreeMap<String, String>,
     pub toolchain_files: BTreeMap<String, String>,
+    pub symlinks: BTreeSet<String>,
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
     pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
@@ -260,6 +261,9 @@ impl ReleasePlan {
         check_unique(&configs)?;
         check_inventory(&configs, files)?;
         let release_plz_version = mise::check(&files.mise_tomls, &files.mise_lock)?;
+        for root in &config.roots {
+            symlink_on_config_path(root, &files.symlinks)?;
+        }
         let publishes = configs.iter().any(|config| config.publishes_to_crates_io);
         for (file, text) in &files.cargo_configs {
             if config.roots.iter().any(|root| config_reaches(file, root)) {

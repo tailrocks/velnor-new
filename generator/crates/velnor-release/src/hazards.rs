@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use toml::Value;
 
 use crate::error::ReleaseError;
@@ -70,7 +72,7 @@ fn redirects_crates_io(value: &Value) -> bool {
 fn is_builtin(value: &Value) -> bool {
     match value {
         Value::String(name) => name == BUILTIN_PROVIDER,
-        Value::Array(items) => items.iter().all(is_builtin),
+        Value::Array(items) => !items.is_empty() && items.iter().all(is_builtin),
         _ => false,
     }
 }
@@ -126,4 +128,46 @@ pub(crate) fn toolchain_path(file: &str, text: &str) -> Result<(), ReleaseError>
     } else {
         Ok(())
     }
+}
+
+pub(crate) fn symlink_on_config_path(
+    root: &str,
+    symlinks: &BTreeSet<String>,
+) -> Result<(), ReleaseError> {
+    let mut directories = vec![String::new()];
+    if root != "." {
+        let mut prefix = String::new();
+        for part in root.split('/') {
+            if !prefix.is_empty() {
+                prefix.push('/');
+            }
+            prefix.push_str(part);
+            directories.push(prefix.clone());
+        }
+    }
+    let linked = |path: &str| symlinks.contains(path);
+    for directory in &directories {
+        let at = |name: &str| {
+            if directory.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{directory}/{name}")
+            }
+        };
+        let found = [
+            directory.clone(),
+            at(".cargo"),
+            at(".cargo/config"),
+            at(".cargo/config.toml"),
+        ]
+        .into_iter()
+        .find(|path| !path.is_empty() && linked(path));
+        if let Some(path) = found {
+            return Err(ReleaseError::SymlinkOnCargoConfigPath {
+                root: root.to_owned(),
+                path,
+            });
+        }
+    }
+    Ok(())
 }

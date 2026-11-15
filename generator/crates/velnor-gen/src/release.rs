@@ -175,6 +175,7 @@ fn release_files(
         mise_tomls,
         cargo_configs,
         toolchain_files,
+        symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
         root_members: reality.map(|known| root_members(known.facts)),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),

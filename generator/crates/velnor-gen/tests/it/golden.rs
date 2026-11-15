@@ -83,6 +83,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
     let view = RepoView {
         files,
         tracked_paths,
+        symlinks: BTreeSet::new(),
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {
