@@ -15,6 +15,8 @@ use crate::release_fixture::{
 };
 use crate::yaml_tree::Node;
 
+const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
+
 type TestResult = Result<(), Box<dyn Error>>;
 #[test]
 fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> TestResult {
@@ -65,6 +67,7 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
             BTreeSet::from([PUSH.to_owned(), GREEN.to_owned()])
         );
         for (id, job) in &all[1..] {
+            let newest = (*id == "release-pr").then(|| NEWEST.to_owned());
             assert!(
                 job.get("needs")
                     .ok_or("no needs")?
@@ -72,11 +75,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                     .contains(&"gate"),
                 "{id}"
             );
-            assert_eq!(
-                conjuncts(job),
-                BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]),
-                "{id}"
-            );
+            let mut wanted = BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]);
+            wanted.extend(newest);
+            assert_eq!(conjuncts(job), wanted, "{id}");
         }
     }
     Ok(())
@@ -111,6 +112,22 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
         steps(tag)[0].at(&["with", "ref"]).and_then(Node::text),
         Some("${{ github.event.workflow_run.head_sha }}")
     );
+    Ok(())
+}
+
+#[test]
+fn release_yml_release_pr_checks_out_the_verified_commit_and_runs_only_while_it_is_newest()
+-> TestResult {
+    for (_, tree) in [app()?, two_roots()?] {
+        let pr = tree.at(&["jobs", "release-pr"]).ok_or("no release-pr")?;
+        assert_eq!(
+            steps(pr)[0].at(&["with", "ref"]).and_then(Node::text),
+            Some("${{ github.event.workflow_run.head_sha }}")
+        );
+        assert!(conjuncts(pr).contains(NEWEST));
+        let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
+        assert!(!conjuncts(tag).contains(NEWEST));
+    }
     Ok(())
 }
 

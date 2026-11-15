@@ -22,6 +22,8 @@ const LINT_IGNORE: &str = "jactionlint ignore=dangerous-triggers";
 const BRANCH: &str = "main";
 const ENVIRONMENT: &str = "release";
 const FROM_A_PASSED_PUSH: &str = "github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'";
+const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
+const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
 const GATE_IS_READY: &str = "needs.gate.outputs.ready == 'true'";
 const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
@@ -156,7 +158,7 @@ fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
 
 fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
     let mut steps = vec![
-        checkout("${{ github.sha }}"),
+        checkout(VERIFIED_COMMIT),
         install_release_plz(),
         app_token(&[("contents", "write"), ("pull-requests", "write")]),
     ];
@@ -167,6 +169,9 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
         )
     }));
     RenderedJob {
+        condition: Some(expression(&format!(
+            "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && {STILL_NEWEST}"
+        ))),
         permissions: permissions(&[("contents", "read")]),
         concurrency: Some(RenderedConcurrency {
             group: "release-pr".to_owned(),
@@ -179,7 +184,7 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
 
 fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![
-        checkout("${{ github.event.workflow_run.head_sha }}"),
+        checkout(VERIFIED_COMMIT),
         install_release_plz(),
         install_helper(helper),
         app_token(&[("contents", "write"), ("pull-requests", "read")]),
