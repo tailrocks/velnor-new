@@ -60,7 +60,7 @@ fn pair_stage(
     ownership: &PhysicalRunnerOwnership,
     state: PhysicalRunnerJitState,
 ) -> Result<PairStage, HostError> {
-    let stage = match state {
+    let resolved = match state {
         PhysicalRunnerJitState::Ready | PhysicalRunnerJitState::Started => PairStage::Running,
         PhysicalRunnerJitState::Absent
         | PhysicalRunnerJitState::Claimed
@@ -72,10 +72,10 @@ fn pair_stage(
         | PhysicalRunnerJitState::StartUncertain
         | PhysicalRunnerJitState::Unknown => return Err(HostError::Ownership),
     };
-    if stage == PairStage::Running && *ownership == PhysicalRunnerOwnership::Unknown {
+    if resolved == PairStage::Running && *ownership == PhysicalRunnerOwnership::Unknown {
         return Err(HostError::Ownership);
     }
-    Ok(stage)
+    Ok(resolved)
 }
 
 async fn audit_connection(
