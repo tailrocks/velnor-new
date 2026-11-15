@@ -66,7 +66,11 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(uses) = &step.uses {
-        items.push(entry("uses", text(uses)));
+        let value = match &step.uses_comment {
+            Some(comment) => Yaml::Trailed(comment.clone(), Box::new(text(uses))),
+            None => text(uses),
+        };
+        items.push(entry("uses", value));
     }
     if !step.with.is_empty() {
         items.push(entry("with", values(&step.with)));
@@ -99,7 +103,6 @@ fn values(items: &[(String, Value)]) -> Yaml {
                 let yaml = match value {
                     Value::Text(text) => Yaml::Str(text.clone()),
                     Value::Expr(text) => Yaml::Expr(text.clone()),
-                    Value::Selected(text) => Yaml::Selected(text.clone()),
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };

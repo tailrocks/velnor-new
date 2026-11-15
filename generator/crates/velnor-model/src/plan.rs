@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
 };
 
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
@@ -117,7 +117,7 @@ pub enum StepKind {
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,
-    FetchHelper(HelperRelease),
+    InstallHelper(HelperRelease),
     FailWhenANeedFailed,
 }
 
@@ -133,21 +133,27 @@ pub enum HelperCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelperRelease {
     version: HelperVersion,
-    binaries: BTreeMap<Platform, HelperBinary>,
+    action: CommitSha,
+    digests: BTreeMap<Platform, Sha256>,
 }
 
 impl HelperRelease {
     pub fn new(
         version: HelperVersion,
-        binaries: BTreeMap<Platform, HelperBinary>,
+        action: CommitSha,
+        digests: BTreeMap<Platform, Sha256>,
     ) -> Result<Self, InvalidId> {
-        if binaries.is_empty() {
+        if digests.is_empty() {
             return Err(InvalidId {
                 kind: "HelperRelease",
                 value: version.to_string(),
             });
         }
-        Ok(Self { version, binaries })
+        Ok(Self {
+            version,
+            action,
+            digests,
+        })
     }
 
     #[must_use]
@@ -156,15 +162,14 @@ impl HelperRelease {
     }
 
     #[must_use]
-    pub fn binaries(&self) -> &BTreeMap<Platform, HelperBinary> {
-        &self.binaries
+    pub fn action(&self) -> &CommitSha {
+        &self.action
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelperBinary {
-    pub url: DownloadUrl,
-    pub sha256: Sha256,
+    #[must_use]
+    pub fn digests(&self) -> &BTreeMap<Platform, Sha256> {
+        &self.digests
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

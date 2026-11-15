@@ -1,13 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-const SELECTED_IGNORE: &str = "# jactionlint ignore=obfuscation";
 const UNREAD_IGNORE: &str = "# jactionlint ignore=unused-job-output";
 
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
-    Selected(String),
     Unread(String),
     Block(String),
     Int(u64),
@@ -15,6 +13,7 @@ pub(crate) enum Yaml {
     Seq(Vec<Yaml>),
     Map(Vec<(String, Yaml)>),
     Noted(String, Box<Yaml>),
+    Trailed(String, Box<Yaml>),
 }
 
 pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
@@ -38,7 +37,6 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
             other => other,
         };
         let ignore = match value {
-            Yaml::Selected(_) => Some(SELECTED_IGNORE),
             Yaml::Unread(_) => Some(UNREAD_IGNORE),
             _ => None,
         };
@@ -95,14 +93,13 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 fn inline(value: &Yaml) -> String {
     match value {
         Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
-        Yaml::Expr(text) | Yaml::Selected(text) | Yaml::Unread(text) | Yaml::Block(text) => {
-            scalar(text)
-        }
+        Yaml::Expr(text) | Yaml::Unread(text) | Yaml::Block(text) => scalar(text),
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),
         Yaml::Map(_) => "{}".to_owned(),
         Yaml::Noted(_, inner) => inline(inner),
+        Yaml::Trailed(note, inner) => format!("{}  # {note}", inline(inner)),
     }
 }
 
