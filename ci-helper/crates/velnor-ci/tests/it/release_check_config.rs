@@ -55,23 +55,22 @@ fn a_file_that_is_not_toml_is_refused_and_every_file_is_checked() {
 fn the_binary_exits_1_on_an_escaped_command_key_and_0_on_a_clean_file() {
     let dir = std::env::temp_dir().join(format!("velnor-ci-check-config-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    let clean = dir.join("clean.toml");
-    let evil = dir.join("evil.toml");
-    std::fs::write(&clean, "[workspace]\n").unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(dir.join("clean.toml"), "[workspace]\n").unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::write(
-        &evil,
+        dir.join("evil.toml"),
         "[changelog]\ncommit_preprocessors = [{ \"replace_command\" = \"x\" }]\n",
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    let run = |file: &std::path::Path| {
+    let run = |file: &str| {
         std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["release", "check-config"])
             .arg(file)
+            .current_dir(&dir)
             .status()
             .unwrap_or_else(|e| unreachable!("{e}"))
             .code()
     };
-    let (ok, refused) = (run(&clean), run(&evil));
+    let (ok, refused) = (run("clean.toml"), run("evil.toml"));
     let _ignored = std::fs::remove_dir_all(&dir);
     assert_eq!((ok, refused), (Some(0), Some(1)));
 }

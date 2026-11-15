@@ -113,7 +113,7 @@ pub enum ReleaseCommand {
     )]
     Publish(PublishArgs),
     #[command(
-        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML"
+        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
 }

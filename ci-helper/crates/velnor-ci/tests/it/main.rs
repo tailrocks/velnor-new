@@ -12,6 +12,7 @@ mod io_release;
 mod io_restore;
 mod logscan;
 mod plan;
+mod release_cargo_discovery;
 mod release_check_config;
 mod release_fake;
 mod release_publish;

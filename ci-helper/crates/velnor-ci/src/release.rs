@@ -97,6 +97,28 @@ fn output_name(package: &str) -> Result<PlainName, CiError> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CargoPathEntry {
+    pub path: String,
+    pub symlink: bool,
+    pub text: Option<String>,
+}
+
+pub fn check_cargo_discovery(entries: &[CargoPathEntry]) -> Result<(), CiError> {
+    for entry in entries {
+        if entry.symlink {
+            return Err(CiError::new(format!(
+                "{}: a symbolic link on the cargo config path can make cargo read a file the generator never saw",
+                entry.path
+            )));
+        }
+        if let Some(text) = &entry.text {
+            velnor_release::refuse_cargo_config(&entry.path, text).map_err(CiError::new)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
     for (file, text) in files {
         velnor_release::refuse_external_commands(file, text).map_err(CiError::new)?;
