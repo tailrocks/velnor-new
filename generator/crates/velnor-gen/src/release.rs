@@ -93,9 +93,17 @@ fn root_members(facts: &RepoFacts) -> BTreeMap<String, BTreeSet<String>> {
 }
 
 fn workflow_name(text: &str) -> Option<String> {
-    text.lines()
-        .find_map(|line| line.strip_prefix("name:"))
-        .map(|name| name.trim().trim_matches(['"', '\'']).to_owned())
+    let value = text
+        .lines()
+        .find_map(|line| line.strip_prefix("name:"))?
+        .trim();
+    for quote in ['"', '\''] {
+        if let Some(inner) = value.strip_prefix(quote) {
+            return inner.split_once(quote).map(|(name, _)| name.to_owned());
+        }
+    }
+    let plain = value.split(" #").next().unwrap_or(value);
+    Some(plain.trim().to_owned())
 }
 
 fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {

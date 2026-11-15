@@ -163,6 +163,14 @@ fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), R
     Ok(())
 }
 
+fn config_reaches(file: &str, root: &str) -> bool {
+    let base = file
+        .strip_suffix("/.cargo/config.toml")
+        .or_else(|| file.strip_suffix("/.cargo/config"))
+        .unwrap_or(".");
+    base == "." || root == base || root.starts_with(&format!("{base}/"))
+}
+
 fn manifest_of(root: &str) -> String {
     if root == "." {
         "Cargo.toml".to_owned()
@@ -249,7 +257,9 @@ impl ReleasePlan {
         let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
         if configs.iter().any(|config| config.publishes_to_crates_io) {
             for (file, text) in &files.cargo_configs {
-                credential_provider(file, text)?;
+                if config.roots.iter().any(|root| config_reaches(file, root)) {
+                    credential_provider(file, text)?;
+                }
             }
         }
         let binaries = plan_binaries(&config, &configs, files)?;

@@ -235,3 +235,25 @@ fn the_generated_release_workflow_cannot_be_an_after_workflow() -> TestResult {
     assert!(error.to_string().contains("Release"), "{error}");
     Ok(())
 }
+
+#[test]
+fn a_workflow_name_with_a_trailing_yaml_comment_or_quotes_is_the_plain_name() -> TestResult {
+    use velnor_gen::expected_files;
+    use velnor_model::RepoPath;
+
+    let mut view = crate::release_fixture::release_view(
+        &[crate::release_fixture::APP],
+        Some("after = [\"Rust CI\", \"Qualification\", \"Checks\"]\n"),
+    )?;
+    for (file, text) in [
+        ("q", "name: Qualification # required\non: push\n"),
+        ("c", "name: \"Checks\" # quoted\non: push\n"),
+    ] {
+        view.files.insert(
+            RepoPath::new(format!(".github/workflows/{file}.yml"))?,
+            text.as_bytes().to_vec(),
+        );
+    }
+    assert!(expected_files(&view).is_ok());
+    Ok(())
+}

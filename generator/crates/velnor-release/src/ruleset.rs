@@ -10,7 +10,8 @@ use crate::tag::PACKAGE_WILDCARD;
 
 pub const RELEASE_APP_SLUG: &str = "velnor-release";
 pub const RELEASE_APP_ID: u64 = 5_762_496;
-const RULESET_NAME: &str = "release-tags";
+const CREATION_RULESET: &str = "release-tags";
+const IMMUTABLE_RULESET: &str = "release-tags-immutable";
 const VERSION_PLACEHOLDER: &str = "{{ version }}";
 
 #[must_use]
@@ -34,17 +35,26 @@ pub fn ruleset_json(plan: &ReleasePlan) -> String {
             )
         })
         .collect();
-    let ruleset = json!({
-        "name": RULESET_NAME,
+    let conditions = json!({ "ref_name": { "include": include, "exclude": [] } });
+    let creation = json!({
+        "name": CREATION_RULESET,
         "target": "tag",
         "enforcement": "active",
-        "conditions": { "ref_name": { "include": include, "exclude": [] } },
-        "rules": [{ "type": "creation" }, { "type": "update" }, { "type": "deletion" }],
+        "conditions": conditions,
+        "rules": [{ "type": "creation" }],
         "bypass_actors": [{
             "actor_id": RELEASE_APP_ID,
             "actor_type": "Integration",
             "bypass_mode": "always"
         }]
     });
-    format!("{ruleset:#}\n")
+    let immutable = json!({
+        "name": IMMUTABLE_RULESET,
+        "target": "tag",
+        "enforcement": "active",
+        "conditions": conditions,
+        "rules": [{ "type": "update" }, { "type": "deletion" }],
+        "bypass_actors": []
+    });
+    format!("{:#}\n", json!([creation, immutable]))
 }

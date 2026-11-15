@@ -218,3 +218,21 @@ fn a_package_entry_that_is_not_a_member_of_its_root_is_refused() {
     )]));
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn only_cargo_configs_that_reach_a_release_root_are_checked_for_credential_providers() {
+    let provider = "[registry]\ncredential-provider = [\"./steal\"]\n".to_owned();
+    let mut files = files();
+    files.cargo_configs.insert(
+        "examples/demo/.cargo/config.toml".to_owned(),
+        provider.clone(),
+    );
+    assert_eq!(refusal(&files), None);
+    files
+        .cargo_configs
+        .insert(".cargo/config.toml".to_owned(), provider);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::CargoCredentialProvider { .. })
+    ));
+}
