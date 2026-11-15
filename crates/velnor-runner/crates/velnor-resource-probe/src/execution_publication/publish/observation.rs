@@ -3,10 +3,9 @@
 
 use super::{
     AtFlags, CONTROL_DIRECTORY_MODE, CONTROL_FILE_MODE, CONTROL_GID, CONTROL_UID,
-    DirectoryIdentity, ExpectedOwner, File, FileIdentity, FileType, MOUNTINFO_LIMIT,
-    MOUNTINFO_PATH, MetadataExt, Mode, MountEntry, OFlags, PUBLISHER_ROOT, ProbeError, Read,
-    StatxFlags, attachment_mount_source, filesystem_name, fstat, fstatfs, fstatvfs, open, openat,
-    statx,
+    DirectoryIdentity, ExpectedOwner, File, FileIdentity, FileType, MOUNTINFO_PATH, MetadataExt,
+    Mode, MountEntry, OFlags, PUBLISHER_ROOT, ProbeError, StatxFlags, attachment_mount_source,
+    filesystem_name, fstat, fstatfs, fstatvfs, open, openat, statx,
 };
 
 pub(super) fn observe_control_file_identity(
@@ -175,16 +174,7 @@ pub(super) fn open_control_directory() -> Result<File, ProbeError> {
 }
 
 pub(super) fn read_mountinfo() -> Result<Vec<u8>, ProbeError> {
-    let file = File::open(MOUNTINFO_PATH)
-        .map_err(|_| ProbeError::Invalid("publication_mountinfo_open"))?;
-    let mut bytes = Vec::with_capacity(MOUNTINFO_LIMIT.min(4096));
-    file.take((MOUNTINFO_LIMIT + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ProbeError::Invalid("publication_mountinfo_read"))?;
-    if bytes.len() > MOUNTINFO_LIMIT {
-        return Err(ProbeError::InputTooLarge("publication_mountinfo"));
-    }
-    Ok(bytes)
+    crate::mountinfo_io::read_mountinfo(MOUNTINFO_PATH, "publication_mountinfo")
 }
 
 pub(super) fn decode_payload(value: &str) -> Result<Vec<u8>, ProbeError> {

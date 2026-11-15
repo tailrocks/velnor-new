@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    FILE_MODE, MOUNTINFO_LIMIT, MOUNTINFO_PATH, ROOT_GID, ROOT_TARGET, ROOT_UID, lower_hex,
-    observe_directory,
+    FILE_MODE, MOUNTINFO_PATH, ROOT_GID, ROOT_TARGET, ROOT_UID, lower_hex, observe_directory,
 };
 use crate::{
     ProbeError,
@@ -196,14 +195,5 @@ fn decode_existing_payload(
 }
 
 pub(super) fn read_mountinfo() -> Result<Vec<u8>, ProbeError> {
-    let file =
-        File::open(MOUNTINFO_PATH).map_err(|_| ProbeError::Invalid("job_facts_mountinfo_open"))?;
-    let mut bytes = Vec::with_capacity(MOUNTINFO_LIMIT.min(4096));
-    file.take((MOUNTINFO_LIMIT + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ProbeError::Invalid("job_facts_mountinfo_read"))?;
-    if bytes.len() > MOUNTINFO_LIMIT {
-        return Err(ProbeError::InputTooLarge("job_facts_mountinfo"));
-    }
-    Ok(bytes)
+    crate::mountinfo_io::read_mountinfo(MOUNTINFO_PATH, "job_facts_mountinfo")
 }
