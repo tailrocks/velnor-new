@@ -37,7 +37,7 @@ fn three_roots() -> Steps {
 }
 
 #[test]
-fn each_root_gets_its_mode_its_packages_and_a_nextest_filter_never_cargo_arguments() {
+fn each_root_gets_its_mode_its_packages_a_nextest_filter_and_the_cargo_package_arguments() {
     let selected = BTreeMap::from([
         (
             name("velnor-ci"),
@@ -61,16 +61,19 @@ fn each_root_gets_its_mode_its_packages_and_a_nextest_filter_never_cargo_argumen
         "rust_root_mode=all\n\
          rust_root_packages=\n\
          rust_root_test_filter=all()\n\
+         rust_root_package_args=--workspace\n\
          rust_root_doctests=run\n\
          rust_root_docs=run\n\
          rust_ci_helper_mode=some\n\
          rust_ci_helper_packages=support velnor-ci\n\
          rust_ci_helper_test_filter=package(support) | package(velnor-ci)\n\
+         rust_ci_helper_package_args=-p support -p velnor-ci\n\
          rust_ci_helper_doctests=skip\n\
          rust_ci_helper_docs=skip\n\
          rust_crates_velnor_runner_mode=none\n\
          rust_crates_velnor_runner_packages=\n\
          rust_crates_velnor_runner_test_filter=\n\
+         rust_crates_velnor_runner_package_args=\n\
          rust_crates_velnor_runner_doctests=skip\n\
          rust_crates_velnor_runner_docs=skip\n"
     );
@@ -142,4 +145,21 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
     assert!(!starred.contains("glob = "), "{starred}");
     assert!(!starred.contains("\"scripts/a*b\""), "{starred}");
+}
+
+#[test]
+fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_package_arguments() {
+    for bad in ["a;b", "a$(x)", "a`x`", "a${{x}}", "a b", "-x", "caf\u{e9}"] {
+        let selected = BTreeMap::from([
+            (name("a"), SelectionReason::Changed(path("a/src/lib.rs"))),
+            (name(bad), SelectionReason::DependsOn(name("a"))),
+        ]);
+        let selections = BTreeMap::from([(path("Cargo.toml"), RustSelection::Some(selected))]);
+        let written =
+            outputs(&selections, &BTreeMap::new()).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            written.contains("rust_root_package_args=--workspace\n"),
+            "{bad:?}: {written}"
+        );
+    }
 }
