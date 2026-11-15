@@ -15,7 +15,6 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
@@ -30,7 +29,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 1
+          fetch-depth: 2
           persist-credentials: false
       - name: Install velnor-ci 0.1.79
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
@@ -41,9 +40,7 @@ jobs:
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: plan
         name: velnor-ci plan
-        env:
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: velnor-ci plan
+        run: velnor-ci plan --explain
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c

@@ -1,107 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::process::Output;
 
-use crate::io::{Repo, serve};
-use crate::io_plan::{plan_command, plan_lock, plan_repo, selected, stale_plan_command};
+use crate::io::Repo;
+use crate::io_plan::{plan_command, plan_repo, selected, stale_plan_command};
 
-const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
-const REPOSITORY: &str = "tailrocks/velnor-lab";
-
-fn event(repo: &Repo, default_branch: &str) -> std::path::PathBuf {
+pub(crate) fn event(repo: &Repo, default_branch: &str) -> std::path::PathBuf {
     let file = repo.root().join("event.json");
     let payload = format!(
-        "{{\"number\":7,\"repository\":{{\"default_branch\":\"{default_branch}\"}},\"pull_request\":{{\"number\":7,\"base\":{{\"sha\":\"{BASE}\"}}}}}}"
+        "{{\"number\":7,\"repository\":{{\"default_branch\":\"{default_branch}\"}},\"pull_request\":{{\"number\":7,\"base\":{{\"sha\":\"0123456789abcdef0123456789abcdef01234567\"}}}}}}"
     );
     fs::write(&file, payload).unwrap_or_else(|e| unreachable!("{e}"));
     file
-}
-
-fn files(names: &[&str]) -> String {
-    let items: Vec<String> = names
-        .iter()
-        .map(|name| format!("{{\"filename\":\"{name}\",\"status\":\"modified\"}}"))
-        .collect();
-    format!("[{}]", items.join(","))
-}
-
-struct Api(BTreeMap<String, String>);
-
-impl Api {
-    fn listing(names: &[&str]) -> Self {
-        Self(BTreeMap::from([(
-            format!("/repos/{REPOSITORY}/pulls/7/files?per_page=100&page=1"),
-            files(names),
-        )]))
-    }
-
-    fn contents(mut self, path: &str, text: &str) -> Self {
-        self.0.insert(
-            format!("/repos/{REPOSITORY}/contents/{path}?ref={BASE}"),
-            text.to_owned(),
-        );
-        self
-    }
-}
-
-fn pull_request(repo: &Repo, api: Option<Api>, token: bool) -> Output {
-    let url = serve(api.map(|api| api.0).unwrap_or_default());
-    let mut command = plan_command(repo);
-    command
-        .args(["plan", "--explain"])
-        .env("GITHUB_EVENT_NAME", "pull_request")
-        .env("GITHUB_EVENT_PATH", event(repo, "main"))
-        .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("GITHUB_API_URL", url);
-    if token {
-        command.env("GITHUB_TOKEN", "t");
-    }
-    command.output().unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-#[test]
-fn a_pull_request_selects_from_the_files_the_api_lists() {
-    let repo = plan_repo("api-files");
-    let output = pull_request(&repo, Some(Api::listing(&["a/src/lib.rs"])), true);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        selected(&output),
-        "Cargo.toml: some\n  a changed:a/src/lib.rs\ntools/Cargo.toml: all:most-packages:1\n  t depends-on:a\n"
-    );
-}
-
-#[test]
-fn a_changed_lockfile_is_compared_with_its_text_at_the_base_commit() {
-    let repo = plan_repo("api-lock");
-    repo.write("Cargo.lock", &plan_lock("1.0.6"));
-    let api = Api::listing(&["Cargo.lock"]).contents("Cargo.lock", &plan_lock("1.0.5"));
-    let output = pull_request(&repo, Some(api), true);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(
-        selected(&output),
-        "Cargo.toml: some\n  b lock:fnv\ntools/Cargo.toml: none\n"
-    );
-}
-
-#[test]
-fn a_file_list_or_base_text_the_api_does_not_give_selects_everything() {
-    let repo = plan_repo("api-down");
-    let everything = "Cargo.toml: all:base-unavailable\ntools/Cargo.toml: all:base-unavailable\n";
-    let down = pull_request(&repo, None, true);
-    assert!(down.status.success(), "{down:?}");
-    assert_eq!(selected(&down), everything);
-    let anonymous = pull_request(&repo, Some(Api::listing(&["a/src/lib.rs"])), false);
-    assert_eq!(selected(&anonymous), everything);
-    repo.write("Cargo.lock", &plan_lock("1.0.6"));
-    let no_base = pull_request(&repo, Some(Api::listing(&["Cargo.lock"])), true);
-    assert_eq!(
-        selected(&no_base),
-        "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
-    );
 }
 
 #[test]

@@ -60,10 +60,6 @@ impl GitHub for FakeGitHub {
             .cloned()
             .ok_or_else(|| CiError::new(format!("no recorded response for {path}")))
     }
-
-    fn get_raw(&self, path: &str) -> Result<String, CiError> {
-        self.get(path)
-    }
 }
 
 pub(crate) fn repo() -> Repo {

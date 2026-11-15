@@ -66,8 +66,9 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
         "{text}"
     );
     assert!(text.contains(
-        "        env:\n          GITHUB_TOKEN: '${{ github.token }}'\n        run: velnor-ci plan\n"
+        "      - id: plan\n        name: velnor-ci plan\n        run: velnor-ci plan --explain\n"
     ));
+    assert!(!text.contains("GITHUB_TOKEN"), "{text}");
     Ok(())
 }
 
@@ -268,18 +269,30 @@ fn job_permissions(text: &str, job: &str) -> Vec<String> {
         .collect()
 }
 
+fn checkout_depths<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
+    let header = format!("  {job}:\n");
+    let start = text
+        .find(&header)
+        .map_or(text.len(), |at| at + header.len());
+    text[start..]
+        .lines()
+        .skip_while(|line| !line.contains("name: Check out"))
+        .skip(1)
+        .find_map(|line| line.trim().strip_prefix("fetch-depth: "))
+        .into_iter()
+        .collect()
+}
+
 #[test]
-fn only_the_plan_job_may_read_pull_requests_and_every_other_job_reads_contents_only() -> TestResult
-{
+fn no_job_asks_for_pull_requests_access_and_every_job_reads_contents_only() -> TestResult {
     let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
-    assert_eq!(
-        job_permissions(&multi, "rust-plan"),
-        ["contents: read", "pull-requests: read"]
-    );
-    for job in ["rust-root", "rust-lab", "required"] {
+    let single = workflow(&view(&["Cargo.toml"], None)?)?;
+    for text in [&multi, &single] {
+        assert!(!text.contains("pull-requests"), "{text}");
+    }
+    for job in ["rust-plan", "rust-root", "rust-lab", "required"] {
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
     }
-    let single = workflow(&view(&["Cargo.toml"], None)?)?;
     assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
     Ok(())
 }
@@ -303,6 +316,18 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
             );
         }
         assert!(text.contains("id: restored"), "{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_job_that_plans_checks_out_two_commits_and_a_job_that_does_not_checks_out_one() -> TestResult {
+    let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    let single = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert_eq!(checkout_depths(&single, "rust"), ["2"]);
+    assert_eq!(checkout_depths(&multi, "rust-plan"), ["2"]);
+    for job in ["rust-root", "rust-lab"] {
+        assert_eq!(checkout_depths(&multi, job), ["1"], "{job}");
     }
     Ok(())
 }

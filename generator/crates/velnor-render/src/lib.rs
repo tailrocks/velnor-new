@@ -117,7 +117,6 @@ pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String
             let scope = match scope {
                 PermissionScope::Actions => "actions",
                 PermissionScope::Contents => "contents",
-                PermissionScope::PullRequests => "pull-requests",
             };
             let access = match access {
                 Access::None => "none",
