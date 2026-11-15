@@ -267,3 +267,26 @@ fn only_the_plan_job_may_read_pull_requests_and_every_other_job_reads_contents_o
     assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
     Ok(())
 }
+
+#[test]
+fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
+    for roots in [&["Cargo.toml"][..], &["Cargo.toml", "lab/Cargo.toml"][..]] {
+        let text = workflow(&view(roots, None)?)?;
+        let cargo: Vec<&str> = text
+            .split("      - name: ")
+            .filter(|step| {
+                step.contains("run: velnor-ci run -- cargo")
+                    || step.contains("run: 'velnor-ci run -- cargo")
+            })
+            .collect();
+        assert!(!cargo.is_empty(), "{text}");
+        for step in cargo {
+            assert!(
+                step.contains("!cancelled() && steps.restored.outcome == ''success''"),
+                "{step}"
+            );
+        }
+        assert!(text.contains("id: restored"), "{text}");
+    }
+    Ok(())
+}

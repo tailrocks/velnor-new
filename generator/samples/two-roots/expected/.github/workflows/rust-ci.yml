@@ -72,27 +72,28 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Doctests
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
         run: velnor-ci run -- cargo test --doc --workspace --locked
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p core --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-xtask:
@@ -128,25 +129,26 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' }}'
         working-directory: xtask
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         run: velnor-ci run -- cargo check -p xtask --locked
   required:

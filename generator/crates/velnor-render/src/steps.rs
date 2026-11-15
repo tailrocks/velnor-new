@@ -1,14 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind,
-};
+use velnor_model::{CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind};
 
 use crate::gate::{PLAN_STEP, condition, output};
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 const PREPARE_STEP: &str = "prepare";
+const RESTORED_STEP: &str = "restored";
 const RUN: &str = "velnor-ci run --";
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
@@ -23,7 +22,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when, job.gate.as_ref()),
+        condition: condition(job.when, job.gate.as_ref(), false),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: job.permissions.clone(),
         timeout_minutes: job.timeout_minutes,
@@ -42,7 +41,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 
 fn rendered_step(step: &Step) -> RenderedStep {
     let mut rendered = step_body(&step.kind);
-    if let Some(condition) = condition(step.when, step.gate.as_ref()) {
+    if let Some(condition) = condition(step.when, step.gate.as_ref(), true) {
         rendered.condition = Some(condition);
     }
     rendered.working_directory = step.directory.as_ref().map(ToString::to_string);
@@ -91,6 +90,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
                     )],
                 ),
                 HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
+                HelperCommand::Restored => (Some(RESTORED_STEP), Vec::new()),
                 _ => (None, Vec::new()),
             };
             RenderedStep {

@@ -224,7 +224,8 @@ fn discovered(relative: &str) -> bool {
                 .strip_prefix(folder)
                 .and_then(|rest| rest.strip_prefix('/'))
                 .is_some_and(|rest| {
-                    rest.ends_with(".rs") && !rest.contains('/')
+                    rest.strip_suffix(".rs")
+                        .is_some_and(|name| !name.contains('/'))
                         || rest
                             .strip_suffix("/main.rs")
                             .is_some_and(|name| !name.contains('/'))

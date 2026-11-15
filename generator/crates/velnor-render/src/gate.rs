@@ -3,6 +3,7 @@
 
 use velnor_model::{Gate, GateNeed, PlanFrom, When};
 
+const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
 
@@ -18,10 +19,13 @@ fn need_name(need: GateNeed) -> &'static str {
     }
 }
 
-pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
+pub(crate) fn condition(when: When, gate: Option<&Gate>, after_setup: bool) -> Option<String> {
     let mut parts = Vec::new();
     if when == When::NotCancelled {
         parts.push(NOT_CANCELLED.to_owned());
+        if after_setup {
+            parts.push(SETUP_DONE.to_owned());
+        }
     }
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate));
