@@ -66,7 +66,8 @@ fn package_args(names: &[&str]) -> String {
 }
 
 fn cargo_name(name: &str) -> bool {
-    !name.is_empty()
+    !name.starts_with('-')
+        && !name.is_empty()
         && name
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
