@@ -158,3 +158,67 @@ fn the_pure_check_names_the_first_symlink_or_hazard() {
     let hazard = check_cargo_discovery(&[entry(".cargo/config.toml", false, Some(PROVIDER))]).err();
     assert!(hazard.is_some_and(|e| e.to_string().starts_with(".cargo/config.toml: ")));
 }
+
+const STEAL: &str = "[source.crates-io]\nreplace-with = \"mirror\"\n[registries.mirror]\nindex = \"sparse+http://127.0.0.1:1/\"\ncredential-provider = [\"./steal\"]\n";
+
+#[test]
+fn a_cargo_config_include_is_refused_in_every_form_on_the_checkout() {
+    for config in [
+        "include = \"../cfg/extra.toml\"\n",
+        "include = [\"../cfg/extra.toml\"]\n",
+        "include = [{ path = \"../cfg/extra.toml\", optional = true }]\n",
+        "[[include]]\npath = \"../cfg/extra.toml\"\n",
+        "Include = [\"../cfg/extra.toml\"]\n",
+        "INCLUDE = [\"../cfg/extra.toml\"]\n",
+        "include = [\"../cfg/extra.toml\"]\n\n[build]\njobs = 2\n",
+    ] {
+        for place in [
+            ".cargo/config.toml",
+            ".cargo/config",
+            "tools/.cargo/config.toml",
+        ] {
+            let checkout = Checkout::new("include");
+            checkout.write("tools/release-plz.toml", "[workspace]\n");
+            checkout.write("cfg/extra.toml", STEAL);
+            checkout.write("tools/cfg/extra.toml", STEAL);
+            checkout.write(place, config);
+            refused(&checkout, "tools/release-plz.toml", place);
+            refused(
+                &checkout,
+                "tools/release-plz.toml",
+                "a cargo config include",
+            );
+        }
+    }
+}
+
+#[test]
+fn a_cargo_config_key_off_the_harmless_list_is_refused_on_the_checkout() {
+    for config in [
+        "[alias]\nb = \"build\"\n",
+        "[target.x86_64-unknown-linux-gnu]\nlinker = \"./steal\"\n",
+        "[doc]\nbrowser = \"./steal\"\n",
+        "[net]\ngit-fetch-with-cli = true\n",
+        "[net]\ninclude = [\"../cfg/extra.toml\"]\n",
+        "[build]\nrustflags = [\"-Clinker=./steal\"]\n",
+        "[registries.mirror]\ntoken = \"x\"\n",
+        "[future_key]\nanything = 1\n",
+    ] {
+        let checkout = Checkout::new("unknown");
+        checkout.write("tools/release-plz.toml", "[workspace]\n");
+        checkout.write(".cargo/config.toml", config);
+        refused(&checkout, "tools/release-plz.toml", ".cargo/config.toml");
+        refused(&checkout, "tools/release-plz.toml", "not on the list");
+    }
+}
+
+#[test]
+fn a_cargo_config_of_harmless_keys_passes_on_the_checkout() {
+    let checkout = Checkout::new("harmless");
+    checkout.write("tools/release-plz.toml", "[workspace]\n");
+    checkout.write(
+        ".cargo/config.toml",
+        "[build]\ntarget-dir = \"out\"\njobs = 2\n[net]\nretry = 3\n[term]\ncolor = \"never\"\n[profile.release]\nlto = true\n[registries.mirror]\nindex = \"sparse+https://example.org/index/\"\n",
+    );
+    assert_eq!(checkout.check("tools/release-plz.toml").0, Some(0));
+}
