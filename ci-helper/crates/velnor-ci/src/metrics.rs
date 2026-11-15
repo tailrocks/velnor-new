@@ -21,6 +21,8 @@ pub struct RunMetrics {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JobMetrics {
     pub name: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
     pub conclusion: String,
     pub started: bool,
     pub queue_seconds: u64,

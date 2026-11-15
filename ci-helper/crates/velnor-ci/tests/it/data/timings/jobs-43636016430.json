@@ -4,6 +4,7 @@
     {
       "id": 132572876594,
       "name": "rust-root",
+      "labels": ["ubuntu-latest"],
       "conclusion": "success",
       "created_at": "2026-11-14T20:10:00Z",
       "started_at": "2026-11-14T20:10:01Z",
@@ -122,6 +123,7 @@
     {
       "id": 132572876877,
       "name": "rust-lab",
+      "labels": ["ubuntu-latest"],
       "conclusion": "success",
       "created_at": "2026-11-14T20:10:00Z",
       "started_at": "2026-11-14T20:10:01Z",
@@ -210,6 +212,7 @@
     {
       "id": 132573124848,
       "name": "Required",
+      "labels": ["ubuntu-latest"],
       "conclusion": "success",
       "created_at": "2026-11-14T20:10:52Z",
       "started_at": "2026-11-14T20:11:46Z",

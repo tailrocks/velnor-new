@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use velnor_model::{LINT_STEP, RepoPath, TEST_STEP, Timings, WORKFLOW_PATH};
+use velnor_model::{LINT_STEP, RepoPath, RunnerLabel, TEST_STEP, Timings, WORKFLOW_PATH};
 use velnor_rust::root_job_ids;
 
 use crate::collect::collect;
@@ -36,6 +36,7 @@ pub fn gather(
     github: &dyn GitHub,
     repo: &Repo,
     roots: &[RepoPath],
+    runner: &RunnerLabel,
 ) -> Result<TimingsReport, CiError> {
     let default_branch = default_branch(github, repo)?;
     let run_ids = ordinary_runs(github, repo, &default_branch)?;
@@ -59,11 +60,11 @@ pub fn gather(
     for root in roots {
         let samples: Vec<Sample> = runs
             .iter()
-            .filter_map(|run| sample(run, root, roots.len() > 1))
+            .filter_map(|run| sample(run, root, roots.len() > 1, runner))
             .collect();
         if samples.len() < RUNS_NEEDED {
             notes.push(format!(
-                "{root}: {} of {} runs have its lint and test steps; at least {RUNS_NEEDED} are needed, so it has no entry",
+                "{root}: {} of {} runs on `{runner}` have its lint and test steps; at least {RUNS_NEEDED} are needed, so it has no entry",
                 samples.len(),
                 runs.len()
             ));
@@ -121,12 +122,17 @@ fn is_ordinary(run: &ApiListedRun, default_branch: &str) -> bool {
         }
 }
 
-fn sample(run: &RunMetrics, root: &RepoPath, several_roots: bool) -> Option<Sample> {
+fn sample(
+    run: &RunMetrics,
+    root: &RepoPath,
+    several_roots: bool,
+    runner: &RunnerLabel,
+) -> Option<Sample> {
     let [single, lint_job, test_job] = root_job_ids(root, several_roots);
     let step_in = |jobs: [&str; 2], step: &str| -> Option<&StepMetrics> {
         run.jobs
             .iter()
-            .filter(|job| jobs.contains(&job.name.as_str()))
+            .filter(|job| jobs.contains(&job.name.as_str()) && on_runner(job, runner))
             .find_map(|job| ran_step(job, step))
     };
     let lint = step_in([single.as_str(), lint_job.as_str()], LINT_STEP)?;
@@ -137,6 +143,12 @@ fn sample(run: &RunMetrics, root: &RepoPath, several_roots: bool) -> Option<Samp
         tests: test.log.nextest.first()?.seconds,
         binaries: test.log.binary_seconds.clone(),
     })
+}
+
+fn on_runner(job: &JobMetrics, runner: &RunnerLabel) -> bool {
+    job.labels
+        .iter()
+        .any(|label| label.eq_ignore_ascii_case(runner.as_str()))
 }
 
 fn ran_step<'a>(job: &'a JobMetrics, name: &str) -> Option<&'a StepMetrics> {

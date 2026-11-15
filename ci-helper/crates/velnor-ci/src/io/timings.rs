@@ -24,7 +24,12 @@ pub(super) fn run_timings(args: &TimingsArgs) -> Result<String, CiError> {
         .iter()
         .map(|root| root.manifest.clone())
         .collect();
-    let report = gather(&http::HttpGitHub::new(api_url(), token), &repo, &roots)?;
+    let report = gather(
+        &http::HttpGitHub::new(api_url(), token),
+        &repo,
+        &roots,
+        &facts.config.runner,
+    )?;
     write_report(&checkout.root, report)
 }
 
