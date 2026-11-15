@@ -4,7 +4,7 @@
 use velnor_ci::collect::collect;
 use velnor_ci::github::{Repo, job_log_path, jobs_path, repo_path, run_path, workflow_runs_path};
 use velnor_ci::timings::{TimingsReport, gather};
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RunnerLabel};
 
 use crate::support::FakeGitHub;
 
@@ -72,6 +72,10 @@ pub(crate) fn lab() -> Repo {
     Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+pub(crate) fn runner() -> RunnerLabel {
+    RunnerLabel::from_static("ubuntu-latest")
+}
+
 pub(crate) fn roots() -> Vec<RepoPath> {
     ["Cargo.toml", "lab/Cargo.toml"]
         .map(|path| RepoPath::new(path).unwrap_or_else(|e| unreachable!("{e}")))
@@ -94,7 +98,7 @@ pub(crate) fn recorded(list: &str) -> FakeGitHub {
 }
 
 pub(crate) fn report(list: &str) -> TimingsReport {
-    gather(&recorded(list), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"))
+    gather(&recorded(list), &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 pub(crate) fn median(mut values: Vec<f64>) -> u64 {
@@ -175,13 +179,13 @@ fn only_ordinary_runs_count() {
     let report = report(LIST);
     assert_eq!(report.timings.len(), 2);
     let manual_only = LIST.replace("\"pull_request\"", "\"workflow_dispatch\"");
-    let report =
-        gather(&recorded(&manual_only), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&recorded(&manual_only), &lab(), &roots(), &runner())
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
     assert!(report.notes[0].contains("0 ordinary"), "{:?}", report.notes);
     let reruns = LIST.replace("\"run_attempt\":1", "\"run_attempt\":2");
-    let report =
-        gather(&recorded(&reruns), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&recorded(&reruns), &lab(), &roots(), &runner())
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
 }
 
@@ -191,8 +195,8 @@ fn a_pull_request_into_another_branch_is_not_the_default_branch() {
         "\"pull_requests\":[]",
         "\"pull_requests\":[{\"base\":{\"ref\":\"release\"}}]",
     );
-    let report =
-        gather(&recorded(&elsewhere), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&recorded(&elsewhere), &lab(), &roots(), &runner())
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
 }
 
@@ -210,7 +214,8 @@ fn fewer_than_three_runs_write_nothing_and_say_so() {
         );
         value.to_string()
     };
-    let report = gather(&recorded(&two), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&recorded(&two), &lab(), &roots(), &runner())
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
     assert!(report.notes[0].contains("2 ordinary"), "{:?}", report.notes);
     assert!(report.notes[0].contains("no file is written"));
@@ -227,7 +232,7 @@ fn a_root_whose_steps_cannot_be_read_gets_no_entry() {
             &log.replace("##[group]Run", "##[group]Skip"),
         );
     }
-    let report = gather(&fake, &repo, &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&fake, &repo, &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
     assert_eq!(report.notes.len(), 2);
     assert!(
@@ -249,7 +254,7 @@ fn a_later_finished_line_in_the_test_step_is_not_the_test_build() {
         );
         fake.respond(job_log_path(&repo, id), &later);
     }
-    let report = gather(&fake, &repo, &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(&fake, &repo, &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report, self::report(LIST));
 }
 
@@ -270,7 +275,7 @@ fn only_the_newest_runs_are_read() {
         listed.push(stale);
     }
     value["workflow_runs"] = serde_json::Value::Array(listed);
-    let report = gather(&recorded(&value.to_string()), &lab(), &roots())
+    let report = gather(&recorded(&value.to_string()), &lab(), &roots(), &runner())
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report.timings.len(), 2);
 }

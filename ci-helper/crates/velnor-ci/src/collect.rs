@@ -139,6 +139,7 @@ fn job_metrics(
         .collect();
     Ok(JobMetrics {
         name: job.name.clone(),
+        labels: job.labels.clone(),
         conclusion,
         started,
         queue_seconds,
