@@ -278,7 +278,7 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     Ok(Checkout { root, view })
 }
 
-type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
+pub type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
 fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
@@ -294,6 +294,14 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
+    view_of(root, tracked_paths, keep_metadata)
+}
+
+pub fn view_of(
+    root: &Path,
+    tracked_paths: BTreeSet<RepoPath>,
+    keep_metadata: bool,
+) -> Result<Recorded, Error> {
     let mut view = RepoView {
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
