@@ -252,3 +252,25 @@ fn a_later_finished_line_in_the_test_step_is_not_the_test_build() {
     let report = gather(&fake, &repo, &roots()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report, self::report(LIST));
 }
+
+#[test]
+fn only_the_newest_runs_are_read() {
+    let mut value: serde_json::Value =
+        serde_json::from_str(LIST).unwrap_or_else(|e| unreachable!("{e}"));
+    let runs = value["workflow_runs"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let newest = runs[1].clone();
+    let mut listed = runs.clone();
+    listed.extend(std::iter::repeat_n(newest.clone(), 7));
+    for id in 1..=5_u64 {
+        let mut stale = newest.clone();
+        stale["id"] = id.into();
+        listed.push(stale);
+    }
+    value["workflow_runs"] = serde_json::Value::Array(listed);
+    let report = gather(&recorded(&value.to_string()), &lab(), &roots())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(report.timings.len(), 2);
+}
