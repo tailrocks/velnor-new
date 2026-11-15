@@ -20,6 +20,7 @@ mod plan;
 mod plan_api;
 mod plan_git;
 mod plan_main;
+mod platform;
 mod prepare;
 mod prepare_install;
 mod release_fake;

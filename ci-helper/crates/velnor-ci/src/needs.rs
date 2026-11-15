@@ -9,6 +9,7 @@ use velnor_model::{
 };
 
 use crate::coverage::{UnitKind, crate_name};
+use crate::platform::Platforms;
 
 pub(crate) enum Need<'f> {
     Unit {
@@ -33,8 +34,9 @@ pub(crate) fn groups<'f>(
     root: &'f RustRoot,
     paths: &'f Paths<'f>,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+    platforms: &Platforms,
 ) -> Vec<Group<'f>> {
-    let hosted = hosted(root, reached);
+    let hosted = hosted(root, reached, platforms);
     let mut groups: Vec<Group<'f>> = root
         .members
         .iter()
@@ -69,6 +71,7 @@ pub(crate) fn groups<'f>(
 fn hosted<'f>(
     root: &'f RustRoot,
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+    platforms: &Platforms,
 ) -> BTreeSet<&'f RepoPath> {
     let edges = |manifest: &RepoPath| -> &'f [MemberDependency] {
         match (member_of(root, manifest), reached.get(manifest)) {
@@ -77,13 +80,39 @@ fn hosted<'f>(
             (None, None) => &[],
         }
     };
+    let mut live: BTreeSet<&RepoPath> = BTreeSet::new();
+    let mut walk: Vec<&RepoPath> = root
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| applies_to_target_build(dependency, platforms))
+        .map(|dependency| &dependency.manifest)
+        .collect();
+    while let Some(manifest) = walk.pop() {
+        if let Some(package) = reached.get(manifest)
+            && live.insert(manifest)
+        {
+            walk.extend(
+                package
+                    .dependencies
+                    .iter()
+                    .filter(|dependency| {
+                        dependency.kind != DependencyKind::Dev
+                            && applies_to_target_build(dependency, platforms)
+                    })
+                    .map(|dependency| &dependency.manifest),
+            );
+        }
+    }
     let mut pending: Vec<&RepoPath> = root
         .members
         .iter()
         .map(|member| &member.manifest)
-        .chain(reached.keys().copied())
+        .chain(live.iter().copied())
         .flat_map(&edges)
-        .filter(|dependency| dependency.kind == DependencyKind::Build)
+        .filter(|dependency| {
+            dependency.kind == DependencyKind::Build && applies_to_host_build(dependency, platforms)
+        })
         .map(|dependency| &dependency.manifest)
         .collect();
     let mut hosted = BTreeSet::new();
@@ -92,12 +121,32 @@ fn hosted<'f>(
             pending.extend(
                 edges(manifest)
                     .iter()
-                    .filter(|dependency| dependency.kind != DependencyKind::Dev)
+                    .filter(|dependency| {
+                        dependency.kind != DependencyKind::Dev
+                            && applies_to_host_build(dependency, platforms)
+                    })
                     .map(|dependency| &dependency.manifest),
             );
         }
     }
     hosted
+}
+
+fn applies_to_host_build(dependency: &MemberDependency, platforms: &Platforms) -> bool {
+    dependency
+        .platform
+        .as_deref()
+        .is_none_or(|predicate| platforms.holds_for_host(predicate))
+}
+
+fn applies_to_target_build(dependency: &MemberDependency, platforms: &Platforms) -> bool {
+    dependency.platform.as_deref().is_none_or(|predicate| {
+        if dependency.kind == DependencyKind::Build {
+            platforms.holds_for_host(predicate)
+        } else {
+            platforms.holds_for_ordinary_edge(predicate)
+        }
+    })
 }
 
 fn member_of<'f>(root: &'f RustRoot, manifest: &RepoPath) -> Option<&'f RustMember> {
