@@ -5,24 +5,20 @@ use std::fmt;
 
 use velnor_model::Permissions;
 
-pub const FETCH_HELPER_RUN: &str = "\
-curl -fsSL --create-dirs -o \"$RUNNER_TEMP/vbin/velnor-ci\" \"$URL\"
-echo \"$SHA  $RUNNER_TEMP/vbin/velnor-ci\" > \"$RUNNER_TEMP/velnor-ci.sha\"
-shasum -a 256 -c \"$RUNNER_TEMP/velnor-ci.sha\"
-chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
-echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
+pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const HELPER_FROM_ARTIFACT_RUN: &str = "\
 chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
 echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
 
-pub const ALLOWED_ACTIONS: [&str; 6] = [
+pub const ALLOWED_ACTIONS: [&str; 7] = [
     "actions/checkout",
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
     "jdx/mise-action",
+    SETUP_VELNOR_ACTION,
 ];
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
@@ -34,7 +30,6 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
-    Selected(String),
     Int(u64),
     Bool(bool),
 }
@@ -45,6 +40,7 @@ pub struct RenderedStep {
     pub id: Option<String>,
     pub condition: Option<String>,
     pub uses: Option<String>,
+    pub uses_comment: Option<String>,
     pub with: Vec<(String, Value)>,
     pub working_directory: Option<String>,
     pub env: Vec<(String, Value)>,
@@ -143,7 +139,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if let Some(run) = step
         .run
         .as_deref()
-        .filter(|run| *run != FETCH_HELPER_RUN && *run != HELPER_FROM_ARTIFACT_RUN)
+        .filter(|run| *run != HELPER_FROM_ARTIFACT_RUN)
     {
         run_rules(run, &mut rules);
     }

@@ -304,7 +304,7 @@ fn head(facts: &RepoFacts, from_source: bool) -> Vec<Step> {
             facts
                 .helper
                 .iter()
-                .map(|release| step(StepKind::FetchHelper(release.clone()))),
+                .map(|release| step(StepKind::InstallHelper(release.clone()))),
         );
     }
     steps

@@ -14,8 +14,8 @@ use velnor_model::{
 };
 
 pub use crate::rules::{
-    ALLOWED_ACTIONS, FETCH_HELPER_RUN, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob,
-    RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    ALLOWED_ACTIONS, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
