@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::logscan::{CacheKind, scan};
+use velnor_ci::logscan::{CacheKind, scan, split_steps};
 
 use crate::support::{CLI_LOG, CORE_LOG};
 
@@ -112,4 +112,19 @@ fn nextest_test_times_are_summed_per_binary() {
     assert!((result.binary_seconds["app::bin/app"] - 0.1).abs() < 1e-9);
     assert!((result.binary_seconds["lib"] - 2.0).abs() < 1e-9);
     assert_eq!(result.nextest.len(), 1);
+}
+
+#[test]
+fn steps_are_slices_of_the_log_not_copies_of_it() {
+    let log = "setup\n##[group]Run a\none\n##[group]Run b\ntwo\n";
+    let steps = split_steps(log);
+    assert_eq!(steps.len(), 2);
+    assert_eq!(steps[0], "##[group]Run a\none\n");
+    assert_eq!(steps[1], "##[group]Run b\ntwo\n");
+    let whole = log.as_ptr() as usize..log.as_ptr() as usize + log.len();
+    assert!(
+        steps
+            .iter()
+            .all(|step| whole.contains(&(step.as_ptr() as usize)))
+    );
 }

@@ -110,7 +110,7 @@ fn job_metrics(
     let (log, step_logs) = if ran {
         let text = github
             .get(&job_log_path(repo, job.id))
-            .map_err(|e| CiError::new(format!("log of job `{}`: {e}", job.name)))?;
+            .map_err(|e| e.context(&format!("log of job `{}`", job.name)))?;
         (logscan::scan(&text), step_logs(job, &text))
     } else {
         (logscan::LogScan::default(), BTreeMap::new())
@@ -166,6 +166,6 @@ fn step_logs(job: &ApiJob, text: &str) -> BTreeMap<usize, logscan::LogScan> {
     indexes
         .into_iter()
         .zip(segments)
-        .map(|(index, segment)| (index, logscan::scan(&segment)))
+        .map(|(index, segment)| (index, logscan::scan(segment)))
         .collect()
 }

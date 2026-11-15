@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::collect::collect;
 use velnor_ci::error::CiError;
@@ -22,6 +22,7 @@ pub(crate) const CORE_ID: u64 = 131_068_183_788;
 #[derive(Debug, Default)]
 pub(crate) struct FakeGitHub {
     responses: BTreeMap<String, String>,
+    absent: BTreeSet<String>,
 }
 
 impl FakeGitHub {
@@ -40,6 +41,10 @@ impl FakeGitHub {
         self.responses.get(path).cloned().unwrap_or_default()
     }
 
+    pub(crate) fn missing(&mut self, path: String) {
+        self.absent.insert(path);
+    }
+
     pub(crate) fn respond(&mut self, path: String, body: &str) {
         self.responses.insert(path, body.to_owned());
     }
@@ -47,6 +52,9 @@ impl FakeGitHub {
 
 impl GitHub for FakeGitHub {
     fn get(&self, path: &str) -> Result<String, CiError> {
+        if self.absent.contains(path) {
+            return Err(CiError::missing(format!("GET {path}: http status: 404")));
+        }
         self.responses
             .get(path)
             .cloned()

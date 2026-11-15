@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::collect::collect;
-use velnor_ci::github::{jobs_path, workflow_runs_path};
+use velnor_ci::github::{job_log_path, jobs_path, run_path, workflow_runs_path};
 use velnor_ci::timings::gather;
 use velnor_model::RepoPath;
 
@@ -210,4 +210,31 @@ fn a_binary_seen_in_fewer_than_three_runs_has_no_entry() {
             .test_binary_seconds
             .is_empty()
     );
+}
+
+#[test]
+fn a_run_whose_logs_were_deleted_is_skipped() {
+    let extra = NEWEST[0] + 1;
+    let mut fake = recorded(&list(&ordinary(&[extra, NEWEST[0], NEWEST[1], NEWEST[2]])));
+    let run = fake.get_text(&run_path(&lab(), NEWEST[0]));
+    let mut jobs: Value = serde_json::from_str(&fake.get_text(&jobs_path(&lab(), NEWEST[0], 1, 1)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    for job in jobs["jobs"].as_array_mut().into_iter().flatten() {
+        let id = job["id"].as_u64().unwrap_or_default() + 1_000_000;
+        job["id"] = id.into();
+        fake.missing(job_log_path(&lab(), id));
+    }
+    fake.respond(run_path(&lab(), extra), &run);
+    fake.respond(jobs_path(&lab(), extra, 1, 1), &jobs.to_string());
+    let report = gather(&fake, &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(report.timings.len(), 2);
+}
+
+#[test]
+fn a_failure_that_is_not_a_missing_log_still_stops_the_command() {
+    let extra = NEWEST[0] + 1;
+    let mut fake = recorded(&list(&ordinary(&[extra, NEWEST[0], NEWEST[1], NEWEST[2]])));
+    let run = fake.get_text(&run_path(&lab(), NEWEST[0]));
+    fake.respond(run_path(&lab(), extra), &run);
+    assert!(gather(&fake, &lab(), &roots()).is_err());
 }

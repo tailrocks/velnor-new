@@ -206,17 +206,22 @@ fn set_cache_key(result: &mut LogScan, kind: CacheKind, key: &str) {
 }
 
 #[must_use]
-pub fn split_steps(log: &str) -> Vec<String> {
-    let mut steps: Vec<String> = Vec::new();
-    for raw in log.lines() {
-        let cleaned = strip_ansi(strip_timestamp(raw));
-        if cleaned.starts_with("##[group]Run ") {
-            steps.push(String::new());
+pub fn split_steps(log: &str) -> Vec<&str> {
+    let mut starts: Vec<usize> = Vec::new();
+    let mut at = 0;
+    for raw in log.split_inclusive('\n') {
+        if strip_ansi(strip_timestamp(raw.trim_end_matches(['\n', '\r'])))
+            .starts_with("##[group]Run ")
+        {
+            starts.push(at);
         }
-        if let Some(step) = steps.last_mut() {
-            step.push_str(raw);
-            step.push('\n');
-        }
+        at += raw.len();
     }
-    steps
+    let ends = starts.iter().skip(1).copied().chain([log.len()]);
+    starts
+        .iter()
+        .copied()
+        .zip(ends)
+        .map(|(from, to)| &log[from..to])
+        .collect()
 }

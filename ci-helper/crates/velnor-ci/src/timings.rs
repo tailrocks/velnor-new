@@ -51,10 +51,27 @@ pub fn gather(
             notes,
         });
     }
-    let runs = run_ids
-        .iter()
-        .map(|id| collect(github, repo, *id, false))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut runs = Vec::new();
+    for id in &run_ids {
+        match collect(github, repo, *id, false) {
+            Ok(run) => runs.push(run),
+            Err(error) if error.is_missing() => {
+                notes.push(format!("run {id} has no readable logs and was skipped"));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if runs.len() < RUNS_NEEDED {
+        notes.push(format!(
+            "{} has {} runs with readable logs; at least {RUNS_NEEDED} are needed, so no file is written",
+            WORKFLOW_PATH.as_str(),
+            runs.len()
+        ));
+        return Ok(TimingsReport {
+            timings: BTreeMap::new(),
+            notes,
+        });
+    }
     let mut timings = BTreeMap::new();
     for root in roots {
         let samples: Vec<Sample> = runs
