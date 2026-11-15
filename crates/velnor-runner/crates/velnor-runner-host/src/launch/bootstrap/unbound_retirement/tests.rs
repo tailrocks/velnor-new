@@ -22,6 +22,10 @@ const BOUND: Pair = Pair {
     reservation: 4,
     bound: true,
 };
+const FRESH: Pair = Pair {
+    reservation: 6,
+    bound: false,
+};
 const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
 
 #[tokio::test(flavor = "multi_thread")]
@@ -111,6 +115,36 @@ async fn a_crash_after_the_containers_are_removed_converges_on_restart() -> Test
     assert_eq!(
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         RETIRED
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_retirement_claim_refuses_resource_binding_while_a_normal_reservation_binds()
+-> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let socket = dir.path().join("docker.sock");
+    let _fixture = FixtureDocker::start(&socket, &[FRESH, FAILED])?;
+    let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
+    let journal = Journal::open(&dir.path().join("launch.db")).await?;
+    let (scope, engine) = seed::started_pairs(&journal, &docker, &[FRESH, FAILED]).await?;
+
+    seed::bind_resources(&journal, FRESH, engine.docker_root_digest()).await?;
+    assert_eq!(seed::resources_bound(&journal, FRESH.reservation).await?, 1);
+
+    assert!(abandon_and_retire_unbound_pair(&docker, &scope, &engine, FAILED.reservation).await?);
+    let error = seed::bind_resources(&journal, FAILED, engine.docker_root_digest())
+        .await
+        .err()
+        .ok_or("binding a claimed reservation succeeded")?;
+    assert!(
+        error
+            .to_string()
+            .contains("A retirement claim prevents this operation.")
+    );
+    assert_eq!(
+        seed::resources_bound(&journal, FAILED.reservation).await?,
+        0
     );
     Ok(())
 }

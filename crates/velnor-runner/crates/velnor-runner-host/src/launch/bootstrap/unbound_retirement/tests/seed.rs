@@ -119,7 +119,7 @@ pub(super) async fn started_pairs(
             .replace("{hex64}", &hex64),
     )
     .await?;
-    let saved = trigger_sql(journal).await?;
+    let saved = trigger_sql(journal, &GUARDS).await?;
     for name in GUARDS {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;
     }
@@ -160,10 +160,10 @@ pub(super) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
     Ok(())
 }
 
-async fn trigger_sql(journal: &Journal) -> TestResult<Vec<String>> {
+async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String>> {
     let connection = journal.connection().await?;
     let mut saved = Vec::new();
-    for name in GUARDS {
+    for &name in names {
         let mut rows = connection
             .query("SELECT sql FROM sqlite_schema WHERE name = ?1", [name])
             .await?;
@@ -171,6 +171,81 @@ async fn trigger_sql(journal: &Journal) -> TestResult<Vec<String>> {
         saved.push(row.get::<String>(0)?);
     }
     Ok(saved)
+}
+
+const ROOT_BACKING: &str = "INSERT INTO capacity_reservation_root_backing_mappings (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, sample_generation_id, role, container_id, image_runtime_id, image_source_sha, logical_mount_id, logical_filesystem_digest, backing_filesystem_digest, mapping_record, mapping_digest) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', '{hex32}', '{role}', '{container}', 'image-test', '{sha40}', 1, '{hex64}', '{hex64}', '{}', '{hex64}')";
+
+const WITNESS: &str = "INSERT INTO capacity_reservation_cleanup_observer_witnesses (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, runner_container_id, dind_container_id, instance_binding_digest, guest_boot_id, binding_json, binding_sha256) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', '{runner}', '{dind}', '{digest}', '{boot}', '{}', '{hex64}')";
+
+const BOUND_SEED_GUARDS: [&str; 2] = [
+    "root_backing_insert_guard",
+    "cleanup_observer_witness_insert_guard",
+];
+
+pub(super) async fn bind_resources(
+    journal: &Journal,
+    pair: Pair,
+    docker_root_digest: &str,
+) -> TestResult<()> {
+    let saved = trigger_sql(journal, &BOUND_SEED_GUARDS).await?;
+    for name in BOUND_SEED_GUARDS {
+        execute(journal, &format!("DROP TRIGGER {name}")).await?;
+    }
+    let reservation = pair.reservation.to_string();
+    let witness_digest = "d".repeat(64);
+    let rows = [ROOT_BACKING, ROOT_BACKING, WITNESS]
+        .iter()
+        .enumerate()
+        .map(|(index, sql)| {
+            let role = if index == 1 {
+                "dind-root"
+            } else {
+                "runner-root"
+            };
+            sql.replace("{r}", &reservation)
+                .replace("{i}", &(pair.reservation - 1).to_string())
+                .replace("{root}", docker_root_digest)
+                .replace("{hex32}", &"b".repeat(32))
+                .replace("{hex64}", &"c".repeat(64))
+                .replace("{sha40}", &"e".repeat(40))
+                .replace("{role}", role)
+                .replace(
+                    "{container}",
+                    &pair.container_id(if index == 1 { "dind" } else { "runner" }),
+                )
+                .replace("{runner}", &pair.container_id("runner"))
+                .replace("{dind}", &pair.container_id("dind"))
+                .replace("{digest}", &witness_digest)
+                .replace("{boot}", BOOT_ID)
+        })
+        .collect::<Vec<_>>();
+    for row in rows {
+        execute(journal, &row).await?;
+    }
+    for sql in saved {
+        execute(journal, &sql).await?;
+    }
+    execute(
+        journal,
+        &format!(
+            "UPDATE capacity_reservation_provisioning_state SET resources_bound = 1, instance_binding_digest = '{witness_digest}', guest_boot_id = '{BOOT_ID}' WHERE reservation_id = {reservation}"
+        ),
+    )
+    .await
+}
+
+const BOOT_ID: &str = "00000000-0000-0000-0000-000000000001";
+
+pub(super) async fn resources_bound(journal: &Journal, reservation: i64) -> TestResult<i64> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT resources_bound FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1",
+            [reservation],
+        )
+        .await?;
+    let row = rows.next().await?.ok_or("row missing")?;
+    Ok(row.get::<i64>(0)?)
 }
 
 pub(super) async fn text(journal: &Journal, sql: &str, reservation: i64) -> TestResult<String> {
