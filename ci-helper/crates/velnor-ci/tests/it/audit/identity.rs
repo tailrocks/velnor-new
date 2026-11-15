@@ -81,6 +81,7 @@ fn a_target_of_an_app_binary_without_dep_info_makes_the_audit_refuse() {
     );
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
+    assert!(lock.exists());
 }
 
 #[test]
@@ -106,6 +107,7 @@ fn a_feature_variant_of_a_test_harness_without_dep_info_makes_the_audit_refuse()
     );
     let variant = audit(&repo, &["--write"]);
     assert!(variant.status.success(), "{variant:?}");
+    assert!(lock.exists());
 }
 
 #[test]
@@ -147,6 +149,7 @@ fn a_path_dependency_needs_its_build_script_run_and_a_current_unit() {
     ]);
     let unbuilt = audit(&repo, &["--write"]);
     assert!(unbuilt.status.success(), "{unbuilt:?}");
+    assert!(lock.exists());
 }
 
 #[test]
@@ -178,6 +181,7 @@ fn a_path_dependency_built_under_a_target_triple_needs_a_current_unit_per_packag
     );
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
+    assert!(lock.exists());
     fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
     repo.set_mtime(
         &format!("{triple}/deps/leaf-0000000000000007.d"),
