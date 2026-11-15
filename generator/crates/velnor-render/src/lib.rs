@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache;
 mod gate;
 mod rules;
 mod steps;
@@ -13,6 +14,7 @@ use velnor_model::{
     Access, PermissionScope, Permissions, RepoPath, Triggers, WORKFLOW_PATH, WorkflowPlan,
 };
 
+pub use crate::cache::{RenderedKey, render_key};
 pub use crate::rules::{
     ALLOWED_ACTIONS, FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
     RenderedWorkflow, Rule, RuleViolation, Value, check_rules,

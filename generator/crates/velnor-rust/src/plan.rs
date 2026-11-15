@@ -4,15 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job, JobId,
-    PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape, ShapeDecision,
-    Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CacheKey, CacheRoot, CargoCommand, Concurrency, FilterRef, Gate, GateNeed,
+    HelperCommand, Host, Job, JobId, PermissionScope, Permissions, PlanFrom, RepoFacts, RootSlug,
+    RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When,
+    WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
-use crate::select::root_slug;
 use crate::shape::decide_shape;
 
 const RUST_JOB: JobId = JobId::from_static("rust");
@@ -22,7 +22,7 @@ const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
 struct Lane {
-    slug: String,
+    slug: RootSlug,
     plan: Option<JobId>,
 }
 
@@ -67,7 +67,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .zip(decisions)
         .flat_map(|(root, decision)| {
             let lane = Lane {
-                slug: root_slug(&root.manifest),
+                slug: RootSlug::of(&root.manifest),
                 plan: (!single).then_some(PLAN_JOB),
             };
             root_jobs(facts, root, decision, suffixed, &lane)
@@ -98,8 +98,8 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
-    let used: BTreeSet<(String, GateNeed)> = lanes
+fn used_outputs(lanes: &[Job]) -> Vec<(RootSlug, GateNeed)> {
+    let used: BTreeSet<(RootSlug, GateNeed)> = lanes
         .iter()
         .flat_map(|job| {
             job.gate
@@ -116,7 +116,7 @@ fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
     used.into_iter().collect()
 }
 
-fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
+fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
     let mut steps = head(facts);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
@@ -139,7 +139,7 @@ fn root_jobs(
 ) -> Vec<Job> {
     let id = |base: JobId| {
         if suffixed {
-            base.suffixed(&lane.slug)
+            base.suffixed(lane.slug.as_str())
         } else {
             base
         }
@@ -176,7 +176,8 @@ fn root_jobs(
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
-            let mut steps = setup(facts, root, true, lane);
+            let job_id = id(RUST_JOB);
+            let mut steps = setup(facts, root, true, lane, &job_id);
             steps.extend(cargo(
                 lint.into_iter()
                     .chain(test)
@@ -186,11 +187,12 @@ fn root_jobs(
             ));
             vec![Job {
                 comment,
-                ..lane_job(id(RUST_JOB), steps)
+                ..lane_job(job_id, steps)
             }]
         }
         Shape::LintAndTest | Shape::BuildThenGroups => {
-            let mut lint_steps = setup(facts, root, true, lane);
+            let lint_id = id(LINT_JOB);
+            let mut lint_steps = setup(facts, root, true, lane, &lint_id);
             lint_steps.extend(cargo(
                 lint.into_iter()
                     .chain([CargoCommand::Doc])
@@ -199,12 +201,13 @@ fn root_jobs(
             ));
             let mut jobs = vec![Job {
                 comment,
-                ..lane_job(id(LINT_JOB), lint_steps)
+                ..lane_job(lint_id, lint_steps)
             }];
             if !test.is_empty() {
-                let mut test_steps = setup(facts, root, false, lane);
+                let test_id = id(TEST_JOB);
+                let mut test_steps = setup(facts, root, false, lane, &test_id);
                 test_steps.extend(cargo(test));
-                jobs.push(lane_job(id(TEST_JOB), test_steps));
+                jobs.push(lane_job(test_id, test_steps));
             }
             jobs
         }
@@ -264,7 +267,7 @@ fn head(facts: &RepoFacts) -> Vec<Step> {
     steps
 }
 
-fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
+fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane, job: &JobId) -> Vec<Step> {
     let mut steps = head(facts);
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
@@ -298,8 +301,18 @@ fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Ste
             }
         }
     }
+    let cache_root = CacheRoot::new(&root.manifest);
     toolchain.extend([
         step(StepKind::Helper(HelperCommand::Prepare)),
+        step(StepKind::CacheRestore(CacheKey::Sources {
+            host: Host,
+            root: cache_root.clone(),
+        })),
+        step(StepKind::CacheRestore(CacheKey::Target {
+            job: job.clone(),
+            root: cache_root,
+            host: Host,
+        })),
         step(StepKind::Helper(HelperCommand::Restored)),
     ]);
     steps.extend(toolchain.into_iter().map(|step| Step {

@@ -180,6 +180,14 @@ pub struct RustCiConfig {
     pub shape: Option<Shape>,
     pub required_check: String,
     pub default_branch: String,
+    pub ci_debuginfo: CiDebugInfo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CiDebugInfo {
+    Full,
+    LineTablesOnly,
+    None,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,6 +208,7 @@ impl Default for RustCiConfig {
             shape: None,
             required_check: "Required".to_owned(),
             default_branch: "main".to_owned(),
+            ci_debuginfo: CiDebugInfo::LineTablesOnly,
         }
     }
 }

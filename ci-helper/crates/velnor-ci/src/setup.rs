@@ -5,15 +5,9 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use velnor_model::ToolPins;
+use velnor_rust::BuildProfile;
 
 use crate::error::CiError;
-
-pub const BUILD_ENV: [(&str, &str); 4] = [
-    ("RUSTUP_AUTO_INSTALL", "0"),
-    ("CARGO_INCREMENTAL", "0"),
-    ("CARGO_TERM_COLOR", "always"),
-    ("SOURCE_DATE_EPOCH", "0"),
-];
 
 pub const COMPAT: &str = "compat";
 
@@ -31,16 +25,20 @@ pub fn parse_reported(json: &str) -> Result<Reported, CiError> {
         .map_err(|error| CiError::new(format!("mise ls --json is not readable: {error}")))
 }
 
+pub const RUSTUP_AUTO_INSTALL: (&str, &str) = ("RUSTUP_AUTO_INSTALL", "0");
+
 #[must_use]
-pub fn env_lines() -> String {
-    BUILD_ENV
+pub fn env_lines(profile: &BuildProfile) -> String {
+    std::iter::once(&RUSTUP_AUTO_INSTALL)
+        .chain(&profile.env)
         .map(|(name, value)| format!("{name}={value}\n"))
+        .collect::<Vec<_>>()
         .concat()
 }
 
 #[must_use]
-pub fn output_lines() -> String {
-    format!("{COMPAT}=\n")
+pub fn output_lines(compat: &str) -> String {
+    format!("{COMPAT}={compat}\n")
 }
 
 pub fn check_tools(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> {

@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
 
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
 
-pub(crate) fn output(slug: &str, need: GateNeed) -> String {
+pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     format!("rust_{slug}_{}", need_name(need))
 }
 

@@ -88,24 +88,6 @@ fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     walk
 }
 
-#[must_use]
-pub fn root_slug(manifest: &RepoPath) -> String {
-    match manifest.parent() {
-        None => "root".to_owned(),
-        Some(directory) => directory
-            .as_str()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() {
-                    c.to_ascii_lowercase()
-                } else {
-                    '_'
-                }
-            })
-            .collect(),
-    }
-}
-
 const OWN_FOLDERS: [&str; 4] = ["src/", "tests/", "benches/", "examples/"];
 const BUILD_SCRIPT: &str = "build.rs";
 

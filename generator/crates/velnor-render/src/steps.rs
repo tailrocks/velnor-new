@@ -4,18 +4,23 @@
 use std::fmt;
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
+    CacheKey, CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step,
+    StepKind,
 };
+
+use crate::cache::{path_text, render_key};
 
 use crate::gate::{PLAN_STEP, condition, output};
 use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
 
-const PREPARE_STEP: &str = "prepare";
+pub(crate) const PREPARE_STEP: &str = "prepare";
 const RUN: &str = "velnor-ci run --";
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
 const MISE_VERSION: &str = "2026.11.1";
+const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -71,6 +76,8 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ],
             ..RenderedStep::default()
         },
+        StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
+        StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -126,6 +133,27 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
+    let rendered = render_key(key);
+    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
+    let mut with = vec![
+        ("path".to_owned(), Value::Text(paths.join("\n"))),
+        ("key".to_owned(), Value::Expr(rendered.key)),
+    ];
+    if fallbacks && !rendered.restore_keys.is_empty() {
+        with.push((
+            "restore-keys".to_owned(),
+            Value::Expr(rendered.restore_keys.join("\n")),
+        ));
+    }
+    RenderedStep {
+        name: format!("{verb} the {} cache", key.family()),
+        uses: Some(action.to_owned()),
+        with,
+        ..RenderedStep::default()
     }
 }
 

@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape};
+use velnor_model::{
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape,
+};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 9] = [
+const KEYS: [&str; 10] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -19,6 +21,7 @@ const KEYS: [&str; 9] = [
     "shape",
     "required_check",
     "default_branch",
+    "ci_debuginfo",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -36,6 +39,7 @@ struct RawConfig {
     shape: Option<String>,
     required_check: Option<String>,
     default_branch: Option<String>,
+    ci_debuginfo: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -89,8 +93,21 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     };
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+    let ci_debuginfo = match raw.ci_debuginfo.as_deref() {
+        None => defaults.ci_debuginfo,
+        Some("full") => CiDebugInfo::Full,
+        Some("line-tables-only") => CiDebugInfo::LineTablesOnly,
+        Some("none") => CiDebugInfo::None,
+        Some(other) => {
+            return Err(invalid(Reason::InvalidValue {
+                key: "ci_debuginfo",
+                value: other.to_owned(),
+            }));
+        }
+    };
     Ok(RustCiConfig {
         shape,
+        ci_debuginfo,
         required_check,
         default_branch,
         non_inputs,
@@ -243,4 +260,13 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
             (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
+}
+
+pub fn ci_debuginfo(
+    files: &std::collections::BTreeMap<RepoPath, Vec<u8>>,
+) -> Result<CiDebugInfo, DetectError> {
+    files.get(&CONFIG_PATH).map_or_else(
+        || Ok(RustCiConfig::default().ci_debuginfo),
+        |bytes| parse(bytes).map(|config| config.ci_debuginfo),
+    )
 }

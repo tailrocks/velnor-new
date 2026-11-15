@@ -34,50 +34,159 @@ fn reported(rust: &str, nextest: Option<&str>) -> String {
     format!("{{{}}}", tools.join(","))
 }
 
+const RUSTC: &str =
+    "rustc 1.99.1 (abc 2026-08-27)\nbinary: rustc\nhost: aarch64-apple-darwin\nrelease: 1.99.1\n";
+const DEPENDENCY_DEBUG: &str = "[profile.dev.package.\"*\"]\ndebug = \"none\"\n\n[profile.test.package.\"*\"]\ndebug = \"none\"\n";
+
+struct Setup {
+    json: String,
+    rustc: bool,
+    rust_ci_toml: Option<&'static str>,
+    cargo_config: Option<&'static str>,
+    env: Vec<(&'static str, &'static str)>,
+}
+
+impl Setup {
+    fn new(json: String) -> Self {
+        Self {
+            json,
+            rustc: true,
+            rust_ci_toml: None,
+            cargo_config: None,
+            env: Vec::new(),
+        }
+    }
+}
+
 struct Run {
     output: Output,
     env_file: String,
     outputs: String,
+    cargo_config: String,
 }
 
-fn prepare(name: &str, json: &str) -> Run {
-    let dir = scratch(name);
+fn script(path: &Path, body: &str) {
+    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
-    fs::create_dir_all(&checkout).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(checkout.join("mise.toml"), MISE).unwrap_or_else(|e| unreachable!("{e}"));
     let bin = dir.join("bin");
+    let cargo_home = dir.join("cargo-home");
+    fs::create_dir_all(checkout.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
-    let mise = bin.join("mise");
-    fs::write(&mise, format!("#!/bin/sh\ncat <<'EOF'\n{json}\nEOF\n"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::set_permissions(&mise, fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(checkout.join("mise.toml"), MISE).unwrap_or_else(|e| unreachable!("{e}"));
+    if let Some(text) = setup.rust_ci_toml {
+        fs::write(checkout.join(".velnor/rust-ci.toml"), text)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    if let Some(text) = setup.cargo_config {
+        fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(cargo_home.join("config.toml"), text).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    script(
+        &bin.join("mise"),
+        &format!("cat <<'EOF'\n{}\nEOF", setup.json),
+    );
+    if setup.rustc {
+        script(&bin.join("rustc"), &format!("cat <<'EOF'\n{RUSTC}EOF"));
+    }
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
         .arg("prepare")
         .current_dir(&checkout)
+        .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("CARGO_HOME", &cargo_home)
         .env("GITHUB_ENV", &env_file)
-        .env("GITHUB_OUTPUT", &outputs)
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .env("GITHUB_OUTPUT", &outputs);
+    for (name, value) in &setup.env {
+        command.env(name, value);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     let read = |file: &Path| fs::read_to_string(file).unwrap_or_default();
     Run {
         output,
         env_file: read(&env_file),
         outputs: read(&outputs),
+        cargo_config: read(&cargo_home.join("config.toml")),
     }
 }
 
+fn prepare(name: &str, setup: &Setup) -> Run {
+    prepare_in(&scratch(name), setup)
+}
+
+fn digest(run: &Run) -> &str {
+    run.outputs
+        .strip_prefix("compat=")
+        .and_then(|rest| rest.strip_suffix('\n'))
+        .unwrap_or_default()
+}
+
 #[test]
-fn prepare_sets_the_build_profile_and_an_empty_compat_when_every_tool_is_at_its_pin() {
-    let run = prepare("ok", &reported("1.99.1", Some("0.9.151")));
+fn prepare_sets_the_build_profile_and_writes_a_compat_digest_when_every_tool_is_at_its_pin() {
+    let run = prepare("ok", &Setup::new(reported("1.99.1", Some("0.9.151"))));
     assert!(run.output.status.success(), "{:?}", run.output);
     assert_eq!(
         run.env_file,
-        "RUSTUP_AUTO_INSTALL=0\nCARGO_INCREMENTAL=0\nCARGO_TERM_COLOR=always\nSOURCE_DATE_EPOCH=0\n"
+        "RUSTUP_AUTO_INSTALL=0\nCARGO_INCREMENTAL=0\nCARGO_TERM_COLOR=always\nSOURCE_DATE_EPOCH=0\nCARGO_PROFILE_DEV_DEBUG=line-tables-only\nCARGO_PROFILE_TEST_DEBUG=line-tables-only\n"
     );
-    assert_eq!(run.outputs, "compat=\n");
+    assert_eq!(digest(&run).len(), 16, "{}", run.outputs);
+    assert!(digest(&run).bytes().all(|b| b.is_ascii_hexdigit()));
+    assert_eq!(run.cargo_config, DEPENDENCY_DEBUG);
+}
+
+#[test]
+fn compat_is_stable_and_follows_rustflags_and_the_debuginfo_setting() {
+    let json = reported("1.99.1", Some("0.9.151"));
+    let first = prepare("stable", &Setup::new(json.clone()));
+    let again = prepare("stable", &Setup::new(json.clone()));
+    assert_eq!(digest(&first), digest(&again));
+    let mut flags = Setup::new(json.clone());
+    flags.env.push(("RUSTFLAGS", "-C target-cpu=native"));
+    assert_ne!(digest(&first), digest(&prepare("stable", &flags)));
+    let mut full = Setup::new(json);
+    full.rust_ci_toml = Some("ci_debuginfo = \"full\"\n");
+    let full = prepare("stable", &full);
+    assert_ne!(digest(&first), digest(&full));
+    assert!(full.env_file.contains("CARGO_PROFILE_DEV_DEBUG=full\n"));
+    assert_eq!(full.cargo_config, "");
+}
+
+#[test]
+fn the_cargo_home_config_keeps_what_was_there_and_gets_the_override_once() {
+    let dir = scratch("home");
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.cargo_config = Some("[net]\nretry = 2");
+    let first = prepare_in(&dir, &setup);
+    assert_eq!(
+        first.cargo_config,
+        format!("[net]\nretry = 2\n{DEPENDENCY_DEBUG}")
+    );
+    setup.cargo_config = None;
+    let second = prepare_in(&dir, &setup);
+    assert_eq!(second.cargo_config, first.cargo_config);
+}
+
+#[test]
+fn prepare_without_rustc_fails_and_writes_nothing() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.rustc = false;
+    let run = prepare("norustc", &setup);
+    assert_eq!(run.output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&run.output.stderr).contains("rustc"));
+    assert_eq!(
+        (
+            run.env_file.as_str(),
+            run.outputs.as_str(),
+            run.cargo_config.as_str()
+        ),
+        ("", "", "")
+    );
 }
 
 #[test]
@@ -94,7 +203,7 @@ fn prepare_names_the_tool_that_is_not_at_its_pinned_version_and_writes_nothing()
             "aqua:nextest-rs/nextest/cargo-nextest: pinned 0.9.151, mise reports nothing installed",
         ),
     ] {
-        let run = prepare(name, &json);
+        let run = prepare(name, &Setup::new(json));
         assert_eq!(run.output.status.code(), Some(1), "{name}");
         assert!(
             String::from_utf8_lossy(&run.output.stderr).contains(tool),

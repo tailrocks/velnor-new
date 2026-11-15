@@ -3,8 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use crate::cache::CacheKey;
 use crate::ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
+    Sha256,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,7 +57,7 @@ pub struct Job {
     pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
-    pub plan_outputs: Vec<(String, GateNeed)>,
+    pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub steps: Vec<Step>,
 }
 
@@ -69,7 +71,7 @@ pub struct Step {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gate {
-    pub slug: String,
+    pub slug: RootSlug,
     pub need: GateNeed,
     pub from: PlanFrom,
 }
@@ -98,6 +100,8 @@ pub enum When {
 pub enum StepKind {
     Checkout { depth: u32 },
     InstallTools,
+    CacheRestore(CacheKey),
+    CacheSave(CacheKey),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     Cargo(CargoCommand),

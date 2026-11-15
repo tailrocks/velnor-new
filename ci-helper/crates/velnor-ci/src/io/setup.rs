@@ -9,7 +9,11 @@ use std::sync::Mutex;
 use std::thread;
 
 use velnor_gen::io::read_files;
-use velnor_rust::{mise_files, tool_pins};
+use velnor_model::RepoPath;
+use velnor_rust::{
+    BUILD_DRIVER, CONFIG_PATH, CompatInputs, build_profile, ci_debuginfo, compat, mise_files,
+    tool_pins,
+};
 
 use super::{append_outputs, append_to, current_dir};
 use crate::cli::RunArgs;
@@ -17,6 +21,9 @@ use crate::error::CiError;
 use crate::setup::{check_tools, env_lines, output_lines, parse_reported};
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
+const CARGO_HOME_VARIABLE: &str = "CARGO_HOME";
+const HOME_VARIABLE: &str = "HOME";
+const CARGO_CONFIG: &str = "config.toml";
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
 const NOT_FOUND: u8 = 127;
@@ -26,8 +33,10 @@ const CHUNK: usize = 8192;
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
-    let files = read_files(&root, &mise_files()).map_err(|e| CiError::new(e.to_string()))?;
+    let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
+    let files = read_files(&root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
+    let profile = build_profile(ci_debuginfo(&files).map_err(|e| CiError::new(e.to_string()))?);
     let output = Command::new("mise")
         .args(["ls", "--current", "--json"])
         .current_dir(&root)
@@ -43,8 +52,18 @@ pub(super) fn prepare() -> Result<String, CiError> {
         &pins,
         &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
     )?;
-    append_to(ENV_VARIABLE, &env_lines())?;
-    append_outputs(&output_lines())?;
+    let inputs = CompatInputs {
+        rustc_verbose: rustc_verbose()?,
+        target: env_text("CARGO_BUILD_TARGET"),
+        profile: profile.clone(),
+        rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
+        workspace: root.display().to_string(),
+        driver: BUILD_DRIVER.to_owned(),
+    };
+    let digest = compat(&inputs);
+    write_cargo_config(profile.cargo_config)?;
+    append_to(ENV_VARIABLE, &env_lines(&profile))?;
+    append_outputs(&output_lines(&digest))?;
     Ok(String::new())
 }
 
@@ -149,4 +168,56 @@ fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
             file.write_all(chunk).ok();
         }
     }
+}
+
+fn env_text(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+fn rustc_verbose() -> Result<String, CiError> {
+    let output = Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run rustc: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "rustc -vV failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|_| CiError::new("rustc -vV did not print UTF-8".to_owned()))
+}
+
+fn write_cargo_config(text: &str) -> Result<(), CiError> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    let home = env_text(CARGO_HOME_VARIABLE)
+        .map(PathBuf::from)
+        .or_else(|| env_text(HOME_VARIABLE).map(|home| PathBuf::from(home).join(".cargo")))
+        .ok_or_else(|| CiError::new(format!("set {CARGO_HOME_VARIABLE} or {HOME_VARIABLE}")))?;
+    let file = home.join(CARGO_CONFIG);
+    let existing = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", file.display()))),
+    };
+    if existing.contains(text) {
+        return Ok(());
+    }
+    let separator = if existing.is_empty() || existing.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    std::fs::create_dir_all(&home)
+        .and_then(|()| {
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&file)
+                .and_then(|mut handle| handle.write_all(format!("{separator}{text}").as_bytes()))
+        })
+        .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))
 }
