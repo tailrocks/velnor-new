@@ -26,6 +26,7 @@ use crate::cli::{Cli, Command};
 use crate::{
     Drift, GENERATED_PATHS, GenerateError, check_tag, drift, generated_files, require_compatible,
 };
+use check::cargo_metadata;
 pub use check::check_metadata;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
@@ -385,22 +386,4 @@ fn program(directory: &Path, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Err
             String::from_utf8_lossy(&output.stderr).into_owned(),
         ))
     }
-}
-
-fn cargo_metadata(root: &Path, manifest: &RepoPath) -> Result<Vec<u8>, Error> {
-    let path = manifest_file(root, manifest)?;
-    let directory = path.parent().unwrap_or(root);
-    program(
-        directory,
-        "cargo",
-        &[
-            OsStr::new("metadata"),
-            OsStr::new("--format-version"),
-            OsStr::new("1"),
-            OsStr::new("--no-deps"),
-            OsStr::new("--offline"),
-            OsStr::new("--manifest-path"),
-            path.as_os_str(),
-        ],
-    )
 }

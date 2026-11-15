@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 
@@ -10,7 +11,7 @@ use velnor_rust::{
     reduce_metadata,
 };
 
-use super::{Error, cargo_metadata, read_files, read_manifests, read_tracked, toplevel};
+use super::{Error, manifest_file, program, read_files, read_manifests, read_tracked, toplevel};
 
 const MANIFEST: &str = "Cargo.toml";
 
@@ -47,4 +48,22 @@ pub fn check_metadata(directory: &Path) -> Result<(), Error> {
     } else {
         Err(Error::MetadataFile(MetadataFileError::Differs(manifest)))
     }
+}
+
+pub(super) fn cargo_metadata(root: &Path, manifest: &RepoPath) -> Result<Vec<u8>, Error> {
+    let path = manifest_file(root, manifest)?;
+    let directory = path.parent().unwrap_or(root);
+    program(
+        directory,
+        "cargo",
+        &[
+            OsStr::new("metadata"),
+            OsStr::new("--format-version"),
+            OsStr::new("1"),
+            OsStr::new("--no-deps"),
+            OsStr::new("--offline"),
+            OsStr::new("--manifest-path"),
+            path.as_os_str(),
+        ],
+    )
 }
