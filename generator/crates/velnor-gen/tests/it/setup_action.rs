@@ -220,16 +220,27 @@ fn an_unset_or_read_only_tool_cache_does_not_stop_the_private_install() -> TestR
     assert!(install.run(None, None)?.success());
     assert_eq!(install.installed()?, install.binary);
 
-    let read_only = install.work.join("read-only");
-    fs::create_dir_all(&read_only)?;
-    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o555))?;
-    fs::remove_file(install.work.join("path"))?;
-    let status = install.run(Some(&read_only), None)?;
-    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o755))?;
-    let copy = install.installed();
+    let mut unwritable = Vec::new();
+    for leaf in ["read-only", "read-only-leaf/velnor-ci/1.2.3/x64"] {
+        let cache = install.work.join(leaf.split('/').next().unwrap_or(leaf));
+        let locked = install.work.join(leaf);
+        fs::create_dir_all(&locked)?;
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o555))?;
+        if fs::write(locked.join("probe"), b"").is_ok() {
+            fs::set_permissions(&locked, fs::Permissions::from_mode(0o755))?;
+            continue;
+        }
+        fs::remove_file(install.work.join("path"))?;
+        let status = install.run(Some(&cache), None)?;
+        let copy = install.installed();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755))?;
+        unwritable.push((status.success(), copy.ok()));
+    }
     fs::remove_dir_all(&install.work)?;
-    assert!(status.success());
-    assert_eq!(copy?, install.binary);
+    for (success, copy) in unwritable {
+        assert!(success);
+        assert_eq!(copy.as_deref(), Some(install.binary));
+    }
     Ok(())
 }
 
