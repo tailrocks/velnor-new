@@ -112,6 +112,8 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             None,
         )?;
         check_package(root, None, workspace)?;
+    } else if workspace.release != Some(false) {
+        check_package(root, None, workspace)?;
     }
     let mut packages = Vec::new();
     for (name, settings) in &released {
