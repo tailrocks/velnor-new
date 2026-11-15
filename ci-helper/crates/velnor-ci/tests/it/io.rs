@@ -81,6 +81,15 @@ fn a_folder_with_no_dash_after_its_pid_is_left_alone() {
 }
 
 #[test]
+fn a_folder_with_an_empty_rest_after_its_pid_dash_is_left_alone() {
+    assert_dead(DEAD_PID);
+    let folder = Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{DEAD_PID}-")));
+    fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let _repo = Repo::new("sweep-empty");
+    assert!(folder.root().is_dir());
+}
+
+#[test]
 fn a_dead_pid_folder_that_only_resembles_the_prefix_is_left_alone() {
     assert_dead(DEAD_PID);
     let temp = std::env::temp_dir();
