@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod network;
-mod pair;
-mod storage_object;
+pub(crate) mod pair;
+pub(crate) mod storage_object;
 
 pub(crate) use network::{
     remove_owned_network, remove_owned_network_for_jit_conflict,

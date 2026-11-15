@@ -191,7 +191,7 @@ pub fn runner_pair_environment(role: BootstrapContainerRole) -> Option<Vec<Strin
     })
 }
 
-pub(in crate::launch::bootstrap::containers) fn create_body(
+pub(crate) fn create_body(
     name: String,
     image: String,
     role: BootstrapContainerRole,

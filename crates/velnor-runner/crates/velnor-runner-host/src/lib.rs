@@ -39,6 +39,8 @@ mod launch;
 mod launch_blocking;
 mod launch_identity;
 mod listen;
+#[cfg(feature = "local-mode")]
+pub mod local;
 mod plist;
 mod readiness;
 mod readiness_scan;
