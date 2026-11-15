@@ -215,7 +215,7 @@ fn a_draft_run_fails_the_verdict_and_a_conversion_to_draft_starts_a_run() -> Tes
 }
 
 #[test]
-fn the_policy_lane_fetches_no_helper_it_never_runs() -> TestResult {
+fn the_policy_lane_installs_no_helper_it_never_runs() -> TestResult {
     let mut multi = view(&["Cargo.toml"], None)?;
     for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let path = RepoPath::new(path)?;
@@ -232,11 +232,11 @@ fn the_policy_lane_fetches_no_helper_it_never_runs() -> TestResult {
         )?,
     );
     let text = workflow(&multi)?;
-    assert!(text.contains("Fetch velnor-ci"), "{text}");
+    assert!(text.contains("Install velnor-ci"), "{text}");
     let policy = text.split("\n  policy:\n").nth(1).unwrap_or_default();
     let policy = policy.split("\n  required:\n").next().unwrap_or_default();
     assert!(policy.contains("cargo-deny"), "{policy}");
-    assert!(!policy.contains("Fetch velnor-ci"), "{policy}");
+    assert!(!policy.contains("Install velnor-ci"), "{policy}");
     Ok(())
 }
 
