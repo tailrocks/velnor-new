@@ -7,9 +7,14 @@ pub mod io;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
-use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
-use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
+use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView, WORKFLOW_PATH};
+use velnor_render::{GENERATED_HEADER, RuleViolation, render};
+use velnor_rust::{
+    DetectError, METADATA_PATH, MetadataFileError, check_required_check, check_tools, detect,
+    metadata_file, plan,
+};
+
+pub const GENERATED_PATHS: [RepoPath; 2] = [WORKFLOW_PATH, METADATA_PATH];
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 
@@ -17,6 +22,8 @@ pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub enum GenerateError {
     Detect(DetectError),
     IncompatibleHelper(HelperVersion),
+    HelperNotPinned,
+    Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
 
@@ -29,6 +36,10 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
                 COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
             ),
+            Self::HelperNotPinned => f.write_str(
+                "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
+            ),
+            Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {
@@ -48,6 +59,15 @@ impl From<DetectError> for GenerateError {
     }
 }
 
+pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+    let mut files = expected_files(view)?;
+    files.insert(
+        METADATA_PATH,
+        metadata_file(view).map_err(GenerateError::Metadata)?,
+    );
+    Ok(files)
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     let facts = detect(view)?;
     check_helper(&facts)?;
@@ -61,7 +81,8 @@ fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {
     facts
         .helper
         .as_ref()
-        .map_or(Ok(()), |release| require_compatible(release.version()))
+        .ok_or(GenerateError::HelperNotPinned)
+        .and_then(|release| require_compatible(release.version()))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
@@ -121,10 +142,12 @@ pub fn drift(
     expected: &BTreeMap<RepoPath, String>,
     on_disk: &BTreeMap<RepoPath, Vec<u8>>,
 ) -> Vec<Drift> {
-    OWNED_PATHS
+    GENERATED_PATHS
         .iter()
         .filter_map(|path| match (expected.get(path), on_disk.get(path)) {
-            (_, Some(have)) if !have.starts_with(GENERATED_HEADER.as_bytes()) => {
+            (_, Some(have))
+                if *path == WORKFLOW_PATH && !have.starts_with(GENERATED_HEADER.as_bytes()) =>
+            {
                 Some(Drift::Foreign(path.clone()))
             }
             (Some(want), Some(have)) if want.as_bytes() == have.as_slice() => None,

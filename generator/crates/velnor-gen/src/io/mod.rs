@@ -13,16 +13,18 @@ pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
-use velnor_render::OWNED_PATHS;
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, manifests, metadata_roots, pin_lock,
-    reduce_metadata, release_version, sums_url, wanted_files,
+    DetectError, LOCK_PATH, LockError, METADATA_PATH, MetadataError, MetadataFileError, manifests,
+    metadata_file, metadata_roots, pin_lock, recorded_metadata, reduce_metadata, release_version,
+    sums_url, wanted_files,
 };
 
 mod sample;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
+use crate::{
+    Drift, GENERATED_PATHS, GenerateError, check_tag, drift, generated_files, require_compatible,
+};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -35,6 +37,7 @@ pub enum Error {
     Program(String, String),
     Repository(String),
     Metadata(MetadataError),
+    MetadataFile(MetadataFileError),
     Detect(DetectError),
     Generate(GenerateError),
     Lock(LockError),
@@ -52,6 +55,7 @@ impl fmt::Display for Error {
             Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
             Self::Repository(message) => f.write_str(message),
             Self::Metadata(error) => error.fmt(f),
+            Self::MetadataFile(error) => error.fmt(f),
             Self::Detect(error) => error.fmt(f),
             Self::Generate(error) => error.fmt(f),
             Self::Lock(error) => error.fmt(f),
@@ -191,8 +195,8 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
-    let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
+    let expected = generated_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
+    let drifts = drift(&expected, &read_files(&root, &GENERATED_PATHS)?);
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
@@ -278,9 +282,26 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     Ok(Checkout { root, view })
 }
 
+pub fn write_metadata(path: &Path) -> Result<(), Error> {
+    let root = toplevel(path)?;
+    let view = read_view(&root, false)?.0;
+    let text = metadata_file(&view).map_err(Error::MetadataFile)?;
+    replace(&root.join(METADATA_PATH.as_str()), text.as_bytes())
+}
+
+pub fn read_recorded_checkout(path: &Path) -> Result<Checkout, Error> {
+    let root = toplevel(path)?;
+    let mut view = read_tracked(&root)?;
+    read_manifests(&root, &mut view);
+    let mut recorded = read_files(&root, &[METADATA_PATH])?;
+    view.rust_metadata = recorded_metadata(&view, recorded.remove(&METADATA_PATH).as_deref())
+        .map_err(Error::MetadataFile)?;
+    Ok(Checkout { root, view })
+}
+
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+fn read_tracked(root: &Path) -> Result<RepoView, Error> {
     let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
@@ -294,11 +315,25 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
-    let mut view = RepoView {
+    Ok(RepoView {
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
         rust_metadata: BTreeMap::new(),
-    };
+    })
+}
+
+fn read_manifests(root: &Path, view: &mut RepoView) {
+    for manifest in manifests(&view.tracked_paths) {
+        if let Ok(Some(file)) = regular_file(root, &manifest)
+            && let Ok(bytes) = fs::read(&file)
+        {
+            view.files.entry(manifest).or_insert(bytes);
+        }
+    }
+}
+
+fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+    let mut view = read_tracked(root)?;
     let mut recorded = BTreeMap::new();
     for manifest in metadata_roots(&view).map_err(Error::Detect)? {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
@@ -330,13 +365,7 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
-    for manifest in manifests(&view.tracked_paths) {
-        if let Ok(Some(file)) = regular_file(root, &manifest)
-            && let Ok(bytes) = fs::read(&file)
-        {
-            view.files.entry(manifest).or_insert(bytes);
-        }
-    }
+    read_manifests(root, &mut view);
     Ok((view, recorded))
 }
 

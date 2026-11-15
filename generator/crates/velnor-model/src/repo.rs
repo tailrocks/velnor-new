@@ -179,6 +179,7 @@ pub struct RustCiConfig {
     pub default_ignores: bool,
     pub shape: Option<Shape>,
     pub required_check: String,
+    pub default_branch: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,6 +199,7 @@ impl Default for RustCiConfig {
             default_ignores: true,
             shape: None,
             required_check: "Required".to_owned(),
+            default_branch: "main".to_owned(),
         }
     }
 }

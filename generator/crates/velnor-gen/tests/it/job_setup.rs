@@ -20,7 +20,7 @@ fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestRe
         b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\nprotoc = \"31.1\"\n".to_vec(),
     );
     let text = workflow(&pinned)?;
-    assert!(text.contains("      - name: Install tools\n        uses: jdx/mise-action@"));
+    assert!(text.contains("        uses: jdx/mise-action@"));
     assert!(!text.contains("install_args"), "{text}");
     let mut unpinned = pinned;
     unpinned.files.insert(

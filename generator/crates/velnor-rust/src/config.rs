@@ -9,7 +9,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 8] = [
+const KEYS: [&str; 9] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -18,6 +18,7 @@ const KEYS: [&str; 8] = [
     "default_ignores",
     "shape",
     "required_check",
+    "default_branch",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -34,6 +35,7 @@ struct RawConfig {
     default_ignores: Option<bool>,
     shape: Option<String>,
     required_check: Option<String>,
+    default_branch: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -85,9 +87,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
+    let default_branch =
+        default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     Ok(RustCiConfig {
         shape,
         required_check,
+        default_branch,
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
@@ -114,6 +119,29 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
+    match configured {
+        None => Ok(default),
+        Some(name) if branch_name(&name) => Ok(name),
+        Some(name) => Err(Reason::InvalidValue {
+            key: "default_branch",
+            value: name,
+        }),
+    }
+}
+
+fn branch_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['/', '-'])
+        && !name.ends_with(['/', '.'])
+        && !name.contains("..")
+        && !name.contains("//")
+        && !name.contains("@{")
+        && !name
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

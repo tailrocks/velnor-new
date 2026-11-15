@@ -11,9 +11,9 @@ pub use ids::{
     Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
-    WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperBinary, HelperCommand,
+    HelperRelease, Job, PermissionScope, Permissions, PlanFrom, Platform, Shape, ShapeDecision,
+    Step, StepKind, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,

@@ -1,0 +1,252 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::BTreeMap;
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+use velnor_model::{
+    DependencyKind, PackageDependency, PackageName, RepoPath, RepoView, RustMetadata, RustPackage,
+    Target, TargetKind, TargetName,
+};
+
+use crate::detect::metadata_roots;
+use crate::sha256::sha256_hex;
+
+pub const METADATA_PATH: RepoPath = RepoPath::from_static(".velnor/rust-metadata.json");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetadataFileError {
+    Missing,
+    Unreadable(String),
+    Changed(RepoPath),
+    Unlisted(RepoPath),
+}
+
+impl fmt::Display for MetadataFileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing => write!(f, "{METADATA_PATH} is missing"),
+            Self::Unreadable(detail) => write!(f, "{METADATA_PATH} is unreadable: {detail}"),
+            Self::Changed(path) => write!(f, "{path} changed after {METADATA_PATH} was written"),
+            Self::Unlisted(path) => write!(f, "{path} is not in {METADATA_PATH}"),
+        }?;
+        f.write_str("; run velnor-gen generate")
+    }
+}
+
+impl std::error::Error for MetadataFileError {}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct File {
+    roots: BTreeMap<String, Root>,
+    manifests: BTreeMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Root {
+    members: Vec<Member>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Member {
+    name: String,
+    manifest: String,
+    dependencies: Vec<Edge>,
+    targets: Vec<Goal>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Edge {
+    name: String,
+    kind: String,
+    manifest: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Goal {
+    name: String,
+    kinds: Vec<String>,
+    tests: bool,
+    doctest: bool,
+    source: Option<String>,
+    requires_features: bool,
+}
+
+const KINDS: [(&str, TargetKind); 7] = [
+    ("lib", TargetKind::Lib),
+    ("proc-macro", TargetKind::ProcMacro),
+    ("bin", TargetKind::Bin),
+    ("test", TargetKind::Test),
+    ("bench", TargetKind::Bench),
+    ("example", TargetKind::Example),
+    ("build-script", TargetKind::BuildScript),
+];
+
+const DEPENDENCIES: [(&str, DependencyKind); 3] = [
+    ("normal", DependencyKind::Normal),
+    ("dev", DependencyKind::Dev),
+    ("build", DependencyKind::Build),
+];
+
+fn kind_name(kind: TargetKind) -> &'static str {
+    KINDS
+        .iter()
+        .find(|(_, known)| *known == kind)
+        .map_or("lib", |(name, _)| name)
+}
+
+fn dependency_name(kind: DependencyKind) -> &'static str {
+    DEPENDENCIES
+        .iter()
+        .find(|(_, known)| *known == kind)
+        .map_or("normal", |(name, _)| name)
+}
+
+pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
+    let mut manifests = BTreeMap::new();
+    let mut roots = BTreeMap::new();
+    for (workspace, metadata) in &view.rust_metadata {
+        for path in std::iter::once(workspace).chain(metadata.members.iter().map(|m| &m.manifest)) {
+            let bytes = view
+                .files
+                .get(path)
+                .ok_or_else(|| MetadataFileError::Changed(path.clone()))?;
+            manifests.insert(path.to_string(), sha256_hex(bytes));
+        }
+        roots.insert(
+            workspace.to_string(),
+            Root {
+                members: metadata.members.iter().map(member).collect(),
+            },
+        );
+    }
+    let mut text = serde_json::to_string_pretty(&File { roots, manifests })
+        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    text.push('\n');
+    Ok(text)
+}
+
+fn member(package: &RustPackage) -> Member {
+    Member {
+        name: package.name.to_string(),
+        manifest: package.manifest.to_string(),
+        dependencies: package
+            .dependencies
+            .iter()
+            .map(|dependency| Edge {
+                name: dependency.name.to_string(),
+                kind: dependency_name(dependency.kind).to_owned(),
+                manifest: dependency.manifest.as_ref().map(ToString::to_string),
+            })
+            .collect(),
+        targets: package
+            .targets
+            .iter()
+            .map(|target| Goal {
+                name: target.name.to_string(),
+                kinds: target
+                    .kinds
+                    .iter()
+                    .map(|kind| kind_name(*kind).to_owned())
+                    .collect(),
+                tests: target.tests,
+                doctest: target.doctest,
+                source: target.source.as_ref().map(ToString::to_string),
+                requires_features: target.requires_features,
+            })
+            .collect(),
+    }
+}
+
+pub fn recorded_metadata(
+    view: &RepoView,
+    recorded: Option<&[u8]>,
+) -> Result<BTreeMap<RepoPath, RustMetadata>, MetadataFileError> {
+    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
+    let file: File = serde_json::from_slice(bytes)
+        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    for (path, digest) in &file.manifests {
+        let path = path_of(path)?;
+        let current = view.files.get(&path).map(|bytes| sha256_hex(bytes));
+        if current.as_deref() != Some(digest.as_str()) {
+            return Err(MetadataFileError::Changed(path));
+        }
+    }
+    let mut known = BTreeMap::new();
+    for (workspace, root) in file.roots {
+        let workspace = path_of(&workspace)?;
+        let members = root
+            .members
+            .into_iter()
+            .map(package)
+            .collect::<Result<Vec<_>, _>>()?;
+        known.insert(workspace, RustMetadata { members });
+    }
+    let candidates =
+        metadata_roots(view).map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    for manifest in candidates {
+        let listed = known.iter().any(|(workspace, metadata)| {
+            *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
+        });
+        if !listed {
+            return Err(MetadataFileError::Unlisted(manifest));
+        }
+    }
+    Ok(known)
+}
+
+fn path_of(text: &str) -> Result<RepoPath, MetadataFileError> {
+    RepoPath::new(text).map_err(|error| MetadataFileError::Unreadable(error.to_string()))
+}
+
+fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
+    let unreadable =
+        |error: velnor_model::InvalidId| MetadataFileError::Unreadable(error.to_string());
+    Ok(RustPackage {
+        name: PackageName::new(member.name).map_err(unreadable)?,
+        manifest: path_of(&member.manifest)?,
+        dependencies: member
+            .dependencies
+            .into_iter()
+            .map(|edge| {
+                Ok(PackageDependency {
+                    name: PackageName::new(edge.name).map_err(unreadable)?,
+                    kind: choose(&DEPENDENCIES, &edge.kind)?,
+                    manifest: edge.manifest.as_deref().map(path_of).transpose()?,
+                })
+            })
+            .collect::<Result<_, MetadataFileError>>()?,
+        targets: member
+            .targets
+            .into_iter()
+            .map(|goal| {
+                Ok(Target {
+                    name: TargetName::new(goal.name).map_err(unreadable)?,
+                    kinds: goal
+                        .kinds
+                        .iter()
+                        .map(|kind| choose(&KINDS, kind))
+                        .collect::<Result<_, _>>()?,
+                    tests: goal.tests,
+                    doctest: goal.doctest,
+                    source: goal.source.as_deref().map(path_of).transpose()?,
+                    requires_features: goal.requires_features,
+                })
+            })
+            .collect::<Result<_, MetadataFileError>>()?,
+    })
+}
+
+fn choose<T: Copy>(table: &[(&str, T)], name: &str) -> Result<T, MetadataFileError> {
+    table
+        .iter()
+        .find(|(known, _)| *known == name)
+        .map(|(_, value)| *value)
+        .ok_or_else(|| MetadataFileError::Unreadable(format!("unknown kind {name}")))
+}

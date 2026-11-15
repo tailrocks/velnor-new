@@ -5,12 +5,49 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
+  rust-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_xtask_mode: '${{ steps.plan.outputs.rust_xtask_mode }}'
+      rust_xtask_doctests: '${{ steps.plan.outputs.rust_xtask_doctests }}'
+      rust_xtask_docs: '${{ steps.plan.outputs.rust_xtask_docs }}'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Fetch velnor-ci 0.1.79
+        env:
+          # jactionlint ignore=obfuscation
+          SHA: '${{ fromJSON(''{"Linux-X64":"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e","Linux-ARM64":"56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6","macOS-ARM64":"39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+          # jactionlint ignore=obfuscation
+          URL: '${{ fromJSON(''{"Linux-X64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64","Linux-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64","macOS-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-macos-arm64"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+        run: |
+          curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"
+          echo "$SHA  $RUNNER_TEMP/vbin/velnor-ci" > "$RUNNER_TEMP/velnor-ci.sha"
+          shasum -a 256 -c "$RUNNER_TEMP/velnor-ci.sha"
+          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
+          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+      - name: velnor-ci plan
+        id: plan
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: velnor-ci plan
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -19,6 +56,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Fetch velnor-ci 0.1.79
+        env:
+          # jactionlint ignore=obfuscation
+          SHA: '${{ fromJSON(''{"Linux-X64":"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e","Linux-ARM64":"56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6","macOS-ARM64":"39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+          # jactionlint ignore=obfuscation
+          URL: '${{ fromJSON(''{"Linux-X64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64","Linux-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64","macOS-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-macos-arm64"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+        run: |
+          curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"
+          echo "$SHA  $RUNNER_TEMP/vbin/velnor-ci" > "$RUNNER_TEMP/velnor-ci.sha"
+          shasum -a 256 -c "$RUNNER_TEMP/velnor-ci.sha"
+          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
+          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -26,29 +75,37 @@ jobs:
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
+      - name: velnor-ci prepare
+        id: prepare
+        run: velnor-ci prepare
+      - name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() }}'
-        run: cargo-fmt --all --check
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() }}'
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Doctests
-        if: '${{ !cancelled() }}'
-        run: cargo test --doc --workspace --locked
+        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
+        run: velnor-ci run -- cargo test --doc --workspace --locked
       - name: Documentation
-        if: '${{ !cancelled() }}'
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() }}'
-        run: cargo check -p app --locked
+        run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
         if: '${{ !cancelled() }}'
-        run: cargo check -p core --locked
+        run: velnor-ci run -- cargo check -p core --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-xtask:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_xtask_mode != ''none'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -57,6 +114,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Fetch velnor-ci 0.1.79
+        env:
+          # jactionlint ignore=obfuscation
+          SHA: '${{ fromJSON(''{"Linux-X64":"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e","Linux-ARM64":"56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6","macOS-ARM64":"39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+          # jactionlint ignore=obfuscation
+          URL: '${{ fromJSON(''{"Linux-X64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64","Linux-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-arm64","macOS-ARM64":"https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-macos-arm64"}'')[format(''{0}-{1}'', runner.os, runner.arch)] }}'
+        run: |
+          curl -fsSL --create-dirs -o "$RUNNER_TEMP/vbin/velnor-ci" "$URL"
+          echo "$SHA  $RUNNER_TEMP/vbin/velnor-ci" > "$RUNNER_TEMP/velnor-ci.sha"
+          shasum -a 256 -c "$RUNNER_TEMP/velnor-ci.sha"
+          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
+          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -65,29 +134,35 @@ jobs:
       - name: Add Rust components
         working-directory: xtask
         run: rustup component add clippy rustfmt
+      - name: velnor-ci prepare
+        id: prepare
+        run: velnor-ci prepare
+      - name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        run: cargo-fmt --all --check
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' }}'
         working-directory: xtask
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
         if: '${{ !cancelled() }}'
         working-directory: xtask
-        run: cargo check -p xtask --locked
+        run: velnor-ci run -- cargo check -p xtask --locked
   required:
     name: Required
     needs:
+      - rust-plan
       - rust-root
       - rust-xtask
     if: '${{ !cancelled() }}'

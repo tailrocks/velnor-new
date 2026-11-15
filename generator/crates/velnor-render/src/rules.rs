@@ -36,6 +36,7 @@ pub enum Value {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedStep {
     pub name: String,
+    pub id: Option<String>,
     pub condition: Option<String>,
     pub uses: Option<String>,
     pub with: Vec<(String, Value)>,
@@ -54,6 +55,7 @@ pub struct RenderedJob {
     pub condition: Option<String>,
     pub runs_on: String,
     pub timeout_minutes: u16,
+    pub outputs: Vec<(String, String)>,
     pub steps: Vec<RenderedStep>,
 }
 

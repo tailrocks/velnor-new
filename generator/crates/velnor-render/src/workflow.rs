@@ -21,11 +21,22 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-        entry(
-            "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-        ),
     ]);
+    if !job.outputs.is_empty() {
+        items.push(entry(
+            "outputs",
+            Yaml::Map(
+                job.outputs
+                    .iter()
+                    .map(|(name, value)| entry(name, Yaml::Expr(value.clone())))
+                    .collect(),
+            ),
+        ));
+    }
+    items.extend([entry(
+        "steps",
+        Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+    )]);
     match &job.comment {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
@@ -34,6 +45,9 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
 
 fn yaml_step(step: &RenderedStep) -> Yaml {
     let mut items = vec![entry("name", text(&step.name))];
+    if let Some(id) = &step.id {
+        items.push(entry("id", text(id)));
+    }
     if let Some(condition) = &step.condition {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }

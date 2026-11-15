@@ -90,7 +90,13 @@ fn a_locked_helper_is_fetched_right_after_the_checkout_and_nowhere_else() -> Tes
     assert!(text.contains(
         "\"Linux-X64\":\"10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e\""
     ));
-    assert!(!workflow(&view(&["Cargo.toml"], None)?)?.contains("Fetch velnor-ci"));
+    let mut unpinned = view(&["Cargo.toml"], None)?;
+    unpinned.files.remove(&LOCK_PATH);
+    unpinned.tracked_paths.remove(&LOCK_PATH);
+    assert_eq!(
+        expected_files(&unpinned),
+        Err(GenerateError::HelperNotPinned)
+    );
     Ok(())
 }
 
