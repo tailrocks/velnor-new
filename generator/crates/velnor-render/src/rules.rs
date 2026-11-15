@@ -5,8 +5,11 @@ use std::fmt;
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
-pub const ALLOWED_ACTIONS: [&str; 7] = [
+pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
+
+pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/checkout",
+    APP_TOKEN_ACTION,
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
@@ -30,6 +33,7 @@ pub enum Value {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedStep {
+    pub id: Option<String>,
     pub name: String,
     pub condition: Option<String>,
     pub uses: Option<String>,
@@ -41,6 +45,12 @@ pub struct RenderedStep {
     pub run: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedConcurrency {
+    pub group: String,
+    pub cancel_in_progress: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -48,6 +58,10 @@ pub struct RenderedJob {
     pub comment: Option<String>,
     pub needs: Vec<String>,
     pub condition: Option<String>,
+    pub environment: Option<String>,
+    pub permissions: Vec<(String, String)>,
+    pub concurrency: Option<RenderedConcurrency>,
+    pub outputs: Vec<(String, String)>,
     pub runs_on: String,
     pub timeout_minutes: u16,
     pub steps: Vec<RenderedStep>,

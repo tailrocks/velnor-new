@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use toml::Table;
 
 use crate::error::ReleaseError;
@@ -55,10 +57,20 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError> {
+pub(crate) fn check(
+    mise_toml: &str,
+    dot_mise_toml: Option<&str>,
+    mise_lock: &str,
+) -> Result<(), ReleaseError> {
     let mise_toml = parse("mise.toml", mise_toml)?;
+    let dot_mise_toml = dot_mise_toml
+        .map(|text| parse(".mise.toml", text))
+        .transpose()?;
     let mise_lock = parse("mise.lock", mise_lock)?;
-    let configured = release_plz_tools(&mise_toml);
+    let mut configured = BTreeMap::new();
+    for table in std::iter::once(&mise_toml).chain(&dot_mise_toml) {
+        configured.extend(release_plz_tools(table));
+    }
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }

@@ -33,7 +33,24 @@ pub(crate) struct Document {
     pub(crate) package: Vec<PackageEntry>,
 }
 
+const EXECUTABLE_KEYS: [&str; 2] = ["replace_command", "changelog_config"];
+
+pub(crate) fn executable_key(value: &toml::Value) -> Option<&'static str> {
+    match value {
+        toml::Value::Table(table) => EXECUTABLE_KEYS
+            .into_iter()
+            .find(|key| table.contains_key(*key))
+            .or_else(|| table.values().find_map(executable_key)),
+        toml::Value::Array(items) => items.iter().find_map(executable_key),
+        _ => None,
+    }
+}
+
 impl Settings {
+    pub(crate) fn publishes_to_crates_io(&self) -> bool {
+        self.publish != Some(false) && self.git_only != Some(true)
+    }
+
     pub(crate) fn over(&self, base: &Settings) -> Settings {
         Settings {
             git_tag_name: self

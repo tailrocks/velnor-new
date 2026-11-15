@@ -25,6 +25,7 @@ pub(crate) fn files() -> ReleaseFiles {
         release_toml: None,
         release_plz_toml: [(".".to_owned(), PLZ.to_owned())].into(),
         mise_toml: MISE_TOML.to_owned(),
+        dot_mise_toml: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
 }

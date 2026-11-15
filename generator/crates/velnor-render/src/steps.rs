@@ -7,9 +7,9 @@ use velnor_model::{
 
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
-const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
-const MISE_VERSION: &str = "2026.11.1";
+pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
@@ -24,6 +24,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         runs_on: job.runs_on.as_str().to_owned(),
         timeout_minutes: job.timeout_minutes,
         steps: job.steps.iter().map(rendered_step).collect(),
+        ..RenderedJob::default()
     }
 }
 
@@ -165,7 +166,7 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
     }
 }
 
-fn install_helper(release: &HelperRelease) -> RenderedStep {
+pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     let version = release.version();
     let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
     with.extend(release.digests().iter().map(|(platform, digest)| {

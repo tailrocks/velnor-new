@@ -91,6 +91,10 @@ pub enum ReleaseError {
     EmptyPrBranchPrefix {
         root: String,
     },
+    ExecutableConfig {
+        root: String,
+        key: &'static str,
+    },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
     ReleasePlzLockMismatch {
@@ -218,6 +222,10 @@ impl ReleaseError {
                 f,
                 "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
                 subject(package.as_ref())
+            ),
+            Self::ExecutableConfig { root, key } => write!(
+                f,
+                "{root}/release-plz.toml: {key} can run commands or read a file that Velnor does not check, and release-plz holds the release App token"
             ),
             Self::EmptyPrBranchPrefix { root } => write!(
                 f,

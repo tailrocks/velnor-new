@@ -9,11 +9,11 @@ use velnor_model::{RepoFacts, RepoPath, RustMember, ToolPin, ToolPins};
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
-pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
+pub static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static("mise.toml"),
     RepoPath::from_static(".mise.toml"),
 ];
-pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
+pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
