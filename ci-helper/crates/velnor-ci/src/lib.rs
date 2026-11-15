@@ -6,6 +6,7 @@ pub mod collect;
 pub mod compare;
 pub mod coverage;
 pub mod error;
+pub mod escape;
 pub mod gate;
 pub mod github;
 pub mod inputs;

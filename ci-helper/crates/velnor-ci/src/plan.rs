@@ -9,6 +9,7 @@ use velnor_model::{
 use velnor_rust::{CONFIG_PATH, root_slug};
 
 use crate::error::CiError;
+use crate::escape::{escape, inert};
 
 pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
 
@@ -80,24 +81,6 @@ pub fn warnings(new: &[Weakening]) -> String {
         ));
     }
     lines.concat()
-}
-
-fn inert(text: &str) -> String {
-    escape(text, false).replace(':', "%3A")
-}
-
-fn escape(text: &str, property: bool) -> String {
-    text.chars()
-        .map(|c| match c {
-            '%' => "%25".to_owned(),
-            '\r' => "%0D".to_owned(),
-            '\n' => "%0A".to_owned(),
-            ':' if property => "%3A".to_owned(),
-            ',' if property => "%2C".to_owned(),
-            control if control.is_control() => format!("%{:02X}", u32::from(control)),
-            other => other.to_string(),
-        })
-        .collect()
 }
 
 #[must_use]

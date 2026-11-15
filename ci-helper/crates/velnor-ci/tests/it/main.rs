@@ -11,6 +11,7 @@ mod io_plan;
 mod io_plan_forged;
 mod io_release;
 mod io_restore;
+mod io_stderr;
 mod logscan;
 mod plan;
 mod release_fake;

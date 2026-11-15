@@ -83,7 +83,7 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
     let complaint = String::from_utf8_lossy(&stale.stderr);
     assert!(
         complaint.ends_with(
-            "\nreads it does not list:\nshared/greeting.txt\tapp\nlines nothing reads:\nshared/old.txt\tapp\n"
+            "%0Areads it does not list:%0Ashared/greeting.txt%09app%0Alines nothing reads:%0Ashared/old.txt%09app\n"
         ),
         "{complaint}"
     );
