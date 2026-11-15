@@ -53,11 +53,9 @@ fn forward(client: UnixStream, server: UnixStream, armed: &Arc<AtomicBool>) {
         let mut buffer = [0_u8; 16384];
         while let Ok(read) = client_read.read(&mut buffer) {
             let head = &buffer[..read];
-            if head.starts_with(b"POST ")
-                && head.windows(8).any(|window| window == b"-runner ")
-                && head
-                    .windows(18)
-                    .any(|window| window == b"/containers/create")
+            let first_line = head.split(|byte| *byte == b'\r').next().unwrap_or_default();
+            if first_line.starts_with(b"POST /containers/create")
+                && first_line.windows(8).any(|window| window == b"-runner&")
             {
                 armed.store(true, Ordering::SeqCst);
             }
