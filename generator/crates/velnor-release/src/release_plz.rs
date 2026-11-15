@@ -44,6 +44,14 @@ fn check_package(
     Ok(())
 }
 
+fn valid_package_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
@@ -56,13 +64,33 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         });
     }
     let mut released: Vec<(String, Settings)> = Vec::new();
-    for entry in &document.package {
+    for (index, entry) in document.package.iter().enumerate() {
+        if document.package[..index]
+            .iter()
+            .any(|earlier| earlier.name == entry.name)
+        {
+            return Err(ReleaseError::DuplicatePackage {
+                root: root.to_owned(),
+                package: entry.name.clone(),
+            });
+        }
+        if !valid_package_name(&entry.name) {
+            return Err(ReleaseError::InvalidPackageName {
+                root: root.to_owned(),
+                package: entry.name.clone(),
+            });
+        }
         let effective = entry.settings.over(workspace);
         if effective.release != Some(false) {
             released.push((entry.name.clone(), effective));
         }
     }
     if released.is_empty() {
+        if workspace.release == Some(false) {
+            return Err(ReleaseError::RootReleasesNothing {
+                root: root.to_owned(),
+            });
+        }
         if workspace.git_tag_name.is_none() {
             return Err(ReleaseError::MissingGitTagName {
                 root: root.to_owned(),

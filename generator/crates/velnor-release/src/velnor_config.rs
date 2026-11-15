@@ -56,7 +56,17 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     if roots.is_empty() {
         return Err(ReleaseError::EmptyRoots);
     }
+    if let Some(root) = roots.iter().find(|root| {
+        root.is_empty() || root.starts_with('/') || root.split('/').any(|part| part == "..")
+    }) {
+        return Err(ReleaseError::UnsafeRoot { root: root.clone() });
+    }
     for binary in &raw.binaries {
+        if binary.platforms.as_ref().is_some_and(Vec::is_empty) {
+            return Err(ReleaseError::EmptyPlatforms {
+                package: binary.package.clone(),
+            });
+        }
         if let Some(platform) = binary
             .platforms
             .iter()

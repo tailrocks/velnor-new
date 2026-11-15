@@ -47,6 +47,23 @@ pub enum ReleaseError {
     },
     EmptyAfter,
     EmptyRoots,
+    EmptyPlatforms {
+        package: String,
+    },
+    UnsafeRoot {
+        root: String,
+    },
+    DuplicatePackage {
+        root: String,
+        package: String,
+    },
+    InvalidPackageName {
+        root: String,
+        package: String,
+    },
+    RootReleasesNothing {
+        root: String,
+    },
     DuplicateTagPattern {
         pattern: String,
         packages: Vec<String>,
@@ -118,6 +135,14 @@ impl fmt::Display for ReleaseError {
                 "roots {} share pr_branch_prefix {prefix:?}",
                 roots.join(", ")
             ),
+            _ => self.fmt_config(f),
+        }
+    }
+}
+
+impl ReleaseError {
+    fn fmt_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             Self::BinaryNotReleased { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
@@ -135,11 +160,32 @@ impl fmt::Display for ReleaseError {
                 f,
                 ".velnor/release.toml: after must name at least one non-blank workflow"
             ),
+            Self::EmptyPlatforms { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} must name at least one platform"
+            ),
+            Self::UnsafeRoot { root } => write!(
+                f,
+                ".velnor/release.toml: root {root:?} must be a relative path without \"..\""
+            ),
+            Self::DuplicatePackage { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: package {package} has more than one [[package]] entry"
+            ),
+            Self::InvalidPackageName { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: {package:?} is not a valid package name"
+            ),
+            Self::RootReleasesNothing { root } => write!(
+                f,
+                "{root}/release-plz.toml: [workspace] release = false leaves nothing to release"
+            ),
             Self::EmptyRoots => {
                 write!(f, ".velnor/release.toml: roots must name at least one root")
             }
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
+            _ => Ok(()),
         }
     }
 }
