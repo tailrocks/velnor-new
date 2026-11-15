@@ -83,7 +83,9 @@ impl ErrorDetail {
 
 impl std::fmt::Display for ErrorDetail {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&String::from_utf8_lossy(&self.text[..usize::from(self.len)]))
+        formatter.write_str(&String::from_utf8_lossy(
+            &self.text[..usize::from(self.len)],
+        ))
     }
 }
 

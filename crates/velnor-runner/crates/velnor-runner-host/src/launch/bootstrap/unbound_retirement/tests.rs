@@ -24,7 +24,8 @@ const BOUND: Pair = Pair {
     reservation: 4,
     bound: true,
 };
-pub(super) const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
+pub(super) const RETIRED: &str =
+    "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_released() -> TestResult<()>
