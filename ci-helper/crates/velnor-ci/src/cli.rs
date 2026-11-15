@@ -105,7 +105,7 @@ pub struct ReleaseGateArgs {
 #[derive(Debug, Subcommand)]
 pub enum ReleaseCommand {
     #[command(
-        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released; exit 1 when a package or a tag appears twice, or a package or tag holds anything but ASCII letters, digits, '.', '_' and '-'"
+        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released; exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
     )]
     Record(RecordArgs),
     #[command(
