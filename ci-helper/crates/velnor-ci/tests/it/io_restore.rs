@@ -188,8 +188,7 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
 fn a_retargeted_symlink_restores_nothing() {
     let repo = Repo::new("symlink");
     repo.write("src/lib.rs", "pub fn one() {}\n");
-    repo.write("data/a.txt", "a\n");
-    repo.write("data/b.txt", "b\n");
+    repo.write_all(&[("data/a.txt", "a\n"), ("data/b.txt", "b\n")]);
     repo.link("data/a.txt", "data/link.txt");
     let paths = [".gitignore", "src/lib.rs", "data/a.txt", "data/b.txt"];
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
@@ -273,8 +272,7 @@ fn a_symlink_retargeted_inside_a_submodule_restores_nothing() {
     origin.commit();
 
     let repo = Repo::new("submodule");
-    repo.write("data/a.txt", "a\n");
-    repo.write("data/b.txt", "b\n");
+    repo.write_all(&[("data/a.txt", "a\n"), ("data/b.txt", "b\n")]);
     let origin_path = origin.root().to_str().unwrap_or_else(|| unreachable!());
     repo.git(&[
         "-c",

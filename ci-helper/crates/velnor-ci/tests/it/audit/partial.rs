@@ -94,7 +94,6 @@ fn a_stale_host_unit_of_a_member_used_as_a_build_dependency_makes_the_audit_refu
         "rust/app/Cargo.toml",
         "[package]\nname = \"app\"\nedition = \"2024\"\n\n[build-dependencies]\nlib = { path = \"../lib\" }\n",
     );
-    repo.git(&["add", "--all"]);
     let triple = "rust/target/x86_64-unknown-linux-gnu/debug";
     own_units_in(&repo, DEBUG, triple, &[]);
     let host = "rust/target/debug/deps/lib-f0000000000000b1.d";

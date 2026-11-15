@@ -34,17 +34,27 @@ fn a_body_over_the_limit_is_an_error_not_a_truncation() {
 pub(crate) struct Repo(PathBuf);
 
 impl Repo {
-    pub(crate) fn new(name: &str) -> Self {
+    fn empty(name: &str) -> Self {
         let root =
             std::env::temp_dir().join(format!("velnor-ci-inputs-{}-{name}", std::process::id()));
         if root.exists() {
             fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         }
         fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        let repo = Self(root);
+        Self(root)
+    }
+
+    pub(crate) fn new(name: &str) -> Self {
+        let repo = Self::empty(name);
         repo.git(&["init", "--quiet"]);
-        repo.write(".gitignore", "/target/\n");
+        repo.write_unstaged(".gitignore", "/target/\n");
         repo
+    }
+
+    pub(crate) fn fork(&self, name: &str) -> Self {
+        let copy = Self::empty(name);
+        copy_tree(&self.0, &copy.0);
+        copy
     }
 
     pub(crate) fn git(&self, args: &[&str]) {
@@ -57,12 +67,22 @@ impl Repo {
         assert!(status.success(), "git {args:?}");
     }
 
-    pub(crate) fn write(&self, path: &str, text: &str) {
+    pub(crate) fn write_unstaged(&self, path: &str, text: &str) {
         let path = self.0.join(path);
         fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
             .unwrap_or_else(|e| unreachable!("{e}"));
         fs::write(path, text).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    pub(crate) fn write_all(&self, files: &[(&str, &str)]) {
+        for (path, text) in files {
+            self.write_unstaged(path, text);
+        }
         self.git(&["add", "--all"]);
+    }
+
+    pub(crate) fn write(&self, path: &str, text: &str) {
+        self.write_all(&[(path, text)]);
     }
 
     pub(crate) fn commit(&self) {
@@ -111,6 +131,19 @@ impl Repo {
 
     pub(crate) fn root(&self) -> &Path {
         &self.0
+    }
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    for entry in fs::read_dir(from).unwrap_or_else(|e| unreachable!("{e}")) {
+        let entry = entry.unwrap_or_else(|e| unreachable!("{e}"));
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
+            copy_tree(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), &target).unwrap_or_else(|e| unreachable!("{e}"));
+        }
     }
 }
 

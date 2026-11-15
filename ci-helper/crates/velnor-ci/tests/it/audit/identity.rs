@@ -5,6 +5,8 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, UNIX_EPOCH};
 
+use crate::io::Repo;
+
 use super::{
     audit, own_units, path_dependency_units, path_dependency_units_in,
     root_package_with_path_dependencies, unit, workspace_below_the_root,
@@ -18,14 +20,22 @@ fn refuses(output: &Output, text: &str) {
     );
 }
 
-#[test]
-fn a_unit_of_another_target_or_a_feature_variant_without_dep_info_makes_the_audit_refuse() {
+const TOOLS: [(&str, &str, &str); 4] = [
+    ("f000000000000011", "first_tool", "bin-first-tool"),
+    ("f000000000000012", "first_tool", "test-bin-first-tool"),
+    ("f000000000000014", "second_tool", "test-bin-second-tool"),
+    ("f000000000000013", "second_tool", "bin-second-tool"),
+];
+
+fn app_with_two_tools(built: usize) -> Repo {
     let repo = workspace_below_the_root();
-    repo.write(
-        "rust/app/Cargo.toml",
-        "[package]\nname = \"app\"\nedition = \"2024\"\n\n[[bin]]\nname = \"first-tool\"\npath = \"src/main.rs\"\n\n[[bin]]\nname = \"second-tool\"\npath = \"src/main.rs\"\n",
-    );
-    repo.write("rust/app/src/main.rs", "fn main() {}\n");
+    repo.write_all(&[
+        (
+            "rust/app/Cargo.toml",
+            "[package]\nname = \"app\"\nedition = \"2024\"\n\n[[bin]]\nname = \"first-tool\"\npath = \"src/main.rs\"\n\n[[bin]]\nname = \"second-tool\"\npath = \"src/main.rs\"\n",
+        ),
+        ("rust/app/src/main.rs", "fn main() {}\n"),
+    ]);
     let target = "rust/target/debug";
     own_units(&repo, target, &[]);
     unit(
@@ -33,7 +43,7 @@ fn a_unit_of_another_target_or_a_feature_variant_without_dep_info_makes_the_audi
         &format!("{target}/.fingerprint/serde-f0000000000000ee/lib-serde"),
         "",
     );
-    let built = |hash: &str, name: &str, fingerprint: &str| {
+    for (hash, name, fingerprint) in &TOOLS[..built] {
         unit(
             &repo,
             &format!("{target}/deps/{name}-{hash}.d"),
@@ -44,10 +54,13 @@ fn a_unit_of_another_target_or_a_feature_variant_without_dep_info_makes_the_audi
             &format!("{target}/.fingerprint/app-{hash}/{fingerprint}"),
             "",
         );
-    };
-    built("f000000000000011", "first_tool", "bin-first-tool");
-    built("f000000000000012", "first_tool", "test-bin-first-tool");
-    built("f000000000000014", "second_tool", "test-bin-second-tool");
+    }
+    repo
+}
+
+#[test]
+fn a_target_of_an_app_binary_without_dep_info_makes_the_audit_refuse() {
+    let repo = app_with_two_tools(3);
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     refuses(
         &audit(&repo, &["--write"]),
@@ -55,11 +68,26 @@ fn a_unit_of_another_target_or_a_feature_variant_without_dep_info_makes_the_audi
     );
     assert!(!lock.exists());
 
-    built("f000000000000013", "second_tool", "bin-second-tool");
+    let target = "rust/target/debug";
+    unit(
+        &repo,
+        &format!("{target}/deps/second_tool-f000000000000013.d"),
+        "out.d: app/src/main.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{target}/.fingerprint/app-f000000000000013/bin-second-tool"),
+        "",
+    );
     let complete = audit(&repo, &["--write"]);
     assert!(complete.status.success(), "{complete:?}");
-    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+}
 
+#[test]
+fn a_feature_variant_of_a_test_harness_without_dep_info_makes_the_audit_refuse() {
+    let repo = app_with_two_tools(4);
+    let target = "rust/target/debug";
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
     unit(
         &repo,
         &format!("{target}/.fingerprint/lib-f00000000000000e/test-lib-lib"),
@@ -81,7 +109,7 @@ fn a_unit_of_another_target_or_a_feature_variant_without_dep_info_makes_the_audi
 }
 
 #[test]
-fn a_path_dependency_needs_its_build_script_run_and_a_current_unit_wherever_cargo_built_it() {
+fn a_path_dependency_needs_its_build_script_run_and_a_current_unit() {
     let repo = root_package_with_path_dependencies();
     path_dependency_units(&repo);
     let lock = repo.root().join(".velnor/rust-inputs.lock");
@@ -106,20 +134,36 @@ fn a_path_dependency_needs_its_build_script_run_and_a_current_unit_wherever_carg
     unit(&repo, compiled, "out.d: vendor/leaf/build.rs\n");
     fs::write(&output, text).unwrap_or_else(|e| unreachable!("{e}"));
 
-    repo.write(
-        "vendor/side/Cargo.toml",
-        "[package]\nname = \"side\"\nedition = \"2024\"\n\n[dependencies]\nalt = { path = \"../alt\", package = \"leaf\", optional = true }\n",
-    );
-    repo.write(
-        "vendor/alt/Cargo.toml",
-        "[package]\nname = \"leaf\"\nedition = \"2024\"\n",
-    );
-    repo.write("vendor/alt/src/lib.rs", "");
+    repo.write_all(&[
+        (
+            "vendor/side/Cargo.toml",
+            "[package]\nname = \"side\"\nedition = \"2024\"\n\n[dependencies]\nalt = { path = \"../alt\", package = \"leaf\", optional = true }\n",
+        ),
+        (
+            "vendor/alt/Cargo.toml",
+            "[package]\nname = \"leaf\"\nedition = \"2024\"\n",
+        ),
+        ("vendor/alt/src/lib.rs", ""),
+    ]);
     let unbuilt = audit(&repo, &["--write"]);
     assert!(unbuilt.status.success(), "{unbuilt:?}");
-    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+}
 
-    fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+#[test]
+fn a_path_dependency_built_under_a_target_triple_needs_a_current_unit_per_package() {
+    let repo = root_package_with_path_dependencies();
+    repo.write_all(&[
+        (
+            "vendor/side/Cargo.toml",
+            "[package]\nname = \"side\"\nedition = \"2024\"\n\n[dependencies]\nalt = { path = \"../alt\", package = \"leaf\", optional = true }\n",
+        ),
+        (
+            "vendor/alt/Cargo.toml",
+            "[package]\nname = \"leaf\"\nedition = \"2024\"\n",
+        ),
+        ("vendor/alt/src/lib.rs", ""),
+    ]);
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
     let triple = "target/x86_64-unknown-linux-gnu/debug";
     path_dependency_units_in(&repo, triple);
     unit(
