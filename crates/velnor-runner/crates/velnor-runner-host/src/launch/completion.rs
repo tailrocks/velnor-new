@@ -5,6 +5,7 @@ mod cleanup;
 mod diagnostics;
 mod journal_ref;
 mod reaper;
+mod startup;
 
 pub(in crate::launch) use cleanup::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
@@ -18,7 +19,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use bollard::Docker;
@@ -138,10 +139,6 @@ impl CompletionWorker {
         } = input;
         let token = Zeroizing::new(admin_token);
         let admin = CompletionAdminClient::new(admin_base, &token)?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| HostError::Journal)?;
         let stopping = Arc::new(AtomicBool::new(false));
         let thread_stopping = Arc::clone(&stopping);
         let (wake, receiver) = mpsc::sync_channel(1);
@@ -160,18 +157,9 @@ impl CompletionWorker {
             selected_engine,
         };
         ensure_reaper_started()?;
-        let thread = thread::Builder::new()
-            .name("velnor-completion-reconciler".to_owned())
-            .spawn(move || {
-                completion_thread(
-                    &runtime,
-                    resources,
-                    &thread_stopping,
-                    &receiver,
-                    finished_tx,
-                );
-            })
-            .map_err(|_| HostError::Journal)?;
+        let thread = startup::spawn_with_runtime(build_runtime, move |runtime| {
+            completion_thread(runtime, resources, &thread_stopping, &receiver, finished_tx);
+        })?;
         Ok(Self {
             admin,
             wake,
@@ -247,6 +235,12 @@ impl Drop for CompletionWorker {
             eprintln!("completion worker failed phase=join_dispatch reason={error}");
         }
     }
+}
+
+fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
 }
 
 fn completion_thread(

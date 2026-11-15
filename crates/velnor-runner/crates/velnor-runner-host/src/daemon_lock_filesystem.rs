@@ -58,7 +58,7 @@ pub(super) fn private_directory(path: &Path) -> Result<PathBuf, HostError> {
 
 pub(super) fn open_lock(path: &Path) -> Result<File, HostError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|_| HostError::Lock)?;
+        create_private_directories(parent).map_err(|_| HostError::Lock)?;
     }
     ensure_regular_or_missing(path)?;
     let mut options = OpenOptions::new();
@@ -74,6 +74,17 @@ pub(super) fn open_lock(path: &Path) -> Result<File, HostError> {
     }
     ensure_regular_or_missing(path)?;
     Ok(file)
+}
+
+fn create_private_directories(path: &Path) -> std::io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
 }
 
 pub(super) fn ensure_regular_or_missing(path: &Path) -> Result<(), HostError> {
