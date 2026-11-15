@@ -81,6 +81,29 @@ fn the_locked_version_must_equal_the_configured_one() {
         refusal(&table),
         Some(ReleaseError::ReleasePlzLockMismatch { .. })
     ));
+
+    let mut mixed = files();
+    mixed.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n\n[[tools.release-plz]]\nversion = \"0.4.2\"\n".to_owned();
+    assert!(matches!(
+        refusal(&mixed),
+        Some(ReleaseError::ReleasePlzLockMismatch { configured, locked })
+            if configured == "0.4.3" && locked == ["0.4.3", "0.4.2"]
+    ));
+
+    let mut longer = files();
+    longer.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.30\"\n".to_owned();
+    assert!(matches!(
+        refusal(&longer),
+        Some(ReleaseError::ReleasePlzLockMismatch { configured, locked })
+            if configured == "0.4.3" && locked == ["0.4.30"]
+    ));
+
+    let mut empty = files();
+    empty.mise_lock = "[tools]\nrelease-plz = []\n".to_owned();
+    assert!(matches!(
+        refusal(&empty),
+        Some(ReleaseError::ReleasePlzLockMismatch { .. })
+    ));
 }
 
 #[test]

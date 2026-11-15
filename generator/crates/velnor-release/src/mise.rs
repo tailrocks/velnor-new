@@ -45,7 +45,13 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
     };
     entries
         .into_iter()
-        .filter_map(|entry| entry.get("version")?.as_str().map(str::to_owned))
+        .map(|entry| {
+            entry
+                .get("version")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        })
         .collect()
 }
 
@@ -64,7 +70,7 @@ pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError
         };
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
-        if versions.iter().any(|version| version == wanted) {
+        if !versions.is_empty() && versions.iter().all(|version| version == wanted) {
             return Ok(());
         }
         mismatch = Some(ReleaseError::ReleasePlzLockMismatch {
