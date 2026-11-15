@@ -18,13 +18,32 @@ pub struct WorkflowPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Triggers {
-    pub pull_request: bool,
+    pub pull_request: Vec<PullRequestType>,
+    pub push_branch: Option<String>,
+    pub merge_group: bool,
     pub workflow_dispatch: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Concurrency {
-    pub cancel_in_progress: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PullRequestType {
+    Opened,
+    Synchronize,
+    Reopened,
+    ReadyForReview,
+}
+
+impl PullRequestType {
+    pub const ALL: [Self; 4] = [
+        Self::Opened,
+        Self::Synchronize,
+        Self::Reopened,
+        Self::ReadyForReview,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Concurrency {
+    CancelOlderPullRequestRuns,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -51,6 +70,7 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
+    pub skip_on_draft: bool,
     pub runs_on: RunnerLabel,
     pub timeout_minutes: u16,
     pub steps: Vec<Step>,

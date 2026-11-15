@@ -4,12 +4,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::toml_file::table;
-use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain};
+use velnor_model::{
+    PackageName, PolicyTools, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain,
+};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::select::root_slug;
@@ -102,7 +105,12 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
+    let policy = PolicyTools {
+        deny: view.tracked_paths.contains(&DENY_CONFIG),
+        machete: tools.tools.keys().any(|name| is_machete(name)),
+    };
     Ok(RepoFacts {
+        policy,
         timings,
         rust_roots,
         toolchain,
@@ -112,6 +120,10 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn is_machete(name: &str) -> bool {
+    name.rsplit(['/', ':']).next() == Some("cargo-machete")
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {

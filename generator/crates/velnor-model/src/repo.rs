@@ -72,6 +72,20 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
+    pub policy: PolicyTools,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PolicyTools {
+    pub deny: bool,
+    pub machete: bool,
+}
+
+impl PolicyTools {
+    #[must_use]
+    pub fn any(self) -> bool {
+        self.deny || self.machete
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -178,6 +192,8 @@ pub struct RustCiConfig {
     pub default_ignores: bool,
     pub shape: Option<Shape>,
     pub required_check: String,
+    pub default_branch: String,
+    pub skip_draft_pull_requests: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +213,8 @@ impl Default for RustCiConfig {
             default_ignores: true,
             shape: None,
             required_check: "Required".to_owned(),
+            default_branch: "main".to_owned(),
+            skip_draft_pull_requests: false,
         }
     }
 }

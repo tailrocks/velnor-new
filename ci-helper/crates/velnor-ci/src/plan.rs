@@ -15,6 +15,7 @@ pub type Steps = BTreeMap<RepoPath, OptionalSteps>;
 pub fn outputs(
     selections: &BTreeMap<RepoPath, RustSelection>,
     steps: &Steps,
+    policy: bool,
 ) -> Result<String, CiError> {
     let mut owners = BTreeMap::new();
     let mut lines = Vec::new();
@@ -46,6 +47,10 @@ pub fn outputs(
             lines.push(format!("rust_{slug}_docs={}\n", flag(steps.docs)));
         }
     }
+    lines.push(format!(
+        "rust_policy={}\n",
+        if policy { "run" } else { "skip" }
+    ));
     Ok(lines.concat())
 }
 

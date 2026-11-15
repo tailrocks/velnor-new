@@ -9,7 +9,8 @@ mod yaml;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, PermissionScope, Permissions, RepoPath, Triggers, WORKFLOW_PATH, WorkflowPlan,
+    Access, Concurrency, PermissionScope, Permissions, PullRequestType, RepoPath, Triggers,
+    WORKFLOW_PATH, WorkflowPlan,
 };
 
 pub use crate::rules::{
@@ -19,6 +20,9 @@ pub use crate::rules::{
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
+
+const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
+const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' }}";
 
 pub const OWNED_PATHS: [RepoPath; 1] = [WORKFLOW_PATH];
 pub const GENERATED_HEADER: &str =
@@ -40,16 +44,7 @@ pub fn render_workflow(
         entry("name", text(&plan.name)),
         entry("on", triggers(&plan.triggers)),
         entry("permissions", permissions(&plan.permissions)),
-        entry(
-            "concurrency",
-            Yaml::Map(vec![
-                entry("group", Yaml::Expr("${{ github.workflow_ref }}".to_owned())),
-                entry(
-                    "cancel-in-progress",
-                    Yaml::Bool(plan.concurrency.cancel_in_progress),
-                ),
-            ]),
-        ),
+        entry("concurrency", concurrency(plan.concurrency)),
         entry(
             "jobs",
             Yaml::Map(
@@ -67,10 +62,40 @@ pub fn render_workflow(
     )]))
 }
 
+fn concurrency(concurrency: Concurrency) -> Yaml {
+    let (group, cancel) = match concurrency {
+        Concurrency::CancelOlderPullRequestRuns => (PULL_REQUEST_GROUP, CANCEL_PULL_REQUEST_RUNS),
+    };
+    Yaml::Map(vec![
+        entry("group", Yaml::Expr(group.to_owned())),
+        entry("cancel-in-progress", Yaml::Expr(cancel.to_owned())),
+    ])
+}
+
 fn triggers(triggers: &Triggers) -> Yaml {
     let mut items = Vec::new();
-    if triggers.pull_request {
-        items.push(entry("pull_request", Yaml::Map(Vec::new())));
+    if !triggers.pull_request.is_empty() {
+        let types = triggers.pull_request.iter().map(|kind| {
+            text(match kind {
+                PullRequestType::Opened => "opened",
+                PullRequestType::Synchronize => "synchronize",
+                PullRequestType::Reopened => "reopened",
+                PullRequestType::ReadyForReview => "ready_for_review",
+            })
+        });
+        items.push(entry(
+            "pull_request",
+            Yaml::Map(vec![entry("types", Yaml::Seq(types.collect()))]),
+        ));
+    }
+    if let Some(branch) = &triggers.push_branch {
+        items.push(entry(
+            "push",
+            Yaml::Map(vec![entry("branches", Yaml::Seq(vec![text(branch)]))]),
+        ));
+    }
+    if triggers.merge_group {
+        items.push(entry("merge_group", Yaml::Map(Vec::new())));
     }
     if triggers.workflow_dispatch {
         items.push(entry("workflow_dispatch", Yaml::Map(Vec::new())));

@@ -17,7 +17,8 @@ use clap::{CommandFactory, FromArgMatches};
 use velnor_gen::io::{Checkout, Error as GenError, read_checkout, read_files};
 use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, root_sources, select, unknown_paths, unread_packages,
+    cargo_files, detect, optional_steps, policy_needed, root_sources, select, unknown_paths,
+    unread_packages,
 };
 
 pub use self::audit::audit_inputs;
@@ -134,7 +135,11 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             Ok((root.manifest.clone(), steps))
         })
         .collect::<Result<Steps, CiError>>()?;
-    let outputs = outputs(&selections, &steps)?;
+    let everything = selections
+        .values()
+        .any(|selection| matches!(selection, RustSelection::All(_)));
+    let policy = policy_needed(&changes.paths, everything);
+    let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
     Ok(if args.explain {
         explain(

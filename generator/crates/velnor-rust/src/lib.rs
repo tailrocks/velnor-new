@@ -14,6 +14,7 @@ mod metadata;
 mod mise;
 mod owners;
 mod plan;
+mod policy;
 mod reads;
 mod roots;
 mod select;
@@ -33,6 +34,7 @@ pub use metadata::{MetadataError, reduce_metadata};
 pub use mise::check_tools;
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
+pub use policy::policy_needed;
 pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
