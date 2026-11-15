@@ -10,6 +10,7 @@ use crate::config::{CONFIG_PATH, parse};
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
 use crate::toml_file::table;
+use crate::weaken_nextest::nextest;
 use crate::weaken_scope::reaches_a_check;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
@@ -135,7 +136,7 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
     }
 }
 
-type Make<'a> = dyn Fn(String, String) -> Weakening + 'a;
+pub(crate) type Make<'a> = dyn Fn(String, String) -> Weakening + 'a;
 
 fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let package = parsed.get("package");
@@ -175,11 +176,15 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             .and_then(Value::as_array)
             .into_iter()
             .flatten();
-        for target in targets.filter(|target| off(Some(target), "test")) {
+        for (index, target) in targets.enumerate() {
+            if !off(Some(target), "test") {
+                continue;
+            }
             let target_name = target
                 .get("name")
+                .or_else(|| target.get("path"))
                 .and_then(Value::as_str)
-                .unwrap_or("unnamed");
+                .map_or_else(|| format!("unnamed #{index}"), ToOwned::to_owned);
             found.push(make(
                 format!("[[{kind}]] name = \"{target_name}\" test = false"),
                 format!("leaves the {kind} target {target_name} of {owner} out of the test run"),
@@ -263,95 +268,4 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 
 fn cargo_tool(name: &str) -> bool {
     name == "cargo" || name.starts_with("cargo-")
-}
-
-fn nextest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
-    let commands = parsed
-        .get("scripts")
-        .and_then(|scripts| scripts.get("wrapper"))
-        .and_then(Value::as_table);
-    let profiles = parsed
-        .get("profile")
-        .and_then(Value::as_table)
-        .into_iter()
-        .flatten();
-    let filters: Vec<Weakening> = parsed
-        .get("profile")
-        .and_then(Value::as_table)
-        .into_iter()
-        .flatten()
-        .filter(|(profile, _)| matches!(profile.as_str(), "default" | "ci"))
-        .filter_map(|(profile, section)| {
-            section
-                .get("default-filter")
-                .map(|filter| (profile, filter))
-        })
-        .map(|(profile, filter)| {
-            make(
-                format!("profile.{profile}.default-filter = {filter}"),
-                format!(
-                    "limits a plain nextest run to the tests matching {filter}; the nextest step Velnor generates ignores it"
-                ),
-            )
-        })
-        .collect();
-    profiles
-        .flat_map(|(profile, section)| {
-            section
-                .get("scripts")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(move |entry| {
-                    entry
-                        .get("run-wrapper")
-                        .and_then(Value::as_str)
-                        .map(|name| (profile, name, entry.get("filter")))
-                })
-        })
-        .map(|(profile, name, filter)| {
-            let command = commands
-                .and_then(|commands| commands.get(name))
-                .and_then(|wrapper| wrapper.get("command"))
-                .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
-            make(
-                format!(
-                    "profile.{profile}.scripts run-wrapper = \"{name}\"{}",
-                    filter.map_or_else(String::new, |filter| format!(" filter = {filter}"))
-                ),
-                format!("runs test binaries through the wrapper {name}, command {command}"),
-            )
-        })
-        .chain(filters)
-        .chain(overrides(parsed, make))
-        .collect()
-}
-
-fn overrides(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
-    parsed
-        .get("profile")
-        .and_then(Value::as_table)
-        .into_iter()
-        .flatten()
-        .filter(|(profile, _)| matches!(profile.as_str(), "default" | "ci"))
-        .flat_map(|(profile, section)| {
-            section
-                .get("overrides")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(move |entry| {
-                    entry
-                        .get("retries")
-                        .map(|retries| (profile, entry.get("filter"), retries))
-                })
-        })
-        .map(|(profile, filter, retries)| {
-            let selector = filter.map_or_else(|| "every test".to_owned(), ToString::to_string);
-            make(
-                format!("profile.{profile}.overrides filter = {selector} retries = {retries}"),
-                format!("retries the tests matching {selector}, so a flaky failure there passes"),
-            )
-        })
-        .collect()
 }

@@ -11,7 +11,7 @@ use crate::facts::{TestResult, lib, path, repo};
 const DOCTESTS_OFF: &str = "[lib]\ndoctest = false\n";
 const RUNNER: &str = "[target.x86_64-unknown-linux-gnu]\nrunner = \"true\"\n";
 
-fn named(
+pub(crate) fn named(
     files: &[(&str, &str)],
     untracked_roots: bool,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -30,7 +30,7 @@ fn named(
         .collect())
 }
 
-fn introduced_files(
+pub(crate) fn introduced_files(
     facts: &RepoFacts,
     changed: &[&str],
     base: &[(&str, &str)],
@@ -52,7 +52,7 @@ fn introduced_files(
         .collect())
 }
 
-fn facts(files: &[(&str, &str)]) -> Result<RepoFacts, Box<dyn std::error::Error>> {
+pub(crate) fn facts(files: &[(&str, &str)]) -> Result<RepoFacts, Box<dyn std::error::Error>> {
     let mut view = repo(
         vec![("Cargo.toml", vec![lib("bar", "crates/foo/Cargo.toml")?])],
         files,
@@ -172,5 +172,31 @@ fn a_nextest_override_that_retries_tests_is_named() -> TestResult {
             ".config/nextest.toml: profile.default.overrides filter = \"test(slow)\" retries = 3: retries the tests matching \"test(slow)\", so a flaky failure there passes"
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn a_cargo_config_in_a_roots_folder_or_above_it_is_named_but_not_a_sibling() -> TestResult {
+    let mut view = repo(
+        vec![("sub/Cargo.toml", vec![lib("s", "sub/s/Cargo.toml")?])],
+        &[
+            ("sub/.cargo/config.toml", RUNNER),
+            (".cargo/config.toml", RUNNER),
+            ("other/.cargo/config.toml", RUNNER),
+        ],
+    )?;
+    for file in [
+        "sub/.cargo/config.toml",
+        ".cargo/config.toml",
+        "other/.cargo/config.toml",
+    ] {
+        view.tracked_paths.insert(path(file)?);
+    }
+    let files: Vec<String> = detect(&view)?
+        .weakenings
+        .iter()
+        .map(|w| w.file.to_string())
+        .collect();
+    assert_eq!(files, [".cargo/config.toml", "sub/.cargo/config.toml"]);
     Ok(())
 }

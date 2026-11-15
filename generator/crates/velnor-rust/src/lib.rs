@@ -23,6 +23,7 @@ mod toml_file;
 mod toolchain;
 mod unowned;
 mod weaken;
+mod weaken_nextest;
 mod weaken_scope;
 
 pub use config::CONFIG_PATH;

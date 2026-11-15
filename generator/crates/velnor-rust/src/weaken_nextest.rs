@@ -1,0 +1,120 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use toml::Table;
+use toml::Value;
+use toml::map::Map;
+
+use crate::weaken::Make;
+use velnor_model::Weakening;
+
+const CHECKED_PROFILES: [&str; 2] = ["default", "ci"];
+
+fn profiles(parsed: &Table) -> impl Iterator<Item = (&String, &Value)> {
+    parsed
+        .get("profile")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten()
+}
+
+fn checked(parsed: &Table) -> impl Iterator<Item = (&String, &Value)> {
+    profiles(parsed).filter(|(profile, _)| CHECKED_PROFILES.contains(&profile.as_str()))
+}
+
+fn entries<'a>(section: &'a Value, key: &str) -> impl Iterator<Item = &'a Value> {
+    section
+        .get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
+fn retries_tests(value: &Value) -> bool {
+    value.as_integer() != Some(0)
+}
+
+fn passes_on_timeout(value: &Value) -> bool {
+    value.get("on-timeout").and_then(Value::as_str) == Some("pass")
+}
+
+pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
+    let commands: Option<&Map<String, Value>> = parsed
+        .get("scripts")
+        .and_then(|scripts| scripts.get("wrapper"))
+        .and_then(Value::as_table);
+    let mut found = Vec::new();
+    for (profile, section) in profiles(parsed) {
+        for entry in entries(section, "scripts") {
+            let Some(name) = entry.get("run-wrapper").and_then(Value::as_str) else {
+                continue;
+            };
+            let command = commands
+                .and_then(|commands| commands.get(name))
+                .and_then(|wrapper| wrapper.get("command"))
+                .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
+            let filter = entry
+                .get("filter")
+                .map_or_else(String::new, |filter| format!(" filter = {filter}"));
+            found.push(make(
+                format!(
+                    "profile.{profile}.scripts run-wrapper = \"{name}\" command = {command}{filter}"
+                ),
+                format!("runs test binaries through the wrapper {name}, command {command}"),
+            ));
+        }
+    }
+    for (profile, section) in checked(parsed) {
+        if let Some(filter) = section.get("default-filter") {
+            found.push(make(
+                format!("profile.{profile}.default-filter = {filter}"),
+                format!(
+                    "limits a plain nextest run to the tests matching {filter}; the nextest step Velnor generates ignores it"
+                ),
+            ));
+        }
+        if let Some(retries) = section.get("retries").filter(|r| retries_tests(r)) {
+            found.push(make(
+                format!("profile.{profile} retries = {retries}"),
+                "retries every test in the profile, so a flaky failure passes".to_owned(),
+            ));
+        }
+        if section.get("slow-timeout").is_some_and(passes_on_timeout) {
+            found.push(make(
+                format!("profile.{profile} slow-timeout on-timeout = \"pass\""),
+                "counts a test that times out as passed".to_owned(),
+            ));
+        }
+        found.extend(overrides(profile, section, make));
+    }
+    found
+}
+
+fn overrides(profile: &str, section: &Value, make: &Make<'_>) -> Vec<Weakening> {
+    let mut found = Vec::new();
+    for entry in entries(section, "overrides") {
+        let selector = entry
+            .get("filter")
+            .map_or_else(|| "every test".to_owned(), ToString::to_string);
+        let head = format!("profile.{profile}.overrides filter = {selector}");
+        if let Some(retries) = entry.get("retries") {
+            found.push(make(
+                format!("{head} retries = {retries}"),
+                format!("retries the tests matching {selector}, so a flaky failure there passes"),
+            ));
+        }
+        if entry.get("slow-timeout").is_some_and(passes_on_timeout) {
+            found.push(make(
+                format!("{head} slow-timeout on-timeout = \"pass\""),
+                format!("counts a test matching {selector} that times out as passed"),
+            ));
+        }
+        if let Some(args) = entry.get("run-extra-args") {
+            found.push(make(
+                format!("{head} run-extra-args = {args}"),
+                format!("passes extra arguments to the test binaries matching {selector}"),
+            ));
+        }
+    }
+    found
+}

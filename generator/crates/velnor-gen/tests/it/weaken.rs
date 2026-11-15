@@ -52,7 +52,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".config/nextest.toml",
             "[scripts.wrapper.skip]\ncommand = \"true\"\n\n[[profile.default.scripts]]\nfilter = \"all()\"\nrun-wrapper = \"skip\"\n",
-            "profile.default.scripts run-wrapper = \"skip\" filter = \"all()\"",
+            "profile.default.scripts run-wrapper = \"skip\" command = \"true\" filter = \"all()\"",
             "runs test binaries through the wrapper skip, command \"true\"",
         ),
         (
@@ -197,7 +197,7 @@ fn ordinary_settings_name_nothing() -> TestResult {
         ),
         (
             ".config/nextest.toml",
-            "[profile.default]\nretries = 2\n\n[profile.ci]\nfail-fast = false\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
+            "[profile.default]\nretries = 0\n\n[profile.ci]\nfail-fast = false\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
         ),
         (
             "crates/foo/Cargo.toml",
