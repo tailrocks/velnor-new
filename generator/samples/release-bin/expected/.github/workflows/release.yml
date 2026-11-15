@@ -64,7 +64,7 @@ jobs:
           GH_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'gh api "repos/$REPOSITORY/commits/main" --jq ''"newest=\(.sha == env.COMMIT)"'' >> "$GITHUB_OUTPUT"'
+        run: 'gh api "repos/$REPOSITORY/git/ref/heads/main" --jq ''"newest=\(.object.sha == env.COMMIT)"'' >> "$GITHUB_OUTPUT"'
       - name: Install release-plz
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c

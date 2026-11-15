@@ -45,7 +45,7 @@ pub(crate) fn release_workflow(
             });
         }
     }
-    render_release(&plan, helper).map_err(GenerateError::Rules)
+    render_release(&plan, helper, &facts.config.default_branch).map_err(GenerateError::Rules)
 }
 
 fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {

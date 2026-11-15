@@ -23,7 +23,7 @@ fn release_pr_stays_on_a_branch_and_rechecks_the_live_default_branch_tip() -> Te
         .ok_or("no tip check")?;
     let run = all[tip].get("run").and_then(Node::text).ok_or("no run")?;
     assert!(
-        run.contains("commits/main") && run.contains("env.COMMIT"),
+        run.contains("git/ref/heads/main") && run.contains(".object.sha == env.COMMIT"),
         "{run}"
     );
     let switch = all
@@ -148,5 +148,24 @@ fn a_released_package_that_is_not_a_member_of_its_cargo_root_is_refused() -> Tes
             package: "app".to_owned()
         })
     );
+    Ok(())
+}
+
+#[test]
+fn the_release_workflow_follows_the_configured_default_branch() -> TestResult {
+    let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+    view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
+    view.files.insert(
+        velnor_rust::CONFIG_PATH,
+        b"default_branch = \"trunk\"\n".to_vec(),
+    );
+    let files = expected_files(&view)?;
+    let text = files
+        .get(&velnor_model::RELEASE_WORKFLOW_PATH)
+        .ok_or("no release.yml")?;
+    assert!(text.contains("    branches:\n      - trunk\n"), "{text}");
+    assert!(text.contains("git/ref/heads/trunk"), "{text}");
+    assert!(text.contains("git switch --force-create trunk"), "{text}");
+    assert!(!text.contains("main"), "{text}");
     Ok(())
 }
