@@ -62,9 +62,8 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
         )),
         "{text}"
     );
-    assert!(text.contains(
-        "        env:\n          GITHUB_TOKEN: '${{ github.token }}'\n        run: velnor-ci plan\n"
-    ));
+    assert!(text.contains("        id: plan\n        run: velnor-ci plan\n"));
+    assert!(!text.contains("GITHUB_TOKEN"), "{text}");
     Ok(())
 }
 

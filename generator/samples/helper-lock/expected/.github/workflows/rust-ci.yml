@@ -35,8 +35,6 @@ jobs:
           echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
       - name: velnor-ci plan
         id: plan
-        env:
-          GITHUB_TOKEN: '${{ github.token }}'
         run: velnor-ci plan
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'

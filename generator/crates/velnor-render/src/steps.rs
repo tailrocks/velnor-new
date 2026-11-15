@@ -85,13 +85,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::Helper(command) => {
             let arguments = helper_arguments(*command);
             let (id, env) = match command {
-                HelperCommand::Plan => (
-                    Some(PLAN_STEP),
-                    vec![(
-                        "GITHUB_TOKEN".to_owned(),
-                        Value::Expr("${{ github.token }}".to_owned()),
-                    )],
-                ),
+                HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
                 HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
                 _ => (None, Vec::new()),
             };
