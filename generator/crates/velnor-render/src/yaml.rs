@@ -74,14 +74,11 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
                 }
             }
         }
-        Yaml::Block(text) => {
-            out.push_str(" |\n");
-            for line in text.replace("${{", "${{ '${{' }}").lines() {
-                out.push_str(&" ".repeat(indent));
-                out.push_str(line);
-                out.push('\n');
-            }
+        Yaml::Block(text) => block(out, &text.replace("${{", "${{ '${{' }}"), indent),
+        Yaml::Str(text) if text.contains('\n') => {
+            block(out, &text.replace("${{", "${{ '${{' }}"), indent);
         }
+        Yaml::Expr(text) if text.contains('\n') => block(out, text, indent),
         _ => {
             out.push(' ');
             out.push_str(&inline(value));
@@ -169,4 +166,13 @@ pub(crate) fn entry(key: &str, value: Yaml) -> (String, Yaml) {
 
 pub(crate) fn text(value: &str) -> Yaml {
     Yaml::Str(value.to_owned())
+}
+
+fn block(out: &mut String, text: &str, indent: usize) {
+    out.push_str(" |\n");
+    for line in text.lines() {
+        out.push_str(&" ".repeat(indent));
+        out.push_str(line);
+        out.push('\n');
+    }
 }

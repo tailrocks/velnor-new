@@ -4,9 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread, Weakening,
+    AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed, Unread,
+    Weakening,
 };
-use velnor_rust::{CONFIG_PATH, PolicyRuns, root_slug};
+use velnor_rust::{CONFIG_PATH, PolicyRuns};
 
 use crate::error::CiError;
 
@@ -22,7 +23,7 @@ pub fn outputs(
     let mut owners = BTreeMap::new();
     let mut lines = Vec::new();
     for (root, selection) in selections {
-        let slug = root_slug(root);
+        let slug = RootSlug::of(root);
         if let Some(other) = owners.insert(slug.clone(), root) {
             return Err(CiError::new(format!(
                 "the roots {other} and {root} both get the output name rust_{slug}; move one of them"

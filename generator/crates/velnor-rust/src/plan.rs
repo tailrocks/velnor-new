@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, HelperCommand, Job, JobId, PackageName, PermissionScope,
-    Permissions, PullRequestType, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step,
-    StepKind, Triggers, When, WorkflowPlan,
+    Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RepoPath, RootSlug,
+    RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
@@ -15,7 +15,6 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
-use crate::select::root_slug;
 use crate::shape::decide_shape;
 
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
@@ -48,7 +47,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane::root(root_slug(&root.manifest), single, helper_root.is_some());
+            let lane = Lane::root(RootSlug::of(&root.manifest), single, helper_root.is_some());
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
@@ -105,11 +104,11 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
 
 fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let lane = Lane {
-        slug: root_slug(&root.manifest),
+        slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
         from_source: false,
     };
-    let mut steps = setup(facts, root, false, &lane);
+    let mut steps = setup(facts, root, false, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
         ..step(StepKind::Cargo(CargoCommand::Build {
@@ -165,7 +164,13 @@ fn tools_steps(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 
-pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
+pub(crate) fn setup(
+    facts: &RepoFacts,
+    root: &RustRoot,
+    lint: bool,
+    lane: &Lane,
+    job: &JobId,
+) -> Vec<Step> {
     let mut steps = head(
         facts,
         if lane.plan.is_none() {
@@ -207,12 +212,22 @@ pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane)
             }
         }
     }
+    let cache_root = CacheRoot::new(&root.manifest);
     toolchain.extend([
         step(StepKind::Helper(HelperCommand::Prepare)),
         Step {
             directory: root.manifest.parent(),
             ..step(StepKind::Helper(HelperCommand::CheckMetadata))
         },
+        step(StepKind::CacheRestore(CacheKey::Sources {
+            host: Host,
+            root: cache_root.clone(),
+        })),
+        step(StepKind::CacheRestore(CacheKey::Target {
+            job: job.clone(),
+            root: cache_root,
+            host: Host,
+        })),
         step(StepKind::Helper(HelperCommand::Restored)),
     ]);
     steps.extend(toolchain.into_iter().map(|step| Step {

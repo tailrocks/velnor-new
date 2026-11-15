@@ -4,11 +4,10 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use velnor_model::{JobId, RepoPath, RustRoot, Timings};
+use velnor_model::{JobId, RepoPath, RootSlug, RustRoot, Timings};
 
 use crate::error::{DetectError, Reason};
 use crate::plan::{LINT_JOB, RUST_JOB, TEST_JOB};
-use crate::select::root_slug;
 
 pub const TIMINGS_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci-timings.json");
 
@@ -75,7 +74,7 @@ pub fn render_timings(timings: &BTreeMap<RepoPath, Timings>) -> String {
 pub fn root_job_ids(manifest: &RepoPath, several_roots: bool) -> [JobId; 3] {
     [RUST_JOB, LINT_JOB, TEST_JOB].map(|id| {
         if several_roots {
-            id.suffixed(&root_slug(manifest))
+            id.suffixed(RootSlug::of(manifest).as_str())
         } else {
             id
         }

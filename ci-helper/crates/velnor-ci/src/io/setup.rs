@@ -5,8 +5,11 @@ use std::path::Path;
 use std::process::Command;
 
 use velnor_gen::io::read_files;
-use velnor_model::{ToolPins, Toolchain};
-use velnor_rust::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, mise_files, tool_pins, toolchain};
+use velnor_model::{RepoPath, ToolPins, Toolchain};
+use velnor_rust::{
+    BUILD_DRIVER, CONFIG_PATH, CompatInputs, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, build_profile,
+    ci_debuginfo, compat, mise_files, tool_pins, toolchain,
+};
 
 use super::{append_outputs, append_to, current_dir};
 use crate::error::CiError;
@@ -15,11 +18,16 @@ use crate::setup::{
 };
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
+const CARGO_DIRECTORY: &str = ".cargo";
+const CARGO_CONFIG: &str = "config.toml";
+const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
-    let files = read_files(&root, &mise_files()).map_err(|e| CiError::new(e.to_string()))?;
+    let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
+    let files = read_files(&root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
+    let profile = build_profile(ci_debuginfo(&files).map_err(|e| CiError::new(e.to_string()))?);
     if !pins.tools.is_empty() {
         check_pinned_tools(&root, &pins)?;
     }
@@ -31,8 +39,18 @@ pub(super) fn prepare() -> Result<String, CiError> {
     {
         install_declared(&root, &declared)?;
     }
-    append_to(ENV_VARIABLE, &env_lines())?;
-    append_outputs(&output_lines())?;
+    let inputs = CompatInputs {
+        rustc_verbose: rustc_verbose()?,
+        target: env_text("CARGO_BUILD_TARGET"),
+        profile: profile.clone(),
+        rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
+        workspace: root.display().to_string(),
+        driver: BUILD_DRIVER.to_owned(),
+    };
+    let digest = compat(&inputs);
+    write_cargo_config(&root, profile.cargo_config)?;
+    append_to(ENV_VARIABLE, &env_lines(&profile))?;
+    append_outputs(&output_lines(&digest))?;
     Ok(String::new())
 }
 
@@ -108,4 +126,60 @@ fn host_triple(root: &std::path::Path) -> Result<String, CiError> {
 pub(super) fn check_metadata() -> Result<String, CiError> {
     velnor_gen::io::check_metadata(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
     Ok(String::new())
+}
+
+fn env_text(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+fn rustc_verbose() -> Result<String, CiError> {
+    let output = Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run rustc: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "rustc -vV failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|_| CiError::new("rustc -vV did not print UTF-8".to_owned()))
+}
+
+fn write_cargo_config(root: &Path, text: &str) -> Result<(), CiError> {
+    let directory = root
+        .parent()
+        .ok_or_else(|| CiError::new(format!("{} has no parent directory", root.display())))?
+        .join(CARGO_DIRECTORY);
+    let file = directory.join(CARGO_CONFIG);
+    let failed = |what: &str, e: std::io::Error| {
+        CiError::new(format!("cannot {what} {}: {e}", file.display()))
+    };
+    match std::fs::read_to_string(&file) {
+        Ok(existing) if !existing.starts_with(OWNED_MARKER) => {
+            return if text.is_empty() {
+                Ok(())
+            } else {
+                Err(CiError::new(format!(
+                    "{} exists and was not written by velnor-ci",
+                    file.display()
+                )))
+            };
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(failed("read", e)),
+    }
+    if text.is_empty() {
+        return match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(failed("remove", e)),
+            _ => Ok(()),
+        };
+    }
+    std::fs::create_dir_all(&directory).map_err(|e| failed("create the directory of", e))?;
+    let staged = directory.join(format!("{CARGO_CONFIG}.velnor-{}", std::process::id()));
+    std::fs::write(&staged, format!("{OWNED_MARKER}\n{text}"))
+        .and_then(|()| std::fs::rename(&staged, &file))
+        .map_err(|e| failed("write", e))
 }

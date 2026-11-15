@@ -225,6 +225,7 @@ pub struct RustCiConfig {
     pub on_main: OnMain,
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
+    pub ci_debuginfo: CiDebugInfo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,6 +241,13 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CiDebugInfo {
+    Full,
+    LineTablesOnly,
+    None,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,6 +273,7 @@ impl Default for RustCiConfig {
             on_main: OnMain::Affected,
             full_run: FullRun::Nightly,
             helper: None,
+            ci_debuginfo: CiDebugInfo::LineTablesOnly,
         }
     }
 }

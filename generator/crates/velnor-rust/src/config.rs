@@ -3,8 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath, RunnerLabel,
-    RustCiConfig, Shape, TargetName,
+    CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
+    RunnerLabel, RustCiConfig, Shape, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 14] = [
+const KEYS: [&str; 15] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -27,6 +27,7 @@ const KEYS: [&str; 14] = [
     "on_main",
     "full_run",
     "helper",
+    "ci_debuginfo",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -50,6 +51,7 @@ struct RawConfig {
     on_main: Option<String>,
     full_run: Option<String>,
     helper: Option<RawHelper>,
+    ci_debuginfo: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -85,18 +87,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         }));
     }
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
-    let shape = match raw.shape.as_deref() {
-        None | Some("auto") => None,
-        Some("one-job") => Some(Shape::OneJob),
-        Some("lint-test") => Some(Shape::LintAndTest),
-        Some("groups") => Some(Shape::BuildThenGroups),
-        Some(other) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "shape",
-                value: other.to_owned(),
-            }));
-        }
-    };
+    let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check = match raw.required_check {
         None => defaults.required_check,
         Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
@@ -120,6 +111,18 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .map(|helper| helper_path(helper.path))
         .transpose()
         .map_err(invalid)?;
+    let ci_debuginfo = match raw.ci_debuginfo.as_deref() {
+        None => defaults.ci_debuginfo,
+        Some("full") => CiDebugInfo::Full,
+        Some("line-tables-only") => CiDebugInfo::LineTablesOnly,
+        Some("none") => CiDebugInfo::None,
+        Some(other) => {
+            return Err(invalid(Reason::InvalidValue {
+                key: "ci_debuginfo",
+                value: other.to_owned(),
+            }));
+        }
+    };
     Ok(RustCiConfig {
         nextest_harnesses,
         default_branch,
@@ -130,6 +133,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         full_run,
         helper,
         shape,
+        ci_debuginfo,
         required_check,
         non_inputs,
         inputs,
@@ -166,6 +170,19 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
             ))
         })
         .collect()
+}
+
+fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
+    match configured {
+        None | Some("auto") => Ok(None),
+        Some("one-job") => Ok(Some(Shape::OneJob)),
+        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
+        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "shape",
+            value: other.to_owned(),
+        }),
+    }
 }
 
 fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
@@ -353,4 +370,13 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
             (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
+}
+
+pub fn ci_debuginfo(
+    files: &std::collections::BTreeMap<RepoPath, Vec<u8>>,
+) -> Result<CiDebugInfo, DetectError> {
+    files.get(&CONFIG_PATH).map_or_else(
+        || Ok(RustCiConfig::default().ci_debuginfo),
+        |bytes| parse(bytes).map(|config| config.ci_debuginfo),
+    )
 }

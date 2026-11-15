@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PlanFrom, PlanRef, RepoFacts, Step,
-    StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PlanFrom, PlanRef, RepoFacts,
+    RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::{CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, step};
@@ -14,13 +14,13 @@ pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");
 
 pub(crate) struct Lane {
-    pub(crate) slug: String,
+    pub(crate) slug: RootSlug,
     pub(crate) plan: Option<JobId>,
     pub(crate) from_source: bool,
 }
 
 impl Lane {
-    pub(crate) fn root(slug: String, single: bool, from_source: bool) -> Self {
+    pub(crate) fn root(slug: RootSlug, single: bool, from_source: bool) -> Self {
         Self {
             slug,
             plan: (!single).then_some(PLAN_JOB),
@@ -29,7 +29,7 @@ impl Lane {
     }
 
     pub(crate) fn policy(single: bool, from_source: bool) -> Self {
-        Self::root(String::new(), single, from_source)
+        Self::root(RootSlug::from_static("policy"), single, from_source)
     }
 
     fn from(&self) -> PlanFrom {
@@ -79,8 +79,8 @@ impl Lane {
     }
 }
 
-pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(String, GateNeed)> {
-    let used: BTreeSet<(String, GateNeed)> = jobs
+pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
+    let used: BTreeSet<(RootSlug, GateNeed)> = jobs
         .iter()
         .flat_map(|job| {
             let gates = job
@@ -102,7 +102,7 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(String, GateNeed)> {
     used.into_iter().collect()
 }
 
-pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
+pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, false);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {

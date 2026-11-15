@@ -1,16 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache;
 mod cron;
 mod ids;
 mod plan;
 mod repo;
 mod selection;
 
+pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
 pub use ids::{
-    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
-    Sha256, TargetName,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
+    RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
@@ -19,10 +21,10 @@ pub use plan::{
     WorkflowPlan,
 };
 pub use repo::{
-    CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule, MemberDependency, OnMain,
-    PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata,
-    RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain,
-    UnownedPackage, Unread, Weakening,
+    CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
+    MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
+    ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

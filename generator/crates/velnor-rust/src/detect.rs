@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::toml_file::table;
 use velnor_model::{
     PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RustCiConfig, RustRoot, Toolchain,
+    RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
@@ -16,7 +16,6 @@ use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
-use crate::select::root_slug;
 use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
@@ -75,7 +74,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let unowned = unowned(view, &rust_roots, &targets);
     let mut slugs = BTreeMap::new();
     for root in &rust_roots {
-        if let Some(first) = slugs.insert(root_slug(&root.manifest), &root.manifest) {
+        if let Some(first) = slugs.insert(RootSlug::of(&root.manifest), &root.manifest) {
             return Err(DetectError::SameSlug {
                 first: first.clone(),
                 second: root.manifest.clone(),

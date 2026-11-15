@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -10,7 +10,7 @@ const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 
-pub(crate) fn output(slug: &str, need: GateNeed) -> String {
+pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     if need.is_global() {
         format!("rust_{}", need_name(need))
     } else {

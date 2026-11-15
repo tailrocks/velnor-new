@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, GateNeed, HelperCommand, HelperRelease, Job, LINT_STEP, RepoPath,
-    Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, TargetKind, TargetName,
+    CacheKey, CargoCommand, FilterRef, GateNeed, HelperCommand, HelperRelease, Job, LINT_STEP,
+    RepoPath, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, TargetKind, TargetName,
 };
 
+use crate::cache::{path_text, render_key};
 use crate::gate::{PLAN_STEP, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
 };
 
-const PREPARE_STEP: &str = "prepare";
+pub(crate) const PREPARE_STEP: &str = "prepare";
 const RESTORED_STEP: &str = "restored";
 const RUN: &str = "velnor-ci run --";
 const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
@@ -27,6 +28,8 @@ const ARCHIVE_RETENTION_DAYS: u64 = 7;
 const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
+const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -129,6 +132,8 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         }
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
+        StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
+        StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -193,6 +198,27 @@ fn publish_helper(binary: &RepoPath) -> RenderedStep {
             ("retention-days".to_owned(), Value::Int(1)),
             ("overwrite".to_owned(), Value::Bool(true)),
         ],
+        ..RenderedStep::default()
+    }
+}
+
+fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
+    let rendered = render_key(key);
+    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
+    let mut with = vec![
+        ("path".to_owned(), Value::Text(paths.join("\n"))),
+        ("key".to_owned(), Value::Expr(rendered.key)),
+    ];
+    if fallbacks && !rendered.restore_keys.is_empty() {
+        with.push((
+            "restore-keys".to_owned(),
+            Value::Expr(rendered.restore_keys.join("\n")),
+        ));
+    }
+    RenderedStep {
+        name: format!("{verb} the {} cache", key.family()),
+        uses: Some(action.to_owned()),
+        with,
         ..RenderedStep::default()
     }
 }

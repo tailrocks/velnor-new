@@ -62,7 +62,7 @@ pub(crate) fn root_jobs(
 impl RootJobs<'_> {
     fn id(&self, base: JobId) -> JobId {
         if self.suffixed {
-            base.suffixed(&self.lane.slug)
+            base.suffixed(self.lane.slug.as_str())
         } else {
             base
         }
@@ -166,7 +166,8 @@ impl RootJobs<'_> {
 
     fn single(&self) -> Job {
         let draft = self.facts.config.skip_draft_pull_requests;
-        let mut steps = setup(self.facts, self.root, true, self.lane);
+        let job_id = self.id(RUST_JOB);
+        let mut steps = setup(self.facts, self.root, true, self.lane, &job_id);
         steps.extend(
             self.cargo(lint().into_iter().chain(self.tests()).collect())
                 .map(|step| Step {
@@ -193,13 +194,14 @@ impl RootJobs<'_> {
         );
         Job {
             skip_on_draft: false,
-            ..self.lane_job(self.id(RUST_JOB), steps)
+            ..self.lane_job(job_id, steps)
         }
     }
 
     fn split(&self, comment: Option<String>, archive: bool) -> Vec<Job> {
         let tests = self.tests();
-        let mut steps = setup(self.facts, self.root, true, self.lane);
+        let lint_id = self.id(LINT_JOB);
+        let mut steps = setup(self.facts, self.root, true, self.lane, &lint_id);
         steps.extend(
             self.cargo(
                 lint()
@@ -215,15 +217,16 @@ impl RootJobs<'_> {
         let mut jobs = vec![Job {
             comment,
             skip_on_draft: false,
-            ..self.lane_job(self.id(LINT_JOB), steps)
+            ..self.lane_job(lint_id, steps)
         }];
         if archive && self.nextest {
             jobs.extend(self.archived_tests());
         } else if !tests.is_empty() {
-            let mut steps = setup(self.facts, self.root, false, self.lane);
+            let test_id = self.id(TEST_JOB);
+            let mut steps = setup(self.facts, self.root, false, self.lane, &test_id);
             steps.extend(self.cargo(tests));
             steps.extend(self.audit());
-            jobs.push(self.lane_job(self.id(TEST_JOB), steps));
+            jobs.push(self.lane_job(test_id, steps));
         }
         jobs
     }
@@ -238,7 +241,7 @@ impl RootJobs<'_> {
     fn archived_tests(&self) -> [Job; 2] {
         let build_id = self.id(TEST_JOB);
         let artifact = self.id(ARCHIVE_ID).to_string();
-        let mut build = setup(self.facts, self.root, false, self.lane);
+        let mut build = setup(self.facts, self.root, false, self.lane, &build_id);
         build.extend(self.cargo(vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }]));
         build.push(self.gated(StepKind::UploadArchive {
             name: artifact.clone(),

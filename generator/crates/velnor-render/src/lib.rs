@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache;
 mod gate;
 mod header;
 mod release;
@@ -16,6 +17,7 @@ use velnor_model::{
     WORKFLOW_PATH, WorkflowPlan,
 };
 
+pub use crate::cache::{RenderedKey, render_key};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS,

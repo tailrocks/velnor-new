@@ -62,6 +62,7 @@ id!(PackageName, text);
 id!(TargetName, text);
 id!(RunnerLabel, text);
 id!(JobId, identifier);
+id!(RootSlug, slug);
 id!(HelperVersion, version);
 id!(CommitSha, commit_sha);
 id!(Sha256, sha256);
@@ -97,6 +98,28 @@ impl JobId {
             })
             .collect();
         Self(Cow::Owned(format!("{}-{suffix}", self.0)))
+    }
+}
+
+impl RootSlug {
+    #[must_use]
+    pub fn of(manifest: &RepoPath) -> Self {
+        match manifest.parent() {
+            None => Self::from_static("root"),
+            Some(directory) => Self(Cow::Owned(
+                directory
+                    .as_str()
+                    .chars()
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() {
+                            c.to_ascii_lowercase()
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect(),
+            )),
+        }
     }
 }
 
@@ -178,6 +201,21 @@ const fn identifier(value: &[u8]) -> bool {
     while index < value.len() {
         let byte = value[index];
         if !(byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-') {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn slug(value: &[u8]) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    let mut index = 0;
+    while index < value.len() {
+        let byte = value[index];
+        if !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_') {
             return false;
         }
         index += 1;
