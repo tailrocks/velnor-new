@@ -6,6 +6,7 @@ pub mod io;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::io::Write;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_render::{GENERATED_HEADER, OWNED_PATHS, RuleViolation, render};
@@ -62,6 +63,19 @@ pub fn expected_with_notes(
     check_required_check(&facts, &plan)?;
     let files = render(&plan).map_err(GenerateError::Rules)?;
     Ok((files, facts.timings_notes))
+}
+
+pub fn plan_generate(
+    view: &RepoView,
+    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+    out: &mut dyn Write,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
+    let (expected, notes) = expected_with_notes(view)?;
+    for note in notes {
+        writeln!(out, "velnor-gen: {note}").ok();
+    }
+    let drifts = drift(&expected, on_disk);
+    Ok((expected, drifts))
 }
 
 fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {

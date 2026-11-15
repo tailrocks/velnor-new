@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_gen::{GenerateError, expected_files, expected_with_notes};
+use velnor_gen::{GenerateError, expected_files, expected_with_notes, plan_generate};
 use velnor_model::{
     CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
     TargetKind, TargetName, Timings, When,
@@ -284,13 +284,29 @@ fn a_malformed_timings_file_is_named_and_the_default_shape_is_written() -> TestR
 }
 
 #[test]
+fn generate_names_a_malformed_timings_file_in_a_note_and_writes_the_default_shape() -> TestResult {
+    let mut out = Vec::new();
+    let (files, _) = plan_generate(&timed_view("{", "")?, &BTreeMap::new(), &mut out)?;
+    let text = String::from_utf8(out)?;
+    assert!(
+        text.lines().any(
+            |line| line.starts_with("velnor-gen: .velnor/rust-ci-timings.json: ")
+                && line.ends_with("; ignored")
+        ),
+        "{text}"
+    );
+    assert_eq!(files, untimed()?);
+    Ok(())
+}
+
+#[test]
 fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count() -> TestResult {
     let both = format!("{{{},{}", &GONE[1..GONE.len() - 1], &LAB[1..]);
     let (files, notes) = expected_with_notes(&timed_view(&both, "")?)?;
     assert_eq!(
         notes,
         [
-            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-gen timings` again; entry ignored"
+            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
         ]
     );
     assert_eq!(files, expected_files(&timed_view(LAB, "")?)?);

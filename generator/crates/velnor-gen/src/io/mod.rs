@@ -22,7 +22,7 @@ use velnor_rust::{
 mod sample;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_with_notes, require_compatible};
+use crate::{Drift, GenerateError, check_tag, plan_generate, require_compatible};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -191,12 +191,12 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let (expected, notes) =
-        expected_with_notes(&read_view(&root, false)?.0).map_err(Error::Generate)?;
-    for note in &notes {
-        eprintln!("velnor-gen: {note}");
-    }
-    let drifts = drift(&expected, &read_files(&root, &OWNED_PATHS)?);
+    let (expected, drifts) = plan_generate(
+        &read_view(&root, false)?.0,
+        &read_files(&root, &OWNED_PATHS)?,
+        &mut std::io::stderr(),
+    )
+    .map_err(Error::Generate)?;
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }
