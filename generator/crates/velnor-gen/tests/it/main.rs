@@ -33,6 +33,7 @@ mod rule_config;
 mod rules;
 mod select;
 mod setup_action;
+mod setup_action_cache;
 mod tool_pins;
 mod toolchain;
 mod unowned;

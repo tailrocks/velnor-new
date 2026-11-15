@@ -50,21 +50,18 @@ runs:
         fi
         staging="$(mktemp -d "$RUNNER_TEMP/velnor-ci-staging.XXXXXX")"
         trap 'rm -rf "$staging"' EXIT
-        sums="$RUNNER_TEMP/velnor-ci.sha256"
-        printf '%s  %s\n' "$expected" "$staging/velnor-ci" > "$sums"
         verified=
         for source in cache download; do
           rm -f "$staging/velnor-ci"
           if [ "$source" = cache ]; then
             [ -n "$dir" ] && [ -f "$dir/velnor-ci" ] && [ ! -L "$dir/velnor-ci" ] && [ -x "$dir/velnor-ci" ] || continue
+            [ "$(wc -c < "$dir/velnor-ci")" -le 268435456 ] || continue
             cp "$dir/velnor-ci" "$staging/velnor-ci" 2> /dev/null || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
             curl --fail --silent --show-error --location --retry 3 --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
           fi
-          if command -v sha256sum > /dev/null; then
-            if sha256sum -c --status "$sums"; then verified="$source"; break; fi
-          elif shasum -a 256 -c --status "$sums"; then
+          if [ "$(digest "$staging/velnor-ci")" = "$expected" ]; then
             verified="$source"
             break
           fi
