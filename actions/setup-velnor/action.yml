@@ -44,9 +44,7 @@ runs:
         [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "the SHA-256 for $platform is not 64 lowercase hex digits"
         [ -n "$RUNNER_TOOL_CACHE" ] || fail "RUNNER_TOOL_CACHE is not set"
         arch="$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
-        versions="$RUNNER_TOOL_CACHE/velnor-ci/$VERSION"
-        dir="$versions/$arch"
-        mkdir -p "$versions"
+        dir="$RUNNER_TOOL_CACHE/velnor-ci/$VERSION/$arch"
         staging="$(mktemp -d "$RUNNER_TEMP/velnor-ci-staging.XXXXXX")"
         trap 'rm -rf "$staging"' EXIT
         sums="$RUNNER_TEMP/velnor-ci.sha256"

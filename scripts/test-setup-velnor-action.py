@@ -154,6 +154,17 @@ class SetupVelnorInstallTests(unittest.TestCase):
                 bin_dir = Path(self.github_path.read_text().strip())
                 self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
 
+    def test_a_read_only_tool_cache_does_not_stop_the_install(self):
+        self.tool_cache.chmod(0o500)
+        self.addCleanup(self.tool_cache.chmod, 0o700)
+        if os.access(self.tool_cache, os.W_OK):
+            self.skipTest("the tool cache is writable despite mode 0500")
+        result = self.install(hashlib.sha256(PAYLOAD).hexdigest())
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        bin_dir = Path(self.github_path.read_text().strip())
+        self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
+
 
 if __name__ == "__main__":
     unittest.main()
