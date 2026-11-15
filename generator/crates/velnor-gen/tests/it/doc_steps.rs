@@ -283,6 +283,7 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
     .collect();
     let sources = |index: usize| -> Vec<String> {
         root_sources(&facts, &facts.rust_roots[index], &tracked)
+            .unwrap_or_default()
             .iter()
             .map(ToString::to_string)
             .collect()
@@ -317,4 +318,24 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
             "vendor/ext/src/lib.rs",
         ]
     );
+}
+
+#[test]
+fn a_package_that_reads_the_whole_repository_reads_no_file_and_runs_both_steps() {
+    let mut facts = facts(vec![(
+        "Cargo.toml",
+        vec![library(true), member("other", "other", &[])],
+    )]);
+    facts.compile_inputs = BTreeMap::from([(None, BTreeSet::from([name("a")]))]);
+    let tracked: BTreeSet<_> = ["a/src/lib.rs", "logo.png"].into_iter().map(path).collect();
+    let root = &facts.rust_roots[0];
+    assert_eq!(root_sources(&facts, root, &tracked), None);
+    let steps = optional_steps(root, &BTreeMap::new(), true);
+    assert_eq!((steps.doctests, steps.docs), (RUN, RUN));
+    let binary_root = RustRoot {
+        members: vec![binary()],
+        ..root.clone()
+    };
+    let steps = optional_steps(&binary_root, &BTreeMap::new(), true);
+    assert_eq!((steps.doctests, steps.docs), (NO_LIBRARY, RUN));
 }

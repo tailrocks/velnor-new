@@ -16,7 +16,7 @@ pub fn root_sources(
     facts: &RepoFacts,
     root: &RustRoot,
     tracked: &BTreeSet<RepoPath>,
-) -> Vec<RepoPath> {
+) -> Option<Vec<RepoPath>> {
     let own = root.manifest.parent();
     let nested: Vec<Option<RepoPath>> = facts
         .rust_roots
@@ -36,13 +36,16 @@ pub fn root_sources(
         .filter(|(_, packages)| packages.iter().any(|package| names.contains(package)))
         .map(|(path, _)| path)
         .collect();
+    if read.iter().any(|input| input.is_none()) {
+        return None;
+    }
     let manifests: BTreeSet<&RepoPath> = root
         .members
         .iter()
         .map(|member| &member.manifest)
         .chain([&root.manifest])
         .collect();
-    tracked
+    let sources = tracked
         .iter()
         .filter(|path| {
             let config_base = path.parent().and_then(|folder| folder.parent());
@@ -61,7 +64,8 @@ pub fn root_sources(
                     && ((under(&own) && !nested.iter().any(under)) || members.iter().any(under)))
         })
         .cloned()
-        .collect()
+        .collect();
+    Some(sources)
 }
 
 fn contains(outer: Option<&RepoPath>, inner: Option<&RepoPath>) -> bool {

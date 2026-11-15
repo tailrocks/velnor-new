@@ -38,6 +38,7 @@ const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
+const SOURCE_LIMIT: u64 = 1 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
@@ -120,11 +121,15 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .rust_roots
         .iter()
         .map(|root| {
-            let paths = root_sources(&facts, root, &checkout.view.tracked_paths);
-            let steps = match read_files(&checkout.root, &paths) {
-                Ok(sources) => optional_steps(root, &sources, full),
-                Err(GenError::NotRegular(_)) => optional_steps(root, &BTreeMap::new(), true),
-                Err(error) => return Err(CiError::new(error.to_string())),
+            let steps = match root_sources(&facts, root, &checkout.view.tracked_paths) {
+                None => optional_steps(root, &BTreeMap::new(), true),
+                Some(paths) => match read_sources(&checkout.root, &paths) {
+                    Ok(Some(sources)) => optional_steps(root, &sources, full),
+                    Ok(None) | Err(GenError::NotRegular(_)) => {
+                        optional_steps(root, &BTreeMap::new(), true)
+                    }
+                    Err(error) => return Err(CiError::new(error.to_string())),
+                },
             };
             Ok((root.manifest.clone(), steps))
         })
@@ -141,6 +146,20 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     } else {
         outputs
     })
+}
+
+fn read_sources(
+    root: &Path,
+    paths: &[RepoPath],
+) -> Result<Option<BTreeMap<RepoPath, Vec<u8>>>, GenError> {
+    let oversized = paths.iter().any(|path| {
+        fs::symlink_metadata(root.join(path.as_str()))
+            .is_ok_and(|metadata| metadata.len() > SOURCE_LIMIT)
+    });
+    if oversized {
+        return Ok(None);
+    }
+    read_files(root, paths).map(Some)
 }
 
 fn read_base_files(files: &[BaseFile]) -> Result<BTreeMap<RepoPath, String>, CiError> {
