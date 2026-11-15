@@ -1,16 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
+use velnor_model::PackageName;
 use velnor_rust::normalize;
 
 use super::audit::Audit;
-use crate::coverage::HOST;
+use crate::coverage::{Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
 
 #[derive(Deserialize)]
@@ -39,19 +39,12 @@ pub(super) enum UnitFile {
     BuildOutput {
         configuration: String,
         package: String,
+        hash: String,
     },
-}
-
-impl UnitFile {
-    pub(super) fn configuration(&self) -> Option<&str> {
-        match self {
-            Self::Fingerprint { configuration, .. } | Self::BuildOutput { configuration, .. } => {
-                Some(configuration)
-            }
-            Self::DepInfo { configuration, .. } => configuration.as_deref(),
-            Self::Script { .. } => None,
-        }
-    }
+    Directory {
+        name: String,
+        root: bool,
+    },
 }
 
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
@@ -102,6 +95,12 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
         .map(|part| part.to_str())
         .collect::<Option<_>>()?;
     let (name, folders) = parts.split_last()?;
+    if let ([directory], "CACHEDIR.TAG" | ".rustc_info.json") = (folders, *name) {
+        return Some(UnitFile::Directory {
+            name: (*directory).to_owned(),
+            root: *name == ".rustc_info.json",
+        });
+    }
     let configuration = |depth: usize| {
         folders
             .len()
@@ -117,10 +116,13 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
             hash: hash.to_owned(),
             name: (*name).to_owned(),
         }),
-        (Some("build"), Some((package, _))) if *name == "output" => Some(UnitFile::BuildOutput {
-            configuration: configuration(2)?,
-            package: package.to_owned(),
-        }),
+        (Some("build"), Some((package, hash))) if *name == "output" => {
+            Some(UnitFile::BuildOutput {
+                configuration: configuration(2)?,
+                package: package.to_owned(),
+                hash: hash.to_owned(),
+            })
+        }
         (Some("build"), Some((package, _))) => {
             name.strip_suffix(".d").and_then(split).and_then(|_| {
                 Some(UnitFile::Script {
@@ -207,25 +209,47 @@ pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
         .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
 }
 
-pub(super) fn triples(directory: &Path) -> Result<BTreeSet<String>, CiError> {
-    let output = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
-        .args(["--print", "target-list"])
-        .current_dir(directory)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run rustc --print target-list: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "rustc --print target-list failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::to_owned)
-        .collect())
-}
-
 impl Audit<'_> {
+    pub(super) fn fingerprint(
+        &mut self,
+        index: usize,
+        configuration: String,
+        package: String,
+        hash: String,
+        name: &str,
+    ) {
+        if let Some(fingerprint) = Fingerprint::parse(name) {
+            if fingerprint.kind == UnitKind::Normal {
+                self.names.insert(
+                    (index, configuration.clone(), fingerprint.target.clone()),
+                    (package.clone(), fingerprint.clone()),
+                );
+            }
+            self.fingerprints.insert(
+                (index, configuration.clone(), hash.clone()),
+                (package.clone(), fingerprint),
+            );
+        }
+        if let Ok(package) = PackageName::new(package) {
+            if name.starts_with("lib-") {
+                self.built[index].libraries.insert((configuration, package));
+            } else if name.starts_with("build-script-") && !name.contains('.') {
+                self.built[index].builders.insert((configuration, package));
+            } else if name.starts_with("run-") && !name.contains('.') {
+                self.runs
+                    .insert((index, configuration, hash), package.to_string());
+            }
+        }
+    }
+
+    pub(super) fn directory(&mut self, index: usize, name: String, root: bool) {
+        if root {
+            self.rooted.insert((index, name));
+        } else {
+            self.placed.insert((index, name));
+        }
+    }
+
     pub(super) fn script(
         &mut self,
         workspace: &Path,
@@ -261,6 +285,24 @@ impl Audit<'_> {
                     package.clone(),
                     fingerprint.clone(),
                 ));
+            }
+        }
+        for ((index, configuration, hash), package) in &self.runs {
+            let key = (*index, configuration.clone(), hash.clone());
+            if !self.present.contains(&key) {
+                self.built[*index].orphans.insert((
+                    configuration.clone(),
+                    package.clone(),
+                    Fingerprint {
+                        kind: UnitKind::Run,
+                        target: String::new(),
+                    },
+                ));
+            }
+        }
+        for (index, name) in &self.placed {
+            if !self.rooted.contains(&(*index, name.clone())) {
+                self.built[*index].placed.insert(name.clone());
             }
         }
     }

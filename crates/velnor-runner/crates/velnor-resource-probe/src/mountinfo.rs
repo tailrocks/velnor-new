@@ -5,7 +5,7 @@ use crate::{ProbeError, units::digits};
 
 #[cfg(target_os = "linux")]
 const TARGET: &str = "/velnor/docker-root";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo_io::MOUNTINFO_LIMIT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MountEntry {
