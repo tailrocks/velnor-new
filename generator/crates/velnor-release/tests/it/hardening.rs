@@ -106,3 +106,28 @@ fn a_release_plz_from_another_publisher_is_not_the_qualified_tool() {
         );
     }
 }
+
+#[test]
+fn a_release_plz_tool_table_may_name_only_a_version() {
+    for extra in [
+        "path = \"./evil\"",
+        "ref = \"main\"",
+        "prefix = \"v\"",
+        "postinstall = \"./evil.sh\"",
+    ] {
+        let mut files = files();
+        files.mise_toml = format!("[tools.release-plz]\nversion = \"0.4.3\"\n{extra}\n");
+        files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+        assert!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::ReleasePlzToolOverride { .. })
+            ),
+            "{extra}"
+        );
+    }
+    let mut files = files();
+    files.mise_toml = "[tools.release-plz]\nversion = \"0.4.3\"\n".to_owned();
+    files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(refusal(&files), None);
+}

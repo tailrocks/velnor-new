@@ -84,6 +84,15 @@ pub(crate) fn check(
     }
     let locked = release_plz_tools(&mise_lock);
     for (key, value) in configured {
+        if let Some(field) = value
+            .as_table()
+            .and_then(|table| table.keys().find(|field| *field != "version"))
+        {
+            return Err(ReleaseError::ReleasePlzToolOverride {
+                tool: key.clone(),
+                field: field.clone(),
+            });
+        }
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };

@@ -101,6 +101,10 @@ pub enum ReleaseError {
         configured: String,
         locked: Vec<String>,
     },
+    ReleasePlzToolOverride {
+        tool: String,
+        field: String,
+    },
 }
 
 fn subject(package: Option<&String>) -> String {
@@ -240,6 +244,10 @@ impl ReleaseError {
                 f,
                 "mise.toml requests release-plz {configured} but mise.lock locks {}",
                 locked.join(", ")
+            ),
+            Self::ReleasePlzToolOverride { tool, field } => write!(
+                f,
+                "mise.toml: the release-plz tool {tool} sets {field}, which can point mise at repository code or run a script while the release App token is in scope; give it only a version"
             ),
             _ => Ok(()),
         }
