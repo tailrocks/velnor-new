@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::path::Path;
 
 pub const RUNNER_TAG: &str = "velnor-local/pair-runner";
@@ -19,23 +20,46 @@ const HELPERS: &str = r##"rustup target add aarch64-unknown-linux-musl \
     && cp /target/aarch64-unknown-linux-musl/release/velnor-storage-init /out/storage-init/storage-init \
     && cp /target/aarch64-unknown-linux-musl/release/velnor-job-start-hook /out/job-start-hook/job-start-hook \
     && printf "#!/bin/sh\nset -eu\nexec /velnor/job-start-hook \"\$@\"\n" > /out/job-started-hook/velnor-job-start-hook.sh \
-    && chmod 0555 /out/*/*"##;
+    && chmod 0555 /out/*/* \
+    && chown -R "$(stat -c %u:%g /out)" /out"##;
 
 #[derive(Debug)]
 pub struct Lock(BTreeMap<String, String>);
 
 impl Lock {
-    #[must_use]
-    pub fn parse(text: &str) -> Self {
-        Self(
-            text.lines()
-                .filter_map(|line| {
-                    let (key, value) = line.split_once(" = ")?;
-                    let value = value.strip_prefix('"')?.strip_suffix('"')?;
-                    Some((key.to_owned(), value.to_owned()))
-                })
-                .collect(),
-        )
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let mut strings = BTreeMap::new();
+        let mut seen = BTreeSet::new();
+        for (index, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let number = index + 1;
+            let malformed =
+                || format!(".velnor/runner.lock line {number} is not a `key = value` assignment");
+            let (key, value) = line.split_once(" = ").ok_or_else(malformed)?;
+            let key_ok = !key.is_empty()
+                && key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-');
+            let text = value
+                .strip_prefix('"')
+                .and_then(|rest| rest.strip_suffix('"'));
+            let list = value.starts_with('[') && value.ends_with(']');
+            if !key_ok || (text.is_none() && !list && value.parse::<i64>().is_err()) {
+                return Err(malformed());
+            }
+            if !seen.insert(key.to_owned()) {
+                return Err(format!(
+                    ".velnor/runner.lock line {number} assigns {key} a second time"
+                ));
+            }
+            if let Some(text) = text {
+                strings.insert(key.to_owned(), text.to_owned());
+            }
+        }
+        Ok(Self(strings))
     }
 
     pub fn get(&self, key: &str) -> Result<&str, String> {
@@ -71,6 +95,17 @@ fn build(tag: &str, mut args: Vec<String>, path: String) -> Vec<String> {
     command
 }
 
+fn target_volume(root: &str) -> String {
+    let digest = ring::digest::digest(&ring::digest::SHA256, root.as_bytes());
+    let suffix = digest.as_ref()[..8]
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
+    format!("{TARGET_VOLUME}-{suffix}")
+}
+
 pub fn plan(
     lock: &Lock,
     root: &Path,
@@ -93,7 +128,7 @@ pub fn plan(
         "-v",
         &format!("{root}:/src:ro"),
         "-v",
-        &format!("{TARGET_VOLUME}:/target"),
+        &format!("{}:/target", target_volume(&root)),
         "-v",
         &format!("{stages}:/out"),
         "-e",

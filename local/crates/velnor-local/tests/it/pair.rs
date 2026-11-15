@@ -74,7 +74,7 @@ const ALL: [(&str, &str); 3] = [
 
 fn steps() -> Vec<Vec<String>> {
     plan(
-        &Lock::parse(REAL_LOCK),
+        &Lock::parse(REAL_LOCK).unwrap_or_else(|e| unreachable!("{e}")),
         Path::new("/repo"),
         Path::new("/stages"),
         "abc123",
@@ -84,6 +84,7 @@ fn steps() -> Vec<Vec<String>> {
 
 fn lock_value(key: &str) -> String {
     Lock::parse(REAL_LOCK)
+        .unwrap_or_else(|e| unreachable!("{e}"))
         .get(key)
         .unwrap_or_else(|e| unreachable!("{e}"))
         .to_owned()
@@ -136,7 +137,8 @@ fn the_helpers_build_is_locked_and_reads_the_checkout_read_only() {
 
 #[test]
 fn the_image_plan_names_the_lock_entry_that_is_missing() {
-    let lock = Lock::parse("base_image = \"ubuntu:26.04@sha256:00\"\n");
+    let lock = Lock::parse("base_image = \"ubuntu:26.04@sha256:00\"\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let refused = plan(&lock, Path::new("/r"), Path::new("/s"), "abc");
     assert!(
         refused

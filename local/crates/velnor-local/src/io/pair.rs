@@ -72,15 +72,45 @@ pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> io::Result<Min
 
 pub async fn write_private(path: &Path, content: &str) -> io::Result<()> {
     let fresh = path.with_extension(format!("{}.new", random_hex(8)?));
-    fs::OpenOptions::new()
+    let written = stage_and_rename(&fresh, path, content).await;
+    if written.is_err() {
+        let _ = fs::remove_file(&fresh).await;
+    }
+    written
+}
+
+async fn stage_and_rename(fresh: &Path, path: &Path, content: &str) -> io::Result<()> {
+    let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .mode(0o600)
-        .open(&fresh)
-        .await?
-        .write_all(content.as_bytes())
+        .open(fresh)
         .await?;
-    fs::rename(&fresh, path).await
+    file.write_all(content.as_bytes()).await?;
+    drop(file);
+    fs::rename(fresh, path).await
+}
+
+pub async fn ensure_clean(root: &Path) -> io::Result<()> {
+    let changed = program(
+        "git",
+        &[
+            "-C",
+            &root.display().to_string(),
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+        ],
+        None,
+    )
+    .await?;
+    if changed.is_empty() {
+        return Ok(());
+    }
+    Err(io::Error::other(format!(
+        "{} has uncommitted changes to tracked files, so the images would claim a revision that does not hold their bytes; commit or stash them first",
+        root.display()
+    )))
 }
 
 pub async fn jit(args: JitArgs) -> io::Result<()> {
@@ -115,6 +145,8 @@ async fn streamed(args: &[String]) -> io::Result<()> {
 pub async fn build(args: BuildArgs) -> io::Result<()> {
     let root = fs::canonicalize(&args.root).await?;
     let lock = fs::read_to_string(root.join(".velnor/runner.lock")).await?;
+    let lock = Lock::parse(&lock).map_err(io::Error::other)?;
+    ensure_clean(&root).await?;
     let sha = program(
         "git",
         &["-C", &root.display().to_string(), "rev-parse", "HEAD"],
@@ -124,7 +156,7 @@ pub async fn build(args: BuildArgs) -> io::Result<()> {
     let sha = String::from_utf8_lossy(&sha).trim().to_owned();
     let stages = std::env::temp_dir().join(format!("velnor-local-build-{}", random_hex(8)?));
     fs::create_dir_all(&stages).await?;
-    let built = build_in(&Lock::parse(&lock), &root, &stages, &sha).await;
+    let built = build_in(&lock, &root, &stages, &sha).await;
     if let Err(error) = fs::remove_dir_all(&stages).await {
         eprintln!(
             "velnor-local: {} was not removed: {error}",

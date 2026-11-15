@@ -10,6 +10,7 @@ mod environment;
 mod io;
 mod io_edges;
 mod pair;
+mod pair_inputs;
 mod report;
 mod restore;
 mod side;
