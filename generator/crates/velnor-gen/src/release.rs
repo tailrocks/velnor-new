@@ -3,9 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
+use velnor_model::{
+    RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
+};
 use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
-use velnor_render::render_release;
+use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK};
 
 use crate::GenerateError;
@@ -55,6 +57,41 @@ fn cargo_manifests(facts: &RepoFacts) -> BTreeSet<String> {
         .collect()
 }
 
+fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
+    let mut found = BTreeSet::new();
+    for root in &facts.rust_roots {
+        for member in &root.members {
+            for target in &member.targets {
+                if target.kinds.contains(&TargetKind::Bin) && !target.requires_features {
+                    for manifest in [&root.manifest, &member.manifest] {
+                        found.insert((
+                            manifest.to_string(),
+                            member.name.to_string(),
+                            target.name.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    found
+}
+
+fn root_members(facts: &RepoFacts) -> BTreeMap<String, BTreeSet<String>> {
+    facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            let directory = root
+                .manifest
+                .parent()
+                .map_or_else(|| ".".to_owned(), |parent| parent.to_string());
+            let names = root.members.iter().map(|member| member.name.to_string());
+            (directory, names.collect())
+        })
+        .collect()
+}
+
 fn workflow_name(text: &str) -> Option<String> {
     text.lines()
         .find_map(|line| line.strip_prefix("name:"))
@@ -72,6 +109,7 @@ fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BT
                     .extension()
                     .is_some_and(|ext| ext == "yml" || ext == "yaml")
         })
+        .filter(|(_, bytes)| owner_of(bytes) != Owner::VelnorGen)
         .filter_map(|(_, bytes)| workflow_name(&String::from_utf8_lossy(bytes)));
     let made = generated.values().filter_map(|text| workflow_name(text));
     tracked.chain(made).collect()
@@ -119,6 +157,8 @@ fn release_files(
         release_plz_toml,
         mise_tomls,
         cargo_configs,
+        root_members: reality.map(|known| root_members(known.facts)),
+        bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
         workflow_names: reality.map(|known| workflow_names(view, known.generated)),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),

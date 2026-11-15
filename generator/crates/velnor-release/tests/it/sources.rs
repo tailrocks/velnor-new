@@ -158,3 +158,44 @@ fn a_plugin_for_release_plz_or_an_unapproved_locked_backend_is_refused() {
     let other = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\nbun = \"https://example.com/bun\"\n";
     assert_eq!(refusal(&with_mise(other)), None);
 }
+
+#[test]
+fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
+    let mut files = files();
+    files.release_toml = Some("[[binaries]]\npackage = \"app\"\nbin = \"rg\"\n".to_owned());
+    let target =
+        |manifest: &str, bin: &str| (manifest.to_owned(), "app".to_owned(), bin.to_owned());
+    files.bin_targets = Some(BTreeSet::from([target("Cargo.toml", "app")]));
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::BinaryTargetMissing { package, bin }) if package == "app" && bin == "rg"),
+        "{error:?}"
+    );
+    files.bin_targets = Some(BTreeSet::from([target("other/Cargo.toml", "rg")]));
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::BinaryTargetMissing { .. })
+    ));
+    files.bin_targets = Some(BTreeSet::from([target("Cargo.toml", "rg")]));
+    assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
+    let members = |app: &[&str], tools: &[&str]| {
+        Some(std::collections::BTreeMap::from([
+            (".".to_owned(), names(app)),
+            ("tools".to_owned(), names(tools)),
+        ]))
+    };
+    let mut files = two_roots(PLZ_TOOLS)?;
+    files.root_members = members(&["app"], &["app", "tools"]);
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app"),
+        "{error:?}"
+    );
+    files.root_members = members(&["app"], &["tools"]);
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}

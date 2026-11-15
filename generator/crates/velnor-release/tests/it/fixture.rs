@@ -29,6 +29,8 @@ pub(crate) fn files() -> ReleaseFiles {
         mise_tomls: vec![MISE_TOML.to_owned()],
         cargo_configs: BTreeMap::new(),
         cargo_manifests: None,
+        bin_targets: None,
+        root_members: None,
         workflow_names: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
