@@ -73,12 +73,16 @@ fn package_args(names: &[&str]) -> String {
     }
 }
 
+fn shell_inert(c: char) -> bool {
+    !c.is_ascii() && !c.is_whitespace() && !c.is_control()
+}
+
 fn cargo_name(name: &str) -> bool {
     !name.starts_with('-')
         && !name.is_empty()
         && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || shell_inert(c))
 }
 
 #[must_use]

@@ -167,7 +167,17 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
 
 #[test]
 fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_package_arguments() {
-    for bad in ["a;b", "a$(x)", "a`x`", "a${{x}}", "a b", "-x", "caf\u{e9}"] {
+    for bad in [
+        "a;b",
+        "a$(x)",
+        "a`x`",
+        "a${{x}}",
+        "a b",
+        "-x",
+        "a\u{2028}b",
+        "a\u{a0}b",
+        "a\u{85}b",
+    ] {
         let selected = BTreeMap::from([
             (name("a"), SelectionReason::Changed(path("a/src/lib.rs"))),
             (name(bad), SelectionReason::DependsOn(name("a"))),
@@ -244,4 +254,19 @@ fn a_package_name_that_reads_as_a_workflow_command_is_inert_in_the_test_filter()
         filter,
         "rust_root_test_filter=package(a%3A%3Astop-commands%3A%3Atok%25)"
     );
+}
+
+#[test]
+fn a_unicode_package_name_cargo_accepts_stays_scoped_in_the_package_arguments() {
+    for good in ["f\u{f6}\u{f6}", "a\u{301}", "\u{6a21}\u{5757}-x"] {
+        let selected =
+            BTreeMap::from([(name(good), SelectionReason::Changed(path("a/src/lib.rs")))]);
+        let selections = BTreeMap::from([(path("Cargo.toml"), RustSelection::Some(selected))]);
+        let written = outputs(&selections, &BTreeMap::new(), PolicyRuns::default())
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            written.contains(&format!("rust_root_package_args=-p {good}\n")),
+            "{good:?}: {written}"
+        );
+    }
 }
