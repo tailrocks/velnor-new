@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use velnor_model::{LINT_STEP, RepoPath, RunnerLabel, TEST_STEP, Timings, WORKFLOW_PATH};
-use velnor_rust::root_job_ids;
+use velnor_model::{LINT_STEP, RepoPath, RepoView, RunnerLabel, TEST_STEP, Timings, WORKFLOW_PATH};
+use velnor_rust::{TIMINGS_PATH, detect, root_job_ids};
 
 use crate::collect::collect;
 use crate::error::CiError;
@@ -30,6 +30,18 @@ struct Sample {
     test_build: f64,
     tests: f64,
     binaries: BTreeMap<String, f64>,
+}
+
+pub fn current_setup(view: &RepoView) -> Result<(Vec<RepoPath>, RunnerLabel), CiError> {
+    let mut without_timings = view.clone();
+    without_timings.files.remove(&TIMINGS_PATH);
+    let facts = detect(&without_timings).map_err(|e| CiError::new(e.to_string()))?;
+    let roots = facts
+        .rust_roots
+        .iter()
+        .map(|root| root.manifest.clone())
+        .collect();
+    Ok((roots, facts.config.runner))
 }
 
 pub fn gather(

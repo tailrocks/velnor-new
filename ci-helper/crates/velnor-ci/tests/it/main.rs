@@ -20,5 +20,6 @@ mod support;
 mod time;
 mod timings;
 mod timings_runs;
+mod timings_setup;
 mod unowned;
 mod version;
