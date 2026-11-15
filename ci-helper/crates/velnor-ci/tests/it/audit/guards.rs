@@ -8,6 +8,7 @@ use super::{
     audit, own_units, own_units_in, path_dependency_units, root_package_with_path_dependencies,
     unit, workspace_below_the_root,
 };
+use crate::io::Repo;
 
 #[test]
 fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole_repository() {
@@ -275,7 +276,7 @@ fn a_reachable_path_dependency_built_without_its_dep_info_makes_the_audit_refuse
     assert!(lock.exists());
 }
 
-fn tools_target_directory(directory: &str, holds: bool) {
+fn tools_workspace() -> Repo {
     let repo = workspace_below_the_root();
     repo.write_all(&[
         (".gitignore", "target/\ntarget-tools/\n"),
@@ -285,29 +286,33 @@ fn tools_target_directory(directory: &str, holds: bool) {
         ),
         ("tools/Cargo.lock", "version = 4\n"),
         ("tools/src/main.rs", "fn main() {}\n"),
-        (
-            "tools/.cargo/config.toml",
-            &format!("[build]\ntarget-dir = \"../{directory}\"\n"),
-        ),
     ]);
     own_units(&repo, "rust/target/debug", &[]);
+    repo
+}
+
+fn tools_target_directory(repo: &Repo, directory: &str, holds: bool) {
+    repo.write(
+        "tools/.cargo/config.toml",
+        &format!("[build]\ntarget-dir = \"../{directory}\"\n"),
+    );
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     for (hash, fingerprint) in [
         ("f0000000000000d1", "bin-tools"),
         ("f0000000000000d2", "test-bin-tools"),
     ] {
         unit(
-            &repo,
+            repo,
             &format!("{directory}/debug/deps/tools-{hash}.d"),
             "out.d: src/main.rs\n",
         );
         unit(
-            &repo,
+            repo,
             &format!("{directory}/debug/.fingerprint/tools-{hash}/{fingerprint}"),
             "",
         );
     }
-    let result = audit(&repo, &["--write"]);
+    let result = audit(repo, &["--write"]);
     if holds {
         assert_eq!(result.status.code(), Some(1), "{result:?}");
         let complaint = String::from_utf8_lossy(&result.stderr);
@@ -326,10 +331,17 @@ fn tools_target_directory(directory: &str, holds: bool) {
 
 #[test]
 fn a_target_directory_inside_another_roots_target_directory_makes_the_audit_refuse() {
-    tools_target_directory("rust/target/tools", true);
+    tools_target_directory(&tools_workspace(), "rust/target/tools", true);
 }
 
 #[test]
 fn a_target_directory_beside_another_roots_target_directory_passes_the_audit() {
-    tools_target_directory("rust/target-tools", false);
+    tools_target_directory(&tools_workspace(), "rust/target-tools", false);
+}
+
+#[test]
+fn a_target_directory_beside_the_inside_one_left_behind_passes_the_audit() {
+    let repo = tools_workspace();
+    tools_target_directory(&repo, "rust/target/tools", true);
+    tools_target_directory(&repo, "rust/target-tools", false);
 }
