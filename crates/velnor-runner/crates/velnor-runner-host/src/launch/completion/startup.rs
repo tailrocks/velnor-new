@@ -22,14 +22,14 @@ pub(super) fn spawn_with_runtime(
                 }
             }
             Err(_) => {
-                let _ = ready_tx.send(false);
+                ready_tx.send(false).ok();
             }
         })
         .map_err(|_| HostError::Journal)?;
     if ready_rx.recv() == Ok(true) {
         return Ok(thread);
     }
-    let _ = thread.join();
+    drop(thread.join());
     Err(HostError::Journal)
 }
 
