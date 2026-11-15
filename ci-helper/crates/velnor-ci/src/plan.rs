@@ -168,7 +168,7 @@ pub fn explain(
             ));
             continue;
         }
-        let quoted = toml_string(&shown);
+        let quoted = toml_string(path.as_str());
         lines.push(format!(
             "unknown path: {shown}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    {quoted},\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = {quoted}\n    packages = [\"<package>\"]\n"
         ));
@@ -186,11 +186,15 @@ fn flag(need: StepNeed) -> &'static str {
 fn toml_string(text: &str) -> String {
     let escaped: String = text
         .chars()
-        .flat_map(|c| match c {
-            '"' => vec!['\\', '"'],
-            '\\' => vec!['\\', '\\'],
-            other => vec![other],
+        .map(|c| match c {
+            '"' => "\\\"".to_owned(),
+            '\\' => "\\\\".to_owned(),
+            odd if odd.is_control() || (odd.is_whitespace() && odd != ' ') => {
+                format!("\\u{:04X}", u32::from(odd))
+            }
+            other => other.to_string(),
         })
-        .collect();
+        .collect::<String>()
+        .replace("##[", "#\\u0023[");
     format!("\"{escaped}\"")
 }

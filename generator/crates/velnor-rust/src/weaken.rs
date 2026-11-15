@@ -179,6 +179,9 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let build = parsed.get("build").and_then(Value::as_table);
     for key in COMPILER_KEYS {
         if let Some(value) = build.and_then(|build| build.get(key)) {
+            if key.ends_with("wrapper") && value.as_str() == Some("") {
+                continue;
+            }
             let effect = if key.ends_with("wrapper") {
                 format!("runs the compiler through {value}")
             } else {
