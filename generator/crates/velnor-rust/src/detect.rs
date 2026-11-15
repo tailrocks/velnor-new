@@ -125,6 +125,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         deny,
         machete: pinned("cargo-machete"),
     };
+    let weakenings = weakenings(&view.files, &rust_roots);
     Ok(RepoFacts {
         policy,
         repository: view.repository.clone(),
@@ -137,7 +138,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
-        weakenings: weakenings(&view.files),
+        weakenings,
     })
 }
 

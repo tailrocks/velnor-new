@@ -31,7 +31,7 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 
 #[test]
 fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 21] = [
+    let cases: [(&str, &str, &str, &str); 19] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -53,7 +53,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".config/nextest.toml",
             "[scripts.wrapper.skip]\ncommand = \"true\"\n\n[[profile.default.scripts]]\nfilter = \"all()\"\nrun-wrapper = \"skip\"\n",
-            "profile.default.scripts run-wrapper = \"skip\"",
+            "profile.default.scripts run-wrapper = \"skip\" command = \"true\" filter = \"all()\"",
             "runs test binaries through the wrapper skip, command \"true\"",
         ),
         (
@@ -65,7 +65,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".cargo/config.toml",
             "[build]\nrustdocflags = [\"--test-args\", \"zzz\"]\n",
-            "rustdocflags with --test-args",
+            "rustdocflags [\"--test-args\", \"zzz\"] with --test-args",
             "passes --test-args to rustdoc, which can leave out every doctest",
         ),
         (
@@ -77,7 +77,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".cargo/config.toml",
             "[build]\nrustdocflags = [\"--no-run\"]\n",
-            "rustdocflags with --no-run",
+            "rustdocflags [\"--no-run\"] with --no-run",
             "passes --no-run to rustdoc, which compiles every doctest without running it",
         ),
         (
@@ -130,21 +130,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "crates/foo/Cargo.toml",
-            "[package]\nname = \"foo\"\n\n[[bench]]\nname = \"b\"\ntest = false\n",
-            "[[bench]] name = \"b\" test = false",
-            "leaves the bench target b of foo out of the test run",
-        ),
-        (
-            "crates/foo/Cargo.toml",
             "[package]\nname = \"foo\"\n\n[[bin]]\nname = \"tool\"\npath = \"src/tool.rs\"\ntest = false\n",
             "[[bin]] name = \"tool\" test = false",
             "leaves the bin target tool of foo out of the test run",
-        ),
-        (
-            "crates/foo/Cargo.toml",
-            "[package]\nname = \"foo\"\n\n[[example]]\nname = \"demo\"\ntest = false\n",
-            "[[example]] name = \"demo\" test = false",
-            "leaves the example target demo of foo out of the test run",
         ),
         (
             ".config/nextest.toml",
@@ -201,7 +189,7 @@ fn ordinary_settings_name_nothing() -> TestResult {
         ),
         (
             ".config/nextest.toml",
-            "[profile.default]\nretries = 2\n\n[profile.ci]\nfail-fast = false\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
+            "[profile.default]\nretries = 0\n\n[profile.ci]\nfail-fast = false\n\n[scripts.wrapper.unused]\ncommand = \"true\"\n",
         ),
         (
             "crates/foo/Cargo.toml",

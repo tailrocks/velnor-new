@@ -33,6 +33,9 @@ mod toml_file;
 mod toolchain;
 mod unowned;
 mod weaken;
+mod weaken_nextest;
+mod weaken_scope;
+mod weaken_targets;
 
 pub use build_profile::{BuildProfile, build_profile};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};

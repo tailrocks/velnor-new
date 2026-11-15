@@ -8,7 +8,7 @@ fn plan_explain_prints_a_hostile_key_in_one_line_that_is_no_workflow_command() {
     let repo = plan_repo("forged");
     repo.write(
         ".config/nextest.toml",
-        "[scripts.wrapper.w]\ncommand = \"true\"\n[profile.\"p\\n::warning::FORGED\"]\nscripts = [{ filter = \"all()\", run-wrapper = \"w\" }]\n",
+        "[scripts.wrapper.\"w\\n::warning::FORGED\"]\ncommand = \"true\"\n[profile.default]\nscripts = [{ filter = \"all()\", run-wrapper = \"w\\n::warning::FORGED\" }]\n",
     );
     repo.write(
         ".cargo/config.toml",
