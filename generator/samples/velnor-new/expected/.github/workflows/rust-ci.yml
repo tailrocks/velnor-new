@@ -24,8 +24,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
     outputs:
       rust_ci_helper_mode: '${{ steps.plan.outputs.rust_ci_helper_mode }}'
       rust_ci_helper_docs: '${{ steps.plan.outputs.rust_ci_helper_docs }}'
@@ -37,6 +35,8 @@ jobs:
       rust_local_docs: '${{ steps.plan.outputs.rust_local_docs }}'
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -50,8 +50,8 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: velnor-ci plan
-        id: plan
+      - id: plan
+        name: velnor-ci plan
         env:
           GITHUB_TOKEN: '${{ github.token }}'
         run: velnor-ci plan
@@ -86,11 +86,11 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: velnor-ci prepare
-        id: prepare
+      - id: prepare
+        name: velnor-ci prepare
         run: velnor-ci prepare
-      - name: velnor-ci restored
-        id: restored
+      - id: restored
+        name: velnor-ci restored
         run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -179,11 +179,11 @@ jobs:
       - name: Add Rust targets
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: velnor-ci prepare
-        id: prepare
+      - id: prepare
+        name: velnor-ci prepare
         run: velnor-ci prepare
-      - name: velnor-ci restored
-        id: restored
+      - id: restored
+        name: velnor-ci restored
         run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -238,11 +238,11 @@ jobs:
       - name: Add Rust targets
         working-directory: crates/velnor-runner
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: velnor-ci prepare
-        id: prepare
+      - id: prepare
+        name: velnor-ci prepare
         run: velnor-ci prepare
-      - name: velnor-ci restored
-        id: restored
+      - id: restored
+        name: velnor-ci restored
         run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -325,11 +325,11 @@ jobs:
       - name: Add Rust targets
         working-directory: generator
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: velnor-ci prepare
-        id: prepare
+      - id: prepare
+        name: velnor-ci prepare
         run: velnor-ci prepare
-      - name: velnor-ci restored
-        id: restored
+      - id: restored
+        name: velnor-ci restored
         run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -396,11 +396,11 @@ jobs:
       - name: Add Rust targets
         working-directory: local
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: velnor-ci prepare
-        id: prepare
+      - id: prepare
+        name: velnor-ci prepare
         run: velnor-ci prepare
-      - name: velnor-ci restored
-        id: restored
+      - id: restored
+        name: velnor-ci restored
         run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'

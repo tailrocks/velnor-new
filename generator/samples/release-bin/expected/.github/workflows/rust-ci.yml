@@ -22,6 +22,8 @@ concurrency:
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -37,33 +39,50 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - id: plan
+        name: velnor-ci plan
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: velnor-ci plan
       - name: Install tools
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
           cache: false
       - name: Add Rust components
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: rustup component add clippy rustfmt
+      - id: prepare
+        name: velnor-ci prepare
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci prepare
+      - id: restored
+        name: velnor-ci restored
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
-        run: cargo-fmt --all --check
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() }}'
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' }}'
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p app --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci run -- cargo check -p app --locked
   required:
     name: Required
     needs:
       - rust
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

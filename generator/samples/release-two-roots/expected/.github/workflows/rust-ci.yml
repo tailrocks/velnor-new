@@ -20,8 +20,42 @@ concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
 jobs:
+  rust-plan:
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
+      rust_tools_mode: '${{ steps.plan.outputs.rust_tools_mode }}'
+      rust_tools_docs: '${{ steps.plan.outputs.rust_tools_docs }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - id: plan
+        name: velnor-ci plan
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: velnor-ci plan
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -44,23 +78,34 @@ jobs:
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
+      - id: prepare
+        name: velnor-ci prepare
+        run: velnor-ci prepare
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
-        run: cargo-fmt --all --check
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() }}'
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() }}'
-        run: cargo check -p app --locked
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: velnor-ci run -- cargo check -p app --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-tools:
+    needs:
+      - rust-plan
+    if: '${{ needs.rust-plan.outputs.rust_tools_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -84,32 +129,41 @@ jobs:
       - name: Add Rust components
         working-directory: tools
         run: rustup component add clippy rustfmt
+      - id: prepare
+        name: velnor-ci prepare
+        run: velnor-ci prepare
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: cargo-fmt --all --check
+        run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: 'cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_tools_mode != ''none'' && needs.rust-plan.outputs.rust_tools_docs == ''run'' }}'
         working-directory: tools
-        run: 'cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check tools alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        run: cargo check -p tools --locked
+        run: velnor-ci run -- cargo check -p tools --locked
   required:
     name: Required
     needs:
+      - rust-plan
       - rust-root
       - rust-tools
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
