@@ -34,6 +34,10 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+    let restores = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::Helper(HelperCommand::Restored));
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -60,12 +64,16 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 )
             }))
             .collect(),
-        steps: job.steps.iter().flat_map(rendered_steps).collect(),
+        steps: job
+            .steps
+            .iter()
+            .flat_map(|step| rendered_steps(step, restores))
+            .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step) -> Vec<RenderedStep> {
+fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
     let mut rendered = vec![step_body(&step.kind)];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
@@ -75,7 +83,8 @@ fn rendered_steps(step: &Step) -> Vec<RenderedStep> {
         });
     }
     for body in &mut rendered {
-        if let Some(condition) = condition(step.when, step.gate.as_ref(), true, step.skip_on_draft)
+        if let Some(condition) =
+            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft)
         {
             body.condition = Some(condition);
         }

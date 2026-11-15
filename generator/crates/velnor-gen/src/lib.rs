@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
 
-use velnor_model::{FullRun, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
+use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
 use velnor_release::ReleaseError;
 use velnor_render::{Owner, RuleViolation, owner_of, render};
 use velnor_rust::{
@@ -25,7 +25,6 @@ pub enum GenerateError {
     Detect(DetectError),
     IncompatibleHelper(HelperVersion),
     Release(ReleaseError),
-    ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
     ReleaseRootWithoutCargoToml(String),
     HelperNotPinned,
@@ -44,9 +43,6 @@ impl fmt::Display for GenerateError {
                 COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
             ),
             Self::Release(error) => error.fmt(f),
-            Self::ReleaseNeedsHelper => f.write_str(
-                "release.yml runs velnor-ci; pin a release with `velnor-gen pin-helper <version>`",
-            ),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
             Self::ReleaseRootWithoutCargoToml(root) => write!(
                 f,
@@ -111,12 +107,12 @@ pub fn expected_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
-    check_helper(&facts)?;
+    let helper = check_helper(&facts)?;
     check_tools(&facts)?;
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    files.extend(release::release_workflow(view, &facts)?);
+    files.extend(release::release_workflow(view, &facts, helper)?);
     Ok((files, facts.timings_notes))
 }
 
@@ -134,12 +130,13 @@ pub fn plan_generate(
     Ok((expected, drifts))
 }
 
-fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {
-    facts
+fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
+    let release = facts
         .helper
         .as_ref()
-        .ok_or(GenerateError::HelperNotPinned)
-        .and_then(|release| require_compatible(release.version()))
+        .ok_or(GenerateError::HelperNotPinned)?;
+    require_compatible(release.version())?;
+    Ok(release)
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {

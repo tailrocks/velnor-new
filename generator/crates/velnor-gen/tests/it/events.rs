@@ -148,7 +148,7 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
 #[test]
 fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestResult {
     let none = with(&[], None)?;
-    assert!(!none.contains("rust-policy"), "{none}");
+    assert!(!none.contains("  policy:\n"), "{none}");
     let unpinned = with(&[("deny.toml", "")], None);
     assert!(
         unpinned.is_err_and(|error| error.to_string().contains("cargo-deny is not pinned")),
