@@ -17,8 +17,9 @@ mod config;
 mod production;
 mod spec;
 
+pub(crate) use config::create_body;
+pub(super) use config::fixed_mounts;
 pub use config::runner_pair_environment;
-pub(super) use config::{create_body, fixed_mounts};
 
 pub(in crate::launch::bootstrap) use production::create_spec_sha256;
 pub(crate) use production::verify_pre_jit_created;

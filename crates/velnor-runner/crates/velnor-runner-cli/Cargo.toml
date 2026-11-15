@@ -9,6 +9,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[features]
+local-mode = ["velnor-runner-host/local-mode"]
+
 [lints]
 workspace = true
 

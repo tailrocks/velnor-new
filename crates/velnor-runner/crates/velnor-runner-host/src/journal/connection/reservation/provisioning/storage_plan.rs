@@ -17,15 +17,15 @@ const EXPECTED_ROLE_COUNT: usize = StorageRole::PHYSICAL.len();
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct StorageProvisioningRole {
-    role: StorageRole,
-    pool_id: String,
-    medium: StorageMedium,
-    filesystem_kind: StorageFilesystemKind,
-    inode_policy: StorageInodePolicy,
-    planned_filesystem_instance_digest: Option<String>,
-    charge_bytes: u64,
-    charge_inodes: u64,
-    retained_memory_bytes: u64,
+    pub(crate) role: StorageRole,
+    pub(crate) pool_id: String,
+    pub(crate) medium: StorageMedium,
+    pub(crate) filesystem_kind: StorageFilesystemKind,
+    pub(crate) inode_policy: StorageInodePolicy,
+    pub(crate) planned_filesystem_instance_digest: Option<String>,
+    pub(crate) charge_bytes: u64,
+    pub(crate) charge_inodes: u64,
+    pub(crate) retained_memory_bytes: u64,
 }
 
 impl StorageProvisioningRole {
@@ -68,15 +68,15 @@ impl StorageProvisioningRole {
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct StorageProvisioningPlan {
-    reservation_id: i64,
-    operation_id: i64,
+    pub(crate) reservation_id: i64,
+    pub(crate) operation_id: i64,
 
-    engine_id: String,
-    docker_root_digest: String,
-    profile_generation_id: String,
-    profile_digest: String,
-    sample_generation_id: String,
-    roles: Vec<StorageProvisioningRole>,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) profile_generation_id: String,
+    pub(crate) profile_digest: String,
+    pub(crate) sample_generation_id: String,
+    pub(crate) roles: Vec<StorageProvisioningRole>,
 }
 
 impl StorageProvisioningPlan {
