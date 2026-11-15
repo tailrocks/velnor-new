@@ -13,7 +13,7 @@ pub(crate) fn tokens(text: &str) -> Vec<Token<'_>> {
     let mut lexer = Lexer {
         text,
         bytes: text.as_bytes(),
-        at: 0,
+        at: if text.starts_with('\u{feff}') { 3 } else { 0 },
     };
     let mut found = Vec::new();
     while let Some(token) = lexer.next() {

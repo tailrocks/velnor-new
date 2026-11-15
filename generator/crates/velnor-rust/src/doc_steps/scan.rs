@@ -30,7 +30,16 @@ impl Found {
 
     pub(crate) fn scan_rust(&mut self, text: &str) {
         self.scan_text(text);
-        for token in tokens(text) {
+        let tokens = tokens(text);
+        if tokens.windows(3).any(|window| {
+            matches!(
+                window,
+                [Token::Punct('$'), Token::Punct('{'), Token::Ident("concat")]
+            )
+        }) {
+            self.both();
+        }
+        for token in tokens {
             match token {
                 Token::Doc { fenced } => {
                     self.docs = true;

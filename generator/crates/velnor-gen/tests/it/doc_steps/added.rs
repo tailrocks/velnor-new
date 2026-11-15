@@ -244,4 +244,20 @@ pub(super) const ADDED: &[Case] = &[
         RUN,
         RUN,
     ),
+    (
+        "an attribute name spliced together by a macro",
+        Kind::Doctested,
+        "macro_rules! m { ($a:ident) => { #[${concat(d, oc)} = \"```\"] struct $a; } }\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "an include after a byte order mark",
+        Kind::Doctested,
+        "\u{feff}include!(\"x.txt\");\n",
+        false,
+        RUN,
+        RUN,
+    ),
 ];

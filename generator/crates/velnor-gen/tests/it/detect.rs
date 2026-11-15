@@ -384,3 +384,29 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
     );
     Ok(())
 }
+
+#[test]
+fn dev_dependencies_are_not_dependencies_whose_code_a_root_cannot_see() -> TestResult {
+    let mut app = lib("app", "app/Cargo.toml")?;
+    app.dependencies = vec![
+        PackageDependency {
+            name: PackageName::new("proptest")?,
+            kind: DependencyKind::Dev,
+            manifest: None,
+        },
+        PackageDependency {
+            name: PackageName::new("serde")?,
+            kind: DependencyKind::Normal,
+            manifest: None,
+        },
+    ];
+    let view = repo(vec![("Cargo.toml", vec![app])], &[])?;
+    let facts = detect(&view)?;
+    let external: Vec<String> = facts.rust_roots[0]
+        .external_dependencies
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(external, ["serde"]);
+    Ok(())
+}

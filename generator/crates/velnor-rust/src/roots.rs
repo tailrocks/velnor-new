@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    MemberDependency, PackageName, RepoPath, RepoView, RustCiConfig, RustMember, RustMetadata,
-    RustPackage, RustRoot,
+    DependencyKind, MemberDependency, PackageName, RepoPath, RepoView, RustCiConfig, RustMember,
+    RustMetadata, RustPackage, RustRoot,
 };
 
 use crate::config::excluded;
@@ -96,6 +96,7 @@ fn root(
         .members
         .iter()
         .flat_map(|package| &package.dependencies)
+        .filter(|dependency| dependency.kind != DependencyKind::Dev)
         .filter(|dependency| match &dependency.manifest {
             Some(manifest) => !member_manifests.contains(manifest),
             None => true,
