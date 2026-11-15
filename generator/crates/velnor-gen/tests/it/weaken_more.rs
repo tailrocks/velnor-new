@@ -133,3 +133,35 @@ fn a_list_wrapper_that_could_hide_tests_from_discovery_is_named() -> TestResult 
     );
     Ok(())
 }
+
+#[test]
+fn a_changed_mise_wrapper_env_is_new_and_defaults_stay_unnamed() -> TestResult {
+    let mise = |env: &str| {
+        format!(
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n{env}"
+        )
+    };
+    let before = facts(&[("mise.toml", &mise(""))])?;
+    assert_eq!(
+        introduced_files(
+            &before,
+            &["mise.toml"],
+            &[("mise.toml", &mise("env = { RUSTDOC = \"true\" }\n"))]
+        )?,
+        ["mise.toml"]
+    );
+    let build = named(
+        &[(MANIFEST, "[package]\nname = \"bar\"\nbuild = false\n")],
+        false,
+    )?;
+    assert!(build.join("\n").contains("build = false"), "{build:?}");
+    let defaults = named(
+        &[(
+            MANIFEST,
+            "[package]\nname = \"bar\"\n\n[[bench]]\nname = \"b\"\ntest = false\n\n[[example]]\nname = \"e\"\ntest = false\n",
+        )],
+        false,
+    )?;
+    assert_eq!(defaults, Vec::<String>::new());
+    Ok(())
+}

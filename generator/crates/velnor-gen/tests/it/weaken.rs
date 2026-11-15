@@ -30,7 +30,7 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 
 #[test]
 fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 21] = [
+    let cases: [(&str, &str, &str, &str); 19] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -129,21 +129,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "crates/foo/Cargo.toml",
-            "[package]\nname = \"foo\"\n\n[[bench]]\nname = \"b\"\ntest = false\n",
-            "[[bench]] name = \"b\" test = false",
-            "leaves the bench target b of foo out of the test run",
-        ),
-        (
-            "crates/foo/Cargo.toml",
             "[package]\nname = \"foo\"\n\n[[bin]]\nname = \"tool\"\npath = \"src/tool.rs\"\ntest = false\n",
             "[[bin]] name = \"tool\" test = false",
             "leaves the bin target tool of foo out of the test run",
-        ),
-        (
-            "crates/foo/Cargo.toml",
-            "[package]\nname = \"foo\"\n\n[[example]]\nname = \"demo\"\ntest = false\n",
-            "[[example]] name = \"demo\" test = false",
-            "leaves the example target demo of foo out of the test run",
         ),
         (
             ".config/nextest.toml",

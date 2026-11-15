@@ -165,13 +165,19 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             format!("leaves the library unit tests of {owner} out of the test run"),
         ));
     }
+    if off(package, "build") {
+        found.push(make(
+            "build = false".to_owned(),
+            format!("stops {owner} from compiling and running its build script"),
+        ));
+    }
     if off(package, "autotests") {
         found.push(make(
             "autotests = false".to_owned(),
             format!("stops {owner} from finding the files in tests/ as tests"),
         ));
     }
-    for kind in ["test", "bench", "bin", "example"] {
+    for kind in ["test", "bin"] {
         let targets = parsed
             .get(kind)
             .and_then(Value::as_array)
@@ -295,8 +301,12 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             let command = wrapper
                 .get("command")
                 .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
+            let extra: String = ["args", "env"]
+                .iter()
+                .filter_map(|key| wrapper.get(key).map(|value| format!(" {key} = {value}")))
+                .collect();
             make(
-                format!("[wrappers.{name}] command = {command}"),
+                format!("[wrappers.{name}] command = {command}{extra}"),
                 format!("runs {name} through {command}"),
             )
         })
