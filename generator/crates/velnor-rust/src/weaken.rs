@@ -179,6 +179,9 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let build = parsed.get("build").and_then(Value::as_table);
     for key in COMPILER_KEYS {
         if let Some(value) = build.and_then(|build| build.get(key)) {
+            if key.ends_with("wrapper") && value.as_str() == Some("") {
+                continue;
+            }
             let effect = if key.ends_with("wrapper") {
                 format!("runs the compiler through {value}")
             } else {
@@ -209,15 +212,15 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     );
     let flags: Vec<String> = sections
         .filter_map(|section| section.get("rustdocflags"))
-        .map(ToString::to_string)
+        .flat_map(flag_tokens)
         .collect();
-    if flags.iter().any(|flags| flags.contains("--test-args")) {
+    if flags.iter().any(|flag| is_flag(flag, "--test-args")) {
         found.push(make(
             "rustdocflags with --test-args".to_owned(),
             "passes --test-args to rustdoc, which can leave out every doctest".to_owned(),
         ));
     }
-    if flags.iter().any(|flags| flags.contains("--no-run")) {
+    if flags.iter().any(|flag| is_flag(flag, "--no-run")) {
         found.push(make(
             "rustdocflags with --no-run".to_owned(),
             "passes --no-run to rustdoc, which compiles every doctest without running it"
@@ -225,6 +228,25 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         ));
     }
     found
+}
+
+fn flag_tokens(value: &Value) -> Vec<String> {
+    match value {
+        Value::Array(items) => items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        Value::String(text) => text.split_whitespace().map(str::to_owned).collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_flag(token: &str, flag: &str) -> bool {
+    token == flag
+        || token
+            .strip_prefix(flag)
+            .is_some_and(|rest| rest.starts_with('='))
 }
 
 fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {

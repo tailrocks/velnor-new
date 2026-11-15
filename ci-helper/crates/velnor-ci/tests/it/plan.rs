@@ -270,3 +270,19 @@ fn a_unicode_package_name_cargo_accepts_stays_scoped_in_the_package_arguments() 
         );
     }
 }
+
+#[test]
+fn a_percent_in_an_unknown_path_is_kept_in_the_suggested_glob() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    let text = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::from([path("docs/100%.md")]),
+        &BTreeMap::new(),
+    );
+    assert!(text.contains("glob = \"docs/100%.md\"\n"), "{text}");
+    assert!(text.contains("\n    \"docs/100%.md\",\n"), "{text}");
+}

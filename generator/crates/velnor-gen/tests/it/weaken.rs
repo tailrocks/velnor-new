@@ -309,3 +309,26 @@ fn only_a_weakening_a_change_adds_is_new() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_rustdoc_flag_value_that_contains_a_bypass_flag_is_not_a_bypass() -> TestResult {
+    let names = named(&[(
+        ".cargo/config.toml",
+        "[build]\nrustdocflags = [\"--cfg\", \"mode=\\\"--no-run\\\"\", \"--test-args-note\"]\n",
+    )])?;
+    assert!(
+        names.iter().all(|name| !name.contains("rustdocflags")),
+        "{names:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_empty_compiler_wrapper_resets_cargo_and_is_not_named() -> TestResult {
+    let files = [(
+        ".cargo/config.toml",
+        "[build]\nrustc-wrapper = \"\"\nrustc-workspace-wrapper = \"\"\n",
+    )];
+    assert_eq!(named(&files)?, Vec::<String>::new());
+    Ok(())
+}
