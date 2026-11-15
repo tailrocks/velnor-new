@@ -52,7 +52,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".config/nextest.toml",
             "[scripts.wrapper.skip]\ncommand = \"true\"\n\n[[profile.default.scripts]]\nfilter = \"all()\"\nrun-wrapper = \"skip\"\n",
-            "profile.default.scripts run-wrapper = \"skip\"",
+            "profile.default.scripts run-wrapper = \"skip\" filter = \"all()\"",
             "runs test binaries through the wrapper skip, command \"true\"",
         ),
         (
@@ -64,7 +64,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".cargo/config.toml",
             "[build]\nrustdocflags = [\"--test-args\", \"zzz\"]\n",
-            "rustdocflags with --test-args",
+            "rustdocflags [\"--test-args\", \"zzz\"] with --test-args",
             "passes --test-args to rustdoc, which can leave out every doctest",
         ),
         (
@@ -76,7 +76,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         (
             ".cargo/config.toml",
             "[build]\nrustdocflags = [\"--no-run\"]\n",
-            "rustdocflags with --no-run",
+            "rustdocflags [\"--no-run\"] with --no-run",
             "passes --no-run to rustdoc, which compiles every doctest without running it",
         ),
         (

@@ -4,12 +4,13 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, Weakening};
+use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
 
 use crate::config::{CONFIG_PATH, parse};
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
 use crate::toml_file::table;
+use crate::weaken_scope::reaches_a_check;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
@@ -32,9 +33,17 @@ fn named(path: &RepoPath, name: &str) -> bool {
             .is_some_and(|rest| rest.ends_with('/'))
 }
 
-pub(crate) fn weakenings(files: &BTreeMap<RepoPath, Vec<u8>>) -> Vec<Weakening> {
+pub(crate) fn is_manifest(path: &RepoPath) -> bool {
+    named(path, MANIFEST)
+}
+
+pub(crate) fn weakenings(
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+    roots: &[RustRoot],
+) -> Vec<Weakening> {
     let mut found: Vec<Weakening> = files
         .iter()
+        .filter(|(file, _)| reaches_a_check(file, roots))
         .flat_map(|(file, bytes)| in_file(file, bytes))
         .collect();
     found.sort();
@@ -49,11 +58,17 @@ pub fn introduced(facts: &RepoFacts, changes: &ChangeSet) -> Vec<Weakening> {
             .iter()
             .map(|(path, text)| (path.clone(), text.clone().into_bytes()))
             .collect(),
+        &facts.rust_roots,
     );
     facts
         .weakenings
         .iter()
-        .filter(|weakening| changes.paths.contains(&weakening.file) && !before.contains(weakening))
+        .filter(|weakening| {
+            changes.paths.contains(&weakening.file)
+                && !before
+                    .iter()
+                    .any(|old| old.file == weakening.file && old.setting == weakening.setting)
+        })
         .cloned()
         .collect()
 }
@@ -109,7 +124,7 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
     };
     if is_cargo_config(file) {
         cargo_config(&parsed, &make)
-    } else if named(file, MANIFEST) {
+    } else if is_manifest(file) {
         manifest(&parsed, &make)
     } else if MISE_CONFIGS.contains(file) {
         mise(&parsed, &make)
@@ -211,15 +226,15 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .filter_map(|section| section.get("rustdocflags"))
         .map(ToString::to_string)
         .collect();
-    if flags.iter().any(|flags| flags.contains("--test-args")) {
+    if let Some(flags) = flags.iter().find(|flags| flags.contains("--test-args")) {
         found.push(make(
-            "rustdocflags with --test-args".to_owned(),
+            format!("rustdocflags {flags} with --test-args"),
             "passes --test-args to rustdoc, which can leave out every doctest".to_owned(),
         ));
     }
-    if flags.iter().any(|flags| flags.contains("--no-run")) {
+    if let Some(flags) = flags.iter().find(|flags| flags.contains("--no-run")) {
         found.push(make(
-            "rustdocflags with --no-run".to_owned(),
+            format!("rustdocflags {flags} with --no-run"),
             "passes --no-run to rustdoc, which compiles every doctest without running it"
                 .to_owned(),
         ));
@@ -291,19 +306,52 @@ fn nextest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
                     entry
                         .get("run-wrapper")
                         .and_then(Value::as_str)
-                        .map(|name| (profile, name))
+                        .map(|name| (profile, name, entry.get("filter")))
                 })
         })
-        .map(|(profile, name)| {
+        .map(|(profile, name, filter)| {
             let command = commands
                 .and_then(|commands| commands.get(name))
                 .and_then(|wrapper| wrapper.get("command"))
                 .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
             make(
-                format!("profile.{profile}.scripts run-wrapper = \"{name}\""),
+                format!(
+                    "profile.{profile}.scripts run-wrapper = \"{name}\"{}",
+                    filter.map_or_else(String::new, |filter| format!(" filter = {filter}"))
+                ),
                 format!("runs test binaries through the wrapper {name}, command {command}"),
             )
         })
         .chain(filters)
+        .chain(overrides(parsed, make))
+        .collect()
+}
+
+fn overrides(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
+    parsed
+        .get("profile")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten()
+        .filter(|(profile, _)| matches!(profile.as_str(), "default" | "ci"))
+        .flat_map(|(profile, section)| {
+            section
+                .get("overrides")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(move |entry| {
+                    entry
+                        .get("retries")
+                        .map(|retries| (profile, entry.get("filter"), retries))
+                })
+        })
+        .map(|(profile, filter, retries)| {
+            let selector = filter.map_or_else(|| "every test".to_owned(), ToString::to_string);
+            make(
+                format!("profile.{profile}.overrides filter = {selector} retries = {retries}"),
+                format!("retries the tests matching {selector}, so a flaky failure there passes"),
+            )
+        })
         .collect()
 }

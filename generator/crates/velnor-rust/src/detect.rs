@@ -108,6 +108,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
+    let weakenings = weakenings(&view.files, &rust_roots);
     Ok(RepoFacts {
         timings,
         rust_roots,
@@ -117,7 +118,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
-        weakenings: weakenings(&view.files),
+        weakenings,
     })
 }
 

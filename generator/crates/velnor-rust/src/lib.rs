@@ -23,6 +23,7 @@ mod toml_file;
 mod toolchain;
 mod unowned;
 mod weaken;
+mod weaken_scope;
 
 pub use config::CONFIG_PATH;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
