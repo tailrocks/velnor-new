@@ -33,7 +33,7 @@ pub use lock::{LOCK_PATH, LockError, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata};
-pub use mise::check_tools;
+pub use mise::{check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
 pub use reads::{

@@ -32,6 +32,11 @@ fn plan_repo(name: &str) -> Repo {
 }
 
 pub(crate) fn plan_command(repo: &Repo) -> Command {
+    velnor_gen::io::write_metadata(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    stale_plan_command(repo)
+}
+
+pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .current_dir(repo.root())

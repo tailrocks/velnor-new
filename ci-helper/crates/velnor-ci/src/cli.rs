@@ -40,9 +40,33 @@ pub enum Command {
     )]
     Release(ReleaseCommand),
     #[command(
-        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
+        about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout. Reads .velnor/rust-metadata.json instead of running cargo and fails when a Cargo.toml changed after velnor-gen generate wrote it. Fails when default_branch in .velnor/rust-ci.toml differs from repository.default_branch of the event payload. On a pull_request event it lists the changed files and reads the base text of a changed Cargo.lock or root Cargo.toml from the GitHub API with GITHUB_TOKEN; any other event selects everything. --changed replaces the API"
     )]
     Plan(PlanArgs),
+    #[command(
+        about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
+    )]
+    Prepare,
+    #[command(
+        about = "Run after every cache is restored: every action that must follow the restores"
+    )]
+    Restored,
+    #[command(
+        about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
+    )]
+    Run(RunArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RunArgs {
+    #[arg(
+        last = true,
+        required = true,
+        num_args = 1..,
+        value_name = "COMMAND",
+        help = "The command and its arguments, after --"
+    )]
+    pub command: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -51,7 +75,7 @@ pub struct PlanArgs {
         long,
         num_args = 1..,
         value_parser = repo_path,
-        help = "Changed files, relative to the repository root"
+        help = "Changed files, relative to the repository root, instead of the files of the pull request"
     )]
     pub changed: Vec<RepoPath>,
     #[arg(
