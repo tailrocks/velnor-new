@@ -183,6 +183,12 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     if overrides {
         return Err(DetectError::invalid(file, Reason::BuildExecutable));
     }
+    if let Some(key) = credential_hook(&table) {
+        return Err(DetectError::invalid(
+            file,
+            Reason::CargoCredentialProvider(key),
+        ));
+    }
     let env = table.get("env").and_then(toml::Value::as_table);
     if let Some(name) = env.into_iter().flatten().find_map(|(name, value)| {
         let forced = value
@@ -195,6 +201,48 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         return Err(DetectError::invalid(file, Reason::CargoEnv(name)));
     }
     Ok(())
+}
+
+const BUILTIN_PROVIDERS: [&str; 4] = [
+    "cargo:token",
+    "cargo:wincred",
+    "cargo:macos-keychain",
+    "cargo:libsecret",
+];
+
+fn builtin_providers(value: &toml::Value) -> bool {
+    match value {
+        toml::Value::String(name) => BUILTIN_PROVIDERS.contains(&name.as_str()),
+        toml::Value::Array(names) => names.iter().all(builtin_providers),
+        _ => false,
+    }
+}
+
+fn credential_hook(table: &toml::Table) -> Option<String> {
+    if table.contains_key("credential-alias") {
+        return Some("credential-alias".to_owned());
+    }
+    let registry = table.get("registry").and_then(toml::Value::as_table);
+    let named = table
+        .get("registries")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flatten()
+        .map(|(name, entry)| (format!("registries.{name}"), entry.as_table()));
+    registry
+        .map(|registry| ("registry".to_owned(), Some(registry)))
+        .into_iter()
+        .chain(named)
+        .find_map(|(section, entries)| {
+            ["credential-provider", "global-credential-providers"]
+                .into_iter()
+                .find(|key| {
+                    entries
+                        .and_then(|entries| entries.get(*key))
+                        .is_some_and(|value| !builtin_providers(value))
+                })
+                .map(|key| format!("{section}.{key}"))
+        })
 }
 
 const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];

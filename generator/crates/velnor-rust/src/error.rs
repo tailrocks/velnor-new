@@ -60,6 +60,7 @@ pub enum Reason {
     CargoEnv(String),
     UndeclaredTarget(String),
     BuildExecutable,
+    CargoCredentialProvider(String),
 }
 
 impl DetectError {
@@ -135,6 +136,10 @@ impl fmt::Display for Reason {
             ),
             Self::BuildExecutable => f.write_str(
                 "build.rustc, build.rustdoc and the build wrappers replace the programs the checks run; remove them",
+            ),
+            Self::CargoCredentialProvider(key) => write!(
+                f,
+                "{key} names a program or alias that cargo runs when it publishes, with the release token in its environment; remove it, or use one of cargo:token, cargo:wincred, cargo:macos-keychain or cargo:libsecret"
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
