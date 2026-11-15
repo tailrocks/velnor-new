@@ -237,7 +237,7 @@ fn errors_read_as_messages_naming_the_file_and_package() {
         message.contains("tool") && message.contains(".velnor/release.toml"),
         "{message}"
     );
-    let message = plz_refusal("semver_check = false", "semver_check = true")
+    let message = plz_refusal("name = \"app\"\n", "name = \"app\"\nsemver_check = true\n")
         .ok()
         .flatten()
         .map(|error| error.to_string())
@@ -331,5 +331,54 @@ fn a_tag_template_is_checked_against_a_version_with_build_metadata() -> TestResu
         matches!(bad, Some(ReleaseError::InvalidTagTemplate { .. })),
         "{bad:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn unsafe_workspace_defaults_are_refused_even_when_every_listed_package_overrides_them()
+-> TestResult {
+    let safe_package = "[[package]]\nname = \"app\"\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\n";
+    let mut cases = Vec::new();
+    for (from, to) in [
+        ("git_release_draft = true\n", "git_release_draft = false\n"),
+        ("semver_check = false\n", "semver_check = true\n"),
+        ("publish_no_verify = true\n", "publish_no_verify = false\n"),
+    ] {
+        let text = edit(PLZ, from, to)?.replace("[[package]]\nname = \"app\"\n", safe_package);
+        cases.push(text);
+    }
+    for text in cases {
+        let mut files = files();
+        files.release_plz_toml.insert(".".to_owned(), text);
+        let error = refusal(&files);
+        assert!(
+            matches!(
+                error,
+                Some(
+                    ReleaseError::GitReleaseDraftNotTrue { package: None, .. }
+                        | ReleaseError::SemverCheckNotFalse { package: None, .. }
+                        | ReleaseError::PublishWithoutNoVerify { package: None, .. }
+                )
+            ),
+            "{error:?}"
+        );
+    }
+    let mut opted_out = files();
+    let text = edit(
+        PLZ,
+        "release_always = false\n",
+        "release_always = false\nrelease = false\n",
+    )?
+    .replace(
+        "[[package]]\nname = \"app\"\n",
+        &format!("{safe_package}release = true\n"),
+    );
+    let text = edit(
+        &text,
+        "publish_no_verify = true\n",
+        "publish_no_verify = false\n",
+    )?;
+    opted_out.release_plz_toml.insert(".".to_owned(), text);
+    assert_eq!(refusal(&opted_out), None);
     Ok(())
 }
