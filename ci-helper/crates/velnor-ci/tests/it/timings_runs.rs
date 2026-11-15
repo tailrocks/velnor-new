@@ -299,13 +299,13 @@ fn a_runner_seen_in_no_run_gets_no_entry() {
     );
 }
 
-fn relabel(fake: &mut FakeGitHub, labels: Option<Value>) {
+fn relabel(fake: &mut FakeGitHub, labels: Option<&Value>) {
     for id in NEWEST {
         let path = jobs_path(&lab(), id, 1, 1);
         let mut value: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
         for job in value["jobs"].as_array_mut().into_iter().flatten() {
-            match &labels {
+            match labels {
                 Some(labels) => job["labels"] = labels.clone(),
                 None => {
                     if let Some(object) = job.as_object_mut() {
@@ -321,7 +321,7 @@ fn relabel(fake: &mut FakeGitHub, labels: Option<Value>) {
 #[test]
 fn a_label_differing_only_in_case_counts_for_the_runner() {
     let mut fake = recorded(LIST);
-    relabel(&mut fake, Some(json!(["Ubuntu-Latest"])));
+    relabel(&mut fake, Some(&json!(["Ubuntu-Latest"])));
     let report = gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report.notes, Vec::<String>::new());
     assert_eq!(report.timings, crate::timings::report(LIST).timings);
@@ -331,7 +331,7 @@ fn a_label_differing_only_in_case_counts_for_the_runner() {
 fn a_job_with_no_labels_counts_for_no_runner() {
     for labels in [Some(json!([])), None] {
         let mut fake = recorded(LIST);
-        relabel(&mut fake, labels);
+        relabel(&mut fake, labels.as_ref());
         let report =
             gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(report.timings.is_empty());

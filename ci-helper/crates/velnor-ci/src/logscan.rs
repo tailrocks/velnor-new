@@ -155,6 +155,7 @@ fn nextest_test(line: &str) -> Option<(String, f64)> {
     Some((binary.to_owned(), seconds))
 }
 
+#[must_use]
 pub fn nextest_summary(line: &str) -> Option<NextestSummary> {
     let rest = line.strip_prefix("Summary [")?;
     let (seconds, rest) = rest.split_once("s]")?;

@@ -67,7 +67,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         args.command.len() - 1
     )
     .map_err(write_error)?;
-    let mut signals = Signals::new([SIGINT, SIGTERM])
+    let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
     let mut child = Command::new(&args.command[0])
         .args(&args.command[1..])
@@ -98,28 +98,12 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
     drop(sender);
     let handle = signals.handle();
-    thread::spawn(move || {
-        for received in signals.forever() {
-            if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
-                kill(pid, signal).ok();
-            }
-        }
-    });
+    forward(signals, pid);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let mut lost = None;
-    let mut tests_run = None;
-    for _ in 0..streams {
-        match receiver.recv_timeout(PUMP_GRACE) {
-            Ok(pumped) => {
-                lost = lost.or(pumped.failure);
-                tests_run = pumped.tests_run.or(tests_run);
-            }
-            Err(_) => break,
-        }
-    }
+    let (mut lost, tests_run) = collect(&receiver, streams);
     if runs_nextest(&args.command)
         && let Some(tests_run) = tests_run
     {
@@ -148,6 +132,34 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         }
         None => Ok(ExitCode::from(u8::try_from(code).unwrap_or(1))),
     }
+}
+
+fn forward(mut signals: Signals, pid: Option<Pid>) {
+    thread::spawn(move || {
+        for received in signals.forever() {
+            if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
+                kill(pid, signal).ok();
+            }
+        }
+    });
+}
+
+fn collect(
+    receiver: &mpsc::Receiver<Pumped>,
+    streams: usize,
+) -> (Option<std::io::Error>, Option<u64>) {
+    let mut lost = None;
+    let mut tests_run = None;
+    for _ in 0..streams {
+        match receiver.recv_timeout(PUMP_GRACE) {
+            Ok(pumped) => {
+                lost = lost.or(pumped.failure);
+                tests_run = pumped.tests_run.or(tests_run);
+            }
+            Err(_) => break,
+        }
+    }
+    (lost, tests_run)
 }
 
 #[cfg(unix)]

@@ -177,7 +177,7 @@ fn prepare_with(
     declared: Option<&Declared<'_>>,
 ) -> Run {
     let mut setup = Setup::new(String::new());
-    setup.mise_toml = mise_toml.to_owned();
+    mise_toml.clone_into(&mut setup.mise_toml);
     setup.mise_script = Some(mise_script.to_owned());
     setup.toolchain = declared.map(|declared| Toolchain {
         file: declared.file.to_owned(),
