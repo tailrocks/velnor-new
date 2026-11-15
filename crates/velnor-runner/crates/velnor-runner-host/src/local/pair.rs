@@ -24,9 +24,9 @@ use super::request::{LocalPairRequest, Validated, validate};
 use super::{layout, storage};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
-const PAIR_LABEL: &str = "velnor-local.pair";
+pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
 const ROLE_LABEL: &str = "velnor-local.role";
-const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
+pub const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalPair {

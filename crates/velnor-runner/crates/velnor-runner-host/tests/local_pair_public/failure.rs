@@ -108,7 +108,7 @@ async fn local_pair_one_shot_cleans_up_without_waiting_when_the_startup_line_can
     .map_err(|_| "one-shot panicked")?;
     let left = labelled(&fixture.docker, &fixture.environment).await;
     fixture.finish().await?;
-    assert_eq!(outcome, Err(HostError::Path));
+    assert_eq!(outcome, Err(HostError::Path.into()));
     assert!(!waited.load(std::sync::atomic::Ordering::SeqCst));
     assert_eq!(left?, (0, 0));
     Ok(())
