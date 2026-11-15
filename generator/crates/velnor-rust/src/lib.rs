@@ -20,6 +20,7 @@ mod reads;
 mod roots;
 mod select;
 mod shape;
+mod sibling_features;
 mod timings;
 mod toml_file;
 mod toolchain;

@@ -189,3 +189,81 @@ fn a_feature_a_sibling_forwards_counts_and_another_workspaces_request_does_not()
     assert!(!workflow(&separate)?.contains("--test=gated"));
     Ok(())
 }
+
+fn forwarding_view(
+    forwarder: &str,
+    kind: DependencyKind,
+    features: &[&str],
+    workspace: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let a = package(
+        "a",
+        "a/Cargo.toml",
+        &[],
+        &[("gated", TargetKind::Test, true)],
+    )?;
+    let mut b = package(
+        "b",
+        "b/Cargo.toml",
+        &[("a", kind, "a/Cargo.toml")],
+        &[("b", TargetKind::Lib, true)],
+    )?;
+    b.dependencies[0].features = features.iter().map(|f| (*f).to_owned()).collect();
+    view(
+        &[
+            ("Cargo.toml", workspace),
+            ("a/Cargo.toml", GATED),
+            ("b/Cargo.toml", forwarder),
+        ],
+        vec![a, b],
+    )
+}
+
+const WORKSPACE: &str = "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n";
+
+#[test]
+fn a_feature_forwarded_through_a_renamed_dependency_enables_the_gated_harness() -> TestResult {
+    let renamed = "[package]\nname = \"b\"\n[features]\ndefault = [\"aa/x\"]\n[dependencies]\naa = { package = \"a\", path = \"../a\" }\n";
+    let text = workflow(&forwarding_view(
+        renamed,
+        DependencyKind::Normal,
+        &[],
+        WORKSPACE,
+    )?)?;
+    assert!(text.contains("--test=gated"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_feature_forwarded_only_by_a_disabled_sibling_feature_does_not_enable_the_gated_harness()
+-> TestResult {
+    let dormant = "[package]\nname = \"b\"\n[features]\ndormant = [\"a/x\"]\n";
+    let text = workflow(&forwarding_view(
+        dormant,
+        DependencyKind::Normal,
+        &[],
+        WORKSPACE,
+    )?)?;
+    assert!(!text.contains("--test=gated"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_build_dependency_feature_reaches_the_tests_only_when_the_resolver_unifies_it() -> TestResult {
+    let manifest = "[package]\nname = \"b\"\n[build-dependencies]\na = { path = \"../a\" }\n";
+    let split = workflow(&forwarding_view(
+        manifest,
+        DependencyKind::Build,
+        &["x"],
+        WORKSPACE,
+    )?)?;
+    assert!(!split.contains("--test=gated"), "{split}");
+    let unified = workflow(&forwarding_view(
+        manifest,
+        DependencyKind::Build,
+        &["x"],
+        "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"1\"\n",
+    )?)?;
+    assert!(unified.contains("--test=gated"), "{unified}");
+    Ok(())
+}
