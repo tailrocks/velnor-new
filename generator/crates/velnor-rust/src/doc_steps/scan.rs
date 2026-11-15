@@ -5,7 +5,6 @@ use super::tokens::{Token, tokens};
 
 const RUSTDOC_SETTINGS: [&str; 2] = ["rustdoc", "missing_docs"];
 const DOC_MARKERS: [&str; 4] = ["///", "//!", "/**", "/*!"];
-const BINDINGS: [&str; 4] = ["let", "mut", "ref", "const"];
 
 #[derive(Default)]
 pub(crate) struct Found {
@@ -37,67 +36,21 @@ impl Found {
         {
             self.both();
         }
-        let tokens = tokens(text);
-        let mut depth = 0_usize;
-        for (at, token) in tokens.iter().enumerate() {
+        for token in tokens(text) {
             match token {
                 Token::Doc { fenced } => {
                     self.docs = true;
                     self.fenced |= fenced;
                 }
-                Token::Punct('[') if depth > 0 || opens_attribute(&tokens, at) => depth += 1,
-                Token::Punct(']') => depth = depth.saturating_sub(1),
-                Token::Ident("include") if tokens.get(at + 1) == Some(&Token::Punct('!')) => {
-                    self.both();
-                }
-                Token::Ident("path") if depth > 0 && assigns(&tokens, at) => self.both(),
-                Token::Ident("doc") if assigns(&tokens, at) && !binds(&tokens, at) => self.both(),
-                Token::Ident("cfg" | "cfg_attr") => self.docs |= names_doc(&tokens, at),
+                Token::Ident(word) if names_doc_input(word) => self.both(),
                 _ => {}
             }
         }
     }
 }
 
-fn opens_attribute(tokens: &[Token<'_>], at: usize) -> bool {
-    let before = |back: usize| at.checked_sub(back).and_then(|i| tokens.get(i));
-    before(1) == Some(&Token::Punct('#'))
-        || (before(1) == Some(&Token::Punct('!')) && before(2) == Some(&Token::Punct('#')))
-}
-
-fn assigns(tokens: &[Token<'_>], at: usize) -> bool {
-    tokens.get(at + 1) == Some(&Token::Punct('='))
-        && !matches!(tokens.get(at + 2), Some(Token::Punct('=' | '>')))
-}
-
-fn binds(tokens: &[Token<'_>], at: usize) -> bool {
-    match at.checked_sub(1).and_then(|before| tokens.get(before)) {
-        Some(Token::Ident(word)) => BINDINGS.contains(word),
-        Some(Token::Punct('.')) => true,
-        _ => false,
-    }
-}
-
-fn names_doc(tokens: &[Token<'_>], at: usize) -> bool {
-    let open = at + 1 + usize::from(tokens.get(at + 1) == Some(&Token::Punct('!')));
-    if tokens.get(open) != Some(&Token::Punct('(')) {
-        return false;
-    }
-    let mut depth = 0_usize;
-    for token in &tokens[open..] {
-        match token {
-            Token::Punct('(') => depth += 1,
-            Token::Punct(')') => {
-                depth -= 1;
-                if depth == 0 {
-                    return false;
-                }
-            }
-            Token::Ident(word) if word.starts_with("doc") => return true,
-            _ => {}
-        }
-    }
-    false
+fn names_doc_input(word: &str) -> bool {
+    word.starts_with("doc") || word.starts_with("include") || word == "path"
 }
 
 fn has_word(text: &str, word: &str) -> bool {

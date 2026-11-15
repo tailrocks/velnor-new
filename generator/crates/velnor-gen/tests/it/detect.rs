@@ -378,6 +378,9 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
                 .collect()
         })
         .collect();
-    assert_eq!(external, [vec!["serde", "shared"], Vec::<&str>::new()]);
+    assert_eq!(
+        external,
+        [vec!["macros", "serde", "shared"], Vec::<&str>::new()]
+    );
     Ok(())
 }

@@ -92,18 +92,13 @@ fn root(
         .iter()
         .map(|package| &package.manifest)
         .collect();
-    let member_names: BTreeSet<&PackageName> = metadata
-        .members
-        .iter()
-        .map(|package| &package.name)
-        .collect();
     let external_dependencies: BTreeSet<PackageName> = metadata
         .members
         .iter()
         .flat_map(|package| &package.dependencies)
         .filter(|dependency| match &dependency.manifest {
             Some(manifest) => !member_manifests.contains(manifest),
-            None => !member_names.contains(&dependency.name),
+            None => true,
         })
         .map(|dependency| dependency.name.clone())
         .collect();
