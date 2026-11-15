@@ -4,7 +4,7 @@ on:
   # jactionlint ignore=dangerous-triggers
   workflow_run:
     workflows:
-      - Rust CI
+      - CI
     types:
       - completed
 permissions: {}

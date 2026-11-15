@@ -20,6 +20,7 @@ mod patch;
 mod pipeline;
 mod release_fixture;
 mod release_workflow;
+mod release_sample_names;
 mod release_yml;
 mod release_yml_binaries;
 mod release_yml_cargo;
