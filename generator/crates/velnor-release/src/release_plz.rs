@@ -69,6 +69,36 @@ fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
+fn check_workspace(
+    root: &str,
+    workspace: &Settings,
+    nothing_listed: bool,
+) -> Result<(), ReleaseError> {
+    if nothing_listed {
+        if workspace.release == Some(false) {
+            return Err(ReleaseError::RootReleasesNothing {
+                root: root.to_owned(),
+            });
+        }
+        if workspace.git_tag_name.is_none() {
+            return Err(ReleaseError::MissingGitTagName {
+                root: root.to_owned(),
+                package: None,
+            });
+        }
+        checked(
+            workspace.git_tag_name.as_deref().unwrap_or_default(),
+            "package",
+            root,
+            None,
+        )?;
+        check_package(root, None, workspace)?;
+    } else if workspace.release != Some(false) {
+        check_package(root, None, workspace)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
@@ -102,28 +132,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             released.push((entry.name.clone(), effective));
         }
     }
-    if released.is_empty() {
-        if workspace.release == Some(false) {
-            return Err(ReleaseError::RootReleasesNothing {
-                root: root.to_owned(),
-            });
-        }
-        if workspace.git_tag_name.is_none() {
-            return Err(ReleaseError::MissingGitTagName {
-                root: root.to_owned(),
-                package: None,
-            });
-        }
-        checked(
-            workspace.git_tag_name.as_deref().unwrap_or_default(),
-            "package",
-            root,
-            None,
-        )?;
-        check_package(root, None, workspace)?;
-    } else if workspace.release != Some(false) {
-        check_package(root, None, workspace)?;
-    }
+    check_workspace(root, workspace, released.is_empty())?;
     let mut packages = Vec::new();
     for (name, settings) in &released {
         let Some(template) = settings.git_tag_name.as_deref() else {
