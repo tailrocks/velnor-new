@@ -23,6 +23,7 @@ pub enum GenerateError {
     ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
     ReleaseRootWithoutCargoToml(String),
+    ReleasePackageNotInRoot { root: String, package: String },
     Rules(Vec<RuleViolation>),
 }
 
@@ -43,6 +44,10 @@ impl fmt::Display for GenerateError {
             Self::ReleaseRootWithoutCargoToml(root) => write!(
                 f,
                 ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
+            ),
+            Self::ReleasePackageNotInRoot { root, package } => write!(
+                f,
+                "release-plz.toml in {root:?} releases package {package:?}, which is not a member of that Cargo root"
             ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;

@@ -28,14 +28,21 @@ pub(crate) fn release_workflow(
         } else {
             format!("{}/Cargo.toml", root.root)
         };
-        let is_cargo_root = facts
+        let detected = facts
             .rust_roots
             .iter()
-            .any(|detected| detected.manifest.as_str() == manifest);
-        if !is_cargo_root {
-            return Err(GenerateError::ReleaseRootWithoutCargoToml(
-                root.root.clone(),
-            ));
+            .find(|detected| detected.manifest.as_str() == manifest)
+            .ok_or_else(|| GenerateError::ReleaseRootWithoutCargoToml(root.root.clone()))?;
+        if let Some((package, _)) = root.packages.iter().find(|(package, _)| {
+            !detected
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == package)
+        }) {
+            return Err(GenerateError::ReleasePackageNotInRoot {
+                root: root.root.clone(),
+                package: package.clone(),
+            });
         }
     }
     render_release(&plan, helper).map_err(GenerateError::Rules)

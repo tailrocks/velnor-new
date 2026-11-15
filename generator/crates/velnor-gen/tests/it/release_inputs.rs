@@ -4,7 +4,7 @@
 use std::error::Error;
 
 use velnor_gen::{GenerateError, expected_files};
-use velnor_model::RepoPath;
+use velnor_model::{PackageName, RepoPath};
 use velnor_release::ReleaseError;
 
 use crate::release_fixture::{APP, Root, app, jobs, release_view, steps};
@@ -130,5 +130,23 @@ fn a_mise_file_that_runs_code_is_refused_before_release_jobs_are_rendered() -> T
         expected_files(&view),
         Err(GenerateError::Detect(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_released_package_that_is_not_a_member_of_its_cargo_root_is_refused() -> TestResult {
+    let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+    let metadata = view
+        .rust_metadata
+        .get_mut(&RepoPath::new("Cargo.toml")?)
+        .ok_or("no metadata")?;
+    metadata.members[0].name = PackageName::new("other")?;
+    assert_eq!(
+        expected_files(&view).err(),
+        Some(GenerateError::ReleasePackageNotInRoot {
+            root: ".".to_owned(),
+            package: "app".to_owned()
+        })
+    );
     Ok(())
 }

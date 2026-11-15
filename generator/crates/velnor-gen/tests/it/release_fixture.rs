@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_gen::expected_files;
-use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView};
+use velnor_model::{PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView};
 use velnor_rust::LOCK_PATH;
 
 use crate::pipeline::view;
@@ -84,6 +84,14 @@ pub(crate) fn release_view(
             .insert(RELEASE_CONFIG_PATH, text.as_bytes().to_vec());
     }
     for root in roots {
+        let manifest = RepoPath::new(if root.dir == "." {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{}/Cargo.toml", root.dir)
+        })?;
+        if let Some(metadata) = view.rust_metadata.get_mut(&manifest) {
+            metadata.members[0].name = PackageName::new(root.package)?;
+        }
         let path = if root.dir == "." {
             "release-plz.toml".to_owned()
         } else {
