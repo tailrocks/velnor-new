@@ -31,7 +31,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestArchive { file } => (
             "Build the tests".into(),
             format!(
-                "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
+                "cargo-nextest nextest archive $PACKAGE_ARGS --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
             ),
             vec![],

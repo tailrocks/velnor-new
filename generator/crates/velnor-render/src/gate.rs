@@ -98,6 +98,12 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
             runs(GateNeed::Deny),
             runs(GateNeed::Machete)
         )),
+        GateNeed::PackageArgs if gate.package.is_some() => {
+            parts.extend(gate.package.iter().map(|package| {
+                let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
+                format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
+            }));
+        }
         GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
             parts.push(format!("{} != ''", read(gate.need)));
         }

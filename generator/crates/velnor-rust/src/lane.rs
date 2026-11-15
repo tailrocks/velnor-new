@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PlanFrom, PlanRef, RepoFacts,
-    RootSlug, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
+    RepoFacts, RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::{CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, step};
@@ -41,6 +41,14 @@ impl Lane {
             slug: self.slug.clone(),
             need,
             from: self.from(),
+            package: None,
+        }
+    }
+
+    fn package_gate(&self, package: PackageName) -> Gate {
+        Gate {
+            package: Some(package),
+            ..self.gate(GateNeed::PackageArgs)
         }
     }
 
@@ -62,6 +70,10 @@ impl Lane {
             CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
             CargoCommand::Deny { .. } => Some(self.gate(GateNeed::Deny)),
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
+            CargoCommand::CheckAlone { ref package }
+            | CargoCommand::TestTarget { ref package, .. } => {
+                Some(self.package_gate(package.clone()))
+            }
             _ => self.steps(),
         };
         let reads = (!command.plan_values().is_empty()).then(|| PlanRef {

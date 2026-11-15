@@ -140,10 +140,10 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
         run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p app '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p core '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p core --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-xtask:
@@ -232,7 +232,7 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_xtask_package_args }}'
         run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_xtask_package_args), '' -p xtask '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_xtask_package_args), '' --workspace '')) }}'
         working-directory: xtask
         run: velnor-ci run -- cargo check -p xtask --locked
   required:

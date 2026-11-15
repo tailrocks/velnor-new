@@ -123,19 +123,19 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
         run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p app '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p core '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p core --locked
       - name: Check lib alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p lib '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p lib --locked
       - name: Check macros alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p macros '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p macros --locked
       - name: Check tool alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p tool '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p tool --locked
   rust-test-root:
     needs:
@@ -194,7 +194,9 @@ jobs:
         run: velnor-ci restored
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: 'velnor-ci run -- cargo-nextest nextest archive --workspace --locked --archive-file ''nextest-archive.tar.zst'''
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest archive $PACKAGE_ARGS --locked --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -329,7 +331,7 @@ jobs:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
         run: 'velnor-ci run -- cargo doc $PACKAGE_ARGS --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check lab alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_lab_package_args), '' -p lab '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_lab_package_args), '' --workspace '')) }}'
         working-directory: lab
         run: velnor-ci run -- cargo check -p lab --locked
   rust-test-lab:
@@ -393,7 +395,9 @@ jobs:
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        run: 'velnor-ci run -- cargo-nextest nextest archive --workspace --locked --archive-file ''nextest-archive.tar.zst'''
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_lab_package_args }}'
+        run: 'velnor-ci run -- cargo-nextest nextest archive $PACKAGE_ARGS --locked --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:

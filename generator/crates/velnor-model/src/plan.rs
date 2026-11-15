@@ -112,6 +112,7 @@ pub struct Gate {
     pub slug: RootSlug,
     pub need: GateNeed,
     pub from: PlanFrom,
+    pub package: Option<PackageName>,
 }
 
 impl Gate {
@@ -326,7 +327,9 @@ impl CargoCommand {
         match self {
             Self::NextestRun { .. } => &[GateNeed::TestFilter, GateNeed::PackageArgs],
             Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
-            Self::Clippy { .. } | Self::Doc => &[GateNeed::PackageArgs],
+            Self::Clippy { .. } | Self::Doc | Self::NextestArchive { .. } => {
+                &[GateNeed::PackageArgs]
+            }
             Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
             _ => &[],
         }

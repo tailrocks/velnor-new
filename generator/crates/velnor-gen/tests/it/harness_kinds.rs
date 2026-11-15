@@ -302,3 +302,57 @@ fn a_feature_forwarded_through_a_workspace_inherited_alias_enables_the_gated_har
     assert!(text.contains("--test=gated"), "{text}");
     Ok(())
 }
+
+#[test]
+fn the_per_package_steps_and_the_archive_build_follow_the_packages_the_plan_selected() -> TestResult
+{
+    let manifest = "[package]\nname = \"a\"\n[[test]]\nname = \"custom\"\nharness = false\n";
+    let a = package(
+        "a",
+        "a/Cargo.toml",
+        &[],
+        &[
+            ("a", TargetKind::Lib, true),
+            ("custom", TargetKind::Test, true),
+        ],
+    )?;
+    let b = package("b", "b/Cargo.toml", &[], &[("b", TargetKind::Lib, true)])?;
+    let config = "shape = \"groups\"\n";
+    let text = workflow(&repo(
+        vec![("Cargo.toml", vec![a, b])],
+        &[
+            ("mise.toml", NEXTEST_MISE),
+            ("a/Cargo.toml", manifest),
+            (CONFIG_PATH.as_str(), config),
+        ],
+    )?)?
+    .replace("''", "'");
+    let archive = text
+        .lines()
+        .find(|line| line.contains("nextest archive"))
+        .unwrap_or_default();
+    assert!(
+        archive.contains("archive $PACKAGE_ARGS --locked"),
+        "{archive}"
+    );
+    assert!(!archive.contains("--workspace"), "{archive}");
+    for (name, package) in [
+        ("Test a custom", "a"),
+        ("Check a alone", "a"),
+        ("Check b alone", "b"),
+    ] {
+        let marker = format!("name: {name}\n");
+        let block: String = text
+            .lines()
+            .skip_while(|line| !line.ends_with(marker.trim_end()))
+            .take_while(|line| !line.contains("run: "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let selected = format!(
+            "contains(format(' {{0}} ', needs.rust-plan.outputs.rust_root_package_args), ' -p {package} ')"
+        );
+        assert!(block.contains(&selected), "{name}: {block}");
+        assert!(block.contains("' --workspace '"), "{name}: {block}");
+    }
+    Ok(())
+}
