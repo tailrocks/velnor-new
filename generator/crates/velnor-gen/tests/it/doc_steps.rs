@@ -59,7 +59,7 @@ const TEXT_TARGET: &str = "a/src/lib.txt";
 
 const FENCED: &str = "/// Adds.\n///\n/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
 
-const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 39] = [
+const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 42] = [
     ("fenced line doc", Kind::Doctested, FENCED, false, RUN, RUN),
     (
         "fenced inner doc",
@@ -338,6 +338,30 @@ const CASES: [(&str, Kind, &str, bool, StepNeed, StepNeed); 39] = [
         "a variable named path and a cfg naming a docs-only flag",
         Kind::Doctested,
         "fn f() {\n    let path = 1;\n    let doc = 2;\n}\n#[cfg(docsrs)]\nfn g() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "a raw string holding a quote",
+        Kind::Doctested,
+        "const B: &str = r#\"x \" y\"#;\n/// Adds.\nfn g() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "a char literal holding a quote",
+        Kind::Doctested,
+        "const Q: char = '\"';\n/// Adds.\nfn g() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
+    (
+        "inner doc whose text starts with a slash",
+        Kind::Doctested,
+        "//!/ x\n",
         false,
         NO_FENCE,
         RUN,
