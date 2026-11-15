@@ -10,6 +10,7 @@ use crate::event::PullRequest;
 use crate::github::{ApiPullFile, GitHub, Repo, contents_path, parse, pull_files_path};
 
 pub const FILE_LIST_CAP: usize = 3_000;
+pub const BASE_READ_CAP: usize = 64;
 const PAGE_SIZE: usize = 100;
 const MAX_PAGES: u32 = 30;
 
@@ -50,6 +51,7 @@ pub fn base_files(
 ) -> BTreeMap<RepoPath, String> {
     wanted
         .iter()
+        .take(BASE_READ_CAP)
         .filter_map(|path| {
             let text = github
                 .get_raw(&contents_path(repo, path.as_str(), &pull.base))

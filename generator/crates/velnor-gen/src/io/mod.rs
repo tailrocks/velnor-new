@@ -14,7 +14,8 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, MetadataFileError, manifests, metadata_roots,
+    DetectError, LOCK_PATH, LockError, MetadataError, MetadataFileError, commit_url, manifests,
+    metadata_roots,
     pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
@@ -164,19 +165,14 @@ fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     let version = release_version(version).map_err(Error::Lock)?;
     require_compatible(&version).map_err(Error::Generate)?;
     let root = toplevel(root)?;
-    let url = sums_url(&version);
-    let sums = program(
-        &root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new(&url),
-        ],
-    )?;
-    let lock = pin_lock(version.as_str(), &String::from_utf8_lossy(&sums)).map_err(Error::Lock)?;
+    let sums = download(&root, &sums_url(&version))?;
+    let commit = download(&root, &commit_url(&version))?;
+    let lock = pin_lock(
+        version.as_str(),
+        &String::from_utf8_lossy(&commit),
+        &String::from_utf8_lossy(&sums),
+    )
+    .map_err(Error::Lock)?;
     write_lock(&root, &lock)?;
     program(
         &root,
@@ -190,6 +186,20 @@ fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     Ok(format!(
         "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH} and staged it"
     ))
+}
+
+fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
+    program(
+        root,
+        "curl",
+        &[
+            OsStr::new("--fail"),
+            OsStr::new("--silent"),
+            OsStr::new("--show-error"),
+            OsStr::new("--location"),
+            OsStr::new(url),
+        ],
+    )
 }
 
 pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
