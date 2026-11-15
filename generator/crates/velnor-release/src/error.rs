@@ -105,6 +105,10 @@ pub enum ReleaseError {
         tool: String,
         field: String,
     },
+    MiseRedirectsInstall {
+        file: String,
+        key: String,
+    },
 }
 
 fn subject(package: Option<&String>) -> String {
@@ -256,6 +260,10 @@ impl ReleaseError {
             Self::ReleasePlzToolOverride { tool, field } => write!(
                 f,
                 "mise.toml: the release-plz tool {tool} sets {field}, which can point mise at repository code or run a script while the release App token is in scope; give it only a version"
+            ),
+            Self::MiseRedirectsInstall { file, key } => write!(
+                f,
+                "{file}: {key} can redirect where mise downloads release-plz from, so the downloaded program runs with the release App token in scope; remove it"
             ),
             _ => Ok(()),
         }

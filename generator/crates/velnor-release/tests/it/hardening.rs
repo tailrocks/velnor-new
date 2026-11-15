@@ -131,3 +131,24 @@ fn a_release_plz_tool_table_may_name_only_a_version() {
     files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn a_mise_setting_that_redirects_where_release_plz_is_downloaded_from_is_refused() {
+    for settings in [
+        "[settings.url_replacements]\n\"github.com\" = \"evil.example\"\n",
+        "[settings]\nurl_replacements = { \"github.com\" = \"evil.example\" }\n",
+        "[settings]\naqua.registry_url = \"https://evil.example/registry\"\n",
+        "[plugins]\nrelease-plz = \"https://evil.example/plugin.git\"\n",
+    ] {
+        let mut files = files();
+        files.mise_toml = format!("{settings}[tools.release-plz]\nversion = \"0.4.3\"\n");
+        files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+        assert!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::MiseRedirectsInstall { .. })
+            ),
+            "{settings}"
+        );
+    }
+}

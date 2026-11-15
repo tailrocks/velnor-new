@@ -65,6 +65,16 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
+fn redirecting_key(table: &Table) -> Option<&'static str> {
+    if table.contains_key("plugins") {
+        return Some("plugins");
+    }
+    let settings = table.get("settings").and_then(toml::Value::as_table)?;
+    ["url_replacements", "registry_url", "aqua"]
+        .into_iter()
+        .find(|key| settings.contains_key(*key))
+}
+
 pub(crate) fn check(
     mise_toml: &str,
     dot_mise_toml: Option<&str>,
@@ -75,6 +85,18 @@ pub(crate) fn check(
         .map(|text| parse(".mise.toml", text))
         .transpose()?;
     let mise_lock = parse("mise.lock", mise_lock)?;
+    let files = [
+        ("mise.toml", Some(&mise_toml)),
+        (".mise.toml", dot_mise_toml.as_ref()),
+    ];
+    for (file, table) in files {
+        if let Some(key) = table.and_then(redirecting_key) {
+            return Err(ReleaseError::MiseRedirectsInstall {
+                file: file.to_owned(),
+                key: key.to_owned(),
+            });
+        }
+    }
     let mut configured = BTreeMap::new();
     for table in std::iter::once(&mise_toml).chain(&dot_mise_toml) {
         configured.extend(release_plz_tools(table));
