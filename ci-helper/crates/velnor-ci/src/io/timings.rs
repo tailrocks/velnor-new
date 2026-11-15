@@ -11,7 +11,7 @@ use super::{api_url, current_dir, http, token};
 use crate::cli::TimingsArgs;
 use crate::error::CiError;
 use crate::github::Repo;
-use crate::timings::gather;
+use crate::timings::{TimingsReport, gather};
 
 pub(super) fn run_timings(args: &TimingsArgs) -> Result<String, CiError> {
     let token = token()?;
@@ -25,11 +25,15 @@ pub(super) fn run_timings(args: &TimingsArgs) -> Result<String, CiError> {
         .map(|root| root.manifest.clone())
         .collect();
     let report = gather(&http::HttpGitHub::new(api_url(), token), &repo, &roots)?;
+    write_report(&checkout.root, report)
+}
+
+pub fn write_report(root: &Path, report: TimingsReport) -> Result<String, CiError> {
     let mut lines = report.notes;
     if report.timings.is_empty() {
         lines.push(format!("{TIMINGS_PATH} was not written"));
     } else {
-        write_file(&checkout.root, &render_timings(&report.timings))?;
+        write_file(root, &render_timings(&report.timings))?;
         lines.push(format!(
             "wrote {TIMINGS_PATH} for {} Cargo roots",
             report.timings.len()

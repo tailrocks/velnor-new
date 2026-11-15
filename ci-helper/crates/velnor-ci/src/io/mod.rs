@@ -23,6 +23,7 @@ use velnor_rust::{
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BaseFile, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
     InputsCommand, PlanArgs, ReleaseCommand, ReleaseGateArgs,

@@ -8,7 +8,7 @@ use velnor_model::RepoPath;
 
 use crate::support::FakeGitHub;
 
-const LIST: &str = include_str!("data/timings/list.json");
+pub(crate) const LIST: &str = include_str!("data/timings/list.json");
 const REPO: &str = include_str!("data/timings/repo.json");
 
 const RUNS: [(u64, &str, &str); 3] = [
@@ -68,17 +68,17 @@ const LOGS: [(u64, &str); 9] = [
     ),
 ];
 
-fn lab() -> Repo {
+pub(crate) fn lab() -> Repo {
     Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn roots() -> Vec<RepoPath> {
+pub(crate) fn roots() -> Vec<RepoPath> {
     ["Cargo.toml", "lab/Cargo.toml"]
         .map(|path| RepoPath::new(path).unwrap_or_else(|e| unreachable!("{e}")))
         .to_vec()
 }
 
-fn recorded(list: &str) -> FakeGitHub {
+pub(crate) fn recorded(list: &str) -> FakeGitHub {
     let repo = lab();
     let mut fake = FakeGitHub::default();
     fake.respond(repo_path(&repo), REPO);
@@ -93,11 +93,11 @@ fn recorded(list: &str) -> FakeGitHub {
     fake
 }
 
-fn report(list: &str) -> TimingsReport {
+pub(crate) fn report(list: &str) -> TimingsReport {
     gather(&recorded(list), &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn median(mut values: Vec<f64>) -> u64 {
+pub(crate) fn median(mut values: Vec<f64>) -> u64 {
     values.sort_by(f64::total_cmp);
     let (low, high) = (values[(values.len() - 1) / 2], values[values.len() / 2]);
     let seconds = std::time::Duration::from_secs_f64(f64::midpoint(low, high).round());
