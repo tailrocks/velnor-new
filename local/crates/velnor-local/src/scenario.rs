@@ -341,6 +341,16 @@ pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {
 }
 
 #[must_use]
+pub const fn keeps_environment(
+    keep: bool,
+    interrupted: bool,
+    replay_failed: bool,
+    runs: usize,
+) -> bool {
+    keep && !interrupted && (!replay_failed || runs > 0)
+}
+
+#[must_use]
 pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64) -> String {
     let mut lines = vec![format!("Verdict of scenario {scenario}")];
     for outcome in outcomes {

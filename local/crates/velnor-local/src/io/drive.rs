@@ -17,7 +17,8 @@ use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
 use crate::scenario::{
-    Outcome, Scenario, Step, distinct, inside, overlapping, plan, summary, verdict,
+    Outcome, Scenario, Step, distinct, inside, keeps_environment, overlapping, plan, summary,
+    verdict,
 };
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
 
@@ -152,7 +153,7 @@ async fn run_one(
     let interrupted = replayed
         .as_ref()
         .is_err_and(|error| error.kind() == io::ErrorKind::Interrupted);
-    let kept = args.keep && !interrupted && !outcomes.is_empty();
+    let kept = keeps_environment(args.keep, interrupted, replayed.is_err(), outcomes.len());
     let stopped = if kept { Ok(()) } else { env.down().await };
     print!("{}", verdict(tag, &outcomes, up_at, up_seconds));
     if kept {

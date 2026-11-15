@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use velnor_local::authority::{AGENTS_PATH, RUNS_PATH};
 use velnor_local::io::Body;
 use velnor_local::io::authority::{Authority, Backend};
-use velnor_local::io::pair::Minted;
+use velnor_local::io::pair::{MintError, Minted};
 use velnor_local::side::Side;
 
 use crate::support::temp_dir;
@@ -28,11 +28,26 @@ pub(super) struct FakeRunners {
     pub(super) agents: Mutex<Vec<(Side, u64, String)>>,
     pub(super) down: Mutex<Vec<Side>>,
     pub(super) stubborn: bool,
+    pub(super) mint_fails: bool,
 }
 
 impl FakeRunners {
     pub(super) fn create(&self, side: Side, id: u64, event: &str, git_ref: &str, sha: &str) {
-        let run = json!({"id": id, "fileName": ".github/workflows/ci.yml", "eventName": event, "ref": git_ref, "sha": sha});
+        self.create_file(side, id, "ci.yml", event, git_ref, sha);
+    }
+
+    pub(super) fn create_file(
+        &self,
+        side: Side,
+        id: u64,
+        file: &str,
+        event: &str,
+        git_ref: &str,
+        sha: &str,
+    ) {
+        let name = format!(".github/workflows/{file}");
+        let run =
+            json!({"id": id, "fileName": name, "eventName": event, "ref": git_ref, "sha": sha});
         let job = json!({"requestId": id, "jobId": "j", "name": "ci", "workflowIdentifier": "ci",
             "workflowname": "ci", "attempt": 1, "runid": id});
         let mut runs = self.runs.lock().unwrap_or_else(|e| unreachable!("{e}"));
@@ -105,7 +120,13 @@ impl Backend for &FakeRunners {
         std::future::ready(Ok(()))
     }
 
-    fn mint(&self, side: Side) -> impl Future<Output = io::Result<Option<Minted>>> + Send {
+    fn mint(&self, side: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+        if self.mint_fails {
+            return std::future::ready(Err(MintError {
+                name: "velnor-x-jit-1".to_owned(),
+                source: io::Error::other("the registration output was truncated"),
+            }));
+        }
         let down = self
             .down
             .lock()
