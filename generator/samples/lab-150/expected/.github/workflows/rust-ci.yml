@@ -35,7 +35,7 @@ jobs:
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: velnor-ci plan
         id: plan
-        run: velnor-ci plan
+        run: velnor-ci plan --explain
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
     needs:

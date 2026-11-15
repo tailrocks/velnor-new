@@ -41,6 +41,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .rust_roots
         .iter()
         .map(|root| {
+            if matches!(selections.get(&root.manifest), Some(RustSelection::None)) {
+                return Ok((
+                    root.manifest.clone(),
+                    optional_steps(root, &BTreeMap::new(), true),
+                ));
+            }
             let steps = match root_sources(&facts, root, &checkout.view.tracked_paths) {
                 None => optional_steps(root, &BTreeMap::new(), true),
                 Some(paths) => match read_sources(&checkout.root, &paths) {

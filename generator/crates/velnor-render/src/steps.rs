@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind,
-};
+use velnor_model::{CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind};
 
 use crate::gate::{PLAN_STEP, condition, output};
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
@@ -91,7 +89,10 @@ fn step_body(kind: &StepKind) -> RenderedStep {
                 name: format!("velnor-ci {arguments}"),
                 id: id.map(str::to_owned),
                 env,
-                run: Some(format!("velnor-ci {arguments}")),
+                run: Some(match command {
+                    HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
+                    _ => format!("velnor-ci {arguments}"),
+                }),
                 ..RenderedStep::default()
             }
         }

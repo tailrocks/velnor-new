@@ -81,11 +81,15 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
 }
 
 fn doc_flags(repo: &Repo, event: Option<&str>) -> String {
+    doc_flags_of(repo, event, "rust-toolchain.toml")
+}
+
+fn doc_flags_of(repo: &Repo, event: Option<&str>, changed: &str) -> String {
     let outputs = repo.root().join("doc-flags");
     fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = plan_command(repo);
     command
-        .args(["plan", "--changed", "rust-toolchain.toml"])
+        .args(["plan", "--changed", changed])
         .env("GITHUB_OUTPUT", &outputs);
     if let Some(event) = event {
         command.env("GITHUB_EVENT_NAME", event);
@@ -190,6 +194,15 @@ fn plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs() {
     assert_eq!(
         doc_flags(&repo, None),
         "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+    );
+}
+
+#[test]
+fn plan_reads_no_source_of_a_root_that_selects_nothing() {
+    let repo = plan_repo("doc-flags-unselected");
+    assert_eq!(
+        doc_flags_of(&repo, None, "tools/src/main.rs"),
+        "rust_root_mode=none rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
 }
 
