@@ -14,6 +14,7 @@ pub enum DetectError {
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
     NextestRequired { path: RepoPath },
+    DenyRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
@@ -169,6 +170,10 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::DenyRequired { path } => write!(
+                f,
+                "deny.toml is tracked, so the generated policy job runs cargo-deny; pin it in {path}, for example \"aqua:EmbarkStudios/cargo-deny\" = \"<version>\""
             ),
             Self::SameSlug { first, second } => write!(
                 f,

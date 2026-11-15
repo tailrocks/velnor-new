@@ -92,7 +92,7 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
     })
 }
 
-const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
+pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if let Some((file, mise)) = toolchain_conflict(facts) {

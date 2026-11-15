@@ -12,6 +12,10 @@ pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c
 pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
+const NOT_DRAFT: &str = "${{ github.event.pull_request.draft != true }}";
+const NOT_CANCELLED_NOT_DRAFT: &str =
+    "${{ !cancelled() && github.event.pull_request.draft != true }}";
+const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -21,11 +25,19 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when),
+        condition: job_condition(job),
         runs_on: job.runs_on.as_str().to_owned(),
         timeout_minutes: job.timeout_minutes,
         steps: job.steps.iter().map(rendered_step).collect(),
         ..RenderedJob::default()
+    }
+}
+
+fn job_condition(job: &Job) -> Option<String> {
+    match (job.when, job.skip_on_draft) {
+        (when, false) => condition(when),
+        (When::Success, true) => Some(NOT_DRAFT.to_owned()),
+        (When::NotCancelled, true) => Some(NOT_CANCELLED_NOT_DRAFT.to_owned()),
     }
 }
 
@@ -90,6 +102,12 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::InstallHelper(release) => install_helper(release),
+        StepKind::FailOnDraftRun => RenderedStep {
+            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
+            condition: Some(IS_DRAFT.to_owned()),
+            run: Some("exit 1".to_owned()),
+            ..RenderedStep::default()
+        },
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),

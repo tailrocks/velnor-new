@@ -7,6 +7,7 @@ mod compile_inputs;
 mod detect;
 mod doc_steps;
 mod drift;
+mod events;
 mod facts;
 mod golden;
 mod harness;

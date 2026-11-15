@@ -12,11 +12,12 @@ pub use ids::{
 };
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
-    WorkflowPlan,
+    PermissionScope, Permissions, Platform, PullRequestType, Shape, ShapeDecision, Step, StepKind,
+    Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
+    PolicyTools,
     RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
     TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };

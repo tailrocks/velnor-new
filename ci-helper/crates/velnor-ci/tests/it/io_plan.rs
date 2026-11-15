@@ -67,7 +67,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=skip\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=skip\nrust_policy=run\n"
     );
 }
 
@@ -296,5 +296,67 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     assert_eq!(
         selected(&output),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
+    );
+}
+
+fn policy_output(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
+    let outputs = repo.root().join("policy");
+    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = plan_command(repo);
+    command
+        .args(["plan", "--changed"])
+        .args(changed)
+        .env("GITHUB_OUTPUT", &outputs);
+    if let Some(event) = event {
+        command.env("GITHUB_EVENT_NAME", event);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    fs::read_to_string(&outputs)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .lines()
+        .filter(|line| line.starts_with("rust_policy="))
+        .collect()
+}
+
+fn policy_case(name: &str, event: &str, changed: &str) -> String {
+    let repo = plan_repo(name);
+    policy_output(&repo, Some(event), &[changed])
+}
+
+#[test]
+fn plan_skips_the_policy_lane_for_a_pull_request_that_changes_only_sources() {
+    assert_eq!(
+        policy_case("policy-src", "pull_request", "b/src/lib.rs"),
+        "rust_policy=skip"
+    );
+}
+
+#[test]
+fn plan_runs_the_policy_lane_for_a_changed_lock_file() {
+    assert_eq!(
+        policy_case("policy-lock", "pull_request", "Cargo.lock"),
+        "rust_policy=run"
+    );
+}
+
+#[test]
+fn plan_runs_the_policy_lane_on_a_schedule() {
+    assert_eq!(
+        policy_case("policy-schedule", "schedule", "b/src/lib.rs"),
+        "rust_policy=run"
+    );
+}
+
+#[test]
+fn plan_skips_the_policy_lane_when_source_edits_only_select_most_packages() {
+    let repo = plan_repo("policy-most");
+    assert_eq!(
+        policy_output(
+            &repo,
+            Some("pull_request"),
+            &["a/src/lib.rs", "b/src/lib.rs"]
+        ),
+        "rust_policy=skip"
     );
 }
