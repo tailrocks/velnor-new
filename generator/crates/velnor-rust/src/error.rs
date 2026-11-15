@@ -60,6 +60,7 @@ pub enum Reason {
     CargoEnv(String),
     UndeclaredTarget(String),
     UnpinnedTool(&'static str),
+    HelperBox(RepoPath),
 }
 
 impl DetectError {
@@ -128,6 +129,10 @@ impl fmt::Display for Reason {
             Self::MiseOverridesFlags(name) => write!(
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::HelperBox(path) => write!(
+                f,
+                "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
             Self::UndeclaredTarget(target) => write!(
                 f,

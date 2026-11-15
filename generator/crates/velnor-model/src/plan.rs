@@ -177,6 +177,8 @@ pub enum StepKind {
     Helper(HelperCommand),
     GeneratorCheck,
     InstallHelper(HelperRelease),
+    HelperFromArtifact,
+    PublishHelper { binary: RepoPath },
     FailWhenANeedFailed,
     FailOnDraftRun,
 }
@@ -270,6 +272,9 @@ pub enum CargoCommand {
         extra: Vec<String>,
     },
     CheckAlone {
+        package: PackageName,
+    },
+    Build {
         package: PackageName,
     },
     NextestRun {

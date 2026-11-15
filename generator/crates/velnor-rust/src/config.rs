@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 13] = [
+const KEYS: [&str; 14] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -26,6 +26,7 @@ const KEYS: [&str; 13] = [
     "skip_draft_pull_requests",
     "on_main",
     "full_run",
+    "helper",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -48,6 +49,13 @@ struct RawConfig {
     skip_draft_pull_requests: Option<bool>,
     on_main: Option<String>,
     full_run: Option<String>,
+    helper: Option<RawHelper>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHelper {
+    path: String,
 }
 
 #[derive(Deserialize)]
@@ -107,6 +115,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         None => defaults.full_run,
         Some(value) => full_run(value).map_err(invalid)?,
     };
+    let helper = raw
+        .helper
+        .map(|helper| helper_path(helper.path))
+        .transpose()
+        .map_err(invalid)?;
     Ok(RustCiConfig {
         nextest_harnesses,
         default_branch,
@@ -115,6 +128,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .unwrap_or(defaults.skip_draft_pull_requests),
         on_main,
         full_run,
+        helper,
         shape,
         required_check,
         non_inputs,
@@ -165,6 +179,13 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
             key: "runner",
             value: label,
         })
+}
+
+fn helper_path(path: String) -> Result<RepoPath, Reason> {
+    RepoPath::new(path.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
+        key: "helper.path",
+        value: path,
+    })
 }
 
 fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {

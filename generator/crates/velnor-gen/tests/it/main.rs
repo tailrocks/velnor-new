@@ -13,6 +13,7 @@ mod facts;
 mod golden;
 mod harness;
 mod harness_kinds;
+mod helper_source;
 mod inputs;
 mod io;
 mod io_manifests;

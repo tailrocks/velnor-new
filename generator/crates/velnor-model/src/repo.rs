@@ -224,6 +224,7 @@ pub struct RustCiConfig {
     pub skip_draft_pull_requests: bool,
     pub on_main: OnMain,
     pub full_run: FullRun,
+    pub helper: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +264,7 @@ impl Default for RustCiConfig {
             skip_draft_pull_requests: false,
             on_main: OnMain::Affected,
             full_run: FullRun::Nightly,
+            helper: None,
         }
     }
 }
