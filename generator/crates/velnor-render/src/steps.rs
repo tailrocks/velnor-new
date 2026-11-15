@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, FilterRef, GateNeed, HelperCommand, HelperRelease, Job, LINT_STEP,
-    RepoPath, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, TargetKind, TargetName,
+    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    TESTS_RUN_OUTPUT,
 };
 
 use crate::cache::{path_text, render_key};
+use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{PLAN_STEP, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
@@ -15,8 +16,8 @@ use crate::rules::{
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 const RESTORED_STEP: &str = "restored";
-const RUN: &str = "velnor-ci run --";
-const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
+pub(crate) const RUN: &str = "velnor-ci run --";
+pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
@@ -25,7 +26,7 @@ const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const HELPER_ARTIFACT: &str = "velnor-ci";
 const ARCHIVE_RETENTION_DAYS: u64 = 7;
-const TEST_STEP_ID: &str = "test";
+pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -230,154 +231,6 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         with,
         ..RenderedStep::default()
     }
-}
-
-fn cargo_step(command: &CargoCommand) -> RenderedStep {
-    let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
-        CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
-        CargoCommand::Clippy { extra } => (
-            LINT_STEP.into(),
-            ["cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings"]
-                .into_iter()
-                .chain(extra.iter().map(String::as_str))
-                .collect::<Vec<_>>()
-                .join(" "),
-            vec![],
-        ),
-        CargoCommand::NextestRun { filter } => nextest_run("$PACKAGE_ARGS --locked", filter),
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
-            &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
-                file.as_str().replace('\'', "'\\''")
-            ),
-            filter,
-        ),
-        CargoCommand::NextestArchive { file } => (
-            "Build the tests".into(),
-            format!(
-                "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
-                file.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
-        CargoCommand::TestTarget {
-            package,
-            target,
-            kind,
-            features,
-        } => (
-            format!("Test {package} {target}"),
-            format!(
-                "cargo test -p {package} --locked {}{}",
-                test_selector(*kind, target),
-                feature_flag(features)
-            ),
-            vec![],
-        ),
-        CargoCommand::Doctest => (
-            "Doctests".into(),
-            "cargo test --doc $PACKAGE_ARGS --locked".into(),
-            vec![],
-        ),
-        CargoCommand::Doc => (
-            "Documentation".into(),
-            "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
-                .into(),
-            vec![],
-        ),
-        CargoCommand::CheckAlone { package } => (
-            format!("Check {package} alone"),
-            format!("cargo check -p {package} --locked"),
-            vec![],
-        ),
-        CargoCommand::Build { package } => (
-            format!("Build {package}"),
-            format!("cargo build -p {package} --locked"),
-            vec![],
-        ),
-        CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
-    };
-    let prefix = if matches!(command, CargoCommand::Doctest) {
-        RUN_DOCTESTS
-    } else {
-        RUN
-    };
-    RenderedStep {
-        name,
-        id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
-        env,
-        run: Some(format!("{prefix} {run}")),
-        ..RenderedStep::default()
-    }
-}
-
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
-    (
-        TEST_STEP.into(),
-        format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
-            nextest_filter(filter)
-        ),
-        vec![],
-    )
-}
-
-fn nextest_filter(filter: &FilterRef) -> String {
-    match filter {
-        FilterRef::All => "$TEST_FILTER".to_owned(),
-        FilterRef::AllExcept(binaries) => binaries
-            .iter()
-            .fold("($TEST_FILTER)".to_owned(), |text, id| {
-                format!("{text} - binary_id(={id})")
-            }),
-    }
-}
-
-fn feature_flag(features: &[String]) -> String {
-    if features.is_empty() {
-        String::new()
-    } else {
-        format!(
-            " --features '{}'",
-            features.join(",").replace('\'', "'\\''")
-        )
-    }
-}
-
-fn test_selector(kind: TargetKind, target: &TargetName) -> String {
-    match kind {
-        TargetKind::Lib | TargetKind::ProcMacro => "--lib".to_owned(),
-        TargetKind::Bin => format!("--bin={target}"),
-        TargetKind::Bench => format!("--bench={target}"),
-        TargetKind::Example => format!("--example={target}"),
-        TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
-    }
-}
-
-fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
-    match manifest.parent() {
-        None => (
-            "Dependency policy".into(),
-            "cargo-deny check".into(),
-            vec![],
-        ),
-        Some(directory) => (
-            format!("Dependency policy ({directory})"),
-            format!(
-                "cargo-deny --manifest-path '{}' check",
-                manifest.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
-    }
-}
-
-fn reports_tests(command: &CargoCommand) -> bool {
-    matches!(
-        command,
-        CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. }
-    )
 }
 
 fn helper_arguments(command: HelperCommand) -> &'static str {

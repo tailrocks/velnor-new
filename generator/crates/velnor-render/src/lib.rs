@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cache;
+mod cargo;
+mod events;
 mod gate;
 mod header;
 mod release;
@@ -12,12 +14,10 @@ mod yaml;
 
 use std::collections::BTreeMap;
 
-use velnor_model::{
-    Access, Concurrency, PermissionScope, Permissions, PullRequestType, RepoPath, Triggers,
-    WORKFLOW_PATH, WorkflowPlan,
-};
+use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use crate::cache::{RenderedKey, render_key};
+use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS,
@@ -27,9 +27,6 @@ pub use crate::rules::{
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
-
-const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
-const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' }}";
 
 pub use crate::header::{Owner, VELNOR_GEN_MARKER, owner_of};
 pub const GENERATED_HEADER: &str =
@@ -67,68 +64,6 @@ pub fn render_workflow(
         WORKFLOW_PATH,
         format!("{GENERATED_HEADER}{}", emit(&workflow)),
     )]))
-}
-
-fn concurrency(concurrency: Concurrency) -> Yaml {
-    let (group, cancel) = match concurrency {
-        Concurrency::CancelOlderPullRequestRuns => (PULL_REQUEST_GROUP, CANCEL_PULL_REQUEST_RUNS),
-    };
-    Yaml::Map(vec![
-        entry("group", Yaml::Expr(group.to_owned())),
-        entry("cancel-in-progress", Yaml::Expr(cancel.to_owned())),
-    ])
-}
-
-fn branch_filter(branch: &str) -> String {
-    branch.chars().fold(String::new(), |mut out, c| {
-        if matches!(c, '+' | '!' | ']') {
-            out.push('\\');
-        }
-        out.push(c);
-        out
-    })
-}
-
-fn triggers(triggers: &Triggers) -> Yaml {
-    let mut items = Vec::new();
-    if !triggers.pull_request.is_empty() {
-        let types = triggers.pull_request.iter().map(|kind| {
-            text(match kind {
-                PullRequestType::Opened => "opened",
-                PullRequestType::Synchronize => "synchronize",
-                PullRequestType::Reopened => "reopened",
-                PullRequestType::ReadyForReview => "ready_for_review",
-                PullRequestType::Edited => "edited",
-                PullRequestType::ConvertedToDraft => "converted_to_draft",
-            })
-        });
-        items.push(entry(
-            "pull_request",
-            Yaml::Map(vec![entry("types", Yaml::Seq(types.collect()))]),
-        ));
-    }
-    if let Some(branch) = &triggers.push_branch {
-        items.push(entry(
-            "push",
-            Yaml::Map(vec![entry(
-                "branches",
-                Yaml::Seq(vec![text(&branch_filter(branch))]),
-            )]),
-        ));
-    }
-    if triggers.merge_group {
-        items.push(entry("merge_group", Yaml::Map(Vec::new())));
-    }
-    if let Some(cron) = &triggers.schedule {
-        items.push(entry(
-            "schedule",
-            Yaml::Seq(vec![Yaml::Map(vec![entry("cron", text(cron.as_str()))])]),
-        ));
-    }
-    if triggers.workflow_dispatch {
-        items.push(entry("workflow_dispatch", Yaml::Map(Vec::new())));
-    }
-    Yaml::Map(items)
 }
 
 pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {
