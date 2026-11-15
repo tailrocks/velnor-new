@@ -13,13 +13,13 @@ fn text(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn step<'a>(text: &'a str, name: &str) -> Vec<&'a str> {
-    let marker = format!("- name: {name}");
+    let marker = format!("name: {name}");
     let mut lines = text
         .lines()
         .skip_while(|line| !line.trim().ends_with(&marker));
     let first = lines.next().into_iter();
     first
-        .chain(lines.take_while(|line| !line.trim_start().starts_with("- name:")))
+        .chain(lines.take_while(|line| !line.trim_start().starts_with("- ")))
         .collect()
 }
 
