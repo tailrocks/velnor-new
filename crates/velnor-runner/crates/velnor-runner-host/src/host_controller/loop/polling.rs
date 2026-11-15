@@ -31,6 +31,9 @@ mod positive_offer;
 mod pre_jit;
 #[path = "polling/recovery.rs"]
 mod recovery;
+#[cfg(test)]
+#[path = "polling/restart_tests.rs"]
+mod restart_tests;
 #[path = "polling/successor.rs"]
 mod successor;
 

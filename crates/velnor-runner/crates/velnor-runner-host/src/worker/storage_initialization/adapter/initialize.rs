@@ -23,7 +23,7 @@ use super::super::{
         VerifiedStorageInitializerResult, VerifiedStorageInitializerStarted,
     },
 };
-use super::{InitializationPhase, bounded_by_deadline, create, recovery::recover_absent, start};
+use super::{InitializationPhase, bounded_by_deadline, create, recover_absent, start};
 
 struct InitializationContext<'a> {
     docker: &'a Docker,
