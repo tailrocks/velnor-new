@@ -7,6 +7,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::state_directory::create_private_dir_all;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StateWriteError {
     Failed,
@@ -130,12 +132,12 @@ pub(super) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StateWriteEr
 
 fn prepare_parent_directory(parent: &Path) -> Result<(), StateWriteError> {
     if parent.file_name() != Some(std::ffi::OsStr::new("connection-drain")) {
-        std::fs::create_dir_all(parent).map_err(|_| StateWriteError::Failed)?;
+        create_private_dir_all(parent).map_err(|_| StateWriteError::Failed)?;
         return Ok(());
     }
 
     let state = parent.parent().ok_or(StateWriteError::Failed)?;
-    std::fs::create_dir_all(state).map_err(|_| StateWriteError::Failed)?;
+    create_private_dir_all(state).map_err(|_| StateWriteError::Failed)?;
     let state_metadata = std::fs::symlink_metadata(state).map_err(|_| StateWriteError::Failed)?;
     if !state_metadata.is_dir()
         || state_metadata.file_type().is_symlink()
@@ -146,7 +148,7 @@ fn prepare_parent_directory(parent: &Path) -> Result<(), StateWriteError> {
     match std::fs::symlink_metadata(parent) {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            std::fs::create_dir(parent).map_err(|_| StateWriteError::Failed)?;
+            create_private_dir_all(parent).map_err(|_| StateWriteError::Failed)?;
         }
         Err(_) => return Err(StateWriteError::Failed),
     }
@@ -208,5 +210,55 @@ pub(super) fn report_marker_write_error(error: StateWriteError) {
     match error {
         StateWriteError::Failed => eprintln!("Drain request failed."),
         StateWriteError::Uncertain => eprintln!("Drain state is uncertain."),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::atomic_write;
+
+    fn mode(path: &Path) -> std::io::Result<u32> {
+        Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
+    }
+
+    fn missing_state_under_existing_parent(
+        root: &Path,
+    ) -> std::io::Result<(std::path::PathBuf, std::path::PathBuf)> {
+        let parent = root.join("parent");
+        std::fs::create_dir(&parent)?;
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755))?;
+        Ok((parent.clone(), parent.join("state")))
+    }
+
+    #[test]
+    fn drain_marker_creates_a_missing_state_folder_private_and_keeps_its_parent_mode()
+    -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let (parent, state) = missing_state_under_existing_parent(&root)?;
+        let written = atomic_write(&state.join("drain"), b"token");
+        assert!(written.is_ok());
+        assert_eq!(mode(&state)?, 0o700);
+        assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
+    }
+
+    #[test]
+    fn connection_drain_proof_creates_a_missing_state_folder_private_and_keeps_its_parent_mode()
+    -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let (parent, state) = missing_state_under_existing_parent(&root)?;
+        let written = atomic_write(
+            &state.join("connection-drain").join("connection~drained"),
+            b"token",
+        );
+        assert!(written.is_ok());
+        assert_eq!(mode(&state)?, 0o700);
+        assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
     }
 }

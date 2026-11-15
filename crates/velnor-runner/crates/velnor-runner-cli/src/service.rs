@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use crate::args::ServiceAction;
+use crate::state_directory::create_private_dir_all;
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
 use quarantine::{open_expected_file, uninstall_after_stop};
@@ -30,14 +31,14 @@ struct InstalledPlist {
 pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
         ServiceAction::Install => install(state),
-        ServiceAction::Start => start(state),
+        ServiceAction::Start => start(state, &log_dir()),
         ServiceAction::Stop => stop(state),
         ServiceAction::Uninstall => uninstall(state),
     }
 }
 
-fn start(state: &Path) -> ExitCode {
-    if std::fs::create_dir_all(log_dir()).is_err() {
+fn start(state: &Path, logs: &Path) -> ExitCode {
+    if create_private_dir_all(logs).is_err() {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
@@ -136,4 +137,31 @@ fn bootout_argv(uid: u32) -> Vec<String> {
         "bootout".to_owned(),
         format!("gui/{uid}/{LABEL}"),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    use super::start;
+
+    fn mode(path: &Path) -> std::io::Result<u32> {
+        Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
+    }
+
+    #[test]
+    fn start_creates_a_missing_log_folder_private_and_keeps_its_parent_mode() -> std::io::Result<()>
+    {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let parent = root.join("parent");
+        std::fs::create_dir(&parent)?;
+        std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755))?;
+        let logs = parent.join("Logs").join("Velnor");
+        let _ = start(&root.join("state"), &logs);
+        assert_eq!(mode(&logs)?, 0o700);
+        assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
+    }
 }

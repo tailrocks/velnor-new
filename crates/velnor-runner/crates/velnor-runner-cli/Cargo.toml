@@ -20,6 +20,9 @@ rustix = { workspace = true }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner-host" }
 
+[dev-dependencies]
+tempfile = { version = "=3.27.0" }
+
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 security-framework = { version = "=3.7.0" }
 
@@ -27,7 +30,6 @@ security-framework = { version = "=3.7.0" }
 doctest = false
 name = "velnor_runner_cli"
 path = "src/lib.rs"
-test = false
 
 [[bin]]
 name = "velnor-host"
