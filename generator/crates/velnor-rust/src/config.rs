@@ -69,18 +69,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         }));
     }
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
-    let shape = match raw.shape.as_deref() {
-        None | Some("auto") => None,
-        Some("one-job") => Some(Shape::OneJob),
-        Some("lint-test") => Some(Shape::LintAndTest),
-        Some("groups") => Some(Shape::BuildThenGroups),
-        Some(other) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "shape",
-                value: other.to_owned(),
-            }));
-        }
-    };
+    let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check = match raw.required_check {
         None => defaults.required_check,
         Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
@@ -128,6 +117,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
+    match configured {
+        None | Some("auto") => Ok(None),
+        Some("one-job") => Ok(Some(Shape::OneJob)),
+        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
+        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "shape",
+            value: other.to_owned(),
+        }),
+    }
 }
 
 fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {

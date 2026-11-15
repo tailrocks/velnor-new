@@ -110,9 +110,10 @@ fn string_expression(text: &str) -> String {
     if !run.is_empty() {
         arguments.push(quoted(&run));
     }
-    let slots: String = (0..arguments.len())
+    let slots = (0..arguments.len())
         .map(|index| format!("{{{index}}}"))
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     format!("format('{slots}', {})", arguments.join(", "))
 }
 

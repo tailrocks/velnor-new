@@ -202,6 +202,8 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
     Ok(())
 }
 
+type Mutation = (&'static str, fn(&mut CompatInputs));
+
 fn inputs() -> CompatInputs {
     CompatInputs {
         rustc_verbose: "rustc 1.99.1\nhost: aarch64-apple-darwin\n".to_owned(),
@@ -218,19 +220,19 @@ fn changing_any_compat_input_changes_the_digest() {
     let base = compat(&inputs());
     assert_eq!(base, compat(&inputs()));
     assert_eq!(base.len(), 16);
-    let mutations: [(&str, fn(&mut CompatInputs)); 9] = [
+    let mutations: [Mutation; 9] = [
         ("rustc", |i| i.rustc_verbose.push_str("release: 1.99.2\n")),
         ("target", |i| {
-            i.target = Some("x86_64-unknown-linux-gnu".to_owned())
+            i.target = Some("x86_64-unknown-linux-gnu".to_owned());
         }),
         ("debuginfo full", |i| {
-            i.profile = build_profile(CiDebugInfo::Full)
+            i.profile = build_profile(CiDebugInfo::Full);
         }),
         ("debuginfo none", |i| {
-            i.profile = build_profile(CiDebugInfo::None)
+            i.profile = build_profile(CiDebugInfo::None);
         }),
         ("rustflags", |i| {
-            i.rustflags = "-C target-cpu=native".to_owned()
+            i.rustflags = "-C target-cpu=native".to_owned();
         }),
         ("workspace", |i| i.workspace = "/work".to_owned()),
         ("driver", |i| i.driver = "mbx".to_owned()),

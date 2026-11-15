@@ -221,8 +221,12 @@ fn prepares_in_a_row_and_at_once_leave_one_override() {
     assert_eq!(second.velnor_config, first.velnor_config);
     assert_eq!(effective_text(&dir).matches(DEBUG_NONE).count(), 1);
     std::thread::scope(|scope| {
-        for _ in 0..8 {
-            scope.spawn(|| prepare_in(&dir, &setup));
+        let runs: Vec<_> = (0..8)
+            .map(|_| scope.spawn(|| prepare_in(&dir, &setup)))
+            .collect();
+        for run in runs {
+            let run = run.join().unwrap_or_else(|_| unreachable!("prepare panicked"));
+            assert!(run.output.status.success(), "{:?}", run.output.stderr);
         }
     });
     assert_eq!(effective_text(&dir).matches(DEBUG_NONE).count(), 1);

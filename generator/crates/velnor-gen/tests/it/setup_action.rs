@@ -132,7 +132,7 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
     let script = install_script(&action);
-    assert!(!script.is_empty());
+    assert_ne!(script, "");
     assert!(
         !script.contains("${{"),
         "inputs must reach the script through env"

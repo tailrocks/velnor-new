@@ -20,12 +20,13 @@ pub struct CompatInputs {
 
 #[must_use]
 pub fn compat(inputs: &CompatInputs) -> String {
-    let profile_env: String = inputs
+    let profile_env = inputs
         .profile
         .env
         .iter()
         .map(|(name, value)| format!("{name}={value}\n"))
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     let schema = COMPAT_SCHEMA.to_string();
     let fields = [
         ("schema", schema.as_str()),
@@ -37,9 +38,10 @@ pub fn compat(inputs: &CompatInputs) -> String {
         ("workspace", &inputs.workspace),
         ("driver", &inputs.driver),
     ];
-    let canonical: String = fields
+    let canonical = fields
         .iter()
         .map(|(name, value)| format!("{name}:{}:{value}\n", value.len()))
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     sha256_hex(canonical.as_bytes())[..COMPAT_LENGTH].to_owned()
 }
