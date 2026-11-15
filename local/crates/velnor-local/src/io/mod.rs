@@ -7,6 +7,7 @@ mod drive;
 pub mod env;
 mod git;
 mod index_file;
+pub mod pair;
 mod proxy;
 mod reply;
 mod run;

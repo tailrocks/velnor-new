@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::event::{Push, Repository};
 use crate::scenario::Step;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum Side {
     Trusted,
     Untrusted,

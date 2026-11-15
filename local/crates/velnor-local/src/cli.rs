@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_cache_rules::REPOSITORY_LIMIT_BYTES;
 
+use crate::side::Side;
+
 #[derive(Debug, Parser)]
 #[command(name = "velnor-local", version, about = "The local GitHub environment")]
 pub struct Cli {
@@ -38,6 +40,37 @@ pub enum Command {
         about = "Compare the probe observations in the logs of a run with the probe results stored from GitHub"
     )]
     Conformance(ConformanceArgs),
+    #[command(
+        about = "Build the linux/arm64 runner, dind and probe images that pair mode runs, tagged velnor-local/pair-*"
+    )]
+    Build(BuildArgs),
+    #[command(
+        hide = true,
+        about = "Register a throwaway ephemeral runner at runner.server and write its configuration as a JIT file"
+    )]
+    Jit(JitArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BuildArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Repository root that holds images/ and .velnor/runner.lock"
+    )]
+    pub root: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct JitArgs {
+    #[arg(long, help = "State directory of the environment")]
+    pub dir: PathBuf,
+    #[arg(
+        long,
+        value_enum,
+        help = "Side whose runner.server registers the runner"
+    )]
+    pub side: Side,
 }
 
 #[derive(Debug, Args)]
