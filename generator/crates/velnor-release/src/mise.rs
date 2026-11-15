@@ -21,6 +21,26 @@ const APPROVED_KEYS: [&str; 5] = [
     "cargo:release-plz",
 ];
 
+fn plugin_for_release_plz(table: &Table) -> Option<&String> {
+    table
+        .get("plugins")
+        .and_then(toml::Value::as_table)
+        .and_then(|plugins| plugins.keys().find(|key| names_release_plz(key)))
+}
+
+fn locked_backend_approved(value: &toml::Value) -> bool {
+    let entries = match value {
+        toml::Value::Array(entries) => entries.iter().collect(),
+        other => vec![other],
+    };
+    entries.into_iter().all(|entry| {
+        entry
+            .get("backend")
+            .and_then(toml::Value::as_str)
+            .is_none_or(|backend| APPROVED_KEYS.contains(&backend))
+    })
+}
+
 fn approved(key: &str, value: &toml::Value) -> bool {
     APPROVED_KEYS.contains(&key)
         && value
@@ -86,6 +106,9 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
+    if let Some(key) = mise_tomls.iter().find_map(plugin_for_release_plz) {
+        return Err(ReleaseError::ReleasePlzSource { key: key.clone() });
+    }
     if let Some((key, _)) = configured.iter().find(|(key, value)| !approved(key, value)) {
         return Err(ReleaseError::ReleasePlzSource {
             key: (*key).clone(),
@@ -97,6 +120,11 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             continue;
         };
+        if !locked_backend_approved(entry) {
+            return Err(ReleaseError::ReleasePlzSource {
+                key: (*key).clone(),
+            });
+        }
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
         if !wanted.is_empty()

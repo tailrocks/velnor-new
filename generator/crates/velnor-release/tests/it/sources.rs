@@ -156,3 +156,26 @@ fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
     files.bin_targets = Some(BTreeSet::from([target("Cargo.toml", "rg")]));
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn a_plugin_for_release_plz_or_an_unapproved_locked_backend_is_refused() {
+    let plugin = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\n\"asdf:release-plz\" = \"https://example.com/evil\"\n";
+    let error = refusal(&with_mise(plugin));
+    assert!(
+        matches!(error, Some(ReleaseError::ReleasePlzSource { .. })),
+        "{error:?}"
+    );
+    let mut files = files();
+    files.mise_lock =
+        "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"asdf:release-plz\"\n".to_owned();
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzSource { .. })
+    ));
+    files.mise_lock =
+        "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"aqua:release-plz/release-plz\"\n"
+            .to_owned();
+    assert_eq!(refusal(&files), None);
+    let other = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\nbun = \"https://example.com/bun\"\n";
+    assert_eq!(refusal(&with_mise(other)), None);
+}
