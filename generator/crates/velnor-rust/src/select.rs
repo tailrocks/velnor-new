@@ -223,17 +223,20 @@ impl<'a> Graph<'a> {
             .filter(|(_, root)| contains(root.manifest.parent().as_ref(), path))
             .max_by_key(|(_, root)| depth(root.manifest.parent().as_ref()))
             .map(|(index, _)| index);
-        let package = self
+        let in_root = |node: &Node<'a>| root.is_some() && node.root == root;
+        let claimed = self
             .nodes
             .iter()
-            .filter(|(_, node)| {
-                root.is_some()
-                    && node.root == root
-                    && (claims(node.directory.as_ref(), node.whole, path)
-                        || node.sources.contains(&path))
-            })
+            .filter(|(_, node)| in_root(node) && claims(node.directory.as_ref(), node.whole, path))
             .max_by_key(|(_, node)| depth(node.directory.as_ref()))
             .map(|(manifest, _)| *manifest);
+        let sourced: Vec<&RepoPath> = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| in_root(node) && node.sources.contains(&path))
+            .map(|(manifest, _)| *manifest)
+            .collect();
+        let package: Vec<&RepoPath> = claimed.into_iter().chain(sourced).collect();
         let shared: Vec<&RepoPath> = self
             .nodes
             .iter()
@@ -245,8 +248,10 @@ impl<'a> Graph<'a> {
         for manifest in &shared {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
         }
-        if let Some(manifest) = package {
-            walk.seed(manifest, SelectionReason::Changed(path.clone()));
+        if !package.is_empty() {
+            for manifest in package {
+                walk.seed(manifest, SelectionReason::Changed(path.clone()));
+            }
             return;
         }
         if !shared.is_empty() {

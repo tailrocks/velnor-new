@@ -235,3 +235,13 @@ fn a_changed_mise_config_runs_cargo_deny_when_deny_is_enabled() {
         "rust_deny=run rust_machete=run "
     );
 }
+
+#[test]
+fn plan_runs_cargo_deny_when_the_change_deletes_its_policy() {
+    let repo = plan_repo("policy-deleted");
+    pin_machete(&repo);
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["deny.toml"]),
+        "rust_deny=run rust_machete=run "
+    );
+}

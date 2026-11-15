@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{
     AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob, PolicyTools,
     RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason,
-    ToolPins, UnownedPackage,
+    Target, TargetKind, ToolPins, UnownedPackage,
 };
 use velnor_rust::select;
 
@@ -336,4 +336,34 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
         ),
     ]);
     assert_selects(&facts, rows);
+}
+
+#[test]
+fn two_members_of_one_workspace_that_share_a_target_source_are_both_selected() {
+    let sharing = |package: &str, directory: &str| RustMember {
+        targets: vec![Target {
+            source: Some(path("shared/common.rs")),
+            ..crate::job_shape::target(TargetKind::Lib)
+        }],
+        ..member(package, directory, &[])
+    };
+    let facts = facts(vec![(
+        "Cargo.toml",
+        vec![
+            sharing("a", "a"),
+            sharing("b", "b"),
+            member("c", "c", &[]),
+            member("d", "d", &[]),
+        ],
+    )]);
+    assert_selects(
+        &facts,
+        vec![(
+            &["shared/common.rs"],
+            vec![some(&[
+                ("a", changed("shared/common.rs")),
+                ("b", changed("shared/common.rs")),
+            ])],
+        )],
+    );
 }

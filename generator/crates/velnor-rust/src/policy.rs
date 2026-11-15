@@ -44,7 +44,7 @@ pub fn policy_runs(
             || IGNORE_FILES.contains(&name)
     });
     PolicyRuns {
-        deny: tools.deny && (dependency || deny_only),
+        deny: (tools.deny || changed.contains(&DENY_CONFIG)) && (dependency || deny_only),
         machete: tools.machete && (dependency || unused_possible),
     }
 }
