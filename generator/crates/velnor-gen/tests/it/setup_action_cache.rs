@@ -25,7 +25,9 @@ fn a_sha256sum_without_gnu_long_options_still_verifies_the_download() -> TestRes
     let shims = shim(
         &install,
         "sha256sum",
-        &format!("#!/bin/sh\ncase \"$*\" in\n  *--*) echo \"sha256sum: unrecognized option\" >&2; exit 1 ;;\nesac\nexec {real} \"$@\"\n"),
+        &format!(
+            "#!/bin/sh\ncase \"$*\" in\n  *--*) echo \"sha256sum: unrecognized option\" >&2; exit 1 ;;\nesac\nexec {real} \"$@\"\n"
+        ),
     )?;
     let status = install.run(None, Some(&shims))?;
     let copy = install.installed();
