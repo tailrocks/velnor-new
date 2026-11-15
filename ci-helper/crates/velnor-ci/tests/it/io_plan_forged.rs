@@ -116,3 +116,34 @@ fn plan_explain_escapes_a_changed_path_that_carries_a_line_separator_and_a_comma
         assert!(text.chars().all(|c| c == '\n' || !c.is_control()), "{text}");
     }
 }
+
+#[test]
+fn plan_prints_a_setting_with_a_unicode_separator_or_a_legacy_prefix_as_no_command() {
+    let repo = plan_repo("forged-setting");
+    repo.write(
+        ".cargo/config.toml",
+        "[target.\"x\\u2028::error::FORGED\\u0085::error::FORGED2 ##[error]FORGED3\"]\nrunner = \"true\"\n",
+    );
+    for explain in [true, false] {
+        let mut command = plan_command(&repo);
+        command.arg("plan");
+        if explain {
+            command.arg("--explain");
+        }
+        let output = command
+            .args(["--changed", ".cargo/config.toml"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(text.contains("FORGED"), "{text}");
+        assert!(!text.contains("##["), "{text}");
+        let commands = text
+            .split([
+                '\n', '\r', '\u{2028}', '\u{2029}', '\u{85}', '\u{b}', '\u{c}',
+            ])
+            .filter(|line| line.trim().starts_with("::error"))
+            .count();
+        assert_eq!(commands, 0, "{text}");
+    }
+}
