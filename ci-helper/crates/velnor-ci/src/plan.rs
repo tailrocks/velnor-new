@@ -107,7 +107,11 @@ pub fn explain(
             }
             RustSelection::All(trigger) => (trigger.to_string(), None),
         };
-        lines.push(format!("{}: {header}\n", inert(root.as_str())));
+        lines.push(format!(
+            "{}: {}\n",
+            inert(root.as_str()),
+            escape(&header, false)
+        ));
         for (package, reason) in packages.into_iter().flatten() {
             lines.push(format!(
                 "  {} {}\n",
@@ -128,20 +132,25 @@ pub fn explain(
         }
     }
     for (manifest, cause) in unread {
+        let (manifest, cause) = (
+            escape(manifest.as_str(), false),
+            escape(&cause.to_string(), false),
+        );
         lines.push(format!(
             "unread package: {manifest}\n  {cause}, so Velnor cannot follow its dependencies and a change to any package selects every package that depends on it\n"
         ));
     }
     for path in unknown {
+        let shown = escape(path.as_str(), false);
         if path.as_str().contains('*') {
             lines.push(format!(
-                "unknown path: {path}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                "unknown path: {shown}\n  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
             ));
             continue;
         }
-        let quoted = toml_string(path.as_str());
+        let quoted = toml_string(&shown);
         lines.push(format!(
-            "unknown path: {path}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    {quoted},\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = {quoted}\n    packages = [\"<package>\"]\n"
+            "unknown path: {shown}\n  to select nothing, add this line to non_inputs in {CONFIG_PATH}:\n    {quoted},\n  to select packages, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = {quoted}\n    packages = [\"<package>\"]\n"
         ));
     }
     lines.concat()
