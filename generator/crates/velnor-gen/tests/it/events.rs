@@ -52,7 +52,7 @@ fn unquoted(text: &str) -> String {
 
 #[test]
 fn the_workflow_starts_on_the_four_events_and_cancels_only_older_pull_request_runs() -> TestResult {
-    let text = unquoted(&with(&[], None)?);
+    let text = unquoted(&with(&[], Some(b"full_run = \"off\"\n"))?);
     assert!(text.contains(&unquoted(EVENTS)), "{text}");
     Ok(())
 }
