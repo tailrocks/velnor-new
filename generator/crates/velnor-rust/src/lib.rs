@@ -13,6 +13,7 @@ mod lock_affected;
 mod manifest_diff;
 mod metadata;
 mod mise;
+mod os_pins;
 mod owners;
 mod plan;
 mod policy;

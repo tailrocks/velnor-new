@@ -13,6 +13,7 @@ use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIG, MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
@@ -119,17 +120,21 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         ));
     }
     let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !tools.tools.keys().any(|name| is_tool(name, "cargo-deny")) {
+    let pinned = |tool: &str| {
+        pinned_for_runner(
+            &view.files,
+            |name| is_tool(name, tool),
+            config.runner.as_str(),
+        )
+    };
+    if deny && !pinned("cargo-deny") {
         return Err(DetectError::DenyRequired {
             path: tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
         });
     }
     let policy = PolicyTools {
         deny,
-        machete: tools
-            .tools
-            .keys()
-            .any(|name| is_tool(name, "cargo-machete")),
+        machete: pinned("cargo-machete"),
     };
     Ok(RepoFacts {
         policy,
