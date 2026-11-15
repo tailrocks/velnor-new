@@ -152,7 +152,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         } => (
             format!("Test {package} {target}"),
             format!(
-                "cargo test --workspace --locked {}",
+                "cargo test -p {package} --locked {}",
                 test_selector(*kind, target)
             ),
             vec![],

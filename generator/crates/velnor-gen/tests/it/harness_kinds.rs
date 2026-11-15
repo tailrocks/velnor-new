@@ -118,7 +118,7 @@ fn a_proc_macro_library_with_a_custom_harness_runs_with_cargo_test_lib() -> Test
     )?;
     let text = workflow(&view(&[("a/Cargo.toml", manifest)], vec![a])?)?;
     assert!(
-        text.contains("cargo test --workspace --locked --lib"),
+        text.contains("cargo test -p a --locked --lib"),
         "{text}"
     );
     assert!(!text.contains("nextest"), "{text}");
