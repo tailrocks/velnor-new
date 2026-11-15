@@ -317,3 +317,17 @@ fn prepare_does_not_need_mise_when_no_tool_is_pinned() {
     assert!(run.output.status.success(), "{:?}", run.output);
     assert_eq!(run.outputs, "compat=\n");
 }
+
+#[test]
+fn prepare_still_verifies_the_declared_toolchain_when_no_tool_is_pinned() {
+    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
+    let run = prepare_with(
+        "empty-declared",
+        "[tools]\n",
+        "echo mise must not run >&2\nexit 1\n",
+        Some(&declared(file)),
+    );
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("component rust-docs"), "{stderr}");
+}
