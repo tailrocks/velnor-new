@@ -69,8 +69,8 @@ fn cargo_name(name: &str) -> bool {
     !name.starts_with('-')
         && !name.is_empty()
         && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
 }
 
 #[must_use]

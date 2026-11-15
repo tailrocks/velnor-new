@@ -149,7 +149,7 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
 
 #[test]
 fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_package_arguments() {
-    for bad in ["a;b", "a$(x)", "a`x`", "a${{x}}", "a b", "-x", "caf\u{e9}"] {
+    for bad in ["a;b", "a$(x)", "a`x`", "a${{x}}", "a b", "-x"] {
         let selected = BTreeMap::from([
             (name("a"), SelectionReason::Changed(path("a/src/lib.rs"))),
             (name(bad), SelectionReason::DependsOn(name("a"))),
@@ -162,4 +162,18 @@ fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_pack
             "{bad:?}: {written}"
         );
     }
+}
+
+#[test]
+fn a_unicode_package_name_cargo_accepts_stays_scoped_in_the_package_arguments() {
+    let selected = BTreeMap::from([(
+        name("f\u{f6}\u{f6}"),
+        SelectionReason::Changed(path("a/src/lib.rs")),
+    )]);
+    let selections = BTreeMap::from([(path("Cargo.toml"), RustSelection::Some(selected))]);
+    let written = outputs(&selections, &BTreeMap::new()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        written.contains("rust_root_package_args=-p f\u{f6}\u{f6}\n"),
+        "{written}"
+    );
 }
