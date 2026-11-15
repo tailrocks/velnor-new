@@ -288,13 +288,11 @@ fn forwards(signal: &str, code: i32) {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
-    let status = match status {
-        Some(status) => status,
-        None => {
-            killpg(Pid::from_raw(child.id() as i32), Signal::SIGKILL).ok();
-            child.wait().unwrap_or_else(|e| unreachable!("{e}"))
-        }
-    };
+    let status = status.unwrap_or_else(|| {
+        let pid = i32::try_from(child.id()).unwrap_or_else(|e| unreachable!("{e}"));
+        killpg(Pid::from_raw(pid), Signal::SIGKILL).ok();
+        child.wait().unwrap_or_else(|e| unreachable!("{e}"))
+    });
     assert_eq!(status.code(), Some(code));
     assert_eq!(
         lines.next().and_then(Result::ok).as_deref(),
