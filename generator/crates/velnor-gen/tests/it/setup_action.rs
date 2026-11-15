@@ -411,7 +411,12 @@ fn a_special_file_in_the_tool_cache_is_not_read_and_the_download_is_used() -> Te
     let entry = install.work.join("cache/velnor-ci/1.2.3/x64");
     fs::create_dir_all(&entry)?;
     let fifo = entry.join("velnor-ci");
-    assert!(Command::new("mkfifo").arg(&fifo).status()?.success());
+    assert!(
+        Command::new("/usr/bin/mkfifo")
+            .arg(&fifo)
+            .status()?
+            .success()
+    );
     fs::set_permissions(&fifo, fs::Permissions::from_mode(0o755))?;
     let status = install.run(Some(&install.work.join("cache")), None);
     let copy = install.installed();
