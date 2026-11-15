@@ -30,6 +30,7 @@ mod journal;
 mod journal_assignment;
 mod journal_identity;
 mod journal_schema;
+mod journal_show;
 mod journal_sql;
 mod keychain;
 mod launch;
@@ -76,6 +77,7 @@ pub use journal::pr_source_transition::{
     TransitionStage, UncertaintyReason,
 };
 pub use journal::{IntentState, Journal, Outcome};
+pub use journal_show::{ReservationRow, show_reservations};
 pub use keychain::{
     NormalizedSecret, SecretStore, import_secret, load_secret, read_secret, store_secret,
 };

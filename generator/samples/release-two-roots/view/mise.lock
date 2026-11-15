@@ -1,0 +1,6 @@
+lockfile_version = 3
+
+[[tools."aqua:release-plz/release-plz"]]
+version = "0.4.3"
+backend = "aqua:release-plz/release-plz"
+specifiers = ["0.4.3"]

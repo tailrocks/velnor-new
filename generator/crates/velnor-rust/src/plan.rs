@@ -1,23 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Job, JobId, PermissionScope, Permissions,
-    RepoFacts, RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers,
-    When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
+    PermissionScope, Permissions, PullRequestType, RepoFacts, RustRoot, Shape, ShapeDecision, Step,
+    StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
 const RUST_JOB: JobId = JobId::from_static("rust");
 const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
+const POLICY_JOB: JobId = JobId::from_static("policy");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
 #[must_use]
@@ -31,23 +33,45 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed)
         })
         .collect();
+    if facts.policy.any() {
+        jobs.push(policy_job(facts));
+    }
+    let draft_guard = facts
+        .config
+        .skip_draft_pull_requests
+        .then(|| step(StepKind::FailOnDraftRun));
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
+        skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::NotCancelled,
-        steps: vec![step(StepKind::FailWhenANeedFailed)],
+        steps: draft_guard
+            .into_iter()
+            .chain([step(StepKind::FailWhenANeedFailed)])
+            .collect(),
         ..job(facts, VERDICT_JOB)
     });
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
-            pull_request: true,
+            pull_request: PullRequestType::ALL
+                .into_iter()
+                .chain(
+                    facts
+                        .config
+                        .skip_draft_pull_requests
+                        .then_some(PullRequestType::ConvertedToDraft),
+                )
+                .collect(),
+            push_branch: Some(facts.config.default_branch.clone()),
+            merge_group: true,
             workflow_dispatch: true,
         },
-        concurrency: Concurrency {
-            cancel_in_progress: true,
-        },
-        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        concurrency: Concurrency::CancelOlderPullRequestRuns,
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Contents, Access::Read),
+            (PermissionScope::PullRequests, Access::Read),
+        ])),
         jobs,
     }
 }
@@ -77,16 +101,7 @@ fn root_jobs(
         CargoCommand::FmtCheck,
         CargoCommand::Clippy { extra: Vec::new() },
     ];
-    let nextest = root.members.iter().any(RustMember::has_test_target);
-    let mut test = Vec::new();
-    if nextest {
-        test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
-        });
-    }
-    if has_doctest_library(root) {
-        test.push(CargoCommand::Doctest);
-    }
+    let test = test_commands(facts, root);
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
@@ -114,6 +129,7 @@ fn root_jobs(
             ));
             let mut jobs = vec![Job {
                 comment,
+                skip_on_draft: false,
                 steps: lint_steps,
                 ..job(facts, id(LINT_JOB))
             }];
@@ -127,6 +143,68 @@ fn root_jobs(
             }
             jobs
         }
+    }
+}
+
+fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
+    let mut test = Vec::new();
+    if root
+        .members
+        .iter()
+        .any(|member| uses_nextest(&facts.config, member))
+    {
+        test.push(CargoCommand::NextestRun {
+            filter: nextest_filter(facts, root),
+        });
+    }
+    let mut seen = BTreeSet::new();
+    test.extend(root.members.iter().flat_map(|member| {
+        member
+            .custom_harnesses
+            .iter()
+            .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+            .filter(|harness| seen.insert((member.name.clone(), selector_id(harness))))
+            .map(|harness| CargoCommand::TestTarget {
+                package: member.name.clone(),
+                target: harness.name.clone(),
+                kind: harness.kind,
+                features: harness.required_features.clone(),
+            })
+            .collect::<Vec<_>>()
+    }));
+    if has_doctest_library(root) {
+        test.push(CargoCommand::Doctest);
+    }
+    test
+}
+
+fn nextest_filter(facts: &RepoFacts, root: &RustRoot) -> FilterRef {
+    let direct: Vec<String> = root
+        .members
+        .iter()
+        .flat_map(|member| {
+            member
+                .custom_harnesses
+                .iter()
+                .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+                .map(|harness| binary_id(&member.name, harness))
+        })
+        .collect();
+    if direct.is_empty() {
+        FilterRef::All
+    } else {
+        FilterRef::AllExcept(direct)
+    }
+}
+
+fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
+    let name = &harness.name;
+    match harness.kind {
+        TargetKind::Lib | TargetKind::ProcMacro => package.to_string(),
+        TargetKind::Bin => format!("{package}::bin/{name}"),
+        TargetKind::Example => format!("{package}::example/{name}"),
+        TargetKind::Bench => format!("{package}::bench/{name}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
     }
 }
 
@@ -168,17 +246,46 @@ fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
         .collect()
 }
 
-fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
+fn policy_job(facts: &RepoFacts) -> Job {
+    let commands = [
+        (facts.policy.deny, CargoCommand::Deny),
+        (facts.policy.machete, CargoCommand::Machete),
+    ];
+    let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
+    steps.extend(tools_steps(facts));
+    steps.extend(
+        commands
+            .into_iter()
+            .filter(|(wanted, _)| *wanted)
+            .map(|(_, command)| Step {
+                when: When::NotCancelled,
+                ..step(StepKind::Cargo(command))
+            }),
+    );
+    Job {
+        steps,
+        ..job(facts, POLICY_JOB)
+    }
+}
+
+fn base_steps(facts: &RepoFacts) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth: 1 })];
     steps.extend(
         facts
             .helper
             .iter()
-            .map(|release| step(StepKind::FetchHelper(release.clone()))),
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    if !facts.tools.tools.is_empty() {
-        steps.push(step(StepKind::InstallTools));
-    }
+    steps.extend(tools_steps(facts));
+    steps
+}
+
+fn tools_steps(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools))
+}
+
+fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool) -> Vec<Step> {
+    let mut steps = base_steps(facts);
     let declared = facts.toolchain.as_ref();
     if declared.is_some_and(|toolchain| toolchain.path.is_some()) {
         return steps;
@@ -215,6 +322,7 @@ fn job(facts: &RepoFacts, id: JobId) -> Job {
         comment: None,
         needs: Vec::new(),
         when: When::Success,
+        skip_on_draft: facts.config.skip_draft_pull_requests,
         runs_on: facts.config.runner.clone(),
         timeout_minutes: facts.config.timeout_minutes,
         steps: Vec::new(),

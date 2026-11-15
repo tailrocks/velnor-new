@@ -341,6 +341,16 @@ pub fn summary(results: &[(String, Result<(), String>)]) -> Result<(), String> {
 }
 
 #[must_use]
+pub const fn keeps_environment(
+    keep: bool,
+    interrupted: bool,
+    replay_failed: bool,
+    runs: usize,
+) -> bool {
+    keep && !interrupted && (!replay_failed || runs > 0)
+}
+
+#[must_use]
 pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64) -> String {
     let mut lines = vec![format!("Verdict of scenario {scenario}")];
     for outcome in outcomes {
@@ -357,6 +367,7 @@ pub fn verdict(scenario: &str, outcomes: &[Outcome], up_at: u64, up_seconds: f64
     ));
     lines.push("Executed: every step of every job above except actions/checkout, by GitHub's official runner in linux/arm64 containers.".to_owned());
     lines.push("Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.".to_owned());
+    lines.push(crate::authority::WARNING.to_owned());
     lines.iter().fold(String::new(), |mut text, line| {
         let _ = writeln!(text, "velnor-local {scenario}: {line}");
         text

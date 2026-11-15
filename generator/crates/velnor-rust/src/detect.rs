@@ -4,12 +4,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::toml_file::table;
-use velnor_model::{PackageName, RepoFacts, RepoPath, RepoView, RustCiConfig, RustRoot, Toolchain};
+use velnor_model::{
+    PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    RustCiConfig, RustRoot, Toolchain,
+};
 
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIG, MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::os_pins::pinned_for_runner;
+use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::select::root_slug;
@@ -23,6 +28,7 @@ const CARGO_MANIFEST: &str = "Cargo.toml";
 pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
+        RELEASE_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
@@ -34,7 +40,17 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
     .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_release_plz_config(path))
+            .cloned(),
+    )
     .collect()
+}
+
+fn is_release_plz_config(path: &RepoPath) -> bool {
+    path.as_str().rsplit('/').next() == Some(RELEASE_PLZ_FILE)
 }
 
 pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
@@ -77,6 +93,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownLockedPackage(package),
         ));
     }
+    check_nextest_harnesses(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -102,7 +119,9 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
+    let policy = policy_tools(view, config.runner.as_str(), &tools.configs)?;
     Ok(RepoFacts {
+        policy,
         timings,
         rust_roots,
         toolchain,
@@ -112,6 +131,28 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         compile_inputs,
         unowned,
     })
+}
+
+fn policy_tools(
+    view: &RepoView,
+    runner: &str,
+    configs: &[RepoPath],
+) -> Result<PolicyTools, DetectError> {
+    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
+    let deny = view.tracked_paths.contains(&DENY_CONFIG);
+    if deny && !pinned("cargo-deny") {
+        return Err(DetectError::DenyRequired {
+            path: configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
+    Ok(PolicyTools {
+        deny,
+        machete: pinned("cargo-machete"),
+    })
+}
+
+fn is_tool(name: &str, tool: &str) -> bool {
+    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
@@ -252,4 +293,32 @@ fn is_named(path: &RepoPath, name: &str) -> bool {
             .as_str()
             .strip_suffix(name)
             .is_some_and(|rest| rest.ends_with('/'))
+}
+
+fn check_nextest_harnesses(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    for (package, target) in &config.nextest_harnesses {
+        let declared: usize = rust_roots
+            .iter()
+            .flat_map(|root| &root.members)
+            .filter(|member| member.name == *package)
+            .map(|member| {
+                member
+                    .custom_harnesses
+                    .iter()
+                    .filter(|harness| harness.name == *target)
+                    .count()
+            })
+            .sum();
+        let entry = format!("{package}:{target}");
+        let reason = match declared {
+            0 => Reason::UnknownNextestHarness(entry),
+            1 => continue,
+            _ => Reason::AmbiguousNextestHarness(entry),
+        };
+        return Err(DetectError::invalid(&CONFIG_PATH, reason));
+    }
+    Ok(())
 }

@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod authority;
 pub mod cli;
 pub mod conformance;
 pub mod event;
+pub mod images;
 pub mod io;
+pub mod jit;
 pub mod protocol;
 pub mod rest;
 pub mod scenario;

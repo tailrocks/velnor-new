@@ -1,0 +1,4 @@
+after = ["CI"]
+
+[[binaries]]
+package = "app"

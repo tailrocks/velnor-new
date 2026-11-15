@@ -50,6 +50,9 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
         Command::Run(args) => drive::run(args).await,
         Command::Conformance(args) => conformance(args).await,
+        Command::Build(args) => super::pair::build(args).await,
+        Command::Jit(args) => super::pair::jit(args).await,
+        Command::Supervise(args) => super::supervisor::serve(args).await,
     }
 }
 
@@ -81,10 +84,19 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
     let env = Environment::at(&args.environment.dir, DockerCli).await?;
     let repo = fs::canonicalize(&args.repo).await?;
     let addresses = env.up(&repo, &args.environment).await?;
+    let authority = match super::supervisor::start(&env.dir).await {
+        Ok(authority) => authority,
+        Err(error) => {
+            let _ = env.down().await;
+            return Err(error);
+        }
+    };
+    println!("velnor-local: authority on {}", authority.address);
     println!(
         "velnor-local: {} is up, API stub at {}",
         env.name, addresses.stub_url
     );
+    println!("velnor-local: {}", crate::authority::WARNING);
     Ok(())
 }
 
@@ -192,6 +204,14 @@ where
 {
     let listener = TcpListener::bind(listen).await?;
     eprintln!("velnor-local {name} listening on {listen}");
+    accept(listener, handler).await
+}
+
+pub(super) async fn accept<H, F>(listener: TcpListener, handler: H) -> std::io::Result<()>
+where
+    H: Fn(Request<Body>) -> F + Clone + Send + 'static,
+    F: Future<Output = Response<Body>> + Send + 'static,
+{
     loop {
         let (stream, _) = listener.accept().await?;
         let handler = handler.clone();

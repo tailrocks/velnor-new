@@ -3,7 +3,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
-use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -14,53 +13,22 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    DetectError, LOCK_PATH, LockError, MetadataError, manifests, metadata_roots, pin_lock,
-    reduce_metadata, release_version, sums_url, wanted_files,
+    LOCK_PATH, commit_url, manifests, metadata_roots, pin_lock, reduce_metadata, release_version,
+    sums_url, wanted_files,
 };
 
+mod error;
 mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
+use crate::{Drift, check_tag, drift, expected_files, require_compatible};
+pub use error::Error;
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
+    write_sample,
 };
 use workflows::{ENGINE_CONFIG, workflow_paths};
-
-#[derive(Debug)]
-pub enum Error {
-    File(PathBuf, std::io::Error),
-    NotRegular(RepoPath),
-    Foreign(RepoPath),
-    Program(String, String),
-    Repository(String),
-    Metadata(MetadataError),
-    Detect(DetectError),
-    Generate(GenerateError),
-    Lock(LockError),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::File(path, error) => write!(f, "{}: {error}", path.display()),
-            Self::NotRegular(path) => write!(
-                f,
-                "{path} goes through a symbolic link or is not a regular file"
-            ),
-            Self::Foreign(path) => Drift::Foreign(path.clone()).fmt(f),
-            Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
-            Self::Repository(message) => f.write_str(message),
-            Self::Metadata(error) => error.fmt(f),
-            Self::Detect(error) => error.fmt(f),
-            Self::Generate(error) => error.fmt(f),
-            Self::Lock(error) => error.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[must_use]
 pub fn version_text() -> String {
@@ -157,19 +125,14 @@ fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     let version = release_version(version).map_err(Error::Lock)?;
     require_compatible(&version).map_err(Error::Generate)?;
     let root = toplevel(root)?;
-    let url = sums_url(&version);
-    let sums = program(
-        &root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new(&url),
-        ],
-    )?;
-    let lock = pin_lock(version.as_str(), &String::from_utf8_lossy(&sums)).map_err(Error::Lock)?;
+    let sums = download(&root, &sums_url(&version))?;
+    let commit = download(&root, &commit_url(&version))?;
+    let lock = pin_lock(
+        version.as_str(),
+        &String::from_utf8_lossy(&commit),
+        &String::from_utf8_lossy(&sums),
+    )
+    .map_err(Error::Lock)?;
     write_lock(&root, &lock)?;
     program(
         &root,
@@ -183,6 +146,20 @@ fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     Ok(format!(
         "pinned velnor-ci and velnor-gen {version} in {LOCK_PATH} and staged it"
     ))
+}
+
+fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
+    program(
+        root,
+        "curl",
+        &[
+            OsStr::new("--fail"),
+            OsStr::new("--silent"),
+            OsStr::new("--show-error"),
+            OsStr::new("--location"),
+            OsStr::new(url),
+        ],
+    )
 }
 
 pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
@@ -297,6 +274,14 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
+    view_of(root, tracked_paths, keep_metadata)
+}
+
+pub fn view_of(
+    root: &Path,
+    tracked_paths: BTreeSet<RepoPath>,
+    keep_metadata: bool,
+) -> Result<Recorded, Error> {
     let mut view = RepoView {
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
@@ -333,14 +318,18 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
-    for manifest in manifests(&view.tracked_paths) {
-        if let Ok(Some(file)) = regular_file(root, &manifest)
-            && let Ok(bytes) = fs::read(&file)
-        {
-            view.files.entry(manifest).or_insert(bytes);
-        }
-    }
+    add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))
+}
+
+pub fn add_manifests(
+    view: &mut RepoView,
+    read: impl FnOnce(&[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error>,
+) -> Result<(), Error> {
+    for (manifest, bytes) in read(&manifests(&view.tracked_paths))? {
+        view.files.entry(manifest).or_insert(bytes);
+    }
+    Ok(())
 }
 
 pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {

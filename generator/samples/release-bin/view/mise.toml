@@ -1,0 +1,4 @@
+[tools]
+rust = "1.99.1"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.151"
+"aqua:release-plz/release-plz" = "0.4.3"

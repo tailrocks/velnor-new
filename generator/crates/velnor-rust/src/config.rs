@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape};
+use velnor_model::{
+    InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
+};
 
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 8] = [
+const KEYS: [&str; 11] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -18,6 +20,9 @@ const KEYS: [&str; 8] = [
     "default_ignores",
     "shape",
     "required_check",
+    "nextest_harnesses",
+    "default_branch",
+    "skip_draft_pull_requests",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -34,6 +39,10 @@ struct RawConfig {
     default_ignores: Option<bool>,
     shape: Option<String>,
     required_check: Option<String>,
+    #[serde(default)]
+    nextest_harnesses: Vec<String>,
+    default_branch: Option<String>,
+    skip_draft_pull_requests: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -85,7 +94,15 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
+    let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
+    let default_branch =
+        default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     Ok(RustCiConfig {
+        nextest_harnesses,
+        default_branch,
+        skip_draft_pull_requests: raw
+            .skip_draft_pull_requests
+            .unwrap_or(defaults.skip_draft_pull_requests),
         shape,
         required_check,
         non_inputs,
@@ -114,6 +131,48 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             })
             .collect::<Result<_, _>>()?,
     })
+}
+
+fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let invalid = || Reason::InvalidValue {
+                key: "nextest_harnesses",
+                value: entry.clone(),
+            };
+            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
+            Ok((
+                PackageName::new(package).map_err(|_| invalid())?,
+                TargetName::new(target).map_err(|_| invalid())?,
+            ))
+        })
+        .collect()
+}
+
+fn default_branch(raw: Option<String>, default: String) -> Result<String, Reason> {
+    match raw {
+        None => Ok(default),
+        Some(name) if branch_name(&name) => Ok(name),
+        Some(name) => Err(Reason::InvalidValue {
+            key: "default_branch",
+            value: name,
+        }),
+    }
+}
+
+fn branch_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
+        && !name.starts_with(['/', '-'])
+        && !name.ends_with(['/', '.'])
+        && !name.contains("..")
+        && !name.contains("//")
+        && name.split('/').all(|part| {
+            !part.starts_with('.') && part.rsplit_once('.').is_none_or(|(_, ext)| ext != "lock")
+        })
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

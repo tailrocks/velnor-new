@@ -1,0 +1,9 @@
+roots = [".", "tools"]
+after = ["CI", "Qualification"]
+
+[[binaries]]
+package = "app"
+
+[[binaries]]
+package = "tools"
+platforms = ["linux-x64", "macos-arm64"]

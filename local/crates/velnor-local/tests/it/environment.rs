@@ -247,6 +247,11 @@ async fn the_untrusted_side_has_its_own_network_and_keys_and_no_way_to_the_stub(
         |meta| meta.permissions().mode() & 0o777,
     );
     assert_eq!(mode, 0o600);
+    let keys_mode = std::fs::metadata(dir.join("keys")).map_or_else(
+        |e| unreachable!("{e}"),
+        |meta| meta.permissions().mode() & 0o777,
+    );
+    assert_eq!(keys_mode, 0o700);
 }
 
 #[tokio::test]

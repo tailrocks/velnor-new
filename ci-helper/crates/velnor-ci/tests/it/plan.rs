@@ -57,7 +57,7 @@ fn each_root_gets_its_mode_its_packages_and_a_nextest_filter_never_cargo_argumen
         (path("crates/velnor-runner/Cargo.toml"), RustSelection::None),
     ]);
     assert_eq!(
-        outputs(&selections, &three_roots()).unwrap_or_else(|e| unreachable!("{e}")),
+        outputs(&selections, &three_roots(), true).unwrap_or_else(|e| unreachable!("{e}")),
         "rust_root_mode=all\n\
          rust_root_packages=\n\
          rust_root_test_filter=all()\n\
@@ -72,7 +72,8 @@ fn each_root_gets_its_mode_its_packages_and_a_nextest_filter_never_cargo_argumen
          rust_crates_velnor_runner_packages=\n\
          rust_crates_velnor_runner_test_filter=\n\
          rust_crates_velnor_runner_doctests=skip\n\
-         rust_crates_velnor_runner_docs=skip\n"
+         rust_crates_velnor_runner_docs=skip\n\
+         rust_policy=run\n"
     );
     let text = explain(
         &selections,
@@ -98,7 +99,7 @@ fn two_roots_whose_output_names_would_collide_are_an_error() {
         (path("a-b/Cargo.toml"), RustSelection::None),
         (path("a_b/Cargo.toml"), RustSelection::None),
     ]);
-    assert!(outputs(&selections, &Steps::new()).is_err());
+    assert!(outputs(&selections, &Steps::new(), false).is_err());
 }
 
 #[test]

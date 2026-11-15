@@ -4,16 +4,17 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoFacts, RepoPath, RustMember, ToolPin, ToolPins};
+use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
+use crate::harness::uses_nextest;
 use crate::toml_file::table;
 
-pub(crate) static MISE_CONFIGS: [RepoPath; 2] = [
+pub static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static("mise.toml"),
     RepoPath::from_static(".mise.toml"),
 ];
-pub(crate) const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
+pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
@@ -91,7 +92,7 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
     })
 }
 
-const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
+pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if let Some((file, mise)) = toolchain_conflict(facts) {
@@ -117,7 +118,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         .rust_roots
         .iter()
         .flat_map(|root| &root.members)
-        .any(RustMember::has_test_target);
+        .any(|member| uses_nextest(&facts.config, member));
     if tested && nextest_tool(&facts.tools).is_none() {
         return Err(DetectError::NextestRequired {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),

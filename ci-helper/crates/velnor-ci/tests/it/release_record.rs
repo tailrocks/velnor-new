@@ -99,3 +99,34 @@ fn release_record_refuses_a_file_that_is_not_release_plz_output() {
         );
     }
 }
+
+#[test]
+fn release_record_accepts_a_tag_with_build_metadata() {
+    let plus = release("app", "app-v1.2.3+linux");
+    assert_eq!(
+        recorded(&[("app.json", plus.as_str())]),
+        Ok("app=app-v1.2.3+linux\n".to_owned())
+    );
+}
+
+#[test]
+fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), String> {
+    let files = velnor_release::ReleaseFiles {
+        release_toml: None,
+        release_plz_toml: [(
+            ".".to_owned(),
+            "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n[[package]]\nname = \"app\"\n".to_owned(),
+        )]
+        .into(),
+        mise_toml: "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned(),
+        dot_mise_toml: None,
+        mise_lock: "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned(),
+    };
+    let plan = velnor_release::ReleasePlan::read(&files).map_err(|e| e.to_string())?;
+    let pattern = plan.roots[0].packages[0].1.as_str().to_owned();
+    for version in ["1.2.3", "1.4.0-rc.1", "1.2.3+linux", "1.2.3-rc.1+build.5"] {
+        let tag = pattern.replace("{{ version }}", version);
+        assert!(velnor_ci::release::PlainName::tag(&tag).is_ok(), "{tag}");
+    }
+    Ok(())
+}

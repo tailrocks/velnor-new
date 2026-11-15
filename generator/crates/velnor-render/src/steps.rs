@@ -1,18 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
-
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind, When,
+    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind, TargetKind,
+    TargetName, When,
 };
 
-use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
-const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
-const MISE_VERSION: &str = "2026.11.1";
+pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
+const NOT_DRAFT: &str = "${{ github.event.pull_request.draft != true }}";
+const NOT_CANCELLED_NOT_DRAFT: &str =
+    "${{ !cancelled() && github.event.pull_request.draft != true }}";
+const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -22,10 +25,19 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when),
+        condition: job_condition(job),
         runs_on: job.runs_on.as_str().to_owned(),
         timeout_minutes: job.timeout_minutes,
         steps: job.steps.iter().map(rendered_step).collect(),
+        ..RenderedJob::default()
+    }
+}
+
+fn job_condition(job: &Job) -> Option<String> {
+    match (job.when, job.skip_on_draft) {
+        (when, false) => condition(when),
+        (When::Success, true) => Some(NOT_DRAFT.to_owned()),
+        (When::NotCancelled, true) => Some(NOT_CANCELLED_NOT_DRAFT.to_owned()),
     }
 }
 
@@ -89,16 +101,11 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some("velnor-gen check".to_owned()),
             ..RenderedStep::default()
         },
-        StepKind::FetchHelper(release) => RenderedStep {
-            name: format!("Fetch velnor-ci {}", release.version()),
-            env: vec![
-                (
-                    "SHA".to_owned(),
-                    by_platform(release, |binary| &binary.sha256),
-                ),
-                ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
-            ],
-            run: Some(FETCH_HELPER_RUN.to_owned()),
+        StepKind::InstallHelper(release) => install_helper(release),
+        StepKind::FailOnDraftRun => RenderedStep {
+            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
+            condition: Some(IS_DRAFT.to_owned()),
+            run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
         StepKind::FailWhenANeedFailed => RenderedStep {
@@ -126,9 +133,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             "Test".into(),
             format!(
                 "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
-                match filter {
-                    FilterRef::All => "all()",
-                }
+                nextest_filter(filter)
             ),
             vec![],
         ),
@@ -137,6 +142,20 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             format!(
                 "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
+            ),
+            vec![],
+        ),
+        CargoCommand::TestTarget {
+            package,
+            target,
+            kind,
+            features,
+        } => (
+            format!("Test {package} {target}"),
+            format!(
+                "cargo test -p {package} --locked {}{}",
+                test_selector(*kind, target),
+                feature_flag(features)
             ),
             vec![],
         ),
@@ -171,6 +190,36 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
     }
 }
 
+fn nextest_filter(filter: &FilterRef) -> String {
+    match filter {
+        FilterRef::All => "all()".to_owned(),
+        FilterRef::AllExcept(binaries) => binaries.iter().fold("all()".to_owned(), |text, id| {
+            format!("{text} - binary_id(={id})")
+        }),
+    }
+}
+
+fn feature_flag(features: &[String]) -> String {
+    if features.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " --features '{}'",
+            features.join(",").replace('\'', "'\\''")
+        )
+    }
+}
+
+fn test_selector(kind: TargetKind, target: &TargetName) -> String {
+    match kind {
+        TargetKind::Lib | TargetKind::ProcMacro => "--lib".to_owned(),
+        TargetKind::Bin => format!("--bin={target}"),
+        TargetKind::Bench => format!("--bench={target}"),
+        TargetKind::Example => format!("--example={target}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
+    }
+}
+
 fn helper_arguments(command: HelperCommand) -> &'static str {
     match command {
         HelperCommand::InputsSave => "inputs save",
@@ -178,17 +227,20 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
     }
 }
 
-fn by_platform<T: fmt::Display>(
-    release: &HelperRelease,
-    field: impl Fn(&HelperBinary) -> &T,
-) -> Value {
-    let table = release
-        .binaries()
-        .iter()
-        .map(|(platform, binary)| format!("\"{}\":\"{}\"", platform.runner_key(), field(binary)))
-        .collect::<Vec<_>>()
-        .join(",");
-    Value::Selected(format!(
-        "${{{{ fromJSON('{{{table}}}')[format('{{0}}-{{1}}', runner.os, runner.arch)] }}}}"
-    ))
+pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
+    let version = release.version();
+    let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
+    with.extend(release.digests().iter().map(|(platform, digest)| {
+        (
+            format!("sha256-{}", platform.file_suffix()),
+            Value::Text(digest.to_string()),
+        )
+    }));
+    RenderedStep {
+        name: format!("Install velnor-ci {version}"),
+        uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
+        uses_comment: Some(format!("rust-ci-v{version}")),
+        with,
+        ..RenderedStep::default()
+    }
 }

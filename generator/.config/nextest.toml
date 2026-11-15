@@ -1,5 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
+experimental = ["wrapper-scripts"]
+
+[scripts.wrapper.no-programs]
+command = ["/usr/bin/env", "PATH=/nonexistent"]
+
+[[profile.default.scripts]]
+filter = "all()"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
+
+[[profile.ci.scripts]]
+filter = "all()"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
+
 [profile.ci]
 retries = 0
 test-threads = "num-cpus"

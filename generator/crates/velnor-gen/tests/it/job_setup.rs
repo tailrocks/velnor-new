@@ -347,6 +347,10 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[env]\nANY_NAME = \"x\"\n",
         "[env]\nANY_NAME = { value = \"x\", force = false }\n",
         "[build]\nrustflags = [\"-C\", \"debuginfo=0\"]\n",
+        "[registry]\ncredential-provider = \"cargo:token\"\n",
+        "[registry]\nglobal-credential-providers = [\"cargo:token\", \"cargo:libsecret\"]\n",
+        "[registry]\ncredential-provider = \"cargo:1password\"\n",
+        "[credential-alias]\ncorp = \"corp-credential-helper --flag\"\n",
     ];
     for (text, ok) in rejected
         .iter()

@@ -7,20 +7,20 @@ mod repo;
 mod selection;
 
 pub use ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RunnerLabel,
     Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
-    WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, HelperCommand, HelperRelease, Job,
+    PermissionScope, Permissions, Platform, PullRequestType, Shape, ShapeDecision, Step, StepKind,
+    Triggers, When, WorkflowPlan,
 };
 pub use repo::{
-    CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
-    RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind,
-    Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
+    PolicyTools, RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage,
+    RustRoot, Target, TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };
 pub use selection::{
-    AllTrigger, ChangeSet, OptionalSteps, RustSelection, SelectionReason, SkipReason, StepNeed,
-    WORKFLOW_PATH,
+    AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };

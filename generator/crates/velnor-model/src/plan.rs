@@ -4,8 +4,10 @@
 use std::collections::BTreeMap;
 
 use crate::ids::{
-    DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    TargetName,
 };
+use crate::repo::TargetKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -18,13 +20,35 @@ pub struct WorkflowPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Triggers {
-    pub pull_request: bool,
+    pub pull_request: Vec<PullRequestType>,
+    pub push_branch: Option<String>,
+    pub merge_group: bool,
     pub workflow_dispatch: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Concurrency {
-    pub cancel_in_progress: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PullRequestType {
+    Opened,
+    Synchronize,
+    Reopened,
+    ReadyForReview,
+    Edited,
+    ConvertedToDraft,
+}
+
+impl PullRequestType {
+    pub const ALL: [Self; 5] = [
+        Self::Opened,
+        Self::Synchronize,
+        Self::Reopened,
+        Self::ReadyForReview,
+        Self::Edited,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Concurrency {
+    CancelOlderPullRequestRuns,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -51,6 +75,7 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
+    pub skip_on_draft: bool,
     pub runs_on: RunnerLabel,
     pub timeout_minutes: u16,
     pub steps: Vec<Step>,
@@ -79,8 +104,9 @@ pub enum StepKind {
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,
-    FetchHelper(HelperRelease),
+    InstallHelper(HelperRelease),
     FailWhenANeedFailed,
+    FailOnDraftRun,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,21 +118,27 @@ pub enum HelperCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelperRelease {
     version: HelperVersion,
-    binaries: BTreeMap<Platform, HelperBinary>,
+    action: CommitSha,
+    digests: BTreeMap<Platform, Sha256>,
 }
 
 impl HelperRelease {
     pub fn new(
         version: HelperVersion,
-        binaries: BTreeMap<Platform, HelperBinary>,
+        action: CommitSha,
+        digests: BTreeMap<Platform, Sha256>,
     ) -> Result<Self, InvalidId> {
-        if binaries.is_empty() {
+        if digests.is_empty() {
             return Err(InvalidId {
                 kind: "HelperRelease",
                 value: version.to_string(),
             });
         }
-        Ok(Self { version, binaries })
+        Ok(Self {
+            version,
+            action,
+            digests,
+        })
     }
 
     #[must_use]
@@ -115,15 +147,14 @@ impl HelperRelease {
     }
 
     #[must_use]
-    pub fn binaries(&self) -> &BTreeMap<Platform, HelperBinary> {
-        &self.binaries
+    pub fn action(&self) -> &CommitSha {
+        &self.action
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelperBinary {
-    pub url: DownloadUrl,
-    pub sha256: Sha256,
+    #[must_use]
+    pub fn digests(&self) -> &BTreeMap<Platform, Sha256> {
+        &self.digests
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,19 +189,34 @@ impl Platform {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CargoCommand {
     FmtCheck,
-    Clippy { extra: Vec<String> },
-    CheckAlone { package: PackageName },
-    NextestRun { filter: FilterRef },
-    NextestArchive { file: RepoPath },
+    Clippy {
+        extra: Vec<String>,
+    },
+    CheckAlone {
+        package: PackageName,
+    },
+    NextestRun {
+        filter: FilterRef,
+    },
+    NextestArchive {
+        file: RepoPath,
+    },
+    TestTarget {
+        package: PackageName,
+        target: TargetName,
+        kind: TargetKind,
+        features: Vec<String>,
+    },
     Doctest,
     Doc,
     Deny,
     Machete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterRef {
     All,
+    AllExcept(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -18,6 +18,35 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(condition) = &job.condition {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
+    if let Some(environment) = &job.environment {
+        items.push(entry("environment", text(environment)));
+    }
+    if !job.permissions.is_empty() {
+        items.push(entry("permissions", pairs(&job.permissions)));
+    }
+    if let Some(concurrency) = &job.concurrency {
+        items.push(entry(
+            "concurrency",
+            Yaml::Map(vec![
+                entry("group", Yaml::Expr(concurrency.group.clone())),
+                entry(
+                    "cancel-in-progress",
+                    Yaml::Bool(concurrency.cancel_in_progress),
+                ),
+            ]),
+        ));
+    }
+    if !job.outputs.is_empty() {
+        items.push(entry(
+            "outputs",
+            Yaml::Map(
+                job.outputs
+                    .iter()
+                    .map(|(key, value)| entry(key, Yaml::Expr(value.clone())))
+                    .collect(),
+            ),
+        ));
+    }
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
@@ -33,12 +62,20 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
 }
 
 fn yaml_step(step: &RenderedStep) -> Yaml {
-    let mut items = vec![entry("name", text(&step.name))];
+    let mut items = Vec::new();
+    if let Some(id) = &step.id {
+        items.push(entry("id", text(id)));
+    }
+    items.push(entry("name", text(&step.name)));
     if let Some(condition) = &step.condition {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(uses) = &step.uses {
-        items.push(entry("uses", text(uses)));
+        let value = match &step.uses_comment {
+            Some(comment) => Yaml::Trailed(comment.clone(), Box::new(text(uses))),
+            None => text(uses),
+        };
+        items.push(entry("uses", value));
     }
     if !step.with.is_empty() {
         items.push(entry("with", values(&step.with)));
@@ -63,6 +100,15 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
     Yaml::Map(items)
 }
 
+fn pairs(items: &[(String, String)]) -> Yaml {
+    Yaml::Map(
+        items
+            .iter()
+            .map(|(key, value)| entry(key, text(value)))
+            .collect(),
+    )
+}
+
 fn values(items: &[(String, Value)]) -> Yaml {
     Yaml::Map(
         items
@@ -71,7 +117,6 @@ fn values(items: &[(String, Value)]) -> Yaml {
                 let yaml = match value {
                     Value::Text(text) => Yaml::Str(text.clone()),
                     Value::Expr(text) => Yaml::Expr(text.clone()),
-                    Value::Selected(text) => Yaml::Selected(text.clone()),
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };

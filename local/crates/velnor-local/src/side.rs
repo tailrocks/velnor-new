@@ -3,18 +3,35 @@
 
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::event::{Push, Repository};
 use crate::scenario::Step;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
 pub enum Side {
     Trusted,
     Untrusted,
 }
 
 impl Side {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Trusted => "trusted",
+            Self::Untrusted => "untrusted",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        [Self::Trusted, Self::Untrusted]
+            .into_iter()
+            .find(|side| side.name() == name)
+    }
+
     #[must_use]
     pub fn of(payload: &Value) -> Self {
         if payload["pull_request"]["head"]["repo"]["fork"] == true {
