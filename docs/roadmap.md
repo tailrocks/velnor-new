@@ -79,10 +79,10 @@ The subagent models are `haiku`, `sonnet` and `opus`. Use the model the issue na
 
 Every agent shares one GitHub token, and its API limit is 5000 calls an hour. Agents that poll used up the limit twice in one day. Follow these rules.
 
-1. Never poll GitHub in a loop. Watch a run with `gh run watch <id> --interval 180`, and a pull request with `gh pr checks <number> --watch --interval 180`. The default interval polls every 3 seconds. Run one watcher, owned by the orchestrator.
+1. Never poll GitHub in a loop. Watch a run with `gh run watch <id> --interval 180`, and a pull request with `gh pr checks <number> --watch --interval 180`. The default interval is 3 seconds for `gh run watch` and 10 seconds for `gh pr checks --watch`. Run one watcher, owned by the orchestrator.
 2. When GraphQL is rate-limited, `gh pr review` and `gh pr create` fail. Post a review with REST instead: `gh api -X POST repos/tailrocks/velnor-new/pulls/<number>/reviews -f event=COMMENT -F body=@<file>`.
 3. A plain `cargo nextest run --workspace` fails about 100 tests in `velnor-actions-cli`, `velnor-actions-mise` and `velnor-archive-guard`. They need environment variables that only `scripts/verify-local.sh` sets. Run that script, or test only the crates you touch. These failures are not regressions.
-4. On a heavily loaded machine, a slow test can hit a nextest `slow-timeout` and fail even though its assertions pass. Treat that as a timing result, not a test failure. To check it, copy `.config/nextest.toml` with a longer timeout, and prove the timing on CI.
+4. On a heavily loaded machine, a slow test can hit a nextest `slow-timeout` and fail even though its assertions pass. Treat that as a timing result, not a test failure. The `slow-timeout = { period = "2s", terminate-after = 1 }` setting is in the nextest config of two workspaces: `generator/` and `ci-helper/`. `local/` and `crates/velnor-runner/` set none. To check a timeout, copy `.config/nextest.toml` with a longer timeout, and prove the timing on CI.
 
 ## The project board
 
