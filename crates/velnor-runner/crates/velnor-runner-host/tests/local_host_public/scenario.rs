@@ -162,10 +162,10 @@ pub(crate) async fn wait_for_runner(
             .await?
             .into_iter()
             .find(|live| !unlike.contains(&live.agent.as_str()));
-        if let Some(live) = found {
-            if read_challenge(docker, &live.runner).await.is_ok() {
-                return Ok(live);
-            }
+        if let Some(live) = found
+            && read_challenge(docker, &live.runner).await.is_ok()
+        {
+            return Ok(live);
         }
         if started.elapsed() > WAIT {
             return Err("no new runner with a challenge".into());

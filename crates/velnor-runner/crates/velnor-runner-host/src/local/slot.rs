@@ -167,17 +167,17 @@ impl Supervisor {
 
 async fn wait_exit(docker: &bollard::Docker, id: &str) -> Result<(), HostError> {
     let mut waiting = docker.wait_container(id, None::<WaitContainerOptions>);
-    while let Some(next) = waiting.next().await {
-        match next {
+    match waiting.next().await {
+        None
+        | Some(
             Ok(_)
             | Err(
                 DockerError::DockerContainerWaitError { .. }
                 | DockerError::DockerResponseServerError {
                     status_code: 404, ..
                 },
-            ) => return Ok(()),
-            Err(_) => return Err(HostError::Docker),
-        }
+            ),
+        ) => Ok(()),
+        Some(Err(_)) => Err(HostError::Docker),
     }
-    Ok(())
 }
