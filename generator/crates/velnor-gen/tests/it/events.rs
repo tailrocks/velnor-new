@@ -15,6 +15,7 @@ const EVENTS: &str = r"on:
   pull_request:
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
@@ -130,26 +131,33 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         deny: true,
         machete: true,
     };
-    let cases: [(&[&str], bool, (bool, bool)); 9] = [
-        (&["README.md"], false, (false, false)),
-        (&[], false, (false, false)),
-        (&["Cargo.lock"], false, (true, true)),
-        (&["crates/a/Cargo.toml"], false, (true, true)),
-        (&["deny.toml"], false, (true, true)),
+    let cases: [(&[&str], bool, bool, (bool, bool)); 10] = [
+        (&["README.md"], false, false, (false, false)),
+        (&[], false, false, (false, false)),
+        (&["Cargo.lock"], false, true, (true, true)),
+        (&["crates/a/Cargo.toml"], false, true, (true, true)),
+        (&["deny.toml"], false, true, (true, true)),
         (
             &["docs/deny.toml.md", "src/Cargo.tomls"],
             false,
+            false,
             (false, false),
         ),
-        (&["src/lib.rs", "README.md"], false, (false, true)),
-        (&["mise.toml"], false, (false, true)),
-        (&[], true, (true, true)),
+        (&["src/lib.rs", "README.md"], false, true, (false, true)),
+        (&["docs/example.rs"], false, false, (false, false)),
+        (&["mise.toml"], false, false, (false, true)),
+        (&[], true, true, (true, true)),
     ];
-    for (paths, everything, (deny, machete)) in cases {
-        let runs = policy_runs(both, &changed(paths)?, everything);
+    for (paths, everything, selected, (deny, machete)) in cases {
+        let runs = policy_runs(both, &changed(paths)?, everything, selected);
         assert_eq!((runs.deny, runs.machete), (deny, machete), "{paths:?}");
     }
-    let no_tools = policy_runs(PolicyTools::default(), &changed(&["Cargo.lock"])?, true);
+    let no_tools = policy_runs(
+        PolicyTools::default(),
+        &changed(&["Cargo.lock"])?,
+        true,
+        true,
+    );
     assert_eq!(no_tools, PolicyRuns::default());
     Ok(())
 }

@@ -63,17 +63,17 @@ pub fn collect(
     })
 }
 
-const SETUP_END_STEPS: [&str; 2] = ["velnor-ci restored", "velnor-ci plan"];
+const RESTORED_STEP: &str = "velnor-ci restored";
+const PLAN_STEP: &str = "velnor-ci plan";
 
 #[must_use]
 pub fn setup_seconds(job: &ApiJob) -> Option<u64> {
     let started = job.started_at.as_deref()?;
-    SETUP_END_STEPS.iter().find_map(|name| {
-        let step = job.steps.iter().find(|step| step.name == *name)?;
-        let done = step.completed_at.as_deref()?;
-        (step.conclusion.as_deref() == Some("success"))
-            .then(|| seconds_between(Some(started), Some(done)))
-    })
+    let ended_by = |name: &str| job.steps.iter().find(|step| step.name == name);
+    let step = ended_by(RESTORED_STEP).or_else(|| ended_by(PLAN_STEP))?;
+    let done = step.completed_at.as_deref()?;
+    (step.conclusion.as_deref() == Some("success"))
+        .then(|| seconds_between(Some(started), Some(done)))
 }
 
 fn fetch_jobs(

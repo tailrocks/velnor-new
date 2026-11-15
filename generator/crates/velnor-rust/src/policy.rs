@@ -22,6 +22,7 @@ pub fn policy_runs(
     tools: PolicyTools,
     changed: &BTreeSet<RepoPath>,
     everything: bool,
+    selected: bool,
 ) -> PolicyRuns {
     let dependency = everything
         || changed.iter().any(|path| {
@@ -30,7 +31,7 @@ pub fn policy_runs(
         });
     let unused_possible = changed
         .iter()
-        .any(|path| is_rust_source(path) || MISE_CONFIGS.contains(path));
+        .any(|path| (selected && is_rust_source(path)) || MISE_CONFIGS.contains(path));
     PolicyRuns {
         deny: tools.deny && dependency,
         machete: tools.machete && (dependency || unused_possible),

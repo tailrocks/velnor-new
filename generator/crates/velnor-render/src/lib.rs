@@ -79,6 +79,7 @@ fn triggers(triggers: &Triggers) -> Yaml {
         let types = triggers.pull_request.iter().map(|kind| {
             text(match kind {
                 PullRequestType::Opened => "opened",
+                PullRequestType::Edited => "edited",
                 PullRequestType::Synchronize => "synchronize",
                 PullRequestType::Reopened => "reopened",
                 PullRequestType::ReadyForReview => "ready_for_review",

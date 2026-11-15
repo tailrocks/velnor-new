@@ -4,6 +4,7 @@ on:
   pull_request:
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
@@ -103,7 +104,9 @@ jobs:
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         env:
@@ -202,7 +205,9 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_ci_helper_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: ci-helper
@@ -265,7 +270,9 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: crates/velnor-runner
@@ -356,7 +363,9 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: generator
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_generator_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: generator
@@ -431,7 +440,9 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() }}'
         working-directory: local
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        env:
+          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_local_package_args }}'
+        run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
       - name: Test
         if: '${{ !cancelled() }}'
         working-directory: local

@@ -127,7 +127,7 @@ fn the_doctest_step_fails_when_it_ran_no_doctest() -> TestResult {
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests -- cargo test --doc --workspace --locked"
+        "velnor-ci run --require-doctests -- cargo test --doc $PACKAGE_ARGS --locked"
     );
     Ok(())
 }
@@ -195,5 +195,76 @@ fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult
         deny.contains("steps.plan.outputs.rust_deny == 'run'"),
         "{deny}"
     );
+    Ok(())
+}
+
+fn policy_job(text: &str) -> String {
+    text.lines()
+        .skip_while(|line| *line != "  rust-policy:")
+        .skip(1)
+        .take_while(|line| line.starts_with("   "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn the_policy_lane_installs_the_pinned_tools_before_it_runs_one() -> TestResult {
+    let mut files = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    track(&mut files, "deny.toml", "")?;
+    track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
+    let job = policy_job(&text(&files)?);
+    let install = job.find("uses: jdx/mise-action").ok_or("no install step")?;
+    let first = job.find("cargo-").ok_or("no policy step")?;
+    assert!(install < first, "{job}");
+    Ok(())
+}
+
+#[test]
+fn the_policy_lane_checks_every_cargo_root() -> TestResult {
+    let mut files = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    track(&mut files, "deny.toml", "")?;
+    let job = policy_job(&text(&files)?);
+    assert!(job.contains("velnor-ci run -- cargo-deny check"), "{job}");
+    assert!(
+        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
+        "{job}"
+    );
+    Ok(())
+}
+
+#[test]
+fn lint_and_the_doctests_follow_the_planned_packages() -> TestResult {
+    let single = text(&view(&["Cargo.toml"], None)?)?;
+    let lint = step(&single, "Lint");
+    assert!(
+        run_line(&lint).contains("clippy $PACKAGE_ARGS --all-targets"),
+        "{lint:?}"
+    );
+    assert!(
+        lint.iter().any(|line| line.contains("PACKAGE_ARGS: ")),
+        "{lint:?}"
+    );
+    assert!(!run_line(&lint).contains("--workspace"), "{lint:?}");
+    Ok(())
+}
+
+#[test]
+fn a_one_job_workflow_that_skips_drafts_still_lints_them() -> TestResult {
+    let config = b"skip_draft_pull_requests = true\n";
+    let text = text(&view(&["Cargo.toml"], Some(config))?)?;
+    let job = text
+        .lines()
+        .skip_while(|line| *line != "  rust:")
+        .skip(1)
+        .take_while(|line| line.starts_with("   "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let draft = "github.event.pull_request.draft != true";
+    assert!(
+        !job.lines().take(4).any(|line| line.contains(draft)),
+        "{job}"
+    );
+    assert!(!step(&job, "Lint").join("\n").contains(draft), "{job}");
+    assert!(step(&job, "Test").join("\n").contains(draft), "{job}");
     Ok(())
 }

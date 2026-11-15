@@ -111,16 +111,28 @@ fn root_jobs(
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
+            let draft = facts.config.skip_draft_pull_requests;
             let mut steps = setup(facts, root, true, lane);
-            steps.extend(cargo(
-                lint.into_iter()
-                    .chain(test)
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
-            ));
+            steps.extend(
+                cargo(
+                    lint.into_iter()
+                        .chain(test)
+                        .chain([CargoCommand::Doc])
+                        .chain(alone)
+                        .collect(),
+                )
+                .map(|step| Step {
+                    skip_on_draft: draft
+                        && matches!(
+                            step.kind,
+                            StepKind::Cargo(CargoCommand::NextestRun | CargoCommand::Doctest)
+                        ),
+                    ..step
+                }),
+            );
             vec![Job {
                 comment,
+                skip_on_draft: false,
                 ..lane_job(id(RUST_JOB), steps)
             }]
         }
@@ -274,6 +286,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         when: When::Success,
+        skip_on_draft: false,
         gate: None,
         reads: None,
     }

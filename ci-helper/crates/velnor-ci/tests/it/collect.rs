@@ -234,5 +234,10 @@ fn setup_ends_when_the_restores_are_done_or_for_the_plan_job_when_the_plan_is() 
     assert_eq!(velnor_ci::collect::setup_seconds(&plan), Some(9));
     let skipped = job_with(&[("velnor-ci restored", "skipped", "2026-11-15T10:00:24Z")]);
     assert_eq!(velnor_ci::collect::setup_seconds(&skipped), None);
+    let nothing_selected = job_with(&[
+        ("velnor-ci plan", "success", "2026-11-15T10:00:09Z"),
+        ("velnor-ci restored", "skipped", "2026-11-15T10:00:09Z"),
+    ]);
+    assert_eq!(velnor_ci::collect::setup_seconds(&nothing_selected), None);
     assert_eq!(velnor_ci::collect::setup_seconds(&job_with(&[])), None);
 }

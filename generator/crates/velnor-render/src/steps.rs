@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind};
+use velnor_model::{
+    CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+};
 
 use crate::gate::{PLAN_STEP, condition, output, plan_source};
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
@@ -41,7 +43,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 
 fn rendered_step(step: &Step) -> RenderedStep {
     let mut rendered = step_body(&step.kind);
-    if let Some(condition) = condition(step.when, step.gate.as_ref(), false) {
+    if let Some(condition) = condition(step.when, step.gate.as_ref(), step.skip_on_draft) {
         rendered.condition = Some(condition);
     }
     rendered.working_directory = step.directory.as_ref().map(ToString::to_string);
@@ -139,7 +141,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
             "Lint".into(),
-            ["cargo-clippy clippy --workspace --all-targets --locked -- -D warnings"]
+            ["cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings"]
                 .into_iter()
                 .chain(extra.iter().map(String::as_str))
                 .collect::<Vec<_>>()
@@ -161,7 +163,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Doctest => (
             "Doctests".into(),
-            "cargo test --doc --workspace --locked".into(),
+            "cargo test --doc $PACKAGE_ARGS --locked".into(),
             vec![],
         ),
         CargoCommand::Doc => (
@@ -175,11 +177,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             format!("cargo check -p {package} --locked"),
             vec![],
         ),
-        CargoCommand::Deny => (
-            "Dependency policy".into(),
-            "cargo-deny check".into(),
-            vec![],
-        ),
+        CargoCommand::Deny { manifest } => deny(manifest),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
     };
     let prefix = if matches!(command, CargoCommand::Doctest) {
@@ -192,6 +190,24 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         env,
         run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
+    }
+}
+
+fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
+    match manifest.parent() {
+        None => (
+            "Dependency policy".into(),
+            "cargo-deny check".into(),
+            vec![],
+        ),
+        Some(directory) => (
+            format!("Dependency policy ({directory})"),
+            format!(
+                "cargo-deny --manifest-path '{}' check",
+                manifest.as_str().replace('\'', "'\\''")
+            ),
+            vec![],
+        ),
     }
 }
 

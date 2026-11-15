@@ -27,14 +27,16 @@ pub struct Triggers {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PullRequestType {
     Opened,
+    Edited,
     Synchronize,
     Reopened,
     ReadyForReview,
 }
 
 impl PullRequestType {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Opened,
+        Self::Edited,
         Self::Synchronize,
         Self::Reopened,
         Self::ReadyForReview,
@@ -83,6 +85,7 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub when: When,
+    pub skip_on_draft: bool,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
 }
@@ -106,10 +109,9 @@ impl Gate {
         let own = |need| (self.slug.clone(), need);
         match self.need {
             GateNeed::Selected => vec![own(GateNeed::Selected)],
-            GateNeed::Doctests => vec![own(GateNeed::Selected), own(GateNeed::Doctests)],
-            GateNeed::Docs => vec![
+            GateNeed::Doctests | GateNeed::Docs => vec![
                 own(GateNeed::Selected),
-                own(GateNeed::Docs),
+                own(self.need),
                 own(GateNeed::PackageArgs),
             ],
             GateNeed::Deny => vec![own(GateNeed::Deny)],
@@ -254,7 +256,7 @@ pub enum CargoCommand {
     NextestArchive { file: RepoPath },
     Doctest,
     Doc,
-    Deny,
+    Deny { manifest: RepoPath },
     Machete,
 }
 
@@ -263,7 +265,8 @@ impl CargoCommand {
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
             Self::NextestRun => &[GateNeed::TestFilter, GateNeed::PackageArgs],
-            Self::Doc => &[GateNeed::PackageArgs],
+            Self::Clippy { .. } => &[GateNeed::PackageArgs],
+            Self::Doc | Self::Doctest => &[GateNeed::PackageArgs],
             _ => &[],
         }
     }
