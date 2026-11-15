@@ -37,10 +37,6 @@ pub enum ReleaseError {
         root: String,
         package: Option<String>,
     },
-    AmbiguousBinary {
-        package: String,
-        roots: Vec<String>,
-    },
     UnknownPlatform {
         package: String,
         platform: String,
@@ -81,6 +77,32 @@ pub enum ReleaseError {
     },
     BinaryNotReleased {
         package: String,
+    },
+    GitTagDisabled {
+        root: String,
+        package: Option<String>,
+    },
+    GitReleaseDisabled {
+        root: String,
+        package: Option<String>,
+    },
+    EmptyPrBranchPrefix {
+        root: String,
+    },
+    ExternalCommand {
+        root: String,
+        key: String,
+    },
+    CargoCredentialProvider {
+        file: String,
+    },
+    DuplicatePackageName {
+        package: String,
+        roots: Vec<String>,
+    },
+    TagsMayCollide {
+        first: String,
+        second: String,
     },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
@@ -158,11 +180,6 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
             ),
-            Self::AmbiguousBinary { package, roots } => write!(
-                f,
-                ".velnor/release.toml: binary {package} is released from several roots: {}",
-                roots.join(", ")
-            ),
             Self::UnknownPlatform { package, platform } => write!(
                 f,
                 ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
@@ -185,7 +202,7 @@ impl ReleaseError {
             ),
             Self::UnsafeRoot { root } => write!(
                 f,
-                ".velnor/release.toml: root {root:?} must be a relative path without \"..\""
+                ".velnor/release.toml: root {root:?} must be \".\" or a relative path without empty, \".\" or \"..\" components"
             ),
             Self::DuplicatePackage { root, package } => write!(
                 f,
@@ -208,6 +225,43 @@ impl ReleaseError {
                 f,
                 "mise.toml requests release-plz {configured} but mise.lock locks {}",
                 locked.join(", ")
+            ),
+            _ => self.fmt_hardening(f),
+        }
+    }
+
+    fn fmt_hardening(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GitTagDisabled { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: git_tag_enable must not be false for {}",
+                subject(package.as_ref())
+            ),
+            Self::GitReleaseDisabled { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: git_release_enable must not be false for {}",
+                subject(package.as_ref())
+            ),
+            Self::EmptyPrBranchPrefix { root } => write!(
+                f,
+                "{root}/release-plz.toml: pr_branch_prefix must not be empty or blank"
+            ),
+            Self::ExternalCommand { root, key } => write!(
+                f,
+                "{root}/release-plz.toml: {key} runs an external command with the release token in reach"
+            ),
+            Self::CargoCredentialProvider { file } => write!(
+                f,
+                "{file}: a cargo credential provider would run next to the crates.io publish token"
+            ),
+            Self::DuplicatePackageName { package, roots } => write!(
+                f,
+                "package {package} is released from several roots: {}",
+                roots.join(", ")
+            ),
+            Self::TagsMayCollide { first, second } => write!(
+                f,
+                "tag patterns {first} and {second} can render the same tag"
             ),
             _ => Ok(()),
         }

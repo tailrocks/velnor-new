@@ -59,6 +59,17 @@ fn release_record_refuses_a_package_or_a_tag_released_twice() {
 }
 
 #[test]
+fn release_record_accepts_semver_build_metadata_in_a_tag_but_not_in_a_package() {
+    let text = release("app", "app-v1.2.3+build.5");
+    assert_eq!(
+        recorded(&[("app.json", &text)]),
+        Ok("app=app-v1.2.3+build.5\n".to_owned())
+    );
+    let text = release("app+x", "app-v1.2.3");
+    assert!(recorded(&[("app.json", &text)]).is_err());
+}
+
+#[test]
 fn release_record_refuses_a_name_that_could_break_out_of_its_output_line() {
     for (package, tag) in [
         (

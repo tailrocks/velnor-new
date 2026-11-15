@@ -52,16 +52,26 @@ fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
             release_plz_toml.insert(root, text(path)?.unwrap_or_default());
         }
     }
-    let mut mise_toml = None;
+    let mut mise_tomls = Vec::new();
     for config in &MISE_CONFIGS {
-        if mise_toml.is_none() {
-            mise_toml = text(config)?;
+        mise_tomls.extend(text(config)?);
+    }
+    let mut cargo_configs = BTreeMap::new();
+    for path in view.files.keys() {
+        let name = path.as_str();
+        if name == ".cargo/config.toml"
+            || name == ".cargo/config"
+            || name.ends_with("/.cargo/config.toml")
+            || name.ends_with("/.cargo/config")
+        {
+            cargo_configs.insert(name.to_owned(), text(path)?.unwrap_or_default());
         }
     }
     Ok(ReleaseFiles {
         release_toml: text(&RELEASE_CONFIG_PATH)?,
         release_plz_toml,
-        mise_toml: mise_toml.unwrap_or_default(),
+        mise_tomls,
+        cargo_configs,
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

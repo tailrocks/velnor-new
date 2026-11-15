@@ -4,4 +4,5 @@
 mod config;
 mod defaults;
 mod fixture;
+mod hardening;
 mod refusals;

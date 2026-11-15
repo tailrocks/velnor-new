@@ -55,10 +55,13 @@ fn locked_versions(value: &toml::Value) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError> {
-    let mise_toml = parse("mise.toml", mise_toml)?;
+pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<(), ReleaseError> {
+    let mise_tomls = mise_tomls
+        .iter()
+        .map(|text| parse("mise.toml", text))
+        .collect::<Result<Vec<_>, _>>()?;
     let mise_lock = parse("mise.lock", mise_lock)?;
-    let configured = release_plz_tools(&mise_toml);
+    let configured: Vec<_> = mise_tomls.iter().flat_map(release_plz_tools).collect();
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }

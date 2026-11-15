@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -24,7 +26,8 @@ pub(crate) fn files() -> ReleaseFiles {
     ReleaseFiles {
         release_toml: None,
         release_plz_toml: [(".".to_owned(), PLZ.to_owned())].into(),
-        mise_toml: MISE_TOML.to_owned(),
+        mise_tomls: vec![MISE_TOML.to_owned()],
+        cargo_configs: BTreeMap::new(),
         mise_lock: MISE_LOCK.to_owned(),
     }
 }

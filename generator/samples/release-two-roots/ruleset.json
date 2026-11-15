@@ -10,6 +10,7 @@
     "ref_name": {
       "exclude": [],
       "include": [
+        "refs/tags/*-v*",
         "refs/tags/app-v*",
         "refs/tags/tools-v*"
       ]
@@ -20,6 +21,12 @@
   "rules": [
     {
       "type": "creation"
+    },
+    {
+      "type": "update"
+    },
+    {
+      "type": "deletion"
     }
   ],
   "target": "tag"

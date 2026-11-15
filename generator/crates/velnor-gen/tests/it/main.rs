@@ -22,6 +22,7 @@ mod release_fixture;
 mod release_workflow;
 mod release_yml;
 mod release_yml_binaries;
+mod release_yml_cargo;
 mod release_yml_security;
 mod repo_sample;
 mod rule_config;

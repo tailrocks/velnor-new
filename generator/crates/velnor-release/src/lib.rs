@@ -3,6 +3,7 @@
 
 mod error;
 mod git_ref;
+mod hazards;
 mod mise;
 mod plan;
 mod release_plz;
