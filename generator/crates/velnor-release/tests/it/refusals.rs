@@ -378,3 +378,29 @@ fn a_binary_released_from_two_roots_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn tag_templates_the_recorder_cannot_consume_are_refused() -> TestResult {
+    for template in [
+        "releases/{{ package }}/v{{ version }}",
+        "{{ package }} v{{ version }}",
+        "-{{ package }}{{ version }}",
+    ] {
+        let to = format!("git_tag_name = \"{template}\"");
+        let error = plz_refusal("git_tag_name = \"{{ package }}-v{{ version }}\"", &to)?;
+        assert!(
+            matches!(error, Some(ReleaseError::InvalidTagTemplate { .. })),
+            "{template}: {error:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn empty_roots_and_blank_workflow_names_are_refused() {
+    let mut files = files();
+    files.release_toml = Some("roots = []\n".to_owned());
+    assert_eq!(refusal(&files), Some(ReleaseError::EmptyRoots));
+    files.release_toml = Some("after = [\"\"]\n".to_owned());
+    assert_eq!(refusal(&files), Some(ReleaseError::EmptyAfter));
+}

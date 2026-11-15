@@ -29,7 +29,16 @@ pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
         rest = &inner[close + 2..];
     }
     out.push_str(rest);
-    Some(TagPattern(out))
+    is_plain(&out.replace("{{ version }}", "0")).then_some(TagPattern(out))
+}
+
+fn is_plain(text: &str) -> bool {
+    !text.is_empty()
+        && !text.starts_with(['.', '-'])
+        && !text.ends_with('.')
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 pub(crate) fn checked(

@@ -49,8 +49,12 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
-    if after.is_empty() {
+    if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
+    }
+    let roots = raw.roots.unwrap_or_else(|| vec![".".to_owned()]);
+    if roots.is_empty() {
+        return Err(ReleaseError::EmptyRoots);
     }
     for binary in &raw.binaries {
         if let Some(platform) = binary
@@ -66,7 +70,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         }
     }
     Ok(VelnorConfig {
-        roots: raw.roots.unwrap_or_else(|| vec![".".to_owned()]),
+        roots,
         after,
         binaries: raw
             .binaries

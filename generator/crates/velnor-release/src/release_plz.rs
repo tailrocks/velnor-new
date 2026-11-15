@@ -71,7 +71,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         }
         checked(
             workspace.git_tag_name.as_deref().unwrap_or_default(),
-            "",
+            "package",
             root,
             None,
         )?;

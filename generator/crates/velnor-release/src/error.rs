@@ -46,6 +46,7 @@ pub enum ReleaseError {
         platform: String,
     },
     EmptyAfter,
+    EmptyRoots,
     DuplicateTagPattern {
         pattern: String,
         packages: Vec<String>,
@@ -132,8 +133,11 @@ impl fmt::Display for ReleaseError {
             ),
             Self::EmptyAfter => write!(
                 f,
-                ".velnor/release.toml: after must name at least one workflow"
+                ".velnor/release.toml: after must name at least one non-blank workflow"
             ),
+            Self::EmptyRoots => {
+                write!(f, ".velnor/release.toml: roots must name at least one root")
+            }
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
         }
