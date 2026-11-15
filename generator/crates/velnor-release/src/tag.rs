@@ -51,9 +51,17 @@ pub(crate) fn checked(
     root: &str,
     named: Option<&str>,
 ) -> Result<TagPattern, ReleaseError> {
-    render(template, package).ok_or_else(|| ReleaseError::InvalidTagTemplate {
+    let pattern = render(template, package).ok_or_else(|| ReleaseError::InvalidTagTemplate {
         root: root.to_owned(),
         package: named.map(str::to_owned),
         template: template.to_owned(),
-    })
+    })?;
+    if pattern.as_str().contains("{{ version }}") {
+        Ok(pattern)
+    } else {
+        Err(ReleaseError::TagTemplateWithoutVersion {
+            root: root.to_owned(),
+            package: named.map(str::to_owned),
+        })
+    }
 }

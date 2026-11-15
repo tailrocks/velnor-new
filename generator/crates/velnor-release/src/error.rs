@@ -75,6 +75,22 @@ pub enum ReleaseError {
     BinaryNotReleased {
         package: String,
     },
+    TagTemplateWithoutVersion {
+        root: String,
+        package: Option<String>,
+    },
+    ReleaseSwitchOff {
+        root: String,
+        package: Option<String>,
+        field: &'static str,
+    },
+    PublishWithGitOnly {
+        root: String,
+        package: Option<String>,
+    },
+    EmptyPrBranchPrefix {
+        root: String,
+    },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
     ReleasePlzLockMismatch {
@@ -183,6 +199,29 @@ impl ReleaseError {
             Self::RootReleasesNothing { root } => write!(
                 f,
                 "{root}/release-plz.toml: [workspace] release = false leaves nothing to release"
+            ),
+            Self::TagTemplateWithoutVersion { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: git_tag_name of {} must contain {{{{ version }}}} so every release gets its own tag",
+                subject(package.as_ref())
+            ),
+            Self::ReleaseSwitchOff {
+                root,
+                package,
+                field,
+            } => write!(
+                f,
+                "{root}/release-plz.toml: {field} must not be false for {}",
+                subject(package.as_ref())
+            ),
+            Self::PublishWithGitOnly { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
+                subject(package.as_ref())
+            ),
+            Self::EmptyPrBranchPrefix { root } => write!(
+                f,
+                "{root}/release-plz.toml: pr_branch_prefix must not be empty"
             ),
             Self::EmptyRoots => {
                 write!(f, ".velnor/release.toml: roots must name at least one root")
