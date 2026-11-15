@@ -24,7 +24,8 @@ mod sample;
 use crate::cli::{Cli, Command};
 use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
+    write_sample,
 };
 
 #[derive(Debug)]

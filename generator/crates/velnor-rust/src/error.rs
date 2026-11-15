@@ -46,6 +46,7 @@ pub enum Reason {
     },
     UnknownInputPackage(String),
     UnknownNextestHarness(String),
+    AmbiguousNextestHarness(String),
     UntrackedManifest,
     LockLine(usize),
     UnknownLockedPackage(String),
@@ -95,6 +96,10 @@ impl fmt::Display for Reason {
             Self::UnknownInputPackage(package) => write!(
                 f,
                 "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::AmbiguousNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which more than one workspace member declares"
             ),
             Self::UnknownNextestHarness(entry) => write!(
                 f,
