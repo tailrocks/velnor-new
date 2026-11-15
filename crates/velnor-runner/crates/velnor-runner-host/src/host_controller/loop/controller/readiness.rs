@@ -145,9 +145,12 @@ async fn validated_inventory(
     ) {
         return Ok(None);
     }
-    let inventory =
+    let Some(inventory) =
         audit::audit_inventory_with_remote(docker, journal, config, selected, polls, remote_audit)
-            .await?;
+            .await?
+    else {
+        return Ok(None);
+    };
 
     let error_to_host = |_| HostError::Docker;
     let live = docker_deadline(docker.info())

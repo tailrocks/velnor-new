@@ -3,9 +3,11 @@
 
 use serde::{Deserialize, Serialize};
 
+mod mount_projection;
 mod request_validation;
 mod tmpfs_reference;
 
+pub use mount_projection::owned_mountinfo_projection;
 pub use request_validation::validate_request;
 pub use tmpfs_reference::{
     descriptor_has_owned_tmpfs, linux_device, mountinfo_line_has_owned_tmpfs,

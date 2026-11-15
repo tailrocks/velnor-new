@@ -6,6 +6,7 @@ use crate::journal::StorageRole;
 mod observer;
 mod production;
 mod request;
+mod retry;
 mod runtime;
 mod validation;
 

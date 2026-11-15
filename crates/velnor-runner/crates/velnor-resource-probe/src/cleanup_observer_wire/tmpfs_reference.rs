@@ -25,25 +25,13 @@ pub fn observer_runtime_tmpfs_devices(
     binding: &CleanupObserverBinding,
     self_mountinfo: &[u8],
 ) -> HashSet<u64> {
-    let Some(namespace) = observer_namespace else {
+    if observer_namespace.is_none() {
         return HashSet::new();
-    };
-    let protected_namespaces = [
-        (
-            binding.daemon.namespace_device,
-            binding.daemon.namespace_inode,
-        ),
-        (
-            binding.runner.namespace_device,
-            binding.runner.namespace_inode,
-        ),
-        (binding.dind.namespace_device, binding.dind.namespace_inode),
-    ];
+    }
     if observer_pid == 0
         || observer_pid == binding.daemon.pid
         || observer_pid == binding.runner.pid
         || observer_pid == binding.dind.pid
-        || protected_namespaces.contains(&namespace)
     {
         return HashSet::new();
     }
@@ -59,7 +47,7 @@ pub fn observer_runtime_tmpfs_devices(
         else {
             continue;
         };
-        if is_observer_runtime_tmpfs_mount(&fields) {
+        if is_observer_runtime_mount(&fields) {
             devices.insert(device);
         }
     }
@@ -68,16 +56,14 @@ pub fn observer_runtime_tmpfs_devices(
 
 #[must_use]
 pub fn mountinfo_line_has_owned_tmpfs<S: std::hash::BuildHasher>(
-    fields: &[&str],
     device: u64,
-    is_observer_task: bool,
     owned_tmpfs_devices: &HashSet<u64, S>,
     observer_tmpfs_devices: &HashSet<u64, S>,
 ) -> bool {
     if !owned_tmpfs_devices.contains(&device) {
         return false;
     }
-    if is_observer_task && observer_tmpfs_devices.contains(&device) && is_tmpfs_mount(fields) {
+    if observer_tmpfs_devices.contains(&device) {
         return false;
     }
     true
@@ -85,7 +71,6 @@ pub fn mountinfo_line_has_owned_tmpfs<S: std::hash::BuildHasher>(
 
 #[must_use]
 pub fn descriptor_has_owned_tmpfs<S: std::hash::BuildHasher>(
-    is_observer_task: bool,
     filesystem_magic: i64,
     device: [u32; 2],
     _target: &Path,
@@ -99,25 +84,28 @@ pub fn descriptor_has_owned_tmpfs<S: std::hash::BuildHasher>(
     if !owned_tmpfs_devices.contains(&dev) {
         return false;
     }
-    if is_observer_task && observer_tmpfs_devices.contains(&dev) {
+    if observer_tmpfs_devices.contains(&dev) {
         return false;
     }
     true
 }
 
-fn is_tmpfs_mount(fields: &[&str]) -> bool {
+fn is_observer_runtime_mount(fields: &[&str]) -> bool {
     let fstype = fields
         .iter()
         .position(|field| *field == "-")
         .and_then(|separator| fields.get(separator + 1).copied());
-    fstype == Some("tmpfs")
-}
-
-fn is_observer_runtime_tmpfs_mount(fields: &[&str]) -> bool {
-    is_tmpfs_mount(fields)
-        && fields.get(3).copied() == Some("/")
+    fields.get(3).copied() == Some("/")
         && matches!(
-            fields.get(4).copied(),
-            Some("/dev" | "/dev/shm" | "/run" | "/sys/fs/cgroup")
+            (fstype, fields.get(4).copied()),
+            (
+                Some("tmpfs"),
+                Some("/dev" | "/dev/shm" | "/run" | "/sys/fs/cgroup")
+            ) | (Some("mqueue"), Some("/dev/mqueue"))
+                | (Some("devpts"), Some("/dev/pts"))
+                | (Some("proc"), Some("/proc"))
+                | (Some("sysfs"), Some("/sys"))
+                | (Some("cgroup2" | "cgroup"), Some("/sys/fs/cgroup"))
+                | (Some("overlay"), Some("/"))
         )
 }

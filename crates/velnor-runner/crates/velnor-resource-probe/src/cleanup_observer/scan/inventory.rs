@@ -15,7 +15,9 @@ use super::{
     },
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
-use crate::cleanup_observer_wire::{descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices};
+use crate::cleanup_observer_wire::{
+    descriptor_has_owned_tmpfs, observer_runtime_tmpfs_devices, owned_mountinfo_projection,
+};
 
 const PROC: &str = "/proc";
 use crate::mountinfo_io::MOUNTINFO_LIMIT;
@@ -39,7 +41,6 @@ struct ScanContext<'a> {
     started: Instant,
     namespace_ids: [([u32; 2], u64); 2],
     tmpfs_devices: HashSet<u64>,
-    observer_pid: u32,
     observer_namespace: Option<([u32; 2], u64)>,
     observer_tmpfs_devices: HashSet<u64>,
 }
@@ -109,7 +110,6 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
             .iter()
             .map(|device| linux_device(u64::from(device[0]), u64::from(device[1])))
             .collect(),
-        observer_pid,
         observer_namespace,
         observer_tmpfs_devices,
     }
@@ -166,19 +166,16 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
             return;
         }
     };
-    let owned_namespace = context.namespace_ids.contains(&namespace);
-    if owned_namespace {
+    let is_observer_task = context.observer_namespace == Some(namespace);
+    if context.namespace_ids.contains(&namespace) && !is_observer_task {
         inventory.owned_reference_count = inventory.owned_reference_count.saturating_add(1);
     }
-    let is_observer_task = pid == context.observer_pid
-        && context.observer_namespace == Some(namespace)
-        && !owned_namespace;
     let new_namespace = inventory.namespaces.insert(namespace);
     if new_namespace {
         if inventory.namespaces.len() > MAX_NAMESPACES {
             add_issue(&mut inventory.issues, "namespace_limit");
         } else {
-            scan_task_mounts(pid, tid, is_observer_task, context, inventory);
+            scan_task_mounts(pid, tid, context, inventory);
         }
     }
     scan_descriptors(pid, tid, is_observer_task, context, inventory);
@@ -189,13 +186,7 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
     }
 }
 
-fn scan_task_mounts(
-    pid: u32,
-    tid: u32,
-    is_observer_task: bool,
-    context: &ScanContext<'_>,
-    inventory: &mut Inventory,
-) {
+fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inventory) {
     let Some(bytes) = read_task_mountinfo(pid, tid, &mut inventory.issues) else {
         return;
     };
@@ -204,20 +195,21 @@ fn scan_task_mounts(
         tid,
         &bytes,
         context.request,
+        &context.observer_tmpfs_devices,
         &mut inventory.owned_reference_count,
         &mut inventory.issues,
     );
     check_tmpfs_mounts(
         pid,
         &bytes,
-        is_observer_task,
         (&context.tmpfs_devices, &context.observer_tmpfs_devices),
         &context.namespace_ids,
         &mut inventory.owned_reference_count,
         &mut inventory.issues,
     );
     if let Some(after) = read_task_mountinfo(pid, tid, &mut inventory.issues)
-        && after != bytes
+        && owned_mountinfo_projection(&after, &context.request.binding)
+            != owned_mountinfo_projection(&bytes, &context.request.binding)
     {
         add_issue(&mut inventory.issues, "task_mountinfo_changed");
     }
@@ -275,19 +267,19 @@ fn observe_task_descriptor(
             return;
         }
     };
-    let namespace_reference = namespace_link(&observation.target).is_some_and(|inode| {
-        observation.filesystem_magic == 0x6e73_6673
-            && context
-                .namespace_ids
-                .iter()
-                .any(|(device, expected_inode)| {
-                    *expected_inode == inode
-                        && *expected_inode == observation.inode
-                        && *device == observation.device
-                })
-    });
+    let namespace_reference = !is_observer_task
+        && namespace_link(&observation.target).is_some_and(|inode| {
+            observation.filesystem_magic == 0x6e73_6673
+                && context
+                    .namespace_ids
+                    .iter()
+                    .any(|(device, expected_inode)| {
+                        *expected_inode == inode
+                            && *expected_inode == observation.inode
+                            && *device == observation.device
+                    })
+        });
     let tmpfs_reference = descriptor_has_owned_tmpfs(
-        is_observer_task,
         observation.filesystem_magic,
         observation.device,
         &observation.target,

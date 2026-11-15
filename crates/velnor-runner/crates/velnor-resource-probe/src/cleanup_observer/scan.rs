@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{CleanupObserverRecord, CleanupObserverRequest, ProcessIdentity};
+use crate::cleanup_observer_wire::owned_mountinfo_projection;
 mod helpers;
 mod inventory;
 mod mounts;
@@ -154,7 +155,11 @@ fn check_daemon_mounts(
     before: Option<&[u8]>,
     issues: &mut Vec<String>,
 ) {
-    if read_mountinfo(request.binding.daemon.pid, issues).as_deref() != before {
+    let owned = |bytes: Option<&[u8]>| {
+        bytes.map(|bytes| owned_mountinfo_projection(bytes, &request.binding))
+    };
+    let after = read_mountinfo(request.binding.daemon.pid, issues);
+    if owned(after.as_deref()) != owned(before) {
         add_issue(issues, "daemon_mountinfo_changed");
     }
 }
