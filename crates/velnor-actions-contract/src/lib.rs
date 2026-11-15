@@ -120,7 +120,7 @@ pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
     MiseBootstrap, ReleaseManifest, TargetRecord, require_release_version,
 };
-pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
+pub use marker::*;
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,
     RunnerInventory, VersionPolicy, days_between,
