@@ -19,6 +19,7 @@ mod job_shape;
 mod lock;
 mod lock_affected;
 mod lock_consistency;
+mod no_programs;
 mod patch;
 mod pipeline;
 mod release_fixture;
