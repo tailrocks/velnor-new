@@ -21,6 +21,7 @@ pub enum MetadataFileError {
     Unreadable(String),
     Changed(RepoPath),
     Unlisted(RepoPath),
+    Differs(RepoPath),
 }
 
 impl fmt::Display for MetadataFileError {
@@ -30,6 +31,10 @@ impl fmt::Display for MetadataFileError {
             Self::Unreadable(detail) => write!(f, "{METADATA_PATH} is unreadable: {detail}"),
             Self::Changed(path) => write!(f, "{path} changed after {METADATA_PATH} was written"),
             Self::Unlisted(path) => write!(f, "{path} is not in {METADATA_PATH}"),
+            Self::Differs(path) => write!(
+                f,
+                "{METADATA_PATH} differs from what cargo reports for {path}"
+            ),
         }?;
         f.write_str("; run velnor-gen generate")
     }

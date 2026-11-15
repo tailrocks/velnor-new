@@ -75,6 +75,10 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
             AllTrigger::Global(path(".velnor/rust-ci.toml")),
         ),
         (
+            ".velnor/rust-metadata.json",
+            AllTrigger::Global(path(".velnor/rust-metadata.json")),
+        ),
+        (
             ".velnor/rust-ci-timings.json",
             AllTrigger::Global(path(".velnor/rust-ci-timings.json")),
         ),
@@ -107,7 +111,6 @@ fn docs_and_licence_paths_select_nothing_and_look_alikes_select_everything() {
             "README.md",
             "CHANGELOG.md",
             ".velnor/rust-inputs.lock",
-            ".velnor/rust-metadata.json",
         ],
         |_| RustSelection::None,
     ));

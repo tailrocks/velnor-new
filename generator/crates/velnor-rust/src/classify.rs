@@ -31,7 +31,7 @@ pub(crate) fn classify<'c>(
     is_root_manifest: bool,
     sheltered: bool,
 ) -> Class<'c> {
-    if *path == INPUTS_LOCK || *path == METADATA_PATH {
+    if *path == INPUTS_LOCK {
         return Class::Nothing;
     }
     if config
@@ -73,6 +73,7 @@ fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
         || name == CARGO_LOCK.as_str()
         || *path == CONFIG_PATH
         || *path == TIMINGS_PATH
+        || *path == METADATA_PATH
     {
         Some(AllTrigger::Global(path.clone()))
     } else {

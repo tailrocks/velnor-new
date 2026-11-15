@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cargo_lock;
+mod check_metadata;
 mod classify;
 mod compile_inputs;
 mod detect;

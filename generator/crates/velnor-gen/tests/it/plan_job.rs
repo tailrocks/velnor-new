@@ -29,12 +29,13 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 6] = [
+const LANE_SETUP: [&str; 7] = [
     "Check out",
     "Fetch velnor-ci 0.1.79",
     "Install tools",
     "Add Rust components",
     "velnor-ci prepare",
+    "velnor-ci check-metadata",
     "velnor-ci restored",
 ];
 
@@ -78,7 +79,13 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     );
     let plan_job = &text[text.find("  rust-plan:").unwrap_or_default()
         ..text.find("  rust-root:").unwrap_or_default()];
-    for forbidden in ["mise-action", "rustup", "cargo", "prepare"] {
+    for forbidden in [
+        "mise-action",
+        "rustup",
+        "cargo",
+        "prepare",
+        "check-metadata",
+    ] {
         assert!(!plan_job.contains(forbidden), "{forbidden} in {plan_job}");
     }
     for slug in ["root", "lab"] {
@@ -96,8 +103,8 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     }
     assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
-    assert_eq!(lane[..6], LANE_SETUP);
-    assert!(lane[6].starts_with("Format"), "{lane:?}");
+    assert_eq!(lane[..7], LANE_SETUP);
+    assert!(lane[7].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
         "      - rust-plan\n      - rust-root\n      - rust-lab\n    if: '${{ !cancelled() }}'\n"
     ));

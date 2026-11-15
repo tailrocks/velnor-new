@@ -48,6 +48,10 @@ pub enum Command {
     )]
     Prepare,
     #[command(
+        about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
+    )]
+    CheckMetadata,
+    #[command(
         about = "Run after every cache is restored: every action that must follow the restores"
     )]
     Restored,

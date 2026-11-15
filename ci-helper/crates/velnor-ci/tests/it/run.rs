@@ -184,3 +184,86 @@ fn run_refuses_a_log_that_is_a_symlink_and_leaves_its_target_alone() {
     assert!(!marker.exists());
     assert_eq!(fs::read_to_string(&target).unwrap_or_default(), "kept");
 }
+
+struct Flaky {
+    chunks: Vec<std::io::Result<Vec<u8>>>,
+}
+
+impl std::io::Read for Flaky {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if self.chunks.is_empty() {
+            return Ok(0);
+        }
+        self.chunks.remove(0).map(|bytes| {
+            buffer[..bytes.len()].copy_from_slice(&bytes);
+            bytes.len()
+        })
+    }
+}
+
+#[test]
+fn run_keeps_reading_after_an_interrupted_read() {
+    let from = Flaky {
+        chunks: vec![
+            Ok(b"before ".to_vec()),
+            Err(std::io::ErrorKind::Interrupted.into()),
+            Ok(b"after".to_vec()),
+        ],
+    };
+    let mut shown = Vec::new();
+    let log = std::sync::Mutex::new(Vec::new());
+    velnor_ci::stream::pump(from, &mut shown, &log);
+    assert_eq!(shown, b"before after");
+    assert_eq!(
+        log.into_inner().unwrap_or_else(|e| unreachable!("{e}")),
+        b"before after"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_written() {
+    let temp = scratch("full-log");
+    let script = format!(
+        "trap '' XFSZ; ulimit -f 1; exec {} run -- sh -c 'head -c 2000 /dev/zero | tr \"\\0\" x; exit 7'",
+        env!("CARGO_BIN_EXE_velnor-ci")
+    );
+    let output = Command::new("sh")
+        .args(["-c", &script])
+        .env("RUNNER_TEMP", &temp)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert_eq!(output.stdout.len(), 2000);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("velnor-run.log"));
+}
+
+#[cfg(unix)]
+#[test]
+fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let temp = scratch("sigterm");
+    let script = "trap 'echo got-term; exit 5' TERM; echo ready; i=0; while [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; exit 9";
+    let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--", "sh", "-c", script])
+        .env("RUNNER_TEMP", &temp)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = child.stdout.take().unwrap_or_else(|| unreachable!("piped"));
+    let mut lines = BufReader::new(stdout).lines();
+    assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("ready"));
+    let sent = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(sent.success());
+    assert_eq!(
+        lines.next().and_then(Result::ok).as_deref(),
+        Some("got-term")
+    );
+    let status = child.wait().unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(status.code(), Some(5));
+}

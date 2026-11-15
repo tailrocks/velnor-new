@@ -3,6 +3,7 @@
 
 mod audit;
 mod changes;
+mod check_metadata;
 mod collect;
 mod compare;
 mod gate;
