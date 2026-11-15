@@ -56,7 +56,7 @@ runs:
         for source in cache download; do
           rm -f "$staging/velnor-ci"
           if [ "$source" = cache ]; then
-            [ -n "$dir" ] && [ -x "$dir/velnor-ci" ] || continue
+            [ -n "$dir" ] && [ -f "$dir/velnor-ci" ] && [ ! -L "$dir/velnor-ci" ] && [ -x "$dir/velnor-ci" ] || continue
             cp "$dir/velnor-ci" "$staging/velnor-ci" 2> /dev/null || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
