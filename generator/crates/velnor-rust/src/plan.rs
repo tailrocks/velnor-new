@@ -4,17 +4,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, FullRun, HelperCommand, Job,
-    JobId, OnMain, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RepoPath,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, HelperCommand, Job, JobId, PackageName, PermissionScope,
+    Permissions, PullRequestType, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step,
+    StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
-use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
-use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::select::root_slug;
 use crate::shape::decide_shape;
@@ -125,160 +124,6 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         ..job(facts, HELPER_JOB)
     }
 }
-fn root_jobs(
-    facts: &RepoFacts,
-    root: &RustRoot,
-    decision: ShapeDecision,
-    suffixed: bool,
-    lane: &Lane,
-) -> Vec<Job> {
-    let id = |base: JobId| {
-        if suffixed {
-            base.suffixed(&lane.slug)
-        } else {
-            base
-        }
-    };
-    let cargo = |commands: Vec<CargoCommand>| {
-        commands
-            .into_iter()
-            .map(|command| lane.cargo(command, root.manifest.parent()))
-    };
-    let lane_job = |id: JobId, steps: Vec<Step>| Job {
-        needs: lane
-            .plan
-            .clone()
-            .into_iter()
-            .chain(lane.from_source.then_some(HELPER_JOB))
-            .collect(),
-        gate: lane.job(),
-        steps,
-        ..job(facts, id)
-    };
-    let alone = check_alone(root);
-    let lint = [
-        CargoCommand::FmtCheck,
-        CargoCommand::Clippy { extra: Vec::new() },
-    ];
-    let test = test_commands(facts, root);
-    let comment = Some(decision.reason);
-    let audit = audit_step(facts, lane);
-    match decision.shape {
-        Shape::OneJob => {
-            let draft = facts.config.skip_draft_pull_requests;
-            let mut steps = setup(facts, root, true, lane);
-            steps.extend(
-                cargo(lint.into_iter().chain(test).collect()).map(|step| Step {
-                    skip_on_draft: draft
-                        && matches!(
-                            step.kind,
-                            StepKind::Cargo(
-                                CargoCommand::NextestRun { .. }
-                                    | CargoCommand::TestTarget { .. }
-                                    | CargoCommand::Doctest
-                            )
-                        ),
-                    ..step
-                }),
-            );
-            steps.extend(audit);
-            steps.extend(cargo(
-                [CargoCommand::Doc].into_iter().chain(alone).collect(),
-            ));
-            vec![Job {
-                comment,
-                skip_on_draft: false,
-                ..lane_job(id(RUST_JOB), steps)
-            }]
-        }
-        Shape::LintAndTest | Shape::BuildThenGroups => {
-            let mut lint_steps = setup(facts, root, true, lane);
-            lint_steps.extend(cargo(
-                lint.into_iter()
-                    .chain([CargoCommand::Doc])
-                    .chain(alone)
-                    .collect(),
-            ));
-            if test.is_empty() {
-                lint_steps.extend(audit.clone());
-            }
-            let mut jobs = vec![Job {
-                comment,
-                skip_on_draft: false,
-                ..lane_job(id(LINT_JOB), lint_steps)
-            }];
-            if !test.is_empty() {
-                let mut test_steps = setup(facts, root, false, lane);
-                test_steps.extend(cargo(test));
-                test_steps.extend(audit);
-                jobs.push(lane_job(id(TEST_JOB), test_steps));
-            }
-            jobs
-        }
-    }
-}
-
-fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
-    let mut test = Vec::new();
-    if root
-        .members
-        .iter()
-        .any(|member| uses_nextest(&facts.config, member))
-    {
-        test.push(CargoCommand::NextestRun {
-            filter: nextest_filter(facts, root),
-        });
-    }
-    let mut seen = BTreeSet::new();
-    test.extend(root.members.iter().flat_map(|member| {
-        member
-            .custom_harnesses
-            .iter()
-            .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
-            .filter(|harness| seen.insert(selector_id(harness)))
-            .map(|harness| CargoCommand::TestTarget {
-                package: member.name.clone(),
-                target: harness.name.clone(),
-                kind: harness.kind,
-            })
-            .collect::<Vec<_>>()
-    }));
-    if has_doctest_library(root) {
-        test.push(CargoCommand::Doctest);
-    }
-    test
-}
-
-fn nextest_filter(facts: &RepoFacts, root: &RustRoot) -> FilterRef {
-    let direct: Vec<String> = root
-        .members
-        .iter()
-        .flat_map(|member| {
-            member
-                .custom_harnesses
-                .iter()
-                .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
-                .map(|harness| binary_id(&member.name, harness))
-        })
-        .collect();
-    if direct.is_empty() {
-        FilterRef::All
-    } else {
-        FilterRef::AllExcept(direct)
-    }
-}
-
-fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
-    let name = &harness.name;
-    match harness.kind {
-        TargetKind::Lib | TargetKind::ProcMacro => package.to_string(),
-        TargetKind::Bin => format!("{package}::bin/{name}"),
-        TargetKind::Example => format!("{package}::example/{name}"),
-        TargetKind::Bench => format!("{package}::bench/{name}"),
-        TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
-    }
-}
-
 pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
     let mut ids = BTreeSet::new();
     if let Some(job) = plan.jobs.iter().find(|job| !ids.insert(job.id.as_str())) {
@@ -301,39 +146,6 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
-    root.members
-        .iter()
-        .filter(|member| {
-            member.targets.iter().any(|target| {
-                !target.requires_features
-                    && target.kinds.iter().any(|kind| {
-                        matches!(
-                            kind,
-                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                        )
-                    })
-            })
-        })
-        .map(|member| CargoCommand::CheckAlone {
-            package: member.name.clone(),
-        })
-        .collect()
-}
-
-fn audit_step(facts: &RepoFacts, lane: &Lane) -> Option<Step> {
-    let when = match (facts.config.on_main, &facts.config.full_run) {
-        (OnMain::Everything, _) => When::ScheduledOrPush,
-        (OnMain::Affected, FullRun::Off) => return None,
-        (OnMain::Affected, _) => When::Scheduled,
-    };
-    Some(Step {
-        when,
-        gate: lane.steps(),
-        ..step(StepKind::Helper(HelperCommand::InputsAudit))
-    })
-}
-
 pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth })];
     if from_source {
@@ -350,10 +162,10 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
 }
 
 fn tools_steps(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools))
+    (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 
-fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
+pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lint: bool, lane: &Lane) -> Vec<Step> {
     let mut steps = head(
         facts,
         if lane.plan.is_none() {

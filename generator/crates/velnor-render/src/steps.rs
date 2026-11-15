@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CargoCommand, FilterRef, GateNeed, HelperCommand, HelperRelease, Job, LINT_STEP, RepoPath,
-    Step, StepKind, TEST_STEP, TargetKind, TargetName,
+    Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, TargetKind, TargetName,
 };
 
 use crate::gate::{PLAN_STEP, condition, output, plan_source};
@@ -23,6 +23,8 @@ const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d229
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const HELPER_ARTIFACT: &str = "velnor-ci";
+const ARCHIVE_RETENTION_DAYS: u64 = 7;
+const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const A_NEED_FAILED: &str =
@@ -46,6 +48,14 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
+            .chain(job.steps.iter().any(|step| {
+                matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
+            }).then(|| {
+                (
+                    TESTS_RUN_OUTPUT.to_owned(),
+                    format!("${{{{ steps.{TEST_STEP_ID}.outputs.{TESTS_RUN_OUTPUT} }}}}"),
+                )
+            }))
             .collect(),
         steps: job.steps.iter().flat_map(rendered_steps).collect(),
         ..RenderedJob::default()
@@ -102,15 +112,23 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ],
             ..RenderedStep::default()
         },
-        StepKind::InstallTools => RenderedStep {
-            name: "Install tools".to_owned(),
-            uses: Some(MISE.to_owned()),
-            with: vec![
+        StepKind::InstallTools { only } => {
+            let mut with = vec![
                 ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
                 ("cache".to_owned(), Value::Bool(false)),
-            ],
-            ..RenderedStep::default()
-        },
+            ];
+            if let Some(tool) = only {
+                with.push(("install_args".to_owned(), Value::Text(tool.clone())));
+            }
+            RenderedStep {
+                name: "Install tools".to_owned(),
+                uses: Some(MISE.to_owned()),
+                with,
+                ..RenderedStep::default()
+            }
+        }
+        StepKind::UploadArchive { name, file } => upload_step(name, file),
+        StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -122,25 +140,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::Cargo(command) => cargo_step(command),
-        StepKind::Helper(command) => {
-            let arguments = helper_arguments(*command);
-            let (id, env) = match command {
-                HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
-                HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-                HelperCommand::Restored => (Some(RESTORED_STEP), Vec::new()),
-                _ => (None, Vec::new()),
-            };
-            RenderedStep {
-                name: format!("velnor-ci {arguments}"),
-                id: id.map(str::to_owned),
-                env,
-                run: Some(match command {
-                    HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
-                    _ => format!("velnor-ci {arguments}"),
-                }),
-                ..RenderedStep::default()
-            }
-        }
+        StepKind::Helper(command) => helper_step(*command),
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
@@ -212,7 +212,16 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestRun { filter } => (
             TEST_STEP.into(),
             format!(
-                "cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E \"{}\"",
+                "cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
+                nextest_filter(filter)
+            ),
+            vec![],
+        ),
+        CargoCommand::NextestRunArchive { file, filter } => (
+            TEST_STEP.into(),
+            format!(
+                "cargo-nextest nextest run --archive-file '{}' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
+                file.as_str().replace('\'', "'\\''"),
                 nextest_filter(filter)
             ),
             vec![],
@@ -268,6 +277,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
     };
     RenderedStep {
         name,
+        id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
         env,
         run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
@@ -313,6 +323,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     }
 }
 
+fn reports_tests(command: &CargoCommand) -> bool {
+    matches!(
+        command,
+        CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. }
+    )
+}
+
 fn helper_arguments(command: HelperCommand) -> &'static str {
     match command {
         HelperCommand::Plan => "plan",
@@ -339,6 +356,60 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
         uses_comment: Some(format!("rust-ci-v{version}")),
         with,
+        ..RenderedStep::default()
+    }
+}
+
+fn upload_step(name: &str, file: &RepoPath) -> RenderedStep {
+    RenderedStep {
+        name: "Upload the tests".to_owned(),
+        uses: Some(UPLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            ("name".to_owned(), Value::Text(name.to_owned())),
+            ("path".to_owned(), Value::Text(file.to_string())),
+            ("compression-level".to_owned(), Value::Int(0)),
+            (
+                "retention-days".to_owned(),
+                Value::Int(ARCHIVE_RETENTION_DAYS),
+            ),
+            (
+                "if-no-files-found".to_owned(),
+                Value::Text("error".to_owned()),
+            ),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep {
+    let mut with = vec![("name".to_owned(), Value::Text(name.to_owned()))];
+    if let Some(into) = into {
+        with.push(("path".to_owned(), Value::Text(into.to_string())));
+    }
+    RenderedStep {
+        name: "Download the tests".to_owned(),
+        uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
+        with,
+        ..RenderedStep::default()
+    }
+}
+
+fn helper_step(command: HelperCommand) -> RenderedStep {
+    let arguments = helper_arguments(command);
+    let (id, env) = match command {
+        HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
+        HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
+        HelperCommand::Restored => (Some(RESTORED_STEP), Vec::new()),
+        _ => (None, Vec::new()),
+    };
+    RenderedStep {
+        name: format!("velnor-ci {arguments}"),
+        id: id.map(str::to_owned),
+        env,
+        run: Some(match command {
+            HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
+            _ => format!("velnor-ci {arguments}"),
+        }),
         ..RenderedStep::default()
     }
 }

@@ -136,7 +136,12 @@ fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_an
 "
     );
     assert!(text.contains(&install), "{text}");
-    for forbidden in ["curl", "releases/download", "jactionlint", "fromJSON"] {
+    for forbidden in [
+        "curl",
+        "releases/download",
+        "jactionlint ignore=obfuscation",
+        "fromJSON",
+    ] {
         assert!(!text.contains(forbidden), "{forbidden} in {text}");
     }
     let mut unpinned = view(&["Cargo.toml"], None)?;

@@ -70,6 +70,9 @@ jobs:
     if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
     permissions:
       contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -110,12 +113,13 @@ jobs:
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
         run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
-      - name: Test
+      - id: test
+        name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit
@@ -173,6 +177,9 @@ jobs:
     if: '${{ needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' }}'
     permissions:
       contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -218,13 +225,14 @@ jobs:
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_ci_helper_package_args }}'
         run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
-      - name: Test
+      - id: test
+        name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         env:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_ci_helper_package_args }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit
@@ -245,6 +253,9 @@ jobs:
     if: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' }}'
     permissions:
       contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -290,13 +301,14 @@ jobs:
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_package_args }}'
         run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
-      - name: Test
+      - id: test
+        name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         env:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_package_args }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit
@@ -345,6 +357,9 @@ jobs:
     if: '${{ needs.rust-plan.outputs.rust_generator_mode != ''none'' }}'
     permissions:
       contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -390,13 +405,14 @@ jobs:
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_generator_package_args }}'
         run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
-      - name: Test
+      - id: test
+        name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         env:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_generator_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_generator_package_args }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit
@@ -429,6 +445,9 @@ jobs:
     if: '${{ needs.rust-plan.outputs.rust_local_mode != ''none'' }}'
     permissions:
       contents: read
+    outputs:
+      # jactionlint ignore=unused-job-output
+      tests_run: '${{ steps.test.outputs.tests_run }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -474,13 +493,14 @@ jobs:
         env:
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_local_package_args }}'
         run: 'velnor-ci run -- cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings'
-      - name: Test
+      - id: test
+        name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         env:
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_local_test_filter }}'
           PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_local_package_args }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
+        run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit

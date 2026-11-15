@@ -59,7 +59,7 @@ fn without_a_measured_shard_threshold_long_tests_stay_in_the_shared_job() {
     }
 }
 
-fn target(kind: TargetKind) -> Target {
+pub(crate) fn target(kind: TargetKind) -> Target {
     Target {
         name: TargetName::new("t").unwrap_or_else(|e| unreachable!("{e}")),
         kinds: vec![kind],
@@ -83,7 +83,7 @@ fn crates(count: usize) -> Vec<RustMember> {
         .collect()
 }
 
-fn job_ids(facts: &RepoFacts) -> Vec<String> {
+pub(crate) fn job_ids(facts: &RepoFacts) -> Vec<String> {
     plan(facts)
         .jobs
         .iter()
@@ -192,8 +192,10 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
             .any(|c| matches!(c, CargoCommand::NextestRun { .. })),
         "{commands:?}"
     );
-    no_tests.config.shape = Some(Shape::LintAndTest);
-    assert_eq!(job_ids(&no_tests), ["rust-plan", "rust-lint", "required"]);
+    for shape in [Shape::LintAndTest, Shape::BuildThenGroups] {
+        no_tests.config.shape = Some(shape);
+        assert_eq!(job_ids(&no_tests), ["rust-plan", "rust-lint", "required"]);
+    }
     Ok(())
 }
 

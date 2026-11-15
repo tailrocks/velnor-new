@@ -129,7 +129,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     if !facts.tools.tools.is_empty() {
         steps.push(Step {
             gate: lane.plan.is_none().then(|| lane.gate(GateNeed::Policy)),
-            ..step(StepKind::InstallTools)
+            ..step(StepKind::InstallTools { only: None })
         });
     }
     if facts.policy.deny {

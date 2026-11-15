@@ -14,9 +14,11 @@ use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
+use super::append_outputs;
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
-use crate::stream::pump_counted;
+use crate::stream::{Pumped, pump_counted};
+use crate::tests_run::{output_line, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -108,11 +110,21 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
     let mut lost = None;
+    let mut tests_run = None;
     for _ in 0..streams {
         match receiver.recv_timeout(PUMP_GRACE) {
-            Ok(failure) => lost = lost.or(failure),
+            Ok(pumped) => {
+                lost = lost.or(pumped.failure);
+                tests_run = pumped.tests_run.or(tests_run);
+            }
             Err(_) => break,
         }
+    }
+    if runs_nextest(&args.command)
+        && let Some(tests_run) = tests_run
+    {
+        append_outputs(&output_line(tests_run))
+            .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
     let ran = doctests
         .lock()
@@ -157,7 +169,7 @@ fn spawn_pump(
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: mpsc::Sender<Option<std::io::Error>>,
+    done: mpsc::Sender<Pumped>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {

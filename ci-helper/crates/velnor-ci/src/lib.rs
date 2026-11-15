@@ -19,5 +19,6 @@ pub mod publish;
 pub mod release;
 pub mod setup;
 pub mod stream;
+pub mod tests_run;
 pub mod time;
 pub mod timings;

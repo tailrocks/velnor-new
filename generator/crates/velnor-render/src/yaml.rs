@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+const UNREAD_IGNORE: &str = "# jactionlint ignore=unused-job-output";
+
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
+    Unread(String),
     Block(String),
     Int(u64),
     Bool(bool),
@@ -33,6 +36,15 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
             }
             other => other,
         };
+        let ignore = match value {
+            Yaml::Unread(_) => Some(UNREAD_IGNORE),
+            _ => None,
+        };
+        if let Some(ignore) = ignore {
+            out.push_str(&" ".repeat(indent));
+            out.push_str(ignore);
+            out.push('\n');
+        }
         out.push_str(&" ".repeat(indent));
         out.push_str(&key_text(key));
         out.push(':');
@@ -81,7 +93,7 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
 fn inline(value: &Yaml) -> String {
     match value {
         Yaml::Str(text) => scalar(&text.replace("${{", "${{ '${{' }}")),
-        Yaml::Expr(text) | Yaml::Block(text) => scalar(text),
+        Yaml::Expr(text) | Yaml::Unread(text) | Yaml::Block(text) => scalar(text),
         Yaml::Int(number) => number.to_string(),
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),

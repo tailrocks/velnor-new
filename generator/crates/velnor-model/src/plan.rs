@@ -13,6 +13,8 @@ use crate::repo::TargetKind;
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 
+pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
     pub name: String,
@@ -169,16 +171,30 @@ pub enum When {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
-    Checkout { depth: u32 },
-    InstallTools,
+    Checkout {
+        depth: u32,
+    },
+    InstallTools {
+        only: Option<String>,
+    },
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
+    UploadArchive {
+        name: String,
+        file: RepoPath,
+    },
+    DownloadArchive {
+        name: String,
+        into: Option<RepoPath>,
+    },
     Cargo(CargoCommand),
     Helper(HelperCommand),
     GeneratorCheck,
     InstallHelper(HelperRelease),
     HelperFromArtifact,
-    PublishHelper { binary: RepoPath },
+    PublishHelper {
+        binary: RepoPath,
+    },
     FailWhenANeedFailed,
     FailOnDraftRun,
 }
@@ -283,6 +299,10 @@ pub enum CargoCommand {
     NextestArchive {
         file: RepoPath,
     },
+    NextestRunArchive {
+        file: RepoPath,
+        filter: FilterRef,
+    },
     TestTarget {
         package: PackageName,
         target: TargetName,
@@ -301,6 +321,7 @@ impl CargoCommand {
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
             Self::NextestRun { .. } => &[GateNeed::TestFilter, GateNeed::PackageArgs],
+            Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
             Self::Clippy { .. } | Self::Doc => &[GateNeed::PackageArgs],
             Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
             _ => &[],

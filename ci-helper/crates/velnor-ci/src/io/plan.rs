@@ -6,7 +6,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
-use velnor_model::{AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection};
+use velnor_model::{
+    AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
+};
 use velnor_rust::{
     cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
     select_event, selects_by_diff, unknown_paths, unread_packages,
