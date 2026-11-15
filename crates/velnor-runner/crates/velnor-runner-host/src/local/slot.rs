@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::WaitContainerOptions;
@@ -39,14 +40,33 @@ struct Line<'a> {
     sha: Option<&'a str>,
 }
 
+const START_ATTEMPTS: u32 = 3;
+const START_RETRY: Duration = Duration::from_secs(2);
+
+enum PairFailure {
+    Start(HostError),
+    Run(HostError),
+}
+
+use PairFailure::{Run, Start};
+
 impl Supervisor {
     pub(super) async fn run_slot(
         &self,
         slot: Slot,
         mut stop: watch::Receiver<bool>,
     ) -> Result<(), HostError> {
+        let mut failed = 0;
         while !*stop.borrow() {
-            self.one_pair(&slot, &mut stop).await?;
+            match self.one_pair(&slot, &mut stop).await {
+                Err(Start(HostError::Docker)) if failed + 1 < START_ATTEMPTS => {
+                    failed += 1;
+                    eprintln!("pair {} did not start, attempt {failed}", slot.label);
+                    tokio::time::sleep(START_RETRY).await;
+                }
+                Err(Start(error) | Run(error)) => return Err(error),
+                Ok(()) => failed = 0,
+            }
         }
         Ok(())
     }
@@ -55,19 +75,21 @@ impl Supervisor {
         &self,
         slot: &Slot,
         stop: &mut watch::Receiver<bool>,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), PairFailure> {
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
         let minted = self
             .client
             .mint(slot.side)
             .await
-            .map_err(|_| HostError::Endpoint)?;
+            .map_err(|_| Run(HostError::Endpoint))?;
         let request = self.request(slot, &minted.name, sequence);
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
             Err(error) => {
-                self.retire_agent(slot.side, &minted.name).await?;
-                return Err(error);
+                self.retire_agent(slot.side, &minted.name)
+                    .await
+                    .map_err(Run)?;
+                return Err(Start(error));
             }
         };
         let served = self.serve(slot, &pair, &minted, sequence, stop).await;
@@ -77,9 +99,9 @@ impl Supervisor {
             println!("pair {} removed", slot.label);
         }
         let retired = self.retire_agent(slot.side, &minted.name).await;
-        served?;
-        removed?;
-        retired
+        served.map_err(Run)?;
+        removed.map_err(Run)?;
+        retired.map_err(Run)
     }
 
     async fn retire_agent(&self, side: Side, name: &str) -> Result<(), HostError> {

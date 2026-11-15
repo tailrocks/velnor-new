@@ -18,6 +18,8 @@ use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/retry.rs"]
+mod retry;
 #[path = "local_host_public/scenario.rs"]
 mod scenario;
 use authority::{JIT, Run, TOKEN};
