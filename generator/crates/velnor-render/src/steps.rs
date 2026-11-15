@@ -4,7 +4,8 @@
 use std::fmt;
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind, When,
+    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind,
+    TargetKind, TargetName, When,
 };
 
 use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
@@ -126,9 +127,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             "Test".into(),
             format!(
                 "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
-                match filter {
-                    FilterRef::All => "all()",
-                }
+                nextest_filter(filter)
             ),
             vec![],
         ),
@@ -140,9 +139,16 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             ),
             vec![],
         ),
-        CargoCommand::TestTarget { package, target } => (
+        CargoCommand::TestTarget {
+            package,
+            target,
+            kind,
+        } => (
             format!("Test {package} {target}"),
-            format!("cargo test -p {package} --test {target} --locked"),
+            format!(
+                "cargo test --workspace --locked {}",
+                test_selector(*kind, target)
+            ),
             vec![],
         ),
         CargoCommand::Doctest => (
@@ -173,6 +179,25 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         env,
         run: Some(run),
         ..RenderedStep::default()
+    }
+}
+
+fn nextest_filter(filter: &FilterRef) -> String {
+    match filter {
+        FilterRef::All => "all()".to_owned(),
+        FilterRef::AllExcept(binaries) => binaries.iter().fold("all()".to_owned(), |text, id| {
+            format!("{text} - binary_id(={id})")
+        }),
+    }
+}
+
+fn test_selector(kind: TargetKind, target: &TargetName) -> String {
+    match kind {
+        TargetKind::Lib | TargetKind::ProcMacro => "--lib".to_owned(),
+        TargetKind::Bin => format!("--bin={target}"),
+        TargetKind::Bench => format!("--bench={target}"),
+        TargetKind::Example => format!("--example={target}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
     }
 }
 

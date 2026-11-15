@@ -131,7 +131,13 @@ pub struct RustMember {
     pub directory: Option<RepoPath>,
     pub dependencies: Vec<MemberDependency>,
     pub targets: Vec<Target>,
-    pub custom_harnesses: Vec<TargetName>,
+    pub custom_harnesses: Vec<CustomHarness>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomHarness {
+    pub name: TargetName,
+    pub kind: TargetKind,
 }
 
 impl RustMember {

@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use velnor_model::RepoPath;
-use velnor_rust::{MetadataError, cargo_files, wanted_files};
+use velnor_rust::{MetadataError, cargo_files, manifests, wanted_files};
 
 use crate::expected_files;
 
@@ -22,13 +22,8 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
     expected_files(&view).map_err(Error::Generate)?;
-    let wanted = wanted_files(&view.tracked_paths);
     let recording = Recording {
-        view: view
-            .files
-            .into_iter()
-            .filter(|(path, _)| wanted.contains(path))
-            .collect(),
+        view: recorded_files(view.files, &view.tracked_paths),
         manifests: cargo_files(&view.tracked_paths),
         metadata: metadata
             .into_iter()
@@ -36,6 +31,19 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
             .collect::<Result<_, Error>>()?,
     };
     write_sample(&destination, name, &recording)
+}
+
+#[must_use]
+pub fn recorded_files(
+    files: BTreeMap<RepoPath, Vec<u8>>,
+    tracked: &BTreeSet<RepoPath>,
+) -> BTreeMap<RepoPath, Vec<u8>> {
+    let mut wanted = wanted_files(tracked);
+    wanted.extend(manifests(tracked));
+    files
+        .into_iter()
+        .filter(|(path, _)| wanted.contains(path))
+        .collect()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

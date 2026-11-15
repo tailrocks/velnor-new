@@ -11,7 +11,7 @@ use similar::TextDiff;
 use velnor_gen::expected_files;
 use velnor_gen::io::SAMPLE_REPOSITORY;
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{metadata_roots, reduce_metadata, wanted_files};
+use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -73,6 +73,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
     }
     let files = wanted_files(&tracked_paths)
         .into_iter()
+        .chain(manifests(&tracked_paths))
         .filter_map(|path| recorded.get(&path).map(|bytes| (path, bytes.clone())))
         .collect();
     let mut rust_metadata = BTreeMap::new();

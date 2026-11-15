@@ -7,6 +7,7 @@ use crate::ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
     TargetName,
 };
+use crate::repo::TargetKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -174,6 +175,7 @@ pub enum CargoCommand {
     TestTarget {
         package: PackageName,
         target: TargetName,
+        kind: TargetKind,
     },
     Doctest,
     Doc,
@@ -181,9 +183,10 @@ pub enum CargoCommand {
     Machete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterRef {
     All,
+    AllExcept(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -77,17 +77,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownLockedPackage(package),
         ));
     }
-    if let Some((package, target)) = config.nextest_harnesses.iter().find(|(package, target)| {
-        !rust_roots
-            .iter()
-            .flat_map(|root| &root.members)
-            .any(|member| member.name == *package && member.custom_harnesses.contains(target))
-    }) {
-        return Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::UnknownNextestHarness(format!("{package}:{target}")),
-        ));
-    }
+    check_nextest_harnesses(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -263,4 +253,31 @@ fn is_named(path: &RepoPath, name: &str) -> bool {
             .as_str()
             .strip_suffix(name)
             .is_some_and(|rest| rest.ends_with('/'))
+}
+
+fn check_nextest_harnesses(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    for (package, target) in &config.nextest_harnesses {
+        let declared = rust_roots
+            .iter()
+            .flat_map(|root| &root.members)
+            .filter(|member| {
+                member.name == *package
+                    && member
+                        .custom_harnesses
+                        .iter()
+                        .any(|harness| harness.name == *target)
+            })
+            .count();
+        let entry = format!("{package}:{target}");
+        let reason = match declared {
+            0 => Reason::UnknownNextestHarness(entry),
+            1 => continue,
+            _ => Reason::AmbiguousNextestHarness(entry),
+        };
+        return Err(DetectError::invalid(&CONFIG_PATH, reason));
+    }
+    Ok(())
 }

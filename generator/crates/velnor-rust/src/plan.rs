@@ -4,14 +4,15 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Job, JobId, PermissionScope, Permissions,
-    RepoFacts, RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers,
-    When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
+    PermissionScope, Permissions, RepoFacts, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::harness::{runs_in_direct_step, uses_nextest};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -123,30 +124,60 @@ fn root_jobs(
 
 fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
     let mut test = Vec::new();
-    if root.members.iter().any(RustMember::has_test_target) {
+    if root
+        .members
+        .iter()
+        .any(|member| uses_nextest(&facts.config, member))
+    {
         test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
+            filter: nextest_filter(facts, root),
         });
     }
     test.extend(root.members.iter().flat_map(|member| {
         member
             .custom_harnesses
             .iter()
-            .filter(|target| {
-                !facts
-                    .config
-                    .nextest_harnesses
-                    .contains(&(member.name.clone(), (*target).clone()))
-            })
-            .map(|target| CargoCommand::TestTarget {
+            .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+            .map(|harness| CargoCommand::TestTarget {
                 package: member.name.clone(),
-                target: target.clone(),
+                target: harness.name.clone(),
+                kind: harness.kind,
             })
     }));
     if has_doctest_library(root) {
         test.push(CargoCommand::Doctest);
     }
     test
+}
+
+fn nextest_filter(facts: &RepoFacts, root: &RustRoot) -> FilterRef {
+    let direct: Vec<String> = root
+        .members
+        .iter()
+        .flat_map(|member| {
+            member
+                .custom_harnesses
+                .iter()
+                .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+                .map(|harness| binary_id(&member.name, harness))
+        })
+        .collect();
+    if direct.is_empty() {
+        FilterRef::All
+    } else {
+        FilterRef::AllExcept(direct)
+    }
+}
+
+fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
+    let name = &harness.name;
+    match harness.kind {
+        TargetKind::Lib | TargetKind::ProcMacro => package.to_string(),
+        TargetKind::Bin => format!("{package}::bin/{name}"),
+        TargetKind::Example => format!("{package}::example/{name}"),
+        TargetKind::Bench => format!("{package}::bench/{name}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
+    }
 }
 
 pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
