@@ -302,3 +302,44 @@ fn release_plz_may_sit_in_either_mise_file() {
     ];
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn only_the_cargo_token_built_in_passes_as_a_credential_provider() {
+    for provider in [
+        "\"cargo:token\"",
+        "[\"cargo:token\"]",
+        "[\"cargo:token\", \"cargo:token\"]",
+    ] {
+        let mut files = files();
+        files.cargo_configs.insert(
+            ".cargo/config.toml".to_owned(),
+            format!("[registry]\ncredential-provider = {provider}\n"),
+        );
+        assert_eq!(refusal(&files), None, "{provider}");
+    }
+    for provider in [
+        "\"cargo:wincred\"",
+        "\"cargo:macos-keychain\"",
+        "\"cargo:libsecret\"",
+        "\"cargo:token-from-stdout cat\"",
+        "\"cargo:token-from-stdout ./steal\"",
+        "\"cargo:\"",
+        "\"cargo:token \"",
+        "\"Cargo:token\"",
+        "[\"cargo:token\", \"cargo:wincred\"]",
+        "[\"cargo:token\", \"./steal\"]",
+        "[]",
+        "true",
+    ] {
+        let mut files = files();
+        files.cargo_configs.insert(
+            ".cargo/config.toml".to_owned(),
+            format!("[registry]\ncredential-provider = {provider}\n"),
+        );
+        let got = refusal(&files);
+        assert!(
+            matches!(got, Some(ReleaseError::CargoCredentialProvider { .. })),
+            "{provider}: {got:?}"
+        );
+    }
+}

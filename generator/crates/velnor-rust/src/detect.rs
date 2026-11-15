@@ -41,6 +41,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(
         tracked
             .iter()
+            .filter(|path| is_nested_toolchain(path))
+            .cloned(),
+    )
+    .chain(
+        tracked
+            .iter()
             .filter(|path| is_release_plz_config(path))
             .cloned(),
     )
@@ -51,6 +57,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
             .cloned(),
     )
     .collect()
+}
+
+fn is_nested_toolchain(path: &RepoPath) -> bool {
+    path.as_str().rsplit_once('/').is_some_and(|(_, name)| {
+        name == TOOLCHAIN_PLAIN.as_str() || name == TOOLCHAIN_TOML.as_str()
+    })
 }
 
 fn is_workflow_file(path: &RepoPath) -> bool {

@@ -297,10 +297,11 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
 fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let tracked_paths = tracked(root)?;
+    let (tracked_paths, symlinks) = tracked(root)?;
     let mut view = RepoView {
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
+        symlinks,
         rust_metadata: BTreeMap::new(),
     };
     let mut recorded = BTreeMap::new();

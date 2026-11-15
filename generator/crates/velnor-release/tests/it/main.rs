@@ -9,3 +9,4 @@ mod hardening;
 mod refs;
 mod refusals;
 mod sources;
+mod symlinks;
