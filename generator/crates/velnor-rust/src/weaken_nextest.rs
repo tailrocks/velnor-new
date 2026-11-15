@@ -31,7 +31,7 @@ fn entries<'a>(section: &'a Value, key: &str) -> impl Iterator<Item = &'a Value>
 }
 
 fn retries_tests(value: &Value) -> bool {
-    value.as_integer() != Some(0)
+    value.get("count").unwrap_or(value).as_integer() != Some(0)
 }
 
 fn flaky_result(section: &Value) -> String {
@@ -63,6 +63,9 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
                 let filter = entry
                     .get("filter")
                     .map_or_else(String::new, |filter| format!(" filter = {filter}"));
+                let platform = entry
+                    .get("platform")
+                    .map_or_else(String::new, |platform| format!(" platform = {platform}"));
                 let stage = if key == "run-wrapper" {
                     "runs test binaries"
                 } else {
@@ -70,7 +73,7 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
                 };
                 found.push(make(
                     format!(
-                        "profile.{profile}.scripts {key} = \"{name}\" command = {command}{filter}"
+                        "profile.{profile}.scripts {key} = \"{name}\" command = {command}{filter}{platform}"
                     ),
                     format!("{stage} through the wrapper {name}, command {command}"),
                 ));

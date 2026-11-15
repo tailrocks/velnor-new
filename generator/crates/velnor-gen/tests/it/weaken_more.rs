@@ -165,3 +165,26 @@ fn a_changed_mise_wrapper_env_is_new_and_defaults_stay_unnamed() -> TestResult {
     assert_eq!(defaults, Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn a_zero_count_retry_table_is_not_named_and_a_script_platform_change_is_new() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[profile.default]\nretries = { backoff = \"fixed\", count = 0 }\n",
+        )],
+        false,
+    )?;
+    assert_eq!(named, Vec::<String>::new());
+    let wrapper = |host: &str| {
+        format!(
+            "[scripts.wrapper.skip]\ncommand = \"true\"\n\n[[profile.default.scripts]]\nfilter = \"all()\"\nplatform = \"{host}\"\nrun-wrapper = \"skip\"\n"
+        )
+    };
+    let before = facts(&[(NEXTEST, &wrapper("cfg(windows)"))])?;
+    assert_eq!(
+        introduced_files(&before, &[NEXTEST], &[(NEXTEST, &wrapper("cfg(unix)"))])?,
+        [NEXTEST]
+    );
+    Ok(())
+}
