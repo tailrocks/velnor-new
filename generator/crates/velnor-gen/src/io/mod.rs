@@ -15,8 +15,7 @@ use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
     DetectError, LOCK_PATH, LockError, MetadataError, MetadataFileError, commit_url, manifests,
-    metadata_roots,
-    pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
+    metadata_roots, pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
 mod check;

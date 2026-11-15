@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind,
-};
+use velnor_model::{CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind};
 
 use crate::gate::{PLAN_STEP, condition, output};
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
