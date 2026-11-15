@@ -10,7 +10,8 @@ mod yaml;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, PermissionScope, Permissions, RepoPath, Triggers, WORKFLOW_PATH, WorkflowPlan,
+    Access, CancelInProgress, PermissionScope, Permissions, RepoPath, Triggers, WORKFLOW_PATH,
+    WorkflowPlan,
 };
 
 pub use crate::rules::{
@@ -47,7 +48,12 @@ pub fn render_workflow(
                 entry("group", Yaml::Expr("${{ github.workflow_ref }}".to_owned())),
                 entry(
                     "cancel-in-progress",
-                    Yaml::Bool(plan.concurrency.cancel_in_progress),
+                    match plan.concurrency.cancel_in_progress {
+                        CancelInProgress::Never => Yaml::Bool(false),
+                        CancelInProgress::PullRequests => {
+                            Yaml::Expr("${{ github.event_name == 'pull_request' }}".to_owned())
+                        }
+                    },
                 ),
             ]),
         ),

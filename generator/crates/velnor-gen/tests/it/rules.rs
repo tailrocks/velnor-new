@@ -7,9 +7,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease, HelperVersion, Job,
-    JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
-    When, WorkflowPlan,
+    CancelInProgress, Concurrency, DownloadUrl, HelperBinary, HelperCommand, HelperRelease,
+    HelperVersion, Job, JobId, Permissions, Platform, RunnerLabel, Sha256, Step, StepKind,
+    Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{
     FETCH_HELPER_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -82,7 +82,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             workflow_dispatch: false,
         },
         concurrency: Concurrency {
-            cancel_in_progress: true,
+            cancel_in_progress: CancelInProgress::PullRequests,
         },
         permissions: Permissions::default(),
         jobs: vec![Job {

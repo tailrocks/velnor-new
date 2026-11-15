@@ -13,7 +13,7 @@ permissions:
   contents: read
 concurrency:
   group: '${{ github.workflow_ref }}'
-  cancel-in-progress: true
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust:

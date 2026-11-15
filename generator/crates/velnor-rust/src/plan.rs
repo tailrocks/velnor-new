@@ -4,9 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, FullRun, Gate, GateNeed, HelperCommand, Job,
-    JobId, OnMain, PermissionScope, Permissions, PlanFrom, RepoFacts, RustMember, RustRoot, Shape,
-    ShapeDecision, Step, StepKind, TargetKind, Triggers, When, WorkflowPlan,
+    Access, CancelInProgress, CargoCommand, Concurrency, FilterRef, FullRun, Gate, GateNeed,
+    HelperCommand, Job, JobId, OnMain, PermissionScope, Permissions, PlanFrom, RepoFacts,
+    RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers, When,
+    WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
@@ -97,7 +98,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             workflow_dispatch: true,
         },
         concurrency: Concurrency {
-            cancel_in_progress: true,
+            cancel_in_progress: CancelInProgress::PullRequests,
         },
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         jobs,

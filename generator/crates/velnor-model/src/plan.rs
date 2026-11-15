@@ -28,7 +28,13 @@ pub struct Triggers {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Concurrency {
-    pub cancel_in_progress: bool,
+    pub cancel_in_progress: CancelInProgress,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancelInProgress {
+    Never,
+    PullRequests,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
