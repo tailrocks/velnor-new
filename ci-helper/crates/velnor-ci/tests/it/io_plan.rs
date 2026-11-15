@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self};
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Output};
 
 use crate::io::Repo;
@@ -126,6 +127,33 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
         "{written}"
     );
     repo.link("b/src/lib.rs", "b/src/linked.rs");
+    assert_eq!(
+        doc_flags(&repo, None),
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+    );
+}
+
+#[test]
+fn plan_reads_no_file_when_a_package_reads_the_whole_repository() {
+    let repo = plan_repo("doc-flags-whole");
+    repo.write(".velnor/rust-inputs.lock", ".\ta\n");
+    repo.write("logo.bin", "x");
+    let guarded = repo.root().join("logo.bin");
+    fs::set_permissions(&guarded, fs::Permissions::from_mode(0o000))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let flags = doc_flags(&repo, None);
+    fs::set_permissions(&guarded, fs::Permissions::from_mode(0o644))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        flags,
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+    );
+}
+
+#[test]
+fn plan_treats_a_source_over_the_size_bound_as_possibly_holding_docs() {
+    let repo = plan_repo("doc-flags-large");
+    repo.write("a/src/lib.rs", &"// pad\n".repeat(200_000));
     assert_eq!(
         doc_flags(&repo, None),
         "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
