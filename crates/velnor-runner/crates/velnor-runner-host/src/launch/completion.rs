@@ -5,6 +5,7 @@ mod cleanup;
 mod diagnostics;
 mod journal_ref;
 mod reaper;
+mod startup;
 
 pub(in crate::launch) use cleanup::{
     remove_owned_resources_for_jit_conflict, remove_owned_resources_for_retirement,
@@ -18,7 +19,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use bollard::Docker;
@@ -156,12 +157,9 @@ impl CompletionWorker {
             selected_engine,
         };
         ensure_reaper_started()?;
-        let thread = thread::Builder::new()
-            .name("velnor-completion-reconciler".to_owned())
-            .spawn(move || {
-                completion_thread(resources, &thread_stopping, &receiver, finished_tx);
-            })
-            .map_err(|_| HostError::Journal)?;
+        let thread = startup::spawn_with_runtime(build_runtime, move |runtime| {
+            completion_thread(runtime, resources, &thread_stopping, &receiver, finished_tx);
+        })?;
         Ok(Self {
             admin,
             wake,
@@ -239,19 +237,20 @@ impl Drop for CompletionWorker {
     }
 }
 
+fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+}
+
 fn completion_thread(
+    runtime: &tokio::runtime::Runtime,
     resources: Resources,
     stopping: &Arc<AtomicBool>,
     receiver: &mpsc::Receiver<()>,
     finished: oneshot::Sender<Result<(), HostError>>,
 ) {
-    let result = match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(runtime) => cleanup::run(&runtime, resources, stopping, receiver),
-        Err(_) => Err(HostError::Journal),
-    };
+    let result = cleanup::run(runtime, resources, stopping, receiver);
     if let Err(Err(error)) = finished.send(result) {
         eprintln!("completion worker failed phase=shutdown reason={error}");
     }
