@@ -169,3 +169,45 @@ fn nothing_is_written_when_there_is_nothing_to_write() {
     );
     assert!(!exists);
 }
+
+#[test]
+fn pages_are_read_until_enough_ordinary_runs_are_found() {
+    let mut fake = recorded(&list(&[]));
+    for page in 1..=6_u32 {
+        let manual: Vec<Value> = (0..100)
+            .map(|n| entry(10_000 + n, "workflow_dispatch", "topic"))
+            .collect();
+        fake.respond(
+            workflow_runs_path(&lab(), "rust-ci.yml", page),
+            &list(&manual),
+        );
+    }
+    fake.respond(
+        workflow_runs_path(&lab(), "rust-ci.yml", 7),
+        &list(&ordinary(&NEWEST)),
+    );
+    let report = gather(&fake, &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(report.timings.len(), 2);
+}
+
+#[test]
+fn a_binary_seen_in_fewer_than_three_runs_has_no_entry() {
+    let mut fake = recorded(&list(&ordinary(&NEWEST)));
+    let log = velnor_ci::github::job_log_path(&lab(), 132_517_592_524);
+    let kept: Vec<String> = fake
+        .get_text(&log)
+        .lines()
+        .filter(|line| !line.contains("lab::bin/lab"))
+        .map(str::to_owned)
+        .collect();
+    let without = kept.join("\n");
+    fake.respond(log, &without);
+    let report = gather(&fake, &lab(), &roots()).unwrap_or_else(|e| unreachable!("{e}"));
+    let lab_entry = &report.timings[&root("lab/Cargo.toml")];
+    assert!(lab_entry.test_binary_seconds.is_empty());
+    assert!(
+        !report.timings[&root("Cargo.toml")]
+            .test_binary_seconds
+            .is_empty()
+    );
+}

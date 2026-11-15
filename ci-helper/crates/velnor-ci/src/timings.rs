@@ -16,7 +16,6 @@ use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
 
 pub const RUNS_NEEDED: usize = 3;
 pub const RUNS_USED: usize = 10;
-const PAGES_LIMIT: u32 = 5;
 const PAGE_SIZE: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,7 +87,7 @@ fn ordinary_runs(
     let path = WORKFLOW_PATH;
     let workflow = path.as_str().rsplit('/').next().unwrap_or_default();
     let mut ids = Vec::new();
-    for page in 1..=PAGES_LIMIT {
+    for page in 1.. {
         let body = github.get(&workflow_runs_path(repo, workflow, page))?;
         let listed: ApiPage<ApiListedRun> = parse(&body, "workflow runs")?;
         let last_page = listed.items.len() < PAGE_SIZE;
@@ -162,6 +161,7 @@ fn medians(samples: &[Sample]) -> Timings {
         test_seconds: seconds(|s| s.tests),
         test_binary_seconds: by_binary
             .into_iter()
+            .filter(|(_, values)| values.len() >= RUNS_NEEDED)
             .map(|(binary, values)| (binary.to_owned(), whole(median(values))))
             .collect(),
     }
