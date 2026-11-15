@@ -45,6 +45,9 @@ pub enum Reason {
         input: PathGlob,
     },
     UnknownInputPackage(String),
+    UnknownNextestHarness(String),
+    AmbiguousNextestHarness(String),
+    UntrackedManifest,
     LockLine(usize),
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
@@ -93,6 +96,17 @@ impl fmt::Display for Reason {
             Self::UnknownInputPackage(package) => write!(
                 f,
                 "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::AmbiguousNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which more than one test target declares"
+            ),
+            Self::UnknownNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which is not a test target with harness = false"
+            ),
+            Self::UntrackedManifest => f.write_str(
+                "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(

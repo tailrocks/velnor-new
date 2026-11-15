@@ -32,6 +32,7 @@ pub(crate) fn package(
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     manifest: Some(path(manifest)?),
+                    features: Vec::new(),
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
@@ -65,6 +66,9 @@ pub(crate) fn repo(
         view.tracked_paths
             .insert(manifest.sibling(&path("Cargo.lock")?));
         view.tracked_paths.insert(manifest.clone());
+        for member in &members {
+            view.tracked_paths.insert(member.manifest.clone());
+        }
         view.rust_metadata
             .insert(manifest, RustMetadata { members });
     }

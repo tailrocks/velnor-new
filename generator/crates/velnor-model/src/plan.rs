@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use crate::ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
+    TargetName,
 };
+use crate::repo::TargetKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -163,19 +165,33 @@ impl Platform {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CargoCommand {
     FmtCheck,
-    Clippy { extra: Vec<String> },
-    CheckAlone { package: PackageName },
-    NextestRun { filter: FilterRef },
-    NextestArchive { file: RepoPath },
+    Clippy {
+        extra: Vec<String>,
+    },
+    CheckAlone {
+        package: PackageName,
+    },
+    NextestRun {
+        filter: FilterRef,
+    },
+    NextestArchive {
+        file: RepoPath,
+    },
+    TestTarget {
+        package: PackageName,
+        target: TargetName,
+        kind: TargetKind,
+    },
     Doctest,
     Doc,
     Deny,
     Machete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterRef {
     All,
+    AllExcept(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

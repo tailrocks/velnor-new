@@ -32,6 +32,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub manifest: Option<RepoPath>,
+    pub features: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +132,13 @@ pub struct RustMember {
     pub directory: Option<RepoPath>,
     pub dependencies: Vec<MemberDependency>,
     pub targets: Vec<Target>,
+    pub custom_harnesses: Vec<CustomHarness>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomHarness {
+    pub name: TargetName,
+    pub kind: TargetKind,
 }
 
 impl RustMember {
@@ -178,6 +186,7 @@ pub struct RustCiConfig {
     pub default_ignores: bool,
     pub shape: Option<Shape>,
     pub required_check: String,
+    pub nextest_harnesses: Vec<(PackageName, TargetName)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +206,7 @@ impl Default for RustCiConfig {
             default_ignores: true,
             shape: None,
             required_check: "Required".to_owned(),
+            nextest_harnesses: Vec::new(),
         }
     }
 }

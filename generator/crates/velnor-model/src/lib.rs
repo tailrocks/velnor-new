@@ -16,9 +16,9 @@ pub use plan::{
     WorkflowPlan,
 };
 pub use repo::{
-    CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
-    RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind,
-    Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    CompileInputs, CustomHarness, DependencyKind, InputRule, MemberDependency, PackageDependency,
+    RepoFacts, RepoView, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
+    TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
 };
 pub use selection::{
     AllTrigger, ChangeSet, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

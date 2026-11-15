@@ -24,7 +24,8 @@ mod workflows;
 use crate::cli::{Cli, Command};
 use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
+    write_sample,
 };
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
@@ -342,14 +343,18 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
-    for manifest in manifests(&view.tracked_paths) {
-        if let Ok(Some(file)) = regular_file(root, &manifest)
-            && let Ok(bytes) = fs::read(&file)
-        {
-            view.files.entry(manifest).or_insert(bytes);
-        }
-    }
+    add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))
+}
+
+pub fn add_manifests(
+    view: &mut RepoView,
+    read: impl FnOnce(&[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error>,
+) -> Result<(), Error> {
+    for (manifest, bytes) in read(&manifests(&view.tracked_paths))? {
+        view.files.entry(manifest).or_insert(bytes);
+    }
+    Ok(())
 }
 
 pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {

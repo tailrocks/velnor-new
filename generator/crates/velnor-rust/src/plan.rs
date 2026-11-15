@@ -1,17 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CargoCommand, Concurrency, FilterRef, Job, JobId, PermissionScope, Permissions,
-    RepoFacts, RustMember, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, Triggers,
-    When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
+    PermissionScope, Permissions, RepoFacts, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
 use crate::doc_steps::has_doctest_library;
 use crate::error::{DetectError, Reason};
+use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
@@ -77,16 +78,7 @@ fn root_jobs(
         CargoCommand::FmtCheck,
         CargoCommand::Clippy { extra: Vec::new() },
     ];
-    let nextest = root.members.iter().any(RustMember::has_test_target);
-    let mut test = Vec::new();
-    if nextest {
-        test.push(CargoCommand::NextestRun {
-            filter: FilterRef::All,
-        });
-    }
-    if has_doctest_library(root) {
-        test.push(CargoCommand::Doctest);
-    }
+    let test = test_commands(facts, root);
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => {
@@ -127,6 +119,67 @@ fn root_jobs(
             }
             jobs
         }
+    }
+}
+
+fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
+    let mut test = Vec::new();
+    if root
+        .members
+        .iter()
+        .any(|member| uses_nextest(&facts.config, member))
+    {
+        test.push(CargoCommand::NextestRun {
+            filter: nextest_filter(facts, root),
+        });
+    }
+    let mut seen = BTreeSet::new();
+    test.extend(root.members.iter().flat_map(|member| {
+        member
+            .custom_harnesses
+            .iter()
+            .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+            .filter(|harness| seen.insert(selector_id(harness)))
+            .map(|harness| CargoCommand::TestTarget {
+                package: member.name.clone(),
+                target: harness.name.clone(),
+                kind: harness.kind,
+            })
+            .collect::<Vec<_>>()
+    }));
+    if has_doctest_library(root) {
+        test.push(CargoCommand::Doctest);
+    }
+    test
+}
+
+fn nextest_filter(facts: &RepoFacts, root: &RustRoot) -> FilterRef {
+    let direct: Vec<String> = root
+        .members
+        .iter()
+        .flat_map(|member| {
+            member
+                .custom_harnesses
+                .iter()
+                .filter(|harness| runs_in_direct_step(&facts.config, member, harness))
+                .map(|harness| binary_id(&member.name, harness))
+        })
+        .collect();
+    if direct.is_empty() {
+        FilterRef::All
+    } else {
+        FilterRef::AllExcept(direct)
+    }
+}
+
+fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
+    let name = &harness.name;
+    match harness.kind {
+        TargetKind::Lib | TargetKind::ProcMacro => package.to_string(),
+        TargetKind::Bin => format!("{package}::bin/{name}"),
+        TargetKind::Example => format!("{package}::example/{name}"),
+        TargetKind::Bench => format!("{package}::bench/{name}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
     }
 }
 

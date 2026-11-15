@@ -10,6 +10,7 @@ use velnor_model::{
 
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
+use crate::harness::custom_harnesses;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -67,7 +68,7 @@ pub(crate) fn rust_roots(
                     targets.entry(name).or_default().insert(target);
                 }
             }
-            Ok(root(manifest, metadata, &owner, &targets))
+            root(manifest, metadata, &owner, &targets, view)
         })
         .collect::<Result<_, _>>()?;
     Ok((roots, every))
@@ -78,7 +79,8 @@ fn root(
     metadata: &RustMetadata,
     owner: &BTreeMap<&RepoPath, &RepoPath>,
     targets: &Targets,
-) -> RustRoot {
+    view: &RepoView,
+) -> Result<RustRoot, DetectError> {
     let depends_on: BTreeSet<RepoPath> = metadata
         .members
         .iter()
@@ -90,14 +92,14 @@ fn root(
     let mut members: Vec<RustMember> = metadata
         .members
         .iter()
-        .map(|package| member(package, targets))
-        .collect();
+        .map(|package| member(package, targets, view))
+        .collect::<Result<_, _>>()?;
     members.sort_by(|a, b| a.name.cmp(&b.name));
-    RustRoot {
+    Ok(RustRoot {
         manifest: manifest.clone(),
         members,
         depends_on: depends_on.into_iter().collect(),
-    }
+    })
 }
 
 const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
@@ -257,8 +259,12 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
     Some(segments.join("/"))
 }
 
-fn member(package: &RustPackage, targets: &Targets) -> RustMember {
-    RustMember {
+fn member(
+    package: &RustPackage,
+    targets: &Targets,
+    view: &RepoView,
+) -> Result<RustMember, DetectError> {
+    Ok(RustMember {
         name: package.name.clone(),
         manifest: package.manifest.clone(),
         directory: package.manifest.parent(),
@@ -278,5 +284,6 @@ fn member(package: &RustPackage, targets: &Targets) -> RustMember {
             })
             .collect(),
         targets: package.targets.clone(),
-    }
+        custom_harnesses: custom_harnesses(view, package)?,
+    })
 }

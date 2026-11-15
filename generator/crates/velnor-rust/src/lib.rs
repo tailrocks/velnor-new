@@ -7,6 +7,7 @@ mod config;
 mod detect;
 mod doc_steps;
 mod error;
+mod harness;
 mod lock;
 mod lock_affected;
 mod manifest_diff;

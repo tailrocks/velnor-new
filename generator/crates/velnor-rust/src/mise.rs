@@ -4,9 +4,10 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoFacts, RepoPath, RustMember, ToolPin, ToolPins};
+use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
+use crate::harness::uses_nextest;
 use crate::toml_file::table;
 
 pub static MISE_CONFIGS: [RepoPath; 2] = [
@@ -117,7 +118,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         .rust_roots
         .iter()
         .flat_map(|root| &root.members)
-        .any(RustMember::has_test_target);
+        .any(|member| uses_nextest(&facts.config, member));
     if tested && nextest_tool(&facts.tools).is_none() {
         return Err(DetectError::NextestRequired {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),

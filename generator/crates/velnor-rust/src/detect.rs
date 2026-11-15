@@ -91,6 +91,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownLockedPackage(package),
         ));
     }
+    check_nextest_harnesses(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -266,4 +267,32 @@ fn is_named(path: &RepoPath, name: &str) -> bool {
             .as_str()
             .strip_suffix(name)
             .is_some_and(|rest| rest.ends_with('/'))
+}
+
+fn check_nextest_harnesses(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    for (package, target) in &config.nextest_harnesses {
+        let declared: usize = rust_roots
+            .iter()
+            .flat_map(|root| &root.members)
+            .filter(|member| member.name == *package)
+            .map(|member| {
+                member
+                    .custom_harnesses
+                    .iter()
+                    .filter(|harness| harness.name == *target)
+                    .count()
+            })
+            .sum();
+        let entry = format!("{package}:{target}");
+        let reason = match declared {
+            0 => Reason::UnknownNextestHarness(entry),
+            1 => continue,
+            _ => Reason::AmbiguousNextestHarness(entry),
+        };
+        return Err(DetectError::invalid(&CONFIG_PATH, reason));
+    }
+    Ok(())
 }

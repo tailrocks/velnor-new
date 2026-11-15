@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind, When,
+    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind, TargetKind,
+    TargetName, When,
 };
 
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
@@ -114,9 +115,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             "Test".into(),
             format!(
                 "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
-                match filter {
-                    FilterRef::All => "all()",
-                }
+                nextest_filter(filter)
             ),
             vec![],
         ),
@@ -125,6 +124,18 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             format!(
                 "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
+            ),
+            vec![],
+        ),
+        CargoCommand::TestTarget {
+            package,
+            target,
+            kind,
+        } => (
+            format!("Test {package} {target}"),
+            format!(
+                "cargo test --workspace --locked {}",
+                test_selector(*kind, target)
             ),
             vec![],
         ),
@@ -156,6 +167,25 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
         env,
         run: Some(run),
         ..RenderedStep::default()
+    }
+}
+
+fn nextest_filter(filter: &FilterRef) -> String {
+    match filter {
+        FilterRef::All => "all()".to_owned(),
+        FilterRef::AllExcept(binaries) => binaries.iter().fold("all()".to_owned(), |text, id| {
+            format!("{text} - binary_id(={id})")
+        }),
+    }
+}
+
+fn test_selector(kind: TargetKind, target: &TargetName) -> String {
+    match kind {
+        TargetKind::Lib | TargetKind::ProcMacro => "--lib".to_owned(),
+        TargetKind::Bin => format!("--bin={target}"),
+        TargetKind::Bench => format!("--bench={target}"),
+        TargetKind::Example => format!("--example={target}"),
+        TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
     }
 }
 
