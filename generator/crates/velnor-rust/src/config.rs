@@ -158,7 +158,12 @@ fn branch_name(name: &str) -> bool {
         && name != "HEAD"
         && !name
             .split('/')
-            .any(|part| part.starts_with('.') || part.ends_with(".lock"))
+            .any(|part| {
+                part.starts_with('.')
+                    || part
+                        .rsplit_once('.')
+                        .is_some_and(|(_, ext)| ext == "lock")
+            })
         && !name
             .chars()
             .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
