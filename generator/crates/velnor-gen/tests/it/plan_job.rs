@@ -82,7 +82,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
         assert!(!plan_job.contains(forbidden), "{forbidden} in {plan_job}");
     }
     for slug in ["root", "lab"] {
-        for output in ["mode", "doctests", "docs"] {
+        for output in ["mode", "docs"] {
             assert!(
                 text.contains(&format!(
                     "      rust_{slug}_{output}: '${{{{ steps.plan.outputs.rust_{slug}_{output} }}}}'\n"
@@ -94,6 +94,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             "    needs:\n      - rust-plan\n    if: '${{{{ needs.rust-plan.outputs.rust_{slug}_mode != ''none'' }}}}'\n"
         )));
     }
+    assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
     assert_eq!(lane[..6], LANE_SETUP);
     assert!(lane[6].starts_with("Format"), "{lane:?}");
@@ -128,6 +129,42 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
         .filter(|line| line.contains("cargo test --doc"))
     {
         assert!(line.contains("velnor-ci run -- cargo test --doc"), "{line}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_plan_job_exposes_only_the_outputs_a_lane_reads() -> TestResult {
+    let mut files = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    let lib = RepoPath::new("lab/src/lib.rs")?;
+    let lab = files
+        .rust_metadata
+        .get_mut(&RepoPath::new("lab/Cargo.toml")?)
+        .ok_or("lab")?;
+    for target in lab.members.iter_mut().flat_map(|m| &mut m.targets) {
+        target.kinds = vec![velnor_model::TargetKind::Lib];
+        target.source = Some(lib.clone());
+        target.doctest = true;
+    }
+    let text = workflow(&files)?;
+    let outputs: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("      rust_"))
+        .filter_map(|line| line.split(':').next())
+        .collect();
+    assert_eq!(
+        outputs,
+        [
+            "lab_mode",
+            "lab_doctests",
+            "lab_docs",
+            "root_mode",
+            "root_docs"
+        ]
+    );
+    for output in &outputs {
+        let read = format!("needs.rust-plan.outputs.rust_{output}");
+        assert!(text.contains(&read), "{output} is never read");
     }
     Ok(())
 }

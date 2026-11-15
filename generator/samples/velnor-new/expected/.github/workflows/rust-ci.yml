@@ -14,21 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
-      rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
-      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_ci_helper_mode: '${{ steps.plan.outputs.rust_ci_helper_mode }}'
-      rust_ci_helper_doctests: '${{ steps.plan.outputs.rust_ci_helper_doctests }}'
       rust_ci_helper_docs: '${{ steps.plan.outputs.rust_ci_helper_docs }}'
       rust_crates_velnor_runner_mode: '${{ steps.plan.outputs.rust_crates_velnor_runner_mode }}'
-      rust_crates_velnor_runner_doctests: '${{ steps.plan.outputs.rust_crates_velnor_runner_doctests }}'
       rust_crates_velnor_runner_docs: '${{ steps.plan.outputs.rust_crates_velnor_runner_docs }}'
       rust_generator_mode: '${{ steps.plan.outputs.rust_generator_mode }}'
-      rust_generator_doctests: '${{ steps.plan.outputs.rust_generator_doctests }}'
       rust_generator_docs: '${{ steps.plan.outputs.rust_generator_docs }}'
       rust_local_mode: '${{ steps.plan.outputs.rust_local_mode }}'
-      rust_local_doctests: '${{ steps.plan.outputs.rust_local_doctests }}'
       rust_local_docs: '${{ steps.plan.outputs.rust_local_docs }}'
+      rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

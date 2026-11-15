@@ -14,12 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
+      rust_lab_mode: '${{ steps.plan.outputs.rust_lab_mode }}'
+      rust_lab_docs: '${{ steps.plan.outputs.rust_lab_docs }}'
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
-      rust_lab_mode: '${{ steps.plan.outputs.rust_lab_mode }}'
-      rust_lab_doctests: '${{ steps.plan.outputs.rust_lab_doctests }}'
-      rust_lab_docs: '${{ steps.plan.outputs.rust_lab_docs }}'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

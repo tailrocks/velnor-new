@@ -74,7 +74,8 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         })
         .collect();
     if !single {
-        jobs.insert(0, plan_job(facts));
+        let used = used_outputs(&jobs);
+        jobs.insert(0, plan_job(facts, used));
     }
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
@@ -100,15 +101,29 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn plan_job(facts: &RepoFacts) -> Job {
+fn used_outputs(lanes: &[Job]) -> Vec<(String, GateNeed)> {
+    let used: BTreeSet<(String, GateNeed)> = lanes
+        .iter()
+        .flat_map(|job| {
+            job.gate
+                .iter()
+                .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
+        })
+        .flat_map(|gate| {
+            [
+                (gate.slug.clone(), GateNeed::Selected),
+                (gate.slug.clone(), gate.need),
+            ]
+        })
+        .collect();
+    used.into_iter().collect()
+}
+
+fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
     let mut steps = head(facts);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
-        plan_outputs: facts
-            .rust_roots
-            .iter()
-            .map(|root| root_slug(&root.manifest))
-            .collect(),
+        plan_outputs: outputs,
         steps,
         ..job(facts, PLAN_JOB)
     }

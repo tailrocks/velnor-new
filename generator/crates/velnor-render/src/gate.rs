@@ -6,8 +6,16 @@ use velnor_model::{Gate, GateNeed, PlanFrom, When};
 pub(crate) const PLAN_STEP: &str = "plan";
 const NOT_CANCELLED: &str = "!cancelled()";
 
-pub(crate) fn output(slug: &str, name: &str) -> String {
-    format!("rust_{slug}_{name}")
+pub(crate) fn output(slug: &str, need: GateNeed) -> String {
+    format!("rust_{slug}_{}", need_name(need))
+}
+
+fn need_name(need: GateNeed) -> &'static str {
+    match need {
+        GateNeed::Selected => "mode",
+        GateNeed::Doctests => "doctests",
+        GateNeed::Docs => "docs",
+    }
 }
 
 pub(crate) fn condition(when: When, gate: Option<&Gate>) -> Option<String> {
@@ -33,12 +41,10 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
         ),
         PlanFrom::Job(job) => (format!("needs.{job}.outputs"), Vec::new()),
     };
-    let read = |name: &str| format!("{source}.{}", output(&gate.slug, name));
-    parts.push(format!("{} != 'none'", read("mode")));
-    match gate.need {
-        GateNeed::Selected => {}
-        GateNeed::Doctests => parts.push(format!("{} == 'run'", read("doctests"))),
-        GateNeed::Docs => parts.push(format!("{} == 'run'", read("docs"))),
+    let read = |need| format!("{source}.{}", output(&gate.slug, need));
+    parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
+    if gate.need != GateNeed::Selected {
+        parts.push(format!("{} == 'run'", read(gate.need)));
     }
     parts
 }

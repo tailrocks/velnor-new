@@ -54,7 +54,7 @@ pub struct Job {
     pub runs_on: RunnerLabel,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
-    pub plan_outputs: Vec<String>,
+    pub plan_outputs: Vec<(String, GateNeed)>,
     pub steps: Vec<Step>,
 }
 
@@ -73,7 +73,7 @@ pub struct Gate {
     pub from: PlanFrom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GateNeed {
     Selected,
     Doctests,

@@ -31,12 +31,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         outputs: job
             .plan_outputs
             .iter()
-            .flat_map(|slug| {
-                ["mode", "doctests", "docs"].map(|name| {
-                    let key = output(slug, name);
-                    let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
-                    (key, value)
-                })
+            .map(|(slug, need)| {
+                let key = output(slug, *need);
+                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                (key, value)
             })
             .collect(),
         steps: job.steps.iter().map(rendered_step).collect(),

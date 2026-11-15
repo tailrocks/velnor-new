@@ -18,7 +18,6 @@ jobs:
       rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_xtask_mode: '${{ steps.plan.outputs.rust_xtask_mode }}'
-      rust_xtask_doctests: '${{ steps.plan.outputs.rust_xtask_doctests }}'
       rust_xtask_docs: '${{ steps.plan.outputs.rust_xtask_docs }}'
     steps:
       - name: Check out
