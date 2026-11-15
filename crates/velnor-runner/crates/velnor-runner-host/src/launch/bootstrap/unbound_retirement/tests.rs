@@ -3,6 +3,8 @@
 
 #[path = "tests/fixture.rs"]
 mod fixture;
+#[path = "tests/safety.rs"]
+mod safety;
 #[path = "tests/seed.rs"]
 mod seed;
 
@@ -12,9 +14,9 @@ use super::{abandon_and_retire_unbound_pair, retire_unbound_pair};
 use fixture::FixtureDocker;
 use seed::{Pair, RESERVATION};
 
-type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub(super) type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-const FAILED: Pair = Pair {
+pub(super) const FAILED: Pair = Pair {
     reservation: 2,
     bound: false,
 };
@@ -22,7 +24,7 @@ const BOUND: Pair = Pair {
     reservation: 4,
     bound: true,
 };
-const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
+pub(super) const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_released() -> TestResult<()>
@@ -36,7 +38,7 @@ async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_release
     fixture.take_requests();
 
     assert!(!retire_unbound_pair(&docker, &scope, &engine, FAILED.reservation).await?);
-    assert!(fixture.take_requests().is_empty());
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         "reserved/00/pending/0/1/none/"
@@ -47,11 +49,11 @@ async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_release
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         RETIRED
     );
-    assert!(fixture.objects(FAILED).is_empty());
+    assert_eq!(fixture.objects(FAILED), Vec::<String>::new());
 
     fixture.take_requests();
     assert!(!abandon_and_retire_unbound_pair(&docker, &scope, &engine, BOUND.reservation).await?);
-    assert!(fixture.take_requests().is_empty());
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(fixture.objects(BOUND).len(), 8);
     assert_eq!(
         seed::text(&journal, RESERVATION, BOUND.reservation).await?,
@@ -89,7 +91,7 @@ async fn a_crash_after_the_containers_are_removed_converges_on_restart() -> Test
 
     fixture.take_requests();
     assert!(!retire_unbound_pair(&docker, &scope, &engine, FAILED.reservation).await?);
-    assert!(fixture.take_requests().is_empty());
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
 
     journal.recover_after_restart_without_authority().await?;
     assert!(retire_unbound_pair(&docker, &scope, &engine, FAILED.reservation).await?);
@@ -97,7 +99,7 @@ async fn a_crash_after_the_containers_are_removed_converges_on_restart() -> Test
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         RETIRED
     );
-    assert!(fixture.objects(FAILED).is_empty());
+    assert_eq!(fixture.objects(FAILED), Vec::<String>::new());
     assert!(
         !fixture
             .take_requests()
@@ -107,7 +109,7 @@ async fn a_crash_after_the_containers_are_removed_converges_on_restart() -> Test
 
     journal.recover_after_restart_without_authority().await?;
     assert!(!retire_unbound_pair(&docker, &scope, &engine, FAILED.reservation).await?);
-    assert!(fixture.take_requests().is_empty());
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         RETIRED

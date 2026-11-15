@@ -105,7 +105,8 @@ pub(super) async fn started_pairs(
     let binding_digest: String = Sha256::digest(binding.canonical_identity_bytes()?)
         .iter()
         .map(|byte| format!("{byte:02x}"))
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     execute(journal, BINDING).await?;
     let engine = SelectedEngineContext::capture(
         &scope.engine_context().await?.ok_or("engine context")?,

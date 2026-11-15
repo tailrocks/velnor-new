@@ -89,6 +89,35 @@ impl FixtureDocker {
         self.hung.notified().await;
     }
 
+    pub(super) fn relabel_container(&self, id: &str) {
+        if let Some(container) = lock(&self.state).containers.get_mut(id) {
+            container.labels["io.velnor.reservation-id"] = json!("999");
+        }
+    }
+
+    pub(super) fn rename_container(&self, id: &str, name: &str) {
+        if let Some(container) = lock(&self.state).containers.get_mut(id) {
+            name.clone_into(&mut container.name);
+        }
+    }
+
+    pub(super) fn reissue_container(&self, id: &str, new_id: &str) {
+        let mut state = lock(&self.state);
+        if let Some(container) = state.containers.remove(id) {
+            state.containers.insert(new_id.to_owned(), container);
+        }
+    }
+
+    pub(super) fn relabel_volume(&self, name: &str) {
+        if let Some(labels) = lock(&self.state).volumes.get_mut(name) {
+            labels["velnor.reservation"] = json!("999");
+        }
+    }
+
+    pub(super) fn has_container(&self, id: &str) -> bool {
+        lock(&self.state).containers.contains_key(id)
+    }
+
     pub(super) fn take_requests(&self) -> Vec<String> {
         std::mem::take(&mut lock(&self.state).requests)
     }
