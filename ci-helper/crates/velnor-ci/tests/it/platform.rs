@@ -86,6 +86,8 @@ fn a_predicate_that_only_names_target_cfgs_can_be_inactive() {
     for predicate in [
         "cfg(windows)",
         "cfg(all(windows, tokio_unstable))",
+        "cfg(all(windows, target_feature = \"avx2\"))",
+        "cfg(all(target_feature = \"avx2\", windows))",
         "cfg(all(unix, target_os = \"macos\"))",
         "cfg(target_has_atomic = \"512\")",
         "cfg(target_env = \"msvc\")",
