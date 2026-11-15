@@ -1,0 +1,183 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::sync::atomic::Ordering;
+
+use bollard::errors::Error as DockerError;
+use bollard::query_parameters::WaitContainerOptions;
+use futures_util::StreamExt;
+use serde::Serialize;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::watch;
+use velnor_resource_probe::job_hook::Challenge;
+
+use crate::error::HostError;
+
+use super::authority::Minted;
+use super::channel::{
+    REQUEST_POLL, challenge, deliver_jit, publish_challenge, publish_decision, read_request,
+};
+use super::decide::{Verdict, decide};
+use super::pair::{LocalPair, remove_pair, start_pair};
+use super::plan::Side;
+use super::supervisor::{Slot, Supervisor, stopped};
+
+#[derive(Serialize)]
+struct Line<'a> {
+    pair: &'a str,
+    side: &'static str,
+    agent: &'a str,
+    allow: bool,
+    reason: Option<&'static str>,
+    ledger: Option<&'a str>,
+    run_id: Option<u64>,
+    attempt: Option<u32>,
+    job: Option<&'a str>,
+    event: Option<&'a str>,
+    #[serde(rename = "ref")]
+    git_ref: Option<&'a str>,
+    sha: Option<&'a str>,
+}
+
+impl Supervisor {
+    pub(super) async fn run_slot(
+        &self,
+        slot: Slot,
+        mut stop: watch::Receiver<bool>,
+    ) -> Result<(), HostError> {
+        while !*stop.borrow() {
+            self.one_pair(&slot, &mut stop).await?;
+        }
+        Ok(())
+    }
+
+    async fn one_pair(
+        &self,
+        slot: &Slot,
+        stop: &mut watch::Receiver<bool>,
+    ) -> Result<(), HostError> {
+        let sequence = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
+        let minted = self
+            .client
+            .mint(slot.side)
+            .await
+            .map_err(|_| HostError::Endpoint)?;
+        let request = self.request(slot, &minted.name, sequence);
+        let pair = match start_pair(&self.docker, &request).await {
+            Ok(pair) => pair,
+            Err(error) => {
+                self.retire_agent(slot.side, &minted.name).await?;
+                return Err(error);
+            }
+        };
+        let served = self.serve(slot, &pair, &minted, sequence, stop).await;
+        let removed = remove_pair(&self.docker, &pair).await;
+        if removed.is_ok() {
+            self.pairs_removed.fetch_add(1, Ordering::SeqCst);
+            println!("pair {} removed", slot.label);
+        }
+        let retired = self.retire_agent(slot.side, &minted.name).await;
+        served?;
+        removed?;
+        retired
+    }
+
+    async fn retire_agent(&self, side: Side, name: &str) -> Result<(), HostError> {
+        self.client
+            .delete_agent(side, name)
+            .await
+            .map_err(|_| HostError::Cleanup)?;
+        self.agents_removed.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn serve(
+        &self,
+        slot: &Slot,
+        pair: &LocalPair,
+        minted: &Minted,
+        sequence: u32,
+        stop: &mut watch::Receiver<bool>,
+    ) -> Result<(), HostError> {
+        let challenge = challenge(pair, sequence)?;
+        publish_challenge(&self.docker, pair, &challenge).await?;
+        deliver_jit(&self.docker, pair, &minted.jit).await?;
+        println!("pair {} listening", slot.label);
+        let mut exited = std::pin::pin!(wait_exit(&self.docker, pair.runner_id()));
+        let request = tokio::select! {
+            () = stopped(stop) => return Ok(()),
+            outcome = &mut exited => return outcome,
+            request = self.next_request(pair) => request?,
+        };
+        let verdict = decide(&self.client, slot.side, &challenge, &request).await;
+        self.record(slot, &challenge, &verdict).await?;
+        publish_decision(&self.docker, pair, &verdict.decision).await?;
+        tokio::select! {
+            () = stopped(stop) => Ok(()),
+            outcome = &mut exited => outcome,
+        }
+    }
+
+    async fn next_request(&self, pair: &LocalPair) -> Result<Vec<u8>, HostError> {
+        loop {
+            if let Some(bytes) = read_request(&self.docker, pair).await? {
+                return Ok(bytes);
+            }
+            tokio::time::sleep(REQUEST_POLL).await;
+        }
+    }
+
+    async fn record(
+        &self,
+        slot: &Slot,
+        challenge: &Challenge,
+        verdict: &Verdict,
+    ) -> Result<(), HostError> {
+        let facts = verdict.facts.as_ref();
+        let line = Line {
+            pair: &slot.label,
+            side: slot.side.name(),
+            agent: &challenge.runner_name,
+            allow: verdict.decision.allow,
+            reason: verdict.reason.map(super::decide::Reason::code),
+            ledger: verdict.ledger.as_deref(),
+            run_id: facts.map(|facts| facts.run_id),
+            attempt: facts.map(|facts| facts.attempt),
+            job: facts.map(|facts| facts.job.as_str()),
+            event: facts.map(|facts| facts.event.as_str()),
+            git_ref: facts.map(|facts| facts.git_ref.as_str()),
+            sha: facts.map(|facts| facts.sha.as_str()),
+        };
+        let mut text = serde_json::to_string(&line).map_err(|_| HostError::Identity)?;
+        text.push('\n');
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.decisions)
+            .await
+            .map_err(|_| HostError::Path)?;
+        file.write_all(text.as_bytes())
+            .await
+            .map_err(|_| HostError::Path)?;
+        file.flush().await.map_err(|_| HostError::Path)?;
+        println!("decision {}", text.trim_end());
+        Ok(())
+    }
+}
+
+async fn wait_exit(docker: &bollard::Docker, id: &str) -> Result<(), HostError> {
+    let mut waiting = docker.wait_container(id, None::<WaitContainerOptions>);
+    while let Some(next) = waiting.next().await {
+        match next {
+            Ok(_)
+            | Err(
+                DockerError::DockerContainerWaitError { .. }
+                | DockerError::DockerResponseServerError {
+                    status_code: 404, ..
+                },
+            ) => return Ok(()),
+            Err(_) => return Err(HostError::Docker),
+        }
+    }
+    Ok(())
+}

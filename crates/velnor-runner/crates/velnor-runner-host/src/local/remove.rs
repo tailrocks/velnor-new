@@ -67,3 +67,30 @@ pub(super) async fn remove_container(docker: &Docker, id: &str) -> Result<(), Ho
         Err(_) => Err(HostError::Docker),
     }
 }
+
+pub(super) async fn labelled_agents(
+    docker: &Docker,
+    label: &str,
+) -> Result<Vec<(String, String)>, HostError> {
+    let filters = HashMap::from([("label".to_owned(), vec![label.to_owned()])]);
+    let containers = docker_deadline(docker.list_containers(Some(ListContainersOptions {
+        all: true,
+        filters: Some(filters),
+        ..Default::default()
+    })))
+    .await?
+    .map_err(|_| HostError::Docker)?;
+    let mut agents: Vec<(String, String)> = containers
+        .into_iter()
+        .filter_map(|container| {
+            let labels = container.labels?;
+            Some((
+                labels.get(super::pair::SIDE_LABEL)?.clone(),
+                labels.get(super::pair::AGENT_LABEL)?.clone(),
+            ))
+        })
+        .collect();
+    agents.sort();
+    agents.dedup();
+    Ok(agents)
+}

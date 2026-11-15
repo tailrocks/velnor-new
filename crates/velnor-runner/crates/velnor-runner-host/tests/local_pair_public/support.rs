@@ -76,6 +76,8 @@ pub(crate) async fn build_sleeper(docker: &Docker, tag: &str) -> TestResult<Stri
 pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPairRequest {
     LocalPairRequest {
         environment: environment.to_owned(),
+        side: "trusted".to_owned(),
+        agent: format!("{environment}-agent"),
         network: network.to_owned(),
         platform: platform().to_owned(),
         runner_image: image.to_owned(),

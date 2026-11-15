@@ -9,6 +9,7 @@ use bollard::query_parameters::{
     CreateContainerOptions, StartContainerOptions, UploadToContainerOptions,
 };
 
+use crate::config::RunnerPlatform;
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 use crate::journal::StorageRole;
@@ -24,19 +25,30 @@ use super::{layout, storage};
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
 const PAIR_LABEL: &str = "velnor-local.pair";
 const ROLE_LABEL: &str = "velnor-local.role";
+pub(super) const SIDE_LABEL: &str = "velnor-local.side";
+pub(super) const AGENT_LABEL: &str = "velnor-local.agent";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalPair {
-    environment: String,
+    request: LocalPairRequest,
     name: String,
     dind_id: String,
     runner_id: String,
+    metadata_volume: String,
 }
 
 impl LocalPair {
     #[must_use]
     pub fn environment(&self) -> &str {
-        &self.environment
+        &self.request.environment
+    }
+
+    pub(super) fn request(&self) -> &LocalPairRequest {
+        &self.request
+    }
+
+    pub(super) fn metadata_volume(&self) -> &str {
+        &self.metadata_volume
     }
 
     #[must_use]
@@ -63,10 +75,13 @@ pub async fn start_pair(
     let pair = validated.pair.clone();
     match Box::pin(create_and_start(docker, request, &validated)).await {
         Ok((dind_id, runner_id)) => Ok(LocalPair {
-            environment: request.environment.clone(),
+            request: request.clone(),
             name: pair,
             dind_id,
             runner_id,
+            metadata_volume: validated
+                .names
+                .volume_name(WorkerVolumeRole::RunnerMetadata),
         }),
         Err(error) => {
             let _removed = remove_labelled(docker, &format!("{PAIR_LABEL}={pair}")).await;
@@ -85,7 +100,7 @@ async fn create_and_start(
     validated: &Validated,
 ) -> Result<(String, String), HostError> {
     let names = &validated.names;
-    let labels = |role: &str| owned_labels(&request.environment, &validated.pair, role);
+    let labels = |role: &str| owned_labels(request, &validated.pair, role);
     for role in WorkerVolumeRole::ALL {
         create_volume(
             docker,
@@ -191,22 +206,42 @@ async fn prefill_metadata(
     request: &LocalPairRequest,
     validated: &Validated,
 ) -> Result<(), HostError> {
-    let names = &validated.names;
+    let volume = validated
+        .names
+        .volume_name(WorkerVolumeRole::RunnerMetadata);
+    upload_to_metadata(
+        docker,
+        request,
+        &validated.pair,
+        &volume,
+        ("init", layout::metadata_archive()?),
+    )
+    .await
+}
+
+pub(super) async fn upload_to_metadata(
+    docker: &Docker,
+    request: &LocalPairRequest,
+    pair: &str,
+    volume: &str,
+    (purpose, archive): (&str, Vec<u8>),
+) -> Result<(), HostError> {
+    let platform = RunnerPlatform::parse(&request.platform).ok_or(HostError::Config)?;
     let helper = PairCreate {
         options: CreateContainerOptions {
-            name: Some(format!("{}-init", validated.pair)),
-            platform: validated.platform.as_str().to_owned(),
+            name: Some(format!("{pair}-{purpose}")),
+            platform: platform.as_str().to_owned(),
         },
         config: ContainerCreateBody {
             image: Some(request.dind_image.clone()),
             entrypoint: Some(vec!["/velnor-local-never-started".to_owned()]),
             network_disabled: Some(true),
-            labels: Some(owned_labels(&request.environment, &validated.pair, "init")),
+            labels: Some(owned_labels(request, pair, purpose)),
             host_config: Some(HostConfig {
                 network_mode: Some("none".to_owned()),
                 mounts: Some(vec![Mount {
                     target: Some(layout::METADATA_TARGET.to_owned()),
-                    source: Some(names.volume_name(WorkerVolumeRole::RunnerMetadata)),
+                    source: Some(volume.to_owned()),
                     typ: Some(MountType::VOLUME),
                     ..Default::default()
                 }]),
@@ -216,14 +251,9 @@ async fn prefill_metadata(
         },
     };
     let helper_id = create(docker, helper).await?;
-    upload(
-        docker,
-        &helper_id,
-        layout::METADATA_PARENT,
-        layout::metadata_archive()?,
-    )
-    .await?;
-    remove_container(docker, &helper_id).await
+    let uploaded = upload(docker, &helper_id, layout::METADATA_PARENT, archive).await;
+    let removed = remove_container(docker, &helper_id).await;
+    uploaded.and(removed)
 }
 
 async fn create(docker: &Docker, create: PairCreate) -> Result<String, HostError> {
@@ -253,11 +283,13 @@ async fn upload(docker: &Docker, id: &str, path: &str, archive: Vec<u8>) -> Resu
     .map_err(|_| HostError::Docker)
 }
 
-fn owned_labels(environment: &str, pair: &str, role: &str) -> HashMap<String, String> {
+fn owned_labels(request: &LocalPairRequest, pair: &str, role: &str) -> HashMap<String, String> {
     HashMap::from([
-        (ENVIRONMENT_LABEL.to_owned(), environment.to_owned()),
+        (ENVIRONMENT_LABEL.to_owned(), request.environment.clone()),
         (PAIR_LABEL.to_owned(), pair.to_owned()),
         (ROLE_LABEL.to_owned(), role.to_owned()),
+        (SIDE_LABEL.to_owned(), request.side.clone()),
+        (AGENT_LABEL.to_owned(), request.agent.clone()),
     ])
 }
 

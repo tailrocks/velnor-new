@@ -93,7 +93,7 @@ pub enum Command {
         #[arg(long)]
         wait: bool,
     },
-    /// Run one local-mode pair from a JSON line on stdin until stdin closes.
+    /// Run local-mode pairs from a JSON plan on stdin until SIGTERM.
     #[cfg(feature = "local-mode")]
     #[command(hide = true)]
     Local,
