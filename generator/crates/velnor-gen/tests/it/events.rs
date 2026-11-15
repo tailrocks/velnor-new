@@ -82,6 +82,24 @@ fn the_default_branch_comes_from_the_config_and_a_malformed_name_is_refused() ->
 }
 
 #[test]
+fn a_default_branch_with_a_filter_character_is_escaped_so_the_push_filter_matches_it_literally()
+-> TestResult {
+    for (name, filter) in [
+        ("release/c++", "release/c\\+\\+"),
+        ("!hotfix", "\\!hotfix"),
+        ("v1]", "v1\\]"),
+    ] {
+        let config = format!("default_branch = \"{name}\"\n");
+        let text = with(&[], Some(config.as_bytes()))?;
+        assert!(
+            text.contains(&format!("    branches:\n      - '{filter}'\n")),
+            "{name}: {text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> TestResult {
     let mise = |os: &str| {
         format!(

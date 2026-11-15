@@ -224,3 +224,14 @@ fn plan_keeps_deny_skipped_for_a_source_change_in_a_single_crate_repository() {
         "rust_deny=skip rust_machete=run "
     );
 }
+
+#[test]
+fn a_changed_mise_config_runs_cargo_deny_when_deny_is_enabled() {
+    let repo = plan_repo("policy-mise-deny");
+    pin_machete(&repo);
+    repo.write("deny.toml", "");
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["mise.toml"]),
+        "rust_deny=run rust_machete=run "
+    );
+}

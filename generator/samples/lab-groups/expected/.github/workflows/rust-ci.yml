@@ -203,6 +203,7 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
+          overwrite: true
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
@@ -401,6 +402,7 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
+          overwrite: true
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' }}'
         run: velnor-ci inputs audit

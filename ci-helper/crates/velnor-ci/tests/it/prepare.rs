@@ -487,7 +487,7 @@ fn prepare_checks_the_listed_targets() {
 #[test]
 fn prepare_matches_a_legacy_preview_component_name_to_its_renamed_component() {
     let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"llvm-tools-preview\", \"clippy-preview\"]\n";
-    let listing = "clippy-x86_64-unknown-linux-gnu (installed)\nllvm-tools-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)";
+    let listing = "cargo-x86_64-unknown-linux-gnu (installed)\nrustc-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nllvm-tools-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)";
     let run = prepare_declared(
         "preview",
         &reported("1.99.1", Some("0.9.151")),
@@ -553,4 +553,36 @@ fn prepare_still_verifies_the_declared_toolchain_when_no_tool_is_pinned() {
     let stderr = String::from_utf8_lossy(&run.output.stderr);
     assert_eq!(run.output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("component rust-docs"), "{stderr}");
+}
+
+#[test]
+fn prepare_names_a_base_component_missing_under_a_minimal_or_default_profile() {
+    let listing = "cargo-x86_64-unknown-linux-gnu\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu (installed)\nrustfmt-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu (installed)";
+    for (name, file) in [
+        (
+            "base-minimal",
+            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\n",
+        ),
+        (
+            "base-default",
+            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
+        ),
+    ] {
+        let run = prepare_declared(
+            name,
+            &reported("1.99.1", Some("0.9.151")),
+            Some(&Declared {
+                file,
+                components: listing,
+                targets: "x86_64-unknown-linux-gnu",
+                rustup: None,
+            }),
+        );
+        let stderr = String::from_utf8_lossy(&run.output.stderr);
+        assert_eq!(run.output.status.code(), Some(1), "{name}: {stderr}");
+        assert!(
+            stderr.ends_with("component cargo, component rust-std\n"),
+            "{name}: {stderr}"
+        );
+    }
 }

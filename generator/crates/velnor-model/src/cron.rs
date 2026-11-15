@@ -56,7 +56,7 @@ fn item_valid(item: &str, (low, high): (u32, u32)) -> bool {
     } else if let Some((from, to)) = base.split_once('-') {
         matches!((within(from), within(to)), (Some(from), Some(to)) if from <= to)
     } else {
-        step.is_none() && within(base).is_some()
+        within(base).is_some()
     };
     span && step.is_none_or(|step| number(step).is_some_and(|n| (1..=high).contains(&n)))
 }
