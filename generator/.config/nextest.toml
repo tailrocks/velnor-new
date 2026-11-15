@@ -1,17 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-experimental = ["setup-scripts"]
+experimental = ["wrapper-scripts"]
 
-[scripts.setup.no-programs]
-command = ["/bin/sh", "-c", "echo PATH=/nonexistent >> \"$NEXTEST_ENV\""]
+[scripts.wrapper.no-programs]
+command = ["/usr/bin/env", "PATH=/nonexistent"]
 
 [[profile.default.scripts]]
 filter = "all()"
-setup = "no-programs"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
 
 [[profile.ci.scripts]]
 filter = "all()"
-setup = "no-programs"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
 
 [profile.ci]
 retries = 0
