@@ -64,3 +64,24 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn an_unreadable_workspace_member_lock_fails_the_checkout() -> TestResult {
+    let manifest = RepoPath::new("app/Cargo.toml")?;
+    let checkout = Checkout::new("member")?;
+    fs::create_dir_all(checkout.0.join("app"))?;
+    fs::write(checkout.0.join(".velnor/rust-ci.toml"), "exclude = []\n")?;
+    fs::write(checkout.0.join(manifest.as_str()), "[package]\n")?;
+    symlink(
+        Path::new("missing/Cargo.lock"),
+        checkout.0.join("app/Cargo.lock"),
+    )?;
+    let result = view_of(&checkout.0, Checkout::tracked(&manifest)?, false);
+    let lock = RepoPath::new("app/Cargo.lock")?;
+    assert!(
+        matches!(result, Err(IoError::NotRegular(ref path)) if *path == lock),
+        "{:?}",
+        result.map(|_| ())
+    );
+    Ok(())
+}

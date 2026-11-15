@@ -12,7 +12,7 @@
 - Assert what a user of the generator can observe: the written files, the selection, an error's type and path. Never the wording of a message, the length of a list, or a private structure.
 - A test name states the behavior, for example `docs_only_change_selects_nothing`.
 - A rule test is a table of inputs and outputs, not one test per case.
-- No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` runs every test with `PATH=/nonexistent`, and `no_programs` fails if a program can still be found that way. The `io` module is tested by the real runs.
+- No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` runs every test with `PATH=/nonexistent`, and `no_programs` fails if `git`, `cargo` or `sh` can still be found through `PATH`. The `io` module is tested by the real runs.
 - One behavior is tested at one layer.
 - A test that runs longer than 2 s fails the suite (`.config/nextest.toml`).
 

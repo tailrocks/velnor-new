@@ -278,7 +278,7 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     Ok(Checkout { root, view })
 }
 
-pub type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
+type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
 fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
     let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
