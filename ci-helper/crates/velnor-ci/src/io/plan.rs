@@ -130,14 +130,13 @@ fn event_changes(
     kind: EventKind,
     event: Option<&Event>,
 ) -> Result<Found, CiError> {
-    let base = match kind {
-        EventKind::PullRequest => git::pull_request_base(&checkout.root)?,
-        _ => {
-            let range = event
-                .and_then(|event| event.range.as_ref())
-                .ok_or_else(|| CiError::new("the event payload names no commit range"))?;
-            git::range_base(&checkout.root, &range.base, &range.head)?
-        }
+    let base = if kind == EventKind::PullRequest {
+        git::pull_request_base(&checkout.root)?
+    } else {
+        let range = event
+            .and_then(|event| event.range.as_ref())
+            .ok_or_else(|| CiError::new("the event payload names no commit range"))?;
+        git::range_base(&checkout.root, &range.base, &range.head)?
     };
     let paths = git::changed_files(&checkout.root, &base)?;
     let roots: BTreeSet<&RepoPath> = facts.rust_roots.iter().map(|root| &root.manifest).collect();
