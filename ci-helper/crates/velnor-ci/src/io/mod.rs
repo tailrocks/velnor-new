@@ -5,6 +5,7 @@ mod audit;
 mod http;
 mod inputs;
 mod release;
+mod timings;
 mod units;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -95,6 +96,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Plan(args) => run_plan(&args),
+        Command::Timings(args) => timings::run_timings(&args),
     }
 }
 

@@ -36,6 +36,10 @@ impl FakeGitHub {
         fake
     }
 
+    pub(crate) fn get_text(&self, path: &str) -> String {
+        self.responses.get(path).cloned().unwrap_or_default()
+    }
+
     pub(crate) fn respond(&mut self, path: String, body: &str) {
         self.responses.insert(path, body.to_owned());
     }

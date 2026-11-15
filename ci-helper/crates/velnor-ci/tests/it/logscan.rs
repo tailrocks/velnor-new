@@ -95,3 +95,21 @@ fn nextest_summary_with_one_test_is_counted() {
     assert_eq!(result.nextest.len(), 1);
     assert_eq!(result.nextest[0].tests_run, 1);
 }
+
+#[test]
+fn nextest_test_times_are_summed_per_binary() {
+    let log = "\
+2026-11-14T16:54:35.0000000Z         PASS [   0.250s] ( 1/4) app::cli one
+2026-11-14T16:54:35.0000000Z         PASS [   1.500s] ( 2/4) app::cli two
+2026-11-14T16:54:35.0000000Z         FAIL [   0.100s] ( 3/4) app::bin/app three
+2026-11-14T16:54:35.0000000Z         PASS [   2.000s] lib other
+2026-11-14T16:54:35.0000000Z         SLOW [> 60.000s] ( 4/4) app::cli slow
+2026-11-14T16:54:35.0000000Z      Summary [   3.850s] 4 tests run: 3 passed, 1 failed, 0 skipped
+";
+    let result = scan(log);
+    assert_eq!(result.binary_seconds.len(), 3);
+    assert!((result.binary_seconds["app::cli"] - 1.75).abs() < 1e-9);
+    assert!((result.binary_seconds["app::bin/app"] - 0.1).abs() < 1e-9);
+    assert!((result.binary_seconds["lib"] - 2.0).abs() < 1e-9);
+    assert_eq!(result.nextest.len(), 1);
+}

@@ -4,7 +4,8 @@
 use std::fmt;
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, Step, StepKind, When,
+    CargoCommand, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job, LINT_STEP, Step,
+    StepKind, TEST_STEP, When,
 };
 
 use crate::rules::{FETCH_HELPER_RUN, RenderedJob, RenderedStep, Value};
@@ -114,7 +115,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
     let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
-            "Lint".into(),
+            LINT_STEP.into(),
             ["cargo-clippy clippy --workspace --all-targets --locked -- -D warnings"]
                 .into_iter()
                 .chain(extra.iter().map(String::as_str))
@@ -123,7 +124,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             vec![],
         ),
         CargoCommand::NextestRun { filter } => (
-            "Test".into(),
+            TEST_STEP.into(),
             format!(
                 "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
                 match filter {

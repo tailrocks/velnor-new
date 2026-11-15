@@ -8,7 +8,7 @@ use velnor_model::{
     CargoCommand, FilterRef, RepoFacts, RepoPath, RepoView, RustMember, Shape, StepKind, Target,
     TargetKind, TargetName, Timings, When,
 };
-use velnor_rust::{CONFIG_PATH, DetectError, TIMINGS_PATH, decide_shape, plan};
+use velnor_rust::{CONFIG_PATH, DetectError, TIMINGS_PATH, decide_shape, plan, render_timings};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -262,5 +262,28 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         let result = expected_files(&view(&["Cargo.toml"], Some(config.as_bytes()))?);
         assert!(invalid(CONFIG_PATH)(result.clone()), "{config}: {result:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_file_that_is_rendered_from_measured_timings_decides_the_shape_and_gives_the_reason()
+-> TestResult {
+    let measured = BTreeMap::from([(
+        RepoPath::new("lab/Cargo.toml")?,
+        Timings {
+            test_binary_seconds: BTreeMap::from([("lab::bin/lab".to_owned(), 7)]),
+            ..timings(10, 20, 8)
+        },
+    )]);
+    let file = render_timings(&measured);
+    assert!(file.ends_with("}\n"));
+    let text = workflow(&timed_view(&file, "")?)?;
+    assert!(
+        text.contains("# lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)"),
+        "{text}"
+    );
+    assert!(text.contains("  rust-lint-lab:"), "{text}");
+    assert!(text.contains("  rust-test-lab:"), "{text}");
+    assert!(text.contains("  rust-root:"), "{text}");
     Ok(())
 }

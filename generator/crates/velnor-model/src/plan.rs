@@ -7,6 +7,9 @@ use crate::ids::{
     DownloadUrl, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RunnerLabel, Sha256,
 };
 
+pub const LINT_STEP: &str = "Lint";
+pub const TEST_STEP: &str = "Test";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
     pub name: String,

@@ -15,9 +15,9 @@ use crate::error::{DetectError, Reason};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
-const RUST_JOB: JobId = JobId::from_static("rust");
-const LINT_JOB: JobId = JobId::from_static("rust-lint");
-const TEST_JOB: JobId = JobId::from_static("rust-test");
+pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
+pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
+pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
 #[must_use]

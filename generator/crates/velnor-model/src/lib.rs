@@ -12,8 +12,8 @@ pub use ids::{
 };
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, HelperBinary, HelperCommand, HelperRelease, Job,
-    PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind, Triggers, When,
-    WorkflowPlan,
+    LINT_STEP, PermissionScope, Permissions, Platform, Shape, ShapeDecision, Step, StepKind,
+    TEST_STEP, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CompileInputs, DependencyKind, InputRule, MemberDependency, PackageDependency, RepoFacts,
