@@ -33,7 +33,6 @@ pub struct Concurrency {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CancelInProgress {
-    Never,
     PullRequests,
 }
 

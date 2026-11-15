@@ -152,7 +152,7 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
     assert!(text.contains(
         "        working-directory: 'a${{ ''${{'' }} github.event.pull_request.title }}'\n"
     ));
-    assert!(text.contains("  group: '${{ github.workflow_ref }}'\n"));
+    assert!(text.contains("  group: '${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.ref || github.sha }}'\n"));
     Ok(())
 }
 

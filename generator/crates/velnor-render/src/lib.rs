@@ -45,11 +45,16 @@ pub fn render_workflow(
         entry(
             "concurrency",
             Yaml::Map(vec![
-                entry("group", Yaml::Expr("${{ github.workflow_ref }}".to_owned())),
+                entry(
+                    "group",
+                    Yaml::Expr(
+                        "${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}"
+                            .to_owned(),
+                    ),
+                ),
                 entry(
                     "cancel-in-progress",
                     match plan.concurrency.cancel_in_progress {
-                        CancelInProgress::Never => Yaml::Bool(false),
                         CancelInProgress::PullRequests => {
                             Yaml::Expr("${{ github.event_name == 'pull_request' }}".to_owned())
                         }
