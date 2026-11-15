@@ -68,6 +68,16 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         .into_iter()
         .map(binary)
         .collect::<Result<Vec<_>, _>>()?;
+    for (index, entry) in binaries.iter().enumerate() {
+        if binaries[..index]
+            .iter()
+            .any(|earlier| earlier.package == entry.package)
+        {
+            return Err(ReleaseError::DuplicateBinary {
+                package: entry.package.clone(),
+            });
+        }
+    }
     Ok(VelnorConfig {
         roots,
         after,

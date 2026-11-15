@@ -11,14 +11,30 @@ use velnor_render::{Owner, owner_of};
 use velnor_rust::{LOCK_PATH, wanted_files};
 
 use crate::release_fixture::{
-    APP, GREEN, PUSH, READY, app, conjuncts, jobs, release_plz, release_view, steps, two_binaries,
-    two_roots,
+    APP, GREEN, PUSH, READY, app, conjuncts, dashed, jobs, release_plz, release_view, steps,
+    two_binaries, two_roots,
 };
 use crate::yaml_tree::Node;
 
 const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 
 type TestResult = Result<(), Box<dyn Error>>;
+fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Error>> {
+    let rest = ["build-", "sums-", "publish-"]
+        .iter()
+        .find_map(|kind| id.strip_prefix(kind))
+        .ok_or("not a binary job")?;
+    packages
+        .iter()
+        .copied()
+        .filter(|package| {
+            rest.strip_prefix(package)
+                .is_some_and(|tail| tail.is_empty() || tail.starts_with('-'))
+        })
+        .max_by_key(|package| package.len())
+        .ok_or_else(|| format!("no package for {id}").into())
+}
+
 #[test]
 fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> TestResult {
     let (_, tree) = two_roots()?;
@@ -58,9 +74,13 @@ fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> Tes
 
 #[test]
 fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_push() -> TestResult {
-    for (_, tree) in [app()?, two_roots()?, two_binaries()?] {
+    for (_, tree) in [app()?, two_roots()?, two_binaries()?, dashed()?] {
         let all = jobs(&tree)?;
         assert!(all.len() >= 3, "{} jobs", all.len());
+        let packages = tree
+            .at(&["jobs", "tag", "outputs"])
+            .map(Node::keys)
+            .unwrap_or_default();
         let (gate_id, gate) = all[0];
         assert_eq!(gate_id, "gate");
         assert_eq!(
@@ -80,7 +100,7 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                 want.insert(NEWEST.to_owned());
             }
             if !matches!(*id, "release-pr" | "tag") {
-                let package = id.split('-').nth(1).ok_or("no package in the job id")?;
+                let package = package_of(id, &packages)?;
                 want.insert(format!("needs.tag.outputs.{package} != ''"));
             }
             assert_eq!(conjuncts(job), want, "{id}");
@@ -118,6 +138,17 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
         steps(tag)[0].at(&["with", "ref"]).and_then(Node::text),
         Some("${{ github.event.workflow_run.head_sha }}")
     );
+    Ok(())
+}
+
+#[test]
+fn release_yml_tag_does_not_wait_for_the_newest_commit_in_any_shape() -> TestResult {
+    for (text, tree) in [app()?, two_roots()?, two_binaries()?, dashed()?] {
+        let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
+        assert!(!conjuncts(tag).contains(NEWEST));
+        assert!(conjuncts(tag).contains(READY));
+        assert!(text.contains(NEWEST));
+    }
     Ok(())
 }
 

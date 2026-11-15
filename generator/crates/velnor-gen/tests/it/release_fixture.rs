@@ -37,6 +37,23 @@ pub(crate) const TOOLS: Root = Root {
     publishes: false,
 };
 
+pub(crate) const DASHED: Root = Root {
+    dir: ".",
+    package: "my-app",
+    prefix: "release-plz-my-app-",
+    publishes: false,
+};
+pub(crate) const SPACED: Root = Root {
+    dir: "my tools",
+    package: "tools",
+    prefix: "release-plz-tools-",
+    publishes: false,
+};
+
+pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
+    render(&[DASHED], Some("[[binaries]]\npackage = \"my-app\"\n"))
+}
+
 pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
         "publish_no_verify = true"

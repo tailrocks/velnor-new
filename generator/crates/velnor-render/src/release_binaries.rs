@@ -5,7 +5,9 @@ use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, VERIFIED_COMMIT};
-use crate::release_steps::{checkout, expression, install_tool, join, permissions, variables};
+use crate::release_steps::{
+    checkout, expression, install_tool, join, permissions, shell_word, variables,
+};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
@@ -73,7 +75,10 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
     let (runner, triple) = target(platform);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
-    let release_dir = format!("{}/{triple}/release", join(&binary.root, "target"));
+    let release_dir = shell_word(&format!(
+        "{}/{triple}/release",
+        join(&binary.root, "target")
+    ));
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
@@ -89,7 +94,7 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
                 format!("Build {} for {suffix}", binary.package),
                 format!(
                     "cargo build --release --locked --manifest-path {} --package {} --target {triple}",
-                    join(&binary.root, "Cargo.toml"),
+                    shell_word(&join(&binary.root, "Cargo.toml")),
                     binary.package
                 ),
             ),

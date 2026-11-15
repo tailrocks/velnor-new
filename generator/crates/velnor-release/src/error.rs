@@ -57,6 +57,9 @@ pub enum ReleaseError {
     UnsafeRoot {
         root: String,
     },
+    DuplicateBinary {
+        package: String,
+    },
     DuplicatePackage {
         root: String,
         package: String,
@@ -175,6 +178,10 @@ impl ReleaseError {
             Self::EmptyPlatforms { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} must name at least one platform"
+            ),
+            Self::DuplicateBinary { package } => write!(
+                f,
+                ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
             ),
             Self::UnsafeRoot { root } => write!(
                 f,

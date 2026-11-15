@@ -8,7 +8,7 @@ use velnor_gen::GenerateError;
 use velnor_release::ReleaseError;
 
 use crate::release_fixture::{
-    APP, Root, TOOLS, TWO_BINARIES, jobs, render, steps, two_binaries, two_roots, uses,
+    APP, Root, SPACED, TOOLS, TWO_BINARIES, jobs, render, steps, two_binaries, two_roots, uses,
 };
 use crate::yaml_tree::Node;
 
@@ -365,5 +365,24 @@ fn release_yml_refuses_a_bin_name_that_would_add_a_second_command() -> TestResul
         );
     }
     assert!(render(&[APP, TOOLS], Some(TWO_BINARIES)).is_ok());
+    Ok(())
+}
+
+#[test]
+fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult {
+    let (_, tree) = render(
+        &[SPACED],
+        Some(
+            "roots = [\"my tools\"]\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n",
+        ),
+    )?;
+    assert_eq!(
+        runs(job(&tree, "build-tools-linux-x64")?),
+        [
+            "rustup target add x86_64-unknown-linux-musl",
+            "cargo build --release --locked --manifest-path 'my tools/Cargo.toml' --package tools --target x86_64-unknown-linux-musl",
+            "tar -czf tools-linux-x64.tar.gz -C 'my tools/target/x86_64-unknown-linux-musl/release' tools",
+        ]
+    );
     Ok(())
 }

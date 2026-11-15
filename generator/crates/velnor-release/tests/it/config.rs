@@ -227,3 +227,18 @@ fn a_bin_name_that_is_not_a_plain_binary_name_is_refused() {
         );
     }
 }
+
+#[test]
+fn two_binaries_entries_for_one_package_are_refused() {
+    let mut files = files();
+    files.release_toml = Some(
+        "[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"app\"\nbin = \"rg\"\n"
+            .to_owned(),
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicateBinary { package }) if package == "app"),
+        "{error:?}"
+    );
+    assert!(error.is_some_and(|error| error.to_string().contains("app")));
+}
