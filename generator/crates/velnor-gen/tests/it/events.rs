@@ -102,6 +102,26 @@ fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> Tes
 }
 
 #[test]
+fn a_machete_pin_reads_mise_os_arch_filters_and_darwin_as_macos() -> TestResult {
+    let mise = |os: &str| {
+        format!(
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
+        )
+    };
+    let linux_arch = with(
+        &[("mise.toml", &mise("linux/x64"))],
+        Some(b"runner = \"ubuntu-latest\"\n"),
+    )?;
+    assert!(linux_arch.contains("cargo-machete"), "{linux_arch}");
+    let darwin = with(
+        &[("mise.toml", &mise("darwin"))],
+        Some(b"runner = \"macos-latest\"\n"),
+    )?;
+    assert!(darwin.contains("cargo-machete"), "{darwin}");
+    Ok(())
+}
+
+#[test]
 fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -> TestResult {
     let shape = "shape = \"lint-test\"\n";
     let off = with(&[], Some(shape.as_bytes()))?;
