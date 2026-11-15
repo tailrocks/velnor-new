@@ -12,6 +12,15 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const REPOSITORY: &str = "tailrocks/velnor-new/";
 const INSTALL_STEP: &str = "      - name: Install velnor-ci";
+const TOOLS: &str = "/usr/bin:/bin";
+
+fn program(name: &str) -> String {
+    ["/usr/bin", "/bin"]
+        .iter()
+        .map(|dir| format!("{dir}/{name}"))
+        .find(|path| Path::new(path).exists())
+        .unwrap_or_else(|| name.to_owned())
+}
 
 fn indented_keys(text: &str, parent: &str, indent: usize) -> BTreeSet<String> {
     let pad = " ".repeat(indent);
@@ -89,7 +98,7 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     fs::create_dir_all(&release)?;
     let binary = b"#!/bin/sh\necho genuine\n";
     fs::write(release.join("velnor-ci-linux-x64"), binary)?;
-    let digest = Command::new("shasum")
+    let digest = Command::new(program("shasum"))
         .args(["-a", "256"])
         .arg(release.join("velnor-ci-linux-x64"))
         .output()?
@@ -101,7 +110,7 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     let path_file = work.join("path");
     let script = work.join("install.sh");
     fs::write(&script, script_text)?;
-    let status = Command::new("bash")
+    let status = Command::new(program("bash"))
         .arg(&script)
         .env("VERSION", "1.2.3")
         .env("SHA256_LINUX_X64", digest)
@@ -113,6 +122,7 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
         .env("RUNNER_TOOL_CACHE", &cache)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_PATH", &path_file)
+        .env("PATH", TOOLS)
         .status()?;
     assert!(status.success());
     let on_path = fs::read_to_string(&path_file)?;
@@ -186,7 +196,7 @@ impl Install {
         use std::process::Command;
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
         let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
-        let digest = Command::new("shasum")
+        let digest = Command::new(program("shasum"))
             .args(["-a", "256"])
             .arg(
                 self.work
@@ -198,7 +208,7 @@ impl Install {
         let digest = digest.split_whitespace().next().ok_or("no digest")?;
         let script = self.work.join("install.sh");
         fs::write(&script, install_script(&action))?;
-        let mut command = Command::new("bash");
+        let mut command = Command::new(program("bash"));
         command
             .arg(&script)
             .env("VERSION", "1.2.3")
@@ -213,13 +223,13 @@ impl Install {
             .env("RUNNER_ARCH", "X64")
             .env("RUNNER_TEMP", self.work.join("temp"))
             .env("GITHUB_PATH", self.work.join("path"))
+            .env("PATH", TOOLS)
             .env_remove("RUNNER_TOOL_CACHE");
         if let Some(cache) = cache {
             command.env("RUNNER_TOOL_CACHE", cache);
         }
         if let Some(shims) = shim_dir {
-            let path = std::env::var("PATH")?;
-            command.env("PATH", format!("{}:{path}", shims.display()));
+            command.env("PATH", format!("{}:{TOOLS}", shims.display()));
         }
         configure(&mut command);
         Ok(command.spawn()?)
@@ -298,7 +308,7 @@ fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> Test
         } else {
             install.work.join("elsewhere")
         };
-        assert!(Command::new("mkfifo").arg(&fifo).status()?.success());
+        assert!(Command::new(program("mkfifo")).arg(&fifo).status()?.success());
         fs::set_permissions(&fifo, fs::Permissions::from_mode(0o755))?;
         if kind != "fifo" {
             symlink(&fifo, &entry)?;
@@ -313,7 +323,7 @@ fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> Test
             }
             if std::time::Instant::now() > deadline {
                 let group = child.id().to_string();
-                Command::new("kill")
+                Command::new(program("kill"))
                     .args(["-KILL", "--", &format!("-{group}")])
                     .status()?;
                 child.wait()?;
