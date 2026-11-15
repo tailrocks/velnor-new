@@ -82,7 +82,7 @@ fn a_bin_and_a_test_with_one_name_make_an_nextest_override_ambiguous() -> TestRe
 }
 
 #[test]
-fn members_sharing_a_harness_target_name_get_one_direct_step() -> TestResult {
+fn members_sharing_a_harness_target_name_each_get_a_direct_step() -> TestResult {
     let manifest = |name: &str| {
         format!("[package]\nname = \"{name}\"\n[[test]]\nname = \"custom\"\nharness = false\n")
     };
@@ -103,7 +103,8 @@ fn members_sharing_a_harness_target_name_get_one_direct_step() -> TestResult {
         &[("a/Cargo.toml", &ma), ("b/Cargo.toml", &mb)],
         vec![a, b],
     )?)?;
-    assert_eq!(text.matches("--test=custom").count(), 1, "{text}");
+    assert!(text.contains("cargo test -p a --locked --test=custom"), "{text}");
+    assert!(text.contains("cargo test -p b --locked --test=custom"), "{text}");
     Ok(())
 }
 
