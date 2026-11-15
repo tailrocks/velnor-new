@@ -84,6 +84,12 @@ pub enum Command {
         #[arg(long, value_name = "DIR")]
         evidence: Option<PathBuf>,
     },
+    /// Recovery journal operations.
+    Journal {
+        /// Action.
+        #[command(subcommand)]
+        action: JournalAction,
+    },
     /// Drain one repository connection.
     Disconnect {
         /// Stable ID for this connection.
@@ -92,6 +98,17 @@ pub enum Command {
         /// Wait up to 300 seconds for active work. Then remove the connection.
         #[arg(long)]
         wait: bool,
+    },
+}
+
+/// Recovery journal actions.
+#[derive(Debug, Subcommand)]
+pub enum JournalAction {
+    /// Print each reservation's recovery state read-only, one line per reservation.
+    Show {
+        /// Print only this reservation.
+        #[arg(long)]
+        reservation: Option<i64>,
     },
 }
 

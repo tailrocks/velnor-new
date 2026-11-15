@@ -9,7 +9,7 @@ use std::time::Duration;
 use clap::Parser;
 use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
 
-use crate::args::{Cli, Command, CredentialAction, DaemonAction};
+use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
 
 mod connect;
 mod connect_authority;
@@ -18,6 +18,7 @@ mod connection_state;
 mod credential;
 mod disconnect;
 mod drain;
+mod journal_show;
 mod marker;
 
 use connect::{ConnectRequest, connect};
@@ -81,6 +82,9 @@ fn dispatch(cli: &Cli) -> ExitCode {
             dind_memory_bytes: args.dind_memory_bytes,
             operational_memory_reserve_bytes: args.operational_memory_reserve_bytes,
         }),
+        Command::Journal { action } => match action {
+            JournalAction::Show { reservation } => journal_show::show(&state, *reservation),
+        },
         Command::Service { action } => crate::service::service(*action, &state),
         Command::Daemon { action } => daemon(&state, *action),
         Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
