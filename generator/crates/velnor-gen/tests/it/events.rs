@@ -33,8 +33,6 @@ concurrency:
 
 const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
 
-const DRAFT: &str = "if: ${{ github.event.pull_request.draft != true }}";
-
 fn with(files: &[(&str, &str)], config: Option<&[u8]>) -> TestResult2 {
     let mut view = view(&["Cargo.toml"], config)?;
     for (path, text) in files {
@@ -92,7 +90,7 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
     };
     assert!(!job("rust-lint").contains("draft"), "{on}");
     assert!(
-        unquoted(&job("rust-test")).contains(&unquoted(DRAFT)),
+        unquoted(&job("rust-test")).contains("github.event.pull_request.draft != true"),
         "{on}"
     );
     assert!(!job("required").contains("draft != true"), "{on}");

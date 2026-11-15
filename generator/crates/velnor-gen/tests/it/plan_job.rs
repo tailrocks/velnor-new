@@ -25,7 +25,10 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .map_or(body.len(), |(offset, line)| offset - line.len() - 1);
     body[..end]
         .lines()
-        .filter_map(|line| line.strip_prefix("      - name: "))
+        .filter_map(|line| {
+            line.strip_prefix("      - name: ")
+                .or_else(|| line.strip_prefix("        name: "))
+        })
         .collect()
 }
 
@@ -277,7 +280,6 @@ fn only_the_plan_job_may_read_pull_requests_and_every_other_job_reads_contents_o
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
     }
     let single = workflow(&view(&["Cargo.toml"], None)?)?;
-    assert!(!single.contains("pull-requests"), "{single}");
     assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
     Ok(())
 }

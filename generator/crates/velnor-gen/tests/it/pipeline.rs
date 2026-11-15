@@ -11,7 +11,7 @@ use velnor_rust::{CONFIG_PATH, DetectError};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const HELPER_LOCK: &[u8] =
+pub(crate) const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
@@ -77,6 +77,7 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let jobs: Vec<&str> = text
         .lines()
+        .skip_while(|line| *line != "jobs:")
         .filter(|line| line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':'))
         .collect();
     assert_eq!(
