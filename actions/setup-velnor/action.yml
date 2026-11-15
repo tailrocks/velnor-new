@@ -42,11 +42,12 @@ runs:
         esac
         [ -n "$expected" ] || fail "no SHA-256 was given for $platform"
         [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "the SHA-256 for $platform is not 64 lowercase hex digits"
-        [ -n "$RUNNER_TOOL_CACHE" ] || fail "RUNNER_TOOL_CACHE is not set"
         arch="$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
-        versions="$RUNNER_TOOL_CACHE/velnor-ci/$VERSION"
-        dir="$versions/$arch"
-        mkdir -p "$versions"
+        dir=
+        if [ -n "${RUNNER_TOOL_CACHE:-}" ]; then
+          dir="$RUNNER_TOOL_CACHE/velnor-ci/$VERSION/$arch"
+          mkdir -p "$dir" 2> /dev/null || dir=
+        fi
         staging="$(mktemp -d "$RUNNER_TEMP/velnor-ci-staging.XXXXXX")"
         trap 'rm -rf "$staging"' EXIT
         sums="$RUNNER_TEMP/velnor-ci.sha256"
@@ -55,7 +56,7 @@ runs:
         for source in cache download; do
           rm -f "$staging/velnor-ci"
           if [ "$source" = cache ]; then
-            [ -x "$dir/velnor-ci" ] || continue
+            [ -n "$dir" ] && [ -x "$dir/velnor-ci" ] || continue
             cp "$dir/velnor-ci" "$staging/velnor-ci" 2> /dev/null || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
@@ -79,13 +80,13 @@ runs:
           echo "velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
           chmod +x "$staging/velnor-ci"
-          {
-            mkdir -p "$dir"
-            entry="$(mktemp "$dir/.velnor-ci.XXXXXX")"
-            cp "$staging/velnor-ci" "$entry"
-            chmod +x "$entry"
-            mv -f "$entry" "$dir/velnor-ci"
-          } || echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache at $dir; this job is not affected"
-          echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
+          entry=
+          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$staging/velnor-ci" "$entry" 2> /dev/null && chmod +x "$entry" && mv -f "$entry" "$dir/velnor-ci" 2> /dev/null; then
+            echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
+          else
+            [ -z "$entry" ] || rm -f "$entry"
+            echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache; this job is not affected"
+            echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $bin"
+          fi
         fi
         echo "$bin" >> "$GITHUB_PATH"
