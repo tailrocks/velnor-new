@@ -20,6 +20,7 @@ pub struct ReleaseFiles {
     pub cargo_configs: BTreeMap<String, String>,
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
+    pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
     pub workflow_names: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
@@ -125,6 +126,32 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     Ok(())
 }
 
+fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), ReleaseError> {
+    let Some(members) = &files.root_members else {
+        return Ok(());
+    };
+    let mut released: BTreeMap<&str, &str> = BTreeMap::new();
+    for config in configs {
+        let inherited = members
+            .get(&config.root)
+            .filter(|_| !config.workspace_tags.is_empty())
+            .into_iter()
+            .flatten();
+        let listed = config.packages.iter().map(|package| &package.name);
+        for name in listed.chain(inherited) {
+            if let Some(first) = released.insert(name.as_str(), config.root.as_str())
+                && first != config.root
+            {
+                return Err(ReleaseError::DuplicatePackageName {
+                    package: name.clone(),
+                    roots: vec![first.to_owned(), config.root.clone()],
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 fn manifest_of(root: &str) -> String {
     if root == "." {
         "Cargo.toml".to_owned()
@@ -207,6 +234,7 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
+        check_inventory(&configs, files)?;
         let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
         if configs.iter().any(|config| config.publishes_to_crates_io) {
             for (file, text) in &files.cargo_configs {

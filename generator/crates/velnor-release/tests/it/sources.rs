@@ -179,3 +179,23 @@ fn a_plugin_for_release_plz_or_an_unapproved_locked_backend_is_refused() {
     let other = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\nbun = \"https://example.com/bun\"\n";
     assert_eq!(refusal(&with_mise(other)), None);
 }
+
+#[test]
+fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
+    let members = |app: &[&str], tools: &[&str]| {
+        Some(std::collections::BTreeMap::from([
+            (".".to_owned(), names(app)),
+            ("tools".to_owned(), names(tools)),
+        ]))
+    };
+    let mut files = two_roots(PLZ_TOOLS)?;
+    files.root_members = members(&["app"], &["app", "tools"]);
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app"),
+        "{error:?}"
+    );
+    files.root_members = members(&["app"], &["tools"]);
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}

@@ -30,6 +30,7 @@ pub(crate) fn files() -> ReleaseFiles {
         cargo_configs: BTreeMap::new(),
         cargo_manifests: None,
         bin_targets: None,
+        root_members: None,
         workflow_names: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
