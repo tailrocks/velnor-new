@@ -75,6 +75,15 @@ gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"t
 
 The subagent models are `haiku`, `sonnet` and `opus`. Use the model the issue names. Use a stronger one only after a failure, and say so in the pull request.
 
+### GitHub API budget and local tests
+
+Every agent shares one GitHub token, and its API limit is 5000 calls an hour. Agents that poll used up the limit twice in one day. Follow these rules.
+
+1. Never poll GitHub in a loop. Watch a run with `gh run watch <id> --interval 180`, and a pull request with `gh pr checks <number> --watch --interval 180`. The default interval polls every 3 seconds. Run one watcher, owned by the orchestrator.
+2. When GraphQL is rate-limited, `gh pr review` and `gh pr create` fail. Post a review with REST instead: `gh api -X POST repos/tailrocks/velnor-new/pulls/<number>/reviews -f event=COMMENT -F body=@<file>`.
+3. A plain `cargo nextest run --workspace` fails about 100 tests in `velnor-actions-cli`, `velnor-actions-mise` and `velnor-archive-guard`. They need environment variables that only `scripts/verify-local.sh` sets. Run that script, or test only the crates you touch. These failures are not regressions.
+4. On a heavily loaded machine, a slow test can hit a nextest `slow-timeout` and fail even though its assertions pass. Treat that as a timing result, not a test failure. To check it, copy `.config/nextest.toml` with a longer timeout, and prove the timing on CI.
+
 ## The project board
 
 The project [Velnor fast Rust CI](https://github.com/orgs/tailrocks/projects/2) shows the roadmap to the owner. Its lists follow the labels and the "blocked by" links, so they need no upkeep. GitHub adds a new child issue of #574 to the project, moves a card to "In Progress" when a pull request that closes its issue opens, and moves it to "Done" when the issue closes.
