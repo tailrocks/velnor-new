@@ -78,6 +78,25 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                 let mut found = globs("exclude", &config.exclude, &|glob| {
                     format!("leaves {glob} out of the checks")
                 });
+                found.extend(config.inputs.iter().map(|rule| {
+                    let packages = rule
+                        .packages
+                        .iter()
+                        .map(|package| format!("\"{package}\""))
+                        .collect::<Vec<_>>();
+                    make(
+                        format!(
+                            "inputs = \"{}\" packages = [{}]",
+                            rule.glob,
+                            packages.join(", ")
+                        ),
+                        format!(
+                            "limits a change to {} to selecting only {}",
+                            rule.glob,
+                            packages.join(", ").replace('"', "")
+                        ),
+                    )
+                }));
                 found.extend(globs("non_inputs", &config.non_inputs, &|glob| {
                     format!("stops a change to {glob} from selecting any package")
                 }));
@@ -188,13 +207,21 @@ fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
             .into_iter()
             .flat_map(|targets| targets.values().filter_map(Value::as_table)),
     );
-    if sections
+    let flags: Vec<String> = sections
         .filter_map(|section| section.get("rustdocflags"))
-        .any(|flags| flags.to_string().contains("--test-args"))
-    {
+        .map(ToString::to_string)
+        .collect();
+    if flags.iter().any(|flags| flags.contains("--test-args")) {
         found.push(make(
             "rustdocflags with --test-args".to_owned(),
             "passes --test-args to rustdoc, which can leave out every doctest".to_owned(),
+        ));
+    }
+    if flags.iter().any(|flags| flags.contains("--no-run")) {
+        found.push(make(
+            "rustdocflags with --no-run".to_owned(),
+            "passes --no-run to rustdoc, which compiles every doctest without running it"
+                .to_owned(),
         ));
     }
     found

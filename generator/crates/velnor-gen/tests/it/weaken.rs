@@ -30,7 +30,7 @@ fn named(files: &[(&str, &str)]) -> Result<Vec<String>, Box<dyn std::error::Erro
 
 #[test]
 fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
-    let cases: [(&str, &str, &str, &str); 19] = [
+    let cases: [(&str, &str, &str, &str); 21] = [
         (
             ".velnor/rust-ci.toml",
             "exclude = [\"tools/Cargo.toml\"]\n",
@@ -66,6 +66,18 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
             "[build]\nrustdocflags = [\"--test-args\", \"zzz\"]\n",
             "rustdocflags with --test-args",
             "passes --test-args to rustdoc, which can leave out every doctest",
+        ),
+        (
+            ".velnor/rust-ci.toml",
+            "[[inputs]]\nglob = \"data/**\"\npackages = [\"foo\"]\n",
+            "inputs = \"data/**\" packages = [\"foo\"]",
+            "limits a change to data/** to selecting only foo",
+        ),
+        (
+            ".cargo/config.toml",
+            "[build]\nrustdocflags = [\"--no-run\"]\n",
+            "rustdocflags with --no-run",
+            "passes --no-run to rustdoc, which compiles every doctest without running it",
         ),
         (
             "mise.toml",
