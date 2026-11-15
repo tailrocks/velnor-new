@@ -52,22 +52,29 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     for (profile, section) in checked(parsed) {
         for entry in entries(section, "scripts") {
-            let Some(name) = entry.get("run-wrapper").and_then(Value::as_str) else {
-                continue;
-            };
-            let command = commands
-                .and_then(|commands| commands.get(name))
-                .and_then(|wrapper| wrapper.get("command"))
-                .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
-            let filter = entry
-                .get("filter")
-                .map_or_else(String::new, |filter| format!(" filter = {filter}"));
-            found.push(make(
-                format!(
-                    "profile.{profile}.scripts run-wrapper = \"{name}\" command = {command}{filter}"
-                ),
-                format!("runs test binaries through the wrapper {name}, command {command}"),
-            ));
+            for key in ["run-wrapper", "list-wrapper"] {
+                let Some(name) = entry.get(key).and_then(Value::as_str) else {
+                    continue;
+                };
+                let command = commands
+                    .and_then(|commands| commands.get(name))
+                    .and_then(|wrapper| wrapper.get("command"))
+                    .map_or_else(|| "an unnamed command".to_owned(), ToString::to_string);
+                let filter = entry
+                    .get("filter")
+                    .map_or_else(String::new, |filter| format!(" filter = {filter}"));
+                let stage = if key == "run-wrapper" {
+                    "runs test binaries"
+                } else {
+                    "lists tests"
+                };
+                found.push(make(
+                    format!(
+                        "profile.{profile}.scripts {key} = \"{name}\" command = {command}{filter}"
+                    ),
+                    format!("{stage} through the wrapper {name}, command {command}"),
+                ));
+            }
         }
     }
     for (profile, section) in checked(parsed) {

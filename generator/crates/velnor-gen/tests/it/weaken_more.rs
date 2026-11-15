@@ -115,3 +115,21 @@ fn a_zero_retry_override_and_a_wrapper_in_an_inactive_profile_are_not_named() ->
     assert_eq!(named, Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn a_list_wrapper_that_could_hide_tests_from_discovery_is_named() -> TestResult {
+    let named = named(
+        &[(
+            NEXTEST,
+            "[scripts.wrapper.sub]\ncommand = \"head -1\"\n\n[[profile.default.scripts]]\nfilter = \"all()\"\nlist-wrapper = \"sub\"\n",
+        )],
+        false,
+    )?;
+    assert_eq!(
+        named,
+        [
+            ".config/nextest.toml: profile.default.scripts list-wrapper = \"sub\" command = \"head -1\" filter = \"all()\": lists tests through the wrapper sub, command \"head -1\""
+        ]
+    );
+    Ok(())
+}
