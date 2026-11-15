@@ -33,7 +33,7 @@ fn reported(versions: &[(&str, bool)]) -> String {
 
 #[test]
 fn a_tool_passes_only_when_an_installed_version_equals_the_lock_or_the_pin() {
-    let cases: [Case<'_>; 8] = [
+    let cases: [Case<'_>; 10] = [
         (&["1.2.3"], &[], &[("1.2.3", true)], true),
         (&["1.2.3"], &[], &[("1.2.4", true)], false),
         (&["1.2"], &[], &[("1.2.9", true)], true),
@@ -42,6 +42,8 @@ fn a_tool_passes_only_when_an_installed_version_equals_the_lock_or_the_pin() {
         (&["1"], &["1.2.3"], &[("1.2.3", true)], true),
         (&["1.2.3"], &[], &[("1.2.3", false)], false),
         (&["1.2.3"], &[], &[], false),
+        (&["1.2"], &["1.2.3"], &[("1.2.3.1", true)], false),
+        (&["1.2"], &[], &[("1.2.3.1", true)], true),
     ];
     for (requested, locked, installed, ok) in cases {
         let json = reported(installed);

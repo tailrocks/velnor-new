@@ -22,7 +22,10 @@ pub struct Installed {
 }
 
 impl Installed {
-    fn satisfies(&self, wanted: &str) -> bool {
+    fn satisfies(&self, wanted: &str, locked: bool) -> bool {
+        if locked {
+            return self.version == wanted;
+        }
         same_version(wanted, &self.version) || self.requested_version.as_deref() == Some(wanted)
     }
 }
@@ -66,9 +69,11 @@ pub fn check_tools(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> 
                 .flatten()
                 .filter(|entry| entry.present)
                 .collect();
-            let agrees = found
-                .iter()
-                .any(|entry| wanted.iter().any(|want| entry.satisfies(want)));
+            let agrees = found.iter().any(|entry| {
+                wanted
+                    .iter()
+                    .any(|want| entry.satisfies(want, !pin.locked.is_empty()))
+            });
             if agrees {
                 None
             } else {
