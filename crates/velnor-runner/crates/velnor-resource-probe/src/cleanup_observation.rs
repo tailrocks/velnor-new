@@ -18,7 +18,7 @@ use crate::{
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
-const MOUNTINFO_LIMIT: usize = 65_536;
+use crate::mountinfo_io::read_mountinfo;
 const BOOT_ID_LIMIT: usize = 128;
 const MAX_PATH_BYTES: usize = 256;
 
@@ -192,7 +192,7 @@ fn open_cgroup_root(path: &Path) -> Result<OwnedFd, ProbeError> {
 }
 
 fn observe_guest_root() -> Result<GuestDockerRootIdentity, ProbeError> {
-    let mountinfo = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let mountinfo = read_mountinfo(MOUNTINFO_PATH, "mountinfo")?;
     cgroup2_root(&mountinfo)?;
     let observation = observe_docker_root(&mountinfo)?;
     Ok(root_identity(&observation))

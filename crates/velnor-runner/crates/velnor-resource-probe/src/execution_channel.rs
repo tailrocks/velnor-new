@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fs::File, io::Read, os::unix::fs::MetadataExt};
+use std::{fs::File, os::unix::fs::MetadataExt};
 
 use rustix::fs::{
     AtFlags, FileType, Mode, OFlags, StatxFlags, fstat, fstatfs, fstatvfs, open, openat, statx,
@@ -27,7 +27,7 @@ const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
+use crate::mountinfo_io::read_mountinfo;
 const CONTROL_OWNER: (u32, u32) = (0, 0);
 const CONTROL_MODE: u32 = 0o555;
 const RUNNER_OWNER: (u32, u32) = (1000, 1000);
@@ -41,11 +41,7 @@ pub fn observe_execution_channel(
     if boot_id != context.expected_guest_boot_id {
         return Err(ProbeError::Invalid("execution_channel_boot_id"));
     }
-    let mountinfo = read_bounded(
-        MOUNTINFO_PATH,
-        MOUNTINFO_LIMIT,
-        "execution_channel_mountinfo",
-    )?;
+    let mountinfo = read_mountinfo(MOUNTINFO_PATH, "execution_channel_mountinfo")?;
     let control = observe_directory(CONTROL_PATH, &mountinfo)?;
     let inbox = observe_directory(INBOX_PATH, &mountinfo)?;
     let job_facts = observe_directory(JOB_FACTS_PATH, &mountinfo)?;
@@ -53,11 +49,7 @@ pub fn observe_execution_channel(
     ensure_distinct_mounts(&control, &job_facts)?;
     ensure_distinct_mounts(&inbox, &job_facts)?;
     let namespace = mount_namespace_id()?;
-    if read_bounded(
-        MOUNTINFO_PATH,
-        MOUNTINFO_LIMIT,
-        "execution_channel_mountinfo",
-    )? != mountinfo
+    if read_mountinfo(MOUNTINFO_PATH, "execution_channel_mountinfo")? != mountinfo
         || observe_directory(CONTROL_PATH, &mountinfo)? != control
         || observe_directory(INBOX_PATH, &mountinfo)? != inbox
         || observe_directory(JOB_FACTS_PATH, &mountinfo)? != job_facts
@@ -112,19 +104,11 @@ pub fn read_execution_request(
         return Err(ProbeError::Invalid("execution_request_channel_changed"));
     }
     let inbox = open_fixed_directory(INBOX_PATH)?;
-    let mountinfo_before = read_bounded(
-        MOUNTINFO_PATH,
-        MOUNTINFO_LIMIT,
-        "execution_channel_mountinfo",
-    )?;
+    let mountinfo_before = read_mountinfo(MOUNTINFO_PATH, "execution_channel_mountinfo")?;
     let inbox_before = observe_open_directory(&inbox, INBOX_PATH, &mountinfo_before)?;
     ensure_channel_directory(&current.inbox, &inbox_before)?;
     let request = read_request_file(&inbox, RUNNER_OWNER.0, RUNNER_OWNER.1)?;
-    let mountinfo_after = read_bounded(
-        MOUNTINFO_PATH,
-        MOUNTINFO_LIMIT,
-        "execution_channel_mountinfo",
-    )?;
+    let mountinfo_after = read_mountinfo(MOUNTINFO_PATH, "execution_channel_mountinfo")?;
     let inbox_after = observe_open_directory(&inbox, INBOX_PATH, &mountinfo_after)?;
     let channel_after = observe_execution_channel(ExecutionChannelContext {
         schema_version: context.schema_version,
@@ -311,18 +295,6 @@ fn open_fixed_directory(path: &str) -> Result<File, ProbeError> {
         );
     }
     Ok(current)
-}
-
-fn read_bounded(path: &str, limit: usize, name: &'static str) -> Result<Vec<u8>, ProbeError> {
-    let file = File::open(path).map_err(|error| ProbeError::Read(name, error))?;
-    let mut bytes = Vec::with_capacity(limit.min(4096));
-    file.take((limit + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|error| ProbeError::Read(name, error))?;
-    if bytes.len() > limit {
-        return Err(ProbeError::InputTooLarge(name));
-    }
-    Ok(bytes)
 }
 
 fn validate_context(schema_version: u8, operation_id: &str) -> Result<(), ProbeError> {
