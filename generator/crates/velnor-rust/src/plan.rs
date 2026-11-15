@@ -168,6 +168,7 @@ fn test_commands(facts: &RepoFacts, root: &RustRoot) -> Vec<CargoCommand> {
                 package: member.name.clone(),
                 target: harness.name.clone(),
                 kind: harness.kind,
+                features: harness.required_features.clone(),
             })
             .collect::<Vec<_>>()
     }));

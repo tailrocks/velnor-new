@@ -273,6 +273,22 @@ fn a_build_dependency_feature_reaches_the_tests_only_when_the_resolver_unifies_i
 }
 
 #[test]
+fn a_package_scoped_harness_carries_the_features_it_requires() -> TestResult {
+    let forwarding = forwarding_view(
+        "[package]\nname = \"b\"\n",
+        DependencyKind::Normal,
+        &["x"],
+        WORKSPACE,
+    )?;
+    let text = workflow(&forwarding)?;
+    assert!(
+        text.contains("cargo test -p a --locked --test=gated --features ''x''"),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_feature_forwarded_through_a_workspace_inherited_alias_enables_the_gated_harness() -> TestResult
 {
     let inherited = "[package]\nname = \"b\"\n[features]\ndefault = [\"aa/x\"]\n[dependencies]\naa.workspace = true\n";

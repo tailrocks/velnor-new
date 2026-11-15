@@ -68,6 +68,14 @@ pub(crate) fn custom_harnesses(
             let harness = CustomHarness {
                 name: target.name.clone(),
                 kind,
+                required_features: entry
+                    .get("required-features")
+                    .and_then(toml::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(toml::Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .collect(),
             };
             if !found.contains(&harness) {
                 found.push(harness);

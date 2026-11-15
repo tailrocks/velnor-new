@@ -205,6 +205,7 @@ pub enum CargoCommand {
         package: PackageName,
         target: TargetName,
         kind: TargetKind,
+        features: Vec<String>,
     },
     Doctest,
     Doc,

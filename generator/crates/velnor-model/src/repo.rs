@@ -154,6 +154,7 @@ pub struct RustMember {
 pub struct CustomHarness {
     pub name: TargetName,
     pub kind: TargetKind,
+    pub required_features: Vec<String>,
 }
 
 impl RustMember {
