@@ -7,7 +7,7 @@ Detected stacks
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check generator-samples: lint-generator-samples (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 29
+  Workspace crates: 30
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -27,6 +27,7 @@ Detected stacks
     - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-render, velnor-rust]
     - velnor-local (local/crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
     - velnor-model (generator/crates/velnor-model/Cargo.toml) [lib]
+    - velnor-release (generator/crates/velnor-release/Cargo.toml) [lib, test]
     - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
     - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
@@ -108,6 +109,7 @@ Workflow to generate
     - rust-velnor-gen (31 steps)
     - rust-velnor-local (31 steps)
     - rust-velnor-model (30 steps)
+    - rust-velnor-release (31 steps)
     - rust-velnor-render (30 steps)
     - rust-velnor-resource-probe (31 steps)
     - rust-velnor-runner-attestation (30 steps)
@@ -121,7 +123,7 @@ Workflow to generate
     - sources-producer (15 steps)
     - state-producer-ci-helper (35 steps)
     - state-producer-crates-velnor-runner (77 steps)
-    - state-producer-generator (53 steps)
+    - state-producer-generator (59 steps)
     - state-producer-local (41 steps)
     - state-producer-root (101 steps)
     - state-seal-ci-helper (9 steps)
@@ -133,7 +135,7 @@ Workflow to generate
     - tools-producer-924ced60 (11 steps)
     - tools-producer-c957c0bd (8 steps)
     - tools-producer-caf63d48 (9 steps)
-    - 27 Rust crate jobs
+    - 28 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
       Entries:
@@ -154,6 +156,7 @@ Workflow to generate
         - rust-velnor-gen
         - rust-velnor-local
         - rust-velnor-model
+        - rust-velnor-release
         - rust-velnor-render
         - rust-velnor-resource-probe
         - rust-velnor-runner-attestation
@@ -270,6 +273,11 @@ Workflow to generate
         - stack/rust/generator/crates/velnor-model/clippy/default
         - stack/rust/generator/crates/velnor-model/doc/default
         - stack/rust/generator/crates/velnor-model/fmt/default
+        - stack/rust/generator/crates/velnor-release/build/default
+        - stack/rust/generator/crates/velnor-release/clippy/default
+        - stack/rust/generator/crates/velnor-release/doc/default
+        - stack/rust/generator/crates/velnor-release/fmt/default
+        - stack/rust/generator/crates/velnor-release/nextest/default
         - stack/rust/generator/crates/velnor-render/build/default
         - stack/rust/generator/crates/velnor-render/clippy/default
         - stack/rust/generator/crates/velnor-render/doc/default
@@ -288,7 +296,7 @@ Workflow to generate
         - stack/rust/local/crates/velnor-local/doc/default
         - stack/rust/local/crates/velnor-local/fmt/default
         - stack/rust/local/crates/velnor-local/nextest/default
-  Parallel: 27 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 28 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -336,6 +344,7 @@ Workflow to generate
   Ineligible: stack/rust/generator/crates/velnor-gen/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-model/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-model/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/generator/crates/velnor-release/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-render/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-render/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-rust/doctest/default has no test targets; no test command emitted
