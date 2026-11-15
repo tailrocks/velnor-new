@@ -203,9 +203,21 @@ pub(crate) fn code_block(rest: &str) -> bool {
         if indent.contains('\t') || indent.len() >= 4 {
             return true;
         }
-        match trimmed.strip_prefix('>') {
+        match trimmed.strip_prefix('>').or_else(|| list_marker(trimmed)) {
             Some(after) => text = after,
             None => return false,
         }
     }
+}
+
+fn list_marker(text: &str) -> Option<&str> {
+    let after = text.strip_prefix(['*', '-', '+']).or_else(|| {
+        let digits = text.trim_start_matches(|c: char| c.is_ascii_digit());
+        if digits.len() < text.len() {
+            digits.strip_prefix(['.', ')'])
+        } else {
+            None
+        }
+    })?;
+    after.starts_with([' ', '\t']).then_some(after)
 }

@@ -276,4 +276,20 @@ pub(super) const ADDED: &[Case] = &[
         NO_FENCE,
         RUN,
     ),
+    (
+        "indented code inside a list item",
+        Kind::Doctested,
+        "/// *     assert!(false);\n/// 1.     assert!(false);\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "a plain list item without code",
+        Kind::Doctested,
+        "/// * one item\n/// 2. another\npub fn f() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
 ];
