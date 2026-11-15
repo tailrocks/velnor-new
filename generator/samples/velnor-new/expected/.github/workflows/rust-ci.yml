@@ -5,12 +5,14 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
   rust-plan:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -52,6 +54,8 @@ jobs:
     needs:
       - rust-plan
     if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -145,6 +149,8 @@ jobs:
     needs:
       - rust-plan
     if: '${{ needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -206,6 +212,8 @@ jobs:
     needs:
       - rust-plan
     if: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -295,6 +303,8 @@ jobs:
     needs:
       - rust-plan
     if: '${{ needs.rust-plan.outputs.rust_generator_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -368,6 +378,8 @@ jobs:
     needs:
       - rust-plan
     if: '${{ needs.rust-plan.outputs.rust_local_mode != ''none'' }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -438,6 +450,8 @@ jobs:
       - rust-generator
       - rust-local
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

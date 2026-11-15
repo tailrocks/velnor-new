@@ -52,6 +52,7 @@ pub struct Job {
     pub needs: Vec<JobId>,
     pub when: When,
     pub runs_on: RunnerLabel,
+    pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(String, GateNeed)>,

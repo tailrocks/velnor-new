@@ -111,7 +111,7 @@ fn token() -> Result<String, CiError> {
 fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     let token = token()?;
     let repo = Repo::parse(&args.repo)?;
-    let github = http::HttpGitHub::new(api_url(), token);
+    let github = http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT);
     let metrics = collect(&github, &repo, args.run_id, args.allow_rerun)?;
     if let Some(path) = &args.output {
         write_metrics(path, &metrics)?;
@@ -126,7 +126,11 @@ fn api_url() -> String {
 fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
     let token = token()?;
     let repo = Repo::parse(&args.repo)?;
-    let verdict = release_gate(&http::HttpGitHub::new(api_url(), token), &repo, &args.sha)?;
+    let verdict = release_gate(
+        &http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT),
+        &repo,
+        &args.sha,
+    )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)
 }

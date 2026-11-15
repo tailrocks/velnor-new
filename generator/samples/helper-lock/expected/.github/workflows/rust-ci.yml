@@ -5,13 +5,14 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: '${{ github.workflow_ref }}'
   cancel-in-progress: true
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -76,6 +77,8 @@ jobs:
     needs:
       - rust
     if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

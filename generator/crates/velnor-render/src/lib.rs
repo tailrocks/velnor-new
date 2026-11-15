@@ -79,7 +79,7 @@ fn triggers(triggers: &Triggers) -> Yaml {
     Yaml::Map(items)
 }
 
-fn permissions(permissions: &Permissions) -> Yaml {
+pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
     Yaml::Map(
         permissions
             .0

@@ -233,3 +233,37 @@ fn the_default_branch_is_main_unless_the_config_names_another_valid_branch() -> 
     }
     Ok(())
 }
+
+fn job_permissions(text: &str, job: &str) -> Vec<String> {
+    let header = format!("  {job}:\n");
+    let start = text
+        .find(&header)
+        .map_or(text.len(), |at| at + header.len());
+    let body = &text[start..];
+    let permissions = "    permissions:\n";
+    let Some(at) = body.find(permissions) else {
+        return Vec::new();
+    };
+    body[at + permissions.len()..]
+        .lines()
+        .take_while(|line| line.starts_with("      "))
+        .map(|line| line.trim().to_owned())
+        .collect()
+}
+
+#[test]
+fn only_the_plan_job_may_read_pull_requests_and_every_other_job_reads_contents_only() -> TestResult
+{
+    let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    assert_eq!(
+        job_permissions(&multi, "rust-plan"),
+        ["contents: read", "pull-requests: read"]
+    );
+    for job in ["rust-root", "rust-lab", "required"] {
+        assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
+    }
+    let single = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(!single.contains("pull-requests"), "{single}");
+    assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
+    Ok(())
+}

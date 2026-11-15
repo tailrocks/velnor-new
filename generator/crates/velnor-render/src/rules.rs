@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use velnor_model::Permissions;
+
 pub const FETCH_HELPER_RUN: &str = "\
 curl -fsSL --create-dirs -o \"$RUNNER_TEMP/vbin/velnor-ci\" \"$URL\"
 echo \"$SHA  $RUNNER_TEMP/vbin/velnor-ci\" > \"$RUNNER_TEMP/velnor-ci.sha\"
@@ -54,6 +56,7 @@ pub struct RenderedJob {
     pub needs: Vec<String>,
     pub condition: Option<String>,
     pub runs_on: String,
+    pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub outputs: Vec<(String, String)>,
     pub steps: Vec<RenderedStep>,

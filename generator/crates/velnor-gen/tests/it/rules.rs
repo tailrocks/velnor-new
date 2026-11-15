@@ -89,6 +89,7 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             needs: Vec::new(),
             when: When::Success,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
+            permissions: Permissions::default(),
             timeout_minutes: 10,
             gate: None,
             plan_outputs: Vec::new(),

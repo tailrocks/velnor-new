@@ -93,10 +93,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         concurrency: Concurrency {
             cancel_in_progress: true,
         },
-        permissions: Permissions(BTreeMap::from([
-            (PermissionScope::Contents, Access::Read),
-            (PermissionScope::PullRequests, Access::Read),
-        ])),
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         jobs,
     }
 }
@@ -125,6 +122,10 @@ fn plan_job(facts: &RepoFacts, outputs: Vec<(String, GateNeed)>) -> Job {
     Job {
         plan_outputs: outputs,
         steps,
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Contents, Access::Read),
+            (PermissionScope::PullRequests, Access::Read),
+        ])),
         ..job(facts, PLAN_JOB)
     }
 }
@@ -316,6 +317,7 @@ fn job(facts: &RepoFacts, id: JobId) -> Job {
         needs: Vec::new(),
         when: When::Success,
         runs_on: facts.config.runner.clone(),
+        permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         plan_outputs: Vec::new(),

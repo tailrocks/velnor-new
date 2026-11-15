@@ -27,6 +27,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: condition(job.when, job.gate.as_ref()),
         runs_on: job.runs_on.as_str().to_owned(),
+        permissions: job.permissions.clone(),
         timeout_minutes: job.timeout_minutes,
         outputs: job
             .plan_outputs

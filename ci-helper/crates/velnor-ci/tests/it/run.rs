@@ -68,7 +68,7 @@ fn run_keeps_each_stream_and_every_byte_and_appends_one_record_per_command() {
     run(&temp, &["sh", "-c", "exit 3"]);
     let text = log(&temp);
     assert_eq!(
-        text.matches("velnor-ci run: sh -c").count(),
+        text.matches("velnor-ci run: sh (2 arguments)").count(),
         2,
         "{}",
         text.len()
@@ -112,4 +112,75 @@ fn run_passes_every_argument_after_the_first_separator_to_the_command() {
         String::from_utf8_lossy(&output.stdout),
         "clippy -- -D warnings --help\n"
     );
+}
+
+#[test]
+fn run_passes_shell_metacharacters_to_the_command_as_plain_arguments() {
+    let temp = scratch("metacharacters");
+    let marker = temp.join("touched");
+    let marker = marker.to_string_lossy();
+    let semicolon = format!("; touch {marker}");
+    let substitution = format!("$(touch {marker})");
+    let backticks = format!("`touch {marker}`");
+    let quotes = "\"double\" 'single' \\ * ? | & > <";
+    let arguments = [
+        "printf",
+        "[%s]\n",
+        &semicolon,
+        &substitution,
+        &backticks,
+        quotes,
+    ];
+    let output = run(&temp, &arguments);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        format!("[{semicolon}]\n[{substitution}]\n[{backticks}]\n[{quotes}]\n")
+    );
+    assert!(!temp.join("touched").exists());
+}
+
+#[test]
+fn run_logs_the_program_and_the_argument_count_but_never_the_arguments() {
+    let temp = scratch("redaction");
+    let output = run(&temp, &["true", "token-abc123", "--password=hunter2"]);
+    assert!(output.status.success(), "{output:?}");
+    let text = log(&temp);
+    assert!(
+        text.contains("velnor-ci run: true (2 arguments)\n"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("token-abc123") && !text.contains("hunter2"),
+        "{text}"
+    );
+}
+
+#[test]
+fn run_fails_without_starting_the_command_when_runner_temp_is_unset() {
+    let marker = scratch("no-temp").join("started");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--", "touch"])
+        .arg(&marker)
+        .env_remove("RUNNER_TEMP")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("RUNNER_TEMP"));
+    assert!(!marker.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn run_refuses_a_log_that_is_a_symlink_and_leaves_its_target_alone() {
+    let temp = scratch("symlink");
+    let target = scratch("symlink-target").join("victim");
+    fs::write(&target, "kept").unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&target, temp.join("velnor-run.log"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let marker = temp.join("started");
+    let output = run(&temp, &["touch", marker.to_string_lossy().as_ref()]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(!marker.exists());
+    assert_eq!(fs::read_to_string(&target).unwrap_or_default(), "kept");
 }

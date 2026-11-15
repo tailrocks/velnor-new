@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::permissions;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 
@@ -18,6 +19,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(condition) = &job.condition {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
+    items.push(entry("permissions", permissions(&job.permissions)));
     items.extend([
         entry("runs-on", text(&job.runs_on)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
