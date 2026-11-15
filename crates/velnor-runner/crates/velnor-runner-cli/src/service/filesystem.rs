@@ -22,7 +22,7 @@ pub(super) fn write_plist(binary: &Path, state: &Path, path: &Path, logs: &Path)
         return false;
     };
     if std::fs::create_dir_all(parent).is_err()
-        || std::fs::create_dir_all(logs).is_err()
+        || create_private_dir_all(logs).is_err()
         || !regular_file_or_absent(path)
     {
         return false;
@@ -154,14 +154,16 @@ mod tests {
         std::fs::create_dir(&parent)?;
         std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o755))?;
         let state = parent.join("state");
+        let logs = parent.join("logs");
         let written = write_plist(
             &root.join("velnor-host"),
             &state,
             &root.join("LaunchAgents").join("host.plist"),
-            &root.join("logs"),
+            &logs,
         );
         assert!(written);
         assert_eq!(mode(&state)?, 0o700);
+        assert_eq!(mode(&logs)?, 0o700);
         assert_eq!(mode(&parent)?, 0o755);
         Ok(())
     }
