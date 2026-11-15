@@ -11,11 +11,7 @@ use observation::{
     valid_boot_id, valid_digest, valid_operation_id,
 };
 
-use std::{
-    fs::File,
-    io::{Read, Write},
-    os::unix::fs::MetadataExt,
-};
+use std::{fs::File, io::Write, os::unix::fs::MetadataExt};
 
 use rustix::{
     fs::{
@@ -41,7 +37,6 @@ use super::{
 const PUBLISHER_ROOT: &str = "/opt/velnor";
 const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
-const MOUNTINFO_LIMIT: usize = 64 * 1024;
 const CONTROL_UID: u32 = 0;
 const CONTROL_GID: u32 = 0;
 const CONTROL_DIRECTORY_MODE: u32 = 0o555;
