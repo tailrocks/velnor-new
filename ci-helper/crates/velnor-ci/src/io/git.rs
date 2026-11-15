@@ -10,6 +10,7 @@ use velnor_model::RepoPath;
 use crate::error::CiError;
 
 const BASE: &str = "HEAD^1";
+const BASE_BYTES_CAP: usize = 4 << 20;
 const HEAD: &str = "HEAD";
 const MERGED: &str = "HEAD^2";
 const SHA_VARIABLE: &str = "GITHUB_SHA";
@@ -91,12 +92,21 @@ pub(super) fn base_files(
     base: &str,
     wanted: &[RepoPath],
 ) -> BTreeMap<RepoPath, String> {
-    wanted
-        .iter()
-        .filter_map(|path| {
-            let object = format!("{base}:{}", path.as_str());
-            let bytes = git(root, &["show", &object]).ok()?;
-            Some((path.clone(), String::from_utf8(bytes).ok()?))
-        })
-        .collect()
+    let mut kept = BTreeMap::new();
+    let mut bytes = 0;
+    for path in wanted {
+        let object = format!("{base}:{}", path.as_str());
+        let Some(text) = git(root, &["show", &object])
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+        else {
+            continue;
+        };
+        bytes += text.len();
+        if bytes > BASE_BYTES_CAP {
+            break;
+        }
+        kept.insert(path.clone(), text);
+    }
+    kept
 }

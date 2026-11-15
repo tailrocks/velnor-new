@@ -353,3 +353,33 @@ fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_tha
         ],
     );
 }
+
+#[test]
+fn a_source_two_roots_name_as_a_target_selects_the_package_of_every_root() {
+    let reader = |package: &str, directory: &str| {
+        let mut member = member(package, directory, &[]);
+        member.targets = vec![Target {
+            name: TargetName::new(package).unwrap_or_else(|e| unreachable!("{e}")),
+            kinds: vec![TargetKind::Bin],
+            tests: false,
+            doctest: false,
+            source: Some(path("a/shared/tool.rs")),
+            requires_features: false,
+        }];
+        member
+    };
+    let facts = facts(vec![
+        ("a/Cargo.toml", vec![reader("first", "a")]),
+        ("b/Cargo.toml", vec![reader("second", "b")]),
+    ]);
+    let hit = |package: &str| {
+        all(AllTrigger::MostPackages(BTreeMap::from([(
+            name(package),
+            changed("a/shared/tool.rs"),
+        )])))
+    };
+    assert_selects(
+        &facts,
+        vec![(&["a/shared/tool.rs"], vec![hit("first"), hit("second")])],
+    );
+}

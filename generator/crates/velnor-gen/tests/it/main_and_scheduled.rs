@@ -192,7 +192,7 @@ fn an_invalid_on_main_or_full_run_is_a_config_error_naming_the_value() {
         ("full_run = \"0 0 * * 7\"", "full_run", "0 0 * * 7"),
         ("full_run = \"0 0 * * MON\"", "full_run", "0 0 * * MON"),
         ("full_run = \"5-1 0 * * *\"", "full_run", "5-1 0 * * *"),
-        ("full_run = \"5/2 0 * * *\"", "full_run", "5/2 0 * * *"),
+        ("full_run = \"60/2 0 * * *\"", "full_run", "60/2 0 * * *"),
         ("full_run = \"*/0 0 * * *\"", "full_run", "*/0 0 * * *"),
         ("full_run = \"0  0 * * *\"", "full_run", "0  0 * * *"),
         ("full_run = \"@daily\"", "full_run", "@daily"),
@@ -217,6 +217,8 @@ fn a_cron_expression_accepts_lists_ranges_and_steps_in_every_field() {
         "15,45 8-18/2 1,15 */2 1-5",
         "59 23 31 12 6",
         "0 0 * * 0",
+        "20/15 * * * *",
+        "0 5/2 * * *",
     ] {
         assert!(CronExpr::new(text).is_ok(), "{text}");
     }

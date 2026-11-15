@@ -38,6 +38,7 @@ mod release_workflow;
 mod release_yml;
 mod release_yml_security;
 mod repo_sample;
+mod restored_term;
 mod rule_config;
 mod rules;
 mod select;

@@ -82,6 +82,24 @@ fn the_default_branch_comes_from_the_config_and_a_malformed_name_is_refused() ->
 }
 
 #[test]
+fn a_default_branch_with_a_filter_character_is_escaped_so_the_push_filter_matches_it_literally()
+-> TestResult {
+    for (name, filter) in [
+        ("release/c++", "release/c\\+\\+"),
+        ("!hotfix", "\\!hotfix"),
+        ("v1]", "v1\\]"),
+    ] {
+        let config = format!("default_branch = \"{name}\"\n");
+        let text = with(&[], Some(config.as_bytes()))?;
+        assert!(
+            text.contains(&format!("    branches:\n      - '{filter}'\n")),
+            "{name}: {text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> TestResult {
     let mise = |os: &str| {
         format!(
@@ -148,7 +166,7 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
 #[test]
 fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestResult {
     let none = with(&[], None)?;
-    assert!(!none.contains("rust-policy"), "{none}");
+    assert!(!none.contains("  policy:\n"), "{none}");
     let unpinned = with(&[("deny.toml", "")], None);
     assert!(
         unpinned.is_err_and(|error| error.to_string().contains("cargo-deny is not pinned")),
