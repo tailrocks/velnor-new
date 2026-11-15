@@ -63,7 +63,11 @@ async fn every_refused_attempt_is_reported_with_its_error() {
     let (_outcome, _calls, reported) = refuse_until_reporting(99, HostError::Identity).await;
     assert_eq!(
         reported,
-        vec![(1, HostError::Identity), (2, HostError::Identity)]
+        vec![
+            (1, HostError::Identity),
+            (2, HostError::Identity),
+            (3, HostError::Identity)
+        ]
     );
 }
 

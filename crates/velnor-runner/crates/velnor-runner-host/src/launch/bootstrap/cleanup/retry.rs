@@ -24,8 +24,11 @@ where
     let mut attempt = 1;
     loop {
         match observe(deadline).await {
-            Err(error @ HostError::Identity) if attempt < OBSERVATION_ATTEMPTS => {
+            Err(error @ HostError::Identity) => {
                 report(attempt, error);
+                if attempt >= OBSERVATION_ATTEMPTS {
+                    return Err(error);
+                }
                 attempt += 1;
             }
             outcome => return outcome,
