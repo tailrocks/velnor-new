@@ -72,6 +72,20 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
+    pub weakenings: Vec<Weakening>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Weakening {
+    pub file: RepoPath,
+    pub setting: String,
+    pub effect: String,
+}
+
+impl fmt::Display for Weakening {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}: {}", self.file, self.setting, self.effect)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

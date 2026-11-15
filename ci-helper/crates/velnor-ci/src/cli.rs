@@ -63,7 +63,7 @@ pub struct PlanArgs {
         long = "base-file",
         value_name = "PATH=FILE",
         value_parser = base_file,
-        help = "The text a changed Cargo.lock or root Cargo.toml had before the change: the repository path, an equals sign, and a file holding the old text. Without it a changed Cargo.lock or root Cargo.toml selects everything. Repeat for each file"
+        help = "The text a changed Cargo.lock, Cargo.toml or configuration file had before the change: the repository path, an equals sign, and a file holding the old text. Without it a changed Cargo.lock or root Cargo.toml selects everything, and a changed file that makes a check do less (.velnor/rust-ci.toml, a Cargo.toml, a cargo, mise or nextest configuration) counts as adding every such setting it holds, which the run reports as a warning. Repeat for each file"
     )]
     pub base_files: Vec<BaseFile>,
 }

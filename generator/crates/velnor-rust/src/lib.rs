@@ -22,6 +22,7 @@ mod timings;
 mod toml_file;
 mod toolchain;
 mod unowned;
+mod weaken;
 
 pub use config::CONFIG_PATH;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
@@ -40,3 +41,4 @@ pub use reads::{
 pub use select::{root_slug, select, unknown_paths, unread_packages};
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::TIMINGS_PATH;
+pub use weaken::introduced;

@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::plan::Steps;
-use velnor_ci::plan::{explain, outputs};
+use velnor_ci::plan::{explain, outputs, warnings, weakened};
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, SelectionReason, SkipReason,
-    StepNeed,
+    StepNeed, Weakening,
 };
 
 fn path(text: &str) -> RepoPath {
@@ -142,4 +142,22 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
     assert!(!starred.contains("glob = "), "{starred}");
     assert!(!starred.contains("\"scripts/a*b\""), "{starred}");
+}
+
+#[test]
+fn a_warning_annotation_escapes_the_characters_a_workflow_command_reads() {
+    let weakening = Weakening {
+        file: path("a,b/c:d.toml"),
+        setting: "x = \"100%\"\ny".to_owned(),
+        effect: "runs it\r".to_owned(),
+    };
+    assert_eq!(
+        warnings(std::slice::from_ref(&weakening)),
+        "::warning file=a%2Cb/c%3Ad.toml::this pull request runs it%0D (x = \"100%25\"%0Ay)\n"
+    );
+    assert_eq!(warnings(&[]), "");
+    assert_eq!(
+        weakened(std::slice::from_ref(&weakening), &[]),
+        "check does less: a,b/c:d.toml: x = \"100%\"\ny: runs it\r\n"
+    );
 }

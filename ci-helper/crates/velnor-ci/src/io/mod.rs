@@ -17,7 +17,8 @@ use clap::{CommandFactory, FromArgMatches};
 use velnor_gen::io::{Checkout, Error as GenError, read_checkout, read_files};
 use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, root_sources, select, unknown_paths, unread_packages,
+    cargo_files, detect, introduced, optional_steps, root_sources, select, unknown_paths,
+    unread_packages,
 };
 
 pub use self::audit::audit_inputs;
@@ -32,7 +33,7 @@ use crate::error::CiError;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::metrics::RunMetrics;
-use crate::plan::{Steps, explain, outputs};
+use crate::plan::{Steps, explain, outputs, warnings, weakened};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
@@ -136,16 +137,18 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .collect::<Result<Steps, CiError>>()?;
     let outputs = outputs(&selections, &steps)?;
     append_outputs(&outputs)?;
-    Ok(if args.explain {
+    let new = introduced(&facts, &changes);
+    let report = if args.explain {
         explain(
             &selections,
             &steps,
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
-        )
+        ) + &weakened(&facts.weakenings, &new)
     } else {
         outputs
-    })
+    };
+    Ok(report + &warnings(&new))
 }
 
 fn read_sources(

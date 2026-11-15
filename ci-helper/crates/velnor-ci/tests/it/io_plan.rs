@@ -298,3 +298,66 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
     );
 }
+
+const DOCTESTS_OFF: &str =
+    "[package]\nname = \"a\"\nedition = \"2024\"\n\n[lib]\ndoctest = false\n";
+const RUNNER: &str = "[target.x86_64-unknown-linux-gnu]\nrunner = \"true\"\n";
+
+fn warnings_of(output: &Output) -> Vec<String> {
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| line.starts_with("::warning"))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn plan_warns_on_the_pull_request_about_a_setting_the_change_adds_that_makes_a_check_do_less() {
+    let repo = plan_repo("weaken");
+    repo.write("a/Cargo.toml", DOCTESTS_OFF);
+    repo.write(".cargo/config.toml", RUNNER);
+    let outputs = repo.root().join("github-output");
+    let changed = ["a/Cargo.toml", ".cargo/config.toml"];
+    let before = "[package]\nname = \"a\"\nedition = \"2024\"\n";
+
+    let added = plan_with_bases(&repo, &changed, &[("a/Cargo.toml", before)]);
+    assert!(added.status.success(), "{added:?}");
+    assert_eq!(
+        warnings_of(&added),
+        [
+            "::warning file=.cargo/config.toml::this pull request runs test binaries through \"true\" (target.x86_64-unknown-linux-gnu.runner = \"true\")",
+            "::warning file=a/Cargo.toml::this pull request turns off doctests for a ([lib] doctest = false)",
+        ]
+    );
+    let text = String::from_utf8_lossy(&added.stdout);
+    assert!(
+        text.contains("check does less: a/Cargo.toml: [lib] doctest = false: turns off doctests for a (new in this change)\n"),
+        "{text}"
+    );
+
+    let kept = plan_with_bases(
+        &repo,
+        &changed,
+        &[
+            ("a/Cargo.toml", DOCTESTS_OFF),
+            (".cargo/config.toml", RUNNER),
+        ],
+    );
+    assert!(warnings_of(&kept).is_empty(), "{kept:?}");
+    let text = String::from_utf8_lossy(&kept.stdout);
+    assert!(
+        text.contains(
+            "check does less: a/Cargo.toml: [lib] doctest = false: turns off doctests for a\n"
+        ),
+        "{text}"
+    );
+
+    let untouched = plan_command(&repo)
+        .args(["plan", "--changed", "README.md"])
+        .env("GITHUB_OUTPUT", &outputs)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(warnings_of(&untouched).is_empty(), "{untouched:?}");
+    let written = fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!written.contains("::warning"), "{written}");
+}
