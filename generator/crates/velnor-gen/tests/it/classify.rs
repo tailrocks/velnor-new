@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AllTrigger, InputRule, RepoFacts, RustSelection, SelectionReason};
+use std::collections::BTreeMap;
+
+use velnor_model::{
+    AllTrigger, InputRule, RepoFacts, RustMember, RustSelection, SelectionReason, Target,
+    TargetKind, TargetName,
+};
 
 use crate::select::{
     all, assert_selects, changed, depends_on, facts, glob, member, name, path, some, two_roots,
@@ -312,6 +317,39 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
                     all(AllTrigger::ToolchainFile(path("rust-toolchain.toml"))),
                 ],
             ),
+        ],
+    );
+}
+
+#[test]
+fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_that_package() {
+    let root_package = RustMember {
+        name: name("tool"),
+        manifest: path("Cargo.toml"),
+        directory: None,
+        dependencies: Vec::new(),
+        targets: vec![Target {
+            name: TargetName::new("tool").unwrap_or_else(|e| unreachable!("{e}")),
+            kinds: vec![TargetKind::Bin],
+            tests: false,
+            doctest: false,
+            source: Some(path("docs/tool.rs")),
+            requires_features: false,
+        }],
+        custom_harnesses: Vec::new(),
+    };
+    let facts = facts(vec![("Cargo.toml", vec![root_package])]);
+    assert_selects(
+        &facts,
+        vec![
+            (
+                &["docs/tool.rs"],
+                vec![all(AllTrigger::MostPackages(BTreeMap::from([(
+                    name("tool"),
+                    changed("docs/tool.rs"),
+                )])))],
+            ),
+            (&["docs/other.rs"], vec![RustSelection::None]),
         ],
     );
 }
