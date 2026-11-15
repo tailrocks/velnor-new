@@ -27,6 +27,7 @@ fn dependency(
         platform: None,
         manifest: manifest.map(path).transpose()?,
         features: Vec::new(),
+        rename: None,
     })
 }
 

@@ -119,6 +119,7 @@ impl RootJobs<'_> {
                         package: member.name.clone(),
                         target: harness.name.clone(),
                         kind: harness.kind,
+                        features: harness.required_features.clone(),
                     })
                     .collect::<Vec<_>>()
             })

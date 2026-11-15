@@ -57,6 +57,7 @@ struct Dependency {
     path: Option<PathBuf>,
     #[serde(default)]
     features: Vec<String>,
+    rename: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -120,6 +121,7 @@ fn dependency_of(
             .map(|path| repo_path(repository, &path.join("Cargo.toml")))
             .transpose()?,
         features: dependency.features,
+        rename: dependency.rename,
     })
 }
 

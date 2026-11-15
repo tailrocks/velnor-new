@@ -22,6 +22,7 @@ fn uses(
             platform: None,
             manifest: None,
             features: Vec::new(),
+            rename: None,
         });
     }
     Ok(package)

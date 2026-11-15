@@ -36,6 +36,7 @@ pub struct PackageDependency {
     pub platform: Option<String>,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
+    pub rename: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,6 +174,7 @@ pub struct RustMember {
 pub struct CustomHarness {
     pub name: TargetName,
     pub kind: TargetKind,
+    pub required_features: Vec<String>,
 }
 
 impl RustMember {

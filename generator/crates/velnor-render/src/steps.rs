@@ -255,11 +255,13 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             package,
             target,
             kind,
+            features,
         } => (
             format!("Test {package} {target}"),
             format!(
-                "cargo test -p {package} --locked {}",
-                test_selector(*kind, target)
+                "cargo test -p {package} --locked {}{}",
+                test_selector(*kind, target),
+                feature_flag(features)
             ),
             vec![],
         ),
@@ -320,6 +322,17 @@ fn nextest_filter(filter: &FilterRef) -> String {
             .fold("($TEST_FILTER)".to_owned(), |text, id| {
                 format!("{text} - binary_id(={id})")
             }),
+    }
+}
+
+fn feature_flag(features: &[String]) -> String {
+    if features.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " --features '{}'",
+            features.join(",").replace('\'', "'\\''")
+        )
     }
 }
 
