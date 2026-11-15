@@ -3,5 +3,6 @@
 
 mod config;
 mod defaults;
+mod expressions;
 mod fixture;
 mod refusals;

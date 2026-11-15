@@ -50,6 +50,10 @@ pub enum ReleaseError {
         bin: String,
     },
     EmptyAfter,
+    ExpressionInValue {
+        key: String,
+        value: String,
+    },
     EmptyRoots,
     EmptyPlatforms {
         package: String,
@@ -170,6 +174,10 @@ impl ReleaseError {
             Self::InvalidBinName { package, bin } => write!(
                 f,
                 ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
+            ),
+            Self::ExpressionInValue { key, value } => write!(
+                f,
+                ".velnor/release.toml: {key} {value:?} contains \"${{{{\", which GitHub Actions would evaluate as an expression"
             ),
             Self::EmptyAfter => write!(
                 f,
