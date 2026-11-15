@@ -68,6 +68,7 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
     assert_eq!(
         runs(job(&tree, "build-tools-linux-x64")?),
         [
+            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
@@ -97,27 +98,6 @@ fn a_root_without_a_tracked_cargo_manifest_is_refused_when_rendering() {
         Some("roots = [\".\", \"gone\"]\n"),
     );
     assert!(rendered.is_err());
-}
-
-#[test]
-fn release_yml_installs_the_release_plz_tool_key_that_mise_toml_and_the_lock_name() -> TestResult {
-    let (_, tree) = two_binaries()?;
-    for id in ["release-pr", "tag"] {
-        let install = steps(job(&tree, id)?)
-            .iter()
-            .find(|step| {
-                step.get("name")
-                    .and_then(Node::text)
-                    .is_some_and(|name| name.starts_with("Install aqua:"))
-            })
-            .ok_or("no release-plz install step")?;
-        assert_eq!(
-            install.at(&["with", "install_args"]).and_then(Node::text),
-            Some("aqua:release-plz/release-plz"),
-            "{id}"
-        );
-    }
-    Ok(())
 }
 
 #[test]
@@ -200,10 +180,26 @@ fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_ref
             .position(|step| {
                 step.get("run").and_then(Node::text)
                     == Some(
-                        "! grep -q -e replace_command -e changelog_config release-plz.toml tools/release-plz.toml",
+                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
                     )
             })
             .ok_or("no refuse step")?;
+        let helper = all
+            .iter()
+            .position(|step| {
+                step.get("uses")
+                    .and_then(Node::text)
+                    .is_some_and(|uses| uses.contains("/actions/setup-velnor@"))
+            })
+            .ok_or("no helper step")?;
+        assert!(helper < refuse, "{id}");
+        assert!(
+            all.iter().all(|step| !step
+                .get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.contains("grep"))),
+            "{id}"
+        );
         let token = all
             .iter()
             .position(|step| {

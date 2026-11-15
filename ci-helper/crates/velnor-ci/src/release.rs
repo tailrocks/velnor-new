@@ -96,3 +96,10 @@ fn output_name(package: &str) -> Result<PlainName, CiError> {
         )))
     }
 }
+
+pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
+    for (file, text) in files {
+        velnor_release::refuse_external_commands(file, text).map_err(CiError::new)?;
+    }
+    Ok(String::new())
+}

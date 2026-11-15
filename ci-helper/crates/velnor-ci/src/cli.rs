@@ -112,6 +112,16 @@ pub enum ReleaseCommand {
         about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
+    #[command(
+        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML"
+    )]
+    CheckConfig(CheckConfigArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckConfigArgs {
+    #[arg(required = true, help = "release-plz.toml files to check")]
+    pub files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

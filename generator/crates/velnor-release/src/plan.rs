@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::Platform;
 
 use crate::error::ReleaseError;
-use crate::hazards::credential_provider;
+use crate::hazards::cargo_config;
 use crate::mise;
 use crate::release_plz::{RootConfig, read};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
@@ -48,7 +48,7 @@ pub struct ReleasePlan {
     pub roots: Vec<RootPlan>,
     pub after: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
-    pub release_plz_tool: String,
+    pub release_plz_version: String,
 }
 
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
@@ -254,12 +254,11 @@ impl ReleasePlan {
         }
         check_unique(&configs)?;
         check_inventory(&configs, files)?;
-        let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
-        if configs.iter().any(|config| config.publishes_to_crates_io) {
-            for (file, text) in &files.cargo_configs {
-                if config.roots.iter().any(|root| config_reaches(file, root)) {
-                    credential_provider(file, text)?;
-                }
+        let release_plz_version = mise::check(&files.mise_tomls, &files.mise_lock)?;
+        let publishes = configs.iter().any(|config| config.publishes_to_crates_io);
+        for (file, text) in &files.cargo_configs {
+            if config.roots.iter().any(|root| config_reaches(file, root)) {
+                cargo_config(file, text, publishes)?;
             }
         }
         let binaries = plan_binaries(&config, &configs, files)?;
@@ -280,7 +279,7 @@ impl ReleasePlan {
                 .collect(),
             after: config.after,
             binaries,
-            release_plz_tool,
+            release_plz_version,
         })
     }
 }

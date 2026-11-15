@@ -30,14 +30,40 @@ pub(crate) fn external_command(root: &str, document: &Value) -> Result<(), Relea
     }
 }
 
-fn runs_a_program(value: &Value) -> bool {
+pub fn refuse_external_commands(file: &str, text: &str) -> Result<(), String> {
+    let document = text
+        .parse::<toml::Table>()
+        .map_err(|error| format!("{file} is not valid TOML: {error}"))?;
+    match find_key(&Value::Table(document), &COMMAND_KEYS) {
+        Some(key) => Err(format!(
+            "{file}: {key} runs an external command with the release token in reach"
+        )),
+        None => Ok(()),
+    }
+}
+
+const PROGRAM_KEYS: [&str; 3] = ["rustc-wrapper", "rustc-workspace-wrapper", "rustc"];
+
+fn program_key(value: &Value) -> Option<&'static str> {
+    match value {
+        Value::Table(table) => PROGRAM_KEYS
+            .iter()
+            .find(|key| table.contains_key(**key))
+            .copied()
+            .or_else(|| table.values().find_map(program_key)),
+        Value::Array(items) => items.iter().find_map(program_key),
+        _ => None,
+    }
+}
+
+fn reaches_crates_io(value: &Value) -> bool {
     match value {
         Value::Table(table) => table.iter().any(|(key, inner)| match key.as_str() {
             "credential-alias" | "proxy" | "cainfo" | "global-credential-providers" => true,
             "credential-provider" => !is_builtin(inner),
-            _ => runs_a_program(inner),
+            _ => reaches_crates_io(inner),
         }),
-        Value::Array(items) => items.iter().any(runs_a_program),
+        Value::Array(items) => items.iter().any(reaches_crates_io),
         _ => false,
     }
 }
@@ -50,18 +76,33 @@ fn is_builtin(value: &Value) -> bool {
     }
 }
 
-pub(crate) fn credential_provider(file: &str, text: &str) -> Result<(), ReleaseError> {
+pub(crate) fn cargo_config(
+    file: &str,
+    text: &str,
+    publishes_to_crates_io: bool,
+) -> Result<(), ReleaseError> {
     let document = text
         .parse::<toml::Table>()
         .map_err(|error| ReleaseError::InvalidToml {
             file: file.to_owned(),
             message: error.to_string(),
         })?;
-    if runs_a_program(&Value::Table(document)) {
-        Err(ReleaseError::CargoCredentialProvider {
-            file: file.to_owned(),
-        })
+    let document = Value::Table(document);
+    let key = if document.get("env").is_some() {
+        Some("env")
     } else {
-        Ok(())
+        program_key(&document)
+    };
+    if let Some(key) = key {
+        return Err(ReleaseError::CargoRunsProgram {
+            file: file.to_owned(),
+            key: key.to_owned(),
+        });
     }
+    if publishes_to_crates_io && reaches_crates_io(&document) {
+        return Err(ReleaseError::CargoCredentialProvider {
+            file: file.to_owned(),
+        });
+    }
+    Ok(())
 }

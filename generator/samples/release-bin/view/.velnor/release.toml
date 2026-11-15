@@ -1,4 +1,4 @@
-after = ["Rust CI"]
+after = ["CI"]
 
 [[binaries]]
 package = "app"

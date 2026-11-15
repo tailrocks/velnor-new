@@ -555,6 +555,7 @@ dependencies = [
  "ureq",
  "velnor-gen",
  "velnor-model",
+ "velnor-release",
  "velnor-rust",
 ]
 

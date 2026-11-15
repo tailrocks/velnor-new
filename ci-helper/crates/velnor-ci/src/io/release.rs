@@ -6,11 +6,11 @@ use std::fs;
 use std::io::ErrorKind;
 
 use super::http::HttpGitHub;
-use crate::cli::{PublishArgs, RecordArgs};
+use crate::cli::{CheckConfigArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
-use crate::release::{PlainName, record};
+use crate::release::{PlainName, check_config, record};
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -25,6 +25,19 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let lines = record(&outputs)?;
     super::append_outputs(&lines)?;
     Ok(lines)
+}
+
+pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError> {
+    let files = args
+        .files
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map(|text| (path.display().to_string(), text))
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    check_config(&files)
 }
 
 pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {

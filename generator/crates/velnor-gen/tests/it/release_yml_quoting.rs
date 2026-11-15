@@ -25,6 +25,7 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_build_commands() -> Test
     assert_eq!(
         runs(job(&tree, "build-tools-linux-x64")?),
         [
+            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
@@ -51,18 +52,19 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_release_plz_runs() -> Te
     let release_plz = |id: &str| -> Result<Vec<&str>, Box<dyn Error>> {
         Ok(runs(job(&tree, id)?)
             .into_iter()
-            .filter(|run| run.starts_with("release-plz"))
+            .filter(|run| run.contains(" -- release-plz "))
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
+    let exec = "mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz";
     assert_eq!(
         release_plz("release-pr")?,
         [
             format!(
-                "release-plz release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
+                "{exec} release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
             ),
             format!(
-                "release-plz release-pr {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml'"
+                "{exec} release-pr {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml'"
             ),
         ]
     );
@@ -70,10 +72,10 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_release_plz_runs() -> Te
         release_plz("tag")?,
         [
             format!(
-                "release-plz release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""
+                "{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""
             ),
             format!(
-                "release-plz release {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml' -o json > \"$RUNNER_TEMP/release-1.json\""
+                "{exec} release {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml' -o json > \"$RUNNER_TEMP/release-1.json\""
             ),
         ]
     );

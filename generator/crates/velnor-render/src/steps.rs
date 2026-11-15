@@ -10,6 +10,8 @@ use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
+pub(crate) const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";

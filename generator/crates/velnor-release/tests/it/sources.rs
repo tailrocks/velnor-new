@@ -33,35 +33,36 @@ fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
 }
 
 #[test]
-fn release_plz_must_come_from_an_approved_source_without_extra_options() {
-    for text in [
-        "[tools.release-plz]\nversion = \"0.4.3\"\npath = \"./fake\"\n",
-        "[tools.release-plz]\nversion = \"0.4.3\"\nref = \"main\"\n",
-        "[tools.release-plz]\nversion = \"0.4.3\"\nprefix = \"x\"\n",
-        "[tools.\"github:evil/release-plz\"]\nversion = \"0.4.3\"\n",
-        "[tools.\"cargo:https://example.com/release-plz\"]\nversion = \"0.4.3\"\n",
+fn release_plz_must_be_pinned_to_an_exact_version_that_mise_cannot_redirect() {
+    for version in [
+        "path:/tmp/evil",
+        "latest",
+        "0.4",
+        "^0.4.3",
+        "0.4.3-rc1",
+        "ref:main",
     ] {
-        let error = refusal(&with_mise(text));
+        let text = format!("[tools]\nrelease-plz = \"{version}\"\n");
+        let mut files = with_mise(&text);
+        files.mise_lock = format!("[[tools.release-plz]]\nversion = \"{version}\"\n");
         assert!(
-            matches!(error, Some(ReleaseError::ReleasePlzSource { .. })),
-            "{text}: {error:?}"
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::ReleasePlzVersionNotExact { .. })
+            ),
+            "{version}"
         );
     }
 }
 
 #[test]
-fn the_plan_keeps_the_mise_key_that_matched_the_lock() -> TestResult {
-    let mut files = with_mise("[tools]\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n");
-    files.mise_lock =
-        "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
-    assert_eq!(
-        ReleasePlan::read(&files)?.release_plz_tool,
-        "aqua:release-plz/release-plz"
+fn the_plan_installs_the_exact_configured_version_whatever_key_or_options_mise_has() -> TestResult {
+    assert_eq!(ReleasePlan::read(&files())?.release_plz_version, "0.4.3");
+    let mut files = with_mise(
+        "[tools]\n\"ubi:evil/release-plz\" = { version = \"0.4.3\", path = \"./fake\" }\n[tool_alias]\nrelease-plz = \"ubi:evil/release-plz\"\n[settings]\naqua.registry_url = \"https://evil.example\"\n",
     );
-    assert_eq!(
-        ReleasePlan::read(&crate::fixture::files())?.release_plz_tool,
-        "release-plz"
-    );
+    files.mise_lock = "[[tools.\"ubi:evil/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(ReleasePlan::read(&files)?.release_plz_version, "0.4.3");
     Ok(())
 }
 
@@ -158,29 +159,6 @@ fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
 }
 
 #[test]
-fn a_plugin_for_release_plz_or_an_unapproved_locked_backend_is_refused() {
-    let plugin = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\n\"asdf:release-plz\" = \"https://example.com/evil\"\n";
-    let error = refusal(&with_mise(plugin));
-    assert!(
-        matches!(error, Some(ReleaseError::ReleasePlzSource { .. })),
-        "{error:?}"
-    );
-    let mut files = files();
-    files.mise_lock =
-        "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"asdf:release-plz\"\n".to_owned();
-    assert!(matches!(
-        refusal(&files),
-        Some(ReleaseError::ReleasePlzSource { .. })
-    ));
-    files.mise_lock =
-        "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"aqua:release-plz/release-plz\"\n"
-            .to_owned();
-    assert_eq!(refusal(&files), None);
-    let other = "[tools]\nrelease-plz = \"0.4.3\"\n[plugins]\nbun = \"https://example.com/bun\"\n";
-    assert_eq!(refusal(&with_mise(other)), None);
-}
-
-#[test]
 fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
     let members = |app: &[&str], tools: &[&str]| {
         Some(std::collections::BTreeMap::from([
@@ -238,22 +216,30 @@ fn only_cargo_configs_that_reach_a_release_root_are_checked_for_credential_provi
 }
 
 #[test]
-fn a_locked_download_must_come_from_the_release_plz_repository() {
-    let lock = |url: &str| {
-        format!(
-            "[[tools.release-plz]]\nversion = \"0.4.3\"\nbackend = \"aqua:release-plz/release-plz\"\n[tools.release-plz.platforms.linux-x64]\nchecksum = \"sha256:00\"\nurl = \"{url}\"\n"
-        )
-    };
-    let mut files = files();
-    files.mise_lock = lock("https://example.com/release-plz.tar.gz");
-    assert!(matches!(
-        refusal(&files),
-        Some(ReleaseError::ReleasePlzSource { .. })
-    ));
-    files.mise_lock = lock(
-        "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz.tar.gz",
-    );
-    assert_eq!(refusal(&files), None);
+fn cargo_configs_that_make_cargo_run_a_program_are_refused_whatever_the_root_publishes() {
+    for config in [
+        "[build]\nrustc-wrapper = \"/tmp/evil\"\n",
+        "[build]\nrustc-workspace-wrapper = \"/tmp/evil\"\n",
+        "[build]\nrustc = \"/tmp/evil\"\n",
+        "[env]\nLD_PRELOAD = \"/tmp/evil.so\"\n",
+        "env.LD_PRELOAD = \"/tmp/evil.so\"\n",
+    ] {
+        let mut files = files();
+        files.release_plz_toml.insert(
+            ".".to_owned(),
+            PLZ.replace(
+                "semver_check = false",
+                "semver_check = false\npublish = false",
+            ),
+        );
+        files
+            .cargo_configs
+            .insert(".cargo/config.toml".to_owned(), config.to_owned());
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::CargoRunsProgram { .. })),
+            "{config}"
+        );
+    }
 }
 
 #[test]

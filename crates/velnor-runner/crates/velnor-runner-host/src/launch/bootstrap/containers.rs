@@ -158,6 +158,26 @@ impl VerifiedCreatedStorageObject {
     pub(crate) fn docker_id(&self) -> &str {
         &self.docker_id
     }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(
+        reservation_id: i64,
+        operation_id: i64,
+        engine_id: &str,
+        docker_root_digest: &str,
+        role: crate::journal::StorageRole,
+        docker_name: &str,
+    ) -> Self {
+        Self {
+            reservation_id,
+            operation_id,
+            engine_id: engine_id.to_owned(),
+            docker_root_digest: docker_root_digest.to_owned(),
+            role,
+            docker_name: docker_name.to_owned(),
+            docker_id: docker_name.to_owned(),
+        }
+    }
 }
 
 pub(crate) struct BootstrapStartReceipt {

@@ -4,7 +4,7 @@ on:
   # jactionlint ignore=dangerous-triggers
   workflow_run:
     workflows:
-      - Rust CI
+      - CI
       - Qualification
     types:
       - completed
@@ -57,14 +57,26 @@ jobs:
           ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
-      - name: 'Install aqua:release-plz/release-plz'
+      - name: Install mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
-          install_args: 'aqua:release-plz/release-plz'
+          sha256: '7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9'
+          install: false
+          env: false
           cache: false
+          cache_save: false
+      - name: Install release-plz 0.4.3
+        run: 'mise --no-config --no-env --no-hooks install aqua:release-plz/release-plz@0.4.3'
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+        with:
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Refuse a release-plz config that runs commands
-        run: '! grep -q -e replace_command -e changelog_config release-plz.toml tools/release-plz.toml'
+        run: velnor-ci release check-config release-plz.toml tools/release-plz.toml
       - id: app
         name: Create the release App token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
@@ -78,11 +90,23 @@ jobs:
       - name: Open the release pull request of the repository root
         env:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-        run: 'release-plz release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml'
+          RUSTC_WRAPPER: ''
+          RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC: rustc
+          RUSTC: rustc
+        run: 'mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml'
       - name: Open the release pull request of tools
         env:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-        run: 'release-plz release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml'
+          RUSTC_WRAPPER: ''
+          RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC: rustc
+          RUSTC: rustc
+        run: 'mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml'
   tag:
     needs:
       - gate
@@ -105,12 +129,17 @@ jobs:
           ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
-      - name: 'Install aqua:release-plz/release-plz'
+      - name: Install mise
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
-          install_args: 'aqua:release-plz/release-plz'
+          sha256: '7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9'
+          install: false
+          env: false
           cache: false
+          cache_save: false
+      - name: Install release-plz 0.4.3
+        run: 'mise --no-config --no-env --no-hooks install aqua:release-plz/release-plz@0.4.3'
       - name: Install velnor-ci 0.1.79
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
@@ -119,7 +148,7 @@ jobs:
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Refuse a release-plz config that runs commands
-        run: '! grep -q -e replace_command -e changelog_config release-plz.toml tools/release-plz.toml'
+        run: velnor-ci release check-config release-plz.toml tools/release-plz.toml
       - id: app
         name: Create the release App token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
@@ -133,11 +162,23 @@ jobs:
       - name: Tag the releases of the repository root
         env:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-        run: 'release-plz release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release-0.json"'
+          RUSTC_WRAPPER: ''
+          RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC: rustc
+          RUSTC: rustc
+        run: 'mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release-0.json"'
       - name: Tag the releases of tools
         env:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-        run: 'release-plz release --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > "$RUNNER_TEMP/release-1.json"'
+          RUSTC_WRAPPER: ''
+          RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WRAPPER: ''
+          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
+          CARGO_BUILD_RUSTC: rustc
+          RUSTC: rustc
+        run: 'mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz release --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > "$RUNNER_TEMP/release-1.json"'
       - id: record
         name: Record the released packages
         run: 'velnor-ci release record "$RUNNER_TEMP/release-0.json" "$RUNNER_TEMP/release-1.json"'
@@ -151,12 +192,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Check out
+      - id: source
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
+      - name: Check that the tag is the commit the gate verified
+        env:
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          CHECKED_OUT: '${{ steps.source.outputs.commit }}'
+        run: 'test "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -190,12 +237,18 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     steps:
-      - name: Check out
+      - id: source
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
+      - name: Check that the tag is the commit the gate verified
+        env:
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          CHECKED_OUT: '${{ steps.source.outputs.commit }}'
+        run: 'test "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -229,12 +282,18 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - name: Check out
+      - id: source
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
+      - name: Check that the tag is the commit the gate verified
+        env:
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          CHECKED_OUT: '${{ steps.source.outputs.commit }}'
+        run: 'test "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -350,12 +409,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Check out
+      - id: source
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 'refs/tags/${{ needs.tag.outputs.tools }}'
           fetch-depth: 1
           persist-credentials: false
+      - name: Check that the tag is the commit the gate verified
+        env:
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          CHECKED_OUT: '${{ steps.source.outputs.commit }}'
+        run: 'test "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -390,12 +455,18 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - name: Check out
+      - id: source
+        name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 'refs/tags/${{ needs.tag.outputs.tools }}'
           fetch-depth: 1
           persist-credentials: false
+      - name: Check that the tag is the commit the gate verified
+        env:
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          CHECKED_OUT: '${{ steps.source.outputs.commit }}'
+        run: 'test "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:

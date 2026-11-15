@@ -155,7 +155,7 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
             let runs_release_plz = step
                 .get("run")
                 .and_then(Node::text)
-                .is_some_and(|run| run.starts_with("release-plz "));
+                .is_some_and(|run| run.contains(" -- release-plz "));
             assert_eq!(
                 token == Some("${{ steps.app.outputs.token }}"),
                 runs_release_plz,
@@ -177,26 +177,29 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
-    let refuse =
-        "! grep -q -e replace_command -e changelog_config release-plz.toml tools/release-plz.toml";
+    let install = "mise --no-config --no-env --no-hooks install aqua:release-plz/release-plz@0.4.3";
+    let exec = "mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz";
+    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml";
     assert_eq!(
         runs("release-pr")?,
         [
+            install.to_owned(),
             refuse.to_owned(),
             format!(
-                "release-plz release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
+                "{exec} release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
             ),
             format!(
-                "release-plz release-pr {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml"
+                "{exec} release-pr {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml"
             ),
         ]
     );
     assert_eq!(
         runs("tag")?,
         [
+            install.to_owned(),
             refuse.to_owned(),
-            format!("release-plz release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
-            format!("release-plz release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
+            format!("{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
+            format!("{exec} release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
             "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),
         ]
     );
