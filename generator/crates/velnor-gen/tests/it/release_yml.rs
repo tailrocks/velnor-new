@@ -11,7 +11,8 @@ use velnor_render::{Owner, owner_of};
 use velnor_rust::{LOCK_PATH, wanted_files};
 
 use crate::release_fixture::{
-    APP, GREEN, PUSH, READY, app, conjuncts, jobs, release_plz, release_view, steps, two_roots,
+    APP, GREEN, PUSH, READY, app, conjuncts, jobs, release_plz, release_view, steps, two_binaries,
+    two_roots,
 };
 use crate::yaml_tree::Node;
 
@@ -55,7 +56,7 @@ fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> Tes
 
 #[test]
 fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_push() -> TestResult {
-    for (_, tree) in [app()?, two_roots()?] {
+    for (_, tree) in [app()?, two_roots()?, two_binaries()?] {
         let all = jobs(&tree)?;
         assert!(all.len() >= 3, "{} jobs", all.len());
         let (gate_id, gate) = all[0];
@@ -72,11 +73,12 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                     .contains(&"gate"),
                 "{id}"
             );
-            assert_eq!(
-                conjuncts(job),
-                BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]),
-                "{id}"
-            );
+            let mut want = BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]);
+            if !matches!(*id, "release-pr" | "tag") {
+                let package = id.split('-').nth(1).ok_or("no package in the job id")?;
+                want.insert(format!("needs.tag.outputs.{package} != ''"));
+            }
+            assert_eq!(conjuncts(job), want, "{id}");
         }
     }
     Ok(())

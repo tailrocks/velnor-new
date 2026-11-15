@@ -103,6 +103,12 @@ pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
     )
 }
 
+pub(crate) const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+
+pub(crate) fn two_binaries() -> Result<(String, Node), Box<dyn Error>> {
+    render(&[APP, TOOLS], Some(TWO_BINARIES))
+}
+
 pub(crate) fn jobs(tree: &Node) -> Result<Vec<(&str, &Node)>, Box<dyn Error>> {
     let jobs = tree.get("jobs").ok_or("no jobs")?;
     jobs.keys()

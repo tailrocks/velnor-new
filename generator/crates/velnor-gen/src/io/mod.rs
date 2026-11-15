@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{self, OpenOptions};
@@ -18,16 +18,17 @@ use velnor_rust::{
     pin_lock, reduce_metadata, release_version, sums_url, wanted_files,
 };
 
+mod ruleset;
 mod sample;
+mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{
-    Drift, GenerateError, check_tag, drift, expected_files, release_ruleset, require_compatible,
-};
+use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
+use tracked::tracked;
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[derive(Debug)]
@@ -125,7 +126,7 @@ pub fn main() -> Exit {
         }
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
         Command::CheckTag { tag } => return tag_verdict(tag),
-        Command::Release(ReleaseCommand::Ruleset) => return print_ruleset(&cli.root),
+        Command::Release(ReleaseCommand::Ruleset) => return ruleset::print(&cli.root),
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
@@ -154,30 +155,6 @@ pub fn main() -> Exit {
             Exit::from(2)
         }
     }
-}
-
-fn print_ruleset(root: &Path) -> Exit {
-    match ruleset(root) {
-        Ok(json) => {
-            print!("{json}");
-            Exit::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("velnor-gen: {error}");
-            Exit::from(2)
-        }
-    }
-}
-
-fn ruleset(root: &Path) -> Result<String, Error> {
-    let root = toplevel(root)?;
-    let tracked_paths = tracked(&root)?;
-    let view = RepoView {
-        files: read_files(&root, &wanted_files(&tracked_paths))?,
-        tracked_paths,
-        rust_metadata: BTreeMap::new(),
-    };
-    release_ruleset(&view).map_err(Error::Generate)
 }
 
 fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
@@ -315,22 +292,6 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
     let view = read_view(&root, false)?.0;
     Ok(Checkout { root, view })
-}
-
-fn tracked(root: &Path) -> Result<BTreeSet<RepoPath>, Error> {
-    program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
-        .split(|byte| *byte == 0)
-        .filter(|entry| !entry.is_empty())
-        .map(|entry| {
-            let text = std::str::from_utf8(entry).map_err(|_| {
-                Error::Repository(format!(
-                    "tracked path {:?} is not UTF-8",
-                    String::from_utf8_lossy(entry)
-                ))
-            })?;
-            RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
-        })
-        .collect()
 }
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
