@@ -122,12 +122,9 @@ impl Platform {
 
     #[must_use]
     pub fn holds(&self, predicate: &str) -> bool {
-        if self.unknown {
-            return true;
-        }
         let predicate = predicate.trim();
         let Some(rest) = predicate.strip_prefix("cfg(") else {
-            return predicate == self.triple;
+            return self.unknown || predicate == self.triple;
         };
         let Some(inner) = rest.strip_suffix(')') else {
             return true;
@@ -143,6 +140,7 @@ impl Platform {
         match expression {
             Expression::Name(name) if name == "true" => Truth::Yes,
             Expression::Name(name) if name == "false" => Truth::No,
+            Expression::Name(_) | Expression::Pair(..) if self.unknown => Truth::Unknown,
             Expression::Name(name) if FIXED_NAMES.contains(&name.as_str()) => {
                 Truth::of(self.names.contains(name))
             }

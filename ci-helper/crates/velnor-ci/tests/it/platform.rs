@@ -96,3 +96,20 @@ fn a_predicate_that_only_names_target_cfgs_can_be_inactive() {
         assert!(!platform.holds(predicate), "{predicate}");
     }
 }
+
+#[test]
+fn an_unknown_target_keeps_every_predicate_that_names_a_cfg_and_decides_the_literal_ones() {
+    let platform = Platform::unknown();
+    for (predicate, expected) in [
+        ("cfg(unix)", true),
+        ("cfg(target_os = \"linux\")", true),
+        ("cfg(any(false, unix))", true),
+        ("cfg(false)", false),
+        ("cfg(not(true))", false),
+        ("cfg(all(false, custom_flag))", false),
+        ("cfg(true)", true),
+        ("x86_64-unknown-linux-gnu", true),
+    ] {
+        assert_eq!(platform.holds(predicate), expected, "{predicate}");
+    }
+}
