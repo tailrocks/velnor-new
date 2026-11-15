@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::error::CiError;
 use crate::github::{
-    ApiJob, ApiJobs, ApiRun, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
+    ApiJob, ApiJobs, ApiRun, ApiStep, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
 };
 use crate::logscan;
 use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
@@ -105,13 +107,13 @@ fn job_metrics(
         .as_deref()
         .is_some_and(|at| !predates(at, attempt_start));
     let ran = conclusion != "skipped" && started;
-    let log = if ran {
+    let (log, step_logs) = if ran {
         let text = github
             .get(&job_log_path(repo, job.id))
-            .map_err(|e| CiError::new(format!("log of job `{}`: {e}", job.name)))?;
-        logscan::scan(&text)
+            .map_err(|e| e.context(&format!("log of job `{}`", job.name)))?;
+        (logscan::scan(&text), step_logs(job, &text))
     } else {
-        logscan::LogScan::default()
+        (logscan::LogScan::default(), BTreeMap::new())
     };
     let (queue_seconds, duration_seconds) = if ran {
         (
@@ -124,7 +126,9 @@ fn job_metrics(
     let steps = job
         .steps
         .iter()
-        .map(|step| StepMetrics {
+        .enumerate()
+        .map(|(index, step)| StepMetrics {
+            log: step_logs.get(&index).cloned().unwrap_or_default(),
             name: step.name.clone(),
             seconds: if step.conclusion.as_deref() == Some("skipped") {
                 0
@@ -142,4 +146,26 @@ fn job_metrics(
         steps,
         log,
     })
+}
+
+fn is_user_step(step: &ApiStep) -> bool {
+    step.conclusion.as_deref() != Some("skipped")
+        && step.name != "Set up job"
+        && step.name != "Complete job"
+        && !step.name.starts_with("Post ")
+}
+
+fn step_logs(job: &ApiJob, text: &str) -> BTreeMap<usize, logscan::LogScan> {
+    let indexes: Vec<usize> = (0..job.steps.len())
+        .filter(|index| is_user_step(&job.steps[*index]))
+        .collect();
+    let segments = logscan::split_steps(text);
+    if segments.len() != indexes.len() {
+        return BTreeMap::new();
+    }
+    indexes
+        .into_iter()
+        .zip(segments)
+        .map(|(index, segment)| (index, logscan::scan(segment)))
+        .collect()
 }

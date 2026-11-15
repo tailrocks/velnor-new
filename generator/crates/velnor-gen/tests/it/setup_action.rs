@@ -308,7 +308,12 @@ fn a_cache_entry_that_is_not_a_regular_file_is_ignored_instead_of_read() -> Test
         } else {
             install.work.join("elsewhere")
         };
-        assert!(Command::new(program("mkfifo")).arg(&fifo).status()?.success());
+        assert!(
+            Command::new(program("mkfifo"))
+                .arg(&fifo)
+                .status()?
+                .success()
+        );
         fs::set_permissions(&fifo, fs::Permissions::from_mode(0o755))?;
         if kind != "fifo" {
             symlink(&fifo, &entry)?;

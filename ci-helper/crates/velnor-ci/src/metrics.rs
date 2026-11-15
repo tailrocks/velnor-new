@@ -33,6 +33,8 @@ pub struct JobMetrics {
 pub struct StepMetrics {
     pub name: String,
     pub seconds: u64,
+    #[serde(default)]
+    pub log: LogScan,
 }
 
 impl JobMetrics {

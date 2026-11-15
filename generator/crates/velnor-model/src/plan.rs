@@ -9,6 +9,9 @@ use crate::ids::{
 };
 use crate::repo::TargetKind;
 
+pub const LINT_STEP: &str = "Lint";
+pub const TEST_STEP: &str = "Test";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
     pub name: String,

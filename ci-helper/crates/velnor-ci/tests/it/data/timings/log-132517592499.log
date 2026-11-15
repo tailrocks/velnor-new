@@ -1,0 +1,205 @@
+2026-11-14T16:54:16.6619079Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-14T16:54:17.6298768Z ##[group]Run jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+2026-11-14T16:54:28.6431434Z ##[group]Run rustup component add clippy rustfmt
+2026-11-14T16:54:28.6431663Z [36;1mrustup component add clippy rustfmt[0m
+2026-11-14T16:54:28.6478434Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:28.6478582Z env:
+2026-11-14T16:54:28.6478696Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:28.6478872Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:28.6479062Z   MISE_YES: 1
+2026-11-14T16:54:28.6479187Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:28.6479336Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:28.6479481Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:28.6479629Z ##[endgroup]
+2026-11-14T16:54:28.7095684Z info: component clippy is up to date
+2026-11-14T16:54:28.7126133Z info: component rustfmt is up to date
+2026-11-14T16:54:28.7157045Z ##[group]Run rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+2026-11-14T16:54:28.7157361Z [36;1mrustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu[0m
+2026-11-14T16:54:28.7199514Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:28.7199650Z env:
+2026-11-14T16:54:28.7199759Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:28.7199934Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:28.7200129Z   MISE_YES: 1
+2026-11-14T16:54:28.7200250Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:28.7200397Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:28.7200538Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:28.7200668Z ##[endgroup]
+2026-11-14T16:54:28.7575249Z info: component rust-std for target aarch64-unknown-linux-gnu is up to date
+2026-11-14T16:54:28.7575703Z info: component rust-std is up to date
+2026-11-14T16:54:28.7641099Z ##[group]Run cargo-fmt --all --check
+2026-11-14T16:54:28.7641311Z [36;1mcargo-fmt --all --check[0m
+2026-11-14T16:54:28.7684326Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:28.7684471Z env:
+2026-11-14T16:54:28.7684588Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:28.7684764Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:28.7684965Z   MISE_YES: 1
+2026-11-14T16:54:28.7685086Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:28.7685234Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:28.7685382Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:28.7685513Z ##[endgroup]
+2026-11-14T16:54:28.8022668Z ##[group]Run cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+2026-11-14T16:54:28.8023005Z [36;1mcargo-clippy clippy --workspace --all-targets --locked -- -D warnings[0m
+2026-11-14T16:54:28.8065049Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:28.8065200Z env:
+2026-11-14T16:54:28.8065440Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:28.8065611Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:28.8065800Z   MISE_YES: 1
+2026-11-14T16:54:28.8065919Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:28.8066063Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:28.8066206Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:28.8066338Z ##[endgroup]
+2026-11-14T16:54:32.8842944Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.05s
+2026-11-14T16:54:32.9043668Z ##[group]Run cargo-nextest nextest run --workspace --locked --no-fail-fast -E 'all()'
+2026-11-14T16:54:32.9044052Z [36;1mcargo-nextest nextest run --workspace --locked --no-fail-fast -E 'all()'[0m
+2026-11-14T16:54:32.9089329Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:32.9089477Z env:
+2026-11-14T16:54:32.9089596Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:32.9089786Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:32.9089989Z   MISE_YES: 1
+2026-11-14T16:54:32.9090114Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:32.9090282Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:32.9090431Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:32.9090568Z ##[endgroup]
+2026-11-14T16:54:35.7750637Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 2.78s
+2026-11-14T16:54:35.7957669Z ────────────
+2026-11-14T16:54:35.7958274Z  Nextest run ID ce194920-3906-41d8-87d8-594530f73725 with nextest profile: default
+2026-11-14T16:54:35.7958519Z     Starting 18 tests across 7 binaries
+2026-11-14T16:54:35.8013466Z         PASS [   0.005s] ( 1/18) app::cli defaults_to_world
+2026-11-14T16:54:35.8013766Z         PASS [   0.005s] ( 2/18) app::cli prints_the_greeting_for_a_name
+2026-11-14T16:54:35.8046082Z         PASS [   0.004s] ( 3/18) app::bin/app greet::tests::line_names_the_record
+2026-11-14T16:54:35.8075552Z         PASS [   0.003s] ( 4/18) app::bin/app greet::tests::line_starts_with_the_shared_greeting
+2026-11-14T16:54:35.8106926Z         PASS [   0.003s] ( 5/18) core tests::checksum_depends_on_order
+2026-11-14T16:54:35.8138482Z         PASS [   0.003s] ( 6/18) core tests::invalid_json_gives_none
+2026-11-14T16:54:35.8170546Z         PASS [   0.003s] ( 7/18) core tests::json_round_trip_keeps_every_field
+2026-11-14T16:54:35.8202716Z         PASS [   0.003s] ( 8/18) lib tests::describe_names_the_build_script_value
+2026-11-14T16:54:35.8233360Z         PASS [   0.003s] ( 9/18) lib tests::digest_is_hex_of_the_json
+2026-11-14T16:54:35.8264616Z         PASS [   0.003s] (10/18) lib tests::macro_doubles_at_compile_time
+2026-11-14T16:54:35.8299342Z         PASS [   0.003s] (11/18) macros tests::doubles_a_literal
+2026-11-14T16:54:35.8333690Z         PASS [   0.003s] (12/18) macros tests::rejects_text_and_overflow
+2026-11-14T16:54:35.8365006Z         PASS [   0.003s] (13/18) tool::bin/tool hash::tests::fingerprint_differs_for_different_input
+2026-11-14T16:54:35.8394646Z         PASS [   0.003s] (14/18) tool::bin/tool hash::tests::fingerprint_is_sixteen_hex_digits
+2026-11-14T16:54:35.8425671Z         PASS [   0.003s] (15/18) tool::bin/tool hash::tests::parse_round_trips_and_rejects_odd_length
+2026-11-14T16:54:55.8000143Z         PASS [  20.004s] (16/18) app::slow slow_three
+2026-11-14T16:54:55.8000389Z         PASS [  20.004s] (17/18) app::slow slow_one
+2026-11-14T16:54:55.8046398Z         PASS [  20.004s] (18/18) app::slow slow_two
+2026-11-14T16:54:55.8046966Z ────────────
+2026-11-14T16:54:55.8047252Z      Summary [  20.009s] 18 tests run: 18 passed, 0 skipped
+2026-11-14T16:54:55.8087023Z ##[group]Run cargo test --doc --workspace --locked
+2026-11-14T16:54:55.8087274Z [36;1mcargo test --doc --workspace --locked[0m
+2026-11-14T16:54:55.8129646Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:55.8129791Z env:
+2026-11-14T16:54:55.8129910Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:55.8130115Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:55.8130341Z   MISE_YES: 1
+2026-11-14T16:54:55.8130458Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:55.8130607Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:55.8130758Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:55.8130888Z ##[endgroup]
+2026-11-14T16:54:55.8397466Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+2026-11-14T16:54:55.8408345Z    Doc-tests lab_core
+2026-11-14T16:54:55.8551182Z 
+2026-11-14T16:54:55.8551725Z running 0 tests
+2026-11-14T16:54:55.8551912Z 
+2026-11-14T16:54:55.8552237Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-11-14T16:54:55.8552538Z 
+2026-11-14T16:54:55.8561813Z    Doc-tests lab_lib
+2026-11-14T16:54:55.8674615Z 
+2026-11-14T16:54:55.8675002Z running 0 tests
+2026-11-14T16:54:55.8675143Z 
+2026-11-14T16:54:55.8675378Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-11-14T16:54:55.8675665Z 
+2026-11-14T16:54:55.8683963Z    Doc-tests lab_macros
+2026-11-14T16:54:55.8788353Z 
+2026-11-14T16:54:55.8788523Z running 0 tests
+2026-11-14T16:54:55.8788651Z 
+2026-11-14T16:54:55.8788877Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-11-14T16:54:55.8789148Z 
+2026-11-14T16:54:55.8838224Z ##[group]Run cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'
+2026-11-14T16:54:55.8838593Z [36;1mcargo doc --workspace --no-deps --locked --config 'build.rustdocflags=["-D","warnings"]'[0m
+2026-11-14T16:54:55.8880274Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:55.8880413Z env:
+2026-11-14T16:54:55.8880524Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:55.8880700Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:55.8880887Z   MISE_YES: 1
+2026-11-14T16:54:55.8881005Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:55.8881153Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:55.8881300Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:55.8881427Z ##[endgroup]
+2026-11-14T16:54:56.1092853Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+2026-11-14T16:54:56.1117721Z    Generated /home/runner/work/velnor-lab/velnor-lab/target/doc/app/index.html and 4 other files
+2026-11-14T16:54:56.2344921Z ##[group]Run cargo check -p app --locked
+2026-11-14T16:54:56.2345147Z [36;1mcargo check -p app --locked[0m
+2026-11-14T16:54:56.2387851Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:56.2388010Z env:
+2026-11-14T16:54:56.2388130Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:56.2388316Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:56.2388518Z   MISE_YES: 1
+2026-11-14T16:54:56.2388642Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:56.2388794Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:56.2388960Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:56.2389101Z ##[endgroup]
+2026-11-14T16:54:56.4647170Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+2026-11-14T16:54:56.5729470Z ##[group]Run cargo check -p core --locked
+2026-11-14T16:54:56.5729788Z [36;1mcargo check -p core --locked[0m
+2026-11-14T16:54:56.5771765Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:56.5771906Z env:
+2026-11-14T16:54:56.5772023Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:56.5772200Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:56.5772399Z   MISE_YES: 1
+2026-11-14T16:54:56.5772518Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:56.5772665Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:56.5772827Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:56.5772965Z ##[endgroup]
+2026-11-14T16:54:59.0640464Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.36s
+2026-11-14T16:54:59.1113786Z ##[group]Run cargo check -p lib --locked
+2026-11-14T16:54:59.1114014Z [36;1mcargo check -p lib --locked[0m
+2026-11-14T16:54:59.1155707Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:59.1155864Z env:
+2026-11-14T16:54:59.1155984Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:59.1156165Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:59.1156369Z   MISE_YES: 1
+2026-11-14T16:54:59.1156512Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:59.1156667Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:59.1156817Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:59.1156961Z ##[endgroup]
+2026-11-14T16:54:59.2695039Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+2026-11-14T16:54:59.3502780Z ##[group]Run cargo check -p macros --locked
+2026-11-14T16:54:59.3503242Z [36;1mcargo check -p macros --locked[0m
+2026-11-14T16:54:59.3546904Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:59.3547057Z env:
+2026-11-14T16:54:59.3547175Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:59.3547356Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:59.3547560Z   MISE_YES: 1
+2026-11-14T16:54:59.3547677Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:59.3547829Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:59.3547979Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:59.3548270Z ##[endgroup]
+2026-11-14T16:54:59.5025768Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+2026-11-14T16:54:59.6489319Z ##[group]Run cargo check -p tool --locked
+2026-11-14T16:54:59.6490033Z [36;1mcargo check -p tool --locked[0m
+2026-11-14T16:54:59.6537645Z shell: /usr/bin/bash -e {0}
+2026-11-14T16:54:59.6537816Z env:
+2026-11-14T16:54:59.6537936Z   MISE_LOG_LEVEL: info
+2026-11-14T16:54:59.6538116Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:54:59.6538321Z   MISE_YES: 1
+2026-11-14T16:54:59.6538440Z   CARGO_HOME: /home/runner/.cargo
+2026-11-14T16:54:59.6538586Z   RUSTUP_HOME: /home/runner/.rustup
+2026-11-14T16:54:59.6538732Z   RUSTUP_TOOLCHAIN: 1.99.1
+2026-11-14T16:54:59.6538864Z ##[endgroup]
+2026-11-14T16:55:00.7192683Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.99s
+2026-11-14T16:55:00.7315030Z Post job cleanup.
+2026-11-14T16:55:00.8570023Z Post job cleanup.
+2026-11-14T16:55:00.9153531Z [command]/usr/bin/git version
+2026-11-14T16:55:00.9200149Z git version 2.56.1
+2026-11-14T16:55:00.9225481Z Temporarily overriding HOME='/home/runner/work/_temp/80b02e02-32e6-4e8c-a2ee-22cea03dbd8d' before making global git config changes
+2026-11-14T16:55:00.9230839Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-lab/velnor-lab
+2026-11-14T16:55:00.9267282Z Removing SSH command configuration
+2026-11-14T16:55:00.9271973Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-14T16:55:00.9309871Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-14T16:55:00.9574728Z Removing HTTP extra header
+2026-11-14T16:55:00.9579950Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-14T16:55:00.9614034Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-14T16:55:00.9846169Z Removing includeIf entries pointing to credentials config files
+2026-11-14T16:55:00.9852101Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-14T16:55:00.9880179Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-14T16:55:01.0227513Z Cleaning up orphan processes

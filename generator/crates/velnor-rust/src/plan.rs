@@ -6,8 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CargoCommand, Concurrency, CustomHarness, FilterRef, Job, JobId, PackageName,
     PermissionScope, Permissions, PullRequestType, RepoFacts, RustRoot, Shape, ShapeDecision, Step,
-    StepKind,
-    TargetKind, Triggers, When, WorkflowPlan,
+    StepKind, TargetKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::config::CONFIG_PATH;
@@ -17,9 +16,9 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::select::root_slug;
 use crate::shape::decide_shape;
 
-const RUST_JOB: JobId = JobId::from_static("rust");
-const LINT_JOB: JobId = JobId::from_static("rust-lint");
-const TEST_JOB: JobId = JobId::from_static("rust-test");
+pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
+pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
+pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 const POLICY_JOB: JobId = JobId::from_static("policy");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 

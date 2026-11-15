@@ -40,7 +40,14 @@ fn body(
     what: &str,
     response: Result<Response<ureq::Body>, ureq::Error>,
 ) -> Result<String, CiError> {
-    let mut response = response.map_err(|e| CiError::new(format!("{what}: {e}")))?;
+    let mut response = response.map_err(|e| {
+        let message = format!("{what}: {e}");
+        if matches!(e, ureq::Error::StatusCode(404 | 410)) {
+            CiError::missing(message)
+        } else {
+            CiError::new(message)
+        }
+    })?;
     let bytes = super::read_limited(response.body_mut().as_reader(), BODY_LIMIT)
         .map_err(|e| CiError::new(format!("{what}: {e}")))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, Step, StepKind, TargetKind,
-    TargetName, When,
+    CargoCommand, FilterRef, HelperCommand, HelperRelease, Job, LINT_STEP, Step, StepKind,
+    TEST_STEP, TargetKind, TargetName, When,
 };
 
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
@@ -121,7 +121,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
     let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
-            "Lint".into(),
+            LINT_STEP.into(),
             ["cargo-clippy clippy --workspace --all-targets --locked -- -D warnings"]
                 .into_iter()
                 .chain(extra.iter().map(String::as_str))
@@ -130,7 +130,7 @@ fn cargo_step(command: &CargoCommand) -> RenderedStep {
             vec![],
         ),
         CargoCommand::NextestRun { filter } => (
-            "Test".into(),
+            TEST_STEP.into(),
             format!(
                 "cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E '{}'",
                 nextest_filter(filter)

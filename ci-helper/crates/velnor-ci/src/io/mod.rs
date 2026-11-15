@@ -5,6 +5,7 @@ mod audit;
 mod http;
 mod inputs;
 mod release;
+mod timings;
 mod units;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,6 +24,7 @@ use velnor_rust::{
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BaseFile, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
     InputsCommand, PlanArgs, ReleaseCommand, ReleaseGateArgs,
@@ -96,6 +98,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Plan(args) => run_plan(&args),
+        Command::Timings(args) => timings::run_timings(&args),
     }
 }
 

@@ -43,6 +43,16 @@ pub enum Command {
         about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) for each Cargo root to $GITHUB_OUTPUT; run in the checkout"
     )]
     Plan(PlanArgs),
+    #[command(
+        about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root; writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
+    )]
+    Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TimingsArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
 }
 
 #[derive(Debug, Args)]

@@ -18,5 +18,7 @@ mod release_publish_guards;
 mod release_record;
 mod support;
 mod time;
+mod timings;
+mod timings_runs;
 mod unowned;
 mod version;
