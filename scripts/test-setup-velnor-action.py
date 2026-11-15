@@ -165,6 +165,23 @@ class SetupVelnorInstallTests(unittest.TestCase):
         bin_dir = Path(self.github_path.read_text().strip())
         self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
 
+    def test_a_failed_copy_into_the_tool_cache_publishes_nothing_and_warns(self):
+        bin_dir = Path(self.path_with("sha256sum"))
+        real_cp = shutil.which("cp")
+        (bin_dir / "cp").unlink()
+        (bin_dir / "cp").write_text(
+            f'#!/bin/sh\nfor a in "$@"; do case "$a" in */.velnor-ci.*) exit 1 ;; esac; done\nexec {real_cp} "$@"\n'
+        )
+        (bin_dir / "cp").chmod(0o755)
+        result = self.install(hashlib.sha256(PAYLOAD).hexdigest(), str(bin_dir))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertEqual(
+            [path for path in installed_files(self.tool_cache) if path.name == "velnor-ci"], []
+        )
+        bin_path = Path(self.github_path.read_text().strip())
+        self.assertEqual((bin_path / "velnor-ci").read_bytes(), PAYLOAD)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -77,13 +77,17 @@ runs:
           echo "velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
           chmod +x "$staging/velnor-ci"
-          {
-            mkdir -p "$dir"
-            entry="$(mktemp "$dir/.velnor-ci.XXXXXX")"
-            cp "$staging/velnor-ci" "$entry"
-            chmod +x "$entry"
-            mv -f "$entry" "$dir/velnor-ci"
-          } || echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache at $dir; this job is not affected"
-          echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
+          if {
+            mkdir -p "$dir" &&
+              entry="$(mktemp "$dir/.velnor-ci.XXXXXX")" &&
+              cp "$staging/velnor-ci" "$entry" &&
+              chmod +x "$entry" &&
+              mv -f "$entry" "$dir/velnor-ci"
+          }; then
+            echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
+          else
+            rm -f "${entry:-}"
+            echo "::warning title=setup-velnor::could not publish velnor-ci $VERSION to the tool cache at $dir; this job is not affected"
+          fi
         fi
         echo "$bin" >> "$GITHUB_PATH"
