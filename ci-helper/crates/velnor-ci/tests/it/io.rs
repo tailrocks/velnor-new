@@ -8,14 +8,14 @@ use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::AtomicU64;
 use std::thread;
 use std::time::SystemTime;
 
 use velnor_ci::io::read_limited;
 
 use crate::gate::{AHEAD, GATE, GREEN, RED, RUNNING};
-use crate::support::{CREATED, DEAD_PID, assert_dead, fresh_dir};
+use crate::support::{DEAD_PID, assert_dead, fresh_dir, fresh_dir_in};
 
 #[test]
 fn a_body_at_the_limit_is_read_whole() {
@@ -56,51 +56,62 @@ fn a_folder_left_by_an_earlier_run_is_not_removed_by_a_new_repo() {
     assert!(leftover.root().join("marker.txt").is_file());
 }
 
+fn isolated_root(label: &str) -> Repo {
+    Repo(fresh_dir("velnor-ci-test-root", label))
+}
+
+fn sweep_in(root: &Repo) -> PathBuf {
+    fresh_dir_in(root.root(), &AtomicU64::new(0), "velnor-ci-inputs", "sweep")
+}
+
+fn make(root: &Repo, name: &str) -> PathBuf {
+    let folder = root.root().join(name);
+    fs::create_dir_all(&folder).unwrap_or_else(|e| unreachable!("{e}"));
+    folder
+}
+
 #[test]
 fn a_folder_of_a_process_that_is_gone_is_removed_and_one_of_a_live_process_is_kept() {
-    let temp = std::env::temp_dir();
-    let stale = Repo(temp.join("velnor-ci-inputs-2000000000-0-stale"));
-    let init = Repo(temp.join("velnor-ci-inputs-1-0-init"));
-    let own = Repo(temp.join(format!("velnor-ci-inputs-{}-live-own", std::process::id())));
-    for folder in [&stale, &init, &own] {
-        fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    let _repo = Repo::new("sweep");
-    assert!(!stale.root().exists());
-    assert!(init.root().is_dir());
-    assert!(own.root().is_dir());
+    let root = isolated_root("sweep-gone");
+    let stale = make(&root, "velnor-ci-inputs-2000000000-0-stale");
+    let init = make(&root, "velnor-ci-inputs-1-0-init");
+    let own = make(
+        &root,
+        &format!("velnor-ci-inputs-{}-live-own", std::process::id()),
+    );
+    sweep_in(&root);
+    assert!(!stale.exists());
+    assert!(init.is_dir());
+    assert!(own.is_dir());
 }
 
 #[test]
 fn a_folder_with_no_dash_after_its_pid_is_left_alone() {
     assert_dead(DEAD_PID);
-    let folder = Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{DEAD_PID}")));
-    fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
-    let _repo = Repo::new("sweep-bare");
-    assert!(folder.root().is_dir());
+    let root = isolated_root("sweep-bare");
+    let folder = make(&root, &format!("velnor-ci-inputs-{DEAD_PID}"));
+    sweep_in(&root);
+    assert!(folder.is_dir());
 }
 
 #[test]
 fn a_folder_with_an_empty_rest_after_its_pid_dash_is_left_alone() {
     assert_dead(DEAD_PID);
-    let folder = Repo(std::env::temp_dir().join(format!("velnor-ci-inputs-{DEAD_PID}-")));
-    fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
-    let _repo = Repo::new("sweep-empty");
-    assert!(folder.root().is_dir());
+    let root = isolated_root("sweep-empty");
+    let folder = make(&root, &format!("velnor-ci-inputs-{DEAD_PID}-"));
+    sweep_in(&root);
+    assert!(folder.is_dir());
 }
 
 #[test]
 fn a_dead_pid_folder_that_only_resembles_the_prefix_is_left_alone() {
     assert_dead(DEAD_PID);
-    let temp = std::env::temp_dir();
-    let contains = Repo(temp.join(format!("x-velnor-ci-inputs-{DEAD_PID}-a")));
-    let longer = Repo(temp.join(format!("velnor-ci-inputs-x-{DEAD_PID}-a")));
-    for folder in [&contains, &longer] {
-        fs::create_dir_all(folder.root()).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    let _repo = Repo::new("sweep-resembles");
-    assert!(contains.root().is_dir());
-    assert!(longer.root().is_dir());
+    let root = isolated_root("sweep-resembles");
+    let contains = make(&root, &format!("x-velnor-ci-inputs-{DEAD_PID}-a"));
+    let longer = make(&root, &format!("velnor-ci-inputs-x-{DEAD_PID}-a"));
+    sweep_in(&root);
+    assert!(contains.is_dir());
+    assert!(longer.is_dir());
 }
 
 #[test]
@@ -129,17 +140,18 @@ fn a_repo_folder_is_removed_when_a_panic_unwinds_past_a_live_repo() {
 
 #[test]
 fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
-    let next = CREATED.load(Ordering::Relaxed);
-    let taken = Repo(std::env::temp_dir().join(format!(
-        "velnor-ci-inputs-{}-{next}-skipme",
-        std::process::id()
-    )));
-    fs::create_dir_all(taken.root()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(taken.root().join("marker.txt"), "taken\n").unwrap_or_else(|e| unreachable!("{e}"));
-    let repo = Repo::new("skipme");
-    assert_ne!(repo.root(), taken.root());
+    let root = isolated_root("collision");
+    let taken = make(
+        &root,
+        &format!("velnor-ci-inputs-{}-0-skipme", std::process::id()),
+    );
+    fs::write(taken.join("marker.txt"), "taken\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let counter = AtomicU64::new(0);
+    let created = fresh_dir_in(root.root(), &counter, "velnor-ci-inputs", "skipme");
+    assert_ne!(created, taken);
+    assert!(created.ends_with(format!("velnor-ci-inputs-{}-1-skipme", std::process::id())));
     assert_eq!(
-        fs::read_to_string(taken.root().join("marker.txt")).unwrap_or_default(),
+        fs::read_to_string(taken.join("marker.txt")).unwrap_or_default(),
         "taken\n"
     );
 }

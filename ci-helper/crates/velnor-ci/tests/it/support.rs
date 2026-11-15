@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use nix::errno::Errno;
@@ -81,12 +81,16 @@ pub(crate) fn assert_dead(pid: i32) {
 pub(crate) static CREATED: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
-    sweep_dead(prefix);
+    fresh_dir_in(&std::env::temp_dir(), &CREATED, prefix, name)
+}
+
+pub(crate) fn fresh_dir_in(root: &Path, counter: &AtomicU64, prefix: &str, name: &str) -> PathBuf {
+    sweep_dead(root, prefix);
     loop {
-        let candidate = std::env::temp_dir().join(format!(
+        let candidate = root.join(format!(
             "{prefix}-{}-{}-{name}",
             std::process::id(),
-            CREATED.fetch_add(1, Ordering::Relaxed)
+            counter.fetch_add(1, Ordering::Relaxed)
         ));
         match fs::create_dir(&candidate) {
             Ok(()) => break candidate,
@@ -96,8 +100,8 @@ pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
     }
 }
 
-fn sweep_dead(prefix: &str) {
-    let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+fn sweep_dead(root: &Path, prefix: &str) {
+    let Ok(entries) = fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
