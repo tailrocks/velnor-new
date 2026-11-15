@@ -129,13 +129,15 @@ fn duplicate_package_entries_and_bad_package_names_are_refused() -> TestResult {
     assert!(
         matches!(refusal(&duplicate), Some(ReleaseError::DuplicatePackage { package, .. }) if package == "app")
     );
-    for name in ["../x", "\u{e9}foo", "a b", ""] {
+    for name in ["../x", "\u{e9}foo", "a b", "1app", ""] {
         let bad = plz_edited("name = \"app\"", &format!("name = {name:?}"))?;
         assert!(
             matches!(refusal(&bad), Some(ReleaseError::InvalidPackageName { .. })),
             "{name:?}"
         );
     }
+    let good = plz_edited("name = \"app\"", "name = \"a-b_c\"")?;
+    assert_eq!(refusal(&good), None);
     Ok(())
 }
 
