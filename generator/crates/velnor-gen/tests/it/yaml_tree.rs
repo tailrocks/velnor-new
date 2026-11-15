@@ -45,6 +45,17 @@ impl Node {
         self.items().iter().filter_map(Node::text).collect()
     }
 
+    pub(crate) fn scalars(&self) -> Vec<&str> {
+        match self {
+            Self::Scalar(text) => vec![text],
+            Self::Seq(items) => items.iter().flat_map(Node::scalars).collect(),
+            Self::Map(items) => items
+                .iter()
+                .flat_map(|(_, value)| value.scalars())
+                .collect(),
+        }
+    }
+
     pub(crate) fn has_key_anywhere(&self, wanted: &str) -> bool {
         match self {
             Self::Scalar(_) => false,

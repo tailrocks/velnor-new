@@ -55,6 +55,9 @@ fn privileged_release_jobs_run_on_a_github_hosted_runner_whatever_the_ci_runner_
         .ok_or("no release.yml")?;
     assert!(!text.contains("self-hosted"), "{text}");
     for (id, job) in jobs(&crate::yaml_tree::parse(text)?)? {
+        if id.starts_with("build-") {
+            continue;
+        }
         assert_eq!(
             job.get("runs-on").and_then(Node::text),
             Some("ubuntu-latest"),
@@ -74,8 +77,10 @@ fn a_release_root_that_is_not_a_detected_cargo_root_is_refused() -> TestResult {
     );
     assert_eq!(
         expected_files(&view).err(),
-        Some(GenerateError::ReleaseRootWithoutCargoToml(
-            "typo".to_owned()
+        Some(GenerateError::Release(
+            ReleaseError::RootWithoutCargoManifest {
+                root: "typo".to_owned()
+            }
         ))
     );
     Ok(())
@@ -143,10 +148,10 @@ fn a_released_package_that_is_not_a_member_of_its_cargo_root_is_refused() -> Tes
     metadata.members[0].name = PackageName::new("other")?;
     assert_eq!(
         expected_files(&view).err(),
-        Some(GenerateError::ReleasePackageNotInRoot {
+        Some(GenerateError::Release(ReleaseError::PackageNotInRoot {
             root: ".".to_owned(),
             package: "app".to_owned()
-        })
+        }))
     );
     Ok(())
 }

@@ -124,16 +124,22 @@ fn an_unlisted_package_that_inherits_publishing_makes_the_root_publish() -> Test
 #[test]
 fn release_plz_declared_only_in_the_dot_mise_file_is_found_and_checked() {
     let mut files = files();
-    files.mise_toml = "[tools]\nbun = \"1.4.4\"\n".to_owned();
+    files.mise_tomls = vec!["[tools]\nbun = \"1.4.4\"\n".to_owned()];
     assert_eq!(refusal(&files), Some(ReleaseError::ReleasePlzNotInMiseToml));
-    files.dot_mise_toml = Some("[tools]\nrelease-plz = \"0.4.3\"\n".to_owned());
+    files
+        .mise_tomls
+        .push("[tools]\nrelease-plz = \"0.4.3\"\n".to_owned());
     assert_eq!(refusal(&files), None);
-    files.dot_mise_toml = Some("[tools]\nrelease-plz = \"0.4.2\"\n".to_owned());
+    files
+        .mise_tomls
+        .push("[tools]\nrelease-plz = \"0.4.2\"\n".to_owned());
     assert!(matches!(
         refusal(&files),
         Some(ReleaseError::ReleasePlzLockMismatch { .. })
     ));
-    files.mise_toml = "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned();
-    files.dot_mise_toml = Some("[tools]\nbun = \"1.4.4\"\n".to_owned());
+    files.mise_tomls = vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()];
+    files
+        .mise_tomls
+        .push("[tools]\nbun = \"1.4.4\"\n".to_owned());
     assert_eq!(refusal(&files), None);
 }

@@ -198,7 +198,7 @@ impl Install {
         self.spawn_with(cache, None, configure)
     }
 
-    fn spawn_with(
+    pub(crate) fn spawn_with(
         &self,
         cache: Option<&Path>,
         shim_dir: Option<&Path>,

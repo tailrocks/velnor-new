@@ -3,7 +3,7 @@
 
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::RepoPath;
-use velnor_rust::{DetectError, Reason};
+use velnor_release::ReleaseError;
 
 use crate::facts::TestResult;
 use crate::release_fixture::{APP, release_view};
@@ -27,10 +27,8 @@ fn a_release_root_refuses_a_cargo_credential_hook() -> TestResult {
         assert!(
             matches!(
                 &result,
-                Err(GenerateError::Detect(DetectError::Invalid {
-                    path,
-                    reason: Reason::CargoCredentialProvider(_),
-                })) if *path == config
+                Err(GenerateError::Release(ReleaseError::CargoCredentialProvider { file }))
+                    if file == config.as_str()
             ),
             "{text}: {result:?}"
         );

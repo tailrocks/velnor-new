@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use velnor_model::{HelperVersion, RepoPath};
+use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MetadataFileError};
@@ -16,11 +16,10 @@ pub enum GenerateError {
     IncompatibleHelper(HelperVersion),
     Release(ReleaseError),
     ReleaseFileNotUtf8(RepoPath),
-    ReleaseRootWithoutCargoToml(String),
+    NoReleaseConfig,
     ReleaseToolchainPath,
     HelperNotPinned,
     Metadata(MetadataFileError),
-    ReleasePackageNotInRoot { root: String, package: String },
     Rules(Vec<RuleViolation>),
 }
 
@@ -35,9 +34,9 @@ impl fmt::Display for GenerateError {
             ),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
-            Self::ReleaseRootWithoutCargoToml(root) => write!(
+            Self::NoReleaseConfig => write!(
                 f,
-                ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
+                "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
             ),
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
@@ -46,10 +45,6 @@ impl fmt::Display for GenerateError {
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
             Self::Metadata(error) => error.fmt(f),
-            Self::ReleasePackageNotInRoot { root, package } => write!(
-                f,
-                "release-plz.toml in {root:?} releases package {package:?}, which is not a member of that Cargo root"
-            ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

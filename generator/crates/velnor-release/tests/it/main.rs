@@ -6,4 +6,8 @@ mod defaults;
 mod fixture;
 mod hardening;
 mod inheritance;
+mod mise_lock;
 mod refusals;
+mod sources;
+mod symlinks;
+mod token_hardening;

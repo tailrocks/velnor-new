@@ -49,10 +49,39 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(
         tracked
             .iter()
+            .filter(|path| is_nested_toolchain(path))
+            .cloned(),
+    )
+    .chain(
+        tracked
+            .iter()
             .filter(|path| is_release_plz_config(path))
             .cloned(),
     )
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_workflow_file(path))
+            .cloned(),
+    )
     .collect()
+}
+
+fn is_nested_toolchain(path: &RepoPath) -> bool {
+    path.as_str().rsplit_once('/').is_some_and(|(_, name)| {
+        name == TOOLCHAIN_PLAIN.as_str() || name == TOOLCHAIN_TOML.as_str()
+    })
+}
+
+fn is_workflow_file(path: &RepoPath) -> bool {
+    path.as_str()
+        .strip_prefix(".github/workflows/")
+        .is_some_and(|name| {
+            !name.contains('/')
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        })
 }
 
 fn is_release_plz_config(path: &RepoPath) -> bool {

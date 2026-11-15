@@ -7,6 +7,7 @@ mod error;
 pub mod io;
 mod release;
 
+pub use crate::release::release_ruleset;
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 
@@ -57,7 +58,8 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    files.extend(release::release_workflow(view, &facts, helper)?);
+    let release = release::release_workflow(view, &facts, helper, &files)?;
+    files.extend(release);
     Ok((files, facts.timings_notes))
 }
 

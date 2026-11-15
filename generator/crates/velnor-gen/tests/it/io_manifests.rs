@@ -48,7 +48,13 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
     let manifest = RepoPath::new("ex/Cargo.toml")?;
     let readable = Checkout::new("readable")?;
     fs::write(readable.0.join(manifest.as_str()), "[package]\n")?;
-    let view = view_of(&readable.0, Checkout::tracked(&manifest)?, false)?.0;
+    let view = view_of(
+        &readable.0,
+        Checkout::tracked(&manifest)?,
+        BTreeSet::new(),
+        false,
+    )?
+    .0;
     assert!(view.files.contains_key(&manifest));
 
     let dangling = Checkout::new("dangling")?;
@@ -56,7 +62,12 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
         Path::new("missing/Cargo.toml"),
         dangling.0.join(manifest.as_str()),
     )?;
-    let result = view_of(&dangling.0, Checkout::tracked(&manifest)?, false);
+    let result = view_of(
+        &dangling.0,
+        Checkout::tracked(&manifest)?,
+        BTreeSet::new(),
+        false,
+    );
     assert!(
         matches!(result, Err(IoError::NotRegular(ref path)) if *path == manifest),
         "{:?}",
@@ -76,7 +87,12 @@ fn an_unreadable_workspace_member_lock_fails_the_checkout() -> TestResult {
         Path::new("missing/Cargo.lock"),
         checkout.0.join("app/Cargo.lock"),
     )?;
-    let result = view_of(&checkout.0, Checkout::tracked(&manifest)?, false);
+    let result = view_of(
+        &checkout.0,
+        Checkout::tracked(&manifest)?,
+        BTreeSet::new(),
+        false,
+    );
     let lock = RepoPath::new("app/Cargo.lock")?;
     assert!(
         matches!(result, Err(IoError::NotRegular(ref path)) if *path == lock),

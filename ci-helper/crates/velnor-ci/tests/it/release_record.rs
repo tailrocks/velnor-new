@@ -59,6 +59,17 @@ fn release_record_refuses_a_package_or_a_tag_released_twice() {
 }
 
 #[test]
+fn release_record_accepts_semver_build_metadata_in_a_tag_but_not_in_a_package() {
+    let text = release("app", "app-v1.2.3+build.5");
+    assert_eq!(
+        recorded(&[("app.json", &text)]),
+        Ok("app=app-v1.2.3+build.5\n".to_owned())
+    );
+    let text = release("app+x", "app-v1.2.3");
+    assert!(recorded(&[("app.json", &text)]).is_err());
+}
+
+#[test]
 fn release_record_refuses_a_name_that_could_break_out_of_its_output_line() {
     for (package, tag) in [
         (
@@ -118,9 +129,9 @@ fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), Stri
             "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n[[package]]\nname = \"app\"\n".to_owned(),
         )]
         .into(),
-        mise_toml: "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned(),
-        dot_mise_toml: None,
+        mise_tomls: vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()],
         mise_lock: "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned(),
+        ..velnor_release::ReleaseFiles::default()
     };
     let plan = velnor_release::ReleasePlan::read(&files).map_err(|e| e.to_string())?;
     let pattern = plan.roots[0].packages[0].1.as_str().to_owned();
