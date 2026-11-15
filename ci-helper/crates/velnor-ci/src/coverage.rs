@@ -87,7 +87,7 @@ pub fn gaps(
     for (manifest, package) in &reached {
         paths.entry(&package.name).or_default().push(manifest);
     }
-    let groups = groups(root, &paths);
+    let groups = groups(root, &paths, &reached);
     let owned: BTreeSet<&str> = root
         .members
         .iter()

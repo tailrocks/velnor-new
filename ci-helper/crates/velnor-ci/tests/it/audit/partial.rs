@@ -5,7 +5,10 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::{audit, own_units, own_units_in, placed, unit, workspace_below_the_root};
+use super::{
+    audit, own_units, own_units_in, path_dependency_units_in, placed,
+    root_package_with_path_dependencies, unit, workspace_below_the_root,
+};
 use crate::io::Repo;
 
 const DEBUG: &str = "rust/target/debug";
@@ -118,7 +121,7 @@ fn a_stale_host_unit_of_a_member_used_as_a_build_dependency_makes_the_audit_refu
     refuses(
         &audit(&repo, &["--write"]),
         &format!(
-            "/{triple} for lib (rust/lib/Cargo.toml) target lib (rust/lib/src/lib.rs, 1 of 2 units);"
+            "/{triple} for lib (rust/lib/Cargo.toml) target lib (rust/lib/src/lib.rs, 2 of 3 units);"
         ),
     );
 }
@@ -175,7 +178,7 @@ fn the_host_build_script_run_of_a_build_dependency_member_is_required_in_the_hos
     refuses(
         &target_only,
         &format!(
-            "/{triple} for lib (rust/lib/Cargo.toml) target build-script-build (rust/lib/build.rs, 0 of 1 units);"
+            "/{triple} for lib (rust/lib/Cargo.toml) target build-script-build (rust/lib/build.rs, 1 of 2 units);"
         ),
     );
     assert!(!written(&repo));
@@ -210,4 +213,104 @@ fn an_orphan_unit_of_a_member_in_a_target_directory_makes_that_directory_a_candi
         &format!("/{triple} for app (rust/app/Cargo.toml)"),
     );
     assert!(!written(&repo));
+}
+
+#[test]
+fn a_host_copy_of_a_build_dependency_member_does_not_stand_in_for_its_target_library() {
+    let repo = workspace_below_the_root();
+    build_dependency_on_lib(&repo);
+    let triple = "rust/target/x86_64-unknown-linux-gnu/debug";
+    own_units_in(&repo, DEBUG, triple, &["lib"]);
+    unit(
+        &repo,
+        &format!("{DEBUG}/deps/lib-f0000000000000b1.d"),
+        "out.d: lib/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        &format!("{DEBUG}/.fingerprint/lib-f0000000000000b1/lib-lib"),
+        "",
+    );
+    unit(
+        &repo,
+        &format!("{DEBUG}/build/lib-f0000000000000b3/output"),
+        "",
+    );
+    refuses(
+        &audit(&repo, &["--write"]),
+        &format!(
+            "/{triple} for lib (rust/lib/Cargo.toml) target lib (rust/lib/src/lib.rs, 1 of 3 units);"
+        ),
+    );
+    assert!(!written(&repo));
+}
+
+#[test]
+fn a_stale_build_script_run_is_not_covered_by_another_current_run_of_the_same_script() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, DEBUG, &[]);
+    for (hash, rerun) in [
+        ("f0000000000000e1", ""),
+        ("f0000000000000e2", "cargo:rerun-if-changed=data.txt\n"),
+    ] {
+        unit(
+            &repo,
+            &format!("{DEBUG}/.fingerprint/lib-{hash}/run-build-script-build-script-build"),
+            "",
+        );
+        unit(&repo, &format!("{DEBUG}/build/lib-{hash}/output"), rerun);
+    }
+    unit(&repo, "rust/lib/data.txt", "");
+    repo.set_mtime(
+        "rust/lib/data.txt",
+        SystemTime::now() + Duration::from_secs(100),
+    );
+    refuses(
+        &audit(&repo, &["--write"]),
+        &format!(
+            "/{DEBUG} for lib target  (build script run with a cargo fingerprint and no output);"
+        ),
+    );
+    assert!(!written(&repo));
+}
+
+#[test]
+fn a_member_that_an_excluded_path_package_uses_as_a_build_dependency_needs_its_host_unit() {
+    let repo = root_package_with_path_dependencies();
+    repo.write(
+        "vendor/mid/Cargo.toml",
+        "[package]\nname = \"mid\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\nleaf = { path = \"../leaf\" }\n\n[build-dependencies]\nother = { path = \"../../other\" }\n",
+    );
+    repo.git(&["add", "--all"]);
+    let triple = "target/x86_64-unknown-linux-gnu/debug";
+    path_dependency_units_in(&repo, triple);
+    unit(
+        &repo,
+        "target/debug/deps/leaf-000000000000001f.d",
+        "out.d: vendor/leaf/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        "target/debug/.fingerprint/leaf-000000000000001f/lib-leaf",
+        "",
+    );
+    refuses(
+        &audit(&repo, &["--write"]),
+        &format!(
+            "/{triple} for other (other/Cargo.toml) target other (other/src/lib.rs, 2 of 3 units);"
+        ),
+    );
+
+    unit(
+        &repo,
+        "target/debug/deps/other-000000000000001e.d",
+        "out.d: other/src/lib.rs\n",
+    );
+    unit(
+        &repo,
+        "target/debug/.fingerprint/other-000000000000001e/lib-other",
+        "",
+    );
+    let complete = audit(&repo, &["--write"]);
+    assert!(complete.status.success(), "{complete:?}");
 }

@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    DependencyKind, PackageName, RepoPath, RustMember, RustRoot, Target, TargetKind, UnownedPackage,
+    DependencyKind, MemberDependency, PackageName, RepoPath, RustMember, RustRoot, Target,
+    TargetKind, UnownedPackage,
 };
 
 use crate::coverage::{UnitKind, crate_name};
@@ -28,8 +29,12 @@ pub(crate) struct Group<'f> {
     pub(crate) needs: Vec<Need<'f>>,
 }
 
-pub(crate) fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<'f>> {
-    let hosted = hosted(root);
+pub(crate) fn groups<'f>(
+    root: &'f RustRoot,
+    paths: &'f Paths<'f>,
+    reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+) -> Vec<Group<'f>> {
+    let hosted = hosted(root, reached);
     let mut groups: Vec<Group<'f>> = root
         .members
         .iter()
@@ -61,23 +66,34 @@ pub(crate) fn groups<'f>(root: &'f RustRoot, paths: &'f Paths<'f>) -> Vec<Group<
     groups
 }
 
-fn hosted(root: &RustRoot) -> BTreeSet<&RepoPath> {
-    let mut pending: Vec<&RustMember> = root
+fn hosted<'f>(
+    root: &'f RustRoot,
+    reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+) -> BTreeSet<&'f RepoPath> {
+    let edges = |manifest: &RepoPath| -> &'f [MemberDependency] {
+        match (member_of(root, manifest), reached.get(manifest)) {
+            (Some(member), _) => &member.dependencies,
+            (None, Some(package)) => &package.dependencies,
+            (None, None) => &[],
+        }
+    };
+    let mut pending: Vec<&RepoPath> = root
         .members
         .iter()
-        .flat_map(|member| &member.dependencies)
+        .map(|member| &member.manifest)
+        .chain(reached.keys().copied())
+        .flat_map(&edges)
         .filter(|dependency| dependency.kind == DependencyKind::Build)
-        .filter_map(|dependency| member_of(root, &dependency.manifest))
+        .map(|dependency| &dependency.manifest)
         .collect();
     let mut hosted = BTreeSet::new();
-    while let Some(member) = pending.pop() {
-        if hosted.insert(&member.manifest) {
+    while let Some(manifest) = pending.pop() {
+        if hosted.insert(manifest) {
             pending.extend(
-                member
-                    .dependencies
+                edges(manifest)
                     .iter()
                     .filter(|dependency| dependency.kind != DependencyKind::Dev)
-                    .filter_map(|dependency| member_of(root, &dependency.manifest)),
+                    .map(|dependency| &dependency.manifest),
             );
         }
     }
@@ -98,34 +114,42 @@ fn needs<'f>(
 ) -> Vec<Need<'f>> {
     let has = |kinds: &[TargetKind]| target.kinds.iter().any(|kind| kinds.contains(kind));
     let proc_macro = has(&[TargetKind::ProcMacro]);
-    let unit = |kind| Need::Unit {
-        host: proc_macro || (hosted && kind == UnitKind::Normal && has(&[TargetKind::Lib])),
+    let unit = |kind, host| Need::Unit {
+        host,
         kind,
         package,
         target: crate_name(target.name.as_str()),
         source,
     };
+    let host_copy = hosted && has(&[TargetKind::Lib]);
     if has(&[TargetKind::BuildScript]) {
-        return vec![Need::Unit {
-            host: hosted,
+        let run = |host| Need::Unit {
+            host,
             kind: UnitKind::Run,
             package,
             target: String::new(),
             source,
-        }];
+        };
+        return [Some(run(false)), hosted.then(|| run(true))]
+            .into_iter()
+            .flatten()
+            .collect();
     }
     if has(&[TargetKind::Bench]) {
-        return vec![unit(UnitKind::Harness)];
+        return vec![unit(UnitKind::Harness, proc_macro)];
     }
     if has(&[TargetKind::Test]) {
-        return [unit(UnitKind::Harness)]
+        return [unit(UnitKind::Harness, proc_macro)]
             .into_iter()
             .filter(|_| target.tests)
             .collect();
     }
-    let mut needs = vec![unit(UnitKind::Normal)];
+    let mut needs = vec![unit(UnitKind::Normal, proc_macro)];
+    if host_copy {
+        needs.push(unit(UnitKind::Normal, true));
+    }
     if target.tests {
-        needs.push(unit(UnitKind::Harness));
+        needs.push(unit(UnitKind::Harness, proc_macro));
     }
     needs
 }

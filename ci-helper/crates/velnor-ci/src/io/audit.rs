@@ -218,8 +218,9 @@ impl Audit<'_> {
                 package,
                 hash,
             } => {
-                self.present.insert((index, configuration.clone(), hash));
-                self.build_output(index, file, &configuration, &package)?;
+                if self.build_output(index, file, &configuration, &package)? {
+                    self.present.insert((index, configuration, hash));
+                }
             }
             UnitFile::Directory { name, root } => self.directory(index, name, root),
         }
@@ -257,10 +258,11 @@ impl Audit<'_> {
         file: &Path,
         configuration: &str,
         package: &str,
-    ) -> Result<(), CiError> {
+    ) -> Result<bool, CiError> {
         let text = read(file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
+        let mut current = false;
         let scripts: Vec<RepoPath> = self
             .scripts
             .get(&(index, profile(configuration).to_owned(), package.to_owned()))
@@ -287,6 +289,7 @@ impl Audit<'_> {
                 }
             }
             if ran {
+                current = true;
                 self.built[index].units.insert(Unit {
                     configuration: configuration.to_owned(),
                     kind: UnitKind::Run,
@@ -296,7 +299,7 @@ impl Audit<'_> {
                 });
             }
         }
-        Ok(())
+        Ok(current)
     }
 
     fn credit(&mut self, owner: &Owner<'_>, base: &Path, paths: &[String], declared: bool) {
