@@ -7,7 +7,7 @@ use velnor_actions_contract::{GithubConfig, UnmanagedPolicy};
 
 use super::preserve::{
     generated_marked_dco, generated_marked_script, generated_shared_action, reserved_path,
-    retired_marked_lint_config,
+    retired_marked_lint_config, velnor_gen_owned,
 };
 use crate::OrchestratorError;
 
@@ -68,7 +68,8 @@ fn walk(base: &Path, relative: &Path, found: &mut Vec<PathBuf>) -> Result<bool, 
             || generated_shared_action(relative, &source, &metadata)?
             || generated_marked_script(relative, &source, &metadata)?
             || generated_marked_dco(relative, &source, &metadata)?
-            || retired_marked_lint_config(relative, &source, &metadata)?)
+            || retired_marked_lint_config(relative, &source, &metadata)?
+            || velnor_gen_owned(relative, &source, &metadata)?)
     {
         return Ok(false);
     }

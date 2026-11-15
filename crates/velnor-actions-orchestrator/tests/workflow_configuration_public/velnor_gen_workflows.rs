@@ -4,7 +4,7 @@
 use super::workflow_configuration_fixture::make_repo;
 use std::{error::Error, fs, path::Path, path::PathBuf};
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
+    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree, unmanaged_report,
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -96,5 +96,36 @@ fn generator_owned_refuses_to_overwrite_a_velnor_gen_workflow() -> Result<(), Bo
         assert_eq!(fs::read_to_string(root.join(WORKFLOW_PATH))?, MARKED);
     }
     assert!(!output.path().join("preview/.github").exists());
+    Ok(())
+}
+
+#[test]
+fn unmanaged_deny_accepts_a_velnor_gen_copy_of_the_hand_written_release_workflow()
+-> Result<(), Box<dyn Error>> {
+    let repository = make_repo(CONFIG)?;
+    let root = repository.path();
+    place(root, MARKED_PATH, MARKED)?;
+    place(root, ".github/workflows/release-rust-ci-tools.yml", MARKED)?;
+    let report = unmanaged_report(root)?;
+    assert_eq!(report.entries, Vec::<String>::new());
+    assert!(!report.is_denied());
+    Ok(())
+}
+
+#[test]
+fn unmanaged_deny_still_reports_the_unmarked_hand_written_release_workflow()
+-> Result<(), Box<dyn Error>> {
+    let repository = make_repo(CONFIG)?;
+    let root = repository.path();
+    place(
+        root,
+        ".github/workflows/release-rust-ci-tools.yml",
+        "name: Release\n",
+    )?;
+    let report = unmanaged_report(root)?;
+    assert_eq!(
+        report.entries,
+        [".github/workflows/release-rust-ci-tools.yml"]
+    );
     Ok(())
 }

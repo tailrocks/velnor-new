@@ -269,18 +269,16 @@ fn first_line_matches(
     let mut reader = std::io::BufReader::new(file);
     let mut first = Vec::with_capacity(limit);
     let mut byte = [0u8; 1];
-    let mut line_feed = false;
     for _ in 0..limit {
         if reader.read(&mut byte).map_err(|error| io(source, &error))? == 0 {
             break;
         }
         if byte[0] == b'\n' {
-            line_feed = true;
             break;
         }
         first.push(byte[0]);
     }
-    if line_feed && first.last() == Some(&b'\r') {
+    if first.last() == Some(&b'\r') {
         first.pop();
     }
     Ok(matches(&String::from_utf8_lossy(&first)))
