@@ -85,7 +85,7 @@ permissions:
   contents: read
   pull-requests: read
 concurrency:
-  group: 'ci-${{ github.workflow }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
@@ -233,7 +233,7 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
     assert!(text.contains(
         "        working-directory: 'a${{ ''${{'' }} github.event.pull_request.title }}'\n"
     ));
-    assert!(text.contains("  group: 'ci-${{ github.workflow }}-"));
+    assert!(text.contains("  group: 'ci-${{ github.workflow_ref }}-"));
     Ok(())
 }
 

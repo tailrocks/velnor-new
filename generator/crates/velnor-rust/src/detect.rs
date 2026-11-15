@@ -11,7 +11,7 @@ use velnor_model::{
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIG, MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
@@ -105,9 +105,18 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
+    let deny = view.tracked_paths.contains(&DENY_CONFIG);
+    if deny && !tools.tools.keys().any(|name| is_tool(name, "cargo-deny")) {
+        return Err(DetectError::DenyRequired {
+            path: tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
     let policy = PolicyTools {
-        deny: view.tracked_paths.contains(&DENY_CONFIG),
-        machete: tools.tools.keys().any(|name| is_machete(name)),
+        deny,
+        machete: tools
+            .tools
+            .keys()
+            .any(|name| is_tool(name, "cargo-machete")),
     };
     Ok(RepoFacts {
         policy,
@@ -122,8 +131,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     })
 }
 
-fn is_machete(name: &str) -> bool {
-    name.rsplit(['/', ':']).next() == Some("cargo-machete")
+fn is_tool(name: &str, tool: &str) -> bool {
+    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {

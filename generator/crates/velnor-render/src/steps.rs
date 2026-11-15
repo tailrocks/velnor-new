@@ -16,6 +16,7 @@ const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 const NOT_DRAFT: &str = "${{ github.event.pull_request.draft != true }}";
 const NOT_CANCELLED_NOT_DRAFT: &str =
     "${{ !cancelled() && github.event.pull_request.draft != true }}";
+const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -110,6 +111,12 @@ fn step_body(kind: &StepKind) -> RenderedStep {
                 ("URL".to_owned(), by_platform(release, |binary| &binary.url)),
             ],
             run: Some(FETCH_HELPER_RUN.to_owned()),
+            ..RenderedStep::default()
+        },
+        StepKind::FailOnDraftRun => RenderedStep {
+            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
+            condition: Some(IS_DRAFT.to_owned()),
+            run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
         StepKind::FailWhenANeedFailed => RenderedStep {

@@ -30,6 +30,7 @@ pub enum PullRequestType {
     Synchronize,
     Reopened,
     ReadyForReview,
+    ConvertedToDraft,
 }
 
 impl PullRequestType {
@@ -101,6 +102,7 @@ pub enum StepKind {
     GeneratorCheck,
     FetchHelper(HelperRelease),
     FailWhenANeedFailed,
+    FailOnDraftRun,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

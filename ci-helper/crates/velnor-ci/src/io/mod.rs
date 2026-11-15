@@ -138,7 +138,7 @@ fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let everything = selections
         .values()
         .any(|selection| matches!(selection, RustSelection::All(_)));
-    let policy = policy_needed(&changes.paths, everything);
+    let policy = policy_needed(&changes.paths, everything, facts.policy);
     let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
     Ok(if args.explain {

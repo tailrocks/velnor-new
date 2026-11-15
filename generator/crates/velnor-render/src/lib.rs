@@ -21,7 +21,7 @@ use crate::steps::rendered_job;
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
 
-const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
+const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
 const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' }}";
 
 pub const OWNED_PATHS: [RepoPath; 1] = [WORKFLOW_PATH];
@@ -81,6 +81,7 @@ fn triggers(triggers: &Triggers) -> Yaml {
                 PullRequestType::Synchronize => "synchronize",
                 PullRequestType::Reopened => "reopened",
                 PullRequestType::ReadyForReview => "ready_for_review",
+                PullRequestType::ConvertedToDraft => "converted_to_draft",
             })
         });
         items.push(entry(

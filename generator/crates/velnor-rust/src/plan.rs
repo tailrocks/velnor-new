@@ -18,7 +18,7 @@ use crate::shape::decide_shape;
 const RUST_JOB: JobId = JobId::from_static("rust");
 const LINT_JOB: JobId = JobId::from_static("rust-lint");
 const TEST_JOB: JobId = JobId::from_static("rust-test");
-const POLICY_JOB: JobId = JobId::from_static("rust-policy");
+const POLICY_JOB: JobId = JobId::from_static("policy");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
 #[must_use]
@@ -35,18 +35,33 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.policy.any() {
         jobs.push(policy_job(facts));
     }
+    let draft_guard = facts
+        .config
+        .skip_draft_pull_requests
+        .then(|| step(StepKind::FailOnDraftRun));
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
         skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::NotCancelled,
-        steps: vec![step(StepKind::FailWhenANeedFailed)],
+        steps: draft_guard
+            .into_iter()
+            .chain([step(StepKind::FailWhenANeedFailed)])
+            .collect(),
         ..job(facts, VERDICT_JOB)
     });
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
-            pull_request: PullRequestType::ALL.to_vec(),
+            pull_request: PullRequestType::ALL
+                .into_iter()
+                .chain(
+                    facts
+                        .config
+                        .skip_draft_pull_requests
+                        .then_some(PullRequestType::ConvertedToDraft),
+                )
+                .collect(),
             push_branch: Some(facts.config.default_branch.clone()),
             merge_group: true,
             workflow_dispatch: true,
