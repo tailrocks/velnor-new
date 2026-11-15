@@ -25,6 +25,8 @@ const BRANCH: &str = "main";
 const ENVIRONMENT: &str = "release";
 pub(crate) const FROM_A_PASSED_PUSH: &str = "github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'";
 pub(crate) const GATE_IS_READY: &str = "needs.gate.outputs.ready == 'true'";
+const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
+pub(crate) const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
 const RELEASE_TIMEOUT_MINUTES: u16 = 30;
 
@@ -139,7 +141,7 @@ pub(crate) fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
 
 fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
     let mut steps = vec![
-        checkout("${{ github.sha }}", 0),
+        checkout(VERIFIED_COMMIT, 0),
         install_release_plz(),
         app_token(&[("contents", "write"), ("pull-requests", "write")]),
     ];
@@ -150,6 +152,9 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
         )
     }));
     RenderedJob {
+        condition: Some(expression(&format!(
+            "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && {STILL_NEWEST}"
+        ))),
         permissions: permissions(&[("contents", "read")]),
         concurrency: Some(RenderedConcurrency {
             group: "release-pr".to_owned(),
@@ -162,7 +167,7 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
 
 fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![
-        checkout("${{ github.event.workflow_run.head_sha }}", 0),
+        checkout(VERIFIED_COMMIT, 0),
         install_release_plz(),
         install_helper(helper),
         app_token(&[("contents", "write"), ("pull-requests", "read")]),

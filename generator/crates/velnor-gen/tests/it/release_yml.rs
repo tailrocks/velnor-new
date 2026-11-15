@@ -16,6 +16,8 @@ use crate::release_fixture::{
 };
 use crate::yaml_tree::Node;
 
+const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
+
 type TestResult = Result<(), Box<dyn Error>>;
 #[test]
 fn release_yml_triggers_only_after_the_named_workflows_complete_on_main() -> TestResult {
@@ -74,6 +76,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                 "{id}"
             );
             let mut want = BTreeSet::from([READY.to_owned(), PUSH.to_owned(), GREEN.to_owned()]);
+            if *id == "release-pr" {
+                want.insert(NEWEST.to_owned());
+            }
             if !matches!(*id, "release-pr" | "tag") {
                 let package = id.split('-').nth(1).ok_or("no package in the job id")?;
                 want.insert(format!("needs.tag.outputs.{package} != ''"));
@@ -113,6 +118,22 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
         steps(tag)[0].at(&["with", "ref"]).and_then(Node::text),
         Some("${{ github.event.workflow_run.head_sha }}")
     );
+    Ok(())
+}
+
+#[test]
+fn release_yml_release_pr_checks_out_the_verified_commit_and_runs_only_while_it_is_newest()
+-> TestResult {
+    for (_, tree) in [app()?, two_roots()?] {
+        let pr = tree.at(&["jobs", "release-pr"]).ok_or("no release-pr")?;
+        assert_eq!(
+            steps(pr)[0].at(&["with", "ref"]).and_then(Node::text),
+            Some("${{ github.event.workflow_run.head_sha }}")
+        );
+        assert!(conjuncts(pr).contains(NEWEST));
+        let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
+        assert!(!conjuncts(tag).contains(NEWEST));
+    }
     Ok(())
 }
 

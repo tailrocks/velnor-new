@@ -42,7 +42,7 @@ jobs:
   release-pr:
     needs:
       - gate
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' }}'
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_sha == github.sha }}'
     environment: release
     permissions:
       contents: read
@@ -55,7 +55,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: '${{ github.sha }}'
+          ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
       - name: Install release-plz

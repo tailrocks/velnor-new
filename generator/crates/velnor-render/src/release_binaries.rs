@@ -4,7 +4,7 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, VERIFIED_COMMIT};
 use crate::release_steps::{checkout, expression, install_tool, join, permissions, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
@@ -79,7 +79,7 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
         steps: vec![
-            checkout("${{ github.event.workflow_run.head_sha }}", 1),
+            checkout(VERIFIED_COMMIT, 1),
             install_tool("rust"),
             command(
                 format!("Add the {triple} target"),
