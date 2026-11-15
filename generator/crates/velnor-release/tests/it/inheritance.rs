@@ -21,7 +21,7 @@ fn a_package_that_turns_release_always_back_on_is_refused() -> TestResult {
 }
 
 #[test]
-fn changelog_processors_that_run_commands_or_read_other_files_are_refused() -> TestResult {
+fn changelog_processors_that_run_commands_or_read_other_files_are_refused() {
     for extra in [
         "\n[changelog]\ncommit_preprocessors = [{ pattern = \"a\", replace_command = \"sh -c x\" }]\n",
         "\n[changelog]\npostprocessors = [{ pattern = \"a\", replace_command = \"x\" }]\n",
@@ -43,7 +43,6 @@ fn changelog_processors_that_run_commands_or_read_other_files_are_refused() -> T
         format!("{PLZ}\n[changelog]\nprotect_breaking_commits = true\n"),
     );
     assert_eq!(refusal(&plain), None);
-    Ok(())
 }
 
 #[test]

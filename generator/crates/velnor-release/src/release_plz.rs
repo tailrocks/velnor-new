@@ -73,21 +73,36 @@ fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
-    let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
+fn workspace_default(root: &str, workspace: &Settings) -> Result<Option<TagPattern>, ReleaseError> {
+    let Some(template) = workspace.git_tag_name.as_deref() else {
+        return Err(ReleaseError::MissingGitTagName {
+            root: root.to_owned(),
+            package: None,
+        });
+    };
+    let pattern = checked(template, "package", root, None)?;
+    check_package(root, None, workspace)?;
+    Ok((render(template, "other") == render(template, "package")).then_some(pattern))
+}
+
+fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
+    let invalid = |error: toml::de::Error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
         message: error.to_string(),
-    })?;
-    let raw: toml::Value = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
-        file: format!("{root}/release-plz.toml"),
-        message: error.to_string(),
-    })?;
-    if let Some(key) = executable_key(&raw) {
-        return Err(ReleaseError::ExecutableConfig {
+    };
+    let document: Document = toml::from_str(text).map_err(invalid)?;
+    let raw: toml::Value = toml::from_str(text).map_err(invalid)?;
+    match executable_key(&raw) {
+        Some(key) => Err(ReleaseError::ExecutableConfig {
             root: root.to_owned(),
             key,
-        });
+        }),
+        None => Ok(document),
     }
+}
+
+pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
+    let document = parse_document(root, text)?;
     let workspace = &document.workspace;
     if workspace.release_always != Some(false) {
         return Err(ReleaseError::ReleaseAlwaysNotFalse {
@@ -137,20 +152,11 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
-    let mut default_tag = None;
-    if workspace_releases {
-        let Some(template) = workspace.git_tag_name.as_deref() else {
-            return Err(ReleaseError::MissingGitTagName {
-                root: root.to_owned(),
-                package: None,
-            });
-        };
-        let pattern = checked(template, "package", root, None)?;
-        check_package(root, None, workspace)?;
-        if render(template, "other") == render(template, "package") {
-            default_tag = Some(pattern);
-        }
-    }
+    let default_tag = if workspace_releases {
+        workspace_default(root, workspace)?
+    } else {
+        None
+    };
     let publishes_to_crates_io = released
         .iter()
         .any(|(_, settings)| settings.publishes_to_crates_io())
