@@ -70,6 +70,16 @@ impl Check {
     }
 }
 
+pub fn conclude(check: &Check, outcomes: &[Outcome]) -> Result<(), &'static str> {
+    if check.refused() {
+        return Err("a job was refused at job start");
+    }
+    if !outcomes.iter().all(Outcome::passed) {
+        return Err("a run did not succeed");
+    }
+    Ok(())
+}
+
 #[must_use]
 pub fn verdict(
     scenario: &str,

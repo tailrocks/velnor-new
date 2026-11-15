@@ -112,6 +112,10 @@ impl Pairs {
     }
 }
 
+pub async fn write_plan(state: &Path, planned: &str) -> io::Result<()> {
+    write_private(&state.join("plan.json"), planned).await
+}
+
 pub(super) async fn spawn(
     env: &Environment<DockerCli>,
     host: &Path,
@@ -148,7 +152,7 @@ pub(super) async fn spawn(
         sides: &sides,
     })
     .to_string();
-    write_private(&state.join("plan.json"), &planned).await?;
+    write_plan(&state, &planned).await?;
     let log = std::fs::File::create(state.join(LOG))?;
     let mut child = Command::new(host)
         .arg("--state")

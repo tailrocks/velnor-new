@@ -20,6 +20,8 @@ use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/proxy.rs"]
+mod proxy;
 #[path = "local_host_public/refusals.rs"]
 mod refusals;
 #[path = "local_host_public/retry.rs"]

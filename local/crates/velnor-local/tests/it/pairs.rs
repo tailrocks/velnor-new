@@ -5,10 +5,11 @@ use clap::Parser;
 use velnor_local::cli::{Cli, Command, EnvironmentArgs, RunnerMode};
 use velnor_local::images::{HOST_BINARY, HOST_BUILD, RELEASE_IDENTITY};
 use velnor_local::io::env::Environment;
+use velnor_local::io::supervisor::write_plan;
 use velnor_local::pairs::{Decision, PlanInput, decisions, listening, plan, slots};
 use velnor_local::scenario::Outcome;
 use velnor_local::side::Side;
-use velnor_local::verdict::{Check, verdict};
+use velnor_local::verdict::{Check, conclude, verdict};
 
 use crate::fake_docker::{FakeDocker, after};
 use crate::support::temp_dir;
@@ -237,4 +238,45 @@ fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
     assert!(lab.is_some_and(|id| id > 0), "{lab:?}");
     assert_eq!(lab, id("tailrocks/velnor-lab"));
     assert_ne!(lab, id("tailrocks/velnor-new"));
+}
+
+#[test]
+fn a_refused_job_fails_the_run_even_when_every_run_succeeded() {
+    let passed = [outcome(1, false)];
+    let refused = Check::Pairs(read(&[ADMITTED, REFUSED]));
+    assert_eq!(
+        conclude(&refused, &passed),
+        Err("a job was refused at job start")
+    );
+    assert_eq!(conclude(&Check::Pairs(read(&[ADMITTED])), &passed), Ok(()));
+    assert_eq!(conclude(&Check::Plain, &passed), Ok(()));
+}
+
+#[test]
+fn a_run_that_did_not_succeed_fails_the_run() {
+    let mut failed = outcome(1, false);
+    failed.conclusion = "failure";
+    assert_eq!(
+        conclude(&Check::Plain, &[failed]),
+        Err("a run did not succeed")
+    );
+}
+
+#[tokio::test]
+async fn the_plan_file_holding_the_authority_token_is_private_to_its_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_dir("plan-mode");
+    write_plan(&dir, "{}")
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mode = std::fs::metadata(dir.join("plan.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("plan.json")).unwrap_or_default(),
+        "{}"
+    );
 }

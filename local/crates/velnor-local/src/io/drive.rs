@@ -21,7 +21,7 @@ use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, keeps_environment, overlapping, plan, summary,
 };
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
-use crate::verdict::{Check, verdict};
+use crate::verdict::{Check, conclude, verdict};
 
 mod outcome;
 mod pulls;
@@ -168,13 +168,7 @@ async fn run_one(
     }
     replayed?;
     stopped?;
-    if check.refused() {
-        return Err(io::Error::other("a job was refused at job start"));
-    }
-    if !outcomes.iter().all(Outcome::passed) {
-        return Err(io::Error::other("a run did not succeed"));
-    }
-    Ok(())
+    conclude(&check, &outcomes).map_err(io::Error::other)
 }
 
 async fn job_start_check(dir: &Path, pairs: bool) -> io::Result<Check> {
