@@ -67,7 +67,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=skip\nrust_policy=skip\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_doctests=skip\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_doctests=skip\nrust_tools_docs=run\nrust_policy=skip\n"
     );
 }
 
@@ -96,7 +96,19 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
     let repo = plan_repo("doc-flags");
     assert_eq!(
         doc_flags(&repo, None),
+        "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
+    );
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"t\"\nedition = \"2024\"\n",
+    );
+    assert_eq!(
+        doc_flags(&repo, None),
         "rust_root_mode=all rust_root_doctests=skip rust_root_docs=skip rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+    );
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
     );
     repo.write(
         "b/src/lib.rs",
@@ -129,7 +141,7 @@ fn plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps()
     repo.link("b/src/lib.rs", "b/src/linked.rs");
     assert_eq!(
         doc_flags(&repo, None),
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
 }
 
@@ -146,7 +158,7 @@ fn plan_reads_no_file_when_a_package_reads_the_whole_repository() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         flags,
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
 }
 
@@ -156,7 +168,7 @@ fn plan_treats_a_source_over_the_size_bound_as_possibly_holding_docs() {
     repo.write("a/src/lib.rs", &"// pad\n".repeat(200_000));
     assert_eq!(
         doc_flags(&repo, None),
-        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=skip "
+        "rust_root_mode=all rust_root_doctests=run rust_root_docs=run rust_tools_mode=all rust_tools_doctests=skip rust_tools_docs=run "
     );
 }
 
