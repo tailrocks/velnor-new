@@ -14,6 +14,7 @@ pub struct ReleaseFiles {
     pub release_toml: Option<String>,
     pub release_plz_toml: BTreeMap<String, String>,
     pub mise_toml: String,
+    pub dot_mise_toml: Option<String>,
     pub mise_lock: String,
 }
 
@@ -47,6 +48,11 @@ fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             tags.entry(&package.tag_pattern)
                 .or_default()
                 .push(package.name.clone());
+        }
+        if let Some(pattern) = &config.default_tag {
+            tags.entry(pattern)
+                .or_default()
+                .push(format!("[workspace] of {}", config.root));
         }
     }
     if let Some((pattern, packages)) = tags.into_iter().find(|(_, names)| names.len() > 1) {
@@ -90,7 +96,11 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        mise::check(&files.mise_toml, &files.mise_lock)?;
+        mise::check(
+            &files.mise_toml,
+            files.dot_mise_toml.as_deref(),
+            &files.mise_lock,
+        )?;
         let mut binaries = Vec::new();
         for binary in &config.binaries {
             let mut found = configs.iter().filter_map(|candidate| {

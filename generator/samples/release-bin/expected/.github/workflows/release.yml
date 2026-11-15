@@ -58,14 +58,26 @@ jobs:
           ref: '${{ github.event.workflow_run.head_sha }}'
           fetch-depth: 0
           persist-credentials: false
+      - id: newest
+        name: Check that the verified commit is still the newest on the default branch
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'gh api "repos/$REPOSITORY/commits/main" --jq ''"newest=\(.sha == env.COMMIT)"'' >> "$GITHUB_OUTPUT"'
       - name: Install release-plz
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
           install_args: release-plz
           cache: false
+      - name: Move the verified commit onto the default branch
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
+        run: git switch --force-create main
       - id: app
         name: Create the release App token
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
@@ -75,6 +87,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
       - name: Open the release pull request of the repository root
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
         run: 'release-plz release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml'

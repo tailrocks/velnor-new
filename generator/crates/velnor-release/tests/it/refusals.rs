@@ -23,7 +23,19 @@ fn a_package_without_an_explicit_tag_name_is_refused() -> TestResult {
         "name = \"app\"",
         "name = \"app\"\ngit_tag_name = \"app-v{{ version }}\"",
     )?;
+    let unlisted = edit(
+        &rescued,
+        "git_tag_name = \"{{ package }}-v{{ version }}\"\n",
+        "",
+    )?;
     let mut files = files();
+    files.release_plz_toml.insert(".".to_owned(), unlisted);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::MissingGitTagName { package: None, .. })
+    ));
+    let rescued = edit(&rescued, "[workspace]\n", "[workspace]\nrelease = false\n")?
+        .replace("name = \"app\"\n", "name = \"app\"\nrelease = true\n");
     files.release_plz_toml.insert(
         ".".to_owned(),
         edit(

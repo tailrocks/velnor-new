@@ -21,9 +21,11 @@ const APP_TOKEN_VERSION: &str = "v3.3.0";
 const LINT_IGNORE: &str = "jactionlint ignore=dangerous-triggers";
 const BRANCH: &str = "main";
 const ENVIRONMENT: &str = "release";
+const HOSTED_RUNNER: &str = "ubuntu-latest";
 const FROM_A_PASSED_PUSH: &str = "github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'";
 const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
+const NEWEST_OUTPUT: &str = "steps.newest.outputs.newest == 'true'";
 const GATE_IS_READY: &str = "needs.gate.outputs.ready == 'true'";
 const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
@@ -31,15 +33,10 @@ const RELEASE_TIMEOUT_MINUTES: u16 = 30;
 
 pub fn render_release(
     plan: &ReleasePlan,
-    runner: &str,
     helper: &HelperRelease,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     let rendered = RenderedWorkflow {
-        jobs: vec![
-            gate(runner, helper),
-            release_pr(plan, runner),
-            tag(plan, runner, helper),
-        ],
+        jobs: vec![gate(helper), release_pr(plan), tag(plan, helper)],
     };
     check_rules(&rendered)?;
     let workflow = [
@@ -107,7 +104,7 @@ fn variables(items: &[(&str, &str)]) -> Vec<(String, Value)> {
         .collect()
 }
 
-fn gate(runner: &str, helper: &HelperRelease) -> RenderedJob {
+fn gate(helper: &HelperRelease) -> RenderedJob {
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
@@ -120,7 +117,7 @@ fn gate(runner: &str, helper: &HelperRelease) -> RenderedJob {
             "ready".to_owned(),
             "${{ steps.gate.outputs.ready }}".to_owned(),
         )],
-        runs_on: runner.to_owned(),
+        runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: GATE_TIMEOUT_MINUTES,
         steps: vec![
             install_helper(helper),
@@ -142,7 +139,7 @@ fn gate(runner: &str, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
+fn after_the_gate(id: &str) -> RenderedJob {
     RenderedJob {
         id: id.to_owned(),
         needs: vec!["gate".to_owned()],
@@ -150,16 +147,18 @@ fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
             "{GATE_IS_READY} && {FROM_A_PASSED_PUSH}"
         ))),
         environment: Some(ENVIRONMENT.to_owned()),
-        runs_on: runner.to_owned(),
+        runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: RELEASE_TIMEOUT_MINUTES,
         ..RenderedJob::default()
     }
 }
 
-fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
+fn release_pr(plan: &ReleasePlan) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT),
+        newest_check(),
         install_release_plz(),
+        on_the_default_branch(),
         app_token(&[("contents", "write"), ("pull-requests", "write")]),
     ];
     steps.extend(plan.roots.iter().map(|root| {
@@ -168,6 +167,9 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
             format!("release-plz release-pr {}", release_plz_arguments(root)),
         )
     }));
+    for step in steps.iter_mut().skip(2) {
+        step.condition = Some(expression(NEWEST_OUTPUT));
+    }
     RenderedJob {
         condition: Some(expression(&format!(
             "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && {STILL_NEWEST}"
@@ -178,11 +180,11 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
             cancel_in_progress: false,
         }),
         steps,
-        ..after_the_gate("release-pr", runner)
+        ..after_the_gate("release-pr")
     }
 }
 
-fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
+fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT),
         install_release_plz(),
@@ -214,7 +216,31 @@ fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob 
     RenderedJob {
         permissions: permissions(&scopes),
         steps,
-        ..after_the_gate("tag", runner)
+        ..after_the_gate("tag")
+    }
+}
+
+fn newest_check() -> RenderedStep {
+    RenderedStep {
+        id: Some("newest".to_owned()),
+        name: "Check that the verified commit is still the newest on the default branch".to_owned(),
+        env: variables(&[
+            ("GH_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "gh api \"repos/$REPOSITORY/commits/{BRANCH}\" --jq '\"newest=\\(.sha == env.COMMIT)\"' >> \"$GITHUB_OUTPUT\""
+        )),
+        ..RenderedStep::default()
+    }
+}
+
+fn on_the_default_branch() -> RenderedStep {
+    RenderedStep {
+        name: "Move the verified commit onto the default branch".to_owned(),
+        run: Some(format!("git switch --force-create {BRANCH}")),
+        ..RenderedStep::default()
     }
 }
 

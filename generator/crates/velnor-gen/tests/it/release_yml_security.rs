@@ -148,7 +148,8 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
             .position(|step| uses(step).is_some_and(|u| u.starts_with(APP_TOKEN)))
             .ok_or("no token step")?;
         for step in &all[..created] {
-            assert!(step.get("env").is_none(), "{id}");
+            let tip = step.get("id").and_then(Node::text) == Some("newest");
+            assert!(tip || step.get("env").is_none(), "{id}");
         }
         for step in &all[created + 1..] {
             let token = step.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text);
@@ -174,6 +175,7 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
         Ok(steps(tree.at(&["jobs", id]).ok_or("no job")?)
             .iter()
             .filter_map(|step| step.get("run").and_then(Node::text))
+            .filter(|run| !run.starts_with("gh ") && !run.starts_with("git "))
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
-use crate::settings::{Document, Settings};
-use crate::tag::{TagPattern, checked};
+use crate::settings::{Document, Settings, executable_key};
+use crate::tag::{TagPattern, checked, render};
 
 const DEFAULT_PR_BRANCH_PREFIX: &str = "release-plz-";
 
@@ -19,6 +19,7 @@ pub(crate) struct RootConfig {
     pub(crate) pr_branch_prefix: String,
     pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
+    pub(crate) default_tag: Option<TagPattern>,
 }
 
 fn check_package(
@@ -27,6 +28,11 @@ fn check_package(
     settings: &Settings,
 ) -> Result<(), ReleaseError> {
     let owned = || (root.to_owned(), package.map(str::to_owned));
+    if settings.release_always != Some(false) {
+        return Err(ReleaseError::ReleaseAlwaysNotFalse {
+            root: root.to_owned(),
+        });
+    }
     if settings.git_release_draft != Some(true) {
         let (root, package) = owned();
         return Err(ReleaseError::GitReleaseDraftNotTrue { root, package });
@@ -67,21 +73,21 @@ fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
-    if released.is_empty() {
-        workspace.publishes_to_crates_io()
-    } else {
-        released
-            .iter()
-            .any(|(_, settings)| settings.publishes_to_crates_io())
-    }
-}
-
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document: Document = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
         message: error.to_string(),
     })?;
+    let raw: toml::Value = toml::from_str(text).map_err(|error| ReleaseError::InvalidToml {
+        file: format!("{root}/release-plz.toml"),
+        message: error.to_string(),
+    })?;
+    if let Some(key) = executable_key(&raw) {
+        return Err(ReleaseError::ExecutableConfig {
+            root: root.to_owned(),
+            key,
+        });
+    }
     let workspace = &document.workspace;
     if workspace.release_always != Some(false) {
         return Err(ReleaseError::ReleaseAlwaysNotFalse {
@@ -110,27 +116,11 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             released.push((entry.name.clone(), effective));
         }
     }
-    if released.is_empty() {
-        if workspace.release == Some(false) {
-            return Err(ReleaseError::RootReleasesNothing {
-                root: root.to_owned(),
-            });
-        }
-        if workspace.git_tag_name.is_none() {
-            return Err(ReleaseError::MissingGitTagName {
-                root: root.to_owned(),
-                package: None,
-            });
-        }
-        checked(
-            workspace.git_tag_name.as_deref().unwrap_or_default(),
-            "package",
-            root,
-            None,
-        )?;
-        check_package(root, None, workspace)?;
-    } else if workspace.release != Some(false) {
-        check_package(root, None, workspace)?;
+    let workspace_releases = workspace.release != Some(false);
+    if released.is_empty() && !workspace_releases {
+        return Err(ReleaseError::RootReleasesNothing {
+            root: root.to_owned(),
+        });
     }
     let mut packages = Vec::new();
     for (name, settings) in &released {
@@ -147,7 +137,24 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
-    let publishes_to_crates_io = publishes(workspace, &released);
+    let mut default_tag = None;
+    if workspace_releases {
+        let Some(template) = workspace.git_tag_name.as_deref() else {
+            return Err(ReleaseError::MissingGitTagName {
+                root: root.to_owned(),
+                package: None,
+            });
+        };
+        let pattern = checked(template, "package", root, None)?;
+        check_package(root, None, workspace)?;
+        if render(template, "other") == render(template, "package") {
+            default_tag = Some(pattern);
+        }
+    }
+    let publishes_to_crates_io = released
+        .iter()
+        .any(|(_, settings)| settings.publishes_to_crates_io())
+        || (workspace_releases && workspace.publishes_to_crates_io());
     let pr_branch_prefix = workspace
         .pr_branch_prefix
         .clone()
@@ -162,5 +169,6 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         publishes_to_crates_io,
         pr_branch_prefix,
         packages,
+        default_tag,
     })
 }

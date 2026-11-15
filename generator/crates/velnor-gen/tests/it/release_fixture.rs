@@ -53,7 +53,22 @@ pub(crate) fn release_view(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<RepoView, Box<dyn Error>> {
-    let mut view = view(&["Cargo.toml"], None)?;
+    let manifests: Vec<String> = roots
+        .iter()
+        .map(|root| {
+            if root.dir == "." {
+                "Cargo.toml".to_owned()
+            } else {
+                format!("{}/Cargo.toml", root.dir)
+            }
+        })
+        .collect();
+    let manifests: Vec<&str> = if manifests.is_empty() {
+        vec!["Cargo.toml"]
+    } else {
+        manifests.iter().map(String::as_str).collect()
+    };
+    let mut view = view(&manifests, None)?;
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     view.files.insert(

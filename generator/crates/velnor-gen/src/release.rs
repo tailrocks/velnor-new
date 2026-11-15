@@ -22,7 +22,23 @@ pub(crate) fn release_workflow(
         .as_ref()
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
     let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
-    render_release(&plan, facts.config.runner.as_str(), helper).map_err(GenerateError::Rules)
+    for root in &plan.roots {
+        let manifest = if root.root == "." {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{}/Cargo.toml", root.root)
+        };
+        let is_cargo_root = facts
+            .rust_roots
+            .iter()
+            .any(|detected| detected.manifest.as_str() == manifest);
+        if !is_cargo_root {
+            return Err(GenerateError::ReleaseRootWithoutCargoToml(
+                root.root.clone(),
+            ));
+        }
+    }
+    render_release(&plan, helper).map_err(GenerateError::Rules)
 }
 
 fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
@@ -44,16 +60,13 @@ fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
             release_plz_toml.insert(root, text(path)?.unwrap_or_default());
         }
     }
-    let mut mise_toml = None;
-    for config in &MISE_CONFIGS {
-        if mise_toml.is_none() {
-            mise_toml = text(config)?;
-        }
-    }
+    let [primary, dot] = &MISE_CONFIGS;
+    let (mise_toml, dot_mise_toml) = (text(primary)?, text(dot)?);
     Ok(ReleaseFiles {
         release_toml: text(&RELEASE_CONFIG_PATH)?,
         release_plz_toml,
         mise_toml: mise_toml.unwrap_or_default(),
+        dot_mise_toml,
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

@@ -19,6 +19,7 @@ mod lock_consistency;
 mod patch;
 mod pipeline;
 mod release_fixture;
+mod release_inputs;
 mod release_workflow;
 mod release_yml;
 mod release_yml_security;

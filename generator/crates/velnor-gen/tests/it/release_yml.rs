@@ -11,7 +11,7 @@ use velnor_render::{Owner, owner_of};
 use velnor_rust::{LOCK_PATH, wanted_files};
 
 use crate::release_fixture::{
-    APP, GREEN, PUSH, READY, app, conjuncts, jobs, release_plz, release_view, steps, two_roots,
+    APP, GREEN, PUSH, READY, Root, app, conjuncts, jobs, release_view, steps, two_roots,
 };
 use crate::yaml_tree::Node;
 
@@ -197,11 +197,11 @@ fn release_yml_is_refused_without_a_pinned_helper_and_with_a_broken_release_plz_
 #[test]
 fn release_yml_refuses_a_root_that_would_add_a_second_command() -> TestResult {
     let root = "app; echo";
-    let mut view = release_view(&[], Some(&format!("roots = [{root:?}]\n")))?;
-    view.files.insert(
-        RepoPath::new(format!("{root}/release-plz.toml"))?,
-        release_plz(&APP).into_bytes(),
-    );
+    let weird = Root {
+        dir: "app; echo",
+        ..APP
+    };
+    let view = release_view(&[weird], Some(&format!("roots = [{root:?}]\n")))?;
     assert!(matches!(
         expected_files(&view),
         Err(GenerateError::Rules(_))

@@ -22,6 +22,7 @@ pub enum GenerateError {
     Release(ReleaseError),
     ReleaseNeedsHelper,
     ReleaseFileNotUtf8(RepoPath),
+    ReleaseRootWithoutCargoToml(String),
     Rules(Vec<RuleViolation>),
 }
 
@@ -39,6 +40,10 @@ impl fmt::Display for GenerateError {
                 "release.yml runs velnor-ci; pin a release with `velnor-gen pin-helper <version>`",
             ),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
+            Self::ReleaseRootWithoutCargoToml(root) => write!(
+                f,
+                ".velnor/release.toml: root {root:?} has no Cargo.toml, so release-plz cannot run there"
+            ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {
