@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::Platform;
 
 use crate::error::ReleaseError;
-use crate::hazards::cargo_config;
+use crate::hazards::{cargo_config, toolchain_path};
 use crate::mise;
 use crate::release_plz::{RootConfig, read};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
@@ -18,6 +18,7 @@ pub struct ReleaseFiles {
     pub release_plz_toml: BTreeMap<String, String>,
     pub mise_tomls: Vec<String>,
     pub cargo_configs: BTreeMap<String, String>,
+    pub toolchain_files: BTreeMap<String, String>,
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
     pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
@@ -168,6 +169,10 @@ fn config_reaches(file: &str, root: &str) -> bool {
         .strip_suffix("/.cargo/config.toml")
         .or_else(|| file.strip_suffix("/.cargo/config"))
         .unwrap_or(".");
+    reaches(base, root)
+}
+
+fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
 
@@ -259,6 +264,17 @@ impl ReleasePlan {
         for (file, text) in &files.cargo_configs {
             if config.roots.iter().any(|root| config_reaches(file, root)) {
                 cargo_config(file, text, publishes)?;
+            }
+        }
+        for (file, text) in &files.toolchain_files {
+            let base = file.rsplit_once('/').map_or(".", |(base, _)| base);
+            let within = |root: &str| root == "." || base.starts_with(&format!("{root}/"));
+            if config
+                .roots
+                .iter()
+                .any(|root| reaches(base, root) || within(root))
+            {
+                toolchain_path(file, text)?;
             }
         }
         let binaries = plan_binaries(&config, &configs, files)?;

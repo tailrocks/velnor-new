@@ -56,14 +56,25 @@ fn program_key(value: &Value) -> Option<&'static str> {
     }
 }
 
-fn reaches_crates_io(value: &Value) -> bool {
+fn credential_provider(value: &Value) -> bool {
     match value {
         Value::Table(table) => table.iter().any(|(key, inner)| match key.as_str() {
-            "credential-alias" | "proxy" | "cainfo" | "global-credential-providers" => true,
+            "credential-alias" | "global-credential-providers" => true,
             "credential-provider" => !is_builtin(inner),
-            _ => reaches_crates_io(inner),
+            _ => credential_provider(inner),
         }),
-        Value::Array(items) => items.iter().any(reaches_crates_io),
+        Value::Array(items) => items.iter().any(credential_provider),
+        _ => false,
+    }
+}
+
+fn redirects_crates_io(value: &Value) -> bool {
+    match value {
+        Value::Table(table) => table.iter().any(|(key, inner)| match key.as_str() {
+            "proxy" | "cainfo" => true,
+            _ => redirects_crates_io(inner),
+        }),
+        Value::Array(items) => items.iter().any(redirects_crates_io),
         _ => false,
     }
 }
@@ -99,10 +110,32 @@ pub(crate) fn cargo_config(
             key: key.to_owned(),
         });
     }
-    if publishes_to_crates_io && reaches_crates_io(&document) {
+    if credential_provider(&document) {
         return Err(ReleaseError::CargoCredentialProvider {
             file: file.to_owned(),
         });
     }
+    if publishes_to_crates_io && redirects_crates_io(&document) {
+        return Err(ReleaseError::CargoRedirectsCratesIo {
+            file: file.to_owned(),
+        });
+    }
     Ok(())
+}
+
+pub(crate) fn toolchain_path(file: &str, text: &str) -> Result<(), ReleaseError> {
+    let names_a_path = match text.parse::<toml::Table>() {
+        Ok(document) => document
+            .get("toolchain")
+            .and_then(Value::as_table)
+            .is_some_and(|toolchain| toolchain.contains_key("path")),
+        Err(_) => text.contains('/') || text.contains('\\'),
+    };
+    if names_a_path {
+        Err(ReleaseError::ToolchainFromPath {
+            file: file.to_owned(),
+        })
+    } else {
+        Ok(())
+    }
 }

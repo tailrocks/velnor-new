@@ -183,39 +183,73 @@ fn changelog_commands_and_external_changelog_configs_are_refused() {
 }
 
 #[test]
-fn an_executable_cargo_credential_provider_is_refused_only_when_publishing_to_crates_io()
+fn an_executable_cargo_credential_provider_is_refused_for_every_root_whatever_it_publishes()
 -> TestResult {
-    let provider = "[registry]\ncredential-provider = [\"./steal\"]\n";
-    let mut files = files();
-    files
-        .cargo_configs
-        .insert(".cargo/config.toml".to_owned(), provider.to_owned());
-    let got = refusal(&files);
-    assert!(
-        matches!(got, Some(ReleaseError::CargoCredentialProvider { .. })),
-        "{got:?}"
-    );
-    files.cargo_configs.insert(
-        ".cargo/config.toml".to_owned(),
-        "[credential-alias]\nx = \"./steal\"\n".to_owned(),
-    );
-    assert!(matches!(
-        refusal(&files),
-        Some(ReleaseError::CargoCredentialProvider { .. })
-    ));
-    files.cargo_configs.insert(
-        ".cargo/config.toml".to_owned(),
-        "[registry]\ncredential-provider = \"cargo:token\"\n".to_owned(),
-    );
-    assert_eq!(refusal(&files), None);
-    files
-        .cargo_configs
-        .insert(".cargo/config.toml".to_owned(), provider.to_owned());
-    files.release_plz_toml.insert(
-        ".".to_owned(),
-        edit(PLZ, "publish_no_verify = true", "git_only = true")?,
-    );
-    assert_eq!(refusal(&files), None);
+    let git_only = edit(PLZ, "publish_no_verify = true", "git_only = true")?;
+    for publishing in [PLZ.to_owned(), git_only] {
+        for config in [
+            "[registry]\ncredential-provider = [\"./steal\"]\n",
+            "[registries.evil]\nindex = \"sparse+http://x\"\ncredential-provider = [\"./steal\"]\n",
+            "[credential-alias]\nx = \"./steal\"\n",
+            "[registry]\nglobal-credential-providers = [\"./steal\"]\n",
+        ] {
+            let mut files = files();
+            files
+                .release_plz_toml
+                .insert(".".to_owned(), publishing.clone());
+            files
+                .cargo_configs
+                .insert(".cargo/config.toml".to_owned(), config.to_owned());
+            let got = refusal(&files);
+            assert!(
+                matches!(got, Some(ReleaseError::CargoCredentialProvider { .. })),
+                "{config}: {got:?}"
+            );
+        }
+        let mut files = files();
+        files.release_plz_toml.insert(".".to_owned(), publishing);
+        files.cargo_configs.insert(
+            ".cargo/config.toml".to_owned(),
+            "[registry]\ncredential-provider = \"cargo:token\"\n".to_owned(),
+        );
+        assert_eq!(refusal(&files), None);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_taken_from_a_path_is_refused_for_every_root() -> TestResult {
+    let git_only = edit(PLZ, "publish_no_verify = true", "git_only = true")?;
+    for publishing in [PLZ.to_owned(), git_only] {
+        for (file, text) in [
+            ("rust-toolchain.toml", "[toolchain]\npath = \"/work/tc\"\n"),
+            ("rust-toolchain", "[toolchain]\npath = \"tc\"\n"),
+            ("rust-toolchain", "/work/tc\n"),
+        ] {
+            let mut files = files();
+            files
+                .release_plz_toml
+                .insert(".".to_owned(), publishing.clone());
+            files
+                .toolchain_files
+                .insert(file.to_owned(), text.to_owned());
+            let got = refusal(&files);
+            assert!(
+                matches!(got, Some(ReleaseError::ToolchainFromPath { .. })),
+                "{file} {text}: {got:?}"
+            );
+        }
+    }
+    for (file, text) in [
+        ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.99.1\"\n"),
+        ("rust-toolchain", "stable\n"),
+    ] {
+        let mut files = files();
+        files
+            .toolchain_files
+            .insert(file.to_owned(), text.to_owned());
+        assert_eq!(refusal(&files), None, "{file}");
+    }
     Ok(())
 }
 

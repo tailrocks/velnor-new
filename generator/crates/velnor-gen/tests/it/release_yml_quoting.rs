@@ -56,7 +56,7 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_release_plz_runs() -> Te
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
-    let exec = "mise --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz";
+    let exec = "\"$RUNNER_TEMP/mise\" --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz";
     assert_eq!(
         release_plz("release-pr")?,
         [

@@ -28,6 +28,7 @@ pub(crate) fn files() -> ReleaseFiles {
         release_plz_toml: [(".".to_owned(), PLZ.to_owned())].into(),
         mise_tomls: vec![MISE_TOML.to_owned()],
         cargo_configs: BTreeMap::new(),
+        toolchain_files: BTreeMap::new(),
         cargo_manifests: None,
         bin_targets: None,
         root_members: None,
