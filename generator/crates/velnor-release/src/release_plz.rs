@@ -34,6 +34,23 @@ fn check_package(
         let (root, package) = owned();
         return Err(ReleaseError::SemverCheckNotFalse { root, package });
     }
+    for (field, value) in [
+        ("git_tag_enable", settings.git_tag_enable),
+        ("git_release_enable", settings.git_release_enable),
+    ] {
+        if value == Some(false) {
+            let (root, package) = owned();
+            return Err(ReleaseError::ReleaseSwitchOff {
+                root,
+                package,
+                field,
+            });
+        }
+    }
+    if settings.publish == Some(true) && settings.git_only == Some(true) {
+        let (root, package) = owned();
+        return Err(ReleaseError::PublishWithGitOnly { root, package });
+    }
     if settings.publish != Some(false)
         && settings.git_only != Some(true)
         && settings.publish_no_verify != Some(true)
@@ -50,6 +67,30 @@ fn valid_package_name(name: &str) -> bool {
         .next()
         .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn check_workspace(
+    root: &str,
+    workspace: &Settings,
+    nothing_listed: bool,
+) -> Result<(), ReleaseError> {
+    let releases = workspace.release != Some(false);
+    if nothing_listed && !releases {
+        return Err(ReleaseError::RootReleasesNothing {
+            root: root.to_owned(),
+        });
+    }
+    if releases {
+        let Some(template) = workspace.git_tag_name.as_deref() else {
+            return Err(ReleaseError::MissingGitTagName {
+                root: root.to_owned(),
+                package: None,
+            });
+        };
+        checked(template, "package", root, None)?;
+        check_package(root, None, workspace)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
@@ -85,28 +126,6 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             released.push((entry.name.clone(), effective));
         }
     }
-    if released.is_empty() {
-        if workspace.release == Some(false) {
-            return Err(ReleaseError::RootReleasesNothing {
-                root: root.to_owned(),
-            });
-        }
-        if workspace.git_tag_name.is_none() {
-            return Err(ReleaseError::MissingGitTagName {
-                root: root.to_owned(),
-                package: None,
-            });
-        }
-        checked(
-            workspace.git_tag_name.as_deref().unwrap_or_default(),
-            "package",
-            root,
-            None,
-        )?;
-        check_package(root, None, workspace)?;
-    } else if workspace.release != Some(false) {
-        check_package(root, None, workspace)?;
-    }
     let mut packages = Vec::new();
     for (name, settings) in &released {
         let Some(template) = settings.git_tag_name.as_deref() else {
@@ -122,12 +141,19 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
+    check_workspace(root, workspace, released.is_empty())?;
+    let pr_branch_prefix = workspace
+        .pr_branch_prefix
+        .clone()
+        .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned());
+    if pr_branch_prefix.is_empty() {
+        return Err(ReleaseError::EmptyPrBranchPrefix {
+            root: root.to_owned(),
+        });
+    }
     Ok(RootConfig {
         root: root.to_owned(),
-        pr_branch_prefix: workspace
-            .pr_branch_prefix
-            .clone()
-            .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned()),
+        pr_branch_prefix,
         packages,
     })
 }

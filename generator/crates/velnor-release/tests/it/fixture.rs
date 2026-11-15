@@ -48,3 +48,7 @@ pub(crate) fn plz_edited(from: &str, to: &str) -> Result<ReleaseFiles, String> {
 pub(crate) fn refusal(files: &ReleaseFiles) -> Option<ReleaseError> {
     ReleasePlan::read(files).err()
 }
+
+pub(crate) fn plz_refusal_of(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
+    Ok(refusal(&plz_edited(from, to)?))
+}

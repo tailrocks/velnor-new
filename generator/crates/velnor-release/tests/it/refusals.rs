@@ -32,6 +32,20 @@ fn a_package_without_an_explicit_tag_name_is_refused() -> TestResult {
             "",
         )?,
     );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::MissingGitTagName { package: None, .. })
+    ));
+    let rescued = edit(&rescued, "[workspace]\n", "[workspace]\nrelease = false\n")?
+        .replace("name = \"app\"\n", "name = \"app\"\nrelease = true\n");
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        edit(
+            &rescued,
+            "git_tag_name = \"{{ package }}-v{{ version }}\"\n",
+            "",
+        )?,
+    );
     assert_eq!(refusal(&files), None);
     Ok(())
 }
@@ -313,6 +327,24 @@ fn tag_templates_the_recorder_cannot_consume_are_refused() -> TestResult {
             "{template}: {error:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_tag_template_is_checked_against_a_version_with_build_metadata() -> TestResult {
+    let plus = plz_edited(
+        "git_tag_name = \"{{ package }}-v{{ version }}\"",
+        "git_tag_name = \"{{ package }}+v{{ version }}\"",
+    )?;
+    assert_eq!(refusal(&plus), None);
+    let bad = plz_refusal(
+        "git_tag_name = \"{{ package }}-v{{ version }}\"",
+        "git_tag_name = \"{{ package }} v{{ version }}\"",
+    )?;
+    assert!(
+        matches!(bad, Some(ReleaseError::InvalidTagTemplate { .. })),
+        "{bad:?}"
+    );
     Ok(())
 }
 

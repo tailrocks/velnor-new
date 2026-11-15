@@ -30,18 +30,19 @@ pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
         rest = &inner[close + 2..];
     }
     out.push_str(rest);
-    let example = out.replace("{{ version }}", "0");
-    (is_plain(&example) && git_ref::is_valid(&format!("refs/tags/{example}")))
+    let example = out.replace("{{ version }}", "0.0.0-0+0");
+    (is_tag_name(&example) && git_ref::is_valid(&format!("refs/tags/{example}")))
         .then_some(TagPattern(out))
 }
 
-fn is_plain(text: &str) -> bool {
+#[must_use]
+pub fn is_tag_name(text: &str) -> bool {
     !text.is_empty()
         && !text.starts_with(['.', '-'])
         && !text.ends_with('.')
         && text
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'+'))
 }
 
 pub(crate) fn checked(
@@ -50,9 +51,17 @@ pub(crate) fn checked(
     root: &str,
     named: Option<&str>,
 ) -> Result<TagPattern, ReleaseError> {
-    render(template, package).ok_or_else(|| ReleaseError::InvalidTagTemplate {
+    let pattern = render(template, package).ok_or_else(|| ReleaseError::InvalidTagTemplate {
         root: root.to_owned(),
         package: named.map(str::to_owned),
         template: template.to_owned(),
-    })
+    })?;
+    if pattern.as_str().contains("{{ version }}") {
+        Ok(pattern)
+    } else {
+        Err(ReleaseError::TagTemplateWithoutVersion {
+            root: root.to_owned(),
+            package: named.map(str::to_owned),
+        })
+    }
 }

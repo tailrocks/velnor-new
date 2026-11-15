@@ -14,6 +14,8 @@ pub(crate) struct Settings {
     pub(crate) publish_no_verify: Option<bool>,
     pub(crate) pr_branch_prefix: Option<String>,
     pub(crate) release: Option<bool>,
+    pub(crate) git_tag_enable: Option<bool>,
+    pub(crate) git_release_enable: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,6 +51,8 @@ impl Settings {
                 .clone()
                 .or_else(|| base.pr_branch_prefix.clone()),
             release: self.release.or(base.release),
+            git_tag_enable: self.git_tag_enable.or(base.git_tag_enable),
+            git_release_enable: self.git_release_enable.or(base.git_release_enable),
         }
     }
 }
