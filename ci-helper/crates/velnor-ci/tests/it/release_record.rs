@@ -119,6 +119,7 @@ fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), Stri
         )]
         .into(),
         mise_toml: "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned(),
+        dot_mise_toml: None,
         mise_lock: "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned(),
     };
     let plan = velnor_release::ReleasePlan::read(&files).map_err(|e| e.to_string())?;
