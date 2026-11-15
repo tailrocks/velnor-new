@@ -12,6 +12,7 @@ mod golden;
 mod harness;
 mod inputs;
 mod io;
+mod io_manifests;
 mod job_setup;
 mod job_shape;
 mod lock;
