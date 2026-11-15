@@ -151,7 +151,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
             CargoCommand::FmtCheck,
             CargoCommand::Clippy { extra: Vec::new() },
             CargoCommand::NextestRun {
-                filter: FilterRef::All
+                filter: FilterRef::All,
             },
             CargoCommand::Doctest,
             CargoCommand::Doc,
