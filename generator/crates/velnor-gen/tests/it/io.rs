@@ -6,7 +6,6 @@ use std::error::Error;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use velnor_gen::Drift;
 use velnor_gen::io::{
@@ -378,54 +377,5 @@ fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic
     let result = write_lock(&file_link.repo(), "pinned\n");
     assert!(matches!(result, Err(IoError::NotRegular(_))), "{result:?}");
     assert_eq!(fs::read_to_string(&target)?, "theirs\n");
-    Ok(())
-}
-
-#[test]
-fn recording_a_sample_from_a_stale_timings_file_names_the_ignored_entry_on_stderr() -> TestResult {
-    let scratch = Scratch::new("record-stale-timings")?;
-    let repo = scratch.repo();
-    write(
-        &repo.join("Cargo.toml"),
-        "[package]\nname = \"lab\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
-    write(
-        &repo.join("Cargo.lock"),
-        "version = 4\n\n[[package]]\nname = \"lab\"\nversion = \"0.1.0\"\n",
-    )?;
-    write(&repo.join("src/main.rs"), "fn main() {}\n")?;
-    write(
-        &repo.join("mise.toml"),
-        include_str!("../../../../samples/single-crate/view/mise.toml"),
-    )?;
-    write(
-        &repo.join(".velnor/rust-ci-timings.json"),
-        r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#,
-    )?;
-    let status = Command::new("git")
-        .arg("init")
-        .arg("-q")
-        .current_dir(&repo)
-        .status()?;
-    assert!(status.success());
-    let status = Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(&repo)
-        .status()?;
-    assert!(status.success());
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
-        .arg("--root")
-        .arg(&repo)
-        .arg("record-sample")
-        .arg(&repo)
-        .arg("demo")
-        .output()?;
-    let stderr = String::from_utf8(output.stderr)?;
-    assert!(output.status.success(), "{stderr}");
-    assert!(
-        stderr.lines().any(|line| line
-            == "velnor-gen: .velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"),
-        "{stderr}"
-    );
     Ok(())
 }

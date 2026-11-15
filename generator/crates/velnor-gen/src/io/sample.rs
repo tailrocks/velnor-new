@@ -3,10 +3,10 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{MetadataError, cargo_files, wanted_files};
 
 use crate::expected_with_notes;
@@ -21,12 +21,22 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
     let (view, metadata) = read_view(&checkout, true)?;
+    let recording = recording_of(&checkout, view, metadata, &mut std::io::stderr())?;
+    write_sample(&destination, name, &recording)
+}
+
+pub fn recording_of(
+    checkout: &Path,
+    view: RepoView,
+    metadata: BTreeMap<RepoPath, Vec<u8>>,
+    out: &mut dyn Write,
+) -> Result<Recording, Error> {
     let (_, notes) = expected_with_notes(&view).map_err(Error::Generate)?;
     for note in notes {
-        eprintln!("velnor-gen: {note}");
+        writeln!(out, "velnor-gen: {note}").ok();
     }
     let wanted = wanted_files(&view.tracked_paths);
-    let recording = Recording {
+    Ok(Recording {
         view: view
             .files
             .into_iter()
@@ -35,10 +45,9 @@ pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<
         manifests: cargo_files(&view.tracked_paths),
         metadata: metadata
             .into_iter()
-            .map(|(workspace, json)| Ok((workspace, relocate_metadata(&checkout, &json)?)))
+            .map(|(workspace, json)| Ok((workspace, relocate_metadata(checkout, &json)?)))
             .collect::<Result<_, Error>>()?,
-    };
-    write_sample(&destination, name, &recording)
+    })
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
