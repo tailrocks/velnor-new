@@ -28,14 +28,40 @@ enum Expression {
     Not(Box<Expression>),
 }
 
-const FLAG_SENSITIVE: [&str; 6] = [
-    "target_feature",
-    "panic",
-    "debug_assertions",
-    "overflow_checks",
-    "relocation_model",
-    "sanitize",
+const TARGET_CFGS: [&str; 11] = [
+    "target_os",
+    "target_family",
+    "target_arch",
+    "target_env",
+    "target_vendor",
+    "target_endian",
+    "target_pointer_width",
+    "target_abi",
+    "target_has_atomic",
+    "unix",
+    "windows",
 ];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Truth {
+    Yes,
+    No,
+    Unknown,
+}
+
+impl Truth {
+    fn of(value: bool) -> Self {
+        if value { Self::Yes } else { Self::No }
+    }
+
+    fn not(self) -> Self {
+        match self {
+            Self::Yes => Self::No,
+            Self::No => Self::Yes,
+            Self::Unknown => Self::Unknown,
+        }
+    }
+}
 
 impl Platform {
     #[must_use]
@@ -70,26 +96,41 @@ impl Platform {
         let Some(inner) = rest.strip_suffix(')') else {
             return true;
         };
-        let tokens = tokens(inner);
-        if tokens.iter().any(
-            |token| matches!(token, Token::Word(word) if FLAG_SENSITIVE.contains(&word.as_str())),
-        ) {
-            return true;
-        }
-        let mut tokens = tokens.into_iter().peekable();
+        let mut tokens = tokens(inner).into_iter().peekable();
         match expression(&mut tokens) {
-            Some(parsed) if tokens.peek().is_none() => self.evaluate(&parsed),
+            Some(parsed) if tokens.peek().is_none() => self.evaluate(&parsed) != Truth::No,
             _ => true,
         }
     }
 
-    fn evaluate(&self, expression: &Expression) -> bool {
+    fn evaluate(&self, expression: &Expression) -> Truth {
         match expression {
-            Expression::Name(name) => self.names.contains(name),
-            Expression::Pair(key, value) => self.pairs.contains(&(key.clone(), value.clone())),
-            Expression::All(parts) => parts.iter().all(|part| self.evaluate(part)),
-            Expression::Any(parts) => parts.iter().any(|part| self.evaluate(part)),
-            Expression::Not(part) => !self.evaluate(part),
+            Expression::Name(name) if TARGET_CFGS.contains(&name.as_str()) => {
+                Truth::of(self.names.contains(name))
+            }
+            Expression::Pair(key, value) if TARGET_CFGS.contains(&key.as_str()) => {
+                Truth::of(self.pairs.contains(&(key.clone(), value.clone())))
+            }
+            Expression::Name(_) | Expression::Pair(..) => Truth::Unknown,
+            Expression::All(parts) => {
+                parts
+                    .iter()
+                    .fold(Truth::Yes, |all, part| match (all, self.evaluate(part)) {
+                        (Truth::No, _) | (_, Truth::No) => Truth::No,
+                        (Truth::Unknown, _) | (_, Truth::Unknown) => Truth::Unknown,
+                        _ => Truth::Yes,
+                    })
+            }
+            Expression::Any(parts) => {
+                parts
+                    .iter()
+                    .fold(Truth::No, |any, part| match (any, self.evaluate(part)) {
+                        (Truth::Yes, _) | (_, Truth::Yes) => Truth::Yes,
+                        (Truth::Unknown, _) | (_, Truth::Unknown) => Truth::Unknown,
+                        _ => Truth::No,
+                    })
+            }
+            Expression::Not(part) => self.evaluate(part).not(),
         }
     }
 }

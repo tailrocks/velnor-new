@@ -202,12 +202,18 @@ pub(super) fn host_platform(root: &Path) -> Result<Platform, CiError> {
         }
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     };
-    let version = run(&["-vV"])?;
+    let (version, printed) = std::thread::scope(|scope| {
+        let printed = scope.spawn(|| run(&["--print", "cfg"]));
+        let version = run(&["-vV"]);
+        (version, printed.join())
+    });
+    let version = version?;
     let triple = version
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
         .ok_or_else(|| CiError::new("rustc -vV printed no host triple"))?;
-    Ok(Platform::parse(triple, &run(&["--print", "cfg"])?))
+    let printed = printed.map_err(|_| CiError::new("rustc --print cfg panicked"))??;
+    Ok(Platform::parse(triple, &printed))
 }
 
 pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {

@@ -49,15 +49,37 @@ fn a_predicate_that_cannot_be_read_is_taken_to_hold() {
 }
 
 #[test]
-fn a_predicate_on_a_cfg_key_that_rustflags_can_change_is_taken_to_hold() {
+fn a_predicate_on_a_name_or_key_outside_rustcs_target_cfgs_is_taken_to_hold() {
     let platform = linux();
     for predicate in [
-        "cfg(target_feature = \"avx2\")",
-        "cfg(not(target_feature = \"crt-static\"))",
-        "cfg(all(unix, target_feature = \"sse4.2\"))",
-        "cfg(panic = \"abort\")",
+        "cfg(tokio_unstable)",
         "cfg(debug_assertions)",
+        "cfg(not(debug_assertions))",
+        "cfg(target_feature = \"x\")",
+        "cfg(not(target_feature = \"crt-static\"))",
+        "cfg(all(unix, my_flag))",
+        "cfg(all(unix, panic = \"abort\"))",
+        "cfg(overflow_checks)",
+        "cfg(relocation_model = \"pic\")",
+        "cfg(sanitize = \"address\")",
+        "cfg(feature = \"x\")",
+        "cfg(any(windows, tokio_unstable))",
     ] {
         assert!(platform.holds(predicate), "{predicate}");
+    }
+}
+
+#[test]
+fn a_predicate_that_only_names_target_cfgs_can_be_inactive() {
+    let platform = linux();
+    for predicate in [
+        "cfg(windows)",
+        "cfg(all(windows, tokio_unstable))",
+        "cfg(all(unix, target_os = \"macos\"))",
+        "cfg(target_has_atomic = \"512\")",
+        "cfg(target_env = \"msvc\")",
+        "cfg(not(unix))",
+    ] {
+        assert!(!platform.holds(predicate), "{predicate}");
     }
 }

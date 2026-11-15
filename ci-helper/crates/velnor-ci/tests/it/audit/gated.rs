@@ -108,13 +108,8 @@ fn a_build_dependency_under_an_inactive_triple_needs_no_host_units() {
 }
 
 #[test]
-fn a_build_dependency_under_an_active_cfg_still_needs_its_host_units() {
-    needs_the_host_units_of_lib(&direct(ACTIVE));
-}
-
-#[test]
-fn a_build_dependency_under_a_target_feature_cfg_still_needs_its_host_units() {
-    needs_the_host_units_of_lib(&direct("cfg(target_feature = \"no-such-feature\")"));
+fn a_build_dependency_under_a_cfg_that_rustflags_can_set_still_needs_its_host_units() {
+    needs_the_host_units_of_lib(&direct("cfg(tokio_unstable)"));
 }
 
 #[test]
