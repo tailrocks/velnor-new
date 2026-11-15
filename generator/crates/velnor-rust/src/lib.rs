@@ -30,7 +30,7 @@ mod weaken;
 
 pub use config::CONFIG_PATH;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
-pub use doc_steps::{optional_steps, root_sources};
+pub use doc_steps::{member_sources, optional_steps, root_sources};
 pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;

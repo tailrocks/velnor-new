@@ -56,6 +56,7 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    UnpinnedTool(&'static str),
 }
 
 impl DetectError {
@@ -93,6 +94,10 @@ impl fmt::Display for Reason {
             Self::UnknownInputPackage(package) => write!(
                 f,
                 "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::UnpinnedTool(tool) => write!(
+                f,
+                "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
             ),
             Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
             Self::UnknownLockedPackage(package) => write!(

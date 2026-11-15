@@ -6,7 +6,7 @@ use velnor_model::{RepoPath, RepoView, TargetKind};
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const MISE_WITH_MACHETE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n";
+const MISE_WITH_MACHETE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n";
 
 fn text(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     Ok(workflow(view)?.replace("''", "'"))
@@ -179,6 +179,7 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
 fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     track(&mut files, "deny.toml", "")?;
+    track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let text = text(&files)?;
     let job = text
         .lines()
@@ -223,6 +224,7 @@ fn the_policy_lane_installs_the_pinned_tools_before_it_runs_one() -> TestResult 
 fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     let mut files = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     track(&mut files, "deny.toml", "")?;
+    track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
     assert!(job.contains("velnor-ci run -- cargo-deny check"), "{job}");
     assert!(

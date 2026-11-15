@@ -6,10 +6,10 @@ use std::fs;
 use std::path::Path;
 
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
-use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection};
+use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustRoot, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, introduced, optional_steps, policy_runs, root_sources, select,
-    unknown_paths, unread_packages,
+    cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
+    select, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -41,8 +41,15 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let steps = facts
         .rust_roots
         .iter()
-        .map(|root| {
-            let steps = match root_sources(&facts, root, &checkout.view.tracked_paths) {
+        .map(|whole| {
+            let selection = selections.get(&whole.manifest);
+            let root = &scoped(whole, selection);
+            let found = if matches!(selection, Some(RustSelection::Some(_))) {
+                member_sources(&facts, root, &checkout.view.tracked_paths)
+            } else {
+                root_sources(&facts, root, &checkout.view.tracked_paths)
+            };
+            let steps = match found {
                 None => optional_steps(root, &BTreeMap::new(), true),
                 Some(paths) => match read_sources(&checkout.root, &paths) {
                     Ok(Some(sources)) => optional_steps(root, &sources, full),
@@ -52,12 +59,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
                     Err(error) => return Err(ci(error)),
                 },
             };
-            Ok((root.manifest.clone(), steps))
+            Ok((whole.manifest.clone(), steps))
         })
         .collect::<Result<Steps, CiError>>()?;
-    let everything = selections
-        .values()
-        .any(|selection| matches!(selection, RustSelection::All(_)));
+    let everything = selections.values().any(|selection| {
+        matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
+    });
     let selected = selections
         .values()
         .any(|selection| !matches!(selection, RustSelection::None));
@@ -145,6 +152,21 @@ fn pull_request_changes(checkout: &Checkout, facts: &RepoFacts) -> Result<Found,
         .collect();
     let base = git::base_files(&checkout.root, &wanted);
     Ok((paths, base))
+}
+
+fn scoped(root: &RustRoot, selection: Option<&RustSelection>) -> RustRoot {
+    match selection {
+        Some(RustSelection::Some(packages)) => RustRoot {
+            members: root
+                .members
+                .iter()
+                .filter(|member| packages.contains_key(&member.name))
+                .cloned()
+                .collect(),
+            ..root.clone()
+        },
+        _ => root.clone(),
+    }
 }
 
 fn is_lock(path: &RepoPath) -> bool {

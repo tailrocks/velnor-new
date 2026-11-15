@@ -292,6 +292,10 @@ fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestRe
     let deny = RepoPath::new("deny.toml")?;
     files.tracked_paths.insert(deny.clone());
     files.files.insert(deny, Vec::new());
+    files.files.insert(
+        RepoPath::new("mise.toml")?,
+        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n".to_vec(),
+    );
     let text = workflow(&files)?;
     assert!(!text.contains("rust-plan"), "{text}");
     assert!(

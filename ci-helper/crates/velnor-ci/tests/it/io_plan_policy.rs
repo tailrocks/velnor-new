@@ -28,10 +28,45 @@ fn policy_lines(repo: &Repo, event: Option<&str>, changed: &[&str]) -> String {
         .collect()
 }
 
+fn lines_of(repo: &Repo, changed: &[&str], needles: &[&str]) -> String {
+    let outputs = repo.root().join("lines");
+    fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = plan_command(repo);
+    command
+        .args(["plan", "--changed"])
+        .args(changed)
+        .env("GITHUB_OUTPUT", &outputs);
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    fs::read_to_string(&outputs)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .lines()
+        .filter(|line| needles.iter().any(|needle| line.contains(needle)))
+        .flat_map(|line| [line, " "])
+        .collect()
+}
+
+#[test]
+fn the_doc_flags_of_a_root_come_from_the_selected_packages_only() {
+    let repo = plan_repo("doc-flags-selected");
+    repo.write(
+        "b/src/lib.rs",
+        "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
+    );
+    assert_eq!(
+        lines_of(
+            &repo,
+            &["a/src/lib.rs"],
+            &["root_mode", "root_doctests", "root_docs"]
+        ),
+        "rust_root_mode=some rust_root_doctests=skip rust_root_docs=skip "
+    );
+}
+
 fn pin_machete(repo: &Repo) {
     repo.write(
         "mise.toml",
-        "[tools]\nrust = \"1.99.1\"\n\"cargo:cargo-machete\" = \"0.9.1\"\n",
+        "[tools]\nrust = \"1.99.1\"\n\"cargo:cargo-machete\" = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n",
     );
 }
 
@@ -47,6 +82,17 @@ fn plan_runs_machete_for_a_source_change_and_leaves_deny_skipped() {
     assert_eq!(
         policy_lines(&repo, Some("pull_request"), &["README.md"]),
         "rust_deny=skip rust_machete=skip "
+    );
+}
+
+#[test]
+fn a_source_edit_that_selects_most_of_a_root_is_not_a_global_change_for_cargo_deny() {
+    let repo = plan_repo("policy-most");
+    pin_machete(&repo);
+    repo.write("deny.toml", "");
+    assert_eq!(
+        policy_lines(&repo, Some("pull_request"), &["tools/src/main.rs"]),
+        "rust_deny=skip rust_machete=run "
     );
 }
 

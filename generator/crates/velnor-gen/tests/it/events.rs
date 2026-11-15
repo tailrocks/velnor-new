@@ -101,7 +101,21 @@ fn draft_pull_requests_skip_every_lane_but_lint_only_when_the_config_says_so() -
 fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestResult {
     let none = with(&[], None)?;
     assert!(!none.contains("rust-policy"), "{none}");
-    let deny = with(&[("deny.toml", "")], None)?;
+    let unpinned = with(&[("deny.toml", "")], None);
+    assert!(
+        unpinned.is_err_and(|error| error.to_string().contains("cargo-deny is not pinned")),
+        "a deny.toml without a pinned cargo-deny must be refused"
+    );
+    let deny = with(
+        &[
+            ("deny.toml", ""),
+            (
+                "mise.toml",
+                "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n",
+            ),
+        ],
+        None,
+    )?;
     assert!(deny.contains("  rust-policy:\n"), "{deny}");
     assert!(deny.contains("cargo-deny check"), "{deny}");
     assert!(!deny.contains("cargo-machete"), "{deny}");

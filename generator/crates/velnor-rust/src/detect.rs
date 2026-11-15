@@ -111,9 +111,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownRoot(root.clone()),
         ));
     }
+    let pinned = |tool: &str| tools.tools.keys().any(|name| is_tool(name, tool));
+    let deny = view.tracked_paths.contains(&DENY_CONFIG);
+    if deny && !pinned(DENY_TOOL) {
+        return Err(DetectError::invalid(
+            &DENY_CONFIG,
+            Reason::UnpinnedTool(DENY_TOOL),
+        ));
+    }
     let policy = PolicyTools {
-        deny: view.tracked_paths.contains(&DENY_CONFIG),
-        machete: tools.tools.keys().any(|name| is_machete(name)),
+        deny,
+        machete: pinned("cargo-machete"),
     };
     Ok(RepoFacts {
         policy,
@@ -129,8 +137,10 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     })
 }
 
-fn is_machete(name: &str) -> bool {
-    name.rsplit(['/', ':']).next() == Some("cargo-machete")
+const DENY_TOOL: &str = "cargo-deny";
+
+fn is_tool(name: &str, tool: &str) -> bool {
+    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
