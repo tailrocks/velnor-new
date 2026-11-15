@@ -70,7 +70,12 @@ pub(crate) fn check(mise_toml: &str, mise_lock: &str) -> Result<(), ReleaseError
         };
         let versions = locked_versions(entry);
         let wanted = configured_version(value).unwrap_or_default();
-        if !versions.is_empty() && versions.iter().all(|version| version == wanted) {
+        if !wanted.is_empty()
+            && !versions.is_empty()
+            && versions
+                .iter()
+                .all(|version| !version.is_empty() && version == wanted)
+        {
             return Ok(());
         }
         mismatch = Some(ReleaseError::ReleasePlzLockMismatch {
