@@ -80,6 +80,8 @@ struct Edge {
     features: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rename: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -164,6 +166,7 @@ fn member(package: &RustPackage) -> Member {
                 manifest: dependency.manifest.as_ref().map(ToString::to_string),
                 features: dependency.features.clone(),
                 platform: dependency.platform.clone(),
+                rename: dependency.rename.clone(),
             })
             .collect(),
         targets: package
@@ -295,6 +298,7 @@ fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
                     manifest: edge.manifest.as_deref().map(path_of).transpose()?,
                     features: edge.features,
                     platform: edge.platform,
+                    rename: edge.rename,
                 })
             })
             .collect::<Result<_, MetadataFileError>>()?,
