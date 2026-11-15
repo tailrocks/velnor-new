@@ -36,7 +36,9 @@ fn ruleset_on_the_golden_prints_the_recorded_json() -> TestResult {
 
 #[test]
 fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name() -> TestResult {
-    let tree: serde_json::Value = serde_json::from_str(&golden()?)?;
+    let trees: serde_json::Value = serde_json::from_str(&golden()?)?;
+    assert_eq!(trees.as_array().map(Vec::len), Some(2));
+    let tree = &trees[0];
     assert_eq!(tree["name"], "release-tags");
     assert_eq!(tree["target"], "tag");
     assert_eq!(tree["enforcement"], "active");
@@ -48,10 +50,7 @@ fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name(
         tree["conditions"]["ref_name"]["exclude"],
         serde_json::json!([])
     );
-    assert_eq!(
-        tree["rules"],
-        serde_json::json!([{ "type": "creation" }, { "type": "update" }, { "type": "deletion" }])
-    );
+    assert_eq!(tree["rules"], serde_json::json!([{ "type": "creation" }]));
     assert_eq!(
         tree["bypass_actors"],
         serde_json::json!([{
@@ -60,6 +59,14 @@ fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name(
             "bypass_mode": "always"
         }])
     );
+    let immutable = &trees[1];
+    assert_eq!(immutable["name"], "release-tags-immutable");
+    assert_eq!(
+        immutable["rules"],
+        serde_json::json!([{ "type": "update" }, { "type": "deletion" }])
+    );
+    assert_eq!(immutable["bypass_actors"], serde_json::json!([]));
+    assert_eq!(immutable["conditions"], tree["conditions"]);
     Ok(())
 }
 

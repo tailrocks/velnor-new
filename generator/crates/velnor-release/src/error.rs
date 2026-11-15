@@ -107,6 +107,10 @@ pub enum ReleaseError {
     ReleasePlzSource {
         key: String,
     },
+    PackageNotInRoot {
+        root: String,
+        package: String,
+    },
     BinaryTargetMissing {
         package: String,
         bin: String,
@@ -278,6 +282,10 @@ impl ReleaseError {
             Self::UnknownWorkflow { name } => write!(
                 f,
                 ".velnor/release.toml: after names workflow {name:?}, which no tracked or generated workflow has as its name"
+            ),
+            Self::PackageNotInRoot { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: [[package]] {package} is not a package of the Cargo workspace at {root}"
             ),
             Self::BinaryTargetMissing { package, bin } => write!(
                 f,

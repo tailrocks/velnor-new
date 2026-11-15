@@ -132,6 +132,17 @@ fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), R
     };
     let mut released: BTreeMap<&str, &str> = BTreeMap::new();
     for config in configs {
+        if let Some(known) = members.get(&config.root)
+            && let Some(package) = config
+                .packages
+                .iter()
+                .find(|package| !known.contains(&package.name))
+        {
+            return Err(ReleaseError::PackageNotInRoot {
+                root: config.root.clone(),
+                package: package.name.clone(),
+            });
+        }
         let inherited = members
             .get(&config.root)
             .filter(|_| !config.workspace_tags.is_empty())
@@ -150,6 +161,14 @@ fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), R
         }
     }
     Ok(())
+}
+
+fn config_reaches(file: &str, root: &str) -> bool {
+    let base = file
+        .strip_suffix("/.cargo/config.toml")
+        .or_else(|| file.strip_suffix("/.cargo/config"))
+        .unwrap_or(".");
+    base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
 
 fn manifest_of(root: &str) -> String {
@@ -238,7 +257,9 @@ impl ReleasePlan {
         let release_plz_tool = mise::check(&files.mise_tomls, &files.mise_lock)?;
         if configs.iter().any(|config| config.publishes_to_crates_io) {
             for (file, text) in &files.cargo_configs {
-                credential_provider(file, text)?;
+                if config.roots.iter().any(|root| config_reaches(file, root)) {
+                    credential_provider(file, text)?;
+                }
             }
         }
         let binaries = plan_binaries(&config, &configs, files)?;

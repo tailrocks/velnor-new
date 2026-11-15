@@ -9,7 +9,7 @@ fn plz_refusal(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
     Ok(refusal(&plz_edited(from, to)?))
 }
 
-fn ruleset(
+fn rulesets(
     files: &velnor_release::ReleaseFiles,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     Ok(serde_json::from_str(&ruleset_json(&ReleasePlan::read(
@@ -17,13 +17,25 @@ fn ruleset(
     )?))?)
 }
 
+fn ruleset(
+    files: &velnor_release::ReleaseFiles,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(rulesets(files)?[0].clone())
+}
+
 #[test]
-fn the_ruleset_blocks_updating_and_deleting_the_tags_as_well_as_creating_them() -> TestResult {
-    let tree = ruleset(&files())?;
+fn only_the_creation_rules_are_bypassed_by_the_app_and_tags_cannot_be_moved_or_deleted()
+-> TestResult {
+    let trees = rulesets(&files())?;
+    assert_eq!(trees[0]["rules"], serde_json::json!([{"type": "creation"}]));
+    assert_eq!(trees[0]["bypass_actors"][0]["actor_id"], 5_762_496);
     assert_eq!(
-        tree["rules"],
-        serde_json::json!([{"type": "creation"}, {"type": "update"}, {"type": "deletion"}])
+        trees[1]["rules"],
+        serde_json::json!([{"type": "update"}, {"type": "deletion"}])
     );
+    assert_eq!(trees[1]["bypass_actors"], serde_json::json!([]));
+    assert_eq!(trees[0]["conditions"], trees[1]["conditions"]);
+    assert_ne!(trees[0]["name"], trees[1]["name"]);
     Ok(())
 }
 
