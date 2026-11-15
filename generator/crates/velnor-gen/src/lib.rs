@@ -49,12 +49,19 @@ impl From<DetectError> for GenerateError {
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+    expected_with_notes(view).map(|(files, _)| files)
+}
+
+pub fn expected_with_notes(
+    view: &RepoView,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
     check_helper(&facts)?;
     check_tools(&facts)?;
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
-    render(&plan).map_err(GenerateError::Rules)
+    let files = render(&plan).map_err(GenerateError::Rules)?;
+    Ok((files, facts.timings_notes))
 }
 
 fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use velnor_model::{RepoPath, Timings};
+use velnor_model::{RepoPath, RustRoot, Timings};
 
 use crate::error::{DetectError, Reason};
 
@@ -46,4 +46,30 @@ pub(crate) fn parse_timings(bytes: &[u8]) -> Result<BTreeMap<RepoPath, Timings>,
             ))
         })
         .collect()
+}
+
+pub(crate) fn usable_timings(
+    bytes: Option<&Vec<u8>>,
+    roots: &[RustRoot],
+) -> (BTreeMap<RepoPath, Timings>, Vec<String>) {
+    let Some(bytes) = bytes else {
+        return (BTreeMap::new(), Vec::new());
+    };
+    let parsed = match parse_timings(bytes) {
+        Ok(parsed) => parsed,
+        Err(error) => return (BTreeMap::new(), vec![format!("{error}; ignored")]),
+    };
+    let (known, gone): (BTreeMap<_, _>, BTreeMap<_, _>) = parsed
+        .into_iter()
+        .partition(|(root, _)| roots.iter().any(|known| known.manifest == *root));
+    let notes = gone
+        .into_keys()
+        .map(|root| {
+            format!(
+                "{}; entry ignored",
+                DetectError::invalid(&TIMINGS_PATH, Reason::UnknownRoot(root))
+            )
+        })
+        .collect();
+    (known, notes)
 }
