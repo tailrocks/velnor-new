@@ -74,26 +74,20 @@ fn check_workspace(
     workspace: &Settings,
     nothing_listed: bool,
 ) -> Result<(), ReleaseError> {
-    if nothing_listed {
-        if workspace.release == Some(false) {
-            return Err(ReleaseError::RootReleasesNothing {
-                root: root.to_owned(),
-            });
-        }
-        if workspace.git_tag_name.is_none() {
+    let releases = workspace.release != Some(false);
+    if nothing_listed && !releases {
+        return Err(ReleaseError::RootReleasesNothing {
+            root: root.to_owned(),
+        });
+    }
+    if releases {
+        let Some(template) = workspace.git_tag_name.as_deref() else {
             return Err(ReleaseError::MissingGitTagName {
                 root: root.to_owned(),
                 package: None,
             });
-        }
-        checked(
-            workspace.git_tag_name.as_deref().unwrap_or_default(),
-            "package",
-            root,
-            None,
-        )?;
-        check_package(root, None, workspace)?;
-    } else if workspace.release != Some(false) {
+        };
+        checked(template, "package", root, None)?;
         check_package(root, None, workspace)?;
     }
     Ok(())
@@ -132,7 +126,6 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             released.push((entry.name.clone(), effective));
         }
     }
-    check_workspace(root, workspace, released.is_empty())?;
     let mut packages = Vec::new();
     for (name, settings) in &released {
         let Some(template) = settings.git_tag_name.as_deref() else {
@@ -148,6 +141,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
+    check_workspace(root, workspace, released.is_empty())?;
     let pr_branch_prefix = workspace
         .pr_branch_prefix
         .clone()

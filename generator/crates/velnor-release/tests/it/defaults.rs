@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_release::ReleasePlan;
+use velnor_release::{ReleaseError, ReleasePlan};
 
-use crate::fixture::{TestResult, files, plz_edited};
+use crate::fixture::{TestResult, edit, files, plz_edited, refusal};
 
 #[test]
 fn valid_files_without_velnor_config_use_the_defaults() -> TestResult {
@@ -37,5 +37,24 @@ fn binaries_get_default_platforms_and_the_tag_pattern_of_their_package() -> Test
     );
     assert_eq!(plan.binaries[1].platforms, ["linux-x64"]);
     assert_eq!(plan.binaries[1].tag_pattern.as_str(), "tool-v{{ version }}");
+    Ok(())
+}
+
+#[test]
+fn a_workspace_that_releases_next_to_listed_packages_must_name_a_tag() -> TestResult {
+    let mut files = plz_edited(
+        "name = \"app\"\n",
+        "name = \"app\"\ngit_tag_name = \"app-v{{ version }}\"\n",
+    )?;
+    let listed_only = edit(
+        &files.release_plz_toml["."],
+        "git_tag_name = \"{{ package }}-v{{ version }}\"\n",
+        "",
+    )?;
+    files.release_plz_toml.insert(".".to_owned(), listed_only);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::MissingGitTagName { package: None, .. })
+    ));
     Ok(())
 }
