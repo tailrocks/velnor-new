@@ -34,9 +34,6 @@ pub fn changed_files(
                 );
             }
         }
-        if seen >= FILE_LIST_CAP {
-            return Ok(None);
-        }
         if seen < page as usize * PAGE_SIZE {
             return Ok(Some(paths));
         }
