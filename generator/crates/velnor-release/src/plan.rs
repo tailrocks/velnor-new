@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use velnor_model::Platform;
+
 use crate::error::ReleaseError;
 use crate::mise;
 use crate::release_plz::{RootConfig, read};
@@ -28,8 +30,9 @@ pub struct RootPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinaryPlan {
     pub package: String,
+    pub bin: String,
     pub root: String,
-    pub platforms: Vec<String>,
+    pub platforms: Vec<Platform>,
     pub tag_pattern: TagPattern,
 }
 
@@ -114,6 +117,7 @@ impl ReleasePlan {
             }
             binaries.push(BinaryPlan {
                 package: binary.package.clone(),
+                bin: binary.bin.clone(),
                 root,
                 platforms: binary.platforms.clone(),
                 tag_pattern: package.tag_pattern.clone(),

@@ -5,10 +5,12 @@ pub mod cli;
 pub mod io;
 mod release;
 
+pub use crate::release::release_ruleset;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
+use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoFacts, RepoPath, RepoView};
 use velnor_release::ReleaseError;
 use velnor_render::{Owner, RuleViolation, owner_of, render};
 use velnor_rust::{DetectError, check_required_check, check_tools, detect, plan};
@@ -21,6 +23,7 @@ pub enum GenerateError {
     IncompatibleHelper(HelperVersion),
     Release(ReleaseError),
     ReleaseNeedsHelper,
+    NoReleaseConfig,
     ReleaseFileNotUtf8(RepoPath),
     Rules(Vec<RuleViolation>),
 }
@@ -38,6 +41,12 @@ impl fmt::Display for GenerateError {
             Self::ReleaseNeedsHelper => f.write_str(
                 "release.yml runs velnor-ci; pin a release with `velnor-gen pin-helper <version>`",
             ),
+            Self::NoReleaseConfig => {
+                write!(
+                    f,
+                    "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
+                )
+            }
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;

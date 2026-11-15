@@ -215,3 +215,15 @@ fn a_root_whose_workspace_releases_nothing_is_refused() -> TestResult {
     ));
     Ok(())
 }
+
+#[test]
+fn a_bin_name_that_is_not_a_plain_binary_name_is_refused() {
+    for bin in ["rg; echo", "a.b", "", "-x", "a b", "$(x)"] {
+        let mut files = files();
+        files.release_toml = Some(format!("[[binaries]]\npackage = \"app\"\nbin = {bin:?}\n"));
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::InvalidBinName { .. })),
+            "{bin:?}"
+        );
+    }
+}

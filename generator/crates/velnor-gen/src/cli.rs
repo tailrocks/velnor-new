@@ -40,6 +40,8 @@ pub enum Command {
         #[arg(help = "The release tag")]
         tag: String,
     },
+    #[command(subcommand, about = "Commands about release.yml")]
+    Release(ReleaseCommand),
     #[command(about = "Record a golden-test sample from a real checkout into generator/samples")]
     RecordSample {
         #[arg(help = "A path inside the checkout to record")]
@@ -47,4 +49,12 @@ pub enum Command {
         #[arg(help = "The sample name: lowercase letters, digits and dashes")]
         name: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum ReleaseCommand {
+    #[command(
+        about = "Print the JSON of the tag ruleset that lets only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files; pass it to terraform or to gh api --method POST repos/<owner>/<repo>/rulesets --input -"
+    )]
+    Ruleset,
 }

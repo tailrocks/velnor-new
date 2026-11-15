@@ -45,6 +45,10 @@ pub enum ReleaseError {
         package: String,
         platform: String,
     },
+    InvalidBinName {
+        package: String,
+        bin: String,
+    },
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {
@@ -159,6 +163,10 @@ impl ReleaseError {
             Self::UnknownPlatform { package, platform } => write!(
                 f,
                 ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
+            ),
+            Self::InvalidBinName { package, bin } => write!(
+                f,
+                ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
             ),
             Self::EmptyAfter => write!(
                 f,

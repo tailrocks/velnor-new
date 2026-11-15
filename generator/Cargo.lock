@@ -412,7 +412,9 @@ name = "velnor-release"
 version = "0.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "toml",
+ "velnor-model",
 ]
 
 [[package]]

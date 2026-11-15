@@ -3,6 +3,8 @@
 
 mod header;
 mod release;
+mod release_binaries;
+mod release_steps;
 mod rules;
 mod steps;
 mod workflow;

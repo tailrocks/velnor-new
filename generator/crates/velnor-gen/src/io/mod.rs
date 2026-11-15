@@ -21,8 +21,10 @@ use velnor_rust::{
 mod sample;
 mod workflows;
 
-use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
+use crate::cli::{Cli, Command, ReleaseCommand};
+use crate::{
+    Drift, GenerateError, check_tag, drift, expected_files, release_ruleset, require_compatible,
+};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, relocate_metadata, write_sample,
 };
@@ -123,6 +125,7 @@ pub fn main() -> Exit {
         }
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
         Command::CheckTag { tag } => return tag_verdict(tag),
+        Command::Release(ReleaseCommand::Ruleset) => return print_ruleset(&cli.root),
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
@@ -151,6 +154,30 @@ pub fn main() -> Exit {
             Exit::from(2)
         }
     }
+}
+
+fn print_ruleset(root: &Path) -> Exit {
+    match ruleset(root) {
+        Ok(json) => {
+            print!("{json}");
+            Exit::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("velnor-gen: {error}");
+            Exit::from(2)
+        }
+    }
+}
+
+fn ruleset(root: &Path) -> Result<String, Error> {
+    let root = toplevel(root)?;
+    let tracked_paths = tracked(&root)?;
+    let view = RepoView {
+        files: read_files(&root, &wanted_files(&tracked_paths))?,
+        tracked_paths,
+        rust_metadata: BTreeMap::new(),
+    };
+    release_ruleset(&view).map_err(Error::Generate)
 }
 
 fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
@@ -290,10 +317,8 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     Ok(Checkout { root, view })
 }
 
-type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
-
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let tracked_paths = program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
+fn tracked(root: &Path) -> Result<BTreeSet<RepoPath>, Error> {
+    program(root, "git", &[OsStr::new("ls-files"), OsStr::new("-z")])?
         .split(|byte| *byte == 0)
         .filter(|entry| !entry.is_empty())
         .map(|entry| {
@@ -305,7 +330,13 @@ fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
             })?;
             RepoPath::new(text).map_err(|e| Error::Repository(e.to_string()))
         })
-        .collect::<Result<BTreeSet<_>, _>>()?;
+        .collect()
+}
+
+type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
+
+fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
+    let tracked_paths = tracked(root)?;
     let mut view = RepoView {
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,

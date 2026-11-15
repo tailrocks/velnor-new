@@ -1,0 +1,127 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_model::RELEASE_PLZ_FILE;
+use velnor_release::RootPlan;
+
+use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
+
+const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+const APP_TOKEN_VERSION: &str = "v3.3.0";
+pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
+
+pub(crate) fn expression(condition: &str) -> String {
+    format!("${{{{ {condition} }}}}")
+}
+
+pub(crate) fn permissions(items: &[(&str, &str)]) -> Vec<(String, String)> {
+    items
+        .iter()
+        .map(|(scope, access)| ((*scope).to_owned(), (*access).to_owned()))
+        .collect()
+}
+
+pub(crate) fn variables(items: &[(&str, &str)]) -> Vec<(String, Value)> {
+    items
+        .iter()
+        .map(|(key, value)| ((*key).to_owned(), Value::Expr((*value).to_owned())))
+        .collect()
+}
+
+pub(crate) fn checkout(reference: &str, depth: u64) -> RenderedStep {
+    RenderedStep {
+        name: "Check out".to_owned(),
+        uses: Some(CHECKOUT.to_owned()),
+        with: vec![
+            ("ref".to_owned(), Value::Expr(reference.to_owned())),
+            ("fetch-depth".to_owned(), Value::Int(depth)),
+            ("persist-credentials".to_owned(), Value::Bool(false)),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn install_release_plz() -> RenderedStep {
+    install_tool("release-plz")
+}
+
+pub(crate) fn install_tool(tool: &str) -> RenderedStep {
+    RenderedStep {
+        name: format!("Install {tool}"),
+        uses: Some(MISE.to_owned()),
+        with: vec![
+            ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("install_args".to_owned(), Value::Text(tool.to_owned())),
+            ("cache".to_owned(), Value::Bool(false)),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
+    let mut with = variables(&[
+        ("client-id", "${{ secrets.RELEASE_APP_ID }}"),
+        ("private-key", "${{ secrets.RELEASE_APP_PRIVATE_KEY }}"),
+        ("owner", "${{ github.repository_owner }}"),
+        ("repositories", "${{ github.event.repository.name }}"),
+    ]);
+    with.extend(scopes.iter().map(|(scope, access)| {
+        (
+            format!("permission-{scope}"),
+            Value::Text((*access).to_owned()),
+        )
+    }));
+    RenderedStep {
+        id: Some("app".to_owned()),
+        name: "Create the release App token".to_owned(),
+        uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
+        uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
+        with,
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn release_plz_step(name: String, run: String) -> RenderedStep {
+    RenderedStep {
+        name,
+        env: variables(&[("GITHUB_TOKEN", APP_TOKEN_OUTPUT)]),
+        run: Some(run),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn release_plz_arguments(root: &RootPlan) -> String {
+    format!(
+        "--forge github --git-token \"$GITHUB_TOKEN\" --manifest-path {} --config {}",
+        shell_word(&join(&root.root, "Cargo.toml")),
+        shell_word(&join(&root.root, RELEASE_PLZ_FILE))
+    )
+}
+
+pub(crate) fn label(root: &RootPlan) -> &str {
+    if root.root == "." {
+        "the repository root"
+    } else {
+        &root.root
+    }
+}
+
+pub(crate) fn join(root: &str, file: &str) -> String {
+    if root == "." {
+        file.to_owned()
+    } else {
+        format!("{root}/{file}")
+    }
+}
+
+pub(crate) fn shell_word(word: &str) -> String {
+    if word
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/'))
+    {
+        word.to_owned()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
+    }
+}

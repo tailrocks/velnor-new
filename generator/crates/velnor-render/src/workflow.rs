@@ -21,7 +21,9 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(environment) = &job.environment {
         items.push(entry("environment", text(environment)));
     }
-    if !job.permissions.is_empty() {
+    if job.no_permissions {
+        items.push(entry("permissions", Yaml::Map(Vec::new())));
+    } else if !job.permissions.is_empty() {
         items.push(entry("permissions", pairs(&job.permissions)));
     }
     if let Some(concurrency) = &job.concurrency {

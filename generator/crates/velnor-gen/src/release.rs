@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView};
-use velnor_release::{ReleaseFiles, ReleasePlan};
+use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
 use velnor_render::render_release;
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK};
 
@@ -23,6 +23,14 @@ pub(crate) fn release_workflow(
         .ok_or(GenerateError::ReleaseNeedsHelper)?;
     let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
     render_release(&plan, facts.config.runner.as_str(), helper).map_err(GenerateError::Rules)
+}
+
+pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
+    if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
+        return Err(GenerateError::NoReleaseConfig);
+    }
+    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    Ok(ruleset_json(&plan))
 }
 
 fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {

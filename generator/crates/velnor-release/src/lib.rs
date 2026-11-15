@@ -6,10 +6,12 @@ mod git_ref;
 mod mise;
 mod plan;
 mod release_plz;
+mod ruleset;
 mod settings;
 mod tag;
 mod velnor_config;
 
 pub use error::ReleaseError;
 pub use plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan};
+pub use ruleset::{RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_json};
 pub use tag::TagPattern;

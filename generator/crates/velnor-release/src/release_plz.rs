@@ -42,7 +42,7 @@ fn check_package(
     Ok(())
 }
 
-fn valid_package_name(name: &str) -> bool {
+pub(crate) fn valid_package_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     bytes
         .next()
