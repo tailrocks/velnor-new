@@ -5,11 +5,12 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
+use std::time::Duration;
 
 use velnor_gen::io::read_files;
-use velnor_model::Toolchain;
+use velnor_model::{ToolPins, Toolchain};
 use velnor_rust::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, mise_files, tool_pins, toolchain};
 
 use super::{append_outputs, append_to, current_dir};
@@ -26,26 +27,15 @@ const NOT_FOUND: u8 = 127;
 const NOT_RUNNABLE: u8 = 126;
 const SIGNAL_BASE: i32 = 128;
 const CHUNK: usize = 8192;
+const PUMP_GRACE: Duration = Duration::from_secs(2);
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
     let files = read_files(&root, &mise_files()).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
-    let output = Command::new("mise")
-        .args(["ls", "--current", "--json"])
-        .current_dir(&root)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot run mise: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "mise ls failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
+    if !pins.tools.is_empty() {
+        check_pinned_tools(&root, &pins)?;
     }
-    check_tools(
-        &pins,
-        &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
-    )?;
     let declared = read_files(&root, &[TOOLCHAIN_PLAIN, TOOLCHAIN_TOML])
         .map_err(|e| CiError::new(e.to_string()))?;
     if let Some(declared) = toolchain(&declared)
@@ -57,6 +47,24 @@ pub(super) fn prepare() -> Result<String, CiError> {
     append_to(ENV_VARIABLE, &env_lines())?;
     append_outputs(&output_lines())?;
     Ok(String::new())
+}
+
+fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
+    let output = Command::new("mise")
+        .args(["ls", "--current", "--json"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| CiError::new(format!("cannot run mise: {e}")))?;
+    if !output.status.success() {
+        return Err(CiError::new(format!(
+            "mise ls failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    check_tools(
+        pins,
+        &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
+    )
 }
 
 fn install_declared(root: &std::path::Path, declared: &Toolchain) -> Result<(), CiError> {
@@ -163,25 +171,36 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             };
             (code, format!("cannot run {}: {e}", args.command[0]))
         })?;
-    let log = Mutex::new(log);
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    thread::scope(|scope| {
-        if let Some(from) = stdout {
-            scope.spawn(|| pump(from, std::io::stdout(), &log));
-        }
-        if let Some(from) = stderr {
-            scope.spawn(|| pump(from, std::io::stderr(), &log));
-        }
-    });
+    let log = Arc::new(Mutex::new(log));
+    let (sender, receiver) = mpsc::channel();
+    let mut streams = 0;
+    if let Some(from) = child.stdout.take() {
+        streams += 1;
+        spawn_pump(from, std::io::stdout(), &log, sender.clone());
+    }
+    if let Some(from) = child.stderr.take() {
+        streams += 1;
+        spawn_pump(from, std::io::stderr(), &log, sender.clone());
+    }
+    drop(sender);
     let status = child
         .wait()
         .map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let code = exit_code(status);
+    let mut pumped = None;
+    for _ in 0..streams {
+        match receiver.recv_timeout(PUMP_GRACE) {
+            Ok(failure) => pumped = pumped.or(failure),
+            Err(_) => break,
+        }
+    }
     let mut log = log
-        .into_inner()
+        .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     writeln!(log, "velnor-ci run: exit {code}").map_err(write_error)?;
+    if let Some(error) = pumped {
+        return Err(write_error(error));
+    }
     Ok(ExitCode::from(u8::try_from(code).unwrap_or(1)))
 }
 
@@ -199,16 +218,37 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-fn pump(mut from: impl Read, mut to: impl Write, log: &Mutex<std::fs::File>) {
+fn spawn_pump(
+    from: impl Read + Send + 'static,
+    to: impl Write + Send + 'static,
+    log: &Arc<Mutex<std::fs::File>>,
+    done: mpsc::Sender<Option<std::io::Error>>,
+) {
+    let log = Arc::clone(log);
+    thread::spawn(move || {
+        done.send(pump(from, to, &log)).ok();
+    });
+}
+
+fn pump(
+    mut from: impl Read,
+    mut to: impl Write,
+    log: &Mutex<std::fs::File>,
+) -> Option<std::io::Error> {
     let mut buffer = [0_u8; CHUNK];
-    while let Ok(read) = from.read(&mut buffer) {
-        if read == 0 {
-            break;
-        }
+    let mut failed = None;
+    loop {
+        let read = match from.read(&mut buffer) {
+            Ok(0) => return failed,
+            Ok(read) => read,
+            Err(error) => return failed.or(Some(error)),
+        };
         let chunk = &buffer[..read];
         to.write_all(chunk).and_then(|()| to.flush()).ok();
-        if let Ok(mut file) = log.lock() {
-            file.write_all(chunk).ok();
+        if let Ok(mut file) = log.lock()
+            && let Err(error) = file.write_all(chunk)
+        {
+            failed.get_or_insert(error);
         }
     }
 }

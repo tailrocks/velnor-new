@@ -52,3 +52,13 @@ fn a_tool_passes_only_when_an_installed_version_equals_the_lock_or_the_pin() {
         assert_eq!(result.is_ok(), ok, "{requested:?} {locked:?} {installed:?}");
     }
 }
+
+#[test]
+fn an_alias_passes_when_mise_reports_it_as_the_request_it_resolved() {
+    let json =
+        "{\"tool\":[{\"version\":\"24.11.1\",\"requested_version\":\"lts\",\"installed\":true}]}";
+    let reported = parse_reported(json).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(check_tools(&pins(&["lts"], &[]), &reported), Ok(()));
+    assert!(check_tools(&pins(&["latest-lts"], &[]), &reported).is_err());
+    assert!(check_tools(&pins(&["lts"], &["24.11.0"]), &reported).is_err());
+}

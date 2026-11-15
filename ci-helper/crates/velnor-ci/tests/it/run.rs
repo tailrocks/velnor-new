@@ -184,3 +184,32 @@ fn run_refuses_a_log_that_is_a_symlink_and_leaves_its_target_alone() {
     assert!(!marker.exists());
     assert_eq!(fs::read_to_string(&target).unwrap_or_default(), "kept");
 }
+
+#[test]
+fn run_fails_when_the_log_cannot_take_the_output() {
+    let temp = scratch("log-full");
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "trap '' XFSZ; ulimit -f 1; exec {} run -- sh -c 'yes x | head -c 100000'",
+            env!("CARGO_BIN_EXE_velnor-ci")
+        ))
+        .env("RUNNER_TEMP", &temp)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cannot write"),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
+    let temp = scratch("background");
+    let started = std::time::Instant::now();
+    let output = run(&temp, &["sh", "-c", "sleep 30 & echo started; exit 4"]);
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    assert_eq!(output.status.code(), Some(4));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
+}

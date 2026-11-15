@@ -21,7 +21,15 @@ pub const COMPAT: &str = "compat";
 pub struct Installed {
     version: String,
     #[serde(default)]
-    installed: bool,
+    requested_version: Option<String>,
+    #[serde(default, rename = "installed")]
+    present: bool,
+}
+
+impl Installed {
+    fn satisfies(&self, wanted: &str) -> bool {
+        same_version(wanted, &self.version) || self.requested_version.as_deref() == Some(wanted)
+    }
 }
 
 pub type Reported = BTreeMap<String, Vec<Installed>>;
@@ -57,11 +65,11 @@ pub fn check_tools(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> 
                 .get(name)
                 .into_iter()
                 .flatten()
-                .filter(|entry| entry.installed)
+                .filter(|entry| entry.present)
                 .collect();
             let agrees = found
                 .iter()
-                .any(|entry| wanted.iter().any(|want| same_version(want, &entry.version)));
+                .any(|entry| wanted.iter().any(|want| entry.satisfies(want)));
             if agrees {
                 None
             } else {

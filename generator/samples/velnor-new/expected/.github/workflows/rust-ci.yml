@@ -79,60 +79,61 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-actions-actionlint alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-actionlint --locked
       - name: Check velnor-actions-ansible alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-ansible --locked
       - name: Check velnor-actions-bun alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-bun --locked
       - name: Check velnor-actions-cli alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-cli --locked
       - name: Check velnor-actions-contract alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-contract --locked
       - name: Check velnor-actions-dbt alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-dbt --locked
       - name: Check velnor-actions-freshness alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-freshness --locked
       - name: Check velnor-actions-gradle alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-gradle --locked
       - name: Check velnor-actions-mise alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-mise --locked
       - name: Check velnor-actions-orchestrator alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-orchestrator --locked
       - name: Check velnor-actions-rust alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-rust --locked
       - name: Check velnor-actions-tofu alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-tofu --locked
       - name: Check velnor-actions-workflow-renderer alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-workflow-renderer --locked
       - name: Check velnor-archive-guard alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: velnor-ci run -- cargo check -p velnor-archive-guard --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-ci_helper:
@@ -171,25 +172,26 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' && needs.rust-plan.outputs.rust_ci_helper_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' && needs.rust-plan.outputs.rust_ci_helper_docs == ''run'' }}'
         working-directory: ci-helper
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-ci alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         run: velnor-ci run -- cargo check -p velnor-ci --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
@@ -229,53 +231,54 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' && needs.rust-plan.outputs.rust_crates_velnor_runner_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' && needs.rust-plan.outputs.rust_crates_velnor_runner_docs == ''run'' }}'
         working-directory: crates/velnor-runner
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-resource-probe alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-resource-probe --locked
       - name: Check velnor-runner-attestation alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-attestation --locked
       - name: Check velnor-runner-cli alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-cli --locked
       - name: Check velnor-runner-core alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-core --locked
       - name: Check velnor-runner-github alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-github --locked
       - name: Check velnor-runner-host alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-host --locked
       - name: Check velnor-runner-image-manifest alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-image-manifest --locked
       - name: Check velnor-runner-qualification alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         run: velnor-ci run -- cargo check -p velnor-runner-qualification --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
@@ -315,37 +318,38 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_generator_mode != ''none'' && needs.rust-plan.outputs.rust_generator_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'' && needs.rust-plan.outputs.rust_generator_docs == ''run'' }}'
         working-directory: generator
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-gen alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo check -p velnor-gen --locked
       - name: Check velnor-model alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo check -p velnor-model --locked
       - name: Check velnor-render alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo check -p velnor-render --locked
       - name: Check velnor-rust alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         run: velnor-ci run -- cargo check -p velnor-rust --locked
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
@@ -385,29 +389,30 @@ jobs:
         id: prepare
         run: velnor-ci prepare
       - name: velnor-ci restored
+        id: restored
         run: velnor-ci restored
       - name: Format
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E ''all()'''
       - name: Documentation
-        if: '${{ !cancelled() && needs.rust-plan.outputs.rust_local_mode != ''none'' && needs.rust-plan.outputs.rust_local_docs == ''run'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'' && needs.rust-plan.outputs.rust_local_docs == ''run'' }}'
         working-directory: local
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-cache-rules alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         run: velnor-ci run -- cargo check -p velnor-cache-rules --locked
       - name: Check velnor-local alone
-        if: '${{ !cancelled() }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         run: velnor-ci run -- cargo check -p velnor-local --locked
   required:

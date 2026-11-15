@@ -185,3 +185,87 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     assert_eq!(GENERATED_PATHS.len(), 2);
     Ok(())
 }
+
+#[test]
+fn a_file_cargo_would_discover_as_a_target_after_the_file_was_written_is_refused() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    for added in [
+        "core/src/lib.rs",
+        "core/src/main.rs",
+        "core/src/bin/tool.rs",
+        "core/src/bin/tool/main.rs",
+        "core/tests/it.rs",
+        "core/examples/demo/main.rs",
+        "core/benches/speed.rs",
+        "core/build.rs",
+        "src/main.rs",
+    ] {
+        let mut grown = files.clone();
+        grown.tracked_paths.insert(path(added)?);
+        assert_eq!(
+            recorded_metadata(&grown, Some(text.as_bytes())),
+            Err(MetadataFileError::Layout),
+            "{added}"
+        );
+    }
+    for added in [
+        "core/tests/common/mod.rs",
+        "core/src/util.rs",
+        "docs/example.rs",
+        "core/readme.md",
+    ] {
+        let mut grown = files.clone();
+        grown.tracked_paths.insert(path(added)?);
+        assert_eq!(
+            recorded_metadata(&grown, Some(text.as_bytes()))?,
+            files.rust_metadata,
+            "{added}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_manifest_without_a_digest_in_the_file_is_refused() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    for manifest in ["Cargo.toml", "core/Cargo.toml", "tool/Cargo.toml"] {
+        let mut value: serde_json::Value = serde_json::from_str(&text)?;
+        value["manifests"]
+            .as_object_mut()
+            .ok_or("manifests")?
+            .remove(manifest);
+        assert_eq!(
+            recorded_metadata(&files, Some(value.to_string().as_bytes())),
+            Err(MetadataFileError::Unlisted(path(manifest)?)),
+            "{manifest}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn only_a_rust_file_in_a_discovered_folder_changes_the_recorded_layout() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let mut notes = files.clone();
+    notes.tracked_paths.insert(path("core/tests/notes.txt")?);
+    notes
+        .files
+        .insert(path("core/tests/notes.txt")?, b"notes\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&notes, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    let mut extra = files.clone();
+    extra.tracked_paths.insert(path("core/tests/extra.rs")?);
+    extra
+        .files
+        .insert(path("core/tests/extra.rs")?, b"fn main() {}\n".to_vec());
+    assert_eq!(
+        recorded_metadata(&extra, Some(text.as_bytes())),
+        Err(MetadataFileError::Layout)
+    );
+    Ok(())
+}
