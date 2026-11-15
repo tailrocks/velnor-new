@@ -15,7 +15,7 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
     reservation_id: i64,
     context: ScopedPrepareContext<'_, P>,
 ) -> ScopedRuntimeOutcome {
-    let cleaned = Box::pin(
+    let outcome = Box::pin(
         super::super::bootstrap::remove_bootstrap_after_terminal_failure(
             context.docker,
             context.scoped,
@@ -26,8 +26,8 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
             context.provider,
         ),
     )
-    .await
-    .unwrap_or(false);
+    .await;
+    let cleaned = cleaned_or_logged(reservation_id, outcome, |line| eprintln!("{line}"));
     super::pending(
         prepared,
         Some(network),
@@ -35,6 +35,20 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
         if cleaned { None } else { pending_pair },
         error,
     )
+}
+
+fn cleaned_or_logged(
+    reservation_id: i64,
+    outcome: Result<bool, HostError>,
+    log: impl FnOnce(String),
+) -> bool {
+    match outcome {
+        Ok(cleaned) => cleaned,
+        Err(cleanup) => {
+            log(super::cleanup_failure_line(reservation_id, cleanup));
+            false
+        }
+    }
 }
 
 pub(super) async fn bind_started<P: ImageProvider>(
@@ -97,4 +111,28 @@ pub(super) async fn bind_started<P: ImageProvider>(
             guest_boot_id,
         },
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cleaned_or_logged;
+    use crate::error::HostError;
+
+    #[test]
+    fn a_failed_pair_cleanup_is_logged_and_not_reported_as_cleaned() {
+        let mut logged = Vec::new();
+        let cleaned = cleaned_or_logged(9, Err(HostError::Journal), |line| logged.push(line));
+        assert!(!cleaned);
+        assert_eq!(
+            logged,
+            ["host controller pair cleanup failed reservation=9 reason=journal"]
+        );
+    }
+
+    #[test]
+    fn a_clean_pair_cleanup_is_not_logged() {
+        let mut logged = Vec::new();
+        assert!(cleaned_or_logged(9, Ok(true), |line| logged.push(line)));
+        assert_eq!(logged, Vec::<String>::new());
+    }
 }

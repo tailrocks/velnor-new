@@ -22,6 +22,8 @@ mod digest_hex;
 mod docker_client;
 mod docker_spec;
 mod error;
+#[cfg(test)]
+mod error_tests;
 mod helper_supervisor;
 mod host_controller;
 mod https;
@@ -67,7 +69,7 @@ pub use docker_client::connect_unix;
 pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
-pub use error::{HostError, PreparationCause};
+pub use error::{ErrorDetail, HostError, PreparationCause};
 pub use host_controller::run_host_blocking;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};

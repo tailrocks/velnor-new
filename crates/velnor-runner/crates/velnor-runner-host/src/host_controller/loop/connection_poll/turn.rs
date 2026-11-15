@@ -215,19 +215,20 @@ async fn execute_poll(
         prepared.cursor_for_poll(std::time::Instant::now())
     });
     let outcome = match plan {
-        HeaderPollPlan::Positive => Box::pin(poll_positive_connection(
-            prepared,
-            &poll.allocation,
-            &poll_context,
-            context
-                .control_state
-                .readiness_sample(context.selected_engine, std::time::Instant::now())
-                .ok()
-                .flatten()
-                .and_then(|sample| sample.pressure_sample()),
-        ))
-        .await
-        .map_err(|_| HostError::Journal),
+        HeaderPollPlan::Positive => {
+            Box::pin(poll_positive_connection(
+                prepared,
+                &poll.allocation,
+                &poll_context,
+                context
+                    .control_state
+                    .readiness_sample(context.selected_engine, std::time::Instant::now())
+                    .ok()
+                    .flatten()
+                    .and_then(|sample| sample.pressure_sample()),
+            ))
+            .await
+        }
         HeaderPollPlan::Zero { cursor } => {
             let retired_binding = pending_retirements
                 .iter()
@@ -249,7 +250,6 @@ async fn execute_poll(
                 );
                 ControllerPollOutcome::from_scoped(outcome, cursor)
             })
-            .map_err(|_| HostError::Journal)
         }
     };
     match outcome {

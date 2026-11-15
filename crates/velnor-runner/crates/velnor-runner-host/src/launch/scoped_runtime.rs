@@ -226,6 +226,14 @@ fn pending(
     pending_with_initialization(prepared, network, started, pending_pair, None, failure)
 }
 
+fn held_preparation_line(reservation_id: i64, failure: HostError) -> String {
+    format!("host controller pair preparation held reservation={reservation_id} reason={failure}")
+}
+
+fn cleanup_failure_line(reservation_id: i64, failure: HostError) -> String {
+    format!("host controller pair cleanup failed reservation={reservation_id} reason={failure}")
+}
+
 fn pending_with_initialization(
     prepared: PreparedAcquiredBootstrap,
     network: Option<RecordedStorageNetwork>,
@@ -234,7 +242,10 @@ fn pending_with_initialization(
     initialization: Option<VerifiedStorageInitializationReady>,
     failure: HostError,
 ) -> ScopedRuntimeOutcome {
-    let _ = &failure;
+    eprintln!(
+        "{}",
+        held_preparation_line(prepared.acquired().reservation_id(), failure)
+    );
     ScopedRuntimeOutcome::Pending(Box::new(PendingScopedBootstrap {
         prepared,
         _network: network,
@@ -242,4 +253,26 @@ fn pending_with_initialization(
         _pending_pair: pending_pair,
         _initialization: initialization,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cleanup_failure_line, held_preparation_line};
+    use crate::error::{ErrorDetail, HostError};
+
+    #[test]
+    fn the_held_line_names_the_reservation_and_the_real_reason() {
+        let failure = HostError::Helper(ErrorDetail::from_bytes(b"probe_failed"));
+        let line = held_preparation_line(7, failure);
+        assert!(line.contains("reservation=7"), "{line}");
+        assert!(line.contains("probe_failed"), "{line}");
+    }
+
+    #[test]
+    fn the_cleanup_line_names_the_reservation_and_the_cleanup_reason() {
+        let failure = HostError::Helper(ErrorDetail::from_bytes(b"cleanup_probe_failed"));
+        let line = cleanup_failure_line(9, failure);
+        assert!(line.contains("reservation=9"), "{line}");
+        assert!(line.contains("cleanup_probe_failed"), "{line}");
+    }
 }
