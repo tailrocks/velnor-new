@@ -197,3 +197,31 @@ async fn reading_a_journal_with_uncheckpointed_wal_frames_changes_nothing() -> T
     assert_eq!(snapshot(state.path())?, before);
     Ok(())
 }
+
+#[tokio::test]
+async fn reading_a_journal_whose_files_are_read_only_still_succeeds() -> TestResult<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let state = tempfile::tempdir()?;
+    let journal = fixture(state.path()).await?;
+    journal
+        .connection()
+        .await?
+        .execute("PRAGMA wal_autocheckpoint = 0", ())
+        .await?;
+    drop(journal);
+    let read_only = std::fs::Permissions::from_mode(0o444);
+    for name in ["launch.db", "launch.db-wal"] {
+        std::fs::set_permissions(state.path().join(name), read_only.clone())?;
+    }
+    let path = state.path().to_owned();
+    let shown = tokio::task::spawn_blocking(move || show_reservations(&path, None)).await?;
+    for name in ["launch.db", "launch.db-wal"] {
+        std::fs::set_permissions(
+            state.path().join(name),
+            std::fs::Permissions::from_mode(0o644),
+        )?;
+    }
+    assert_eq!(lines(&shown?), [recovered_line(), BARE_LINE.to_owned()]);
+    Ok(())
+}
