@@ -56,7 +56,6 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
-    BuildExecutable,
 }
 
 impl DetectError {
@@ -118,9 +117,6 @@ impl fmt::Display for Reason {
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
-            ),
-            Self::BuildExecutable => f.write_str(
-                "build.rustc, build.rustdoc and the build wrappers replace the programs the checks run; remove them",
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",

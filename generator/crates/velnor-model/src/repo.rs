@@ -73,6 +73,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub weakenings: Vec<Weakening>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -85,6 +86,19 @@ impl PolicyTools {
     #[must_use]
     pub fn any(self) -> bool {
         self.deny || self.machete
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Weakening {
+    pub file: RepoPath,
+    pub setting: String,
+    pub effect: String,
+}
+
+impl fmt::Display for Weakening {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}: {}", self.file, self.setting, self.effect)
     }
 }
 

@@ -8,8 +8,8 @@ use std::path::Path;
 use velnor_gen::io::{Checkout, Error as GenError, read_files, read_recorded_checkout};
 use velnor_model::{AllTrigger, ChangeSet, RepoFacts, RepoPath, RustSelection};
 use velnor_rust::{
-    cargo_files, detect, optional_steps, policy_runs, root_sources, select, unknown_paths,
-    unread_packages,
+    cargo_files, detect, introduced, optional_steps, policy_runs, root_sources, select,
+    unknown_paths, unread_packages,
 };
 
 use super::{
@@ -21,7 +21,7 @@ use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
 use crate::event::{Event, PullRequest, check_default_branch, parse_event};
 use crate::github::Repo;
-use crate::plan::{Steps, explain, outputs};
+use crate::plan::{Steps, explain, outputs, warnings, weakened};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
@@ -65,16 +65,18 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let policy = policy_runs(facts.policy, &changes.paths, everything);
     let outputs = outputs(&selections, &steps, policy)?;
     append_outputs(&outputs)?;
-    Ok(if args.explain {
+    let new = introduced(&facts, &changes);
+    let report = if args.explain {
         explain(
             &selections,
             &steps,
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
-        )
+        ) + &weakened(&facts.weakenings, &new)
     } else {
         outputs
-    })
+    };
+    Ok(report + &warnings(&new))
 }
 
 fn everything(
@@ -147,6 +149,16 @@ fn pull_request_changes(
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
         .filter(|path| paths.contains(path) && (is_lock(path) || roots.contains(path)))
+        .chain(
+            facts
+                .weakenings
+                .iter()
+                .map(|weakening| &weakening.file)
+                .filter(|file| paths.contains(file))
+                .cloned(),
+        )
+        .collect::<BTreeSet<RepoPath>>()
+        .into_iter()
         .collect();
     let base = base_files(&github, &repo, pull, &wanted);
     Ok((paths, base))

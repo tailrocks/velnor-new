@@ -19,6 +19,7 @@ use crate::select::root_slug;
 use crate::timings::{TIMINGS_PATH, parse_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
+use crate::weaken::{is_nextest_config, weakenings};
 
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
@@ -36,7 +37,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .into_iter()
     .chain(MISE_CONFIGS.iter().cloned())
     .filter(|path| tracked.contains(path))
-    .chain(tracked.iter().filter(|path| is_cargo_config(path)).cloned())
+    .chain(
+        tracked
+            .iter()
+            .filter(|path| is_cargo_config(path) || is_nextest_config(path))
+            .cloned(),
+    )
     .collect()
 }
 
@@ -119,6 +125,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
+        weakenings: weakenings(&view.files),
     })
 }
 

@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread,
+    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, StepNeed, Unread, Weakening,
 };
 use velnor_rust::{CONFIG_PATH, PolicyRuns, root_slug};
 
@@ -77,6 +77,57 @@ fn cargo_name(name: &str) -> bool {
 }
 
 #[must_use]
+pub fn weakened(all: &[Weakening], new: &[Weakening]) -> String {
+    let mut lines = Vec::new();
+    for weakening in all {
+        let marker = if new.contains(weakening) {
+            " (new in this change)"
+        } else {
+            ""
+        };
+        lines.push(format!(
+            "check does less: {}: {}: {}{marker}\n",
+            escape(weakening.file.as_str(), false),
+            escape(&weakening.setting, false),
+            escape(&weakening.effect, false),
+        ));
+    }
+    lines.concat()
+}
+
+#[must_use]
+pub fn warnings(new: &[Weakening]) -> String {
+    let mut lines = Vec::new();
+    for weakening in new {
+        lines.push(format!(
+            "::warning file={}::this pull request {} ({})\n",
+            escape(weakening.file.as_str(), true),
+            escape(&weakening.effect, false),
+            escape(&weakening.setting, false),
+        ));
+    }
+    lines.concat()
+}
+
+fn inert(text: &str) -> String {
+    escape(text, false).replace(':', "%3A")
+}
+
+fn escape(text: &str, property: bool) -> String {
+    text.chars()
+        .map(|c| match c {
+            '%' => "%25".to_owned(),
+            '\r' => "%0D".to_owned(),
+            '\n' => "%0A".to_owned(),
+            ':' if property => "%3A".to_owned(),
+            ',' if property => "%2C".to_owned(),
+            control if control.is_control() => format!("%{:02X}", u32::from(control)),
+            other => other.to_string(),
+        })
+        .collect()
+}
+
+#[must_use]
 pub fn explain(
     selections: &BTreeMap<RepoPath, RustSelection>,
     steps: &Steps,
@@ -93,9 +144,9 @@ pub fn explain(
             }
             RustSelection::All(trigger) => (trigger.to_string(), None),
         };
-        lines.push(format!("{root}: {header}\n"));
+        lines.push(format!("{}: {header}\n", inert(root.as_str())));
         for (package, reason) in packages.into_iter().flatten() {
-            lines.push(format!("  {package} {reason}\n"));
+            lines.push(format!("  {} {reason}\n", inert(&package.to_string())));
         }
         let selected = !matches!(selection, RustSelection::None);
         for (step, need) in steps

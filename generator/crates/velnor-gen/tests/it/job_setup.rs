@@ -340,8 +340,6 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
         "[build]\ntarget = \"wasm32-unknown-unknown\"\n",
         "[build]\nrustflags = [\"@rustflags.args\"]\n",
         "[build]\nrustflags = [\"--force-warn\", \"unused-variables\"]\n",
-        "[build]\nrustdoc = \"/bin/true\"\n",
-        "[build]\nrustc-wrapper = \"/bin/true\"\n",
     ];
     let accepted = [
         "[env]\nANY_NAME = \"x\"\n",

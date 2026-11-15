@@ -106,9 +106,7 @@ jobs:
         run: 'velnor-ci run -- cargo-nextest nextest run $PACKAGE_ARGS --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER"'
       - name: Doctests
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' }}'
-        env:
-          PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'
-        run: 'velnor-ci run -- cargo test --doc $PACKAGE_ARGS --locked'
+        run: velnor-ci run -- cargo test --doc --workspace --locked
       - name: Documentation
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:

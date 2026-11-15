@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::plan::Steps;
-use velnor_ci::plan::{explain, outputs};
+use velnor_ci::plan::{explain, outputs, warnings, weakened};
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, SelectionReason, SkipReason,
-    StepNeed,
+    StepNeed, Weakening,
 };
 use velnor_rust::PolicyRuns;
 
@@ -166,11 +166,55 @@ fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_pack
             (name(bad), SelectionReason::DependsOn(name("a"))),
         ]);
         let selections = BTreeMap::from([(path("Cargo.toml"), RustSelection::Some(selected))]);
-        let written =
-            outputs(&selections, &BTreeMap::new()).unwrap_or_else(|e| unreachable!("{e}"));
+        let written = outputs(&selections, &BTreeMap::new(), PolicyRuns::default())
+            .unwrap_or_else(|e| unreachable!("{e}"));
         assert!(
             written.contains("rust_root_package_args=--workspace\n"),
             "{bad:?}: {written}"
         );
     }
+}
+
+#[test]
+fn a_warning_annotation_escapes_the_characters_a_workflow_command_reads() {
+    let weakening = Weakening {
+        file: path("a,b/c:d.toml"),
+        setting: "x = \"100%\"\ny".to_owned(),
+        effect: "runs it\r".to_owned(),
+    };
+    assert_eq!(
+        warnings(std::slice::from_ref(&weakening)),
+        "::warning file=a%2Cb/c%3Ad.toml::this pull request runs it%0D (x = \"100%25\"%0Ay)\n"
+    );
+    assert_eq!(warnings(&[]), "");
+}
+
+#[test]
+fn a_weakening_printed_by_explain_cannot_forge_a_workflow_command() {
+    let hostile = Weakening {
+        file: path("a/Cargo.toml"),
+        setting: "p\n::warning::FORGED\r::error::FORGED2\n::stop-commands::tok 100%".to_owned(),
+        effect: "\n::warning::FORGED3\u{1b}[0m".to_owned(),
+    };
+    let text = weakened(
+        std::slice::from_ref(&hostile),
+        std::slice::from_ref(&hostile),
+    );
+    assert_eq!(text.matches('\n').count(), 1, "{text:?}");
+    assert!(!text.contains('\r') && !text.contains('\u{1b}'), "{text:?}");
+    assert!(text.starts_with("check does less: "), "{text:?}");
+    assert!(text.contains("100%25"), "{text:?}");
+    assert!(text.contains("%0A::warning::FORGED"), "{text:?}");
+
+    let selections = BTreeMap::from([(path("::warning::x/Cargo.toml"), RustSelection::None)]);
+    let explained = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::new(),
+        &BTreeMap::new(),
+    );
+    assert!(
+        explained.lines().all(|line| !line.starts_with("::")),
+        "{explained:?}"
+    );
 }
