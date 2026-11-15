@@ -62,7 +62,10 @@ fn the_ruleset_protects_the_tags_of_packages_that_inherit_the_workspace_settings
 fn settings_every_unlisted_package_inherits_are_checked_on_the_workspace() -> TestResult {
     let error = plz_refusal("semver_check = false\n", "semver_check = true\n")?;
     assert!(
-        matches!(error, Some(ReleaseError::SemverCheckNotFalse { .. })),
+        matches!(
+            error,
+            Some(ReleaseError::SemverCheckNotFalse { package: Some(ref package), .. }) if package == "app"
+        ),
         "{error:?}"
     );
     let listed = edit(

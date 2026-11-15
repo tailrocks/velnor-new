@@ -96,10 +96,7 @@ fn workspace_wide_tag_patterns_of_two_roots_that_can_collide_are_refused() -> Te
     }
     let error = refusal(&files);
     assert!(
-        matches!(
-            error,
-            Some(ReleaseError::TagsMayCollide { .. } | ReleaseError::DuplicateTagPattern { .. })
-        ),
+        matches!(error, Some(ReleaseError::DuplicateTagPattern { .. })),
         "{error:?}"
     );
     files.release_plz_toml.insert(
