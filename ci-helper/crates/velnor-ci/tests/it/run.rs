@@ -24,6 +24,17 @@ fn run(temp: &Path, command: &[&str]) -> Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+fn run_with_grace(temp: &Path, millis: &str, command: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("run")
+        .arg("--")
+        .args(command)
+        .env("RUNNER_TEMP", temp)
+        .env("VELNOR_CI_RUN_PUMP_GRACE_MS", millis)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
 fn log(temp: &Path) -> String {
     fs::read_to_string(temp.join("velnor-run.log")).unwrap_or_default()
 }
@@ -265,7 +276,11 @@ fn run_fails_when_the_log_cannot_take_the_output() {
 fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
     let temp = scratch("background");
     let started = std::time::Instant::now();
-    let output = run(&temp, &["sh", "-c", "sleep 30 & echo started; exit 4"]);
+    let output = run_with_grace(
+        &temp,
+        "200",
+        &["sh", "-c", "sleep 30 & echo started; exit 4"],
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
     assert_eq!(output.status.code(), Some(4));
     assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");

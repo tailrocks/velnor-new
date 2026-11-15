@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
@@ -26,6 +26,14 @@ const NOT_FOUND: u8 = 127;
 const NOT_RUNNABLE: u8 = 126;
 const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
+const PUMP_GRACE_VARIABLE: &str = "VELNOR_CI_RUN_PUMP_GRACE_MS";
+
+fn pump_grace() -> Duration {
+    std::env::var(PUMP_GRACE_VARIABLE)
+        .ok()
+        .and_then(|millis| millis.parse().ok())
+        .map_or(PUMP_GRACE, Duration::from_millis)
+}
 
 fn log_path() -> Result<PathBuf, (u8, String)> {
     std::env::var_os(TEMP_VARIABLE)
@@ -150,8 +158,9 @@ fn collect(
 ) -> (Option<std::io::Error>, Option<u64>) {
     let mut lost = None;
     let mut tests_run = None;
+    let deadline = Instant::now() + pump_grace();
     for _ in 0..streams {
-        match receiver.recv_timeout(PUMP_GRACE) {
+        match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(pumped) => {
                 lost = lost.or(pumped.failure);
                 tests_run = pumped.tests_run.or(tests_run);

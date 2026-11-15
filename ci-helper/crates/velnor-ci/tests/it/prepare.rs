@@ -87,7 +87,13 @@ pub(crate) struct Run {
 }
 
 fn script(path: &Path, body: &str) {
-    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap_or_else(|e| unreachable!("{e}"));
+    let text = format!("#!/bin/sh\n{body}\n");
+    let unchanged = fs::read_to_string(path).is_ok_and(|have| have == text)
+        && fs::metadata(path).is_ok_and(|meta| meta.permissions().mode() & 0o111 != 0);
+    if unchanged {
+        return;
+    }
+    fs::write(path, text).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
