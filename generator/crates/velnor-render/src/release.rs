@@ -138,8 +138,8 @@ pub(crate) fn after_the_gate(id: &str, runner: &str) -> RenderedJob {
 }
 
 fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
-    let mut steps = vec![checkout(VERIFIED_COMMIT, 0)];
-    steps.extend(install_release_plz(&plan.release_plz_version));
+    let mut steps = install_release_plz(&plan.release_plz_version);
+    steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "write"),
@@ -166,9 +166,9 @@ fn release_pr(plan: &ReleasePlan, runner: &str) -> RenderedJob {
 }
 
 fn tag(plan: &ReleasePlan, runner: &str, helper: &HelperRelease) -> RenderedJob {
-    let mut steps = vec![checkout(VERIFIED_COMMIT, 0)];
-    steps.extend(install_release_plz(&plan.release_plz_version));
+    let mut steps = install_release_plz(&plan.release_plz_version);
     steps.push(install_helper(helper));
+    steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),

@@ -12,7 +12,7 @@ use velnor_rust::{LOCK_PATH, wanted_files};
 
 use crate::release_fixture::{
     APP, DEFAULT_BRANCH, GREEN, PUSH, READY, Root, app, conjuncts, dashed, jobs, release_view,
-    steps, two_binaries, two_roots,
+    steps, two_binaries, two_roots, uses,
 };
 use crate::yaml_tree::Node;
 
@@ -33,6 +33,12 @@ fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Err
         })
         .max_by_key(|package| package.len())
         .ok_or_else(|| format!("no package for {id}").into())
+}
+
+fn checkout_of(all: &[Node]) -> Result<&Node, Box<dyn Error>> {
+    all.iter()
+        .find(|step| uses(step).is_some_and(|u| u.starts_with("actions/checkout@")))
+        .ok_or_else(|| "no checkout".into())
 }
 
 #[test]
@@ -141,7 +147,9 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
     );
     let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
     assert_eq!(
-        steps(tag)[0].at(&["with", "ref"]).and_then(Node::text),
+        checkout_of(steps(tag))?
+            .at(&["with", "ref"])
+            .and_then(Node::text),
         Some("${{ github.event.workflow_run.head_sha }}")
     );
     Ok(())
@@ -164,7 +172,9 @@ fn release_yml_release_pr_checks_out_the_verified_commit_and_runs_only_while_it_
     for (_, tree) in [app()?, two_roots()?] {
         let pr = tree.at(&["jobs", "release-pr"]).ok_or("no release-pr")?;
         assert_eq!(
-            steps(pr)[0].at(&["with", "ref"]).and_then(Node::text),
+            checkout_of(steps(pr))?
+                .at(&["with", "ref"])
+                .and_then(Node::text),
             Some("${{ github.event.workflow_run.head_sha }}")
         );
         assert!(conjuncts(pr).contains(NEWEST));
@@ -251,6 +261,39 @@ fn release_yml_refuses_a_root_that_would_add_a_second_command() -> TestResult {
         expected_files(&view),
         Err(GenerateError::Rules(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn release_yml_refuses_a_runner_the_pinned_mise_digest_does_not_fit() -> TestResult {
+    for (runner, refused) in [
+        ("ubuntu-latest", false),
+        ("ubuntu-24.04", false),
+        ("ubuntu-24.04-arm", true),
+        ("macos-15", true),
+        ("self-hosted", true),
+    ] {
+        let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+        view.files.insert(
+            velnor_rust::CONFIG_PATH,
+            format!("runner = {runner:?}\n").into_bytes(),
+        );
+        let got = expected_files(&view);
+        match got {
+            Err(GenerateError::Rules(found)) => {
+                assert!(refused, "{runner}");
+                assert!(
+                    found
+                        .iter()
+                        .all(|v| matches!(v.rule, velnor_render::Rule::TokenJobRunnerNotX64(_)))
+                );
+                assert!(found.iter().any(|v| v.job == "release-pr"));
+                assert!(found.iter().any(|v| v.job == "tag"));
+            }
+            Ok(_) => assert!(!refused, "{runner}"),
+            Err(other) => return Err(other.into()),
+        }
+    }
     Ok(())
 }
 

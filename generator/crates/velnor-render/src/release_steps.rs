@@ -55,39 +55,64 @@ pub(crate) fn install_tool(tool: &str) -> RenderedStep {
     }
 }
 
-const MISE_ISOLATED: &str = "mise --no-config --no-env --no-hooks";
+pub(crate) const MISE_BIN: &str = "\"$RUNNER_TEMP/mise\"";
+const MISE_ISOLATED: &str = "--no-config --no-env --no-hooks";
 pub(crate) const RELEASE_PLZ_BACKEND: &str = "aqua:release-plz/release-plz";
+pub(crate) const TOOLCHAIN: &str = "stable";
 
 pub(crate) fn release_plz_spec(version: &str) -> String {
     format!("{RELEASE_PLZ_BACKEND}@{version}")
 }
 
+fn run_step(name: &str, run: String, env: Vec<(String, Value)>) -> RenderedStep {
+    RenderedStep {
+        name: name.to_owned(),
+        env,
+        run: Some(run),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn install_release_plz(version: &str) -> Vec<RenderedStep> {
+    let url = format!(
+        "https://github.com/jdx/mise/releases/download/v{MISE_VERSION}/mise-v{MISE_VERSION}-linux-x64"
+    );
     vec![
-        RenderedStep {
-            name: "Install mise".to_owned(),
-            uses: Some(MISE.to_owned()),
-            with: vec![
-                ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-                (
-                    "sha256".to_owned(),
-                    Value::Text(MISE_BINARY_SHA256_LINUX_X64.to_owned()),
-                ),
-                ("install".to_owned(), Value::Bool(false)),
-                ("env".to_owned(), Value::Bool(false)),
-                ("cache".to_owned(), Value::Bool(false)),
-                ("cache_save".to_owned(), Value::Bool(false)),
-            ],
-            ..RenderedStep::default()
-        },
-        RenderedStep {
-            name: format!("Install release-plz {version}"),
-            run: Some(format!(
-                "{MISE_ISOLATED} install {}",
+        run_step(
+            "Download mise",
+            format!("curl --fail --silent --show-error --location --output {MISE_BIN} {url}"),
+            Vec::new(),
+        ),
+        run_step(
+            "Write the mise digest",
+            format!(
+                "printf '%s  %s/mise\\n' {MISE_BINARY_SHA256_LINUX_X64} \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/mise.sha256\""
+            ),
+            Vec::new(),
+        ),
+        run_step(
+            "Verify the mise digest",
+            "sha256sum --check \"$RUNNER_TEMP/mise.sha256\"".to_owned(),
+            Vec::new(),
+        ),
+        run_step(
+            "Make mise executable",
+            format!("chmod 0755 {MISE_BIN}"),
+            Vec::new(),
+        ),
+        run_step(
+            "Install the Rust toolchain",
+            format!("rustup toolchain install {TOOLCHAIN} --profile minimal --no-self-update"),
+            Vec::new(),
+        ),
+        run_step(
+            &format!("Install release-plz {version}"),
+            format!(
+                "{MISE_BIN} {MISE_ISOLATED} install {}",
                 release_plz_spec(version)
-            )),
-            ..RenderedStep::default()
-        },
+            ),
+            Vec::new(),
+        ),
     ]
 }
 
@@ -125,6 +150,10 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
 
 pub(crate) fn release_plz_step(name: String, version: &str, run: &str) -> RenderedStep {
     let mut env = variables(&[("GITHUB_TOKEN", APP_TOKEN_OUTPUT)]);
+    env.push((
+        "RUSTUP_TOOLCHAIN".to_owned(),
+        Value::Text(TOOLCHAIN.to_owned()),
+    ));
     env.extend(
         NO_PROGRAM_VARIABLES
             .iter()
@@ -134,7 +163,7 @@ pub(crate) fn release_plz_step(name: String, version: &str, run: &str) -> Render
         name,
         env,
         run: Some(format!(
-            "{MISE_ISOLATED} exec {} -- {run}",
+            "{MISE_BIN} {MISE_ISOLATED} exec {} -- {run}",
             release_plz_spec(version)
         )),
         ..RenderedStep::default()

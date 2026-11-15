@@ -96,6 +96,12 @@ pub enum ReleaseError {
     CargoCredentialProvider {
         file: String,
     },
+    CargoRedirectsCratesIo {
+        file: String,
+    },
+    ToolchainFromPath {
+        file: String,
+    },
     DuplicatePackageName {
         package: String,
         roots: Vec<String>,
@@ -273,7 +279,15 @@ impl ReleaseError {
             ),
             Self::CargoCredentialProvider { file } => write!(
                 f,
-                "{file}: a cargo credential provider would run next to the crates.io publish token"
+                "{file}: a cargo credential provider or alias makes cargo run a program while release-plz holds the release App token"
+            ),
+            Self::CargoRedirectsCratesIo { file } => write!(
+                f,
+                "{file}: a cargo proxy or CA override would redirect the crates.io publish token"
+            ),
+            Self::ToolchainFromPath { file } => write!(
+                f,
+                "{file}: a toolchain taken from a path makes rustup run repository code while release-plz holds the release App token"
             ),
             Self::CargoRunsProgram { file, key } => write!(
                 f,

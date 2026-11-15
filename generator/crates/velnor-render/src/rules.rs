@@ -14,9 +14,11 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
-    "jdx/mise-action",
+    MISE_ACTION,
     SETUP_VELNOR_ACTION,
 ];
+
+pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 
@@ -83,6 +85,9 @@ pub enum Rule {
     NotExactlyOneOfRunAndUses,
     ActionNotAllowed(String),
     ActionNotPinned(String),
+    MiseActionInTokenJob,
+    MiseReadsRepositoryConfig,
+    TokenJobRunnerNotX64(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +120,16 @@ impl fmt::Display for RuleViolation {
             Rule::ActionNotPinned(action) => {
                 write!(f, "action {action} is not pinned to a full commit SHA")
             }
+            Rule::MiseActionInTokenJob => f.write_str(
+                "a job that holds the release App token uses jdx/mise-action, which reads the repository's mise config",
+            ),
+            Rule::MiseReadsRepositoryConfig => f.write_str(
+                "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
+            ),
+            Rule::TokenJobRunnerNotX64(runner) => write!(
+                f,
+                "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"
+            ),
         }
     }
 }
@@ -124,19 +139,65 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
         .jobs
         .iter()
         .flat_map(|job| {
-            job.steps.iter().enumerate().flat_map(move |(index, step)| {
-                step_rules(step).into_iter().map(move |rule| RuleViolation {
+            let holds_token = holds_app_token(job);
+            let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
+                let mut rules = step_rules(step);
+                if holds_token {
+                    token_step_rules(step, &mut rules);
+                }
+                rules.into_iter().map(move |rule| RuleViolation {
                     job: job.id.clone(),
                     step: index,
                     rule,
                 })
-            })
+            });
+            let runner = (holds_token && !is_linux_x64(&job.runs_on)).then(|| RuleViolation {
+                job: job.id.clone(),
+                step: 0,
+                rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
+            });
+            step_violations.chain(runner)
         })
         .collect();
     if violations.is_empty() {
         Ok(())
     } else {
         Err(violations)
+    }
+}
+
+fn holds_app_token(job: &RenderedJob) -> bool {
+    job.steps.iter().any(|step| {
+        step.uses
+            .as_deref()
+            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+    })
+}
+
+fn is_linux_x64(runner: &str) -> bool {
+    runner == "ubuntu-latest" || (runner.starts_with("ubuntu-") && !runner.contains("arm"))
+}
+
+fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
+    if step
+        .uses
+        .as_deref()
+        .is_some_and(|uses| uses.split('@').next() == Some(MISE_ACTION))
+    {
+        rules.push(Rule::MiseActionInTokenJob);
+    }
+    let program = step
+        .run
+        .as_deref()
+        .and_then(|run| run.split_whitespace().next())
+        .map(|word| word.trim_matches('"'));
+    if program.is_some_and(|word| word == "mise" || word.ends_with("/mise"))
+        && !step
+            .run
+            .as_deref()
+            .is_some_and(|run| run.contains(" --no-config --no-env --no-hooks "))
+    {
+        rules.push(Rule::MiseReadsRepositoryConfig);
     }
 }
 

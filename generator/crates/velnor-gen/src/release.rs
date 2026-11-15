@@ -160,11 +160,21 @@ fn release_files(
             cargo_configs.insert(name.to_owned(), text(path)?.unwrap_or_default());
         }
     }
+    let mut toolchain_files = BTreeMap::new();
+    for path in view.files.keys() {
+        if matches!(
+            path.as_str().rsplit('/').next(),
+            Some("rust-toolchain" | "rust-toolchain.toml")
+        ) {
+            toolchain_files.insert(path.to_string(), text(path)?.unwrap_or_default());
+        }
+    }
     Ok(ReleaseFiles {
         release_toml: text(&RELEASE_CONFIG_PATH)?,
         release_plz_toml,
         mise_tomls,
         cargo_configs,
+        toolchain_files,
         root_members: reality.map(|known| root_members(known.facts)),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),

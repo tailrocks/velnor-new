@@ -255,7 +255,7 @@ fn cargo_proxy_and_ca_overrides_are_refused_when_publishing_to_crates_io() {
         assert!(
             matches!(
                 refusal(&files),
-                Some(ReleaseError::CargoCredentialProvider { .. })
+                Some(ReleaseError::CargoRedirectsCratesIo { .. })
             ),
             "{config}"
         );
