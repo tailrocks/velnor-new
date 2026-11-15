@@ -3,6 +3,8 @@
 
 #[path = "tests/fixture.rs"]
 mod fixture;
+#[path = "tests/renewal.rs"]
+mod renewal;
 #[path = "tests/safety.rs"]
 mod safety;
 #[path = "tests/seed.rs"]

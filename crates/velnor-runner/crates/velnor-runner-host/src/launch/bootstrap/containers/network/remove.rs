@@ -163,9 +163,7 @@ pub(crate) async fn remove_owned_network_for_unbound_retirement(
     engine: &SelectedEngineContext,
     retirement: &UnboundRetirementClaim,
 ) -> Result<(), HostError> {
-    journal
-        .validate_unbound_retirement_claim(retirement)
-        .await?;
+    journal.renew_unbound_retirement_claim(retirement).await?;
     let reservation_id = retirement.reservation_id();
     let claim = match journal
         .claim_storage_network_removal(reservation_id)
