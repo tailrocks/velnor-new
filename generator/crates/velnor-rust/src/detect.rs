@@ -17,7 +17,7 @@ use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::select::root_slug;
-use crate::timings::{TIMINGS_PATH, parse_timings};
+use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
 
@@ -105,19 +105,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
-    let timings = view
-        .files
-        .get(&TIMINGS_PATH)
-        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_timings(bytes))?;
-    if let Some(root) = timings
-        .keys()
-        .find(|root| !rust_roots.iter().any(|known| known.manifest == **root))
-    {
-        return Err(DetectError::invalid(
-            &TIMINGS_PATH,
-            Reason::UnknownRoot(root.clone()),
-        ));
-    }
+    let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny = view.tracked_paths.contains(&DENY_CONFIG);
     if deny && !tools.tools.keys().any(|name| is_tool(name, "cargo-deny")) {
         return Err(DetectError::DenyRequired {
@@ -134,6 +122,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     Ok(RepoFacts {
         policy,
         timings,
+        timings_notes,
         rust_roots,
         toolchain,
         tools,

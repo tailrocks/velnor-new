@@ -116,7 +116,7 @@ impl fmt::Display for Reason {
             ),
             Self::UnknownRoot(root) => write!(
                 f,
-                "has times for {root}, which is not a Cargo root of this repository; run `velnor-gen timings` again"
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",

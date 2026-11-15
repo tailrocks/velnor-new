@@ -7,6 +7,7 @@ mod release;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::io::Write;
 
 use velnor_model::{HelperVersion, RepoFacts, RepoPath, RepoView};
 use velnor_release::ReleaseError;
@@ -64,6 +65,12 @@ impl From<DetectError> for GenerateError {
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+    expected_with_notes(view).map(|(files, _)| files)
+}
+
+pub fn expected_with_notes(
+    view: &RepoView,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
     check_helper(&facts)?;
     check_tools(&facts)?;
@@ -71,7 +78,21 @@ pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, Gen
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
     files.extend(release::release_workflow(view, &facts)?);
-    Ok(files)
+    Ok((files, facts.timings_notes))
+}
+
+pub fn plan_generate(
+    view: &RepoView,
+    on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+    engine_configured: bool,
+    out: &mut dyn Write,
+) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
+    let (expected, notes) = expected_with_notes(view)?;
+    for note in notes {
+        writeln!(out, "velnor-gen: {note}").ok();
+    }
+    let drifts = drift(&expected, on_disk, engine_configured);
+    Ok((expected, drifts))
 }
 
 fn check_helper(facts: &RepoFacts) -> Result<(), GenerateError> {

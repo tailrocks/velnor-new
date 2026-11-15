@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_gen::{COMPATIBLE_HELPER_SERIES, GenerateError, expected_files};
+use velnor_gen::{COMPATIBLE_HELPER_SERIES, GenerateError, expected_with_notes};
 use velnor_model::{HelperVersion, RepoView};
 use velnor_rust::{DetectError, LOCK_PATH, Reason, pin_lock};
 
@@ -173,7 +173,7 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
         "not toml [".to_owned(),
     ];
     for lock in cases {
-        let result = expected_files(&with_lock(&lock)?);
+        let result = expected_with_notes(&with_lock(&lock)?).map(|(files, _)| files);
         assert!(
             matches!(
                 result,
@@ -188,7 +188,7 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
     let mut binary = view(&["Cargo.toml"], None)?;
     binary.files.insert(LOCK_PATH, vec![0xff, 0xfe]);
     assert!(matches!(
-        expected_files(&binary),
+        expected_with_notes(&binary).map(|(files, _)| files),
         Err(GenerateError::Detect(DetectError::Invalid {
             reason: Reason::HelperLock(_),
             ..
@@ -205,7 +205,12 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
         format!("{major}.{minor}.79"),
         format!("{major}.{minor}.4294967296"),
     ] {
-        assert!(expected_files(&locked(&version)?).is_ok(), "{version}");
+        assert!(
+            expected_with_notes(&locked(&version)?)
+                .map(|(files, _)| files)
+                .is_ok(),
+            "{version}"
+        );
     }
     for version in [
         format!("{major}.{}.0", minor + 1),
@@ -213,7 +218,7 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
         format!("{major}.{}.79", minor - 1),
         "1.0.0".to_owned(),
     ] {
-        let result = expected_files(&locked(&version)?);
+        let result = expected_with_notes(&locked(&version)?).map(|(files, _)| files);
         assert_eq!(
             result,
             Err(GenerateError::IncompatibleHelper(HelperVersion::new(

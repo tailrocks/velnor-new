@@ -22,10 +22,10 @@ mod sample;
 mod workflows;
 
 use crate::cli::{Cli, Command};
-use crate::{Drift, GenerateError, check_tag, drift, expected_files, require_compatible};
+use crate::{Drift, GenerateError, check_tag, plan_generate, require_compatible};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, relocate_metadata,
-    write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
+    relocate_metadata, write_sample,
 };
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
@@ -202,10 +202,15 @@ pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
-    let expected = expected_files(&read_view(&root, false)?.0).map_err(Error::Generate)?;
     let workflows = read_files(&root, &workflow_paths(&root)?)?;
     let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
-    let drifts = drift(&expected, &workflows, engine_configured);
+    let (expected, drifts) = plan_generate(
+        &read_view(&root, false)?.0,
+        &workflows,
+        engine_configured,
+        &mut std::io::stderr(),
+    )
+    .map_err(Error::Generate)?;
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
     }

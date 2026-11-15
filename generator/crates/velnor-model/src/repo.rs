@@ -72,6 +72,7 @@ pub struct RepoFacts {
     pub helper: Option<HelperRelease>,
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
+    pub timings_notes: Vec<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
 }
