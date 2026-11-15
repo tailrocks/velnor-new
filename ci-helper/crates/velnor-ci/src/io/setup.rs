@@ -21,9 +21,9 @@ use crate::error::CiError;
 use crate::setup::{check_tools, env_lines, output_lines, parse_reported};
 
 const ENV_VARIABLE: &str = "GITHUB_ENV";
-const CARGO_HOME_VARIABLE: &str = "CARGO_HOME";
-const HOME_VARIABLE: &str = "HOME";
+const CARGO_DIRECTORY: &str = ".cargo";
 const CARGO_CONFIG: &str = "config.toml";
+const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
 const NOT_FOUND: u8 = 127;
@@ -61,7 +61,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
         driver: BUILD_DRIVER.to_owned(),
     };
     let digest = compat(&inputs);
-    write_cargo_config(profile.cargo_config)?;
+    write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
     append_outputs(&output_lines(&digest))?;
     Ok(String::new())
@@ -189,35 +189,39 @@ fn rustc_verbose() -> Result<String, CiError> {
         .map_err(|_| CiError::new("rustc -vV did not print UTF-8".to_owned()))
 }
 
-fn write_cargo_config(text: &str) -> Result<(), CiError> {
+fn write_cargo_config(root: &Path, text: &str) -> Result<(), CiError> {
+    let directory = root
+        .parent()
+        .ok_or_else(|| CiError::new(format!("{} has no parent directory", root.display())))?
+        .join(CARGO_DIRECTORY);
+    let file = directory.join(CARGO_CONFIG);
+    let failed = |what: &str, e: std::io::Error| {
+        CiError::new(format!("cannot {what} {}: {e}", file.display()))
+    };
+    match std::fs::read_to_string(&file) {
+        Ok(existing) if !existing.starts_with(OWNED_MARKER) => {
+            return if text.is_empty() {
+                Ok(())
+            } else {
+                Err(CiError::new(format!(
+                    "{} exists and was not written by velnor-ci",
+                    file.display()
+                )))
+            };
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(failed("read", e)),
+    }
     if text.is_empty() {
-        return Ok(());
+        return match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(failed("remove", e)),
+            _ => Ok(()),
+        };
     }
-    let home = env_text(CARGO_HOME_VARIABLE)
-        .map(PathBuf::from)
-        .or_else(|| env_text(HOME_VARIABLE).map(|home| PathBuf::from(home).join(".cargo")))
-        .ok_or_else(|| CiError::new(format!("set {CARGO_HOME_VARIABLE} or {HOME_VARIABLE}")))?;
-    let file = home.join(CARGO_CONFIG);
-    let existing = match std::fs::read_to_string(&file) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", file.display()))),
-    };
-    if existing.contains(text) {
-        return Ok(());
-    }
-    let separator = if existing.is_empty() || existing.ends_with('\n') {
-        ""
-    } else {
-        "\n"
-    };
-    std::fs::create_dir_all(&home)
-        .and_then(|()| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&file)
-                .and_then(|mut handle| handle.write_all(format!("{separator}{text}").as_bytes()))
-        })
-        .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))
+    std::fs::create_dir_all(&directory).map_err(|e| failed("create the directory of", e))?;
+    let staged = directory.join(format!("{CARGO_CONFIG}.velnor-{}", std::process::id()));
+    std::fs::write(&staged, format!("{OWNED_MARKER}\n{text}"))
+        .and_then(|()| std::fs::rename(&staged, &file))
+        .map_err(|e| failed("write", e))
 }

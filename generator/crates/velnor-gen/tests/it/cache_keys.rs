@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CacheKey, CacheRoot, CiDebugInfo, Concurrency, Host, Job, JobId, Permissions, RepoPath,
-    RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key};
 use velnor_rust::{
@@ -131,6 +131,30 @@ fn a_directory_name_cannot_close_or_open_an_expression_in_a_key() -> TestResult 
 }
 
 #[test]
+fn a_quote_in_a_directory_name_is_doubled_inside_the_hash_files_literal() -> TestResult {
+    let sources = render_key(&CacheKey::Sources {
+        host: Host,
+        root: root("a'b/Cargo.toml")?,
+    });
+    assert!(
+        sources
+            .key
+            .ends_with("-${{ hashFiles('a''b/Cargo.lock') }}"),
+        "{}",
+        sources.key
+    );
+    Ok(())
+}
+
+#[test]
+fn a_root_slug_never_holds_a_dash_so_a_job_and_a_root_cannot_blur() {
+    for text in ["a-b", "-", "a-", "A", "a b", ""] {
+        assert!(RootSlug::new(text).is_err(), "{text:?}");
+    }
+    assert!(RootSlug::new("a_b9").is_ok());
+}
+
+#[test]
 fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
     let key = CacheKey::Sources {
         host: Host,
@@ -223,6 +247,12 @@ fn changing_any_compat_input_changes_the_digest() {
     left.workspace = "b".to_owned();
     right.rustflags = "ab".to_owned();
     right.workspace = String::new();
+    assert_ne!(compat(&left), compat(&right));
+    let (mut left, mut right) = (inputs(), inputs());
+    left.rustflags = "x\nworkspace:y".to_owned();
+    left.workspace = "z".to_owned();
+    right.rustflags = "x".to_owned();
+    right.workspace = "y\nworkspace:z".to_owned();
     assert_ne!(compat(&left), compat(&right));
 }
 

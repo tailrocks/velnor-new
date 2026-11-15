@@ -63,6 +63,7 @@ struct Run {
     env_file: String,
     outputs: String,
     cargo_config: String,
+    velnor_config: String,
 }
 
 fn script(path: &Path, body: &str) {
@@ -78,9 +79,10 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     fs::create_dir_all(checkout.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(checkout.join("mise.toml"), MISE).unwrap_or_else(|e| unreachable!("{e}"));
-    if let Some(text) = setup.rust_ci_toml {
-        fs::write(checkout.join(".velnor/rust-ci.toml"), text)
-            .unwrap_or_else(|e| unreachable!("{e}"));
+    let ci_toml = checkout.join(".velnor/rust-ci.toml");
+    match setup.rust_ci_toml {
+        Some(text) => fs::write(ci_toml, text).unwrap_or_else(|e| unreachable!("{e}")),
+        None => drop(fs::remove_file(ci_toml)),
     }
     if let Some(text) = setup.cargo_config {
         fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
@@ -113,6 +115,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         env_file: read(&env_file),
         outputs: read(&outputs),
         cargo_config: read(&cargo_home.join("config.toml")),
+        velnor_config: read(&dir.join(".cargo/config.toml")),
     }
 }
 
@@ -137,7 +140,12 @@ fn prepare_sets_the_build_profile_and_writes_a_compat_digest_when_every_tool_is_
     );
     assert_eq!(digest(&run).len(), 16, "{}", run.outputs);
     assert!(digest(&run).bytes().all(|b| b.is_ascii_hexdigit()));
-    assert_eq!(run.cargo_config, DEPENDENCY_DEBUG);
+    assert_eq!(run.cargo_config, "");
+    assert!(
+        run.velnor_config.ends_with(DEPENDENCY_DEBUG),
+        "{}",
+        run.velnor_config
+    );
 }
 
 #[test]
@@ -154,22 +162,97 @@ fn compat_is_stable_and_follows_rustflags_and_the_debuginfo_setting() {
     let full = prepare("stable", &full);
     assert_ne!(digest(&first), digest(&full));
     assert!(full.env_file.contains("CARGO_PROFILE_DEV_DEBUG=full\n"));
-    assert_eq!(full.cargo_config, "");
+    assert_eq!(
+        (full.cargo_config.as_str(), full.velnor_config.as_str()),
+        ("", "")
+    );
+}
+
+fn effective(dir: &Path) -> Output {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    Command::new(cargo)
+        .args(["-Zunstable-options", "config", "get", "profile.dev"])
+        .current_dir(dir.join("checkout"))
+        .env("CARGO_HOME", dir.join("cargo-home"))
+        .env("RUSTC_BOOTSTRAP", "1")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn effective_text(dir: &Path) -> String {
+    let output = effective(dir);
+    if String::from_utf8_lossy(&output.stderr).contains("is not set") {
+        return String::new();
+    }
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+const DEBUG_NONE: &str = "profile.dev.package.\"*\".debug = \"none\"";
+
+fn read_config(dir: &Path) -> String {
+    fs::read_to_string(dir.join(".cargo/config.toml")).unwrap_or_default()
 }
 
 #[test]
-fn the_cargo_home_config_keeps_what_was_there_and_gets_the_override_once() {
+fn a_user_config_that_already_has_the_override_table_still_loads_and_is_left_alone() {
     let dir = scratch("home");
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    setup.cargo_config = Some("[net]\nretry = 2");
-    let first = prepare_in(&dir, &setup);
+    setup.cargo_config = Some("[profile.dev.package.\"*\"]\nopt-level = 1\n");
+    let run = prepare_in(&dir, &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
     assert_eq!(
-        first.cargo_config,
-        format!("[net]\nretry = 2\n{DEPENDENCY_DEBUG}")
+        run.cargo_config,
+        "[profile.dev.package.\"*\"]\nopt-level = 1\n"
     );
-    setup.cargo_config = None;
+    let text = effective_text(&dir);
+    assert!(
+        text.contains(DEBUG_NONE) && text.contains("opt-level = 1"),
+        "{text}"
+    );
+}
+
+#[test]
+fn prepares_in_a_row_and_at_once_leave_one_override() {
+    let dir = scratch("twice");
+    let setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    let first = prepare_in(&dir, &setup);
     let second = prepare_in(&dir, &setup);
-    assert_eq!(second.cargo_config, first.cargo_config);
+    assert_eq!(second.velnor_config, first.velnor_config);
+    assert_eq!(effective_text(&dir).matches(DEBUG_NONE).count(), 1);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| prepare_in(&dir, &setup));
+        }
+    });
+    assert_eq!(effective_text(&dir).matches(DEBUG_NONE).count(), 1);
+    assert_eq!(read_config(&dir), first.velnor_config);
+}
+
+#[test]
+fn switching_the_debuginfo_setting_changes_the_effective_override() {
+    let dir = scratch("switch");
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    prepare_in(&dir, &setup);
+    assert!(effective_text(&dir).contains(DEBUG_NONE));
+    setup.rust_ci_toml = Some("ci_debuginfo = \"full\"\n");
+    prepare_in(&dir, &setup);
+    assert!(!effective_text(&dir).contains(DEBUG_NONE));
+    setup.rust_ci_toml = None;
+    prepare_in(&dir, &setup);
+    assert!(effective_text(&dir).contains(DEBUG_NONE));
+}
+
+#[test]
+fn a_config_file_velnor_did_not_write_is_never_replaced() {
+    let dir = scratch("foreign");
+    fs::create_dir_all(dir.join(".cargo")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(dir.join(".cargo/config.toml"), "[net]\nretry = 2\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let run = prepare_in(&dir, &Setup::new(reported("1.99.1", Some("0.9.151"))));
+    assert_eq!(run.output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&run.output.stderr).contains(".cargo/config.toml"));
+    assert_eq!(read_config(&dir), "[net]\nretry = 2\n");
 }
 
 #[test]
