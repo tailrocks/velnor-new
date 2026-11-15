@@ -28,7 +28,15 @@ enum Expression {
     Not(Box<Expression>),
 }
 
-const TARGET_CFGS: [&str; 11] = [
+const FIXED_NAMES: [&str; 5] = [
+    "unix",
+    "windows",
+    "target_env",
+    "target_vendor",
+    "target_abi",
+];
+
+const FIXED_KEYS: [&str; 9] = [
     "target_os",
     "target_family",
     "target_arch",
@@ -38,8 +46,6 @@ const TARGET_CFGS: [&str; 11] = [
     "target_pointer_width",
     "target_abi",
     "target_has_atomic",
-    "unix",
-    "windows",
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -105,10 +111,10 @@ impl Platform {
 
     fn evaluate(&self, expression: &Expression) -> Truth {
         match expression {
-            Expression::Name(name) if TARGET_CFGS.contains(&name.as_str()) => {
+            Expression::Name(name) if FIXED_NAMES.contains(&name.as_str()) => {
                 Truth::of(self.names.contains(name))
             }
-            Expression::Pair(key, value) if TARGET_CFGS.contains(&key.as_str()) => {
+            Expression::Pair(key, value) if FIXED_KEYS.contains(&key.as_str()) => {
                 Truth::of(self.pairs.contains(&(key.clone(), value.clone())))
             }
             Expression::Name(_) | Expression::Pair(..) => Truth::Unknown,

@@ -64,6 +64,11 @@ fn a_predicate_on_a_name_or_key_outside_rustcs_target_cfgs_is_taken_to_hold() {
         "cfg(sanitize = \"address\")",
         "cfg(feature = \"x\")",
         "cfg(any(windows, tokio_unstable))",
+        "cfg(unix = \"x\")",
+        "cfg(windows = \"x\")",
+        "cfg(not(unix = \"x\"))",
+        "cfg(target_os)",
+        "cfg(target_has_atomic)",
     ] {
         assert!(platform.holds(predicate), "{predicate}");
     }
