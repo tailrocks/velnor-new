@@ -238,6 +238,14 @@ impl ReleaseError {
             Self::EmptyRoots => {
                 write!(f, ".velnor/release.toml: roots must name at least one root")
             }
+            _ => self.fmt_mise(f),
+        }
+    }
+}
+
+impl ReleaseError {
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
             Self::ReleasePlzLockMismatch { configured, locked } => write!(
