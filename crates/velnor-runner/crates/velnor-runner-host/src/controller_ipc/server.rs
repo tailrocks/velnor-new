@@ -23,6 +23,8 @@ use transport::{
     marker_exists, private_state_directory, read_request, remove_owned_socket, remove_stale_socket,
     trusted_peer, write_response,
 };
+#[path = "server/bind.rs"]
+mod bind;
 #[path = "server/requests.rs"]
 mod requests;
 mod state;
@@ -54,7 +56,7 @@ impl ControlServer {
         let state_path = private_state_directory(state)?;
         let path = state_path.join(SOCKET_NAME);
         remove_stale_socket(&path)?;
-        let listener = UnixListener::bind(&path).map_err(|_| HostError::Lock)?;
+        let listener = bind::bind_control_socket(&path)?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
             .map_err(|_| HostError::Path)?;
         listener

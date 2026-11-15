@@ -45,6 +45,21 @@ pub enum HostError {
     #[error("daemon lock held")]
     Lock,
 
+    #[error(
+        "control socket path {path} is {length} bytes but must be under the {limit}-byte limit; use a shorter --state folder"
+    )]
+    SocketPathTooLong {
+        path: &'static str,
+        length: usize,
+        limit: usize,
+    },
+
+    #[error("cannot bind control socket {path}: {kind}")]
+    SocketBind {
+        path: &'static str,
+        kind: std::io::ErrorKind,
+    },
+
     #[error("journal")]
     Journal,
 
@@ -121,6 +136,8 @@ impl HostError {
             Self::DeveloperImages => "developer_images",
             Self::Path => "path",
             Self::Lock => "lock",
+            Self::SocketPathTooLong { .. } => "socket_path_too_long",
+            Self::SocketBind { .. } => "socket_bind",
             Self::Journal => "journal",
             Self::ForbiddenMount => "forbidden_mount",
             Self::PrivilegedRunner => "privileged_runner",
