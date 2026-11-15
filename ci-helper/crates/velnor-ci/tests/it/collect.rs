@@ -201,3 +201,38 @@ fn repository_must_be_owner_slash_name() {
         assert!(Repo::parse(bad).is_err(), "{bad}");
     }
 }
+
+fn job_with(steps: &[(&str, &str, &str)]) -> velnor_ci::github::ApiJob {
+    let steps: Vec<String> = steps
+        .iter()
+        .map(|(name, conclusion, done)| {
+            format!(
+                "{{\"name\":\"{name}\",\"conclusion\":\"{conclusion}\",\"started_at\":\"2026-11-15T10:00:00Z\",\"completed_at\":\"{done}\"}}"
+            )
+        })
+        .collect();
+    serde_json::from_str(&format!(
+        "{{\"id\":1,\"name\":\"rust\",\"conclusion\":\"success\",\"created_at\":\"2026-11-15T09:59:00Z\",\"started_at\":\"2026-11-15T10:00:00Z\",\"completed_at\":\"2026-11-15T10:05:00Z\",\"steps\":[{}]}}",
+        steps.join(",")
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn setup_ends_when_the_restores_are_done_or_for_the_plan_job_when_the_plan_is() {
+    let lane = job_with(&[
+        ("Check out", "success", "2026-11-15T10:00:03Z"),
+        ("velnor-ci prepare", "success", "2026-11-15T10:00:20Z"),
+        ("velnor-ci restored", "success", "2026-11-15T10:00:24Z"),
+        ("Format", "success", "2026-11-15T10:03:00Z"),
+    ]);
+    assert_eq!(velnor_ci::collect::setup_seconds(&lane), Some(24));
+    let plan = job_with(&[
+        ("Check out", "success", "2026-11-15T10:00:03Z"),
+        ("velnor-ci plan", "success", "2026-11-15T10:00:09Z"),
+    ]);
+    assert_eq!(velnor_ci::collect::setup_seconds(&plan), Some(9));
+    let skipped = job_with(&[("velnor-ci restored", "skipped", "2026-11-15T10:00:24Z")]);
+    assert_eq!(velnor_ci::collect::setup_seconds(&skipped), None);
+    assert_eq!(velnor_ci::collect::setup_seconds(&job_with(&[])), None);
+}

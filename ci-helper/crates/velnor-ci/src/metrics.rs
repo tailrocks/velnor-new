@@ -25,6 +25,8 @@ pub struct JobMetrics {
     pub started: bool,
     pub queue_seconds: u64,
     pub duration_seconds: u64,
+    #[serde(default)]
+    pub setup_seconds: Option<u64>,
     pub steps: Vec<StepMetrics>,
     pub log: LogScan,
 }
@@ -86,8 +88,11 @@ impl RunMetrics {
             ),
         ];
         lines.extend(self.jobs.iter().map(|job| {
+            let setup = job
+                .setup_seconds
+                .map_or_else(String::new, |seconds| format!(", setup {seconds}s"));
             format!(
-                "  {} [{}] {}s, crates compiled {}, downloaded {}",
+                "  {} [{}] {}s{setup}, crates compiled {}, downloaded {}",
                 job.name,
                 job.conclusion,
                 job.duration_seconds,
