@@ -30,6 +30,7 @@ mod metadata_file;
 mod no_programs;
 mod patch;
 mod pipeline;
+mod policy_exceptions;
 mod plan_job;
 mod release_fixture;
 mod release_inputs;

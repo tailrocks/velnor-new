@@ -12,6 +12,7 @@ use crate::roots::is_cargo_config;
 pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
 
 const DEPENDENCY_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "deny.toml"];
+const DENY_EXCEPTION_FILES: [&str; 2] = ["deny.exceptions.toml", ".deny.exceptions.toml"];
 const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -32,9 +33,10 @@ pub fn policy_runs(
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
             DEPENDENCY_FILES.contains(&name) || is_cargo_config(path)
         });
-    let license = changed
-        .iter()
-        .any(|path| license_text(path.as_str().rsplit('/').next().unwrap_or_default()));
+    let deny_only = changed.iter().any(|path| {
+        let name = path.as_str().rsplit('/').next().unwrap_or_default();
+        license_text(name) || DENY_EXCEPTION_FILES.contains(&name)
+    });
     let unused_possible = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
         (selected && rust_source(path))
@@ -42,7 +44,7 @@ pub fn policy_runs(
             || IGNORE_FILES.contains(&name)
     });
     PolicyRuns {
-        deny: tools.deny && (dependency || license),
+        deny: tools.deny && (dependency || deny_only),
         machete: tools.machete && (dependency || unused_possible),
     }
 }
