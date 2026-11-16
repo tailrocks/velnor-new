@@ -255,5 +255,8 @@ impl InventoryEntry {
 }
 
 #[cfg(test)]
+#[path = "inventory/end_to_end.rs"]
+mod end_to_end;
+#[cfg(test)]
 #[path = "inventory/tests.rs"]
 mod tests;
