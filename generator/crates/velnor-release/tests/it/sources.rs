@@ -67,7 +67,7 @@ fn the_plan_installs_the_exact_configured_version_whatever_key_or_options_mise_h
 
 #[test]
 fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
-    let stale = "[tools]\nrelease-plz = \"0.3.0\"\n".to_owned();
+    let stale = "[tools]\nrelease-plz = \"0.4.2\"\n".to_owned();
     let current = "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned();
     let mut files = files();
     files.mise_tomls = vec![stale.clone(), current.clone()];
@@ -81,7 +81,7 @@ fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
 
 fn workspace_only(prefix: &str, tag: &str) -> String {
     format!(
-        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"{prefix}\"\n"
+        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"{prefix}\"\n"
     )
 }
 
@@ -106,7 +106,7 @@ fn workspace_wide_tag_patterns_of_two_roots_that_can_collide_are_refused() -> Te
     Ok(())
 }
 
-const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
+const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
 
 #[test]
 fn every_release_root_needs_a_tracked_cargo_manifest() -> TestResult {

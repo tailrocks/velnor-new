@@ -37,6 +37,21 @@ fn owning<'a>(
     })
 }
 
+pub(crate) fn inherited_packages(config: &RootConfig, metadata: Option<&Metadata>) -> Vec<String> {
+    let Some((_, workspace)) = metadata.and_then(|metadata| owner(&config.root, metadata)) else {
+        return Vec::new();
+    };
+    workspace
+        .members
+        .iter()
+        .map(|member| member.name.as_str())
+        .filter(|_| !config.workspace_tags.is_empty())
+        .filter(|name| config.releases(name))
+        .filter(|name| config.packages.iter().all(|package| package.name != *name))
+        .map(str::to_owned)
+        .collect()
+}
+
 pub(crate) fn check_inventory(
     configs: &[RootConfig],
     metadata: Option<&Metadata>,
