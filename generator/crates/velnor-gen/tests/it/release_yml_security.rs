@@ -37,7 +37,7 @@ fn release_yml_has_empty_workflow_permissions_and_exact_job_permissions() -> Tes
         ]
     );
     assert_eq!(permissions("release-pr")?, [pair("contents", "read")]);
-    assert_eq!(permissions("tag-0")?, [pair("contents", "read")]);
+    assert_eq!(permissions("tag")?, [pair("contents", "read")]);
     let (_, publishing) = render(
         &[Root {
             publishes: true,
@@ -46,7 +46,7 @@ fn release_yml_has_empty_workflow_permissions_and_exact_job_permissions() -> Tes
         Some("[[binaries]]\npackage = \"app\"\n"),
     )?;
     let tag = publishing
-        .at(&["jobs", "tag-0", "permissions"])
+        .at(&["jobs", "tag", "permissions"])
         .ok_or("no permissions")?;
     assert_eq!(tag.get("id-token").and_then(Node::text), Some("write"));
     assert!(
@@ -67,7 +67,7 @@ fn release_yml_app_token_permissions_are_exact_and_scoped_to_this_repository() -
             ["write", "write"],
         ),
         (
-            "tag-0",
+            "tag",
             ["permission-contents", "permission-pull-requests"],
             ["write", "read"],
         ),
@@ -141,7 +141,7 @@ fn release_yml_checks_out_without_credentials_caches_nothing_and_pins_every_acti
 fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_installed() -> TestResult
 {
     let (_, tree) = two_roots()?;
-    for id in ["release-pr", "tag-0"] {
+    for id in ["release-pr", "tag"] {
         let all = steps(tree.at(&["jobs", id]).ok_or("no job")?);
         let created = all
             .iter()
@@ -187,7 +187,7 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
 }
 
 #[test]
-fn release_yml_runs_one_release_plz_command_per_root_job_and_records_its_output() -> TestResult {
+fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() -> TestResult {
     let (_, tree) = two_roots()?;
     let runs = |id: &str| -> Result<Vec<&str>, Box<dyn Error>> {
         Ok(steps(tree.at(&["jobs", id]).ok_or("no job")?)
@@ -199,7 +199,7 @@ fn release_yml_runs_one_release_plz_command_per_root_job_and_records_its_output(
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
     let exec = "\"$RUNNER_TEMP/release-plz\"";
     let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml";
-    let prepared: Vec<String> = [
+    let mut prepared: Vec<String> = [
         "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
         "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",
         "sha256sum --check \"$RUNNER_TEMP/release-plz.sha256\"",
@@ -217,19 +217,13 @@ fn release_yml_runs_one_release_plz_command_per_root_job_and_records_its_output(
         ),
     ]);
     assert_eq!(runs("release-pr")?, pr_runs);
-    for (id, root, config) in [
-        ("tag-0", "Cargo.toml", "release-plz.toml"),
-        ("tag-1", "tools/Cargo.toml", "tools/release-plz.toml"),
-    ] {
-        let mut tag_runs = prepared.clone();
-        tag_runs[5] = format!("velnor-ci release check-config {config}");
-        tag_runs.extend([
-            format!("{exec} release {base} --manifest-path {root} --config {config} -o json > \"$RUNNER_TEMP/release.json\""),
-            "velnor-ci release record \"$RUNNER_TEMP/release.json\"".to_owned(),
-        ]);
-        assert_eq!(runs(id)?, tag_runs);
-    }
-    for id in ["gate", "release-pr", "tag-0", "tag-1"] {
+    prepared.extend([
+            format!("{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
+            format!("{exec} release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
+            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),
+    ]);
+    assert_eq!(runs("tag")?, prepared);
+    for id in ["gate", "release-pr", "tag"] {
         for run in runs(id)? {
             assert!(
                 !run.contains(['\n', ';', '|', '`']) && !run.contains("&&") && !run.contains("${{"),
@@ -244,7 +238,7 @@ fn release_yml_runs_one_release_plz_command_per_root_job_and_records_its_output(
 fn release_yml_tag_rechecks_the_live_tip_before_the_app_token_and_skips_when_it_moved() -> TestResult
 {
     let (_, tree) = two_roots()?;
-    let all = steps(tree.at(&["jobs", "tag-0"]).ok_or("no job")?);
+    let all = steps(tree.at(&["jobs", "tag"]).ok_or("no job")?);
     let newest = all
         .iter()
         .position(|step| step.get("id").and_then(Node::text) == Some("newest"))

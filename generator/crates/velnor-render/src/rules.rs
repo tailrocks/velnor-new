@@ -25,7 +25,7 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
-pub(crate) const MAX_WORKFLOW_BYTES: usize = 512_000;
+pub(crate) const MAX_WORKFLOW_BYTES: usize = 500_000;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
@@ -94,7 +94,6 @@ pub enum Rule {
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
-    BinaryRootNotPlanned { package: String, root: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,12 +109,6 @@ impl fmt::Display for RuleViolation {
             return write!(
                 f,
                 "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
-            );
-        }
-        if let Rule::BinaryRootNotPlanned { package, root } = &self.rule {
-            return write!(
-                f,
-                "binary {package} is in root {root:?}, which the release plan does not list"
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -145,7 +138,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
-            Rule::WorkflowTooLarge(_) | Rule::BinaryRootNotPlanned { .. } => Ok(()),
+            Rule::WorkflowTooLarge(_) => Ok(()),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"

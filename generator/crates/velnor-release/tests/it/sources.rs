@@ -81,7 +81,7 @@ fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
 
 fn workspace_only(prefix: &str, tag: &str) -> String {
     format!(
-        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"{prefix}\"\n"
+        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"{prefix}\"\n"
     )
 }
 

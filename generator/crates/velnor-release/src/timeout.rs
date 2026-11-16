@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub const TAG_JOB_BASE_MINUTES: u16 = 30;
-pub const MAX_JOB_MINUTES: u16 = 360;
+pub(crate) const TOKEN_LIFETIME_MINUTES: u64 = 60;
+pub(crate) const TOKEN_MARGIN_MINUTES: u64 = 10;
+pub(crate) const DEFAULT_PUBLISH_MINUTES: u64 = 30;
 
 pub(crate) fn seconds(text: &str) -> Option<u64> {
     let mut total = 0u64;

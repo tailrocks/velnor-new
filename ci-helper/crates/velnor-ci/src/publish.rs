@@ -22,6 +22,7 @@ pub struct Request {
     pub app: PlainName,
     pub names: Vec<PlainName>,
     pub files: BTreeMap<String, Vec<u8>>,
+    pub assetless: bool,
 }
 
 struct File<'a> {
@@ -119,6 +120,13 @@ pub fn publish(
 }
 
 fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
+    if request.assetless {
+        return if request.names.is_empty() {
+            Ok(Vec::new())
+        } else {
+            Err(CiError::new("an assetless release names no files"))
+        };
+    }
     let mut names = BTreeSet::new();
     for name in &request.names {
         if name.as_str() == SUMS {

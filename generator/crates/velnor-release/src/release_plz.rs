@@ -27,7 +27,8 @@ pub(crate) struct RootConfig {
     entries: BTreeMap<String, bool>,
     unreleased: BTreeSet<String>,
     unlisted_publish: bool,
-    pub(crate) publish_timeout_minutes: Option<u64>,
+    pub(crate) listed_publish_minutes: u64,
+    pub(crate) unlisted_publish_minutes: u64,
 }
 
 impl RootConfig {
@@ -250,16 +251,15 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .filter(|entry| entry.settings.over(workspace).release == Some(false))
         .map(|entry| entry.name.clone())
         .collect();
-    let publish_timeout_minutes = released
+    let listed_publish_minutes = released
         .iter()
         .map(|(_, settings)| settings)
-        .chain(std::iter::once(workspace).filter(|_| !workspace_tags.is_empty()))
         .filter(|settings| settings.publishes_to_crates_io())
-        .filter_map(|settings| settings.publish_timeout.as_deref())
-        .filter_map(timeout::minutes)
-        .max();
+        .map(Settings::publish_minutes)
+        .sum();
     Ok(RootConfig {
-        publish_timeout_minutes,
+        listed_publish_minutes,
+        unlisted_publish_minutes: workspace.publish_minutes(),
         entries,
         unreleased,
         unlisted_publish: workspace.release != Some(false) && workspace.publishes_to_crates_io(),

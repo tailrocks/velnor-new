@@ -99,10 +99,9 @@ impl ReleaseError {
                 f,
                 "{root}/release-plz.toml: publish_timeout {value:?} is not a duration such as \"10m\" or \"1h 30m\""
             ),
-            Self::PublishTimeoutTooLong { root, minutes } => write!(
+            Self::PublishBudgetOutlivesToken { minutes, limit } => write!(
                 f,
-                "{root}/release-plz.toml: the publish_timeout of its packages needs a {minutes} minute tag job, and GitHub stops a job after {} minutes",
-                crate::timeout::MAX_JOB_MINUTES
+                "the release-plz.toml publish_timeout of the packages to publish adds up to {minutes} minutes (30 for each package that sets none), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run"
             ),
             Self::ReleasePlzVersionTooOld { version, minimum } => write!(
                 f,

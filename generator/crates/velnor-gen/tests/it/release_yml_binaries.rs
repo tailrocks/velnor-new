@@ -4,23 +4,17 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use crate::release_fixture::{jobs, steps, two_binaries, two_roots, uses};
+use velnor_gen::GenerateError;
+use velnor_release::ReleaseError;
+
+use crate::release_fixture::{
+    APP, Root, TOOLS, TWO_BINARIES, jobs, render, steps, two_binaries, two_roots, uses,
+};
 use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 const PLATFORMS: [&str; 3] = ["linux-x64", "linux-arm64", "macos-arm64"];
-
-pub(crate) fn tag_of(package: &str) -> &'static str {
-    if package == "tools" { "tag-1" } else { "tag-0" }
-}
-
-fn tagged_ref(package: &str) -> String {
-    format!(
-        "refs/tags/${{{{ needs.{}.outputs.{package} }}}}",
-        tag_of(package)
-    )
-}
 
 pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
     Ok(tree
@@ -62,8 +56,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     let mut want: BTreeSet<String> = [
         "gate",
         "release-pr",
-        "tag-0",
-        "tag-1",
+        "tag",
         "sums-app",
         "publish-app",
         "sums-tools",
@@ -88,10 +81,11 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     assert_eq!(runner("build-app-linux-arm64")?, "ubuntu-24.04-arm");
     assert_eq!(runner("build-app-macos-arm64")?, "macos-15");
     let (_, without) = two_roots()?;
-    assert!(jobs(&without)?.iter().all(|(id, _)| matches!(
-        *id,
-        "gate" | "release-pr" | "tag-0" | "tag-1" | "finalize-0" | "finalize-1"
-    )));
+    assert!(
+        jobs(&without)?
+            .iter()
+            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag"))
+    );
     Ok(())
 }
 
@@ -143,7 +137,7 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
         let checkout = &steps(build)[0];
         assert_eq!(
             checkout.at(&["with", "ref"]).and_then(Node::text),
-            Some(tagged_ref(package).as_str()),
+            Some(format!("refs/tags/${{{{ needs.tag.outputs.{package} }}}}").as_str()),
             "{id}"
         );
         assert_eq!(
@@ -175,6 +169,43 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
         );
     }
     assert_eq!(built, 5);
+    Ok(())
+}
+
+#[test]
+fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> TestResult {
+    let (_, tree) = render(
+        &[APP],
+        Some("[[binaries]]\npackage = \"app\"\nbin = \"rg\"\nplatforms = [\"linux-arm64\"]\n"),
+    )?;
+    let build = job(&tree, "build-app-linux-arm64")?;
+    assert_eq!(
+        runs(build),
+        [
+            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "sudo apt-get install --yes musl-tools",
+            "rustup target add aarch64-unknown-linux-musl",
+            "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
+            "tar -czf rg-linux-arm64.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
+        ]
+    );
+    let upload = steps(build).last().ok_or("no steps")?;
+    assert_eq!(
+        upload.at(&["with", "name"]).and_then(Node::text),
+        Some("app-linux-arm64")
+    );
+    assert_eq!(
+        upload.at(&["with", "path"]).and_then(Node::text),
+        Some("rg-linux-arm64.tar.gz")
+    );
+    assert_eq!(
+        upload
+            .at(&["with", "if-no-files-found"])
+            .and_then(Node::text),
+        Some("error")
+    );
+    let publish = job(&tree, "publish-app")?;
+    assert!(runs(publish)[0].ends_with(" --dir dist rg-linux-arm64.tar.gz"));
     Ok(())
 }
 
@@ -216,8 +247,7 @@ fn release_yml_sums_has_no_permissions_and_hashes_exactly_the_builds_of_its_pack
             .texts()
             .into_iter()
             .collect();
-        let mut want: BTreeSet<String> =
-            BTreeSet::from(["gate".to_owned(), tag_of(package).to_owned()]);
+        let mut want: BTreeSet<String> = BTreeSet::from(["gate".to_owned(), "tag".to_owned()]);
         want.extend(build_ids(package, &platforms));
         assert_eq!(
             needs,
@@ -301,10 +331,10 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
         );
         assert_eq!(
             command.at(&["env", "TAG"]).and_then(Node::text),
-            Some(format!("${{{{ needs.{}.outputs.{package} }}}}", tag_of(package)).as_str())
+            Some(format!("${{{{ needs.tag.outputs.{package} }}}}").as_str())
         );
         let needs = publish.get("needs").ok_or("no needs")?.texts();
-        assert_eq!(needs, ["gate", tag_of(package), &format!("sums-{package}")]);
+        assert_eq!(needs, ["gate", "tag", &format!("sums-{package}")]);
         let downloaded: Vec<&str> = steps(publish)
             .iter()
             .filter(|step| uses(step).is_some_and(|u| u.starts_with("actions/download-artifact@")))
@@ -317,26 +347,39 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 }
 
 #[test]
-fn release_yml_each_tag_job_exports_the_released_tag_of_the_packages_of_its_root() -> TestResult {
+fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> TestResult {
     let (_, tree) = two_binaries()?;
+    let outputs = job(&tree, "tag")?.get("outputs").ok_or("no outputs")?;
+    assert_eq!(outputs.keys(), ["app", "tools"]);
     for package in ["app", "tools"] {
-        let outputs = job(&tree, tag_of(package))?
-            .get("outputs")
-            .ok_or("no outputs")?;
-        assert_eq!(outputs.keys(), [package]);
         assert_eq!(
             outputs.get(package).and_then(Node::text),
             Some(format!("${{{{ steps.record.outputs.{package} }}}}").as_str())
         );
     }
     let (_, without) = two_roots()?;
-    assert_eq!(
-        job(&without, "tag-0")?.get("outputs").map(Node::keys),
-        Some(vec!["app"])
-    );
-    assert_eq!(
-        job(&without, "tag-1")?.get("outputs").map(Node::keys),
-        Some(vec!["tools"])
-    );
+    assert!(job(&without, "tag")?.get("outputs").is_none());
+    Ok(())
+}
+
+#[test]
+fn release_yml_refuses_a_bin_name_that_would_add_a_second_command() -> TestResult {
+    for bin in ["rg; echo", "a b", "$(id)", "a.b"] {
+        let result = render(
+            &[APP, Root { ..TOOLS }],
+            Some(&format!(
+                "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\nbin = {bin:?}\n"
+            )),
+        );
+        let error = result.err().ok_or("rendered")?;
+        assert!(
+            matches!(
+                error.downcast_ref::<GenerateError>(),
+                Some(GenerateError::Release(ReleaseError::InvalidBinName { .. }))
+            ),
+            "{bin:?}: {error}"
+        );
+    }
+    assert!(render(&[APP, TOOLS], Some(TWO_BINARIES)).is_ok());
     Ok(())
 }

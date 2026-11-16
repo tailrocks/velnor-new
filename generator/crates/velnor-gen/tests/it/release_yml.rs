@@ -83,11 +83,10 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
     for (_, tree) in [app()?, two_roots()?, two_binaries()?, dashed()?] {
         let all = jobs(&tree)?;
         assert!(all.len() >= 3, "{} jobs", all.len());
-        let packages: Vec<&str> = all
-            .iter()
-            .filter(|(id, _)| id.starts_with("tag-"))
-            .flat_map(|(_, job)| job.get("outputs").map(Node::keys).unwrap_or_default())
-            .collect();
+        let packages = tree
+            .at(&["jobs", "tag", "outputs"])
+            .map(Node::keys)
+            .unwrap_or_default();
         let (gate_id, gate) = all[0];
         assert_eq!(gate_id, "gate");
         assert_eq!(
@@ -111,12 +110,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
             if *id == "release-pr" {
                 want.insert(NEWEST.to_owned());
             }
-            if *id != "release-pr" && !id.starts_with("tag-") && !id.starts_with("finalize-") {
+            if !matches!(*id, "release-pr" | "tag") {
                 let package = package_of(id, &packages)?;
-                want.insert(format!(
-                    "needs.{}.outputs.{package} != ''",
-                    crate::release_yml_binaries::tag_of(package)
-                ));
+                want.insert(format!("needs.tag.outputs.{package} != ''"));
             }
             assert_eq!(conjuncts(job), want, "{id}");
         }
@@ -148,7 +144,7 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
         check.at(&["env", "REPOSITORY"]).and_then(Node::text),
         Some("${{ github.repository }}")
     );
-    let tag = tree.at(&["jobs", "tag-0"]).ok_or("no tag")?;
+    let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
     assert_eq!(
         checkout_of(steps(tag))?
             .at(&["with", "ref"])
@@ -161,7 +157,7 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
 #[test]
 fn release_yml_tag_does_not_wait_for_the_newest_commit_in_any_shape() -> TestResult {
     for (text, tree) in [app()?, two_roots()?, two_binaries()?, dashed()?] {
-        let tag = tree.at(&["jobs", "tag-0"]).ok_or("no tag")?;
+        let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
         assert!(!conjuncts(tag).contains(NEWEST));
         assert!(conjuncts(tag).contains(READY));
         assert!(text.contains(NEWEST));
@@ -181,7 +177,7 @@ fn release_yml_release_pr_checks_out_the_verified_commit_and_runs_only_while_it_
             Some("${{ github.event.workflow_run.head_sha }}")
         );
         assert!(conjuncts(pr).contains(NEWEST));
-        let tag = tree.at(&["jobs", "tag-0"]).ok_or("no tag")?;
+        let tag = tree.at(&["jobs", "tag"]).ok_or("no tag")?;
         assert!(!conjuncts(tag).contains(NEWEST));
     }
     Ok(())
@@ -209,9 +205,9 @@ fn release_yml_serializes_runs_per_commit_and_never_cancels_a_release() -> TestR
         Some("false")
     );
     let tag = tree
-        .at(&["jobs", "tag-0", "concurrency"])
+        .at(&["jobs", "tag", "concurrency"])
         .ok_or("no tag group")?;
-    assert_eq!(tag.get("group").and_then(Node::text), Some("release-tag-0"));
+    assert_eq!(tag.get("group").and_then(Node::text), Some("release-tag"));
     Ok(())
 }
 

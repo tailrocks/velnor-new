@@ -4,11 +4,11 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT, tag_id};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
-use crate::rules::{RenderedJob, RenderedStep, Rule, RuleViolation, Value};
+use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
@@ -21,37 +21,20 @@ const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 const DIST: &str = "dist";
 const SUMS_FILE: &str = "SHA256SUMS";
 
-pub(crate) fn binary_jobs(
-    plan: &ReleasePlan,
-    helper: &HelperRelease,
-) -> Result<Vec<RenderedJob>, Vec<RuleViolation>> {
-    let mut jobs = Vec::new();
-    for binary in &plan.binaries {
-        let index = plan
-            .roots
-            .iter()
-            .position(|root| root.root == binary.root)
-            .ok_or_else(|| {
-                vec![RuleViolation {
-                    job: String::new(),
-                    step: 0,
-                    rule: Rule::BinaryRootNotPlanned {
-                        package: binary.package.clone(),
-                        root: binary.root.clone(),
-                    },
-                }]
-            })?;
-        let tag = tag_id(index);
-        jobs.extend(
-            binary
+pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
+    plan.binaries
+        .iter()
+        .flat_map(|binary| {
+            let mut jobs: Vec<RenderedJob> = binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, &tag, *platform)),
-        );
-        jobs.push(sums(binary, &tag));
-        jobs.push(publish(binary, &tag, helper));
-    }
-    Ok(jobs)
+                .map(|platform| build(binary, *platform))
+                .collect();
+            jobs.push(sums(binary));
+            jobs.push(publish(binary, helper));
+            jobs
+        })
+        .collect()
 }
 
 fn target(platform: Platform) -> (&'static str, &'static str) {
@@ -70,21 +53,21 @@ fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
     format!("{}-{}", binary.package, platform.file_suffix())
 }
 
-fn behind_the_gate(id: String, binary: &BinaryPlan, tag: &str, needs: Vec<String>) -> RenderedJob {
-    let mut all = vec!["gate".to_owned(), tag.to_owned()];
+fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
+    let mut all = vec!["gate".to_owned(), "tag".to_owned()];
     all.extend(needs);
     RenderedJob {
         id,
         needs: all,
         condition: Some(expression(&format!(
-            "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && needs.{tag}.outputs.{} != ''",
+            "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && needs.tag.outputs.{} != ''",
             binary.package
         ))),
         ..RenderedJob::default()
     }
 }
 
-fn build(binary: &BinaryPlan, tag: &str, platform: Platform) -> RenderedJob {
+fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
     let (runner, triple) = target(platform);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
@@ -96,7 +79,7 @@ fn build(binary: &BinaryPlan, tag: &str, platform: Platform) -> RenderedJob {
     let mut steps = vec![
         RenderedStep {
             id: Some("source".to_owned()),
-            ..checkout(&tagged_source(binary, tag), 1)
+            ..checkout(&tagged_source(binary), 1)
         },
         RenderedStep {
             env: variables(&[
@@ -150,20 +133,16 @@ fn build(binary: &BinaryPlan, tag: &str, platform: Platform) -> RenderedJob {
         ..behind_the_gate(
             format!("build-{}-{suffix}", binary.package),
             binary,
-            tag,
             Vec::new(),
         )
     }
 }
 
-fn tagged_source(binary: &BinaryPlan, tag: &str) -> String {
-    format!(
-        "refs/tags/${{{{ needs.{tag}.outputs.{} }}}}",
-        binary.package
-    )
+fn tagged_source(binary: &BinaryPlan) -> String {
+    format!("refs/tags/${{{{ needs.tag.outputs.{} }}}}", binary.package)
 }
 
-fn sums(binary: &BinaryPlan, tag: &str) -> RenderedJob {
+fn sums(binary: &BinaryPlan) -> RenderedJob {
     let mut steps: Vec<RenderedStep> = binary
         .platforms
         .iter()
@@ -190,16 +169,11 @@ fn sums(binary: &BinaryPlan, tag: &str) -> RenderedJob {
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
-        ..behind_the_gate(
-            format!("sums-{}", binary.package),
-            binary,
-            tag,
-            builds(binary),
-        )
+        ..behind_the_gate(format!("sums-{}", binary.package), binary, builds(binary))
     }
 }
 
-fn publish(binary: &BinaryPlan, tag: &str, helper: &HelperRelease) -> RenderedJob {
+fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(
         binary
@@ -215,7 +189,7 @@ fn publish(binary: &BinaryPlan, tag: &str, helper: &HelperRelease) -> RenderedJo
             ("REPOSITORY", "${{ github.repository }}"),
             (
                 "TAG",
-                &format!("${{{{ needs.{tag}.outputs.{} }}}}", binary.package),
+                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
             ),
         ]),
         run: Some(format!(
@@ -232,7 +206,6 @@ fn publish(binary: &BinaryPlan, tag: &str, helper: &HelperRelease) -> RenderedJo
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            tag,
             vec![format!("sums-{}", binary.package)],
         )
     }

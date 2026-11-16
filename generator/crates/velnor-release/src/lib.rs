@@ -28,4 +28,4 @@ pub use ruleset::{
     RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_drift, ruleset_json, ruleset_ref, ruleset_refs,
 };
 pub use tag::{TagPattern, is_tag_name};
-pub use timeout::{MAX_JOB_MINUTES, TAG_JOB_BASE_MINUTES};
+pub use timeout::TAG_JOB_BASE_MINUTES;

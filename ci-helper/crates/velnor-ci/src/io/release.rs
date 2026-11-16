@@ -143,7 +143,13 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
     let token = super::token()?;
     let repo = Repo::parse(&args.repo)?;
     let mut files = BTreeMap::new();
-    for name in args.files.iter().map(PlainName::as_str).chain([SUMS]) {
+    let read: &[&str] = if args.no_files { &[] } else { &[SUMS] };
+    for name in args
+        .files
+        .iter()
+        .map(PlainName::as_str)
+        .chain(read.iter().copied())
+    {
         let path = args.dir.join(name);
         match fs::read(&path) {
             Ok(bytes) => {
@@ -163,6 +169,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         app: args.app.clone(),
         names: args.files.clone(),
         files,
+        assetless: args.no_files,
     };
     publish(
         &HttpGitHub::new(super::api_url(), token, DEFAULT_TIMEOUT),

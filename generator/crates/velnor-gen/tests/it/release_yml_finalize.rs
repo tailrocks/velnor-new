@@ -3,61 +3,136 @@
 
 use std::error::Error;
 
-use crate::release_fixture::{APP, TOOLS, render, steps, two_binaries};
+use velnor_gen::expected_files;
+use velnor_model::RELEASE_WORKFLOW_PATH;
+use velnor_rust::LOCK_PATH;
+
+use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
 use crate::release_yml_binaries::{job, permissions};
-use crate::yaml_tree::Node;
+use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+const APP_SLUG: &str = "velnor-release";
+
+fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<dyn Error>> {
+    let mut view = release_view(roots, Some(config))?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+    let text = expected_files(&view)?
+        .remove(&RELEASE_WORKFLOW_PATH)
+        .ok_or("no release.yml")?;
+    Ok(parse(&text)?)
+}
+
 #[test]
-fn a_package_without_a_binaries_entry_gets_a_job_that_publishes_its_draft_release() -> TestResult {
-    let (_, tree) = render(&[APP], Some("roots = [\".\"]\n"))?;
-    let finalize = job(&tree, "finalize-0")?;
+fn a_package_without_a_binaries_entry_is_published_by_the_guarded_helper_command() -> TestResult {
+    let tree = render_with("0.1.81", &[APP], "roots = [\".\"]\n")?;
+    let finalize = job(&tree, "finalize")?;
     assert_eq!(
         finalize.get("needs").map(Node::texts),
-        Some(vec!["gate", "tag-0"])
+        Some(vec!["gate", "tag"])
     );
     assert_eq!(
         permissions(finalize),
-        [("contents".to_owned(), "write".to_owned())]
+        [("contents".to_owned(), "read".to_owned())]
     );
     let all = steps(finalize);
-    assert_eq!(all.len(), 1);
-    let step = &all[0];
+    let token = all
+        .iter()
+        .position(|step| {
+            step.get("uses")
+                .and_then(Node::text)
+                .is_some_and(|uses| uses.starts_with("actions/create-github-app-token@"))
+        })
+        .ok_or("no App token")?;
     assert_eq!(
-        step.get("run").and_then(Node::text),
-        Some("gh release edit \"$TAG\" --repo \"$REPOSITORY\" --draft=false")
+        all[token]
+            .at(&["with", "permission-contents"])
+            .and_then(Node::text),
+        Some("write")
+    );
+    let publish = all.last().ok_or("no steps")?;
+    assert_eq!(
+        publish.get("run").and_then(Node::text),
+        Some(
+            format!(
+                "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {APP_SLUG} --no-files"
+            )
+            .as_str()
+        )
     );
     assert_eq!(
-        step.get("if").and_then(Node::text),
-        Some("${{ needs.tag-0.outputs.app != \'\' }}")
+        publish.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text),
+        Some("${{ steps.app.outputs.token }}")
     );
     assert_eq!(
-        step.at(&["env", "TAG"]).and_then(Node::text),
-        Some("${{ needs.tag-0.outputs.app }}")
+        publish.at(&["env", "TAG"]).and_then(Node::text),
+        Some("${{ needs.tag.outputs.app }}")
     );
+    assert!(all.len() > token + 1);
+    for step in all {
+        let run = step.get("run").and_then(Node::text).unwrap_or_default();
+        assert!(!run.contains("gh release"), "{run}");
+    }
     assert_eq!(
-        job(&tree, "tag-0")?.get("outputs").map(Node::keys),
+        job(&tree, "tag")?.get("outputs").map(Node::keys),
         Some(vec!["app"])
     );
     Ok(())
 }
 
 #[test]
-fn packages_with_a_binaries_entry_are_published_by_their_own_job_and_not_finalized() -> TestResult {
-    let (_, tree) = two_binaries()?;
-    assert!(tree.at(&["jobs", "finalize-0"]).is_none());
-    assert!(tree.at(&["jobs", "finalize-1"]).is_none());
-
-    let (_, mixed) = render(
-        &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"tools\"\n"),
-    )?;
-    assert!(mixed.at(&["jobs", "finalize-0"]).is_some());
-    assert!(mixed.at(&["jobs", "finalize-1"]).is_none());
-    assert_eq!(
-        job(&mixed, "tag-1")?.get("outputs").map(Node::keys),
-        Some(vec!["tools"])
+fn the_finalizer_runs_only_when_a_package_without_a_binary_was_released() -> TestResult {
+    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
+    let finalize = job(&tree, "finalize")?;
+    let condition = finalize.get("if").and_then(Node::text).ok_or("no if")?;
+    assert!(
+        condition
+            .ends_with(" && (needs.tag.outputs.app != '' || needs.tag.outputs.tools != '') }}"),
+        "{condition}"
     );
+    assert_eq!(
+        finalize.get("environment").and_then(Node::text),
+        job(&tree, "tag")?.get("environment").and_then(Node::text)
+    );
+    Ok(())
+}
+
+#[test]
+fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
+    let tree = render_with(
+        "0.1.81",
+        &[APP, TOOLS],
+        "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\n",
+    )?;
+    assert!(tree.at(&["jobs", "finalize"]).is_none());
+    let mixed = render_with(
+        "0.1.81",
+        &[APP, TOOLS],
+        "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"tools\"\n",
+    )?;
+    let condition = job(&mixed, "finalize")?
+        .get("if")
+        .and_then(Node::text)
+        .ok_or("no if")?;
+    assert!(
+        condition.ends_with(" && (needs.tag.outputs.app != '') }}"),
+        "{condition}"
+    );
+    assert_eq!(
+        job(&mixed, "tag")?.get("outputs").map(Node::keys),
+        Some(vec!["tools", "app"])
+    );
+    Ok(())
+}
+
+#[test]
+fn a_helper_that_cannot_publish_an_assetless_release_gets_no_finalizer() -> TestResult {
+    for version in ["0.1.80", "0.1.79"] {
+        let tree = render_with(version, &[APP], "roots = [\".\"]\n")?;
+        assert!(tree.at(&["jobs", "finalize"]).is_none(), "{version}");
+        assert!(job(&tree, "tag")?.get("outputs").is_none(), "{version}");
+    }
     Ok(())
 }

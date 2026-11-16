@@ -171,9 +171,9 @@ pub enum ReleaseError {
         root: String,
         value: String,
     },
-    PublishTimeoutTooLong {
-        root: String,
+    PublishBudgetOutlivesToken {
         minutes: u64,
+        limit: u64,
     },
     ReleasePlzVersionTooOld {
         version: String,

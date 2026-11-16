@@ -1,19 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_release::{ReleasePlan, RootPlan};
+use std::collections::BTreeSet;
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, tag_id};
-use crate::release_steps::{expression, permissions, variables};
+use velnor_model::HelperRelease;
+use velnor_release::{RELEASE_APP_SLUG, ReleasePlan};
+
+use crate::release::after_the_gate;
+use crate::release_steps::{app_token, expression, permissions, variables};
 use crate::rules::{RenderedJob, RenderedStep};
+use crate::steps::install_helper;
 
 const FINALIZE_TIMEOUT_MINUTES: u16 = 10;
+const ASSETLESS_PUBLISH_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-pub(crate) fn without_binary(plan: &ReleasePlan, root: &RootPlan) -> Vec<String> {
-    root.packages
+pub(crate) fn without_binary(plan: &ReleasePlan, helper: &HelperRelease) -> BTreeSet<String> {
+    if !helper.version().at_least(ASSETLESS_PUBLISH_HELPER) {
+        return BTreeSet::new();
+    }
+    plan.roots
         .iter()
-        .map(|(package, _)| package)
-        .chain(&root.inherited)
+        .flat_map(|root| {
+            root.packages
+                .iter()
+                .map(|(package, _)| package)
+                .chain(&root.inherited)
+        })
         .filter(|package| {
             plan.binaries
                 .iter()
@@ -23,44 +35,51 @@ pub(crate) fn without_binary(plan: &ReleasePlan, root: &RootPlan) -> Vec<String>
         .collect()
 }
 
-pub(crate) fn finalize_jobs(plan: &ReleasePlan) -> Vec<RenderedJob> {
-    plan.roots
-        .iter()
-        .enumerate()
-        .filter_map(|(index, root)| {
-            let packages = without_binary(plan, root);
-            (!packages.is_empty()).then(|| finalize(index, &packages))
-        })
-        .collect()
+pub(crate) fn finalize_job(plan: &ReleasePlan, helper: &HelperRelease) -> Option<RenderedJob> {
+    let packages = without_binary(plan, helper);
+    if packages.is_empty() {
+        return None;
+    }
+    let released: Vec<String> = packages.iter().map(|package| released(package)).collect();
+    let mut steps = vec![install_helper(helper), app_token(&[("contents", "write")])];
+    steps.extend(packages.iter().map(|package| publish(package)));
+    let gated = after_the_gate("finalize");
+    Some(RenderedJob {
+        needs: vec!["gate".to_owned(), "tag".to_owned()],
+        condition: gated.condition.map(|gate| {
+            let gate = gate
+                .strip_prefix("${{ ")
+                .and_then(|text| text.strip_suffix(" }}"))
+                .unwrap_or(&gate)
+                .to_owned();
+            expression(&format!("{gate} && ({})", released.join(" || ")))
+        }),
+        permissions: permissions(&[("contents", "read")]),
+        timeout_minutes: FINALIZE_TIMEOUT_MINUTES,
+        steps,
+        id: gated.id,
+        environment: gated.environment,
+        runs_on: gated.runs_on,
+        ..RenderedJob::default()
+    })
 }
 
-fn finalize(index: usize, packages: &[String]) -> RenderedJob {
-    let tag = tag_id(index);
-    RenderedJob {
-        id: format!("finalize-{index}"),
-        needs: vec!["gate".to_owned(), tag.clone()],
-        condition: Some(expression(&format!(
-            "{GATE_IS_READY} && {FROM_A_PASSED_PUSH}"
-        ))),
-        permissions: permissions(&[("contents", "write")]),
-        runs_on: HOSTED_RUNNER.to_owned(),
-        timeout_minutes: FINALIZE_TIMEOUT_MINUTES,
-        steps: packages
-            .iter()
-            .map(|package| RenderedStep {
-                name: format!("Publish the draft release of {package}"),
-                condition: Some(expression(&format!("needs.{tag}.outputs.{package} != ''"))),
-                env: variables(&[
-                    ("GH_TOKEN", "${{ github.token }}"),
-                    ("REPOSITORY", "${{ github.repository }}"),
-                    ("TAG", &format!("${{{{ needs.{tag}.outputs.{package} }}}}")),
-                ]),
-                run: Some(
-                    "gh release edit \"$TAG\" --repo \"$REPOSITORY\" --draft=false".to_owned(),
-                ),
-                ..RenderedStep::default()
-            })
-            .collect(),
-        ..RenderedJob::default()
+fn released(package: &str) -> String {
+    format!("needs.tag.outputs.{package} != ''")
+}
+
+fn publish(package: &str) -> RenderedStep {
+    RenderedStep {
+        name: format!("Publish the draft release of {package}"),
+        condition: Some(expression(&released(package))),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ steps.app.outputs.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("TAG", &format!("${{{{ needs.tag.outputs.{package} }}}}")),
+        ]),
+        run: Some(format!(
+            "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {RELEASE_APP_SLUG} --no-files"
+        )),
+        ..RenderedStep::default()
     }
 }

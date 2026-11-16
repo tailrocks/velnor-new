@@ -52,6 +52,13 @@ impl Settings {
         self.publish != Some(false) && self.git_only != Some(true)
     }
 
+    pub(crate) fn publish_minutes(&self) -> u64 {
+        self.publish_timeout
+            .as_deref()
+            .and_then(crate::timeout::minutes)
+            .unwrap_or(crate::timeout::DEFAULT_PUBLISH_MINUTES)
+    }
+
     pub(crate) fn over(&self, base: &Settings) -> Settings {
         Settings {
             git_tag_name: self

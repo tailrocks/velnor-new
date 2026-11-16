@@ -69,16 +69,15 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_release_plz_runs() -> Te
         ]
     );
     assert_eq!(
-        release_plz("tag-0")?,
-        [format!(
-            "{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release.json\""
-        )]
-    );
-    assert_eq!(
-        release_plz("tag-1")?,
-        [format!(
-            "{exec} release {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml' -o json > \"$RUNNER_TEMP/release.json\""
-        )]
+        release_plz("tag")?,
+        [
+            format!(
+                "{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""
+            ),
+            format!(
+                "{exec} release {base} --manifest-path 'it'\\''s/Cargo.toml' --config 'it'\\''s/release-plz.toml' -o json > \"$RUNNER_TEMP/release-1.json\""
+            ),
+        ]
     );
     Ok(())
 }

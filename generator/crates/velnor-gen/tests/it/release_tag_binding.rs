@@ -26,7 +26,7 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;
     let mut found = Vec::new();
-    for id in ["release-pr", "tag-0", "tag-1"] {
+    for id in ["release-pr", "tag"] {
         let job = tree.at(&["jobs", id]).ok_or("no job")?;
         for step in steps(job) {
             let run = step.get("run").and_then(Node::text).unwrap_or_default();
@@ -58,17 +58,12 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
 fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_token() -> TestResult
 {
     let found = refuse_steps("0.1.80")?;
-    assert_eq!(found.len(), 3);
-    let commands = [
-        "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
-        "velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
-        "velnor-ci release check-config tools/release-plz.toml --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
-    ];
-    for ((_, step), command) in found.into_iter().zip(commands) {
+    assert_eq!(found.len(), 2);
+    for (_, step) in found {
         assert_eq!(
             step,
             [
-                command,
+                "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
                 "CARGO_BUILD_RUSTC_WRAPPER=",
@@ -87,15 +82,11 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 #[test]
 fn a_helper_that_predates_the_flag_is_never_given_it() -> TestResult {
     for version in ["0.1.79", "0.1.0"] {
-        let found = refuse_steps(version)?;
-        let commands = [
-            "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
-            "velnor-ci release check-config release-plz.toml",
-            "velnor-ci release check-config tools/release-plz.toml",
-        ];
-        assert_eq!(found.len(), 3);
-        for ((_, step), command) in found.into_iter().zip(commands) {
-            assert_eq!(step, [command]);
+        for (_, step) in refuse_steps(version)? {
+            assert_eq!(
+                step,
+                ["velnor-ci release check-config release-plz.toml tools/release-plz.toml"]
+            );
         }
     }
     Ok(())
@@ -115,7 +106,7 @@ fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;
-    for id in ["release-pr", "tag-0", "tag-1"] {
+    for id in ["release-pr", "tag"] {
         let job = tree.at(&["jobs", id]).ok_or("no job")?;
         let all = steps(job);
         let check = all

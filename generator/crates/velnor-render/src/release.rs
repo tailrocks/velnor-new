@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::{ReleasePlan, RootPlan, TAG_JOB_BASE_MINUTES};
+use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES};
 
 use crate::release_binaries::binary_jobs;
-use crate::release_finalize::{finalize_jobs, without_binary};
+use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_steps::{
     app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
     release_plz_arguments, release_plz_step, variables,
@@ -40,10 +40,9 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![gate(helper), release_pr(plan, helper)];
-    jobs.extend(tags(plan, helper));
-    jobs.extend(binary_jobs(plan, helper)?);
-    jobs.extend(finalize_jobs(plan));
+    let mut jobs = vec![gate(helper), release_pr(plan, helper), tag(plan, helper)];
+    jobs.extend(binary_jobs(plan, helper));
+    jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
     let workflow = [
@@ -143,7 +142,7 @@ fn gate(helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn after_the_gate(id: &str) -> RenderedJob {
+pub(crate) fn after_the_gate(id: &str) -> RenderedJob {
     RenderedJob {
         id: id.to_owned(),
         needs: vec!["gate".to_owned()],
@@ -199,75 +198,65 @@ fn only_while_newest(steps: &mut [RenderedStep]) {
     }
 }
 
-pub(crate) fn tag_id(index: usize) -> String {
-    format!("tag-{index}")
-}
-
-fn tags(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
-    plan.roots
-        .iter()
-        .enumerate()
-        .map(|(index, root)| tag(plan, helper, index, root))
-        .collect()
-}
-
-fn tag(plan: &ReleasePlan, helper: &HelperRelease, index: usize, root: &RootPlan) -> RenderedJob {
+fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = install_release_plz(plan);
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
-    steps.push(refuse_commands(
-        std::slice::from_ref(root),
-        helper.version(),
-    ));
+    steps.push(refuse_commands(&plan.roots, helper.version()));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
     ]));
-    let file = "\"$RUNNER_TEMP/release.json\"";
-    steps.push(release_plz_step(
-        format!("Tag the releases of {}", label(root)),
-        &format!(
-            "release-plz release {} -o json > {file}",
-            release_plz_arguments(root)
-        ),
-    ));
+    let files: Vec<String> = (0..plan.roots.len())
+        .map(|index| format!("\"$RUNNER_TEMP/release-{index}.json\""))
+        .collect();
+    steps.extend(plan.roots.iter().zip(&files).map(|(root, file)| {
+        release_plz_step(
+            format!("Tag the releases of {}", label(root)),
+            &format!(
+                "release-plz release {} -o json > {file}",
+                release_plz_arguments(root)
+            ),
+        )
+    }));
     steps.push(RenderedStep {
         id: Some("record".to_owned()),
         name: "Record the released packages".to_owned(),
-        run: Some(format!("velnor-ci release record {file}")),
+        run: Some(format!("velnor-ci release record {}", files.join(" "))),
         ..RenderedStep::default()
     });
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
-    if root.publishes_to_crates_io {
+    if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));
     }
     RenderedJob {
         concurrency: Some(RenderedConcurrency {
-            group: format!("release-tag-{index}"),
+            group: "release-tag".to_owned(),
             cancel_in_progress: false,
         }),
         permissions: permissions(&scopes),
         outputs: plan
             .binaries
             .iter()
-            .filter(|binary| binary.root == root.root)
-            .map(|binary| &binary.package)
-            .chain(&without_binary(plan, root))
+            .map(|binary| binary.package.clone())
+            .chain(without_binary(plan, helper))
             .map(|package| {
-                (
-                    package.clone(),
-                    format!("${{{{ steps.record.outputs.{package} }}}}"),
-                )
+                let output = format!("${{{{ steps.record.outputs.{package} }}}}");
+                (package, output)
             })
             .collect(),
         timeout_minutes: u16::try_from(
-            u64::from(TAG_JOB_BASE_MINUTES) + root.publish_budget_minutes,
+            plan.roots
+                .iter()
+                .fold(u64::from(TAG_JOB_BASE_MINUTES), |total, root| {
+                    total.saturating_add(root.publish_budget_minutes)
+                }),
         )
         .unwrap_or(u16::MAX),
         steps,
-        ..after_the_gate(&tag_id(index))
+        ..after_the_gate("tag")
     }
 }
 

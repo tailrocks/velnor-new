@@ -14,7 +14,7 @@ use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
-use crate::timeout::{MAX_JOB_MINUTES, TAG_JOB_BASE_MINUTES};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
 use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -250,25 +250,16 @@ fn plan_binaries(
     Ok(binaries)
 }
 
-fn publish_budget(config: &RootConfig, inherited: usize) -> Result<u64, ReleaseError> {
-    let Some(each) = config.publish_timeout_minutes else {
-        return Ok(0);
-    };
-    let publishing = config
-        .packages
+fn publish_budget(config: &RootConfig, inherited: &[String]) -> u64 {
+    let unlisted = inherited
         .iter()
-        .filter(|package| config.publishes(&package.name))
-        .count()
-        + inherited;
-    let budget = each.saturating_mul(publishing.max(1) as u64);
-    let total = u64::from(TAG_JOB_BASE_MINUTES).saturating_add(budget);
-    if total > u64::from(MAX_JOB_MINUTES) {
-        return Err(ReleaseError::PublishTimeoutTooLong {
-            root: config.root.clone(),
-            minutes: total,
-        });
-    }
-    Ok(budget)
+        .filter(|package| config.publishes(package))
+        .count();
+    let none_known = config.publishes_to_crates_io && unlisted == 0 && config.packages.is_empty();
+    let unlisted = unlisted.max(usize::from(none_known)) as u64;
+    config
+        .listed_publish_minutes
+        .saturating_add(unlisted.saturating_mul(config.unlisted_publish_minutes))
 }
 
 impl ReleasePlan {
@@ -325,8 +316,8 @@ impl ReleasePlan {
             .into_iter()
             .map(|config| {
                 let inherited = inherited_packages(&config, files.rust_metadata.as_ref());
-                let budget = publish_budget(&config, inherited.len())?;
-                Ok(RootPlan {
+                let budget = publish_budget(&config, &inherited);
+                RootPlan {
                     inherited,
                     publish_budget_minutes: budget,
                     root: config.root,
@@ -338,9 +329,17 @@ impl ReleasePlan {
                         .map(|package| (package.name, package.tag_pattern))
                         .collect(),
                     workspace_tags: config.workspace_tags,
-                })
+                }
             })
-            .collect::<Result<Vec<_>, ReleaseError>>()?;
+            .collect::<Vec<_>>();
+        let publishing: u64 = roots.iter().map(|root| root.publish_budget_minutes).sum();
+        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+        if publishing > limit {
+            return Err(ReleaseError::PublishBudgetOutlivesToken {
+                minutes: publishing,
+                limit,
+            });
+        }
         Ok(ReleasePlan {
             roots,
             after: config.after,
