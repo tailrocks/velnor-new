@@ -20,9 +20,8 @@ use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
 use crate::side::Side;
 
-pub(super) const STANDIN_IMAGE: &str = "velnor-local/runner-server";
-const LOCAL_IMAGE: &str = "velnor-local/cache-server";
-const RUNNER_IMAGE: &str = "velnor-local/runner";
+pub(super) use crate::doctor::STANDIN_IMAGE;
+use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub(super) const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
 const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";

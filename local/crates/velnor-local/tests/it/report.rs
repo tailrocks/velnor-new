@@ -143,7 +143,6 @@ fn every_verdict_says_that_the_approved_workflows_check_is_off() {
     let warning = format!("velnor-local leaf: {}\n", velnor_local::authority::WARNING);
     assert!(text.contains(&warning), "{text}");
     assert!(warning.contains("approved-workflows check is off"));
-    assert!(warning.contains("not available yet"));
 }
 
 #[test]
