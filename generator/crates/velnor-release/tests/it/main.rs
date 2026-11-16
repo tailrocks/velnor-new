@@ -10,6 +10,7 @@ mod inheritance;
 mod mise_lock;
 mod refs;
 mod refusals;
+mod registry;
 mod sources;
 mod symlinks;
 mod token_hardening;

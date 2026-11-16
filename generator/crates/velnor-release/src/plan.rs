@@ -8,6 +8,7 @@ use velnor_model::Platform;
 use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
 use crate::mise;
+use crate::registry::check_publish_registries;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::velnor_config::{VelnorConfig, parse};
@@ -21,6 +22,7 @@ pub struct ReleaseFiles {
     pub toolchain_files: BTreeMap<String, String>,
     pub symlinks: BTreeSet<String>,
     pub cargo_manifests: Option<BTreeSet<String>>,
+    pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
     pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
     pub workflow_names: Option<BTreeSet<String>>,
@@ -287,10 +289,20 @@ impl ReleasePlan {
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
         }
-        let publishes = configs.iter().any(|config| config.publishes_to_crates_io);
+        for config in &configs {
+            check_publish_registries(config, &files.cargo_manifest_texts)?;
+        }
         for (file, text) in &files.cargo_configs {
-            if config.roots.iter().any(|root| config_reaches(file, root)) {
-                cargo_config(file, text, publishes)?;
+            let mut reached = configs
+                .iter()
+                .filter(|config| config_reaches(file, &config.root))
+                .peekable();
+            if reached.peek().is_some() {
+                cargo_config(
+                    file,
+                    text,
+                    reached.any(|config| config.publishes_to_crates_io),
+                )?;
             }
         }
         for (file, text) in &files.toolchain_files {

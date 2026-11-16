@@ -18,7 +18,15 @@ impl ReleaseError {
             ),
             Self::CargoRedirectsCratesIo { file } => write!(
                 f,
-                "{file}: a cargo proxy or CA override would redirect the crates.io publish token"
+                "{file}: a cargo proxy, CA override or non-crates.io default registry would redirect the crates.io publish token"
+            ),
+            Self::PublishNamesOtherRegistry {
+                root,
+                manifest,
+                registry,
+            } => write!(
+                f,
+                "{manifest}: package.publish names registry {registry}, so cargo would send the crates.io publish token of release root {root} to it; list only crates-io or set publish = false"
             ),
             Self::ToolchainFromPath { file } => write!(
                 f,

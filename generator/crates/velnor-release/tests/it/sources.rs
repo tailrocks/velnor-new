@@ -17,7 +17,7 @@ fn names(items: &[&str]) -> BTreeSet<String> {
     items.iter().map(|item| (*item).to_owned()).collect()
 }
 
-fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
+pub(crate) fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
     let mut files = files();
     files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
     let root = edit(
@@ -259,6 +259,38 @@ fn cargo_proxy_and_ca_overrides_are_refused_when_publishing_to_crates_io() {
             "{config}"
         );
     }
+}
+
+#[test]
+fn a_non_crates_io_default_registry_is_refused_when_publishing_to_crates_io() {
+    for path in [".cargo/config.toml", ".cargo/config"] {
+        for config in [
+            "[registry]\ndefault = \"company\"\n[registries.company]\nindex = \"sparse+https://example.test/\"\n",
+            "[registry]\ndefault = 7\n",
+        ] {
+            let mut files = files();
+            files
+                .cargo_configs
+                .insert(path.to_owned(), config.to_owned());
+            assert!(
+                matches!(
+                    refusal(&files),
+                    Some(ReleaseError::CargoRedirectsCratesIo { .. })
+                ),
+                "{path}: {config}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_crates_io_default_registry_is_accepted() {
+    let mut files = files();
+    files.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[registry]\ndefault = \"crates-io\"\n".to_owned(),
+    );
+    assert!(refusal(&files).is_none());
 }
 
 #[test]
