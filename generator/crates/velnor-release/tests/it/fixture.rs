@@ -78,7 +78,7 @@ pub(crate) fn plz_refusal_of(from: &str, to: &str) -> Result<Option<ReleaseError
 pub(crate) fn metadata(workspaces: &[(&str, &[(&str, &str)])]) -> BTreeMap<RepoPath, RustMetadata> {
     let package = |(name, manifest): &(&str, &str)| RustPackage {
         name: PackageName::new((*name).to_owned()).unwrap_or_else(|e| unreachable!("{e}")),
-        version: "0.1.0".to_owned(),
+        version: Some("0.1.0".to_owned()),
         manifest: RepoPath::new(*manifest).unwrap_or_else(|e| unreachable!("{e}")),
         dependencies: Vec::new(),
         targets: Vec::new(),

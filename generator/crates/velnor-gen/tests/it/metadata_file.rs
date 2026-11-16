@@ -274,3 +274,24 @@ fn only_a_rust_file_in_a_discovered_folder_changes_the_recorded_layout() -> Test
     );
     Ok(())
 }
+
+#[test]
+fn a_file_written_before_versions_were_recorded_still_reads() -> TestResult {
+    let files = two_workspaces()?;
+    let mut json: serde_json::Value = serde_json::from_str(&recorded(&files)?)?;
+    for root in json["roots"].as_object_mut().ok_or("roots")?.values_mut() {
+        for member in root["members"].as_array_mut().ok_or("members")? {
+            member.as_object_mut().ok_or("member")?.remove("version");
+        }
+    }
+    let old = serde_json::to_string(&json)?;
+    assert!(!old.contains("\"version\""));
+    let read = recorded_metadata(&files, Some(old.as_bytes()))?;
+    assert!(read.values().flat_map(|known| &known.members).count() > 0);
+    assert!(
+        read.values()
+            .flat_map(|known| &known.members)
+            .all(|member| member.version.is_none())
+    );
+    Ok(())
+}

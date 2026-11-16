@@ -38,16 +38,25 @@ fn literal_version(text: &str) -> Option<(String, String)> {
 fn check_metadata(
     config: &RootConfig,
     metadata: &BTreeMap<RepoPath, RustMetadata>,
+    manifests: &BTreeMap<String, String>,
 ) -> Result<(), ReleaseError> {
     for member in metadata.values().flat_map(|known| &known.members) {
-        if within(&config.root, member.manifest.as_str())
-            && receives_version_tag(config, member.name.as_str())
-            && ends_in_lock(&member.version)
+        let path = member.manifest.as_str();
+        if !within(&config.root, path) || !receives_version_tag(config, member.name.as_str()) {
+            continue;
+        }
+        let version = match &member.version {
+            Some(version) => Some(version.clone()),
+            None => manifests
+                .get(path)
+                .and_then(|text| literal_version(text))
+                .filter(|(name, _)| name == member.name.as_str())
+                .map(|(_, version)| version),
+        };
+        if let Some(version) = version
+            && ends_in_lock(&version)
         {
-            return Err(ReleaseError::VersionEndsInLock(
-                member.manifest.to_string(),
-                member.version.clone(),
-            ));
+            return Err(ReleaseError::VersionEndsInLock(path.to_owned(), version));
         }
     }
     Ok(())
@@ -85,7 +94,7 @@ pub(crate) fn check_versions(
             .any(TagPattern::ends_with_version)
     }) {
         match metadata {
-            Some(metadata) => check_metadata(config, metadata)?,
+            Some(metadata) => check_metadata(config, metadata, manifests)?,
             None => check_text(config, manifests)?,
         }
     }
