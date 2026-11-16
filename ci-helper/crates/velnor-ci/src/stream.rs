@@ -5,14 +5,14 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::sync::Mutex;
 
 use crate::setup::DoctestCount;
-use crate::tests_run::SummaryTap;
+use crate::tests_run::{SummaryTap, TestCounts};
 
 const CHUNK: usize = 8192;
 
 #[derive(Debug, Default)]
 pub struct Pumped {
     pub failure: Option<Error>,
-    pub tests_run: Option<u64>,
+    pub counts: Option<TestCounts>,
 }
 
 pub fn pump<L: Write>(from: impl Read, to: impl Write, log: &Mutex<L>) -> Option<Error> {
@@ -52,7 +52,7 @@ pub fn pump_counted<L: Write>(
     }
     Pumped {
         failure: failed,
-        tests_run: tap.finish(),
+        counts: tap.finish(),
     }
 }
 

@@ -16,6 +16,7 @@ pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {

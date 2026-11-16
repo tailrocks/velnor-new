@@ -72,5 +72,5 @@ pub use sha256::sha256_hex;
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
-pub use verdict::{JobResult, Need, PlanOutput, Verdict, decide, verdict};
+pub use verdict::{JobResult, Need, PlanOutput, TestCounts, Verdict, decide, verdict};
 pub use weaken::introduced;

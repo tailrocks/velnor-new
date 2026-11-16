@@ -39,6 +39,7 @@ struct Run {
     outputs: Outputs,
     results: Vec<(&'static str, &'static str)>,
     count: Option<&'static str>,
+    listed: Option<&'static str>,
     event: Option<&'static str>,
 }
 
@@ -54,6 +55,7 @@ fn passing() -> Run {
             ("audit", "skipped"),
         ],
         count: Some("12"),
+        listed: Some("12"),
         event: Some("pull_request"),
     }
 }
@@ -82,11 +84,12 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
                 .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                 .collect();
         }
-        if *job == "rust-test"
-            && let Some(count) = run.count
-        {
-            need.outputs
-                .insert("tests_run".to_owned(), count.to_owned());
+        if *job == "rust-test" {
+            for (name, value) in [("tests_run", run.count), ("tests_listed", run.listed)] {
+                if let Some(value) = value {
+                    need.outputs.insert(name.to_owned(), value.to_owned());
+                }
+            }
         }
         needs.insert(JobId::new(*job)?, need);
     }
@@ -169,23 +172,41 @@ fn a_job_the_plan_did_not_schedule_may_be_skipped_and_a_success_is_a_warning() -
 }
 
 #[test]
-fn zero_tests_in_a_lane_whose_selected_packages_have_tests_fails() -> TestResult {
-    let run = with(passing(), |run| run.count = Some("0"));
-    expect(&run, false, "0 tests ran for root")?;
+fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -> TestResult {
+    let run = with(passing(), |run| {
+        run.count = Some("0");
+        run.listed = Some("3");
+    });
+    expect(&run, false, "3 tests were listed for root and none ran")?;
+    let run = with(passing(), |run| {
+        run.count = Some("0");
+        run.listed = Some("0");
+    });
+    expect(&run, true, "Required: pass")?;
+    let run = with(passing(), |run| {
+        run.count = Some("2");
+        run.listed = Some("9");
+    });
+    expect(&run, true, "Required: pass")
+}
+
+#[test]
+fn a_lane_whose_packages_have_no_test_targets_needs_no_count() -> TestResult {
     let run = with(passing(), |run| {
         run.outputs.iter_mut().for_each(|(key, value)| {
             if *key == "rust_root_tests" {
                 *value = "skip";
             }
         });
+        run.count = None;
+        run.listed = None;
     });
-    let run = with(run, |run| run.count = Some("0"));
     expect(&run, true, "Required: pass")
 }
 
 #[test]
-fn a_missing_empty_or_garbled_tests_run_fails() -> TestResult {
-    for bad in [
+fn a_missing_empty_or_garbled_tests_run_or_tests_listed_fails() -> TestResult {
+    let garbled = [
         None,
         Some(""),
         Some("-1"),
@@ -194,12 +215,19 @@ fn a_missing_empty_or_garbled_tests_run_fails() -> TestResult {
         Some("0x10"),
         Some("+5"),
         Some("99999999999999999999999"),
-    ] {
+    ];
+    for bad in garbled {
         let run = with(passing(), |run| run.count = bad);
         expect(
             &run,
             false,
-            "tests_run is missing or not a number in a test job of root",
+            "tests_run or tests_listed is missing or not a number in a test job of root",
+        )?;
+        let run = with(passing(), |run| run.listed = bad);
+        expect(
+            &run,
+            false,
+            "tests_run or tests_listed is missing or not a number in a test job of root",
         )?;
     }
     Ok(())

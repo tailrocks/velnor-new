@@ -87,6 +87,7 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
     );
     assert!(text.contains("      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'\n"));
     assert!(text.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n"));
+    assert!(text.contains("      tests_listed: '${{ steps.test.outputs.tests_listed }}'\n"));
     Ok(())
 }
 

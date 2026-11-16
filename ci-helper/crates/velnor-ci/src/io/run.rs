@@ -19,7 +19,7 @@ use super::append_outputs;
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::{Pumped, pump_counted, separate_group};
-use crate::tests_run::{output_line, runs_nextest};
+use crate::tests_run::{TestCounts, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -102,11 +102,11 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, tests_run) = collect(&receiver, streams);
+    let (mut lost, counts) = collect(&receiver, streams);
     if runs_nextest(&args.command)
-        && let Some(tests_run) = tests_run
+        && let Some(counts) = counts
     {
-        append_outputs(&output_line(tests_run))
+        append_outputs(&output_lines(counts))
             .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
     let ran = doctests
@@ -182,20 +182,20 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
 fn collect(
     receiver: &mpsc::Receiver<Pumped>,
     streams: usize,
-) -> (Option<std::io::Error>, Option<u64>) {
+) -> (Option<std::io::Error>, Option<TestCounts>) {
     let mut lost = None;
-    let mut tests_run = None;
+    let mut counts = None;
     let deadline = Instant::now() + pump_grace();
     for _ in 0..streams {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(pumped) => {
                 lost = lost.or(pumped.failure);
-                tests_run = pumped.tests_run.or(tests_run);
+                counts = pumped.counts.or(counts);
             }
             Err(_) => break,
         }
     }
-    (lost, tests_run)
+    (lost, counts)
 }
 
 #[cfg(unix)]

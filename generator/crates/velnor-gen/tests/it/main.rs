@@ -57,6 +57,7 @@ mod release_yml_security;
 mod render_empty_key;
 mod repo_sample;
 mod required_gate;
+mod required_gate_lanes;
 mod required_job;
 mod restored_term;
 mod rule_config;

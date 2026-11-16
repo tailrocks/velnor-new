@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{GateNeed, JobCondition, JobId, RootSlug, TESTS_RUN_OUTPUT, VerdictSpec};
+use velnor_model::{
+    GateNeed, JobCondition, JobId, RootSlug, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+};
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -39,6 +41,12 @@ impl JobResult {
             Self::Other(_) => "unknown",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TestCounts {
+    pub run: u64,
+    pub listed: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -179,7 +187,7 @@ impl Verdict {
 pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
-    tests_run: &BTreeMap<JobId, Option<u64>>,
+    tests: &BTreeMap<JobId, Option<TestCounts>>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
@@ -217,23 +225,27 @@ pub fn verdict(
         }
     }
     for (slug, jobs) in &plan.test_lanes {
-        let counts: Vec<Option<u64>> = jobs
+        let counts: Vec<Option<TestCounts>> = jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests_run.get(job).copied().flatten())
+            .map(|job| tests.get(job).copied().flatten())
             .collect();
         if counts.is_empty() {
             out.problems.push(format!(
-                "no scheduled job reports {TESTS_RUN_OUTPUT} for {slug}, whose selected packages have tests"
+                "no scheduled job reports {TESTS_RUN_OUTPUT} and {TESTS_LISTED_OUTPUT} for {slug}, whose selected packages have tests"
             ));
         } else if counts.contains(&None) {
             out.problems.push(format!(
-                "{TESTS_RUN_OUTPUT} is missing or not a number in a test job of {slug}"
+                "{TESTS_RUN_OUTPUT} or {TESTS_LISTED_OUTPUT} is missing or not a number in a test job of {slug}"
             ));
-        } else if counts.iter().flatten().sum::<u64>() == 0 {
-            out.problems.push(format!(
-                "0 tests ran for {slug}, whose selected packages have test targets"
-            ));
+        } else {
+            let run: u64 = counts.iter().flatten().map(|c| c.run).sum();
+            let listed: u64 = counts.iter().flatten().map(|c| c.listed).sum();
+            if listed > 0 && run == 0 {
+                out.problems.push(format!(
+                    "{listed} tests were listed for {slug} and none ran, so a test filter matches nothing"
+                ));
+            }
         }
     }
     out.passed = out.problems.is_empty();
@@ -260,13 +272,13 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
         .iter()
         .filter_map(|(id, need)| Some((id.clone(), JobResult::parse(need.result.as_deref()?))))
         .collect();
-    let tests_run = spec
+    let tests = spec
         .jobs
         .iter()
         .filter(|job| job.tests.is_some())
-        .map(|job| (job.id.clone(), count(needs.get(&job.id))))
+        .map(|job| (job.id.clone(), counts(needs.get(&job.id))))
         .collect();
-    let mut out = verdict(&plan, &results, &tests_run);
+    let mut out = verdict(&plan, &results, &tests);
     for id in needs.keys().filter(|id| !plan.planned.contains_key(*id)) {
         out.problems
             .push(format!("{id} is in needs and the gate does not know it"));
@@ -275,8 +287,15 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     out
 }
 
-fn count(need: Option<&Need>) -> Option<u64> {
-    let text = need?.outputs.get(TESTS_RUN_OUTPUT)?;
+fn counts(need: Option<&Need>) -> Option<TestCounts> {
+    let need = need?;
+    Some(TestCounts {
+        run: number(need.outputs.get(TESTS_RUN_OUTPUT)?)?,
+        listed: number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?,
+    })
+}
+
+fn number(text: &str) -> Option<u64> {
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }

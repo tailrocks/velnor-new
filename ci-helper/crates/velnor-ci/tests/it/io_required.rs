@@ -18,9 +18,9 @@ const ARGS: [&str; 9] = [
     "rust-test=root",
 ];
 
-fn needs(plan_result: &str, test_result: &str, tests_run: &str) -> String {
+fn needs(plan_result: &str, test_result: &str, tests_run: &str, listed: &str) -> String {
     format!(
-        r#"{{"rust-plan":{{"result":"{plan_result}","outputs":{{"rust_root_mode":"some","rust_root_tests":"run"}}}},"rust-test":{{"result":"{test_result}","outputs":{{"tests_run":"{tests_run}"}}}}}}"#
+        r#"{{"rust-plan":{{"result":"{plan_result}","outputs":{{"rust_root_mode":"some","rust_root_tests":"run"}}}},"rust-test":{{"result":"{test_result}","outputs":{{"tests_run":"{tests_run}","tests_listed":"{listed}"}}}}}}"#
     )
 }
 
@@ -42,7 +42,7 @@ fn gate(label: &str, needs: Option<&str>) -> (Output, String) {
 
 #[test]
 fn a_green_plan_with_tests_exits_0_and_writes_the_table_to_the_step_summary() {
-    let (output, summary) = gate("green", Some(&needs("success", "success", "7")));
+    let (output, summary) = gate("green", Some(&needs("success", "success", "7", "7")));
     assert!(output.status.success(), "{output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(stdout, summary);
@@ -58,27 +58,32 @@ fn every_fail_closed_case_exits_1_and_names_the_reason() {
     let cases = [
         (
             "plan-failed",
-            needs("failure", "skipped", ""),
+            needs("failure", "skipped", "", ""),
             "did not succeed",
         ),
         (
             "cancelled",
-            needs("success", "cancelled", "7"),
+            needs("success", "cancelled", "7", "7"),
             "result is cancelled",
         ),
         (
             "skipped",
-            needs("success", "skipped", ""),
+            needs("success", "skipped", "", ""),
             "result is skipped",
         ),
         (
             "zero",
-            needs("success", "success", "0"),
-            "0 tests ran for root",
+            needs("success", "success", "0", "3"),
+            "3 tests were listed for root and none ran",
+        ),
+        (
+            "no-listed",
+            needs("success", "success", "7", ""),
+            "missing or not a number",
         ),
         (
             "empty",
-            needs("success", "success", ""),
+            needs("success", "success", "", ""),
             "missing or not a number",
         ),
         (
@@ -123,7 +128,7 @@ fn malformed_gate_arguments_fail_before_anything_passes() {
             "--job",
             "rust-plan=sometimes",
         ])
-        .env("NEEDS_JSON", needs("success", "success", "7"))
+        .env("NEEDS_JSON", needs("success", "success", "7", "7"))
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(output.status.code(), Some(1), "{output:?}");
