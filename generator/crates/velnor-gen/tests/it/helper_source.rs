@@ -235,3 +235,29 @@ fn a_build_target_in_any_config_of_the_helper_root_refuses_the_helper() -> TestR
     }
     Ok(())
 }
+
+#[test]
+fn the_helper_upload_includes_hidden_files_so_a_dot_target_dir_uploads() -> TestResult {
+    let text = text_of(&helper_with_configs(&[(
+        "ci-helper/.cargo/config.toml",
+        "[build]\ntarget-dir = \".target\"\n",
+    )])?)?;
+    assert!(text.contains("path: ci-helper/.target/debug/velnor-ci"));
+    let upload = text.split("Upload velnor-ci").nth(1).ok_or("no upload")?;
+    let upload = upload.split("- name:").next().unwrap_or_default();
+    assert!(upload.contains("include-hidden-files: true"), "{upload}");
+    Ok(())
+}
+
+#[test]
+fn a_target_dir_with_glob_characters_is_uploaded_literally() -> TestResult {
+    for (dir, literal) in [
+        ("o*t", "ci-helper/o[*]t/debug/velnor-ci"),
+        ("o?t", "ci-helper/o[?]t/debug/velnor-ci"),
+        ("o[t]", "ci-helper/o[[]t]/debug/velnor-ci"),
+    ] {
+        let config = format!("[build]\ntarget-dir = \"{dir}\"\n");
+        assert_eq!(helper_path(Some(&config))?, format!("'{literal}'"));
+    }
+    Ok(())
+}

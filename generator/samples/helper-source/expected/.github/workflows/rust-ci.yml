@@ -126,6 +126,7 @@ jobs:
         with:
           name: velnor-ci
           path: ci-helper/target/debug/velnor-ci
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
           overwrite: true
