@@ -198,7 +198,7 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
             &CONFIG_PATH,
             Reason::HelperBox(path.clone()),
         )),
-        Some(root) if root.target_directory.is_none() => Err(DetectError::invalid(
+        Some(root) if root.debug_binary(HELPER_PACKAGE).is_none() => Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::HelperTarget(path.clone()),
         )),

@@ -11,7 +11,7 @@ use velnor_model::{
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
-use crate::target_dir::target_dir;
+use crate::target_dir::{build_target, target_dir};
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -115,10 +115,10 @@ fn root(
     Ok(RustRoot {
         manifest: manifest.clone(),
         target_dir: target_dir(view, manifest)?,
+        build_target: build_target(view, manifest)?,
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
-        target_directory: metadata.target_directory.clone(),
     })
 }
 

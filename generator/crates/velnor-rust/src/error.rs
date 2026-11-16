@@ -89,7 +89,7 @@ impl Reason {
             ),
             Self::HelperTarget(path) => write!(
                 f,
-                "helper.path is {path}, whose Cargo target directory is outside the repository, so the built velnor-ci cannot be uploaded"
+                "helper.path is {path}, whose cargo config sets build.target to something other than one target triple, so the place of the built velnor-ci is not known"
             ),
             _ => Ok(()),
         }

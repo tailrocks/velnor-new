@@ -36,12 +36,10 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
                 requires_features: false,
             }],
         };
-        let target = manifest.sibling(&RepoPath::new("target")?);
         view.rust_metadata.insert(
             manifest,
             RustMetadata {
                 members: vec![member],
-                target_directory: Some(target),
             },
         );
     }

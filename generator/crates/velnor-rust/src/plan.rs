@@ -22,7 +22,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const HELPER_BINARY: &str = "debug/velnor-ci";
 const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
@@ -119,11 +118,10 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
             package: PackageName::from_static(HELPER_PACKAGE),
         }))
     });
-    steps.extend(root.target_directory.iter().map(|target| {
-        step(StepKind::PublishHelper {
-            binary: target.child(HELPER_BINARY),
-        })
-    }));
+    steps.extend(
+        root.debug_binary(HELPER_PACKAGE)
+            .map(|binary| step(StepKind::PublishHelper { binary })),
+    );
     Job {
         steps,
         ..job(facts, HELPER_JOB)

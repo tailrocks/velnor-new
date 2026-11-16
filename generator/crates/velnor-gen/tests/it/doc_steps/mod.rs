@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RustMember, RustRoot, Target, TargetKind, TargetName};
+use velnor_model::{BuildTarget, RustMember, RustRoot, Target, TargetKind, TargetName};
 use velnor_rust::{optional_steps, root_sources};
 
 use crate::select::{facts, member, name, path};
@@ -34,10 +34,10 @@ fn root(members: Vec<RustMember>) -> RustRoot {
     RustRoot {
         manifest: path("Cargo.toml"),
         target_dir: path("target"),
+        build_target: BuildTarget::Host,
         members,
         depends_on: Vec::new(),
         external_dependencies: Vec::new(),
-        target_directory: None,
     }
 }
 

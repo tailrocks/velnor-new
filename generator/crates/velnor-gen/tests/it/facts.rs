@@ -71,14 +71,8 @@ pub(crate) fn repo(
         for member in &members {
             view.tracked_paths.insert(member.manifest.clone());
         }
-        let target = manifest.sibling(&path("target")?);
-        view.rust_metadata.insert(
-            manifest,
-            RustMetadata {
-                members,
-                target_directory: Some(target),
-            },
-        );
+        view.rust_metadata
+            .insert(manifest, RustMetadata { members });
     }
     for (name, text) in [("mise.toml", MISE)].iter().chain(files) {
         view.tracked_paths.insert(path(name)?);

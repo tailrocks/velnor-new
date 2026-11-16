@@ -59,7 +59,6 @@ struct File {
 #[serde(deny_unknown_fields)]
 struct Root {
     members: Vec<Member>,
-    target_directory: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -141,7 +140,6 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
             workspace.to_string(),
             Root {
                 members: metadata.members.iter().map(member).collect(),
-                target_directory: metadata.target_directory.as_ref().map(ToString::to_string),
             },
         );
     }
@@ -217,14 +215,7 @@ pub fn recorded_metadata(
                 return Err(MetadataFileError::Unlisted(manifest.clone()));
             }
         }
-        let target_directory = root.target_directory.as_deref().map(path_of).transpose()?;
-        known.insert(
-            workspace,
-            RustMetadata {
-                members,
-                target_directory,
-            },
-        );
+        known.insert(workspace, RustMetadata { members });
     }
     if file.layout != layout(&view.tracked_paths, known.values()) {
         return Err(MetadataFileError::Layout);

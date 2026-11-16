@@ -39,7 +39,6 @@ impl std::error::Error for MetadataError {}
 struct Metadata {
     packages: Vec<Package>,
     workspace_root: PathBuf,
-    target_directory: PathBuf,
 }
 
 #[derive(Deserialize)]
@@ -100,14 +99,7 @@ pub fn reduce_metadata(
             })
         })
         .collect::<Result<_, MetadataError>>()?;
-    let target_directory = repo_path(repository, &metadata.target_directory).ok();
-    Ok((
-        workspace,
-        RustMetadata {
-            members,
-            target_directory,
-        },
-    ))
+    Ok((workspace, RustMetadata { members }))
 }
 
 fn dependency_of(
