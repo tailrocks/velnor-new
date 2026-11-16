@@ -195,6 +195,7 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
         [
             "cold",
             "docs",
+            "fork",
             "hub",
             "leaf",
             "lock",
@@ -210,6 +211,9 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "warm"
         ]
     );
+    let fork =
+        Scenario::parse(&read("scenarios/fork.json")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fork.has_fork());
     let story = Scenario::parse(&read("scenarios/story.json"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .on_default_branch("main");

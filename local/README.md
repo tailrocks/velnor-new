@@ -74,7 +74,16 @@ velnor-local down --dir "$STATE"
 
 ## The approved-workflows check and `--policy`
 
-The approved-workflows check is off in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning that says so. There is no `--policy` flag: the check cannot be turned on locally and every run prints that warning, so treat a passing local run as proof that the workflow runs, not that the real runner would approve it.
+The approved-workflows check is off by default in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning that says so. Treat a passing run without `--policy` as proof that the workflow runs, not that the real runner would approve it.
+
+`up` and `run` take an optional `--policy <file>` in pair mode (`--runner plain` has no job-start check and refuses the flag). It turns the check on: the warning then says the check is on, and a job the policy does not approve is refused at job start with reason `policy`, which the verdict prints as `REFUSED at job start: policy` and which makes `run` exit non-zero.
+
+The file is the approved job-authority policy JSON that `velnor-host connect --job-authority-policy` reads, parsed by the runner's own `ApprovedJobAuthorityPolicy` type, and it must be at most 256 KiB. `up` copies it to `runner/policy.json` (0600); `velnor-host local` reads it before it starts a pair and does not start when it is missing, unreadable or does not parse, so `up` fails. After the ledger admits a job, the decider approves it only when the policy:
+
+- lists the job's root workflow path for the repository id the run reports, with the sha256 of the workflow file as committed at the run's commit (the authority hashes `git show <sha>:<workflow>` in the checkout copy, so a pull request that edits the workflow changes the hash and is refused), and that workflow calls no other workflow;
+- has a job entry for that workflow and job key whose context matches the event and ref (`push`, `schedule` and the like by ref; `pull_request` by a rule whose number, base repository, base branch and head branch match).
+
+A pull request from a fork is never approved, because its head repository is not the base repository; a `merge_group` job matches only a policy that lists its queue ref literally. The local check does not verify the policy's binding to a repository connection or its digest, and does not compare an entry's permissions, secrets, environments, needs or concurrency with the workflow; it only ever refuses more than the ledger check alone.
 
 ## Environments, pairs and the authority
 
@@ -104,7 +113,7 @@ velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows
 
 `run` takes several scenarios: `velnor-local run docs leaf --parallel 2 --dir "$STATE" ...` runs each in its own environment under `$STATE/<scenario>`, at most `--parallel` at a time (one unless set), and prefixes every line, the verdict's included, with the scenario. Ctrl-C stops the running scenarios and keeps the queued ones from starting. Each environment has its own network, containers, ports, keys, cache and copy of the checkout.
 
-A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory; a path ending in `.json` is read as is): a description and an ordered list of steps. `warm`, `cold`, `docs`, `leaf`, `hub` and `lock` replay the scenarios of the lab, and `story` merges a pull request, opens a pull request, pushes to it again, opens a second one and closes the first.
+A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory; a path ending in `.json` is read as is): a description and an ordered list of steps. `warm`, `cold`, `docs`, `leaf`, `hub` and `lock` replay the scenarios of the lab, `fork` opens a pull request from the repository and one from a fork (with `testdata/workflows/fork-reach.yml` copied into the checkout, the first job reaches the API stub and the second cannot), and `story` merges a pull request, opens a pull request, pushes to it again, opens a second one and closes the first.
 
 | Step | What the driver does |
 |---|---|
