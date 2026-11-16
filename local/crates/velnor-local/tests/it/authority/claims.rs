@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use velnor_local::authority::{Entry, Facts, Refusal, admit};
-use velnor_local::io::authority::{Authority, mint_or_retire};
+use velnor_local::io::authority::Authority;
 use velnor_local::side::Side;
 use velnor_local::standin::Run;
 
-use super::fake::{FakeRunners, SHA, TOKEN, ask, authority, entry, post, run_facts};
+use super::fake::{FakeRunners, SHA, TOKEN, authority, entry, post, run_facts};
 use crate::support::temp_dir;
 
 #[tokio::test]
@@ -198,34 +198,6 @@ async fn authority_keeps_no_claim_the_ledger_could_not_persist() {
 }
 
 #[tokio::test]
-async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
-    let runners = FakeRunners {
-        mint_fails: true,
-        ..FakeRunners::default()
-    };
-    let authority = authority("authority-mint-cleanup", &runners).await;
-    runners
-        .agents
-        .lock()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .push((Side::Trusted, 9, "velnor-x-jit-1".to_owned()));
-    let (status, _) = ask(
-        &authority,
-        "POST",
-        "/jit",
-        Some(TOKEN),
-        json!({"side": "trusted"}),
-    )
-    .await;
-    let left = runners
-        .agents
-        .lock()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .len();
-    assert_eq!((status, left), (502, 0));
-}
-
-#[tokio::test]
 async fn authority_records_an_entry_only_when_the_whole_ledger_is_written() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -265,27 +237,6 @@ async fn authority_gives_two_identical_events_their_runs_in_creation_order_when_
         (one["ledger"].as_str(), two["ledger"].as_str()),
         (Some("1-push"), Some("2-push"))
     );
-}
-
-#[tokio::test]
-async fn a_jit_that_fails_to_pack_leaves_no_agent_registered() {
-    let runners = FakeRunners {
-        mint_fails: true,
-        ..FakeRunners::default()
-    };
-    runners
-        .agents
-        .lock()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .push((Side::Trusted, 9, "velnor-x-jit-1".to_owned()));
-    let minted = mint_or_retire(&&runners, Side::Trusted).await;
-    let left = runners
-        .agents
-        .lock()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .len();
-    assert!(minted.is_err());
-    assert_eq!(left, 0);
 }
 
 #[test]

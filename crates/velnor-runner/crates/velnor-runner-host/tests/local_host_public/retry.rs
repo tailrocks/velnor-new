@@ -4,12 +4,23 @@
 use velnor_runner_host::HostError;
 use velnor_runner_host::local::supervise;
 
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::proxy::{Faults, Proxy, Wait};
+use super::runner;
 use super::scenario::{Scenario, finish_job};
-use super::support::TestResult;
-use std::sync::atomic::Ordering;
+use super::support::{TestResult, labelled};
+
+fn minted_names(events: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = events
+        .iter()
+        .filter_map(|event| event.strip_prefix("mint:"))
+        .filter_map(|rest| rest.split(':').next().map(str::to_owned))
+        .collect();
+    names.dedup();
+    names
+}
 
 fn mints(events: &[String]) -> usize {
     events
@@ -66,7 +77,8 @@ async fn local_pair_docker_failures_are_retried_three_times_before_the_host_give
         .count();
     assert_eq!(ended?, Err(HostError::Docker));
     assert_eq!(mints, 2 * 3, "{events:?}");
-    for agent in ["agent-1", "agent-2", "agent-3"] {
+    assert_eq!(minted_names(&events).len(), 3, "{events:?}");
+    for agent in minted_names(&events) {
         let deleted = format!("delete:trusted:{agent}");
         assert!(events.contains(&deleted), "{events:?}");
     }
@@ -133,6 +145,115 @@ async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() ->
     Ok(())
 }
 
+#[tokio::test]
+async fn local_transient_mint_failure_is_retried_and_leaves_the_other_slot_running()
+-> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    let plan = scenario.plan(2, 0)?;
+    scenario.fake().mint_failures.store(1, Ordering::SeqCst);
+    scenario.start(plan);
+    let run = async {
+        let first = runner(&scenario, "trusted", &[]).await?;
+        let second = runner(&scenario, "trusted", std::slice::from_ref(&first.agent)).await?;
+        TestResult::Ok((first.agent, second.agent))
+    }
+    .await;
+    let stopped = scenario.stop().await?;
+    let events = scenario.fake().events();
+    scenario.finish().await?;
+    let (first, second) = run?;
+    assert_ne!(first, second);
+    assert_eq!(stopped, Ok(()), "{events:?}");
+    assert!(events.contains(&"mint-failed".to_owned()), "{events:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_shutdown_does_not_wait_for_a_stalled_mint() -> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    let plan = scenario.plan(1, 0)?;
+    scenario.fake().stall_mint.store(true, Ordering::SeqCst);
+    scenario.start(plan);
+    let started = Instant::now();
+    while !scenario
+        .fake()
+        .events()
+        .contains(&"mint-stalled".to_owned())
+        && started.elapsed() < Duration::from_secs(60)
+    {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let requested = Instant::now();
+    let stopped = tokio::time::timeout(Duration::from_secs(30), scenario.stop()).await;
+    let seconds = requested.elapsed().as_secs();
+    let events = scenario.fake().events();
+    let cleared = !scenario.state.path().join("minted-agents.log").exists();
+    scenario.finish().await?;
+    assert!(events.contains(&"mint-stalled".to_owned()), "{events:?}");
+    assert_eq!(stopped??, Ok(()), "{seconds}s");
+    let registered: Vec<&str> = events
+        .iter()
+        .filter_map(|event| event.strip_prefix("registered:"))
+        .collect();
+    assert_eq!(registered.len(), 1, "{events:?}");
+    assert!(
+        events.contains(&format!("delete:trusted:{}", registered[0])),
+        "{events:?}"
+    );
+    assert!(cleared, "{events:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_agent_minted_before_any_container_exists_is_deleted_by_the_next_sweep()
+-> TestResult<()> {
+    let scenario = Scenario::new().await?;
+    let faults = Faults::new(|_| Wait::Forward, 0);
+    faults.hang_creations.store(true, Ordering::SeqCst);
+    let proxy = Proxy::start(std::sync::Arc::clone(&faults))?;
+    let state = scenario.state.path().to_path_buf();
+    let killed = {
+        let docker = proxy.docker.clone();
+        let plan = scenario.plan(1, 0)?;
+        let state = state.clone();
+        tokio::spawn(async move { supervise(docker, plan, &state, std::future::pending()).await })
+    };
+    let started = Instant::now();
+    while !scenario
+        .fake()
+        .events()
+        .iter()
+        .any(|event| event.starts_with("mint:"))
+        && started.elapsed() < Duration::from_secs(60)
+    {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    killed.abort();
+    let _joined = killed.await;
+    let before = scenario.fake().events();
+    let unlabelled = labelled(&scenario.fixture.docker, &scenario.fixture.environment).await?;
+    let docker = scenario.fixture.docker.clone();
+    let plan = scenario.plan(1, 0)?;
+    let ended = tokio::time::timeout(
+        Duration::from_secs(120),
+        supervise(docker, plan, &state, async {}),
+    )
+    .await;
+    let events = scenario.fake().events();
+    scenario.finish().await?;
+    assert_eq!(unlabelled, (0, 0), "{before:?}");
+    assert_eq!(ended?, Ok(()), "{events:?}");
+    let names = minted_names(&events);
+    assert!(!names.is_empty(), "{events:?}");
+    for name in names {
+        assert!(
+            events.contains(&format!("delete:trusted:{name}")),
+            "{events:?}"
+        );
+    }
+    Ok(())
+}
+
 async fn wait_for_event(scenario: &Scenario, event: &str) {
     let started = Instant::now();
     while !scenario.fake().events().iter().any(|seen| seen == event)
@@ -151,20 +272,20 @@ async fn local_slot_retries_the_agent_retirement_after_its_pair_was_removed() ->
     let run = async {
         let first = super::runner(&scenario, "trusted", &[]).await?;
         finish_job(&scenario.fixture.docker, &first.runner).await?;
-        wait_for_event(&scenario, "delete:trusted:agent-1").await;
-        TestResult::Ok(())
+        wait_for_event(&scenario, &format!("delete:trusted:{}", first.agent)).await;
+        TestResult::Ok(first.agent)
     }
     .await;
     let stopped = scenario.stop().await?;
     let events = scenario.fake().events();
     scenario.finish().await?;
-    run?;
+    let agent = run?;
     assert!(
-        events.contains(&"delete_failed:trusted:agent-1".to_owned()),
+        events.contains(&format!("delete_failed:trusted:{agent}")),
         "{events:?}"
     );
     assert!(
-        events.contains(&"delete:trusted:agent-1".to_owned()),
+        events.contains(&format!("delete:trusted:{agent}")),
         "{events:?}"
     );
     assert_eq!(stopped, Ok(()), "{events:?}");

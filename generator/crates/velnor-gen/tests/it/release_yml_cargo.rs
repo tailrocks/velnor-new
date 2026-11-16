@@ -253,3 +253,34 @@ fn a_workflow_name_with_a_trailing_yaml_comment_or_quotes_is_the_plain_name() ->
     assert!(expected_files(&view).is_ok());
     Ok(())
 }
+
+#[test]
+fn workflow_names_are_read_as_yaml_scalars() -> TestResult {
+    use velnor_gen::expected_files;
+    use velnor_model::RepoPath;
+
+    let names = [
+        "Bob's CI",
+        "Say \"hi\" \\ \u{e9}",
+        "Checks # not a comment",
+        "Tab\tName",
+    ];
+    let after: Vec<String> = names.iter().map(|name| format!("{name:?}")).collect();
+    let mut view = crate::release_fixture::release_view(
+        &[crate::release_fixture::APP],
+        Some(&format!("after = [{}]\n", after.join(", "))),
+    )?;
+    for (file, text) in [
+        ("a", "name: 'Bob''s CI' # note\non: push\n"),
+        ("b", "name: \"Say \\\"hi\\\" \\\\ \\u00e9\"\non: push\n"),
+        ("c", "name: 'Checks # not a comment'\non: push\n"),
+        ("d", "name: \"Tab\\tName\"\non: push\n"),
+    ] {
+        view.files.insert(
+            RepoPath::new(format!(".github/workflows/{file}.yml"))?,
+            text.as_bytes().to_vec(),
+        );
+    }
+    expected_files(&view)?;
+    Ok(())
+}

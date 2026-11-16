@@ -193,7 +193,7 @@ fn assert_all_features_package_proposals(
     Ok(())
 }
 
-fn feature_toggle_repo(
+pub(super) fn feature_toggle_repo(
     clippy_all_features: bool,
     all_features: bool,
 ) -> Result<TempDir, Box<dyn Error>> {

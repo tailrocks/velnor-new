@@ -10,6 +10,13 @@ pub struct CargoWorkspaceFact {
     pub root: String,
     pub lockfile_path: Option<String>,
     pub test_runner: velnor_actions_rust::TestRunner,
+    pub packages: Vec<WorkspacePackageFact>,
+}
+#[derive(Debug, Clone)]
+pub struct WorkspacePackageFact {
+    pub id: String,
+    pub name: String,
+    pub manifest: String,
 }
 #[derive(Debug, Clone)]
 pub struct RustTaskFact {

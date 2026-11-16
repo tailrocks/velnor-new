@@ -40,7 +40,10 @@ pub fn ruleset_refs(plan: &ReleasePlan) -> BTreeSet<String> {
 
 #[must_use]
 pub fn ruleset_json(plan: &ReleasePlan) -> String {
-    format!("{:#}\n", Value::Array(rulesets(plan)))
+    rulesets(plan)
+        .iter()
+        .flat_map(|ruleset| [ruleset.to_string(), "\n".to_owned()])
+        .collect()
 }
 
 #[must_use]
