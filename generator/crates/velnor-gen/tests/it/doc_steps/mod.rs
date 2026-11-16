@@ -43,9 +43,11 @@ fn root(members: Vec<RustMember>) -> RustRoot {
 
 mod added;
 mod cases;
+mod read;
 
 use self::added::ADDED;
 use self::cases::{Kind, NO_LIBRARY, ORIGINAL, RUN, TEXT_TARGET};
+use self::read::READ;
 
 #[test]
 fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
@@ -112,49 +114,14 @@ fn a_doctest_is_known_only_when_a_source_has_a_fenced_example() {
 
 #[test]
 fn a_doctest_is_known_only_from_a_fence_in_a_source_rustdoc_reads() {
-    let fenced = "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n";
-    let readme = "```\nlet x = 1;\n```\n";
-    let reads_readme = "#![doc = include_str!(\"../README.md\")]\nfn documented() {}\n";
     let mut root = root(vec![library(true)]);
     root.members[0]
         .targets
         .extend(target_of("a", TargetKind::Bin, false, "a/src/main.rs").targets);
-    let cases = [
-        (
-            "unread README",
-            vec![
-                ("a/src/lib.rs", "pub fn documented() {}\n"),
-                ("a/README.md", readme),
-            ],
-            false,
-            true,
-        ),
-        (
-            "README read by doc include",
-            vec![("a/src/lib.rs", reads_readme), ("a/README.md", readme)],
-            false,
-            true,
-        ),
-        (
-            "fence in the library",
-            vec![("a/src/lib.rs", fenced)],
-            true,
-            true,
-        ),
-        (
-            "fence only in a binary",
-            vec![
-                ("a/src/lib.rs", "pub fn f() {}\n"),
-                ("a/src/main.rs", fenced),
-            ],
-            false,
-            true,
-        ),
-    ];
-    for (case, files, known, run) in cases {
+    for &(case, files, known, run) in READ {
         let sources = files
-            .into_iter()
-            .map(|(file, text)| (path(file), text.as_bytes().to_vec()))
+            .iter()
+            .map(|&(file, text)| (path(file), text.as_bytes().to_vec()))
             .collect();
         let steps = optional_steps(&root, &sources, false);
         assert_eq!(

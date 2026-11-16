@@ -23,7 +23,7 @@ pub(super) const ADDED: &[Case] = &[
     (
         "inner block doc after code on its line",
         Kind::Doctested,
-        "pub mod m { /*! x */ }\n",
+        "pub mod m { /*! ``` x ``` */ }\n",
         false,
         RUN,
         RUN,
@@ -31,7 +31,7 @@ pub(super) const ADDED: &[Case] = &[
     (
         "outer block doc after code on its line",
         Kind::Doctested,
-        "pub mod m { /** x */ fn f() {} }\n",
+        "pub mod m { /** ``` x ``` */ fn f() {} }\n",
         false,
         RUN,
         RUN,
@@ -71,7 +71,7 @@ pub(super) const ADDED: &[Case] = &[
     (
         "a target whose path has no rs extension",
         Kind::TextTarget,
-        "pub mod m { /*! x */ }\n",
+        "pub mod m { /*! ``` x ``` */ }\n",
         false,
         RUN,
         RUN,

@@ -139,7 +139,11 @@ pub fn optional_steps(
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
-            found.scan_rust(&text, !other_kinds.contains(path));
+            for include in found.scan_rust(&text, !other_kinds.contains(path)) {
+                if let Some(read) = included(sources, path, &include) {
+                    found.scan_included(&String::from_utf8_lossy(read));
+                }
+            }
         } else {
             found.scan_text(&text);
         }
@@ -205,4 +209,30 @@ fn is_rust(path: &RepoPath, targets: &BTreeSet<&RepoPath>) -> bool {
         || Path::new(path.as_str())
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+}
+
+fn included<'a>(
+    sources: &'a BTreeMap<RepoPath, Vec<u8>>,
+    from: &RepoPath,
+    include: &str,
+) -> Option<&'a Vec<u8>> {
+    if include.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = from.as_str().split('/').collect();
+    parts.pop();
+    for part in include.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            part => parts.push(part),
+        }
+    }
+    let wanted = parts.join("/");
+    sources
+        .iter()
+        .find(|(path, _)| path.as_str() == wanted)
+        .map(|(_, bytes)| bytes)
 }

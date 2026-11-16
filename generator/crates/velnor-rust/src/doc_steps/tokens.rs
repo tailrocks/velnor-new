@@ -6,6 +6,7 @@ pub(crate) enum Token<'a> {
     Ident(&'a str),
     Punct(char),
     Doc { fenced: bool },
+    Str(&'a str),
     Other,
 }
 
@@ -93,29 +94,36 @@ impl<'a> Lexer<'a> {
             }
         }
         self.at = at;
-        documented.then_some(Token::Doc { fenced: true })
+        documented.then(|| Token::Doc {
+            fenced: self.text[start + 3..at].lines().any(block_line),
+        })
     }
 
     fn string(&mut self, from: usize) -> Token<'a> {
         let mut at = from;
+        let mut end = None;
         while let Some(&byte) = self.bytes.get(at) {
-            at += 1;
             match byte {
-                b'\\' => at += 1,
-                b'"' => break,
-                _ => {}
+                b'\\' => at += 2,
+                b'"' => {
+                    end = Some(at);
+                    at += 1;
+                    break;
+                }
+                _ => at += 1,
             }
         }
         self.at = at.min(self.bytes.len());
-        Token::Other
+        Token::Str(&self.text[from..end.unwrap_or(self.at).max(from)])
     }
 
     fn raw_string(&mut self, hashes: usize, from: usize) -> Token<'a> {
         let closing = format!("\"{}", "#".repeat(hashes));
-        self.at = self.text[from..]
+        let end = self.text[from..]
             .find(&closing)
-            .map_or(self.text.len(), |n| from + n + closing.len());
-        Token::Other
+            .map_or(self.text.len(), |n| from + n);
+        self.at = (end + closing.len()).min(self.text.len());
+        Token::Str(&self.text[from..end])
     }
 
     fn quote(&mut self) -> Token<'a> {
@@ -190,6 +198,18 @@ impl<'a> Lexer<'a> {
 
 fn is_word(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte >= 0x80
+}
+
+fn block_line(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix('*').unwrap_or(line);
+    let line = line.strip_suffix("*/").unwrap_or(line);
+    !line.trim().is_empty() && code_block(line)
+}
+
+pub(crate) fn fenced_text(text: &str) -> bool {
+    text.lines()
+        .any(|line| !line.trim().is_empty() && code_block(line))
 }
 
 pub(crate) fn code_block(rest: &str) -> bool {
