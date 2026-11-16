@@ -171,10 +171,18 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(live_reservations(&journal).await?, live);
 
     restart(&journal, &docker, &mut controller, &engine).await?;
-    assert_eq!(fixture.take_requests(), Vec::<String>::new());
-    assert_eq!(seed::recorded(&journal, 2).await?, recovered);
+    let mut released = recovered;
+    released[0] = Some("released".to_owned());
+    assert_eq!(seed::recorded(&journal, 2).await?, released);
+    assert_eq!(seed::cleanup_proven(&journal, 2).await?, (1, 1, 1));
     assert_eq!(live_reservations(&journal).await?, live);
-    assert_eq!(controller.prepared.recovery_pass, 3);
+
+    fixture.take_requests();
+    restart(&journal, &docker, &mut controller, &engine).await?;
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
+    assert_eq!(seed::recorded(&journal, 2).await?, released);
+    assert_eq!(live_reservations(&journal).await?, live);
+    assert_eq!(controller.prepared.recovery_pass, 4);
     Ok(())
 }
 

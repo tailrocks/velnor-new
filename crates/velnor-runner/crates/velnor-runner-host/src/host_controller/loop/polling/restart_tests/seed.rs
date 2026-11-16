@@ -221,3 +221,18 @@ pub(super) async fn recorded(
         .map(|index| row.get::<Option<String>>(index))
         .collect::<Result<_, _>>()?)
 }
+
+pub(super) async fn cleanup_proven(
+    journal: &Journal,
+    reservation: i64,
+) -> TestResult<(i64, i64, i64)> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT reservation.remote_cleanup_proven, reservation.local_cleanup_proven, intent.cleanup_proven FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id WHERE reservation.id = ?1",
+            [reservation],
+        )
+        .await?;
+    let row = rows.next().await?.ok_or("reservation missing")?;
+    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+}
