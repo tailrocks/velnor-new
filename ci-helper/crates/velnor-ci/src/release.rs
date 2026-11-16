@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::Deserialize;
@@ -146,4 +146,29 @@ pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
         velnor_release::check_release_plz_config(file, text).map_err(CiError::new)?;
     }
     Ok(String::new())
+}
+
+pub fn check_tag_patterns(
+    files: &[(String, String)],
+    expected: &[(String, String)],
+) -> Result<(), CiError> {
+    if expected.is_empty() {
+        return Ok(());
+    }
+    for (file, text) in files {
+        let want: BTreeSet<&str> = expected
+            .iter()
+            .filter(|(name, _)| name == file)
+            .map(|(_, pattern)| pattern.as_str())
+            .collect();
+        let found = velnor_release::release_tag_patterns(file, text)
+            .map_err(|e| CiError::new(e.to_string()))?;
+        let found: BTreeSet<&str> = found.iter().map(String::as_str).collect();
+        if found != want {
+            return Err(CiError::new(format!(
+                "{file}: git_tag_name patterns {found:?} differ from {want:?}, the ones the tag rulesets were provisioned for"
+            )));
+        }
+    }
+    Ok(())
 }

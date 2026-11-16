@@ -19,6 +19,7 @@ pub use error::ReleaseError;
 pub use hazards::{refuse_cargo_config, refuse_external_commands};
 pub use plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan};
 pub use release_plz::check_release_plz_config;
+pub use release_plz::release_tag_patterns;
 pub use release_plz::root_publishes_to_crates_io;
-pub use ruleset::{RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_json};
+pub use ruleset::{RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_json, ruleset_ref, ruleset_refs};
 pub use tag::{TagPattern, is_tag_name};

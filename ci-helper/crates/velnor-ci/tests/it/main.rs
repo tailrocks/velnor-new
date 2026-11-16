@@ -31,6 +31,8 @@ mod release_fake;
 mod release_publish;
 mod release_publish_guards;
 mod release_record;
+mod release_tag_patterns;
+mod rulesets;
 mod run;
 mod setup_pure;
 mod support;

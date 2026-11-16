@@ -180,6 +180,19 @@ impl HelperVersion {
         let mut parts = self.0.split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
     }
+
+    #[must_use]
+    pub fn at_least(&self, minimum: (u64, u64, u64)) -> bool {
+        let mut parts = self.0.split('.').map(|part| part.parse::<u64>().ok());
+        match (
+            parts.next().flatten(),
+            parts.next().flatten(),
+            parts.next().flatten(),
+        ) {
+            (Some(major), Some(minor), Some(patch)) => (major, minor, patch) >= minimum,
+            _ => false,
+        }
+    }
 }
 
 const fn text(value: &[u8]) -> bool {
