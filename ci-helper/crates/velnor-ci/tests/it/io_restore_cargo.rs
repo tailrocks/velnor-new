@@ -14,6 +14,7 @@ fn run(root: &Path, program: &str, args: &[&str]) -> String {
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env("CARGO_TERM_COLOR", "never")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let text = format!(
