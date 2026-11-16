@@ -98,24 +98,27 @@ fn mise_toml_and_the_hidden_mise_toml_are_merged_with_the_hidden_one_winning() -
     )?;
     let tools = detect(&both)?.tools;
     assert_eq!(tools.configs, vec![path("mise.toml")?, path(".mise.toml")?]);
-    let found: Vec<(&str, &ToolPin)> = tools
+    let found: Vec<(&str, &[String])> = tools
         .tools
         .iter()
-        .map(|(name, pin)| (name.as_str(), pin))
+        .map(|(name, pin)| (name.as_str(), pin.requested.as_slice()))
         .collect();
     assert_eq!(
         found,
         vec![
-            ("bun", &pin(&["2.0.0"], &[])),
-            ("jq", &pin(&["1.7"], &[])),
-            ("yq", &pin(&["4"], &[])),
+            ("bun", ["2.0.0".to_owned()].as_slice()),
+            ("jq", ["1.7".to_owned()].as_slice()),
+            ("yq", ["4".to_owned()].as_slice()),
         ]
     );
     let mut hidden = both;
     hidden.files.remove(&path("mise.toml")?);
     let tools = detect(&hidden)?.tools;
     assert_eq!(tools.configs, vec![path(".mise.toml")?]);
-    assert_eq!(tools.tools.get("bun"), Some(&pin(&["2.0.0"], &[])));
+    assert_eq!(
+        tools.tools.get("bun").map(|pin| pin.requested.clone()),
+        Some(vec!["2.0.0".to_owned()])
+    );
     Ok(())
 }
 
