@@ -241,6 +241,16 @@ async fn the_backoff_starts_after_a_slow_attempt_fails() {
 }
 
 #[tokio::test]
+async fn a_late_success_never_installs_credentials() {
+    let start = Instant::now();
+    let mut gate = Gate::new(None);
+    gate.attempt_takes = Duration::from_secs(11);
+    assert!(!gate.run(true, start, false).await);
+    assert!(gate.slot.is_none());
+    assert_eq!(gate.retry_at, Some(start + Duration::from_secs(41)));
+}
+
+#[tokio::test]
 async fn a_hanging_restore_returns_within_the_deadline_and_backs_off() {
     let start = Instant::now();
     let mut slot: Option<u32> = None;
