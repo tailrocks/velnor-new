@@ -14,10 +14,10 @@ type TestResult = Result<(), Box<dyn Error>>;
 const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
 const WRITER: &str = "release";
 const PINNED: (&str, &str) = (
-    "0.1.79",
-    "a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386",
+    "0.1.80",
+    "659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c",
 );
-const ACTION_COMMIT: &str = "9ee3aedc9d3a9ebf90a212d960c9a5cfaae6c46b";
+const ACTION_COMMIT: &str = "46f7a043952f82ef1a78d8ebb63143faca8f268c";
 
 fn read() -> Result<String, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -120,7 +120,7 @@ fn a_workflow_name_with_filter_characters_is_escaped_in_the_trigger() -> TestRes
 
     let mut view = crate::release_fixture::release_view(
         &[crate::release_fixture::APP],
-        Some("after = [\"Build+Test\", \"checks[linux]\"]\n"),
+        Some("after = [\"Rust CI\", \"Build+Test\", \"checks[linux]\"]\n"),
     )?;
     for (file, name) in [("build", "Build+Test"), ("checks", "checks[linux]")] {
         view.files.insert(
@@ -136,7 +136,7 @@ fn a_workflow_name_with_filter_characters_is_escaped_in_the_trigger() -> TestRes
         tree.at(&["on", "workflow_run", "workflows"])
             .ok_or("no workflows")?
             .texts(),
-        ["Build\\+Test", "checks\\[linux\\]"]
+        ["Rust CI", "Build\\+Test", "checks\\[linux\\]"]
     );
     Ok(())
 }
@@ -178,10 +178,11 @@ fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_ref
         let refuse = all
             .iter()
             .position(|step| {
-                step.get("run").and_then(Node::text)
-                    == Some(
-                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
+                step.get("run").and_then(Node::text).is_some_and(|run| {
+                    run.starts_with(
+                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml ",
                     )
+                })
             })
             .ok_or("no refuse step")?;
         let helper = all
@@ -260,6 +261,7 @@ fn workflow_names_are_read_as_yaml_scalars() -> TestResult {
     use velnor_model::RepoPath;
 
     let names = [
+        "Rust CI",
         "Bob's CI",
         "Say \"hi\" \\ \u{e9}",
         "Checks # not a comment",
@@ -282,5 +284,47 @@ fn workflow_names_are_read_as_yaml_scalars() -> TestResult {
         );
     }
     expected_files(&view)?;
+    Ok(())
+}
+
+#[test]
+fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() -> TestResult {
+    use velnor_gen::{GenerateError, expected_files};
+    use velnor_model::RepoPath;
+    use velnor_release::ReleaseError;
+
+    for (text, pushes) in [
+        ("name: Extra\non: push\n", true),
+        ("name: Extra\non: [pull_request, push]\n", true),
+        (
+            "name: Extra\n\"on\":\n  pull_request:\n  push:\n    branches: [main]\n",
+            true,
+        ),
+        ("name: Extra\non:\n  - push\n", true),
+        ("name: Extra\non: {push: {branches: [dev]}}\n", true),
+        ("name: Extra\non: {pull_request: {}, push: null}\n", true),
+        ("name: Extra\non: [push]\n", true),
+        (
+            "name: Extra\non: {pull_request: {branches: [push]}}\n",
+            false,
+        ),
+        ("name: Extra\non: pull_request\n", false),
+        ("name: Extra\non:\n  workflow_dispatch:\n", false),
+    ] {
+        let mut view = crate::release_fixture::release_view(
+            &[crate::release_fixture::APP],
+            Some("after = [\"Rust CI\"]\n"),
+        )?;
+        view.files.insert(
+            RepoPath::new(".github/workflows/extra.yml")?,
+            text.as_bytes().to_vec(),
+        );
+        match expected_files(&view) {
+            Err(GenerateError::Release(ReleaseError::AfterMissingWorkflow { name })) => {
+                assert!(pushes && name == "Extra", "{text}");
+            }
+            other => assert!(!pushes && other.is_ok(), "{text}: {other:?}"),
+        }
+    }
     Ok(())
 }
