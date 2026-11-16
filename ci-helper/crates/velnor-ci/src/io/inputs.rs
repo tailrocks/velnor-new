@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::{self, File, FileTimes};
+use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
@@ -16,10 +17,13 @@ use crate::inputs::{
 };
 use crate::scope::Scope;
 
+static NEXT_SNAPSHOT: AtomicU64 = AtomicU64::new(0);
+
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
     let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
+    check_snapshot_parent(&path)?;
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -47,12 +51,7 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         file: link.clone(),
         mtime_ns: 0,
     }));
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
-    }
-    fs::write(&path, format_inputs(&saved))
-        .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
+    publish_snapshot(&path, &format_inputs(&saved))?;
     Ok(format!(
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
@@ -62,6 +61,63 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         tracked.unsupported,
         tracked.submodules
     ))
+}
+
+fn check_snapshot_parent(path: &Path) -> Result<(), CiError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| CiError::new(format!("{} has no parent", path.display())))?;
+    match fs::symlink_metadata(parent) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Ok(_) => Err(CiError::new(format!(
+            "snapshot directory {} is not a regular directory",
+            parent.display()
+        ))),
+        Err(e) => Err(CiError::new(format!(
+            "cannot inspect snapshot directory {}: {e}",
+            parent.display()
+        ))),
+    }
+}
+
+fn publish_snapshot(path: &Path, text: &str) -> Result<(), CiError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| CiError::new(format!("{} has no parent", path.display())))?;
+    fs::create_dir_all(parent)
+        .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
+    check_snapshot_parent(path)?;
+    let (staged, mut file) = loop {
+        let sequence = NEXT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
+        let staged = parent.join(format!(".inputs.{}.{sequence}.tmp", std::process::id()));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staged)
+        {
+            Ok(file) => break (staged, file),
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err(CiError::new(format!(
+                    "cannot create {}: {e}",
+                    staged.display()
+                )));
+            }
+        }
+    };
+    let written = file.write_all(text.as_bytes());
+    drop(file);
+    let published = written.and_then(|()| fs::rename(&staged, path));
+    if let Err(error) = published {
+        fs::remove_file(&staged)
+            .map_err(|e| CiError::new(format!("cannot remove {}: {e}", staged.display())))?;
+        return Err(CiError::new(format!(
+            "cannot write {}: {error}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
