@@ -75,8 +75,12 @@ fn is_builtin(value: &Value) -> bool {
     }
 }
 
-pub fn refuse_cargo_config(file: &str, text: &str) -> Result<(), String> {
-    cargo_config(file, text, true).map_err(|error| error.to_string())
+pub fn refuse_cargo_config(
+    file: &str,
+    text: &str,
+    publishes_to_crates_io: bool,
+) -> Result<(), String> {
+    cargo_config(file, text, publishes_to_crates_io).map_err(|error| error.to_string())
 }
 
 pub(crate) fn cargo_config(

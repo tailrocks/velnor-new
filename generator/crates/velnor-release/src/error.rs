@@ -116,6 +116,11 @@ pub enum ReleaseError {
     CargoRedirectsCratesIo {
         file: String,
     },
+    PublishNamesOtherRegistry {
+        root: String,
+        manifest: String,
+        registry: String,
+    },
     CargoConfigInclude {
         file: String,
     },
