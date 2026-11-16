@@ -77,6 +77,13 @@ pub struct SuperviseArgs {
     pub pairs: u16,
     #[arg(long, default_value_t = 0, help = "Untrusted pairs")]
     pub fork_pairs: u16,
+    #[arg(
+        long,
+        help = "Apply runner/policy.json, which `up` copied from --policy"
+    )]
+    pub policy: bool,
+    #[arg(long, help = "Repository whose workflow files the policy hashes")]
+    pub repo: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -161,6 +168,11 @@ pub struct EnvironmentArgs {
     pub runner: RunnerMode,
     #[arg(
         long,
+        help = "Approved job-authority policy file (the JSON that velnor-host connect --job-authority-policy reads); turns the approved-workflows check on in pair mode: a job it does not approve is refused at job start with reason policy"
+    )]
+    pub policy: Option<PathBuf>,
+    #[arg(
+        long,
         help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
     )]
     pub velnor_host: Option<PathBuf>,
@@ -228,6 +240,12 @@ pub struct RunArgs {
         help = "Repository as owner/name, as github.repository reports it"
     )]
     pub repository: String,
+    #[arg(
+        long,
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "GitHub's numeric id of the repository, which the --policy file names; events carry it instead of the id derived from --repository"
+    )]
+    pub repository_id: Option<u64>,
     #[arg(
         long,
         default_value = "velnor-ci",

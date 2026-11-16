@@ -28,7 +28,18 @@ enum Check {
     Failed(String),
 }
 
-pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdict, CiError> {
+struct PushEvidence {
+    jobs: Vec<ApiRunJob>,
+    names: BTreeSet<String>,
+    running: bool,
+}
+
+pub fn release_gate(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    pr_only_checks: &[String],
+) -> Result<Verdict, CiError> {
     if sha.len() != 40
         || !sha
             .bytes()
@@ -39,29 +50,12 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
         )));
     }
     let ApiRepo { id, default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
-    let required = required_checks(github, repo, &default_branch)?;
+    let required = required_checks(github, repo, &default_branch, pr_only_checks)?;
     let compare: ApiCompare = parse(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
     )?;
-    let mut runs: Vec<ApiWorkflowRun> =
-        all_pages(github, "workflow runs", |page| runs_path(repo, sha, page))?;
-    runs.retain(|run| {
-        run.event == "push"
-            && run.head_branch.as_deref() == Some(default_branch.as_str())
-            && run.head_sha == sha
-            && run
-                .head_repository
-                .as_ref()
-                .is_some_and(|head| head.id == id)
-    });
-    let mut jobs = Vec::new();
-    for run in &runs {
-        jobs.extend(all_pages::<ApiRunJob>(github, "jobs", |page| {
-            run_jobs_path(repo, run.id, page)
-        })?);
-    }
-    let running = runs.iter().any(|run| run.status != "completed");
+    let push = push_evidence(github, repo, sha, id, &default_branch)?;
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
@@ -77,12 +71,28 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
     }
     let mut ready = true;
     for name in &required {
+        if pr_only_checks.contains(name) {
+            if push.names.contains(name)
+                || statuses
+                    .iter()
+                    .any(|status| status.context.to_lowercase() == name.to_lowercase())
+            {
+                return Err(CiError::new(format!(
+                    "PR-only check {name} has a push job or commit status on commit {sha}"
+                )));
+            }
+            report.push(format!("check {name} is explicitly PR-only"));
+            continue;
+        }
         let named: Vec<&str> = statuses
             .iter()
             .filter(|status| status.context.to_lowercase() == name.to_lowercase())
             .map(|status| status.state.as_str())
             .collect();
-        match with_status(judge(name, &jobs, running, &default_branch), &named) {
+        match with_status(
+            judge(name, &push.jobs, push.running, &default_branch),
+            &named,
+        ) {
             Check::Passed => report.push(format!("check {name} passed")),
             Check::Waiting(state) => {
                 ready = false;
@@ -103,6 +113,40 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
     })
 }
 
+fn push_evidence(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    repository_id: u64,
+    branch: &str,
+) -> Result<PushEvidence, CiError> {
+    let mut runs: Vec<ApiWorkflowRun> =
+        all_pages(github, "workflow runs", |page| runs_path(repo, sha, page))?;
+    runs.retain(|run| {
+        run.event == "push"
+            && run.head_sha == sha
+            && run
+                .head_repository
+                .as_ref()
+                .is_some_and(|head| head.id == repository_id)
+    });
+    let mut push = PushEvidence {
+        jobs: Vec::new(),
+        names: BTreeSet::new(),
+        running: false,
+    };
+    for run in &runs {
+        let jobs =
+            all_pages::<ApiRunJob>(github, "jobs", |page| run_jobs_path(repo, run.id, page))?;
+        push.names.extend(jobs.iter().map(|job| job.name.clone()));
+        if run.head_branch.as_deref() == Some(branch) {
+            push.jobs.extend(jobs);
+            push.running |= run.status != "completed";
+        }
+    }
+    Ok(push)
+}
+
 pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
     let expected = format!("rust-ci-v{version}");
     if tag == expected {
@@ -118,13 +162,17 @@ fn required_checks(
     github: &dyn GitHub,
     repo: &Repo,
     branch: &str,
+    pr_only_checks: &[String],
 ) -> Result<BTreeSet<String>, CiError> {
     let mut checks = BTreeSet::new();
+    let mut app_checks = Vec::new();
+    let mut pull_request = false;
     for page in 1.. {
         let rules: Vec<ApiRule> = parse(
             &github.get(&rules_path(repo, branch, page))?,
             "branch rules",
         )?;
+        pull_request |= rules.iter().any(|rule| rule.kind == "pull_request");
         for rule in rules
             .iter()
             .filter(|rule| rule.kind == "required_status_checks")
@@ -139,7 +187,8 @@ fn required_checks(
                     ))
                 })?;
             for check in listed {
-                require(&mut checks, branch, check)?;
+                checks.insert(check.context.clone());
+                app_checks.push(check.clone());
             }
         }
         if rules.len() < RULES_PAGE {
@@ -151,7 +200,8 @@ fn required_checks(
     if classic.enforcement_level != "off" {
         checks.extend(classic.contexts);
         for check in &classic.checks {
-            require(&mut checks, branch, check)?;
+            checks.insert(check.context.clone());
+            app_checks.push(check.clone());
         }
     }
     if checks.is_empty() {
@@ -159,14 +209,32 @@ fn required_checks(
             "branch {branch} requires no status check in its rules or its branch protection, so no commit of it can be released"
         )));
     }
+    for name in pr_only_checks {
+        if !checks.contains(name) {
+            return Err(CiError::new(format!(
+                "PR-only check {name} is not required on branch {branch}"
+            )));
+        }
+    }
+    if !pr_only_checks.is_empty() && !pull_request {
+        return Err(CiError::new(format!(
+            "branch {branch} has no pull_request rule, so its required checks cannot be exempted as PR-only"
+        )));
+    }
+    if checks.iter().all(|name| pr_only_checks.contains(name)) {
+        return Err(CiError::new(format!(
+            "branch {branch} has no required push check after PR-only exemptions"
+        )));
+    }
+    for check in &app_checks {
+        if !pr_only_checks.contains(&check.context) {
+            require(branch, check)?;
+        }
+    }
     Ok(checks)
 }
 
-fn require(
-    checks: &mut BTreeSet<String>,
-    branch: &str,
-    check: &ApiRequiredCheck,
-) -> Result<(), CiError> {
+fn require(branch: &str, check: &ApiRequiredCheck) -> Result<(), CiError> {
     if let Some(app) = check
         .integration_id
         .filter(|app| ![ACTIONS_APP_ID, ANY_APP].contains(app))
@@ -176,7 +244,6 @@ fn require(
             check.context
         )));
     }
-    checks.insert(check.context.clone());
     Ok(())
 }
 

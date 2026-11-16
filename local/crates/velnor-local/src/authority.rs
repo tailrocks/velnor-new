@@ -9,6 +9,7 @@ use crate::side::Side;
 use crate::standin::{Job, Run};
 
 pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are";
+pub const WARNING_POLICY: &str = "WARNING: the approved-workflows check is on (--policy): a job the policy file does not approve is refused at job start with reason policy; fork pull requests, merge queue refs and workflows that call other workflows are never approved";
 pub const RUNS_PATH: &str = "/_apis/v1/Message/workflow/runs";
 pub const AGENTS_PATH: &str = "/_apis/v1/Agent/0";
 
@@ -276,7 +277,17 @@ pub fn claim(entries: &mut [Entry], id: &str, facts: &Facts) -> bool {
 }
 
 #[must_use]
-pub fn answer(side: Side, facts: &Facts, admitted: Result<&Entry, Refusal>) -> Value {
+pub fn warning(policy: bool) -> &'static str {
+    if policy { WARNING_POLICY } else { WARNING }
+}
+
+#[must_use]
+pub fn answer(
+    side: Side,
+    facts: &Facts,
+    admitted: Result<&Entry, Refusal>,
+    workflow_sha256: Option<&str>,
+) -> Value {
     json!({
         "side": side.name(),
         "id": facts.id,
@@ -288,6 +299,7 @@ pub fn answer(side: Side, facts: &Facts, admitted: Result<&Entry, Refusal>) -> V
         "jobs": facts.jobs,
         "ledger": admitted.map(|entry| entry.id.as_str()).ok(),
         "refusal": admitted.err().map(Refusal::code),
+        "workflow_sha256": workflow_sha256,
     })
 }
 

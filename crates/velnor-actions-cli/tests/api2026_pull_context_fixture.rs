@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cell::Cell,
     error::Error,
     fs, io,
     path::Path,
     process::{Command, Output},
+    time::{Duration, Instant},
 };
 
 use sha2::{Digest, Sha256};
@@ -275,12 +277,38 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
         return Ok(false);
     }
     let request = fs::read_to_string(std::env::var("VELNOR_REQUEST_FILE")?)?;
-    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))?;
-    let failure =
-        fs::read_to_string(Path::new(&std::env::var("VELNOR_FIXTURE_STATE")?).join("failure"))?;
+    let state = std::path::PathBuf::from(std::env::var("VELNOR_FIXTURE_STATE")?);
+    let failure = fs::read_to_string(state.join("failure"))?;
     let polling = matches!(failure.as_str(), "merge-deadline" | "merge-api-deadline");
+    let start = Instant::now();
+    let operation_start = Cell::new(None);
+    let route = if polling {
+        "route=repos/test-owner/test-tap/pulls/17\n"
+    } else {
+        "route=repos/test-owner/test-tap\n"
+    };
+    velnor_actions_mise::CheckDeadline::with_clock(
+        move || {
+            let started = operation_start.get().or_else(|| {
+                let requests = fs::read_to_string(state.join("requests.log")).ok()?;
+                if !requests.contains(route) {
+                    return None;
+                }
+                let started = Instant::now();
+                operation_start.set(Some(started));
+                Some(started)
+            });
+            started.map_or(start, |started| start + started.elapsed())
+        },
+        || deadline_operation(&request, polling),
+    )?;
+    Ok(true)
+}
+
+fn deadline_operation(request: &str, polling: bool) -> Result<(), Box<dyn Error>> {
+    let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(5))?;
     let expired = deadline.scope(|| {
-        let result = velnor_actions_orchestrator::plan_internal(&request);
+        let result = velnor_actions_orchestrator::plan_internal(request);
         assert!(result.is_err(), "deadline plan unexpectedly succeeded");
         if let Err(error) = result {
             eprintln!("{error}");
@@ -294,7 +322,15 @@ pub(crate) fn deadline_child() -> Result<bool, Box<dyn Error>> {
         }
     });
     assert!(expired.is_err(), "public operation deadline did not expire");
-    Ok(true)
+    if polling {
+        let state = std::env::var("VELNOR_FIXTURE_STATE")?;
+        let requests = fs::read_to_string(Path::new(&state).join("requests.log"))?;
+        assert!(
+            requests.contains("route=repos/test-owner/test-tap/pulls/17\n"),
+            "mergeability polling was not reached"
+        );
+    }
+    Ok(())
 }
 
 fn sha256(bytes: &[u8]) -> String {

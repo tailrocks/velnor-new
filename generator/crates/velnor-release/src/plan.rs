@@ -62,6 +62,7 @@ pub struct BinaryPlan {
 pub struct ReleasePlan {
     pub roots: Vec<RootPlan>,
     pub after: Vec<String>,
+    pub pr_only_checks: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
     pub release_plz_version: String,
     pub release_plz_url: String,
@@ -387,6 +388,7 @@ impl ReleasePlan {
         Ok(ReleasePlan {
             roots,
             after: config.after,
+            pr_only_checks: config.pr_only_checks,
             binaries,
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,

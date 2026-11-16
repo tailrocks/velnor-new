@@ -47,6 +47,7 @@ pub(super) struct PreparedConnection {
     pub(super) poll_cursor: i64,
 
     pub(super) poll_retry_at: Option<Instant>,
+    pub(super) restore_retry_at: Option<Instant>,
     pub(super) guest_image: GuestImageFile,
     pub(super) completion: Option<CompletionWorker>,
     pub(super) credentials: Option<SessionCredentials>,

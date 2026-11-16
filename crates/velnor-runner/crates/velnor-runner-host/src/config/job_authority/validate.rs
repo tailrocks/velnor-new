@@ -17,8 +17,14 @@ use super::{
     MAX_POLICY_BYTES, MAX_REFS, MAX_SECRETS, MAX_WORKFLOWS, POLICY_SCHEMA, PermissionLevel,
     WorkflowEvent,
 };
-use crate::config::RepositoryConnection;
+use crate::config::{RepositoryConnection, SourcePolicy};
 use crate::error::HostError;
+
+#[derive(Clone, Copy)]
+pub(super) struct Scope<'a> {
+    repository_id: i64,
+    source_policy: Option<&'a SourcePolicy>,
+}
 
 pub(crate) fn validate_policies(
     policies: &[ApprovedJobAuthorityPolicy],
@@ -49,6 +55,38 @@ pub(super) fn validate_policy(
         || policy.generation == 0
         || policy.connection_id != connection.connection_id
         || policy.binding_sha256 != super::sha256(&connection.canonical_identity_bytes()?)
+    {
+        return Err(HostError::Config);
+    }
+    validate_content(
+        policy,
+        Scope {
+            repository_id: connection.repository_id,
+            source_policy: Some(&connection.source_policy),
+        },
+    )
+}
+
+#[cfg(feature = "local-mode")]
+pub(super) fn validate_structure(
+    policy: &ApprovedJobAuthorityPolicy,
+    repository_id: i64,
+) -> Result<(), HostError> {
+    validate_content(
+        policy,
+        Scope {
+            repository_id,
+            source_policy: None,
+        },
+    )
+}
+
+fn validate_content(
+    policy: &ApprovedJobAuthorityPolicy,
+    scope: Scope<'_>,
+) -> Result<(), HostError> {
+    if policy.schema_version != POLICY_SCHEMA
+        || policy.generation == 0
         || !is_sha256(&policy.binding_sha256)
         || !is_sha256(&policy.generator.artifact_sha256)
         || !is_git_sha(&policy.generator.source_sha)
@@ -63,17 +101,17 @@ pub(super) fn validate_policy(
     if policy.policy_sha256 != expected {
         return Err(HostError::Config);
     }
-    validate_workflows(policy, connection)
+    validate_workflows(policy, scope)
 }
 
 fn validate_workflows(
     policy: &ApprovedJobAuthorityPolicy,
-    connection: &RepositoryConnection,
+    scope: Scope<'_>,
 ) -> Result<(), HostError> {
     let mut workflow_ids = HashSet::new();
     let mut jobs = 0_usize;
     for workflow in &policy.workflows {
-        if workflow.repository_id != connection.repository_id
+        if workflow.repository_id != scope.repository_id
             || !valid_workflow_path(&workflow.path)
             || !is_sha256(&workflow.content_sha256)
             || workflow.calls.len() > MAX_CALLS
@@ -83,7 +121,7 @@ fn validate_workflows(
             return Err(HostError::Config);
         }
         for call in &workflow.calls {
-            if call.repository_id != connection.repository_id
+            if call.repository_id != scope.repository_id
                 || !valid_workflow_path(&call.path)
                 || !is_sha256(&call.content_sha256)
             {
@@ -97,7 +135,7 @@ fn validate_workflows(
             return Err(HostError::Config);
         }
         for job in &workflow.jobs {
-            validate_job(job, workflow, connection)?;
+            validate_job(job, workflow, scope)?;
         }
         if workflow.jobs.windows(2).any(|pair| {
             (&pair[0].root_path, &pair[0].workflow_path, &pair[0].job_key)
@@ -118,7 +156,7 @@ fn validate_workflows(
 fn validate_job(
     job: &ApprovedJobAuthorityEntry,
     workflow: &ApprovedWorkflow,
-    connection: &RepositoryConnection,
+    scope: Scope<'_>,
 ) -> Result<(), HostError> {
     if job.workflow_path != workflow.path
         || !valid_workflow_path(&job.root_path)
@@ -130,7 +168,7 @@ fn validate_job(
         || job
             .contexts
             .iter()
-            .any(|context| !valid_context(context, connection))
+            .any(|context| !valid_context(context, scope))
         || job.secrets.len() > MAX_SECRETS
         || job.environments.len() > MAX_ENVIRONMENTS
         || job.needs.len() > MAX_NEEDS
@@ -148,13 +186,10 @@ fn validate_job(
     {
         return Err(HostError::Config);
     }
-    validate_role(job, connection)
+    validate_role(job, scope)
 }
 
-fn validate_role(
-    job: &ApprovedJobAuthorityEntry,
-    connection: &RepositoryConnection,
-) -> Result<(), HostError> {
+fn validate_role(job: &ApprovedJobAuthorityEntry, scope: Scope<'_>) -> Result<(), HostError> {
     match job.role {
         JobAuthorityRole::Verification => {
             if !job.secrets.is_empty()
@@ -201,7 +236,7 @@ fn validate_role(
                             .any(|context| {
                                 context.pull_request_rules.iter().any(|rule| {
                                     rule.number.is_none()
-                                        || rule.head_repository_id != connection.repository_id
+                                        || rule.head_repository_id != scope.repository_id
                                 })
                             })))
             {
@@ -223,8 +258,9 @@ fn validate_role(
     Ok(())
 }
 
-fn valid_context(context: &ApprovedEventContext, connection: &RepositoryConnection) -> bool {
-    if !connection.source_policy.events.contains(&context.event) {
+fn valid_context(context: &ApprovedEventContext, scope: Scope<'_>) -> bool {
+    let source = scope.source_policy;
+    if source.is_some_and(|source| !source.events.contains(&context.event)) {
         return false;
     }
     if context.event == WorkflowEvent::PullRequest {
@@ -236,7 +272,7 @@ fn valid_context(context: &ApprovedEventContext, connection: &RepositoryConnecti
                 .windows(2)
                 .all(|pair| pair[0] < pair[1])
             && context.pull_request_rules.iter().all(|rule| {
-                rule.base_repository_id == connection.repository_id
+                rule.base_repository_id == scope.repository_id
                     && rule.head_repository_id > 0
                     && rule.number.is_none_or(|number| number > 0)
                     && valid_event_ref(
@@ -247,12 +283,13 @@ fn valid_context(context: &ApprovedEventContext, connection: &RepositoryConnecti
                         WorkflowEvent::Push,
                         &format!("refs/heads/{}", rule.head_branch),
                     )
-                    && connection.source_policy.mode != crate::config::SourcePolicyMode::Repository
-                    && connection
-                        .source_policy
-                        .pull_request_rules
-                        .iter()
-                        .any(|source| pr_rule_is_subset(rule, source))
+                    && source.is_none_or(|source| {
+                        source.mode != crate::config::SourcePolicyMode::Repository
+                            && source
+                                .pull_request_rules
+                                .iter()
+                                .any(|allowed| pr_rule_is_subset(rule, allowed))
+                    })
             });
     }
     if !context.pull_request_rules.is_empty()
@@ -264,6 +301,7 @@ fn valid_context(context: &ApprovedEventContext, connection: &RepositoryConnecti
     }
     context.refs.iter().all(|event_ref| {
         valid_event_ref(context.event, event_ref)
-            && source_policy_allows_ref(&connection.source_policy, context.event, event_ref)
+            && source
+                .is_none_or(|source| source_policy_allows_ref(source, context.event, event_ref))
     })
 }
