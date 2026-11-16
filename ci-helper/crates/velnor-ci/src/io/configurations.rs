@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use crate::cli::CheckConfigurationsArgs;
-use crate::configurations::{Configuration, ResolvedFeatures, requests, resolved};
+use crate::configurations::{Availability, Configuration, ResolvedFeatures, requests, resolved};
 use crate::error::CiError;
 
 pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
@@ -37,6 +38,7 @@ pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
         }
         resolutions.push(resolved(&output.stdout).map_err(|e| e.context(&configuration.name))?);
     }
+    report_targets(&configurations, &resolutions);
     let mut representatives: Vec<usize> = Vec::new();
     for (index, configuration) in configurations.iter().enumerate() {
         let representative = representatives.iter().copied().find(|&previous| {
@@ -74,6 +76,28 @@ pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
         }
     }
     Ok(String::new())
+}
+
+fn report_targets(configurations: &[Configuration], resolutions: &[ResolvedFeatures]) {
+    let mut targets = BTreeSet::new();
+    for (configuration, resolution) in configurations.iter().zip(resolutions) {
+        for (target, availability) in &resolution.test_targets {
+            targets.insert(target);
+            println!(
+                "{}: {}: {}",
+                configuration.name,
+                target.description(),
+                availability.label()
+            );
+        }
+    }
+    for target in targets {
+        if resolutions.iter().all(|resolution| {
+            resolution.test_targets.get(target) == Some(&Availability::Unavailable)
+        }) {
+            println!("no configuration enables {}", target.description());
+        }
+    }
 }
 
 fn cargo(manifest: &Path, configuration: &Configuration, operation: &str) -> Command {
