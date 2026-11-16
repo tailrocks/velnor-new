@@ -83,22 +83,22 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     } else {
         RUN
     };
-    let env = env
-        .into_iter()
-        .chain([(
-            "CARGO_LOG".to_owned(),
-            Value::Expr(format!(
-                "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
-            )),
-        )])
-        .collect();
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
-        env,
+        env: env.into_iter().chain([cache_debug_env()]).collect(),
         run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
     }
+}
+
+fn cache_debug_env() -> (String, Value) {
+    (
+        "CARGO_LOG".to_owned(),
+        Value::Expr(format!(
+            "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
+        )),
+    )
 }
 
 fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {

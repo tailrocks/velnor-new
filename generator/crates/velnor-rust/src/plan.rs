@@ -60,24 +60,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             &Lane::policy(single, helper_root.is_some()),
         ));
     }
-    for job in &mut jobs {
-        if job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-        {
-            let gate = job
-                .steps
-                .iter()
-                .find(|step| step.kind == StepKind::Helper(HelperCommand::Restored))
-                .and_then(|step| step.gate.clone());
-            job.steps.push(Step {
-                when: When::CacheDebug,
-                gate,
-                ..step(StepKind::UploadCargoLog)
-            });
-        }
-    }
+    upload_cargo_logs(&mut jobs);
     let draft_guard = facts
         .config
         .skip_draft_pull_requests
@@ -264,15 +247,40 @@ pub(crate) fn setup_roots(
         ]);
     }
     toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
-    toolchain.extend(roots.iter().map(|root| Step {
-        directory: root.manifest.parent(),
-        ..step(StepKind::Helper(HelperCommand::InputsRestore))
-    }));
+    toolchain.extend(restore_file_times(roots));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
     }));
     steps
+}
+
+fn upload_cargo_logs(jobs: &mut [Job]) {
+    for job in jobs {
+        if job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+        {
+            let gate = job
+                .steps
+                .iter()
+                .find(|step| step.kind == StepKind::Helper(HelperCommand::Restored))
+                .and_then(|step| step.gate.clone());
+            job.steps.push(Step {
+                when: When::CacheDebug,
+                gate,
+                ..step(StepKind::UploadCargoLog)
+            });
+        }
+    }
+}
+
+fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
+    roots.iter().map(|root| Step {
+        directory: root.manifest.parent(),
+        ..step(StepKind::Helper(HelperCommand::InputsRestore))
+    })
 }
 
 pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {

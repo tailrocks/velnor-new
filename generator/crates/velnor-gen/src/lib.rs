@@ -51,7 +51,7 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
         .chain(
             silent_build_scripts(view)
                 .iter()
-                .map(|script| script.note()),
+                .map(velnor_rust::SilentBuildScript::note),
         )
         .collect())
 }

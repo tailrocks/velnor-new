@@ -27,10 +27,7 @@ fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
 fn names_of(lane: &str) -> Vec<&str> {
     lane.lines()
         .filter(|line| line.starts_with("      - ") || line.starts_with("        name: "))
-        .filter_map(|line| {
-            let line = line.trim().trim_start_matches("- ");
-            line.strip_prefix("name: ")
-        })
+        .filter_map(|line| line.trim().trim_start_matches("- ").strip_prefix("name: "))
         .collect()
 }
 
@@ -72,7 +69,7 @@ fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestRes
         .into_iter()
         .filter(|step| step.contains("run: velnor-ci run -- cargo"))
         .collect();
-    assert!(!cargo.is_empty());
+    assert_ne!(cargo.len(), 0);
     for step in cargo {
         assert!(step.contains(DEBUG_LOG), "{step}");
     }
@@ -131,7 +128,7 @@ fn a_build_script_without_a_rerun_directive_is_reported_with_the_line_to_add() -
     ] {
         let fine = with_build_script("build.rs", Some(declared))?;
         assert!(silent_build_scripts(&fine).is_empty(), "{declared}");
-        assert!(notes(&fine)?.is_empty());
+        assert_eq!(notes(&fine)?.len(), 0);
     }
     Ok(())
 }
