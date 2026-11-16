@@ -326,14 +326,8 @@ async fn start_listening_pair(
         asked: Arc::clone(&asked),
         online_after,
     };
-    let started = supervisor::start_pairs(
-        &dir,
-        &script,
-        &pairs,
-        async |_: &Path| Ok(server),
-        timeout,
-    )
-    .await;
+    let started =
+        supervisor::start_pairs(&dir, &script, &pairs, async |_: &Path| Ok(server), timeout).await;
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
     let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
     (started, asked.load(Ordering::SeqCst))
