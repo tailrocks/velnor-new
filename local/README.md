@@ -74,7 +74,7 @@ velnor-local down --dir "$STATE"
 
 ## The approved-workflows check and `--policy`
 
-The approved-workflows check is off in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning that says so. An optional `--policy <file>` that applies the approved job-authority policy locally is the work of FAST-L.8.6 (#746) and is not in this tool yet; until it lands, treat a passing local run as proof that the workflow runs, not that the real runner would approve it.
+The approved-workflows check is off in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning that says so. There is no `--policy` flag: the check cannot be turned on locally and every run prints that warning, so treat a passing local run as proof that the workflow runs, not that the real runner would approve it.
 
 ## Environments, pairs and the authority
 

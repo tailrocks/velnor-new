@@ -8,7 +8,7 @@ use crate::protocol::Error;
 use crate::side::Side;
 use crate::standin::{Job, Run};
 
-pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are; the check is not available yet (see FAST-L.8.6)";
+pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are";
 pub const RUNS_PATH: &str = "/_apis/v1/Message/workflow/runs";
 pub const AGENTS_PATH: &str = "/_apis/v1/Agent/0";
 

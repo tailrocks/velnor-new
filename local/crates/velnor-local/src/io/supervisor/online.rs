@@ -49,6 +49,7 @@ pub async fn await_online<B: Backend>(
     let sides: Vec<_> = sides.iter().filter(|(_, pairs)| *pairs > 0).collect();
     loop {
         let mut short = None;
+        let mut failed = None;
         for &&(side, pairs) in &sides {
             let Ok(ready) = tokio::time::timeout_at(deadline, ready(backend, side)).await else {
                 return Err(io::Error::other(format!(
@@ -57,7 +58,13 @@ pub async fn await_online<B: Backend>(
                     timeout.as_secs()
                 )));
             };
-            let ready = ready?;
+            let ready = match ready {
+                Ok(ready) => ready,
+                Err(error) => {
+                    failed = Some(error);
+                    0
+                }
+            };
             if ready < usize::from(pairs) && short.is_none() {
                 short = Some((side, pairs, ready));
             }
@@ -66,8 +73,9 @@ pub async fn await_online<B: Backend>(
             return Ok(());
         };
         if tokio::time::Instant::now() >= deadline {
+            let last = failed.map_or_else(String::new, |error| format!(" (last error: {error})"));
             return Err(io::Error::other(format!(
-                "{ready} of {pairs} {} runners were online at runner.server within {} s",
+                "{ready} of {pairs} {} runners were online at runner.server within {} s{last}",
                 side.name(),
                 timeout.as_secs()
             )));

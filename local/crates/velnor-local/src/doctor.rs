@@ -71,9 +71,12 @@ pub fn render(parts: &[Part]) -> String {
 }
 
 #[must_use]
-pub fn docker(info: Result<&str, ()>, socket: &str) -> Part {
+pub fn docker(info: Result<&str, ()>, socket: Result<&str, ()>) -> Part {
     let Ok(info) = info else {
         return Part::miss("docker: not reachable", DOCKER_FIX);
+    };
+    let Ok(socket) = socket else {
+        return Part::miss("docker: context not readable", DOCKER_FIX);
     };
     let (os, architecture) = info.split_once('|').unwrap_or((info, ""));
     let name = if os.contains("OrbStack") {
@@ -132,9 +135,9 @@ pub fn pair_images(missing: Option<&[&str]>) -> Part {
 }
 
 #[must_use]
-pub fn host(found: Result<&str, &str>) -> Part {
+pub fn host(found: Result<&str, &str>, fix: &str) -> Part {
     match found {
         Ok(path) => Part::ok(format!("velnor-host with local mode: {path}")),
-        Err(reason) => Part::miss(format!("velnor-host with local mode: {reason}"), BUILD_FIX),
+        Err(reason) => Part::miss(format!("velnor-host with local mode: {reason}"), fix),
     }
 }

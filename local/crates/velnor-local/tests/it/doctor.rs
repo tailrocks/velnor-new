@@ -18,6 +18,7 @@ use crate::support::temp_dir;
 
 struct Docker {
     info: Option<&'static str>,
+    context: bool,
     images: BTreeSet<&'static str>,
 }
 
@@ -25,9 +26,9 @@ impl Engine for Docker {
     fn docker(&self, args: &[&str]) -> impl Future<Output = io::Result<String>> + Send {
         let answer = match args {
             ["info", ..] => self.info.map(str::to_owned),
-            ["context", "inspect", ..] => {
-                Some("unix:///Users/me/.orbstack/run/docker.sock".to_owned())
-            }
+            ["context", "inspect", ..] => self
+                .context
+                .then(|| "unix:///Users/me/.orbstack/run/docker.sock".to_owned()),
             ["image", "inspect", .., tag] => {
                 self.images.contains(tag).then(|| "sha256:aa".to_owned())
             }
@@ -53,6 +54,7 @@ const ALL: [&str; 6] = [
 fn docker(without: &[&str]) -> Docker {
     Docker {
         info: Some("OrbStack|aarch64"),
+        context: true,
         images: ALL
             .into_iter()
             .filter(|tag| !without.contains(tag))
@@ -125,16 +127,14 @@ async fn a_host_without_local_mode_or_without_a_file_is_a_miss_with_the_build_fi
     let (parts, text) = report(&docker(&[]), &plain).await;
     assert!(!healthy(&parts), "{text}");
     assert!(text.contains("miss  velnor-host with local mode"), "{text}");
-    assert!(text.contains("fix: velnor-local build"), "{text}");
-    let (parts, text) = report(&docker(&[]), Path::new("/nonexistent/velnor-host")).await;
-    assert!(!healthy(&parts), "{text}");
-    assert!(text.contains("fix: velnor-local build"), "{text}");
+    assert!(text.contains("fix: build or install velnor-host at"), "{text}");
 }
 
 #[tokio::test]
 async fn unreachable_docker_and_other_architectures_are_misses() {
     let down = Docker {
         info: None,
+        context: true,
         images: BTreeSet::new(),
     };
     let (parts, text) = report(&down, &host("doctor-down", true)).await;
@@ -185,5 +185,33 @@ fn the_doctor_command_exits_1_and_prints_a_fix_when_a_part_is_missing() {
     let text = String::from_utf8_lossy(&output.stdout);
     assert_eq!(output.status.code(), Some(1), "{text}");
     assert!(text.contains("miss  velnor-host with local mode"), "{text}");
-    assert!(text.contains("fix: velnor-local build"), "{text}");
+    assert!(text.contains("fix: build or install velnor-host at"), "{text}");
+}
+
+#[tokio::test]
+async fn an_unreadable_docker_context_is_a_miss_with_the_docker_fix() {
+    let blind = Docker {
+        context: false,
+        ..docker(&[])
+    };
+    let (parts, text) = report(&blind, &host("doctor-context", true)).await;
+    assert!(!healthy(&parts), "{text}");
+    assert!(text.contains("miss  docker: context not readable"), "{text}");
+    assert!(
+        text.contains("fix: start OrbStack or Docker Desktop"),
+        "{text}"
+    );
+}
+
+#[tokio::test]
+async fn an_explicit_missing_host_names_that_path_in_the_fix() {
+    let (parts, text) = report(&docker(&[]), Path::new("/nonexistent/velnor-host")).await;
+    assert!(!healthy(&parts), "{text}");
+    assert!(
+        text.contains(
+            "fix: build or install velnor-host at /nonexistent/velnor-host, or omit --velnor-host"
+        ),
+        "{text}"
+    );
+    assert!(!text.contains("fix: velnor-local build"), "{text}");
 }

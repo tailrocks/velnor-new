@@ -178,3 +178,43 @@ async fn it_is_not_ready_when_an_earlier_side_dropped_before_a_later_side_came_u
     let result = await_online(&server, &sides, Duration::from_secs(5)).await;
     assert!(result.is_err(), "{result:?}");
 }
+
+struct FailsOnce {
+    listed: AtomicUsize,
+}
+
+impl Backend for FailsOnce {
+    fn get(&self, _: Side, path: &str) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send {
+        let answer = if path.contains("isagentonline") {
+            Ok(Some(br#"{"online":true}"#.to_vec()))
+        } else if self.listed.fetch_add(1, Ordering::SeqCst) == 0 {
+            Err(io::Error::other("connection reset"))
+        } else {
+            Ok(Some(br#"{"value":[{"name":"a-1"}],"count":1}"#.to_vec()))
+        };
+        std::future::ready(answer)
+    }
+
+    fn delete(&self, _: Side, _: &str) -> impl Future<Output = io::Result<()>> + Send {
+        std::future::ready(Ok(()))
+    }
+
+    fn mint(
+        &self,
+        _: Side,
+        _: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+        std::future::ready(Ok(None))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn it_retries_a_transient_request_failure_until_the_deadline() {
+    let server = FailsOnce {
+        listed: AtomicUsize::new(0),
+    };
+    let sides = [(Side::Trusted, 1)];
+    let result = await_online(&server, &sides, Duration::from_secs(5)).await;
+    assert!(result.is_ok(), "{result:?}");
+    assert!(server.listed.load(Ordering::SeqCst) >= 2);
+}

@@ -7,7 +7,7 @@ use std::path::Path;
 use super::env::{DockerCli, Engine, program};
 use super::supervisor::default_host;
 use crate::cli::DoctorArgs;
-use crate::doctor::{PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render};
+use crate::doctor::{BUILD_FIX, PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render};
 use crate::images::TARGETS;
 
 async fn missing<'a, E: Engine>(engine: &E, tags: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
@@ -24,6 +24,15 @@ async fn missing<'a, E: Engine>(engine: &E, tags: impl Iterator<Item = &'a str>)
 }
 
 async fn host_part(explicit: Option<&Path>) -> Part {
+    let fix = explicit.map_or_else(
+        || BUILD_FIX.to_owned(),
+        |path| {
+            format!(
+                "build or install velnor-host at {}, or omit --velnor-host",
+                path.display()
+            )
+        },
+    );
     let path = match explicit {
         Some(path) => std::path::absolute(path),
         None => match std::env::current_exe() {
@@ -33,15 +42,15 @@ async fn host_part(explicit: Option<&Path>) -> Part {
     };
     let path = match path {
         Ok(path) => path,
-        Err(error) => return host(Err(&error.to_string())),
+        Err(error) => return host(Err(&error.to_string()), &fix),
     };
     let shown = path.display().to_string();
     if !path.is_file() {
-        return host(Err(&format!("{shown} is not a file")));
+        return host(Err(&format!("{shown} is not a file")), &fix);
     }
     match program(&shown, &["local", "--help"], None).await {
-        Ok(_) => host(Ok(&shown)),
-        Err(_) => host(Err(&format!("{shown} was built without local mode"))),
+        Ok(_) => host(Ok(&shown), &fix),
+        Err(_) => host(Err(&format!("{shown} was built without local mode")), &fix),
     }
 }
 
@@ -56,8 +65,7 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
             "--format",
             "{{.Endpoints.docker.Host}}",
         ])
-        .await
-        .unwrap_or_else(|_| "unknown socket".to_owned());
+        .await;
     let (plain, pair) = if info.is_ok() {
         (
             Some(missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),
@@ -67,7 +75,10 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
         (None, None)
     };
     vec![
-        docker(info.as_deref().map_err(|_| ()), &socket),
+        docker(
+            info.as_deref().map_err(|_| ()),
+            socket.as_deref().map_err(|_| ()),
+        ),
         plain_images(plain.as_deref()),
         pair_images(pair.as_deref()),
         host_part(velnor_host).await,
