@@ -65,6 +65,11 @@ pub struct ArtifactTap {
 }
 
 impl ArtifactTap {
+    #[must_use]
+    pub fn take_ready(&mut self) -> ArtifactBatch {
+        std::mem::take(&mut self.batch)
+    }
+
     pub fn feed(&mut self, bytes: &[u8]) {
         for segment in bytes.split_inclusive(|byte| *byte == b'\n') {
             let newline = segment.last() == Some(&b'\n');
