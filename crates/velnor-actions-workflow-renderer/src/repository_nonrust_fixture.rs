@@ -143,7 +143,7 @@ bun=$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false MISE_LOCKFILE=0 mise 
 case "$bun" in /*) test -f "$bun"; test -x "$bun"; test ! -L "$bun" ;; *) printf '%s\n' 'pinned Bun executable must be absolute' >&2; exit 1 ;; esac
 export VELNOR_FIXTURE_ORIGIN_TOKEN="$fixture_origin_credential"
 unset fixture_origin_credential
-exec "$bun" "$fixture_workspace/scripts/provision-nonrust-tools-fixture.ts" "$RUNNER_TEMP/velnor-nonrust-tools-fixture"
+exec "$bun" --config=/dev/null --no-env-file "$fixture_workspace/scripts/provision-nonrust-tools-fixture.ts" "$RUNNER_TEMP/velnor-nonrust-tools-fixture"
 "#,
         denied = denied.join(" ")
     )

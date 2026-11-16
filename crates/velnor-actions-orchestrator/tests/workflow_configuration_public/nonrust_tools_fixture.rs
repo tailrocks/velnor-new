@@ -46,7 +46,7 @@ pub(super) struct Archive {
 
 impl Fixture {
     pub(super) fn load() -> Result<(Self, Replay), Box<dyn Error>> {
-        let path = std::env::var_os("VELNOR_NONRUST_TOOLS_FIXTURE").ok_or("VELNOR_NONRUST_TOOLS_FIXTURE missing; run bun scripts/provision-nonrust-tools-fixture.ts <private-directory> <pinned-mise>")?;
+        let path = std::env::var_os("VELNOR_NONRUST_TOOLS_FIXTURE").ok_or("VELNOR_NONRUST_TOOLS_FIXTURE missing; use the isolated Bun provisioning recipe in docs/implemented/ci-maintenance/repo-verification.md")?;
         let mut fixture: Self =
             serde_json::from_slice(&fs::read(Path::new(&path).join("fixture.json"))?)?;
         assert_eq!(fixture.schema, 1);
@@ -291,7 +291,13 @@ struct TransportInfo {
 
 impl Replay {
     fn start(path: &Path, bun: &Path) -> Result<(Self, TransportInfo), Box<dyn Error>> {
-        let version = super::nonrust_process::output(Command::new(bun).arg("--version"))?;
+        let version = super::nonrust_process::output(
+            Command::new(bun)
+                .args(["--config=/dev/null", "--no-env-file", "--version"])
+                .env_remove("BUN_OPTIONS")
+                .env_remove("NODE_OPTIONS")
+                .env_remove("NODE_PATH"),
+        )?;
         assert!(version.status.success());
         assert_eq!(
             String::from_utf8(version.stdout)?.trim(),
@@ -300,8 +306,12 @@ impl Replay {
         let script =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/nonrust-tools-transport.ts");
         let child = Command::new(bun)
+            .args(["--config=/dev/null", "--no-env-file"])
             .arg(script)
             .arg(path)
+            .env_remove("BUN_OPTIONS")
+            .env_remove("NODE_OPTIONS")
+            .env_remove("NODE_PATH")
             .stdout(Stdio::piped())
             .spawn()?;
         let mut replay = Self { child };

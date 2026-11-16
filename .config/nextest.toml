@@ -11,6 +11,14 @@ status-level = "all"
 final-status-level = "flaky"
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and binary(=workflow_configuration_public) and (test(/^nonrust_/) or test(/^repository_fixture/))'
+threads-required = "num-test-threads"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and binary(=workflow_configuration_public) and (test(/^nonrust_/) or test(/^repository_fixture/))'
+threads-required = "num-test-threads"
+
+[[profile.ci.overrides]]
 filter = 'package(=velnor-actions-orchestrator) and binary(=runner_image_build_public)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
