@@ -12,12 +12,11 @@ use crate::harness::uses_nextest;
 
 pub(crate) const VERDICT_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-pub(crate) fn has_gate(facts: &RepoFacts, from_source: bool) -> bool {
-    from_source
-        || facts
-            .helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least(VERDICT_HELPER))
+pub(crate) fn has_gate(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(VERDICT_HELPER))
 }
 
 fn tests_lane(job: &Job) -> Option<RootSlug> {

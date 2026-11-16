@@ -67,7 +67,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .config
         .skip_draft_pull_requests
         .then(|| step(StepKind::FailOnDraftRun));
-    let gate = has_gate(facts, helper_root.is_some());
+    let gate = has_gate(facts);
     if !single {
         let mut used = used_outputs(&jobs);
         if gate {

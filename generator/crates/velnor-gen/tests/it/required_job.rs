@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_gen::expected_files;
 use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
+use crate::golden::{load, samples};
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
@@ -108,5 +110,42 @@ fn the_gate_names_every_job_the_verdict_job_needs() -> TestResult {
         .filter_map(|job| job.split_once('=').map(|(id, _)| id.to_owned()))
         .collect();
     assert_eq!(needs, named);
+    Ok(())
+}
+
+fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut view = load(&samples().join("helper-source"))?;
+    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+    let bytes = view.files.get(&lock).ok_or("no lock")?;
+    let text = String::from_utf8(bytes.clone())?.replacen("0.1.79", version, 1);
+    view.files.insert(lock, text.into_bytes());
+    let mut files = expected_files(&view)?;
+    files
+        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .ok_or_else(|| "no workflow".into())
+}
+
+#[test]
+fn a_helper_built_from_source_is_downloaded_by_the_gate_once_the_released_plan_helper_has_it()
+-> TestResult {
+    let text = built_from_source("0.1.81")?;
+    let job = required(&text)?;
+    assert!(job.contains("      - name: Download velnor-ci\n"));
+    assert!(job.contains("      - name: velnor-ci gate\n"));
+    assert!(!job.contains("Install velnor-ci"));
+    assert!(text.contains(
+        "      rust_generator_tests: '${{ steps.plan.outputs.rust_generator_tests }}'\n"
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_helper_built_from_source_keeps_the_old_verdict_while_the_plan_helper_lacks_gate() -> TestResult
+{
+    let text = built_from_source("0.1.80")?;
+    let job = required(&text)?;
+    assert!(job.contains("Fail when a Rust job failed or was cancelled"));
+    assert!(!job.contains("velnor-ci gate"));
+    assert!(!text.contains("_tests"));
     Ok(())
 }

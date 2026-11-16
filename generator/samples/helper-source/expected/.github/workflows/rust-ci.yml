@@ -29,27 +29,22 @@ jobs:
       rust_ci_helper_docs: '${{ steps.plan.outputs.rust_ci_helper_docs }}'
       rust_ci_helper_test_filter: '${{ steps.plan.outputs.rust_ci_helper_test_filter }}'
       rust_ci_helper_package_args: '${{ steps.plan.outputs.rust_ci_helper_package_args }}'
-      rust_ci_helper_tests: '${{ steps.plan.outputs.rust_ci_helper_tests }}'
       rust_crates_velnor_runner_mode: '${{ steps.plan.outputs.rust_crates_velnor_runner_mode }}'
       rust_crates_velnor_runner_docs: '${{ steps.plan.outputs.rust_crates_velnor_runner_docs }}'
       rust_crates_velnor_runner_test_filter: '${{ steps.plan.outputs.rust_crates_velnor_runner_test_filter }}'
       rust_crates_velnor_runner_package_args: '${{ steps.plan.outputs.rust_crates_velnor_runner_package_args }}'
-      rust_crates_velnor_runner_tests: '${{ steps.plan.outputs.rust_crates_velnor_runner_tests }}'
       rust_generator_mode: '${{ steps.plan.outputs.rust_generator_mode }}'
       rust_generator_docs: '${{ steps.plan.outputs.rust_generator_docs }}'
       rust_generator_test_filter: '${{ steps.plan.outputs.rust_generator_test_filter }}'
       rust_generator_package_args: '${{ steps.plan.outputs.rust_generator_package_args }}'
-      rust_generator_tests: '${{ steps.plan.outputs.rust_generator_tests }}'
       rust_local_mode: '${{ steps.plan.outputs.rust_local_mode }}'
       rust_local_docs: '${{ steps.plan.outputs.rust_local_docs }}'
       rust_local_test_filter: '${{ steps.plan.outputs.rust_local_test_filter }}'
       rust_local_package_args: '${{ steps.plan.outputs.rust_local_package_args }}'
-      rust_local_tests: '${{ steps.plan.outputs.rust_local_tests }}'
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
       rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
-      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -845,22 +840,12 @@ jobs:
       - rust-generator
       - rust-local
       - rust-inputs-audit
-    if: '${{ always() }}'
+    if: '${{ !cancelled() }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
-      - name: velnor-ci gate
-        env:
-          NEEDS_JSON: '${{ toJSON(needs) }}'
-        run: 'velnor-ci gate --plan rust-plan --job rust-plan=always --job rust-helper=always --job rust-root=lane:root --job rust-ci_helper=lane:ci_helper --job rust-crates_velnor_runner=lane:crates_velnor_runner --job rust-generator=lane:generator --job rust-local=lane:local --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-ci_helper=ci_helper --tests rust-crates_velnor_runner=crates_velnor_runner --tests rust-generator=generator --tests rust-local=local'
+      - name: Fail when a Rust job failed or was cancelled
+        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
+        run: exit 1
