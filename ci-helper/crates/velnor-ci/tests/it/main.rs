@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod check_configurations;
 mod check_metadata;
 mod check_metadata_gen;
 mod collect;
@@ -31,6 +32,7 @@ mod release_check_config;
 mod release_commit;
 mod release_fake;
 mod release_manifests;
+mod release_preflight;
 mod release_publish;
 mod release_publish_assetless;
 mod release_publish_guards;

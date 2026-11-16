@@ -9,14 +9,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::thread;
 
-use velnor_ci::github::{commit_path, tag_ref_path};
+use velnor_ci::github::tag_ref_path;
 
 use crate::support::repo;
 
-const TREE: &str = "9999999999999999999999999999999999999999";
 const MERGE: &str = "1111111111111111111111111111111111111111";
-const APP_COMMIT: &str = "2222222222222222222222222222222222222222";
-const TOOLS_COMMIT: &str = "3333333333333333333333333333333333333333";
 const PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 const ONLY_TOOLS: &str =
     r#"{"releases":[{"package_name":"tools","prs":[],"tag":"tools-v0.1.0","version":"0.1.0"}]}"#;
@@ -112,18 +109,8 @@ fn api(author: &str, kind: &str) -> String {
     let repo = repo();
     let mut responses = BTreeMap::new();
     for tag in ["app-v0.1.0", "tools-v0.1.0"] {
-        responses.insert(tag_ref_path(&repo, tag), commit(APP_COMMIT));
+        responses.insert(tag_ref_path(&repo, tag), commit(MERGE));
     }
-    responses.insert(
-        commit_path(&repo, MERGE),
-        format!(
-            r#"{{"parents":[{{"sha":"{TOOLS_COMMIT}"}},{{"sha":"{APP_COMMIT}"}}],"commit":{{"tree":{{"sha":"{TREE}"}}}}}}"#
-        ),
-    );
-    responses.insert(
-        commit_path(&repo, APP_COMMIT),
-        format!(r#"{{"parents":[],"commit":{{"tree":{{"sha":"{TREE}"}}}}}}"#),
-    );
     responses.insert(
         "/repos/tailrocks/velnor-new/releases?per_page=100&page=1".to_owned(),
         draft(author, kind),
@@ -164,9 +151,7 @@ fn a_rerun_after_a_failed_second_root_records_the_draft_the_first_root_created()
     assert_eq!(result.status.code(), Some(0), "{result:?}");
     assert_eq!(
         fs::read_to_string(&output).unwrap_or_default(),
-        format!(
-            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={APP_COMMIT}\ntools_commit={APP_COMMIT}\n"
-        )
+        format!("app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={MERGE}\ntools_commit={MERGE}\n")
     );
 }
 

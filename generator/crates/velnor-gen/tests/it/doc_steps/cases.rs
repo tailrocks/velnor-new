@@ -98,7 +98,7 @@ pub(super) const ORIGINAL: &[Case] = &[
     (
         "a block doc may hold an example",
         Kind::Doctested,
-        "/** x */\nfn f() {}\n",
+        "/** ``` x ``` */\nfn f() {}\n",
         false,
         RUN,
         RUN,

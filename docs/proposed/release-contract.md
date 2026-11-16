@@ -169,14 +169,23 @@ Rules:
   release-plz will publish, not merely the event SHA; release-plz may select
   the release-PR head rather than the merge result — qualify that behavior.
   Qualified against release-plz 0.4.3 (release_plz_core 0.43.0,
-  `should_release`): when the checked-out commit belongs to a release PR whose
-  last commit is an ancestor of it, release-plz checks out that PR commit and
-  puts the tag there, so under the merge-commit strategy the tag is on the PR
-  head, not on the verified merge commit. The tag job resolves the commit of
-  each recorded tag, requires it to equal the verified commit or to be its second parent
-  with a tree identical to the verified commit's tree (a stale release PR head
-  fails and must be brought up to date with the base branch or squashed), and exports it as `<package>_commit`; the build jobs compare their
-  checkout with that output, not with the verified commit (helper 0.1.81+).
+  `should_release`): when a pull request whose head branch starts with the
+  `pr_branch_prefix` is associated with the checked-out commit and that
+  pull request's last commit is an ancestor of the commit other than the
+  commit itself, release-plz checks out that PR commit and puts the tag there,
+  so under the merge-commit strategy the tag is on the PR head, not on the
+  verified merge commit. A released tag must name the verified default-branch
+  commit (docs/goals.md), so release pull requests must be squash-merged (or
+  merged through a merge queue with squash). The tag job refuses a merge-commit
+  release before release-plz holds any publishing authority: `velnor-ci
+  release preflight`, read-only, before the App token is minted, lists the pull
+  requests of the verified commit, and fails when one has a `pr_branch_prefix`
+  head branch whose last commit is an ancestor of the verified commit other
+  than that commit, or when the pull requests cannot be read (it fails
+  closed). `velnor-ci release record` then resolves the commit of each recorded
+  tag, requires it to equal the verified commit, and exports it as
+  `<package>_commit`; the build jobs compare their checkout with that output
+  (helper 0.1.81+).
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,

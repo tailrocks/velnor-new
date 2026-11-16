@@ -52,6 +52,10 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+    )]
+    CheckConfigurations(CheckConfigurationsArgs),
+    #[command(
         about = "Run after every cache is restored: every action that must follow the restores"
     )]
     Restored,
@@ -63,6 +67,21 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckConfigurationsArgs {
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Cargo manifest to resolve and check"
+    )]
+    pub manifest_path: PathBuf,
+    #[arg(
+        long,
+        help = "JSON array of named feature configurations; without a file, check the default configuration"
+    )]
+    pub configurations: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -162,6 +181,10 @@ pub enum ReleaseCommand {
     )]
     Publish(PublishArgs),
     #[command(
+        about = "Read-only, before release-plz holds any publishing authority: exit 1 when release-plz release would tag a commit other than the verified one, which is when a pull request whose head branch starts with a given prefix is associated with the verified commit and its last commit is an ancestor of the verified commit other than that commit itself (a release pull request merged with a merge commit or fast-forwarded), and exit 1 when the pull requests cannot be read. Reads GITHUB_TOKEN, which needs contents: read and pull-requests: read"
+    )]
+    Preflight(PreflightArgs),
+    #[command(
         about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
@@ -248,6 +271,25 @@ pub struct RecordArgs {
         help = "A release-plz.toml of a Cargo root, once per root; gives the tag of each package at the version the checkout holds; needs RUSTUP_TOOLCHAIN"
     )]
     pub config: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct PreflightArgs {
+    #[arg(long, value_name = "OWNER/NAME", help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(
+        long,
+        value_name = "SHA",
+        help = "Full SHA of the commit the release gate verified"
+    )]
+    pub verified_commit: String,
+    #[arg(
+        long = "branch-prefix",
+        required = true,
+        value_name = "PREFIX",
+        help = "A pr_branch_prefix of a release-plz root; give one per root"
+    )]
+    pub branch_prefixes: Vec<String>,
 }
 
 #[derive(Debug, Args)]

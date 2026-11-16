@@ -43,9 +43,11 @@ fn root(members: Vec<RustMember>) -> RustRoot {
 
 mod added;
 mod cases;
+mod read;
 
 use self::added::ADDED;
 use self::cases::{Kind, NO_LIBRARY, ORIGINAL, RUN, TEXT_TARGET};
+use self::read::READ;
 
 #[test]
 fn doctests_and_docs_are_left_out_only_when_no_source_could_produce_them() {
@@ -107,6 +109,26 @@ fn a_doctest_is_known_only_when_a_source_has_a_fenced_example() {
         let steps = optional_steps(&root, &sources, false);
         assert_eq!(steps.doctests_known, known, "{source} {dependencies}");
         assert_eq!(steps.doctests == RUN, known || dependencies);
+    }
+}
+
+#[test]
+fn a_doctest_is_known_only_from_a_fence_in_a_source_rustdoc_reads() {
+    let mut root = root(vec![library(true)]);
+    root.members[0]
+        .targets
+        .extend(target_of("a", TargetKind::Bin, false, "a/src/main.rs").targets);
+    for &(case, files, known, run) in READ {
+        let sources = files
+            .iter()
+            .map(|&(file, text)| (path(file), text.as_bytes().to_vec()))
+            .collect();
+        let steps = optional_steps(&root, &sources, false);
+        assert_eq!(
+            (steps.doctests_known, steps.doctests == RUN),
+            (known, run),
+            "{case}"
+        );
     }
 }
 

@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
-use crate::cli::{CheckConfigArgs, PublishArgs, RecordArgs};
+use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
@@ -16,8 +16,23 @@ use crate::release::{
     check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
+use crate::release_preflight::check_release_source;
 use crate::release_recover::recover;
 use crate::rulesets::check_tag_rulesets;
+
+pub(super) fn run_preflight(args: &PreflightArgs) -> Result<String, CiError> {
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    check_release_source(
+        &github,
+        &Repo::parse(&args.repo)?,
+        &args.verified_commit,
+        &args.branch_prefixes,
+    )?;
+    Ok(format!(
+        "release-plz would tag the verified commit {}\n",
+        args.verified_commit
+    ))
+}
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args

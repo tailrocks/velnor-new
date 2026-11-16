@@ -210,8 +210,8 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 }
 
 #[must_use]
-pub fn commit_path(repo: &Repo, sha: &str) -> String {
-    format!("/repos/{repo}/commits/{}", encode(sha))
+pub fn commit_pulls_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/commits/{}/pulls?per_page=100", encode(sha))
 }
 
 #[must_use]
