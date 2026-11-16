@@ -35,6 +35,8 @@ mod release_publish;
 mod release_publish_assetless;
 mod release_publish_guards;
 mod release_record;
+mod release_record_rerun;
+mod release_recover;
 mod release_tag_patterns;
 mod rulesets;
 mod run;

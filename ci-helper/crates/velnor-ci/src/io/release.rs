@@ -16,6 +16,7 @@ use crate::release::{
     check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
+use crate::release_recover::recover;
 use crate::rulesets::check_tag_rulesets;
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
@@ -28,19 +29,41 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let tags = recorded(&outputs)?;
-    let mut lines = tag_lines(&tags);
+    let mut tags = recorded(&outputs)?;
+    let mut lines = String::new();
     if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
-        lines.push_str(&tagged_commits(
-            &github,
-            &Repo::parse(repo)?,
-            verified,
-            &tags,
-        )?);
+        let repo = Repo::parse(repo)?;
+        if let Some(app) = &args.app {
+            tags.extend(recover(
+                &github,
+                &repo,
+                app,
+                &expected_tags(&args.config)?,
+                &tags,
+            )?);
+        }
+        lines.push_str(&tag_lines(&tags));
+        lines.push_str(&tagged_commits(&github, &repo, verified, &tags)?);
+    } else {
+        lines.push_str(&tag_lines(&tags));
     }
     super::append_outputs(&lines)?;
     Ok(lines)
+}
+
+fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>, CiError> {
+    let top = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let mut files = Vec::new();
+    for path in configs {
+        let text = fs::read_to_string(path)
+            .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+        files.push((relative_to(&top, path), text));
+    }
+    let roots: Vec<String> = configs.iter().map(|path| root_of(&top, path)).collect();
+    let known = super::manifests::read(&top, &roots)?;
+    velnor_release::released_tags(&files, &known.metadata, &known.versions).map_err(CiError::new)
 }
 
 pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError> {

@@ -17,6 +17,15 @@ pub fn check_release_versions(
     metadata: &BTreeMap<RepoPath, RustMetadata>,
     versions: &Versions,
 ) -> Result<(), String> {
+    released_tags(files, metadata, versions).map(drop)
+}
+
+pub fn released_tags(
+    files: &[(String, String)],
+    metadata: &BTreeMap<RepoPath, RustMetadata>,
+    versions: &Versions,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut tags = BTreeMap::new();
     for config in read_all(files)? {
         let Some((workspace, known)) = owner(&config.root, metadata) else {
             continue;
@@ -43,7 +52,13 @@ pub fn check_release_versions(
                     config.root
                 ));
             }
+            if let Some(other) = tags.insert(name.clone(), tag.clone()) {
+                return Err(format!(
+                    "{}: package {name} is released as {other} and as {tag}",
+                    config.root
+                ));
+            }
         }
     }
-    Ok(())
+    Ok(tags)
 }

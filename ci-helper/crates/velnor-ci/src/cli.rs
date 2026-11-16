@@ -233,6 +233,21 @@ pub struct RecordArgs {
         help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit or in its history. Reads GITHUB_TOKEN, which needs contents: read"
     )]
     pub verified_commit: Option<String>,
+    #[arg(
+        long,
+        value_name = "SLUG",
+        value_parser = app,
+        requires_all = ["verified_commit", "config"],
+        help = "Slug of the GitHub App whose bot created the draft releases; with --config, also record each package whose tag for the checked-out version exists, was skipped by release-plz and has exactly one unpublished release, a draft that bot created, so a rerun after a partial failure finalizes it; exit 1 on a draft anyone else created or a second draft"
+    )]
+    pub app: Option<PlainName>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "app",
+        help = "A release-plz.toml of a Cargo root, once per root; gives the tag of each package at the version the checkout holds; needs RUSTUP_TOOLCHAIN"
+    )]
+    pub config: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]
