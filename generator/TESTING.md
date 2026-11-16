@@ -14,7 +14,7 @@
 - A rule test is a table of inputs and outputs, not one test per case.
 - No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` wraps every test binary, when nextest lists it and when it runs it, in `env PATH=/nonexistent`, and `no_programs` fails if `git`, `cargo` or `sh` can still be found through `PATH`. A program named by an absolute path is not blocked. The `io` module is tested by the real runs.
 - One behavior is tested at one layer.
-- A test that runs longer than 2 s fails the suite (`.config/nextest.toml`).
+- A test that runs longer than 2 s fails the suite (`.config/nextest.toml`). Tests that build a temporary repository and run real cargo or git get 10 s.
 
 ## Samples
 
