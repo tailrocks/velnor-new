@@ -283,6 +283,9 @@ platform = "linux/amd64"
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"
 inputs = [
+  ".github/workflows/release-rust-ci-tools.yml",
+  "fixtures/tag-ruleset-drift/protect-tags.json",
+  "scripts/tag-ruleset-drift.test.ts",
   "actions/setup-velnor/action.yml",
   ".config/nextest.toml",
   ".mise-version",
@@ -414,6 +417,8 @@ inputs = [
   "crates/velnor-actions-cli/tests/velnor_cli/cargo_artifact.rs",
   "crates/velnor-actions-cli/tests/velnor_cli/native_required_order.rs",
   "crates/velnor-actions-contract/Cargo.toml",
+  "crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt",
+  "crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt",
   "crates/velnor-actions-contract/src/archive.rs",
   "crates/velnor-actions-contract/src/cachekey.rs",
   "crates/velnor-actions-contract/src/cachekey_observed.rs",
@@ -946,7 +951,7 @@ inputs = [
   "scripts/owned_archive_preflight.py",
   "scripts/verify-local.sh",
 ]
-tools = ["cargo-nextest", "jactionlint-linux-x64", "rust", "shellcheck-linux-x64"]
+tools = ["bun-ci", "cargo-nextest", "jactionlint-linux-x64", "rust", "shellcheck-linux-x64"]
 timeout_minutes = 15
 [checks.runner]
 label = "ubuntu-26.04"
@@ -984,6 +989,25 @@ tools = ["jactionlint-linux-x64"]
 label = "ubuntu-26.04"
 platform = "linux_x64"
 executor = "hosted"
+
+[[qualified_tools]]
+id = "bun-ci"
+backend = { kind = "core", tool = "bun" }
+version = "1.4.4"
+options = { kind = "default" }
+depends_on = []
+[[qualified_tools.platforms]]
+platform = "linux_x64"
+artifacts = [
+  { url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip", sha256 = "bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "7c07b5eb3194ed1da6d07db7511e5a5661825ed7877c2a4cd635096afb87196a"
+[[qualified_tools.platforms.executables]]
+name = "bun"
+path = "bun"
+sha256 = "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
+probe = { kind = "version", expected = "1.4.4" }
 
 [[qualified_tools]]
 id = "cargo-nextest"
