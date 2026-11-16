@@ -88,7 +88,7 @@ entry points set are run with the recipe in
 ## Local recipe for fixture-dependent tests
 
 A plain `cargo nextest run --workspace` fails the tests of `velnor-actions-cli`,
-`velnor-actions-mise` and `velnor-archive-guard` when their fixture variable is
+`velnor-actions-orchestrator`, `velnor-actions-mise` and `velnor-archive-guard` when their fixture variable is
 missing. Each such failure names this section. Run a crate with its recipe
 below, or run `bash scripts/verify-local.sh`, which sets every variable and runs
 the whole suite.
@@ -99,6 +99,7 @@ the whole suite.
 | `VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE` | Absolute path to the `qualification-diagnostics` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
 | `VELNOR_QUALIFICATION_CLOCK_DRIVER` | Absolute path to the `golden_collector_clock` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
 | `VELNOR_GROUP_PROBE_RECEIPT` | Receipt written by `scripts/provision-group-signal-interposer.sh` (macOS) | `scripts/verify-local.sh` on macOS | `velnor-actions-mise` `permission_retry_darwin` |
+| `VELNOR_NONRUST_TOOLS_FIXTURE` | Absolute directory containing `fixture.json`, authenticated Mise download state and recorded HTTPS responses | `scripts/provision-nonrust-tools-fixture.ts`, `scripts/verify-local.sh`, own orchestrator CI job | `velnor-actions-orchestrator` `workflow_configuration_public` non-Rust modules |
 
 `velnor-actions-cli` `check_runtime_identity_public` also needs the `mise` on
 `PATH` to be the exact pinned release (`MISE_VERSION` in
@@ -121,6 +122,42 @@ the test, which drops the pinned binary from the front.
 The example paths must be canonical, so each recipe resolves the examples
 directory with `cd -P`. It uses `CARGO_TARGET_DIR` when it is set, and `target`
 otherwise.
+
+### velnor-actions-orchestrator
+
+The strict TypeScript provisioner runs with the pinned Bun version. It verifies
+the Mise binary and official tool archive hashes, then records HTTPS responses
+while genuine Mise validates the installation and signatures. The test executes
+the generated producer from an empty install directory and restores its declared
+payload into a fresh home. The replay transport denies executable archive
+requests during the healthy reader check and reports metadata requests separately.
+Missing fixture state fails the test with the provisioning command.
+
+```bash
+MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install aqua:jdx/mise@2026.11.1 bun@1.4.4
+fixture_mise="$(mise --no-config --no-env --no-hooks which mise --tool aqua:jdx/mise@2026.11.1)"
+fixture_bun="$(mise --no-config --no-env --no-hooks which bun --tool bun@1.4.4)"
+export VELNOR_NONRUST_TOOLS_FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/velnor-nonrust-tools.XXXXXX")"
+"$fixture_bun" scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$fixture_mise"
+fixture_cargo="$(rustup which --toolchain 1.99.1 cargo)"
+PATH="$(dirname "$fixture_cargo"):$PATH" RUSTUP_TOOLCHAIN=1.99.1 \
+  "$fixture_cargo" nextest run --locked -p velnor-actions-orchestrator \
+  --test workflow_configuration_public \
+  -E 'test(nonrust_) | test(family_cache_saves) | test(repository_fixture)' --no-tests fail
+```
+
+Provisioning runs all 43 Bun decoder tests before installing the genuine tools.
+An optional `VELNOR_FIXTURE_ORIGIN_TOKEN="$(gh auth token)"` assignment on the
+provisioning command avoids the shared anonymous GitHub API quota during local
+retries. The recorder sends it only to canonical GitHub API origins and removes
+it from the environment before spawning children. Own CI uses its standard
+read-only `github.token`; no personal access token secret is required.
+
+The replay fixture retains the original API responses and signed bundles. It
+inlines an authentic bundle when GitHub supplies only an expiring download URL.
+Readers deny upstream access, count metadata and archive requests separately,
+and fail on missing replay data. The supplemental Python case selects Mise's
+precompiled-only mode and keeps mandatory archive attestation checks.
 
 ### velnor-actions-cli
 

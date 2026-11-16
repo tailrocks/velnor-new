@@ -104,3 +104,5 @@ pub fn jactionlint_verifier_script(version: &str) -> String {
 }
 
 pub const RENDERER_VERSION: u32 = 2;
+
+pub use crate::repository_nonrust_fixture::repository_nonrust_fixture_step;

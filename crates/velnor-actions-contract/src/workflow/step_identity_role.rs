@@ -140,6 +140,8 @@ pub enum StepRole {
 
     BunRegistryInstall,
 
+    RepositoryNonrustFixture,
+
     BunAssetsHandoff,
 
     PlaywrightInstall,

@@ -305,6 +305,9 @@ fn internal_step_to_yaml(
     composite: bool,
     step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
+    if let Some(rendered) = crate::repository_nonrust_fixture::render(job_id, step, composite)? {
+        return Ok(rendered);
+    }
     let StepKind::Internal {
         operation,
         env: step_env,
