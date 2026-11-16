@@ -175,7 +175,7 @@ fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     Ok(metrics.summary())
 }
 
-pub(self) fn api_url() -> String {
+fn api_url() -> String {
     std::env::var(API_VARIABLE).unwrap_or_else(|_| DEFAULT_API.to_owned())
 }
 

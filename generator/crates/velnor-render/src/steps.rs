@@ -2,25 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BaseExpiry, CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_RUN_OUTPUT,
 };
 
+use crate::base_steps::{base_age, cache_decide, cache_trim};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{BASE_STEP, PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step};
+use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step};
 use crate::permission_pairs;
-use crate::release_steps::shell_word;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
 };
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 const RESTORED_STEP: &str = "restored";
-const MAX_BASE_AGE_DAYS: u64 = 7;
-const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
-const DEFAULT_BRANCH_REF: &str =
-    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
@@ -166,40 +162,8 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide { target, archive } => RenderedStep {
-            id: Some(BASE_STEP.to_owned()),
-            name: "Decide whether to save the build directory".to_owned(),
-            run: Some(format!(
-                "velnor-ci cache decide --target-dir {}{}",
-                shell_word(target.as_str()),
-                archive.as_ref().map_or_else(String::new, |file| format!(
-                    " --archive {}",
-                    shell_word(file.as_str())
-                ))
-            )),
-            ..RenderedStep::default()
-        },
-        StepKind::CacheTrim(key) => RenderedStep {
-            name: format!("Delete the older {} entries", key.family()),
-            env: vec![
-                (
-                    "CACHE_PREFIX".to_owned(),
-                    Value::Expr(
-                        render_key(key)
-                            .restore_keys
-                            .last()
-                            .cloned()
-                            .unwrap_or_default(),
-                    ),
-                ),
-                (
-                    "GITHUB_TOKEN".to_owned(),
-                    Value::Expr("${{ github.token }}".to_owned()),
-                ),
-            ],
-            run: Some("velnor-ci cache trim --prefix \"$CACHE_PREFIX\"".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
+        StepKind::CacheTrim(key) => cache_trim(key),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -389,20 +353,6 @@ fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep {
         with,
         ..RenderedStep::default()
     }
-}
-
-fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
-    let on = match expiry {
-        BaseExpiry::Never => return Vec::new(),
-        BaseExpiry::OnDefaultBranch => DEFAULT_BRANCH_REF.to_owned(),
-        BaseExpiry::OnDefaultBranchExceptPush => {
-            format!("{DEFAULT_BRANCH_REF} && github.event_name != 'push'")
-        }
-    };
-    vec![(
-        BASE_AGE_VARIABLE.to_owned(),
-        Value::Expr(format!("${{{{ {on} && '{MAX_BASE_AGE_DAYS}' || '0' }}}}")),
-    )]
 }
 
 fn helper_step(command: HelperCommand) -> RenderedStep {

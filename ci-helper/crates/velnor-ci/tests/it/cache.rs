@@ -25,7 +25,6 @@ fn decide(repo: &Checkout, log: Option<&str>) -> (Output, String) {
         fs::write(temp.join("velnor-run.log"), log).unwrap_or_else(|e| unreachable!("{e}"));
     }
     let outputs = repo.root().join("github-output");
-    let _ = fs::remove_file(&outputs);
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args([
             "cache",
