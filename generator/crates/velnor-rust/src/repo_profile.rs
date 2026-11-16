@@ -68,13 +68,36 @@ pub fn check_runtime_configs(
     };
     for root in roots {
         let (used, source) = target_dir_source(&read, root)?;
-        let (rendered, _) = target_dir_source(&generated, root)?;
-        if let (true, Some(file)) = (used != rendered, source) {
+        let (rendered, rendered_from) = target_dir_source(&generated, root)?;
+        if used != rendered {
             return Err(DetectError::invalid(
-                file,
+                &blamed(source, rendered_from, &read, root),
                 Reason::RuntimeTargetDir { used, rendered },
             ));
         }
     }
     Ok(())
+}
+
+fn blamed(
+    source: Option<&RepoPath>,
+    rendered_from: Option<&RepoPath>,
+    read: &RepoView,
+    root: &RepoPath,
+) -> RepoPath {
+    source.cloned().unwrap_or_else(|| {
+        rendered_from.map_or_else(
+            || root.clone(),
+            |from| {
+                shadowing(from, read)
+                    .cloned()
+                    .unwrap_or_else(|| from.clone())
+            },
+        )
+    })
+}
+
+fn shadowing<'a>(rendered_from: &RepoPath, read: &'a RepoView) -> Option<&'a RepoPath> {
+    let bare = rendered_from.as_str().strip_suffix(".toml")?;
+    read.files.keys().find(|file| file.as_str() == bare)
 }

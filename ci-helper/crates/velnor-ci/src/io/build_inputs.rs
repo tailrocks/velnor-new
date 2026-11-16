@@ -36,21 +36,30 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
 }
 
 fn tracked_among(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> BTreeSet<RepoPath> {
-    let listed = Command::new("git")
-        .args(["ls-files", "-z"])
-        .current_dir(root)
-        .output()
-        .ok()
-        .filter(|output| output.status.success());
-    let Some(listed) = listed else {
-        return files.keys().cloned().collect();
+    let Some(listed) = listed_configs(root, files) else {
+        return BTreeSet::new();
     };
+    let wanted: BTreeSet<&str> = files.keys().map(RepoPath::as_str).collect();
     listed
-        .stdout
         .split(|byte| *byte == 0)
         .filter_map(|name| std::str::from_utf8(name).ok())
+        .filter(|name| wanted.contains(name))
         .filter_map(|name| RepoPath::new(name).ok())
         .collect()
+}
+
+fn listed_configs(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> Option<Vec<u8>> {
+    if files.is_empty() {
+        return Some(Vec::new());
+    }
+    let output = Command::new("git")
+        .arg("--literal-pathspecs")
+        .args(["ls-files", "-z", "--"])
+        .args(files.keys().map(RepoPath::as_str))
+        .current_dir(root)
+        .output()
+        .ok()?;
+    output.status.success().then_some(output.stdout)
 }
 
 fn read_config(root: &Path, inside: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {

@@ -9,8 +9,12 @@ use std::process::{Command, Output};
 pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
+pub(crate) fn scratch_root(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()))
+}
+
 pub(crate) fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()));
+    let dir = scratch_root(name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }
