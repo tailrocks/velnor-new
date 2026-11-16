@@ -3,10 +3,14 @@
 
 use crate::io::Repo;
 use std::fs::{self, File, FileTimes};
-use std::process::{Command, Output};
-use std::time::{Duration, SystemTime};
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant, SystemTime};
 
 fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
+    run_bounded(repo, command, base, false)
+}
+
+fn run_bounded(repo: &Repo, command: &str, base: &str, bounded: bool) -> (Output, String) {
     let output_file = repo.root().join("delta-output");
     fs::remove_file(&output_file).ok();
     let mut command_line = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -21,15 +25,43 @@ fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
             "app",
         ]);
     }
-    let output = command_line
+    command_line
         .current_dir(repo.root())
         .env("BASE_CACHE_KEY", base)
         .env("GITHUB_OUTPUT", &output_file)
-        .env("RUNNER_TEMP", repo.root())
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .env("RUNNER_TEMP", repo.root());
+    let output = if bounded {
+        bounded_output(&mut command_line)
+    } else {
+        command_line
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+    };
     let written = fs::read_to_string(output_file).unwrap_or_default();
     (output, written)
+}
+
+fn bounded_output(command: &mut Command) -> Output {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let started = Instant::now();
+    while child
+        .try_wait()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .is_none()
+    {
+        if started.elapsed() > Duration::from_millis(250) {
+            child.kill().unwrap_or_else(|e| unreachable!("{e}"));
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    child
+        .wait_with_output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn success(output: &Output) {
@@ -76,11 +108,25 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
     success(&output);
     assert_eq!(save, "save=true\n");
     assert_eq!(time(&repo, "delta/files/debug/first"), built);
+    assert_eq!(
+        fs::read_to_string(repo.root().join("delta/files/debug/first")).unwrap_or_default(),
+        "first"
+    );
     for generation in [2, 3] {
         fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
         repo.write_unstaged("target/.velnor/inputs.tsv", "base manifest");
         success(&run(&repo, "apply", "base").0);
         assert_eq!(time(&repo, "target/debug/first"), built);
+        assert_eq!(
+            fs::read_to_string(repo.root().join("target/debug/first")).unwrap_or_default(),
+            "first"
+        );
+        if generation == 3 {
+            assert_eq!(
+                fs::read_to_string(repo.root().join("target/debug/second")).unwrap_or_default(),
+                "second"
+            );
+        }
         let expected = if generation == 2 {
             "first manifest"
         } else {
@@ -103,13 +149,20 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
         assert!(repo.root().join("delta/files/debug/second").is_file());
         assert!(!repo.root().join("delta/files/debug/deleted").exists());
         assert_eq!(time(&repo, "delta/files/debug/first"), built);
+        for (artifact, expected) in [("first", "first"), ("second", "second")] {
+            assert_eq!(
+                fs::read_to_string(repo.root().join("delta/files/debug").join(artifact))
+                    .unwrap_or_default(),
+                expected
+            );
+        }
     }
 }
 
 #[test]
 fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts() {
+    let repo = Repo::new("delta-base");
     for base in ["other base", ""] {
-        let repo = Repo::new("delta-base");
         repo.write_unstaged("delta/base-key", "base");
         repo.write_unstaged("delta/files/debug/poison", "wrong base");
         repo.write_unstaged("target/debug/base", "base artifact");
@@ -118,16 +171,37 @@ fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts
         assert!(!repo.root().join("target/debug/poison").exists());
         assert!(repo.root().join("target/debug/base").exists());
     }
+    for identity in ["oversized", "fifo"] {
+        let base = "b".repeat(513);
+        if identity == "oversized" {
+            repo.write_unstaged("delta/base-key", &base);
+        } else {
+            fs::create_dir_all(repo.root().join("delta")).unwrap_or_else(|e| unreachable!("{e}"));
+            success(
+                &Command::new("mkfifo")
+                    .arg(repo.root().join("delta/base-key"))
+                    .output()
+                    .unwrap_or_else(|e| unreachable!("{e}")),
+            );
+        }
+        repo.write_unstaged("delta/files/debug/poison", "invalid identity");
+        repo.write_unstaged("target/debug/base", "base artifact");
+        success(&run_bounded(&repo, "apply", &base, identity == "fifo").0);
+        assert!(!repo.root().join("delta").exists());
+        assert!(!repo.root().join("target/debug/poison").exists());
+        assert!(repo.root().join("target/debug/base").exists());
+        assert!(repo.root().join("target/.velnor/delta-marker").is_file());
+    }
 }
 
 #[test]
 fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
+    let repo = Repo::new("delta-no-work");
     for log in [
         "",
         "Finished dev profile\n",
         "Compiling dependency v1.0.0\n",
     ] {
-        let repo = Repo::new("delta-no-work");
         success(&run(&repo, "apply", "base").0);
         repo.write_unstaged("velnor-run.log", log);
         let (output, save) = run(&repo, "stage", "base");
@@ -135,7 +209,6 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
         assert_eq!(save, "save=false\n");
         assert!(!repo.root().join("delta").exists());
     }
-    let repo = Repo::new("delta-big");
     success(&run(&repo, "apply", "base").0);
     compiled(&repo);
     let huge =
@@ -147,6 +220,31 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
     assert_eq!(save, "save=false\n");
     assert!(String::from_utf8_lossy(&output.stdout).contains("500000004"));
     assert!(!repo.root().join("delta").exists());
+    fs::remove_file(repo.root().join("target/huge")).unwrap_or_else(|e| unreachable!("{e}"));
+    success(&run(&repo, "apply", "base").0);
+    compiled(&repo);
+    repo.write_unstaged("target/debug/current", "current");
+    for path in ["delta/junk", "delta/files/debug/incremental/junk"] {
+        repo.write_unstaged(path, "");
+        File::options()
+            .write(true)
+            .open(repo.root().join(path))
+            .and_then(|file| file.set_len(500_000_001))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let (output, save) = run(&repo, "stage", "base");
+    success(&output);
+    assert_eq!(save, "save=true\n");
+    assert!(!repo.root().join("delta/junk").exists());
+    assert!(!repo.root().join("delta/files/debug/incremental").exists());
+    assert_eq!(
+        fs::read_to_string(repo.root().join("delta/files/debug/current")).unwrap_or_default(),
+        "current"
+    );
+    assert_eq!(
+        fs::read_to_string(repo.root().join("delta/base-key")).unwrap_or_default(),
+        "base"
+    );
 }
 
 #[test]

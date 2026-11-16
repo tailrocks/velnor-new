@@ -94,6 +94,7 @@ fn trusted_cleanup_keeps_newest_delta_per_lane_across_bases_after_reading_every_
 fn unverifiable_runs_refs_and_incomplete_listings_never_delete_any_cache() {
     let mut invalid_runs = Vec::new();
     for (field, value) in [
+        ("id", json!(124)),
         ("status", json!("in_progress")),
         ("event", json!("push")),
         ("workflow_id", json!(99)),
@@ -106,7 +107,12 @@ fn unverifiable_runs_refs_and_incomplete_listings_never_delete_any_cache() {
         invalid_runs.push(value_run);
     }
     for invalid in invalid_runs {
-        let api = api(invalid, vec![]);
+        let api = api(
+            invalid,
+            vec![Ok(json!({"total_count":2,"actions_caches":[
+                entry(1,"rust-test","11111111"), entry(2,"rust-test","22222222")
+            ]}))],
+        );
         assert!(trim_deltas(&api, &repo(), 123).is_err());
         assert!(api.deleted.borrow().is_empty());
     }
@@ -120,9 +126,12 @@ fn unverifiable_runs_refs_and_incomplete_listings_never_delete_any_cache() {
         vec![
             Ok(json!({"total_count":2,"actions_caches":[entry(1,"rust-test","11111111")]})),
             Ok(json!({"total_count":3,"actions_caches":[entry(2,"rust-test","11111111")]})),
+            Ok(json!({"total_count":3,"actions_caches":[entry(3,"rust-test","11111111")]})),
         ],
         vec![
-            Ok(json!({"total_count":2,"actions_caches":[entry(1,"rust-test","11111111")]})),
+            Ok(
+                json!({"total_count":3,"actions_caches":[entry(1,"rust-test","11111111"),entry(2,"rust-test","11111111")]}),
+            ),
             Err(CiError::new("page 2 unavailable")),
         ],
         vec![Ok(

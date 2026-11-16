@@ -30,11 +30,8 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     safe_path(&args.staging_dir)?;
     let restored = args.staging_dir.join("files");
     let identity_path = args.staging_dir.join("base-key");
-    let identity = safe_path(&identity_path)
-        .ok()
-        .and_then(|()| fs::read_to_string(identity_path).ok())
-        .unwrap_or_default();
-    let report = if !base.is_empty() && identity == base {
+    let identity = read_identity(&identity_path);
+    let report = if !base.is_empty() && identity.as_deref() == Some(base) {
         match copy_tree(&restored, &args.target_dir) {
             Ok(count) => format!("applied {count} delta files, preserving modification times\n"),
             Err(error) => {
@@ -55,6 +52,16 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     create_parent(&marker)?;
     fs::write(&marker, "").map_err(|e| failure(&marker, &e))?;
     Ok(report)
+}
+
+fn read_identity(path: &Path) -> Option<String> {
+    safe_path(path).ok()?;
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if !metadata.is_file() || metadata.len() > 512 {
+        return None;
+    }
+    let file = fs::File::open(path).ok()?;
+    String::from_utf8(super::read_limited(file, 512).ok()?).ok()
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
@@ -98,11 +105,7 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
             "::notice::delta has {size} bytes, above the {LIMIT} byte limit; saving nothing\n"
         ));
     }
-    for path in prior {
-        if !selected.contains(&path) {
-            fs::remove_file(payload.join(&path)).map_err(|e| failure(&path, &e))?;
-        }
-    }
+    remove(&args.staging_dir)?;
     for path in &selected {
         copy(&args.target_dir.join(path), &payload.join(path))?;
     }
