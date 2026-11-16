@@ -121,8 +121,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -234,9 +232,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: tools
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -367,11 +362,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
-      - name: velnor-ci inputs restore
-        working-directory: tools
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored

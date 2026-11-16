@@ -509,5 +509,5 @@ warning there fails an unrelated pull request.
 it selects") for doctests and lint scope. No number in the goals changes and
 `docs/goals.md` is not edited.
 
-**Status.** Adopted per the review of PR #1008; owner may revisit. Revisit when
+**Status.** Adopted; owner may revisit. Revisit when
 workspace feature unification stabilizes, then restore `-p` everywhere.

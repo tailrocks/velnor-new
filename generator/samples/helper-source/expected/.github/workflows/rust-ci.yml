@@ -131,9 +131,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-helper-ci_helper-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('ci-helper/Cargo.lock') }}-
             velnor-tgt-rust-helper-ci_helper-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: ci-helper
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -150,6 +147,15 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
+          overwrite: true
+      - name: Upload the cargo fingerprint log
+        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'velnor-cargo-log-${{ github.job }}'
+          path: '${{ runner.temp }}/velnor-run.log'
+          if-no-files-found: ignore
+          retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:

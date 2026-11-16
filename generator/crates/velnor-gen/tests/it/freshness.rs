@@ -6,6 +6,7 @@ use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_rust::silent_build_scripts;
 
 use crate::facts::TestResult;
+use crate::lock::locked;
 use crate::pipeline::{view, workflow};
 
 const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
@@ -34,7 +35,13 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    let mut repo = locked("0.1.81")?;
+    for root in ["lab/Cargo.toml"] {
+        let more = view(&["Cargo.toml", root], None)?;
+        repo.rust_metadata = more.rust_metadata;
+        repo.tracked_paths.extend(more.tracked_paths);
+    }
+    let text = workflow(&repo)?;
     for lane in ["rust-root", "rust-lab"] {
         let header = format!("  {lane}:\n");
         let from = text.find(&header).ok_or("lane missing")? + header.len();
@@ -60,6 +67,22 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
             .any(|s| s.contains("working-directory: lab\n"))
     );
     assert!(audited.iter().any(|s| !s.contains("working-directory")));
+    Ok(())
+}
+
+#[test]
+fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -> TestResult {
+    let old = workflow(&locked("0.1.79")?)?;
+    assert!(!old.contains("inputs restore"), "{old}");
+    assert!(old.contains("name: velnor-ci restored"), "{old}");
+    for version in ["0.1.81", "0.1.100"] {
+        let text = workflow(&locked(version)?)?;
+        assert_eq!(
+            named(&text, "velnor-ci inputs restore").len(),
+            1,
+            "{version}"
+        );
+    }
     Ok(())
 }
 
@@ -126,10 +149,31 @@ fn a_build_script_without_a_rerun_directive_is_reported_with_the_line_to_add() -
         "fn main() { println!(\"cargo:rerun-if-changed=build.rs\"); }",
         "fn main() { println!(\"cargo::rerun-if-changed=build.rs\"); }",
         "fn main() { println!(\"cargo:rerun-if-env-changed=PROTOC\"); }",
+        "fn main() { writeln!(out, \"cargo:rerun-if-changed={path}\").ok(); }",
+        "fn main() { print!(r#\"cargo::rerun-if-changed=proto\"#); }",
     ] {
         let fine = with_build_script("build.rs", Some(declared))?;
         assert!(silent_build_scripts(&fine).is_empty(), "{declared}");
         assert_eq!(notes(&fine)?.len(), 0);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_directive_only_named_in_text_is_not_one_the_build_script_emits() -> TestResult {
+    for source in [
+        "fn main() { // add cargo:rerun-if-changed=build.rs\n}",
+        "/* cargo:rerun-if-changed=build.rs */ fn main() {}",
+        "/// cargo:rerun-if-changed=build.rs\nfn main() {}",
+        "fn main() { let note = \"cargo:rerun-if-changed=build.rs\"; drop(note); }",
+        "fn main() { panic!(\"print cargo:rerun-if-changed=build.rs\"); }",
+        "fn main() { eprintln!(\"cargo:rerun-if-env-changed=X\"); }",
+        "fn main() { println!(\"rerun-if-changed is not printed\"); }",
+        "fn main() { if false { /* cargo:rerun-if-changed=x */ } }",
+    ] {
+        let repo = with_build_script("build.rs", Some(source))?;
+        assert_eq!(silent_build_scripts(&repo).len(), 1, "{source}");
+        assert_eq!(notes(&repo)?.len(), 1, "{source}");
     }
     Ok(())
 }

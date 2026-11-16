@@ -3,7 +3,15 @@
 
 use velnor_model::{PackageName, RepoPath, RepoView, TargetKind};
 
-const DIRECTIVES: [&str; 2] = ["rerun-if-changed", "rerun-if-env-changed"];
+use crate::doc_steps::tokens::{Token, tokens};
+
+const PREFIXES: [&str; 4] = [
+    "cargo:rerun-if-changed",
+    "cargo::rerun-if-changed",
+    "cargo:rerun-if-env-changed",
+    "cargo::rerun-if-env-changed",
+];
+const PRINTING: [&str; 4] = ["println", "print", "write", "writeln"];
 const LINE_TO_ADD: &str = "println!(\"cargo:rerun-if-changed=build.rs\");";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -55,13 +63,43 @@ pub fn silent_build_scripts(view: &RepoView) -> Vec<SilentBuildScript> {
                 })
         })
         .filter(|script| {
-            view.files.get(&script.source).is_some_and(|bytes| {
-                let text = String::from_utf8_lossy(bytes);
-                !DIRECTIVES.iter().any(|directive| text.contains(directive))
-            })
+            view.files
+                .get(&script.source)
+                .is_some_and(|bytes| !emits_rerun_directive(&String::from_utf8_lossy(bytes)))
         })
         .collect();
     found.sort();
     found.dedup();
     found
+}
+
+fn emits_rerun_directive(source: &str) -> bool {
+    let found = tokens(source);
+    let mut at = 0;
+    while at < found.len() {
+        let printing = matches!(found[at], Token::Ident(name) if PRINTING.contains(&name))
+            && found.get(at + 1) == Some(&Token::Punct('!'));
+        if printing {
+            let mut depth = 0_usize;
+            for token in &found[at + 2..] {
+                match token {
+                    Token::Punct('(' | '[' | '{') => depth += 1,
+                    Token::Punct(')' | ']' | '}') => {
+                        depth = depth.saturating_sub(1);
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    Token::Str(text)
+                        if depth > 0 && PREFIXES.iter().any(|p| text.starts_with(p)) =>
+                    {
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        at += 1;
+    }
+    false
 }
