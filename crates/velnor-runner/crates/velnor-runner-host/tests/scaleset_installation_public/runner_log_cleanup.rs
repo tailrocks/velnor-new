@@ -148,11 +148,12 @@ fn handle_connection(
     let (method, path, query) = read_http_request(stream)?;
     if method == "POST" && path == format!("containers/{DIND_ID}/stop") {
         dind_stop_entered.store(true, Ordering::Release);
-        for _ in 0..400 {
-            if release_dind_stop.load(Ordering::Acquire) {
-                break;
-            }
+        let released = (0..400).any(|_| {
             thread::sleep(Duration::from_millis(5));
+            release_dind_stop.load(Ordering::Acquire)
+        });
+        if !released {
+            return Err(std::io::Error::other("dind stop was never released"));
         }
         stream.write_all(
             b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",

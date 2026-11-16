@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::super::TestResult;
+use super::helper_stub::Life;
 use super::{CancelledObservation, HelperSpec, Kind, run_cancelled_before_start_scenario};
 
 const CASE_ENV: &str = "VELNOR_HELPER_CASE";
@@ -19,9 +20,16 @@ fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
     Some(match name {
         "publication" => (vec![publication], true),
         "initializer" => (vec![initializer], true),
+        "initializer_already_removed" => (
+            vec![HelperSpec {
+                life: Life::Gone,
+                ..initializer
+            }],
+            true,
+        ),
         "initializer_running" => (
             vec![HelperSpec {
-                running: true,
+                life: Life::Running,
                 ..initializer
             }],
             true,
@@ -105,7 +113,18 @@ fn public_cancelled_run_retires_a_journaled_storage_initializer_before_removing_
     let (observed, stderr) = run_helper_case("initializer")?;
     assert_eq!(observed.helpers_left, 0, "{stderr}");
     assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
     assert!(!stderr.contains("UNROUTED"), "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn public_cleanup_settles_an_initializer_whose_container_a_crash_already_removed() -> TestResult<()>
+{
+    let (observed, stderr) = run_helper_case("initializer_already_removed")?;
+    assert_eq!(observed.helpers_left, 0, "{stderr}");
+    assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
     Ok(())
 }
 
@@ -115,6 +134,7 @@ fn public_cleanup_stops_a_running_storage_initializer_before_removing_it() -> Te
     assert_eq!(observed.stops, 1, "{stderr}");
     assert_eq!(observed.helpers_left, 0, "{stderr}");
     assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
     Ok(())
 }
 

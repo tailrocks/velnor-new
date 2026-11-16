@@ -40,9 +40,6 @@ pub(super) async fn remove_volume_helpers(
     volume: &str,
 ) -> Result<(), Failure> {
     let users = list_users(context, launch, claim, budget, identity, volume).await?;
-    if users.is_empty() {
-        return Ok(());
-    }
     if u64::try_from(users.len()).map_or(true, |count| count > MAX_HELPERS_PER_VOLUME) {
         return Err(Failure::not_proven("volume helper bound"));
     }
@@ -50,16 +47,6 @@ pub(super) async fn remove_volume_helpers(
         .native_cleanup
         .ok_or_else(|| Failure::not_proven("native cleanup capability"))?;
     let scope = context.journal.connection();
-    let publication = request_effect(
-        context,
-        launch,
-        claim,
-        budget,
-        "volume helper publication lookup",
-        identity,
-        || async { runtime.owned_publication(scope, identity).await },
-    )
-    .await?;
     let initializer = request_effect(
         context,
         launch,
@@ -78,25 +65,97 @@ pub(super) async fn remove_volume_helpers(
         },
     )
     .await?;
-    let plan = classify_users(
+    if !users.is_empty() {
+        let publication = request_effect(
+            context,
+            launch,
+            claim,
+            budget,
+            "volume helper publication lookup",
+            identity,
+            || async { runtime.owned_publication(scope, identity).await },
+        )
+        .await?;
+        let plan = classify_users(
+            context,
+            launch,
+            claim,
+            budget,
+            identity,
+            volume,
+            (users, publication, initializer.clone()),
+        )
+        .await?;
+        for retirement in plan {
+            retire(context, launch, claim, budget, identity, retirement).await?;
+        }
+        let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
+        if !remaining.is_empty() {
+            return Err(Failure::not_proven("volume helper retirement"));
+        }
+    }
+    match initializer {
+        Some(helper) => settle_initializer(context, launch, claim, budget, identity, &helper).await,
+        None => Ok(()),
+    }
+}
+
+async fn settle_initializer(
+    context: &Context<'_>,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+    budget: &mut EffectBudget<'_>,
+    identity: &StorageCleanupIdentity,
+    helper: &UnboundInitializer,
+) -> Result<(), Failure> {
+    let by_name = request_effect(
         context,
         launch,
         claim,
         budget,
+        "initializer name absence",
         identity,
-        volume,
-        (users, publication, initializer),
+        || async { inspect_container(context.docker, &helper.name).await },
     )
     .await?;
-    for retirement in plan {
-        retire(context, launch, claim, budget, identity, retirement).await?;
+    let by_id = match helper.id.as_deref() {
+        Some(id) => {
+            request_effect(
+                context,
+                launch,
+                claim,
+                budget,
+                "initializer id absence",
+                identity,
+                || async { inspect_container(context.docker, id).await },
+            )
+            .await?
+        }
+        None => None,
+    };
+    if by_name.is_some() || by_id.is_some() {
+        return Ok(());
     }
-    let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
-    if remaining.is_empty() {
-        Ok(())
-    } else {
-        Err(Failure::not_proven("volume helper retirement"))
-    }
+    let scope = context.journal.connection();
+    request_effect(
+        context,
+        launch,
+        claim,
+        budget,
+        "initializer journal settlement",
+        identity,
+        || async {
+            scope
+                .settle_removed_storage_initializer(
+                    identity.reservation_id(),
+                    identity.engine_id(),
+                    identity.docker_root_digest(),
+                    helper,
+                )
+                .await
+        },
+    )
+    .await
 }
 
 async fn classify_users(

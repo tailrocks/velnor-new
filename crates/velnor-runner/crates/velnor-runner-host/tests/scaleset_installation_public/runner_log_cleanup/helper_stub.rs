@@ -26,12 +26,19 @@ pub(crate) enum Kind {
     Foreign(&'static str),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Life {
+    Created,
+    Running,
+    Gone,
+}
+
 #[derive(Clone)]
 pub(crate) struct HelperSpec {
     pub(crate) kind: Kind,
     pub(crate) mounts: bool,
     pub(crate) listed: bool,
-    pub(crate) running: bool,
+    pub(crate) life: Life,
     pub(crate) engine: Option<&'static str>,
     pub(crate) operation: Option<&'static str>,
 }
@@ -42,7 +49,7 @@ impl HelperSpec {
             kind,
             mounts: true,
             listed: true,
-            running: false,
+            life: Life::Created,
             engine: None,
             operation: None,
         }
@@ -119,15 +126,15 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
                 .collect(),
         );
     }
-    body["State"]["Running"] = json!(spec.running);
+    body["State"]["Running"] = json!(spec.life == Life::Running);
     Helper {
         id,
         name,
         body,
         list_volumes: if spec.listed { mounted } else { Vec::new() },
         mount_volumes: actual,
-        running: spec.running,
-        deleted: false,
+        running: spec.life == Life::Running,
+        deleted: spec.life == Life::Gone,
     }
 }
 
@@ -164,7 +171,13 @@ impl VolumeState {
     }
 
     pub(super) fn all_released(&self) -> bool {
-        self.volumes.is_empty() && self.present().all(|helper| helper.mount_volumes.is_empty())
+        self.volumes.is_empty()
+            && self.present().all(|helper| {
+                helper
+                    .mount_volumes
+                    .iter()
+                    .all(|name| name == "unrelated-volume")
+            })
     }
 
     pub(super) fn counts(&self) -> (usize, usize, usize, usize) {

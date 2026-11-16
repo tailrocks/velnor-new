@@ -16,6 +16,9 @@ use super::hold_context;
 
 #[path = "unbound_retirement/inventory.rs"]
 mod inventory;
+#[cfg(test)]
+#[path = "unbound_retirement/release_ready_tests.rs"]
+mod release_ready_tests;
 #[path = "unbound_retirement/settlement.rs"]
 mod settlement;
 
