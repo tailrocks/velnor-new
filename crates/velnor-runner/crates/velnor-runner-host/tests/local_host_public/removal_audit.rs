@@ -210,3 +210,63 @@ async fn supervisor_sweep_refuses_deletion_without_a_writable_audit() -> TestRes
     assert!(kept);
     Ok(())
 }
+
+#[tokio::test]
+async fn supervisor_sweep_recovers_interrupted_audit_and_preserves_complete_records()
+-> TestResult<()> {
+    let prior = json!({"event": "removed", "resource": "container", "id": "prior-removal"});
+    for tail in ["{\"event\":\"remo", "{\"event\":\"intent\"}"] {
+        let Some(scenario) = Scenario::new().await? else {
+            return Ok(());
+        };
+        let orphan = container(&scenario, &scenario.fixture.environment, true).await?;
+        std::fs::write(
+            scenario.state.path().join("cleanup.jsonl"),
+            format!("{prior}\n{tail}"),
+        )?;
+        let outcome = sweep(&scenario, scenario.fixture.docker.clone()).await?;
+        let gone = !exists(&scenario, &orphan).await;
+        let before = journal(scenario.state.path());
+        let retried = sweep(&scenario, scenario.fixture.docker.clone()).await?;
+        let after = journal(scenario.state.path());
+        discard(&scenario, &orphan).await?;
+        scenario.finish().await?;
+        assert_eq!(outcome, Ok(()));
+        assert!(gone);
+        assert_eq!(retried, Ok(()));
+        let before = before?;
+        assert_eq!(before[0], prior);
+        if let Ok(complete) = serde_json::from_str::<Value>(tail) {
+            assert_eq!(before[1], complete);
+        }
+        assert!(
+            before
+                .iter()
+                .any(|line| line["event"] == "removed" && line["id"] == orphan)
+        );
+        let after = after?;
+        assert_eq!(&after[..before.len()], &before);
+        assert!(after.len() > before.len());
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn supervisor_sweep_preserves_corrupt_complete_history_and_refuses_deletion() -> TestResult<()>
+{
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
+    let orphan = container(&scenario, &scenario.fixture.environment, true).await?;
+    let bytes = b"{\"event\":\"removed\",\"id\":\"prior\"}\n{broken}\n{\"event\":\"intent\"}\n";
+    std::fs::write(scenario.state.path().join("cleanup.jsonl"), bytes)?;
+    let failed = sweep(&scenario, scenario.fixture.docker.clone()).await?;
+    let kept = exists(&scenario, &orphan).await;
+    let after = std::fs::read(scenario.state.path().join("cleanup.jsonl"))?;
+    discard(&scenario, &orphan).await?;
+    scenario.finish().await?;
+    assert_eq!(failed, Err(HostError::Cleanup));
+    assert!(kept);
+    assert_eq!(after, bytes);
+    Ok(())
+}

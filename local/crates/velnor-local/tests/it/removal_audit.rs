@@ -17,17 +17,10 @@ struct Docker {
 }
 
 impl Docker {
-    fn selected(fail_at: usize) -> io::Result<Option<Self>> {
-        let endpoint = match std::env::var("VELNOR_TEST_DOCKER_HOST") {
-            Ok(endpoint) => endpoint,
-            Err(std::env::VarError::NotPresent) => {
-                eprintln!(
-                    "SKIP Docker integration test: set VELNOR_TEST_DOCKER_HOST to an isolated test daemon"
-                );
-                return Ok(None);
-            }
-            Err(error) => return Err(io::Error::other(error)),
-        };
+    fn selected(fail_at: usize) -> io::Result<Self> {
+        let endpoint = std::env::var("VELNOR_TEST_DOCKER_HOST").map_err(|error| {
+            io::Error::other(format!("VELNOR_TEST_DOCKER_HOST is required: {error}"))
+        })?;
         let unix = endpoint.strip_prefix("unix://").is_some_and(|path| {
             Path::new(path).is_absolute() && path.len() > 1 && !path.chars().any(char::is_control)
         });
@@ -47,11 +40,11 @@ impl Docker {
                 "VELNOR_TEST_DOCKER_HOST must be an explicit unix:///socket or tcp://host:port endpoint",
             ));
         }
-        Ok(Some(Self {
+        Ok(Self {
             endpoint,
             removals: AtomicUsize::new(0),
             fail_at,
-        }))
+        })
     }
 }
 
@@ -85,9 +78,7 @@ fn journal(dir: &Path) -> io::Result<Vec<Value>> {
 
 #[tokio::test]
 async fn environment_down_audits_exact_ids_and_keeps_other_environments() -> io::Result<()> {
-    let Some(docker) = Docker::selected(usize::MAX)? else {
-        return Ok(());
-    };
+    let docker = Docker::selected(usize::MAX)?;
     let dir = temp_dir("audit-filter");
     let env = Environment::at(&dir, &docker).await?;
     let label = format!("velnor-local={}", env.name);
@@ -142,9 +133,7 @@ async fn environment_down_audits_exact_ids_and_keeps_other_environments() -> io:
 #[tokio::test]
 async fn environment_down_preserves_confirmed_removals_after_failure_and_appends_on_retry()
 -> io::Result<()> {
-    let Some(docker) = Docker::selected(1)? else {
-        return Ok(());
-    };
+    let docker = Docker::selected(1)?;
     let dir = temp_dir("audit-partial");
     let env = Environment::at(&dir, &docker).await?;
     let label = format!("velnor-local={}", env.name);
@@ -205,9 +194,7 @@ async fn environment_down_preserves_confirmed_removals_after_failure_and_appends
 
 #[tokio::test]
 async fn environment_down_refuses_to_delete_without_a_writable_audit() -> io::Result<()> {
-    let Some(docker) = Docker::selected(usize::MAX)? else {
-        return Ok(());
-    };
+    let docker = Docker::selected(usize::MAX)?;
     let dir = temp_dir("audit-unwritable");
     let env = Environment::at(&dir, &docker).await?;
     let label = format!("velnor-local={}", env.name);
@@ -226,5 +213,123 @@ async fn environment_down_refuses_to_delete_without_a_writable_audit() -> io::Re
     std::fs::remove_dir_all(&dir)?;
     assert!(failed.is_err());
     assert!(kept);
+    Ok(())
+}
+
+#[tokio::test]
+async fn environment_down_recovers_interrupted_audit_and_preserves_complete_records()
+-> io::Result<()> {
+    let docker = Docker::selected(usize::MAX)?;
+    let prior = json!({"event": "removed", "resource": "volume", "id": "prior-removal"});
+    for tail in ["{\"event\":\"remo", "{\"event\":\"intent\"}"] {
+        let dir = temp_dir("audit-recovery");
+        let env = Environment::at(&dir, &docker).await?;
+        let volume = (&docker)
+            .docker(&[
+                "volume",
+                "create",
+                "--label",
+                &format!("velnor-local={}", env.name),
+            ])
+            .await?;
+        std::fs::write(dir.join("cleanup.jsonl"), format!("{prior}\n{tail}"))?;
+        let outcome = env.down().await;
+        let gone = (&docker)
+            .docker(&["volume", "inspect", &volume])
+            .await
+            .is_err();
+        let before = journal(&dir);
+        let retried = env.down().await;
+        let after = journal(&dir);
+        if !gone {
+            (&docker).docker(&["volume", "rm", &volume]).await?;
+        }
+        std::fs::remove_dir_all(&dir)?;
+        assert_eq!(outcome?, [0, 1, 0]);
+        assert!(gone);
+        assert_eq!(retried?, [0, 0, 0]);
+        let before = before?;
+        assert_eq!(before[0], prior);
+        if let Ok(complete) = serde_json::from_str::<Value>(tail) {
+            assert_eq!(before[1], complete);
+        }
+        assert!(
+            before
+                .iter()
+                .any(|line| line["event"] == "removed" && line["id"] == volume)
+        );
+        let after = after?;
+        assert_eq!(&after[..before.len()], &before);
+        assert!(after.len() > before.len());
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn environment_down_preserves_corrupt_complete_history_and_refuses_deletion() -> io::Result<()>
+{
+    let docker = Docker::selected(usize::MAX)?;
+    let dir = temp_dir("audit-corrupt");
+    let env = Environment::at(&dir, &docker).await?;
+    let volume = (&docker)
+        .docker(&[
+            "volume",
+            "create",
+            "--label",
+            &format!("velnor-local={}", env.name),
+        ])
+        .await?;
+    let bytes = b"{\"event\":\"removed\",\"id\":\"prior\"}\n{broken}\n{\"event\":\"intent\"}\n";
+    std::fs::write(dir.join("cleanup.jsonl"), bytes)?;
+    let failed = env.down().await;
+    let kept = (&docker)
+        .docker(&["volume", "inspect", &volume])
+        .await
+        .is_ok();
+    let after = std::fs::read(dir.join("cleanup.jsonl"))?;
+    if kept {
+        (&docker).docker(&["volume", "rm", &volume]).await?;
+    }
+    std::fs::remove_dir_all(&dir)?;
+    assert!(failed.is_err());
+    assert!(kept);
+    assert_eq!(after, bytes);
+    Ok(())
+}
+
+#[test]
+fn required_audit_tests_fail_without_explicit_endpoint() -> io::Result<()> {
+    if std::env::var_os("VELNOR_AUDIT_ENDPOINT_CHILD").is_some() {
+        Docker::selected(usize::MAX)?;
+        return Ok(());
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let output = std::process::Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "removal_audit::required_audit_tests_fail_without_explicit_endpoint",
+            "--nocapture",
+        ])
+        .env("VELNOR_AUDIT_ENDPOINT_CHILD", "1")
+        .env_remove("VELNOR_TEST_DOCKER_HOST")
+        .env("DOCKER_HOST", format!("tcp://{}", listener.local_addr()?))
+        .output()?;
+    let transcript = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{transcript}");
+    assert!(
+        transcript.contains("VELNOR_TEST_DOCKER_HOST"),
+        "{transcript}"
+    );
+    assert!(!transcript.contains("SKIP"), "{transcript}");
+    assert!(
+        listener
+            .accept()
+            .is_err_and(|error| error.kind() == io::ErrorKind::WouldBlock)
+    );
     Ok(())
 }
