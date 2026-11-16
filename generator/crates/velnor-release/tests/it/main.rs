@@ -7,6 +7,7 @@ mod expressions;
 mod fixture;
 mod hardening;
 mod inheritance;
+mod inventory;
 mod mise_lock;
 mod refs;
 mod refusals;
