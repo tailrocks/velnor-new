@@ -13,13 +13,15 @@ fn temp(file: &str) -> std::path::PathBuf {
 }
 
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
+    let execution = execution(argv);
     Ok(Invocation {
         argv: argv.to_vec(),
         root: super::current_dir()?.to_string_lossy().into_owned(),
         configuration: format!(
             "{} {:?}",
             configuration(argv),
-            std::env::vars()
+            execution
+                .iter()
                 .filter(|(key, _)| [
                     "RUSTUP_TOOLCHAIN",
                     "RUSTFLAGS",
@@ -41,16 +43,8 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         capture_complete: false,
         tests: Vec::new(),
         rejected: 0,
-        execution: execution(argv),
-        target_directory: Some(
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map_or_else(
-                    || super::current_dir().map(|cwd| cwd.join("target")),
-                    |path| super::current_dir().map(|cwd| cwd.join(path)),
-                )?
-                .to_string_lossy()
-                .into_owned(),
-        ),
+        execution,
+        target_directory: target_directory(argv)?,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
@@ -67,11 +61,30 @@ pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
     .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))
 }
 
+fn target_directory(argv: &[String]) -> Result<Option<String>, CiError> {
+    let mut target = std::env::var_os("CARGO_TARGET_DIR").map(std::path::PathBuf::from);
+    let mut words = argv.iter().take_while(|word| word.as_str() != "--");
+    while let Some(word) = words.next() {
+        let value = word.strip_prefix("--target-dir=").or_else(|| {
+            (word == "--target-dir")
+                .then(|| words.next().map(String::as_str))
+                .flatten()
+        });
+        if let Some(value) = value {
+            target = Some(value.into());
+        }
+    }
+    target
+        .map(|path| super::current_dir().map(|cwd| cwd.join(path).to_string_lossy().into_owned()))
+        .transpose()
+}
+
 fn execution(argv: &[String]) -> BTreeMap<String, String> {
-    let mut settings: BTreeMap<String, String> = std::env::vars()
-        .filter(|(key, _)| {
-            matches!(
-                key.as_str(),
+    let mut settings: BTreeMap<String, String> = std::env::vars_os()
+        .filter_map(|(key, value)| {
+            let key = key.to_str()?;
+            let recognized = matches!(
+                key,
                 "RUSTUP_TOOLCHAIN"
                     | "RUSTFLAGS"
                     | "RUSTDOCFLAGS"
@@ -82,17 +95,18 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
                     | "RUSTC_BOOTSTRAP"
             ) || key.starts_with("CARGO_PROFILE_")
                 || (key.starts_with("CARGO_TARGET_") && key != "CARGO_TARGET_DIR")
-                || matches!(
-                    key.as_str(),
-                    "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS"
-                )
+                || matches!(key, "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS");
+            if !recognized {
+                return None;
+            }
+            Some((key.to_owned(), value.into_string().ok()?))
         })
         .collect();
     settings.insert(
         "host-platform".to_owned(),
         format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
     );
-    let mut words = argv.iter();
+    let mut words = argv.iter().take_while(|word| word.as_str() != "--");
     let mut configs = Vec::new();
     while let Some(word) = words.next() {
         if let Some(config) = word.strip_prefix("--config=") {

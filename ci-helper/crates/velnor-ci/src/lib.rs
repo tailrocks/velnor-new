@@ -18,8 +18,10 @@ pub mod io;
 pub mod logscan;
 pub mod metrics;
 mod needs;
+pub mod observed_units;
 pub mod plan;
 pub mod platform;
+pub mod progress_evidence;
 pub mod publish;
 pub mod release;
 pub mod report;
@@ -32,6 +34,3 @@ pub mod tests_run;
 pub mod ties;
 pub mod time;
 pub mod timings;
-
-pub mod observed_units;
-pub mod progress_evidence;
