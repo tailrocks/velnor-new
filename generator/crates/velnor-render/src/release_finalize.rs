@@ -14,6 +14,7 @@ use crate::steps::install_helper;
 const SETUP_MINUTES: u16 = 5;
 const REQUESTS_PER_ASSETLESS_PUBLISH: u16 = 5;
 const MINUTES_PER_REQUEST: u16 = 5;
+const TOKEN_BOUND_MINUTES: u16 = 50;
 const ASSETLESS_PUBLISH_HELPER: (u64, u64, u64) = (0, 1, 81);
 
 #[must_use]
@@ -94,6 +95,7 @@ fn timeout_minutes(packages: usize) -> u16 {
         .unwrap_or(u16::MAX)
         .saturating_mul(per_package)
         .saturating_add(SETUP_MINUTES)
+        .min(TOKEN_BOUND_MINUTES)
 }
 
 fn publish_id(index: usize) -> String {

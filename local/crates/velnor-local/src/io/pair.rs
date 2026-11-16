@@ -70,14 +70,25 @@ pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
 }
 
 pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> Result<Minted, MintError> {
-    let name = format!(
-        "{}-jit-{}",
-        env.name,
-        random_hex(4).map_err(|e| MintError {
-            name: String::new(),
-            source: e
-        })?
-    );
+    mint_named(env, side, None).await
+}
+
+pub async fn mint_named<E: Engine>(
+    env: &Environment<E>,
+    side: Side,
+    chosen: Option<&str>,
+) -> Result<Minted, MintError> {
+    let name = match chosen {
+        Some(name) => name.to_owned(),
+        None => format!(
+            "{}-jit-{}",
+            env.name,
+            random_hex(4).map_err(|e| MintError {
+                name: String::new(),
+                source: e
+            })?
+        ),
+    };
     let failed = |source: io::Error| MintError {
         name: name.clone(),
         source,
@@ -161,7 +172,7 @@ pub async fn ensure_clean(root: &Path) -> io::Result<()> {
 pub async fn jit(args: JitArgs) -> io::Result<()> {
     let env = Environment::at(&args.dir, DockerCli).await?;
     let runners = Runners::open(env).await?;
-    let minted = mint_or_retire(&runners, args.side)
+    let minted = mint_or_retire(&runners, args.side, None)
         .await
         .map_err(|error| io::Error::other(error.msg))?
         .ok_or_else(|| io::Error::other(format!("the {} side is not up", args.side.name())))?;

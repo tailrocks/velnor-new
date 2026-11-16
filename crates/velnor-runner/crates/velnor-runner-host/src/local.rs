@@ -12,6 +12,7 @@ mod authority;
 mod channel;
 mod decide;
 mod layout;
+mod minted;
 mod pair;
 mod plan;
 mod remove;

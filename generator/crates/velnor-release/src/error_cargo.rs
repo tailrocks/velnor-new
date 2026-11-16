@@ -87,6 +87,10 @@ impl ReleaseError {
 
     fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NightlyOnly { file, what } => write!(
+                f,
+                "{file}: {what} needs a nightly Rust, and the release jobs run release-plz and cargo on stable"
+            ),
             Self::CargoConfigInclude { file } => write!(
                 f,
                 "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"

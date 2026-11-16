@@ -210,7 +210,32 @@ fn the_finalize_timeout_grows_with_the_assetless_packages_by_five_requests_of_fi
         job(&two, "finalize")?
             .get("timeout-minutes")
             .and_then(Node::text),
-        Some("55")
+        Some("50")
     );
+    Ok(())
+}
+
+const DOCS: Root = Root {
+    dir: "docs",
+    package: "docs",
+    prefix: "release-plz-docs-",
+    publishes: false,
+};
+
+#[test]
+fn the_finalize_timeout_is_capped_at_fifty_minutes_so_it_cannot_outlive_its_one_hour_app_token()
+-> TestResult {
+    let three = render_with(
+        "0.1.81",
+        &[APP, TOOLS, DOCS],
+        "roots = [\".\", \"tools\", \"docs\"]\n",
+    )?;
+    let minutes: u16 = job(&three, "finalize")?
+        .get("timeout-minutes")
+        .and_then(Node::text)
+        .ok_or("no timeout")?
+        .parse()?;
+    assert!(minutes <= 50, "{minutes} for three packages");
+    assert_eq!(minutes, 50);
     Ok(())
 }
