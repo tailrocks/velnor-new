@@ -217,6 +217,9 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     .map(str::to_owned)
     .to_vec();
     let mut pr_runs = prepared.clone();
+    if let Some(last) = prepared.last_mut() {
+        last.push_str(" --released-versions");
+    }
     pr_runs.extend([
         format!("{exec} release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"),
         format!(

@@ -25,7 +25,6 @@ pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
-const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -257,9 +256,7 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    if lane.from_source || breaks_ties(facts) {
-        toolchain.extend(restore_file_times(roots));
-    }
+    toolchain.extend(restore_file_times(roots));
     toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
@@ -287,13 +284,6 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             });
         }
     }
-}
-
-fn breaks_ties(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(TIE_BREAKING_HELPER))
 }
 
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {

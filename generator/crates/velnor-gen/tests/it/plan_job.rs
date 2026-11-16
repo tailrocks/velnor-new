@@ -25,9 +25,9 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 11] = [
+const LANE_SETUP: [&str; 12] = [
     "Check out",
-    "Install velnor-ci 0.1.79",
+    "Install velnor-ci 0.1.81",
     "Restore the tools cache",
     "Install tools",
     "Add Rust components",
@@ -36,6 +36,7 @@ const LANE_SETUP: [&str; 11] = [
     "velnor-ci check-metadata",
     "Restore the sources cache",
     "Restore the target cache",
+    "velnor-ci inputs restore",
     "velnor-ci restored",
 ];
 
@@ -47,7 +48,7 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     let steps = steps_of(&text, "rust");
     assert_eq!(
         steps[..3],
-        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
+        ["Check out", "Install velnor-ci 0.1.81", "velnor-ci plan"]
     );
     let condition =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
@@ -76,7 +77,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     assert_eq!(
         steps_of(&text, "rust-plan"),
-        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
+        ["Check out", "Install velnor-ci 0.1.81", "velnor-ci plan"]
     );
     let plan_job = &text[text.find("  rust-plan:").unwrap_or_default()
         ..text.find("  rust-root:").unwrap_or_default()];
@@ -104,8 +105,8 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     }
     assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
-    assert_eq!(lane[..11], LANE_SETUP);
-    assert!(lane[11].starts_with("Format"), "{lane:?}");
+    assert_eq!(lane[..12], LANE_SETUP);
+    assert!(lane[12].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
         "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
     ));

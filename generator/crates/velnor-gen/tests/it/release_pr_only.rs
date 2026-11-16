@@ -13,20 +13,18 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn render(helper: &str, config: &str) -> Result<String, Box<dyn Error>> {
     let mut view = release_view(&[APP], Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
     expected_files(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or_else(|| "no release.yml".into())
 }
 
 #[test]
-fn absent_and_empty_pr_only_checks_preserve_release_output_for_old_and_new_helpers() -> TestResult {
-    for helper in ["0.1.80", "0.1.81"] {
-        assert_eq!(
-            render(helper, "")?,
-            render(helper, "pr_only_checks = []\n")?
-        );
-    }
+fn absent_and_empty_pr_only_checks_preserve_release_output() -> TestResult {
+    assert_eq!(
+        render("0.1.81", "")?,
+        render("0.1.81", "pr_only_checks = []\n")?
+    );
     Ok(())
 }
 
@@ -38,18 +36,13 @@ fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> T
 }
 
 #[test]
-fn pr_only_checks_refuse_old_helpers_and_workflow_expressions() {
-    for (helper, config, reason) in [
-        ("0.1.80", "pr_only_checks=['DCO']", "pin-helper 0.1.81"),
-        ("0.1.81", "pr_only_checks=['${{x}}']", "${{"),
-    ] {
-        let error = render(helper, config)
-            .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
-        assert!(
-            error.contains("pr_only_checks") && error.contains(reason),
-            "{error}"
-        );
-    }
+fn pr_only_checks_refuse_workflow_expressions() {
+    let error = render("0.1.81", "pr_only_checks=['${{x}}']")
+        .err()
+        .map(|e| e.to_string())
+        .unwrap_or_default();
+    assert!(
+        error.contains("pr_only_checks") && error.contains("${{"),
+        "{error}"
+    );
 }

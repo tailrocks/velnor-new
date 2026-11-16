@@ -25,7 +25,7 @@ use velnor_rust::{
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
-pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
@@ -69,11 +69,8 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
-    files.extend(release);
-    let mut notes = facts.timings_notes;
-    notes.extend(release_notes);
-    Ok((files, notes))
+    files.extend(release::release_workflow(view, &facts, helper, &files)?);
+    Ok((files, facts.timings_notes))
 }
 
 pub fn plan_generate(
@@ -96,6 +93,9 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
+    if !release.version().at_least(HELPER_MINIMUM) {
+        return Err(GenerateError::HelperTooOld(release.version().clone()));
+    }
     Ok(release)
 }
 

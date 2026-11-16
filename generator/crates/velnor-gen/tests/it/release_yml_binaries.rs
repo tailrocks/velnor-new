@@ -84,7 +84,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     assert!(
         jobs(&without)?
             .iter()
-            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag"))
+            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag" | "finalize"))
     );
     Ok(())
 }
@@ -358,7 +358,10 @@ fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> Tes
         );
     }
     let (_, without) = two_roots()?;
-    assert!(job(&without, "tag")?.get("outputs").is_none());
+    assert_eq!(
+        job(&without, "tag")?.get("outputs").map(Node::keys),
+        Some(vec!["app", "tools"])
+    );
     Ok(())
 }
 

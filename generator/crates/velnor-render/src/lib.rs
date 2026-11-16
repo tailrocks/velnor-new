@@ -23,7 +23,6 @@ use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
-pub use crate::release_finalize::unfinalized_without_binary;
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_CACHE_KEY_CHARACTERS,
     MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,

@@ -19,7 +19,7 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
-        LOCK.replace("0.1.79", version).into_bytes(),
+        LOCK.replace("0.1.81", version).into_bytes(),
     );
     let text = expected_files(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
@@ -87,46 +87,11 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 }
 
 #[test]
-fn helper_0_1_80_gets_the_tag_patterns_but_not_released_versions() -> TestResult {
-    let found = refuse_steps("0.1.80")?;
-    assert_eq!(found.len(), 2);
-    for (_, step) in found {
-        assert!(
-            step[0].ends_with("--repo \"$REPOSITORY\" --manifests"),
-            "{}",
-            step[0]
-        );
-        assert!(!step[0].contains("--released-versions"));
-    }
-    Ok(())
-}
-
-#[test]
-fn a_helper_that_predates_the_release_checks_is_refused_with_the_version_to_pin() -> TestResult {
-    for version in ["0.1.79", "0.1.0"] {
-        let error = refuse_steps(version)
-            .err()
-            .ok_or("accepted an old helper")?;
-        assert_eq!(
-            error.to_string(),
-            format!(
-                "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci 0.1.80 or later with `velnor-gen pin-helper 0.1.80`"
-            )
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
-    let mut view = release_view(
+    let view = release_view(
         &[APP, TOOLS],
         Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )?;
-    view.files.insert(
-        velnor_rust::LOCK_PATH,
-        LOCK.replace("0.1.79", "0.1.80").into_bytes(),
-    );
     let text = expected_files(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;

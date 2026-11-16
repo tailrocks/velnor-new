@@ -69,10 +69,7 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
 }
 
 #[test]
-fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -> TestResult {
-    let old = workflow(&locked("0.1.79")?)?;
-    assert!(!old.contains("inputs restore"), "{old}");
-    assert!(old.contains("name: velnor-ci restored"), "{old}");
+fn every_accepted_helper_gets_the_inputs_restore() -> TestResult {
     for version in ["0.1.81", "0.1.100"] {
         let text = workflow(&locked(version)?)?;
         assert_eq!(

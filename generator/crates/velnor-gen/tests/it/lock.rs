@@ -43,7 +43,7 @@ fn pin_helper_writes_the_lock_file_the_sample_repository_commits() -> TestResult
         .join("../../samples/helper-lock/view")
         .join(LOCK_PATH.as_str());
     assert_eq!(
-        pin_lock("0.1.79", COMMIT_FILE, SUMS)?,
+        pin_lock("0.1.81", COMMIT_FILE, SUMS)?,
         fs::read_to_string(sample)?
     );
     Ok(())
@@ -60,15 +60,15 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
     let twice = format!("{SUMS}{}\n", SUMS.lines().next().unwrap_or_default());
     let short = SUMS.replacen("10e3511a", "10E3511A", 1);
     let cases = [
-        (without("velnor-ci-linux-arm64"), "0.1.79"),
-        (without("velnor-gen-macos-arm64"), "0.1.79"),
-        (twice, "0.1.79"),
-        (short, "0.1.79"),
+        (without("velnor-ci-linux-arm64"), "0.1.81"),
+        (without("velnor-gen-macos-arm64"), "0.1.81"),
+        (twice, "0.1.81"),
+        (short, "0.1.81"),
         (SUMS.to_owned(), "0.1"),
-        (SUMS.to_owned(), "v0.1.79"),
-        (SUMS.to_owned(), "0.1.79-rc1"),
-        (SUMS.to_owned(), "0.1.79/../../x"),
-        (String::new(), "0.1.79"),
+        (SUMS.to_owned(), "v0.1.81"),
+        (SUMS.to_owned(), "0.1.81-rc1"),
+        (SUMS.to_owned(), "0.1.81/../../x"),
+        (String::new(), "0.1.81"),
     ];
     for (sums, version) in cases {
         let result = pin_lock(version, COMMIT_FILE, &sums);
@@ -89,7 +89,7 @@ fn a_commit_that_does_not_match_the_digest_sha256sums_lists_for_it_is_not_pinned
         (COMMIT, SUMS),
         (COMMIT_FILE, unlisted.as_str()),
     ] {
-        let result = pin_lock("0.1.79", commit, sums);
+        let result = pin_lock("0.1.81", commit, sums);
         assert!(result.is_err(), "{commit:?} gave {result:?}");
     }
 }
@@ -98,13 +98,13 @@ fn a_commit_that_does_not_match_the_digest_sha256sums_lists_for_it_is_not_pinned
 fn a_release_whose_commit_is_not_a_full_lowercase_sha_is_not_pinned() {
     for commit in [
         "",
-        "rust-ci-v0.1.79",
+        "rust-ci-v0.1.81",
         &COMMIT[..39],
         &format!("{COMMIT}0"),
         &COMMIT.to_uppercase(),
         &format!("{}g", &COMMIT[..39]),
     ] {
-        let result = pin_lock("0.1.79", commit, SUMS);
+        let result = pin_lock("0.1.81", commit, SUMS);
         assert!(result.is_err(), "{commit:?} gave {result:?}");
     }
 }
@@ -112,12 +112,12 @@ fn a_release_whose_commit_is_not_a_full_lowercase_sha_is_not_pinned() {
 #[test]
 fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_and_nowhere_else()
 -> TestResult {
-    let text = workflow(&locked("0.1.79")?)?;
+    let text = workflow(&locked("0.1.81")?)?;
     let steps: Vec<&str> = text
         .lines()
         .filter_map(|line| line.strip_prefix("      - name: "))
         .collect();
-    assert_eq!(steps[..2], ["Check out", "Install velnor-ci 0.1.79"]);
+    assert_eq!(steps[..2], ["Check out", "Install velnor-ci 0.1.81"]);
     assert_eq!(
         steps
             .iter()
@@ -126,10 +126,10 @@ fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_an
         1
     );
     let install = format!(
-        "      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@{COMMIT}  # rust-ci-v0.1.79
+        "      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@{COMMIT}  # rust-ci-v0.1.81
         with:
-          version: '0.1.79'
+          version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
@@ -156,7 +156,7 @@ fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_an
 
 #[test]
 fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestResult {
-    let good = pin_lock("0.1.79", COMMIT_FILE, SUMS)?;
+    let good = pin_lock("0.1.81", COMMIT_FILE, SUMS)?;
     let ci = "10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e";
     let generator = "61ec20debeae57cce969660e66c72315c59ce3cee84659540aee1942aad52628";
     let cases = [
@@ -170,10 +170,10 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
             "[velnor-gen]",
             &format!("windows-x64 = \"{ci}\"\n\n[velnor-gen]"),
         ),
-        good.replace("version = \"0.1.79\"", "version = \"0.1\""),
-        good.replace("version = \"0.1.79\"\n", ""),
+        good.replace("version = \"0.1.81\"", "version = \"0.1\""),
+        good.replace("version = \"0.1.81\"\n", ""),
         good.replace(&format!("commit = \"{COMMIT}\"\n"), ""),
-        good.replace(COMMIT, "rust-ci-v0.1.79"),
+        good.replace(COMMIT, "rust-ci-v0.1.81"),
         good.replace(COMMIT, &COMMIT[..39]),
         good.replace(COMMIT, &COMMIT.to_uppercase()),
         good.replace(COMMIT, &format!("{COMMIT}\\n")),
@@ -212,8 +212,7 @@ fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestR
 fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
     let (major, minor) = COMPATIBLE_HELPER_SERIES;
     for version in [
-        format!("{major}.{minor}.0"),
-        format!("{major}.{minor}.79"),
+        format!("{major}.{minor}.81"),
         format!("{major}.{minor}.4294967296"),
     ] {
         assert!(
@@ -243,6 +242,26 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
                 "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {major}.{minor}.x"
             )),
             "{said}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_helper_below_0_1_81_is_refused_with_the_version_to_pin() -> TestResult {
+    for version in ["0.1.80", "0.1.79", "0.1.0"] {
+        let error = expected_with_notes(&locked(version)?)
+            .err()
+            .ok_or("accepted an old helper")?;
+        assert_eq!(
+            error,
+            GenerateError::HelperTooOld(HelperVersion::new(version)?)
+        );
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "velnor-ci {version} is older than this generator supports: it cannot report the Required verdict, check the release on the tagged commit or record package versions; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+            )
         );
     }
     Ok(())

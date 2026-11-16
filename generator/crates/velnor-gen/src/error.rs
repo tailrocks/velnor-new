@@ -8,7 +8,7 @@ use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MetadataFileError};
 
-use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
+use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
@@ -19,8 +19,7 @@ pub enum GenerateError {
     NoReleaseConfig,
     ReleaseToolchainPath,
     HelperNotPinned,
-    ReleaseHelperTooOld(HelperVersion),
-    PrOnlyChecksHelperTooOld(HelperVersion),
+    HelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -46,15 +45,11 @@ impl fmt::Display for GenerateError {
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
-            Self::ReleaseHelperTooOld(version) => write!(
+            Self::HelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
-                RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
-                RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
-            ),
-            Self::PrOnlyChecksHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+                "velnor-ci {version} is older than this generator supports: it cannot report the Required verdict, check the release on the tagged commit or record package versions; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
+                HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
+                HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {

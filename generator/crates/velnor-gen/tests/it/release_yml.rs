@@ -101,6 +101,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
                     .contains(&"gate"),
                 "{id}"
             );
+            if *id == "finalize" {
+                continue;
+            }
             let mut want = BTreeSet::from([
                 READY.to_owned(),
                 PUSH.to_owned(),

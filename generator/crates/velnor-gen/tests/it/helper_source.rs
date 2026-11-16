@@ -66,7 +66,7 @@ fn the_plan_job_and_the_helper_job_use_the_released_helper() -> TestResult {
         let body = &text[start..];
         let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
         let body = &body[..end];
-        assert!(body.contains("Install velnor-ci 0.1.79"), "{job}");
+        assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
         assert!(!body.contains("Download velnor-ci"), "{job}");
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];

@@ -9,22 +9,19 @@ use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
 use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
-use velnor_render::{Owner, owner_of, render_release, unfinalized_without_binary};
+use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
-use crate::{GenerateError, RELEASE_HELPER_MINIMUM};
+use crate::GenerateError;
 
 pub(crate) fn release_workflow(
     view: &RepoView,
     facts: &RepoFacts,
     helper: &HelperRelease,
     generated: &BTreeMap<RepoPath, String>,
-) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
+) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
-        return Ok((BTreeMap::new(), Vec::new()));
-    }
-    if !helper.version().at_least(RELEASE_HELPER_MINIMUM) {
-        return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
+        return Ok(BTreeMap::new());
     }
     if facts
         .toolchain
@@ -36,11 +33,6 @@ pub(crate) fn release_workflow(
     let reality = Reality { facts, generated };
     let plan =
         ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
-    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 81)) {
-        return Err(GenerateError::PrOnlyChecksHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
     for root in &plan.roots {
         let manifest = if root.root == "." {
             "Cargo.toml".to_owned()
@@ -55,19 +47,7 @@ pub(crate) fn release_workflow(
             reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
-    let unfinalized = unfinalized_without_binary(&plan, helper);
-    let notes = if unfinalized.is_empty() {
-        Vec::new()
-    } else {
-        vec![format!(
-            "WARNING: helper {} cannot publish the draft release of {}, which has no [[binaries]] entry, so that release stays a draft; pin velnor-ci 0.1.81 or newer",
-            helper.version(),
-            unfinalized.into_iter().collect::<Vec<_>>().join(", ")
-        )]
-    };
-    let files = render_release(&plan, helper, &facts.config.default_branch)
-        .map_err(GenerateError::Rules)?;
-    Ok((files, notes))
+    render_release(&plan, helper, &facts.config.default_branch).map_err(GenerateError::Rules)
 }
 
 pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
