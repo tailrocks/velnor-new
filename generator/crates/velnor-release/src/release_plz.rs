@@ -213,3 +213,13 @@ pub fn release_tag_patterns(root: &str, text: &str) -> Result<BTreeSet<String>, 
         .map(|pattern| pattern.as_str().to_owned())
         .collect())
 }
+
+pub fn check_release_plz_config(file: &str, text: &str) -> Result<(), String> {
+    let root = match file.rsplit_once('/') {
+        Some((root, _)) if !root.is_empty() => root,
+        _ => ".",
+    };
+    read(root, text)
+        .map(drop)
+        .map_err(|error| format!("{file}: {error}"))
+}

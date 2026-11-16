@@ -18,9 +18,6 @@ fn a_mise_lock_that_downloads_release_plz_from_elsewhere_is_refused() {
     files.mise_tomls = vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()];
     files.mise_lock = lock(own, api);
     assert_eq!(refusal(&files), None);
-    let valid_with_plus = "https://github.com/release-plz/release-plz/releases/download/v0.4.3+build.1/release-plz_0.4.3-x86_64.tar.gz";
-    files.mise_lock = lock(valid_with_plus, api);
-    assert_eq!(refusal(&files), None);
     for (url, url_api) in [
         ("https://evil.example/release-plz.tar.gz", api),
         (own, "https://evil.example/asset"),
@@ -89,6 +86,29 @@ fn a_mise_lock_that_downloads_release_plz_from_elsewhere_is_refused() {
 }
 
 #[test]
+fn a_mise_lock_archive_for_another_release_tag_is_refused() {
+    let mut files = files();
+    files.mise_tomls = vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()];
+    let api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/1";
+    for url in [
+        "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.2/release-plz-x86_64-unknown-linux-gnu.tar.gz",
+        "https://github.com/release-plz/release-plz/releases/download/v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz",
+        "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3+build.1/release-plz-x86_64-unknown-linux-gnu.tar.gz",
+    ] {
+        files.mise_lock = format!(
+            "[[tools.release-plz]]\nversion = \"0.4.3\"\n\n[tools.release-plz.\"platforms.linux-x64\"]\nchecksum = \"sha256:{RELEASE_PLZ_SHA256}\"\nurl = \"{url}\"\nurl_api = \"{api}\"\n"
+        );
+        assert!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::ReleasePlzArtifactElsewhere { .. })
+            ),
+            "{url}"
+        );
+    }
+}
+
+#[test]
 fn a_mise_lock_without_a_verifiable_linux_download_is_refused() {
     let mut files = files();
     for lock in [
@@ -127,6 +147,19 @@ fn the_cargo_backend_is_refused_by_name_rather_than_as_an_unlocked_download() {
         refusal(&files),
         Some(ReleaseError::ReleasePlzBackendNotDownloadable {
             tool: "cargo:release-plz".to_owned()
+        })
+    );
+}
+
+#[test]
+fn the_ubi_backend_is_refused_by_name_rather_than_as_an_unlocked_download() {
+    let mut files = files();
+    files.mise_tomls = vec!["[tools]\n\"ubi:release-plz/release-plz\" = \"0.4.3\"\n".to_owned()];
+    files.mise_lock = "[[tools.\"ubi:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzBackendNotDownloadable {
+            tool: "ubi:release-plz/release-plz".to_owned()
         })
     );
 }
