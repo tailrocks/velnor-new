@@ -60,9 +60,11 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
     }
     stale_target(&repo, "target");
     stale_target(&repo, "app/target");
-    let report = cold_on_failure(&every_root_target(repo.root()), "restored", || {
-        break_time_ties_with(repo.root(), &|_, _| Ok(()))
-    })
+    let report = cold_on_failure(
+        &every_root_target(repo.root()).unwrap_or_else(|e| unreachable!("{e}")),
+        "restored",
+        || break_time_ties_with(repo.root(), &|_, _| Ok(())),
+    )
     .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         report.contains("still share a modification time"),

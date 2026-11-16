@@ -24,7 +24,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
-pub use self::cold::{cold_on_failure, every_root_target, root_target};
+pub use self::cold::{cold_on_failure, every_root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
@@ -127,7 +127,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Restored => {
             let root = current_dir()?;
-            cold_on_failure(&every_root_target(&root), "restored", || {
+            cold_on_failure(&every_root_target(&root)?, "restored", || {
                 break_time_ties(&root)
             })
         }
