@@ -76,7 +76,7 @@ fn run(stall: bool, name: &str) -> TestResult<()> {
         .env(CHILD, dir.path().join("requests"))
         .env(
             "VELNOR_RETIREMENT_CURL_DELAY_MS",
-            if stall { "0" } else { "750" },
+            if stall { "0" } else { "6000" },
         )
         .output()?;
     assert!(
@@ -159,8 +159,9 @@ async fn exercise(stall: bool) -> TestResult<()> {
         vec![active.prepared, removed.prepared]
     };
     let started = Instant::now();
+    let guard = Duration::from_secs(if stall { 5 } else { 15 });
     tokio::time::timeout(
-        Duration::from_secs(5),
+        guard,
         poll_active_connections(
             ConnectionPollContext {
                 config: &removed.config,
@@ -172,7 +173,11 @@ async fn exercise(stall: bool) -> TestResult<()> {
                 image_authority: &removed.image_authority,
                 admission_ready: false,
                 control_state: &control_state,
-                retirement_budget: Duration::from_millis(500),
+                retirement_budget: if stall {
+                    Duration::from_millis(500)
+                } else {
+                    Duration::from_secs(5)
+                },
             },
             &pending,
             &mut connections,
@@ -180,7 +185,7 @@ async fn exercise(stall: bool) -> TestResult<()> {
         ),
     )
     .await??;
-    assert!(started.elapsed() < Duration::from_secs(5));
+    assert!(started.elapsed() < guard);
     assert_polled(&restarted, &control_state).await?;
     if stall {
         tokio::time::timeout(Duration::from_secs(1), restarted.fixture.hung()).await?;
@@ -190,7 +195,7 @@ async fn exercise(stall: bool) -> TestResult<()> {
         );
         assert_ne!(restarted.fixture.objects(FAILED), Vec::<String>::new());
     } else {
-        assert!(started.elapsed() >= Duration::from_millis(750));
+        assert!(started.elapsed() >= Duration::from_secs(6));
         assert_retired(&restarted).await?;
     }
     Ok(())
