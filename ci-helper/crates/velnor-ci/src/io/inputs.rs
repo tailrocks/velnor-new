@@ -7,11 +7,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
+
 use crate::error::CiError;
 use crate::inputs::{
     INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
     parse_ls_files, plan_restore, with_worktree_blobs,
 };
+use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
@@ -92,6 +95,38 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     ))
 }
 
+pub(super) struct TrackedPaths {
+    pub top: PathBuf,
+    pub paths: Vec<String>,
+    pub non_utf8: usize,
+}
+
+pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
+    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
+    let top = PathBuf::from(
+        String::from_utf8(top)
+            .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
+            .trim_end_matches(['\n', '\r']),
+    );
+    let listed = git(&top, &["ls-files", "-z", "--recurse-submodules"], None)?;
+    let mut paths = Vec::new();
+    let mut non_utf8 = 0;
+    for path in listed
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+    {
+        match String::from_utf8(path.to_vec()) {
+            Ok(path) => paths.push(path),
+            Err(_) => non_utf8 += 1,
+        }
+    }
+    Ok(TrackedPaths {
+        top,
+        paths,
+        non_utf8,
+    })
+}
+
 fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
@@ -99,16 +134,34 @@ fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
             .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
             .trim_end_matches(['\n', '\r']),
     );
-    let tracked = top_level_files(&top)?;
+    let tracked = top_level_files(&top, &scope_of(root, &top)?)?;
     Ok((top, tracked))
 }
 
-fn top_level_files(root: &Path) -> Result<Tracked, CiError> {
-    let index = parse_ls_files(&git(
+fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
+    let prefix = git(root, &["rev-parse", "--show-prefix"], None)?;
+    let prefix = String::from_utf8(prefix)
+        .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
+    let listed = match fs::read(top.join(INPUTS_LOCK.as_str())) {
+        Ok(bytes) => parse_inputs_lock(&bytes)
+            .map_err(|e| CiError::new(e.to_string()))?
+            .into_keys()
+            .map(|path| path.map_or_else(String::new, |path| path.as_str().to_owned()))
+            .collect(),
+        Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
+    };
+    Ok(Scope::new(prefix.trim_end_matches(['\n', '\r']), listed))
+}
+
+fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
+    let mut index = parse_ls_files(&git(
         root,
         &["ls-files", "-s", "-z", "--recurse-submodules"],
         None,
     )?);
+    index.files.retain(|file| scope.contains(&file.path));
+    index.links.retain(|link| scope.contains(&link.path));
     let mut present = Vec::with_capacity(index.files.len());
     let mut absent = Vec::new();
     for file in index.files {
@@ -208,7 +261,7 @@ fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiEr
     Ok(output.stdout)
 }
 
-fn modified_ns(path: &Path) -> Result<u64, CiError> {
+pub(super) fn modified_ns(path: &Path) -> Result<u64, CiError> {
     let modified = fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .map_err(|e| CiError::new(format!("cannot read mtime of {}: {e}", path.display())))?;
@@ -219,7 +272,7 @@ fn modified_ns(path: &Path) -> Result<u64, CiError> {
         .ok_or_else(|| CiError::new(format!("mtime of {} is out of range", path.display())))
 }
 
-fn set_modified_ns(path: &Path, mtime_ns: u64) -> Result<(), CiError> {
+pub(super) fn set_modified_ns(path: &Path, mtime_ns: u64) -> Result<(), CiError> {
     let time = SystemTime::UNIX_EPOCH + Duration::from_nanos(mtime_ns);
     File::options()
         .write(true)

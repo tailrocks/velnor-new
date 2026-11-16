@@ -10,7 +10,7 @@ use velnor_model::{
 
 mod markdown;
 mod scan;
-mod tokens;
+pub(crate) mod tokens;
 
 use self::scan::Found;
 use crate::roots::is_cargo_config;
