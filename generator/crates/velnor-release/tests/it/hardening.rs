@@ -269,6 +269,24 @@ fn a_repository_that_needs_nightly_rust_is_refused() {
 }
 
 #[test]
+fn only_a_toolchain_file_rustup_finds_from_the_checkout_root_is_checked() {
+    let mut nested = files();
+    nested.toolchain_files.insert(
+        "tools/rust-toolchain.toml".to_owned(),
+        "[toolchain]\npath = \"/work/tc\"\n".to_owned(),
+    );
+    assert_eq!(refusal(&nested), None);
+    nested.toolchain_files.insert(
+        "rust-toolchain.toml".to_owned(),
+        "[toolchain]\npath = \"/work/tc\"\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&nested),
+        Some(ReleaseError::ToolchainFromPath { file }) if file == "rust-toolchain.toml"
+    ));
+}
+
+#[test]
 fn a_root_written_with_a_dot_or_an_empty_component_is_refused() {
     for root in ["./tools", "tools/", "tools//sub", "tools/./sub", ""] {
         let mut files = files();

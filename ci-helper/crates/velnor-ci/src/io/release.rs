@@ -89,7 +89,11 @@ fn root_of(top: &Path, file: &Path) -> String {
         .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())
 }
 
-const CONFIG_ENTRIES: [&str; 3] = [".cargo", ".cargo/config", ".cargo/config.toml"];
+const CONFIG_ENTRIES: [(&str, bool); 3] = [
+    (".cargo", false),
+    (".cargo/config", true),
+    (".cargo/config.toml", true),
+];
 
 fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
     let relative = file.strip_prefix(top).unwrap_or(file);
@@ -106,8 +110,8 @@ fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
         if !directory.as_os_str().is_empty() {
             entries.extend(entry(directory, &here, false)?);
         }
-        for name in CONFIG_ENTRIES {
-            entries.extend(entry(&directory.join(name), &here.join(name), true)?);
+        for (name, with_text) in CONFIG_ENTRIES {
+            entries.extend(entry(&directory.join(name), &here.join(name), with_text)?);
         }
     }
     Ok(entries)
@@ -117,7 +121,9 @@ fn entry(shown: &Path, real: &Path, with_text: bool) -> Result<Option<CargoPathE
     let fail = |e: std::io::Error| CiError::new(format!("cannot inspect {}: {e}", shown.display()));
     let meta = match fs::symlink_metadata(real) {
         Ok(meta) => meta,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+            return Ok(None);
+        }
         Err(error) => return Err(fail(error)),
     };
     let symlink = meta.file_type().is_symlink();

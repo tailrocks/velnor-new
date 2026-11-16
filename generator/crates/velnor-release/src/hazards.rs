@@ -67,6 +67,13 @@ fn names_other_default_registry(document: &Value) -> bool {
         .is_some_and(|default| default.as_str() != Some("crates-io"))
 }
 
+fn offline(document: &Value) -> bool {
+    document
+        .get("net")
+        .and_then(|net| net.get("offline"))
+        .is_some_and(|offline| offline.as_bool() != Some(false))
+}
+
 fn is_builtin(value: &Value) -> bool {
     match value {
         Value::String(name) => name == BUILTIN_PROVIDER,
@@ -122,6 +129,11 @@ pub(crate) fn cargo_config(
         && (redirects_crates_io(&document) || names_other_default_registry(&document))
     {
         return Err(ReleaseError::CargoRedirectsCratesIo {
+            file: file.to_owned(),
+        });
+    }
+    if publishes_to_crates_io && offline(&document) {
+        return Err(ReleaseError::CargoOffline {
             file: file.to_owned(),
         });
     }
