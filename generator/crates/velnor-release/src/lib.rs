@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cargo_allowlist;
+mod collisions;
 mod error;
 mod error_cargo;
 mod git_ref;
