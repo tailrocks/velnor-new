@@ -17,7 +17,10 @@ const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMPAT: &str = "${{ steps.prepare.outputs.compat }}";
 
 fn root(manifest: &str) -> Result<CacheRoot, Box<dyn std::error::Error>> {
-    Ok(CacheRoot::new(&RepoPath::new(manifest)?))
+    Ok(CacheRoot::new(
+        &RepoPath::new(manifest)?,
+        RepoPath::new("target")?,
+    ))
 }
 
 fn target(job: &str, manifest: &str) -> Result<RenderedKey, Box<dyn std::error::Error>> {

@@ -32,6 +32,7 @@ mod select_event;
 mod sha256;
 mod shape;
 mod sibling_features;
+mod target_dir;
 mod timings;
 mod toml_file;
 mod toolchain;

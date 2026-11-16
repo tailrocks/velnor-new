@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use crate::key_length::longest_cache_key;
+
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
@@ -25,6 +27,7 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
+pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
@@ -92,6 +95,7 @@ pub enum Rule {
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
+    CacheKeyTooLong(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +133,10 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
+            ),
+            Rule::CacheKeyTooLong(length) => write!(
+                f,
+                "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
@@ -222,6 +230,11 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     }
     if let Some(uses) = &step.uses {
         action_rules(uses, &mut rules);
+    }
+    if let Some(length) = longest_cache_key(step) {
+        if length > MAX_CACHE_KEY_CHARACTERS {
+            rules.push(Rule::CacheKeyTooLong(length));
+        }
     }
     rules
 }
