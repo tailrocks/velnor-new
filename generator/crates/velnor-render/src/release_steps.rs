@@ -165,12 +165,22 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> Ren
         })
         .collect();
     let (name, env) = if binds_tags {
+        let mut env = variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+        ]);
+        env.push((
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            Value::Text(TOOLCHAIN.to_owned()),
+        ));
+        env.extend(
+            NO_PROGRAM_VARIABLES
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
+        );
         (
-            "Refuse a release-plz config that runs commands or changes the tag patterns",
-            variables(&[
-                ("GITHUB_TOKEN", "${{ github.token }}"),
-                ("REPOSITORY", "${{ github.repository }}"),
-            ]),
+            "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry",
+            env,
         )
     } else {
         ("Refuse a release-plz config that runs commands", Vec::new())
@@ -184,7 +194,7 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> Ren
                 files.join(" ")
             ))
             .chain(tags)
-            .chain(binds_tags.then(|| "--repo \"$REPOSITORY\"".to_owned()))
+            .chain(binds_tags.then(|| "--repo \"$REPOSITORY\" --manifests".to_owned()))
             .collect::<Vec<_>>()
             .join(" "),
         ),

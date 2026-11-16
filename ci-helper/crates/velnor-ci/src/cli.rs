@@ -187,6 +187,11 @@ pub struct CheckConfigArgs {
         help = "With --tag-pattern, the repository whose active tag rulesets must hold a creation, update and deletion rule for every listed pattern"
     )]
     pub repo: Option<String>,
+    #[arg(
+        long,
+        help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
+    )]
+    pub manifests: bool,
 }
 
 impl CheckConfigArgs {
