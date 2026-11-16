@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_model::{
-    OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, TargetKind,
+    OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, Target, TargetKind,
 };
 
 mod scan;
@@ -129,6 +129,7 @@ pub fn optional_steps(
 ) -> OptionalSteps {
     let mut found = Found::default();
     let rust = target_sources(root);
+    let other_kinds = undocumented_sources(root);
     let generates = root
         .members
         .iter()
@@ -138,7 +139,7 @@ pub fn optional_steps(
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
-            found.scan_rust(&text);
+            found.scan_rust(&text, !other_kinds.contains(path));
         } else {
             found.scan_text(&text);
         }
@@ -156,7 +157,7 @@ pub fn optional_steps(
     } else {
         StepNeed::Skip(SkipReason::NoDocs)
     };
-    let doctests_known = has_doctest_library(root) && found.fenced;
+    let doctests_known = has_doctest_library(root) && found.written;
     OptionalSteps {
         doctests,
         doctests_known,
@@ -176,6 +177,26 @@ fn target_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {
         .iter()
         .flat_map(|member| &member.targets)
         .filter_map(|target| target.source.as_ref())
+        .collect()
+}
+
+fn undocumented_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {
+    let targets = || root.members.iter().flat_map(|member| &member.targets);
+    let doctested = |target: &&Target| {
+        target.doctest
+            && target
+                .kinds
+                .iter()
+                .any(|kind| matches!(kind, TargetKind::Lib | TargetKind::ProcMacro))
+    };
+    let counted: BTreeSet<_> = targets()
+        .filter(doctested)
+        .filter_map(|t| t.source.as_ref())
+        .collect();
+    targets()
+        .filter(|target| !doctested(target))
+        .filter_map(|target| target.source.as_ref())
+        .filter(|source| !counted.contains(source))
         .collect()
 }
 

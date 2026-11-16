@@ -9,6 +9,7 @@ const RUSTDOC_SETTINGS: [&str; 3] = ["rustdoc", "missing_docs", "missing_crate_l
 pub(crate) struct Found {
     pub(crate) docs: bool,
     pub(crate) fenced: bool,
+    pub(crate) written: bool,
 }
 
 impl Found {
@@ -28,7 +29,7 @@ impl Found {
             });
     }
 
-    pub(crate) fn scan_rust(&mut self, text: &str) {
+    pub(crate) fn scan_rust(&mut self, text: &str, counts: bool) {
         self.scan_text(text);
         let tokens = tokens(text);
         if tokens.windows(3).any(|window| {
@@ -44,6 +45,7 @@ impl Found {
                 Token::Doc { fenced } => {
                     self.docs = true;
                     self.fenced |= fenced;
+                    self.written |= fenced && counts;
                 }
                 Token::Ident(word) if names_doc_input(word) => self.both(),
                 _ => {}
