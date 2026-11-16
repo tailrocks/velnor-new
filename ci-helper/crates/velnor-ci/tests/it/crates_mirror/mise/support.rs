@@ -11,13 +11,16 @@ pub(super) struct Mise {
 
 impl Mise {
     pub(super) fn new(repo: &Repo) -> Result<Self, Box<dyn std::error::Error>> {
+        repo.write_unstaged("empty.toml", "");
         let binary = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
             .map(|path| path.join("mise"))
             .chain([PathBuf::from(std::env::var_os("HOME").ok_or("HOME")?).join(".local/bin/mise")])
             .find(|path| path.is_file())
             .ok_or("Mise unavailable: integration requires a real installed Mise binary")?;
         let binary = fs::canonicalize(binary)?;
-        let output = Command::new(&binary).arg("--version").output()?;
+        let output = Self::base_command(repo.root(), &binary)
+            .arg("--version")
+            .output()?;
         assert!(output.status.success(), "{output:?}");
         assert!(String::from_utf8(output.stdout)?.starts_with("2026.11."));
         let rustup = rustup_binary().ok_or("rustup unavailable")?;
@@ -61,7 +64,6 @@ impl Mise {
             root.join("cargo-home/bin"),
         )?;
         std::os::unix::fs::symlink(&binary, root.join("mise-shims/cargo"))?;
-        repo.write_unstaged("empty.toml", "");
         repo.write_unstaged("configured-wrapper.rs", include_str!("external.rs"));
         let output = Command::new(cargo.with_file_name("rustc"))
             .arg(root.join("configured-wrapper.rs"))
@@ -91,7 +93,14 @@ impl Mise {
     }
 
     pub(super) fn command(&self, repo: &Repo, program: &Path) -> Command {
-        let root = repo.root();
+        let mut command = Self::base_command(repo.root(), program);
+        command
+            .env("CARGO_HOME", repo.root().join("cargo-home"))
+            .env("RUSTUP_HOME", &self.rustup_home);
+        command
+    }
+
+    fn base_command(root: &Path, program: &Path) -> Command {
         let mut command = Command::new(program);
         command
             .current_dir(root)
@@ -105,14 +114,14 @@ impl Mise {
             .env("MISE_DATA_DIR", root.join("mise-data"))
             .env("MISE_CONFIG_DIR", root.join("mise-config"))
             .env("MISE_CACHE_DIR", root.join("mise-cache"))
+            .env("MISE_STATE_DIR", root.join("mise-state"))
+            .env("MISE_SHIMS_DIR", root.join("mise-runtime-shims"))
             .env("MISE_GLOBAL_CONFIG_FILE", root.join("empty.toml"))
             .env("MISE_SYSTEM_CONFIG_FILE", root.join("empty.toml"))
             .env("MISE_TRUSTED_CONFIG_PATHS", root)
             .env("MISE_AUTO_INSTALL", "false")
             .env("MISE_EXEC_AUTO_INSTALL", "false")
-            .env("MISE_OFFLINE", "true")
-            .env("CARGO_HOME", root.join("cargo-home"))
-            .env("RUSTUP_HOME", &self.rustup_home);
+            .env("MISE_OFFLINE", "true");
         command
     }
 

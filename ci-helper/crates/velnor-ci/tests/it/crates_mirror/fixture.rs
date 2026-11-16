@@ -222,20 +222,8 @@ pub(super) fn rustup_binary() -> Option<&'static Path> {
                     .ok()?;
                 (output.status.success() && output.stdout.starts_with(b"rustup ")).then_some(path)
             };
-            if let Some(path) = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
                 .find_map(|directory| candidate(directory.join("rustup")))
-            {
-                return Some(path);
-            }
-            let output = Command::new("mise")
-                .args(["which", "rustup"])
-                .current_dir(&root)
-                .output()
-                .ok()?;
-            if !output.status.success() {
-                return None;
-            }
-            candidate(PathBuf::from(String::from_utf8(output.stdout).ok()?.trim()))
         })
         .as_deref()
 }
