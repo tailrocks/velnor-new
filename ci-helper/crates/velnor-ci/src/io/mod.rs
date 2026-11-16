@@ -6,6 +6,8 @@ mod build_inputs;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_dispatch;
+mod crates_mirror_mise;
 mod git;
 mod http;
 mod inputs;

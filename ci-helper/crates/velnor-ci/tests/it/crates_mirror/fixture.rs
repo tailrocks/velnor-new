@@ -54,12 +54,33 @@ pub(super) fn setup(root: &Path, registry: &str) -> std::process::Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-pub(super) fn mirror_fixture(exercise: fn(&Repo, &Path, &Path) -> TestResult) -> TestResult {
-    if rustup_binary().is_none() {
-        eprintln!("SKIP crates_mirror integration fixture: no real rustup binary available");
-        return Ok(());
-    }
-    let repo = Repo::empty("crates-mirror");
+pub(super) fn mirror_fixture(
+    exercise: impl FnOnce(&Repo, &Path, &Path) -> TestResult,
+) -> TestResult {
+    mirror_fixture_named("crates-mirror", exercise)
+}
+
+pub(super) fn mirror_fixture_named(
+    name: &str,
+    exercise: impl FnOnce(&Repo, &Path, &Path) -> TestResult,
+) -> TestResult {
+    mirror_fixture_with_setup_count(name, 1, exercise)
+}
+
+pub(super) fn repeated_mirror_fixture(
+    exercise: impl FnOnce(&Repo, &Path, &Path) -> TestResult,
+) -> TestResult {
+    mirror_fixture_with_setup_count("crates-mirror", 2, exercise)
+}
+
+fn mirror_fixture_with_setup_count(
+    name: &str,
+    setup_count: usize,
+    exercise: impl FnOnce(&Repo, &Path, &Path) -> TestResult,
+) -> TestResult {
+    rustup_binary()
+        .ok_or("rustup unavailable: mirror integration requires a real Rustup binary")?;
+    let repo = Repo::empty(name);
     let root = repo.root();
     repo.write_unstaged("ca.pem", "not used by the local HTTP fixture");
     repo.write_unstaged("shadow/cargo", "not executable");
@@ -81,7 +102,7 @@ pub(super) fn mirror_fixture(exercise: fn(&Repo, &Path, &Path) -> TestResult) ->
     let archive = fs::read(root.join("probe.crate"))?;
     let checksum = velnor_rust::sha256_hex(&archive);
     let registry = serve(archive, &checksum)?;
-    for _ in 0..2 {
+    for _ in 0..setup_count {
         let output = setup(root, &registry.url);
         assert!(output.status.success(), "{output:?}");
     }
@@ -169,16 +190,16 @@ fn serve(archive: Vec<u8>, checksum: &str) -> Result<Registry, Box<dyn Error>> {
 
 pub(super) fn active_toolchain() -> Result<String, Box<dyn Error>> {
     let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
-        .args(["show", "active-toolchain"])
+        .args(["which", "cargo"])
         .output()?;
     assert!(output.status.success(), "{output:?}");
-    let active = String::from_utf8(output.stdout)?;
-    let active = active.trim();
-    let toolchain = active.rsplit_once(" (").map_or(active, |(name, _)| name);
-    if toolchain.is_empty() {
-        return Err("active toolchain".into());
-    }
-    Ok(toolchain.to_owned())
+    let cargo = PathBuf::from(String::from_utf8(output.stdout)?.trim());
+    Ok(cargo
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::to_str)
+        .ok_or("active toolchain")?
+        .to_owned())
 }
 
 pub(super) fn rustup_binary() -> Option<&'static Path> {

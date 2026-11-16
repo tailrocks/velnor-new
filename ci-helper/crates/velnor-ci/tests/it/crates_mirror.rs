@@ -2,20 +2,42 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::process::Command;
 
 use crate::io::Repo;
 
 mod fixture;
+mod mise;
 mod setup;
 mod toolchains;
-use fixture::{TestResult, active_toolchain, mirror_fixture, rustup_binary};
+use fixture::{
+    TestResult, active_toolchain, mirror_fixture, repeated_mirror_fixture, rustup_binary,
+};
+
+#[test]
+fn missing_rustup_fails_mirror_integration_prerequisite() -> TestResult {
+    let repo = Repo::empty("crates-mirror-missing-rustup");
+    fs::create_dir(repo.root().join("empty-path"))?;
+    let output = Command::new(std::env::current_exe()?)
+        .args([
+            "--exact",
+            "crates_mirror::cargo_fetches_uncached_crates_with_changed_homes_and_explicit_toolchain",
+            "--nocapture",
+        ])
+        .env("PATH", repo.root().join("empty-path"))
+        .output()?;
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8(output.stderr)?.contains("rustup unavailable"),
+        "fixture must report its missing Rustup prerequisite"
+    );
+    Ok(())
+}
 
 #[test]
 fn cargo_fetches_uncached_crates_with_changed_homes_and_explicit_toolchain() -> TestResult {
-    mirror_fixture(direct_fetches)
+    repeated_mirror_fixture(direct_fetches)
 }
 
 #[test]
@@ -86,54 +108,6 @@ fn nested_cargo_uses_saved_executable_when_relative_path_is_unavailable() -> Tes
     })
 }
 
-fn mise_shim(repo: &Repo) -> TestResult {
-    let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
-        .args(["which", "cargo"])
-        .output()?;
-    assert!(output.status.success(), "{output:?}");
-    let cargo = String::from_utf8(output.stdout)?;
-    fs::create_dir(repo.root().join("native"))?;
-    let native = repo.root().join("native/cargo");
-    std::os::unix::fs::symlink(cargo.trim(), &native)?;
-    assert!(fs::symlink_metadata(&native)?.file_type().is_symlink());
-    let cargo = serde_json::to_string(&native)?;
-    let root = serde_json::to_string(&fs::canonicalize(repo.root())?)?;
-    repo.write_unstaged("mise-tools/mise.rs", &format!(r#"fn main() {{
-        let args: Vec<_> = std::env::args().collect();
-        match std::path::Path::new(&args[0]).file_stem().and_then(|name| name.to_str()) {{
-            Some("mise") if args[1..] == ["which", "cargo"] => {{
-                if !std::env::current_dir().unwrap().starts_with({root}) {{
-                    eprintln!("no Mise Cargo configured outside the project");
-                    std::process::exit(1);
-                }}
-                println!("{{}}", {cargo});
-            }},
-            Some("cargo") => std::process::exit(std::process::Command::new({cargo}).args(&args[1..]).status().unwrap().code().unwrap_or(1)),
-            _ => {{ eprintln!("invalid Mise shim name"); std::process::exit(1); }}
-        }}
-    }}"#));
-    let status = Command::new("rustc")
-        .arg(repo.root().join("mise-tools/mise.rs"))
-        .arg("-o")
-        .arg(repo.root().join("mise-tools/mise"))
-        .status()?;
-    assert!(status.success());
-    fs::create_dir(repo.root().join("mise-shims"))?;
-    std::os::unix::fs::symlink(
-        repo.root().join("mise-tools/mise"),
-        repo.root().join("mise-shims/mise"),
-    )?;
-    fs::hard_link(
-        repo.root().join("mise-tools/mise"),
-        repo.root().join("mise-shims/cargo"),
-    )?;
-    let mise = fs::metadata(repo.root().join("mise-tools/mise"))?;
-    let cargo = fs::symlink_metadata(repo.root().join("mise-shims/cargo"))?;
-    assert!(cargo.file_type().is_file());
-    assert_eq!((mise.dev(), mise.ino()), (cargo.dev(), cargo.ino()));
-    Ok(())
-}
-
 fn direct_fetches(repo: &Repo, wrapper: &Path, config: &Path) -> TestResult {
     direct_fetches_using(repo, wrapper, config, "shadow")
 }
@@ -189,8 +163,12 @@ fn direct_fetches_using(repo: &Repo, wrapper: &Path, config: &Path, proxy: &str)
 }
 
 fn child_fetches(repo: &Repo, wrapper: &Path, config: &Path) -> TestResult {
-    mise_shim(repo)?;
-    child_fetches_using(repo, wrapper, config, "mise-shims", None)
+    fs::create_dir(repo.root().join("native"))?;
+    std::os::unix::fs::symlink(
+        Path::new(&active_toolchain()?).join("bin/cargo"),
+        repo.root().join("native/cargo"),
+    )?;
+    child_fetches_using(repo, wrapper, config, "native", None)
 }
 
 fn child_projects(repo: &Repo) {
@@ -261,6 +239,11 @@ fn child_fetches_with_path(
     .collect::<Vec<_>>();
     let mut command = Command::new(wrapper);
     if let Some((home, expected)) = rustup {
+        let expected = if Path::new(expected).is_absolute() {
+            std::path::PathBuf::from(expected)
+        } else {
+            home.join("toolchains").join(expected)
+        };
         command
             .env_remove("RUSTUP_TOOLCHAIN")
             .env("RUSTUP_HOME", home)

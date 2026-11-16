@@ -8,7 +8,7 @@ use std::process::Command;
 
 use crate::io::Repo;
 
-use super::fixture::{TestResult, mirror_fixture, rustup_binary};
+use super::fixture::{TestResult, mirror_fixture, mirror_fixture_named, rustup_binary};
 
 #[test]
 fn hardlinked_rustup_cargo_fetches_uncached_crates() -> TestResult {
@@ -38,26 +38,42 @@ fn toolchain_file_selection_reaches_cargo_children_in_tmp() -> TestResult {
 
 #[test]
 fn directory_override_selection_reaches_cargo_children_in_tmp() -> TestResult {
-    mirror_fixture(|repo, wrapper, config| {
-        let home = private_toolchains(repo)?;
-        fs::create_dir_all(repo.root().join("outer"))?;
-        let output = rustup_command(repo, &home)
-            .args(["override", "set", "mirror-selected", "--path"])
-            .arg(repo.root().join("outer"))
-            .output()?;
-        assert!(output.status.success(), "{output:?}");
-        super::child_fetches_using(
-            repo,
-            wrapper,
-            config,
-            "proxy-bin",
-            Some((&home, "mirror-selected")),
-        )
-    })
+    mirror_fixture(directory_override_fetches)
+}
+
+#[test]
+fn directory_override_with_parentheses_reaches_cargo_children_in_tmp() -> TestResult {
+    mirror_fixture_named("crates-mirror (override)", directory_override_fetches)
+}
+
+fn directory_override_fetches(repo: &Repo, wrapper: &Path, config: &Path) -> TestResult {
+    let home = private_toolchains(repo)?;
+    fs::create_dir_all(repo.root().join("outer"))?;
+    let output = rustup_command(repo, &home)
+        .args(["override", "set", "mirror-selected", "--path"])
+        .arg(repo.root().join("outer"))
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    super::child_fetches_using(
+        repo,
+        wrapper,
+        config,
+        "proxy-bin",
+        Some((&home, "mirror-selected")),
+    )
 }
 
 #[test]
 fn path_toolchain_with_spaces_reaches_cargo_children_in_tmp() -> TestResult {
+    path_toolchain_fetches("custom toolchain")
+}
+
+#[test]
+fn path_toolchain_with_parentheses_reaches_cargo_children_in_tmp() -> TestResult {
+    path_toolchain_fetches("custom (selected) toolchain")
+}
+
+fn path_toolchain_fetches(name: &str) -> TestResult {
     mirror_fixture(|repo, wrapper, config| {
         let home = private_toolchains(repo)?;
         let output = rustup_command(repo, &home)
@@ -66,7 +82,7 @@ fn path_toolchain_with_spaces_reaches_cargo_children_in_tmp() -> TestResult {
         assert!(output.status.success(), "{output:?}");
         let cargo = PathBuf::from(String::from_utf8(output.stdout)?.trim());
         let toolchain = cargo.parent().and_then(Path::parent).ok_or("toolchain")?;
-        let selected = repo.root().join("custom toolchain");
+        let selected = repo.root().join(name);
         std::os::unix::fs::symlink(toolchain, &selected)?;
         repo.write_unstaged(
             "rust-toolchain.toml",
