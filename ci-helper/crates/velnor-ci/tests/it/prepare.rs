@@ -70,6 +70,7 @@ pub(crate) struct Setup {
     pub repo_cargo_config: Option<&'static str>,
     pub ignored: bool,
     pub plain: bool,
+    pub unrecorded: bool,
     pub populate: Option<Populate>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
@@ -88,6 +89,7 @@ impl Setup {
             repo_cargo_config: None,
             ignored: false,
             plain: false,
+            unrecorded: false,
             populate: None,
             release: "1.99.1",
             env: Vec::new(),
@@ -134,6 +136,13 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".gitignore"), ".cargo/\n"),
     );
     hide(setup.plain, fs::remove_dir_all(checkout.join(".git")));
+    if !setup.unrecorded {
+        fs::write(
+            checkout.join(".velnor/rust-metadata.json"),
+            "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    }
     if let Some(populate) = &setup.populate {
         populate(&checkout);
     }

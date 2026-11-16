@@ -174,3 +174,21 @@ fn config_shadows_config_toml_in_prepare() {
     assert_eq!(only_off, both);
     assert_ne!(both, only_toml);
 }
+
+#[test]
+fn prepare_fails_closed_when_the_recorded_metadata_is_missing() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.unrecorded = true;
+    setup.populate = Some(Box::new(|base| {
+        write(base, "lab/.cargo/config.toml", DEBUG);
+    }));
+    let run = prepare("prepare_fails_closed_when_the_recorded_m", &setup);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert!(
+        stderr.contains(".velnor/rust-metadata.json is missing; run velnor-gen generate"),
+        "{stderr}"
+    );
+    assert_eq!(run.outputs, "");
+    assert_eq!(run.env_file, "");
+}
