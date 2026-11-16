@@ -31,7 +31,7 @@ use super::run::accept;
 use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
 use crate::side::Side;
-use host::{LOG, PID, PLAN, runner_dir};
+use host::{LOG, PID, PLAN, POLICY, copy_policy, runner_dir};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -82,16 +82,20 @@ pub async fn start(dir: &Path) -> io::Result<Endpoint> {
 }
 
 pub async fn start_binary(dir: &Path, binary: &Path) -> io::Result<Endpoint> {
-    launch(dir, binary, None).await
+    launch(dir, binary, None, dir).await
 }
 
-pub(super) async fn start_with(dir: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
+pub(super) async fn start_with(
+    dir: &Path,
+    pairs: Option<&Pairs>,
+    repo: &Path,
+) -> io::Result<Endpoint> {
     let binary = std::env::current_exe()?;
     let Some(pairs) = pairs else {
-        return launch(dir, &binary, None).await;
+        return launch(dir, &binary, None, repo).await;
     };
     let open = async |dir: &Path| Runners::open(Environment::at(dir, DockerCli).await?).await;
-    start_pairs(dir, &binary, pairs, open, ONLINE_TIMEOUT).await
+    start_with_pairs(dir, &binary, (pairs, repo), open, ONLINE_TIMEOUT).await
 }
 
 pub async fn start_pairs<B, O>(
@@ -105,7 +109,21 @@ where
     B: Backend,
     O: AsyncFnOnce(&Path) -> io::Result<B>,
 {
-    let endpoint = launch(dir, binary, Some(pairs)).await?;
+    start_with_pairs(dir, binary, (pairs, dir), open, timeout).await
+}
+
+async fn start_with_pairs<B, O>(
+    dir: &Path,
+    binary: &Path,
+    (pairs, repo): (&Pairs, &Path),
+    open: O,
+    timeout: Duration,
+) -> io::Result<Endpoint>
+where
+    B: Backend,
+    O: AsyncFnOnce(&Path) -> io::Result<B>,
+{
+    let endpoint = launch(dir, binary, Some(pairs), repo).await?;
     let sides = [
         (Side::Trusted, pairs.trusted),
         (Side::Untrusted, pairs.untrusted),
@@ -121,7 +139,12 @@ where
     Ok(endpoint)
 }
 
-async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
+async fn launch(
+    dir: &Path,
+    binary: &Path,
+    pairs: Option<&Pairs>,
+    repo: &Path,
+) -> io::Result<Endpoint> {
     stop(dir).await?;
     let authority = authority_dir(dir);
     private_folder(&authority).await?;
@@ -129,8 +152,12 @@ async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<
     for file in [LEDGER, "address", "pid", "binary"] {
         forget(&authority.join(file)).await?;
     }
-    for file in [DECISIONS, LOG, PID, PLAN] {
+    for file in [DECISIONS, LOG, PID, PLAN, POLICY] {
         forget(&runner_dir(dir).join(file)).await?;
+    }
+    if let Some(file) = pairs.and_then(|pairs| pairs.policy.as_deref()) {
+        private_folder(&runner_dir(dir)).await?;
+        copy_policy(&runner_dir(dir), file).await?;
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
     let log = std::fs::File::create(authority.join("supervise.log"))?;
@@ -138,7 +165,7 @@ async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<
         Command::new(binary)
             .args(["supervise", "--dir"])
             .arg(dir)
-            .args(pairs.map(Pairs::arguments).unwrap_or_default())
+            .args(pairs.map(|pairs| pairs.arguments(repo)).unwrap_or_default())
             .stdin(Stdio::null())
             .stdout(log.try_clone()?)
             .stderr(log)
@@ -312,8 +339,15 @@ pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
         ));
     }
     let host_env = Environment::at(&args.dir, DockerCli).await?;
-    let authority =
-        Arc::new(Authority::open(Runners::open(env).await?, token.clone(), &dir).await?);
+    let mut opened = Authority::open(Runners::open(env).await?, token.clone(), &dir).await?;
+    if args.policy {
+        let repo = args
+            .repo
+            .clone()
+            .ok_or_else(|| io::Error::other("--policy needs --repo"))?;
+        opened = opened.hashing(repo);
+    }
+    let authority = Arc::new(opened);
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await?;
     let address = listener.local_addr()?;
     let mut terminated = signal(SignalKind::terminate())?;
@@ -333,7 +367,7 @@ pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
     };
     let counts = (args.pairs, args.fork_pairs);
     let address = address.to_string();
-    let mut child = host::spawn(&host_env, &path, &address, &token, counts).await?;
+    let mut child = host::spawn(&host_env, &path, &address, &token, counts, args.policy).await?;
     write_private(&dir.join("address"), &address).await?;
     tokio::select! {
         served = &mut served => return served,

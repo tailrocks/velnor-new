@@ -18,6 +18,7 @@ use tokio::sync::Mutex;
 
 pub use runners::Runners;
 
+use super::git::Git;
 use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
@@ -68,6 +69,7 @@ pub struct Authority<B> {
     expected: hmac::Tag,
     ledger: Mutex<Ledger>,
     minting: std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+    repo: Option<PathBuf>,
 }
 
 struct Reserved<'a> {
@@ -105,7 +107,35 @@ impl<B: Backend> Authority<B> {
             expected,
             ledger: Mutex::new(Ledger { path, entries }),
             minting: std::sync::Mutex::new(BTreeSet::new()),
+            repo: None,
         })
+    }
+
+    #[must_use]
+    pub fn hashing(mut self, repo: PathBuf) -> Self {
+        self.repo = Some(repo);
+        self
+    }
+
+    async fn workflow_sha256(&self, sha: &str, workflow: &str) -> Option<String> {
+        let repo = self.repo.clone()?;
+        if sha.is_empty() || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
+        let git = Git {
+            repo,
+            diff_limit_bytes: 0,
+            last_diff: Mutex::new(None),
+        };
+        let content = git.run(&["show", &format!("{sha}:{workflow}")]).await?;
+        let digest = ring::digest::digest(&ring::digest::SHA256, &content);
+        Some(
+            digest
+                .as_ref()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+        )
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
@@ -188,7 +218,11 @@ impl<B: Backend> Authority<B> {
             }
         }
         let verdict = admitted.as_ref().map_err(|refusal| *refusal);
-        Ok(json_response(200, &answer(side, &found, verdict)))
+        let hashed = self.workflow_sha256(&found.sha, &found.workflow).await;
+        Ok(json_response(
+            200,
+            &answer(side, &found, verdict, hashed.as_deref()),
+        ))
     }
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {

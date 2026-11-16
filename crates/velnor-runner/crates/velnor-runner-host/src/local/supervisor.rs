@@ -16,6 +16,7 @@ use super::authority::Client;
 use super::minted::MintedAgents;
 use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
+use super::policy::Policy;
 use super::remove::{labelled_agents, remove_labelled};
 use super::request::{LocalPairRequest, validate};
 
@@ -33,6 +34,7 @@ pub(super) struct Supervisor {
     pub(super) docker: Docker,
     pub(super) client: Client,
     pub(super) plan: Plan,
+    pub(super) policy: Option<Policy>,
     pub(super) decisions: PathBuf,
     pub(super) minted: MintedAgents,
     pub(super) sequence: AtomicU32,
@@ -130,10 +132,16 @@ pub async fn supervise(
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), HostError> {
     let client = Client::new(plan.authority, plan.token.clone());
+    let policy = plan
+        .policy
+        .as_deref()
+        .map(|name| Policy::load(state, name))
+        .transpose()?;
     let supervisor = Arc::new(Supervisor {
         docker,
         client,
         plan,
+        policy,
         decisions: state.join(DECISIONS_FILE),
         minted: MintedAgents::new(state),
         sequence: AtomicU32::new(0),

@@ -57,6 +57,7 @@ fn the_plan_names_the_loopback_authority_the_image_ids_and_only_sides_with_pairs
         runner_image: "sha256:aa",
         dind_image: "sha256:bb",
         sides: &sides,
+        policy: None,
     };
     let planned = plan(&input);
     assert_eq!(planned["authority"], "http://127.0.0.1:5311");
@@ -118,7 +119,13 @@ fn each_decision_reads_as_admitted_with_its_event_or_refused_with_its_reason() {
 #[test]
 fn a_pair_verdict_puts_each_job_under_its_run_and_side_and_lists_the_rest() {
     let check = Check::Pairs(read(&[ADMITTED, FORK, MALFORMED]));
-    let text = verdict("warm", &[outcome(1, true)], (100, 9.8), &check);
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &check,
+        velnor_local::authority::WARNING,
+    );
     let lines: Vec<&str> = text.lines().collect();
     let run = lines
         .iter()
@@ -147,7 +154,13 @@ fn a_pair_verdict_puts_each_job_under_its_run_and_side_and_lists_the_rest() {
 
 #[test]
 fn a_plain_verdict_says_there_is_no_job_start_check() {
-    let text = verdict("warm", &[outcome(1, true)], (100, 9.8), &Check::Plain);
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &Check::Plain,
+        velnor_local::authority::WARNING,
+    );
     assert!(
         text.contains("job-start check: none (plain containers)"),
         "{text}"
@@ -206,6 +219,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         default_branch: "main".to_owned(),
         runner: RunnerMode::Pair,
         velnor_host: Some(HOST_BINARY.into()),
+        policy: None,
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();

@@ -22,6 +22,7 @@ pub struct PlanInput<'a> {
     pub runner_image: &'a str,
     pub dind_image: &'a str,
     pub sides: &'a [(Side, String, u16)],
+    pub policy: Option<&'a str>,
 }
 
 #[must_use]
@@ -49,6 +50,7 @@ pub fn plan(input: &PlanInput<'_>) -> Value {
             "dind_memory_bytes": DIND_MEMORY_BYTES,
         },
         "sides": sides,
+        "policy": input.policy,
     })
 }
 
