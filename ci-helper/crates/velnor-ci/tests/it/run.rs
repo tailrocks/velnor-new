@@ -554,3 +554,9 @@ mod tests_run {
         assert!(output.status.success(), "{output:?}");
     }
 }
+
+#[test]
+fn the_child_gets_its_own_group_only_when_no_terminal_is_present() {
+    assert!(velnor_ci::stream::separate_group(false));
+    assert!(!velnor_ci::stream::separate_group(true));
+}

@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
+use crate::journal::schema::UNBOUND_SHAPE;
 
 use super::hold_context;
 
@@ -22,7 +23,11 @@ use inventory::{containers, current_claim, eligible, initializer, volumes};
 
 const CLAIM_SECONDS: i64 = 45;
 
-pub(super) const UNBOUND_PAIR: &str = "s.bootstrap_start_state IN ('started', 'uncertain') AND s.resources_bound = 0 AND s.jit_state = 'not_requested' AND s.publication_state = 'not_requested' AND s.delivery_state = 'not_requested' AND s.storage_cleanup_proven = 0";
+/// The single unbound-pair shape: a started/uncertain pair of two containers,
+/// or a reservation with no containers whose storage-initializer abort is absent.
+fn unbound_pair() -> String {
+    UNBOUND_SHAPE.replace("{s}", "s")
+}
 
 const ABANDON_RESERVATIONS: &str = "UPDATE capacity_reservations SET state = 'uncertain' WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR connection_id = ?2) AND state = 'reserved' AND remote_cleanup_proven = 0 AND local_cleanup_proven = 0 AND EXISTS (SELECT 1 FROM connection_intents AS i JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = capacity_reservations.id WHERE i.id = capacity_reservations.intent_id AND i.connection_id = capacity_reservations.connection_id AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.jit_requested = 0 AND {pair})";
 
@@ -133,7 +138,7 @@ impl ConnectionJournal {
             self.validate_scope(connection).await?;
             let mut rows = connection
                 .query(
-                    &UNCERTAIN_PAIRS.replace("{pair}", UNBOUND_PAIR),
+                    &UNCERTAIN_PAIRS.replace("{pair}", &unbound_pair()),
                     [connection_id.as_str()],
                 )
                 .await
@@ -342,7 +347,7 @@ async fn abandon_unbound_pairs(
     for template in [ABANDON_RESERVATIONS, ABANDON_INTENTS] {
         connection
             .execute(
-                &template.replace("{pair}", UNBOUND_PAIR),
+                &template.replace("{pair}", &unbound_pair()),
                 (reservation_id, connection_id),
             )
             .await

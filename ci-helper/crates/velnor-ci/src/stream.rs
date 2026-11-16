@@ -55,3 +55,8 @@ pub fn pump_counted<L: Write>(
         tests_run: tap.finish(),
     }
 }
+
+#[must_use]
+pub const fn separate_group(has_terminal: bool) -> bool {
+    !has_terminal
+}

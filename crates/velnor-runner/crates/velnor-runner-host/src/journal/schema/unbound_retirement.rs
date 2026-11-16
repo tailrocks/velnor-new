@@ -11,7 +11,11 @@ const PROGRESS: &str = "CREATE TABLE capacity_reservation_unbound_retirement_pro
 
 const RETIREMENTS: &str = "CREATE TABLE physical_attempt_unbound_retirements (lineage_id INTEGER NOT NULL, generation INTEGER NOT NULL CHECK (generation > 0), reservation_id INTEGER NOT NULL UNIQUE REFERENCES capacity_reservation_unbound_retirement_claims(reservation_id), proof_digest TEXT NOT NULL CHECK (length(proof_digest) = 64 AND proof_digest NOT GLOB '*[^0-9a-f]*'), settlement_digest TEXT NOT NULL CHECK (length(settlement_digest) = 64 AND settlement_digest NOT GLOB '*[^0-9a-f]*'), created_at INTEGER NOT NULL CHECK (created_at >= 0), PRIMARY KEY (lineage_id, generation), CHECK (proof_digest = settlement_digest), FOREIGN KEY (lineage_id, generation, reservation_id) REFERENCES physical_attempts(lineage_id, generation, reservation_id))";
 
-const UNBOUND_SHAPE: &str = "state.bootstrap_start_state IN ('started', 'uncertain') AND state.resources_bound = 0 AND state.jit_state = 'not_requested' AND state.publication_state = 'not_requested' AND state.delivery_state = 'not_requested' AND state.storage_cleanup_proven = 0";
+const SHAPE_V43: &str = "state.bootstrap_start_state IN ('started', 'uncertain') AND state.resources_bound = 0 AND state.jit_state = 'not_requested' AND state.publication_state = 'not_requested' AND state.delivery_state = 'not_requested' AND state.storage_cleanup_proven = 0";
+
+const SHAPE_V44: &str = "{s}.resources_bound = 0 AND {s}.jit_state = 'not_requested' AND {s}.publication_state = 'not_requested' AND {s}.delivery_state = 'not_requested' AND {s}.storage_cleanup_proven = 0 AND (({s}.bootstrap_start_state IN ('started', 'uncertain') AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2) OR ({s}.bootstrap_start_state = 'not_requested' AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 0 AND EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = {s}.reservation_id AND init.abort_state = 'absent')))";
+
+pub(in crate::journal) const UNBOUND_SHAPE: &str = "{s}.resources_bound = 0 AND {s}.jit_state = 'not_requested' AND {s}.publication_state = 'not_requested' AND {s}.delivery_state = 'not_requested' AND {s}.storage_cleanup_proven = 0 AND (({s}.bootstrap_start_state IN ('started', 'uncertain') AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2) OR ({s}.bootstrap_start_state = 'not_requested' AND ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 0 OR ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id AND pair_container.create_state = 'unclaimed' AND pair_container.start_state = 'not_requested' AND pair_container.container_id IS NULL) = 2)) AND EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = {s}.reservation_id AND init.abort_state = 'absent')))";
 
 const CLAIM_INSERT_GUARD: &str = "CREATE TRIGGER unbound_retirement_claim_insert_guard BEFORE INSERT ON capacity_reservation_unbound_retirement_claims WHEN NOT EXISTS (SELECT 1 FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id AND intent.connection_id = reservation.connection_id JOIN capacity_reservation_provisioning AS provisioning ON provisioning.reservation_id = reservation.id AND provisioning.operation_id = intent.id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id WHERE reservation.id = NEW.reservation_id AND reservation.connection_id = NEW.connection_id AND intent.id = NEW.operation_id AND provisioning.engine_id = NEW.engine_id AND provisioning.docker_root_digest = NEW.docker_root_digest AND NEW.claim_generation = 1 AND reservation.state = 'uncertain' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.state = 'uncertain' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND {shape}) BEGIN SELECT RAISE(ABORT, 'invalid unbound retirement claim'); END";
 
@@ -22,6 +26,12 @@ const PROGRESS_INSERT_GUARD: &str = "CREATE TRIGGER unbound_retirement_progress_
 const RETIREMENT_INSERT_GUARD: &str = "CREATE TRIGGER physical_attempt_unbound_retirement_insert_guard BEFORE INSERT ON physical_attempt_unbound_retirements WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_current AS cur JOIN capacity_reservation_unbound_retirement_claims AS claim ON claim.reservation_id = cur.reservation_id AND claim.operation_id = cur.intent_id JOIN capacity_reservations AS reservation ON reservation.id = cur.reservation_id AND reservation.intent_id = cur.intent_id JOIN connection_intents AS intent ON intent.id = cur.intent_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = cur.reservation_id WHERE cur.lineage_id = NEW.lineage_id AND cur.generation = NEW.generation AND cur.reservation_id = NEW.reservation_id AND claim.lease_until > CAST(strftime('%s', 'now') AS INTEGER) AND reservation.state = 'uncertain' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.state = 'uncertain' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND {shape} AND (SELECT COUNT(*) FROM capacity_reservation_unbound_retirement_progress AS progress WHERE progress.reservation_id = NEW.reservation_id) = 2 AND NOT EXISTS (SELECT 1 FROM capacity_reservation_networks AS network WHERE network.reservation_id = NEW.reservation_id AND network.remove_state != 'removed')) BEGIN SELECT RAISE(ABORT, 'unbound retirement is not proven'); END";
 
 const BIND_FENCE: &str = "CREATE TRIGGER unbound_retirement_bind_fence BEFORE UPDATE OF resources_bound ON capacity_reservation_provisioning_state WHEN NEW.resources_bound = 1 AND EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_claims AS claim WHERE claim.reservation_id = NEW.reservation_id) BEGIN SELECT RAISE(ABORT, 'A retirement claim prevents this operation.'); END";
+
+const GUARDS_WITH_SHAPE: [&str; 3] = [
+    "unbound_retirement_claim_insert_guard",
+    "unbound_retirement_progress_insert_guard",
+    "physical_attempt_unbound_retirement_insert_guard",
+];
 
 const IMMUTABLE: [&str; 5] = [
     "CREATE TRIGGER unbound_retirement_claim_no_delete BEFORE DELETE ON capacity_reservation_unbound_retirement_claims BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
@@ -50,8 +60,9 @@ UNION ALL
 SELECT lineage_id, generation, reservation_id, 'unbound_retired' AS outcome, proof_digest, settlement_digest, created_at
 FROM physical_attempt_unbound_retirements";
 
-fn objects() -> Vec<(&'static str, String, String)> {
-    let shaped = |sql: &str| sql.replace("{shape}", UNBOUND_SHAPE);
+fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
+    let shape = shape.replace("{s}", "state");
+    let shaped = |sql: &str| sql.replace("{shape}", &shape);
     let mut objects = TABLES
         .into_iter()
         .map(|(name, sql)| ("table", name.to_owned(), sql.to_owned()))
@@ -94,7 +105,7 @@ pub(super) async fn migrate_v42_to_v43(conn: &turso::Connection) -> Result<(), H
     conn.execute("DROP VIEW physical_attempt_terminal_proofs", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, _, sql) in objects() {
+    for (_, _, sql) in objects(SHAPE_V43) {
         conn.execute(&sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
@@ -105,6 +116,41 @@ pub(super) async fn migrate_v42_to_v43(conn: &turso::Connection) -> Result<(), H
     super::validate_persisted_schema_v43(conn).await
 }
 
+pub(super) async fn migrate_v43_to_v44(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v43(conn).await?;
+    replace_shape_guards(conn, SHAPE_V44).await?;
+    conn.execute("PRAGMA user_version = 44", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v44(conn).await
+}
+
+pub(super) async fn migrate_v44_to_v45(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v44(conn).await?;
+    replace_shape_guards(conn, UNBOUND_SHAPE).await?;
+    conn.execute("PRAGMA user_version = 45", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v45(conn).await
+}
+
+async fn replace_shape_guards(conn: &turso::Connection, shape: &str) -> Result<(), HostError> {
+    let current = objects(shape);
+    for name in GUARDS_WITH_SHAPE {
+        conn.execute(&format!("DROP TRIGGER {name}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let (_, _, sql) = current
+            .iter()
+            .find(|(_, candidate, _)| candidate == name)
+            .ok_or(HostError::Journal)?;
+        conn.execute(sql, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
 pub(super) async fn terminal_view_sql(conn: &turso::Connection) -> Result<&'static str, HostError> {
     if super::journal_version(conn).await? >= VERSION {
         Ok(TERMINAL_PROOFS_VIEW)
@@ -113,8 +159,23 @@ pub(super) async fn terminal_view_sql(conn: &turso::Connection) -> Result<&'stat
     }
 }
 
+pub(super) async fn validate_v43(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_objects(conn, objects(SHAPE_V43)).await
+}
+
+pub(super) async fn validate_v44(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_objects(conn, objects(SHAPE_V44)).await
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    for (kind, name, expected) in objects() {
+    validate_objects(conn, objects(UNBOUND_SHAPE)).await
+}
+
+async fn validate_objects(
+    conn: &turso::Connection,
+    objects: Vec<(&'static str, String, String)>,
+) -> Result<(), HostError> {
+    for (kind, name, expected) in objects {
         let mut rows = conn
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type = ?1 AND name = ?2",
