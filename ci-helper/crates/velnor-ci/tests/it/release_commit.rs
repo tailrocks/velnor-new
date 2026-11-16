@@ -32,7 +32,10 @@ fn reference(kind: &str, sha: &str) -> String {
 }
 
 fn merge_of(fake: &mut FakeGitHub, parents: &[&str]) {
-    let list: Vec<String> = parents.iter().map(|p| format!(r#"{{"sha":"{p}"}}"#)).collect();
+    let list: Vec<String> = parents
+        .iter()
+        .map(|p| format!(r#"{{"sha":"{p}"}}"#))
+        .collect();
     fake.respond(
         commit_path(&repo(), MERGE),
         &format!(r#"{{"parents":[{}]}}"#, list.join(",")),

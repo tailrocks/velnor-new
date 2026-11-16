@@ -51,15 +51,11 @@ pub fn tagged_commits(
         }
         let commit = tagged_commit(github, repo, tag)?;
         if commit != verified {
-            let parent = match &second_parent {
-                Some(known) => known.clone(),
-                None => {
-                    let fetched = merge_second_parent(github, repo, &verified)?;
-                    second_parent = Some(fetched.clone());
-                    fetched
-                }
-            };
-            if parent.as_deref() != Some(commit.as_str()) {
+            if second_parent.is_none() {
+                second_parent = Some(merge_second_parent(github, repo, &verified)?);
+            }
+            let parent = second_parent.as_ref().and_then(|known| known.as_deref());
+            if parent != Some(commit.as_str()) {
                 return Err(CiError::new(format!(
                     "tag {tag} is on {commit}, which is neither the verified commit {verified} nor the release pull request head merged into it"
                 )));
