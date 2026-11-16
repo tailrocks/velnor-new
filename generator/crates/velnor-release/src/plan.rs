@@ -252,10 +252,11 @@ fn publish_budget(config: &RootConfig, inherited: usize) -> Result<u64, ReleaseE
         .count()
         + inherited;
     let budget = each.saturating_mul(publishing.max(1) as u64);
-    if TAG_JOB_BASE_MINUTES.saturating_add(budget) > MAX_JOB_MINUTES {
+    let total = u64::from(TAG_JOB_BASE_MINUTES).saturating_add(budget);
+    if total > u64::from(MAX_JOB_MINUTES) {
         return Err(ReleaseError::PublishTimeoutTooLong {
             root: config.root.clone(),
-            minutes: TAG_JOB_BASE_MINUTES.saturating_add(budget),
+            minutes: total,
         });
     }
     Ok(budget)

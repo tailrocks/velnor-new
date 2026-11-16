@@ -33,7 +33,7 @@ const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 const NEWEST_OUTPUT: &str = "steps.newest.outputs.newest == 'true'";
 pub(crate) const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
-const RELEASE_TIMEOUT_MINUTES: u16 = TAG_JOB_BASE_MINUTES as u16;
+const RELEASE_TIMEOUT_MINUTES: u16 = TAG_JOB_BASE_MINUTES;
 
 pub fn render_release(
     plan: &ReleasePlan,
@@ -262,8 +262,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease, index: usize, root: &RootPlan
                 )
             })
             .collect(),
-        timeout_minutes: u16::try_from(TAG_JOB_BASE_MINUTES + root.publish_budget_minutes)
-            .unwrap_or(u16::MAX),
+        timeout_minutes: u16::try_from(
+            u64::from(TAG_JOB_BASE_MINUTES) + root.publish_budget_minutes,
+        )
+        .unwrap_or(u16::MAX),
         steps,
         ..after_the_gate(&tag_id(index))
     }

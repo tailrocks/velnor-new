@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub const TAG_JOB_BASE_MINUTES: u64 = 30;
-pub const MAX_JOB_MINUTES: u64 = 360;
+pub const TAG_JOB_BASE_MINUTES: u16 = 30;
+pub const MAX_JOB_MINUTES: u16 = 360;
 
 pub(crate) fn seconds(text: &str) -> Option<u64> {
     let mut total = 0u64;

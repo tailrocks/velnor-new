@@ -139,15 +139,13 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
             "{id}"
         );
         let checkout = &steps(build)[0];
+        let refs = format!(
+            "refs/tags/${{{{ needs.{}.outputs.{package} }}}}",
+            tag_of(package)
+        );
         assert_eq!(
             checkout.at(&["with", "ref"]).and_then(Node::text),
-            Some(
-                format!(
-                    "refs/tags/${{{{ needs.{}.outputs.{package} }}}}",
-                    tag_of(package)
-                )
-                .as_str()
-            ),
+            Some(refs.as_str()),
             "{id}"
         );
         assert_eq!(
