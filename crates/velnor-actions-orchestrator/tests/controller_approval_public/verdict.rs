@@ -8,8 +8,8 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::fixture;
 
-const ACTIVE_APPROVALS: &str = include_str!("../../../../.velnor/controller-approvals.json");
-const ACTIVE_LOCK: &str = include_str!("../../../../.velnor/generator.lock");
+const ACTIVE_APPROVALS: &str = include_str!("../../../test_support/controller_approval_078.json");
+const ACTIVE_LOCK: &str = include_str!("../../../test_support/generator_078.lock");
 
 fn job_block(workflow: &str, job: &str) -> Result<String, Box<dyn Error>> {
     let parsed: serde_json::Value = serde_saphyr::from_str(workflow)?;
@@ -21,7 +21,8 @@ fn job_block(workflow: &str, job: &str) -> Result<String, Box<dyn Error>> {
 }
 
 #[test]
-fn required_verdict_controller_is_the_active_approved_release() -> Result<(), Box<dyn Error>> {
+fn required_verdict_controller_is_the_active_release_of_the_fixed_078_pair()
+-> Result<(), Box<dyn Error>> {
     let temp = fixture(Some(ACTIVE_APPROVALS), ACTIVE_LOCK)?;
     let tree = render_staged_tree(&prepare(temp.path())?)?;
     let workflow = tree

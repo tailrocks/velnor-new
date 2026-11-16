@@ -158,7 +158,7 @@ pub enum ReleaseCommand {
     )]
     Record(RecordArgs),
     #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
     #[command(
@@ -192,6 +192,12 @@ pub struct CheckConfigArgs {
         help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
     )]
     pub manifests: bool,
+    #[arg(
+        long,
+        requires = "manifests",
+        help = "With --manifests, also refuse a package whose current version would give a tag git cannot create; only for the job that tags the version already committed"
+    )]
+    pub released_versions: bool,
 }
 
 impl CheckConfigArgs {
@@ -234,7 +240,13 @@ pub struct PublishArgs {
     )]
     pub dir: PathBuf,
     #[arg(
-        required = true,
+        long,
+        conflicts_with = "files",
+        help = "Publish a release that must hold no asset at all; no file or SHA256SUMS is read"
+    )]
+    pub no_files: bool,
+    #[arg(
+        required_unless_present = "no_files",
         value_parser = file_name,
         help = "Exact names of the files to publish besides SHA256SUMS"
     )]

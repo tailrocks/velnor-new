@@ -21,6 +21,7 @@ pub use inputs::state_producer_job_ids;
 pub use inputs::{
     CargoWorkspaceFact, GeneratedSourceFact, GeneratedWorkflowKind, GradleRootFact, LogicalJobFact,
     LogicalJobSource, NativeTaskFact, RustTaskFact, SuitePhase, TofuTaskFact, WorkspaceFormatFact,
+    WorkspacePackageFact,
 };
 pub use task_sources::WorkflowSourceFact;
 pub use tools::catalog_tool_pins;

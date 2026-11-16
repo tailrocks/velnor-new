@@ -62,7 +62,9 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
+    HelperTarget(RepoPath),
     CargoCredentialProvider(String),
+    TargetDirOutside(String),
 }
 
 impl DetectError {
@@ -85,6 +87,10 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
+            Self::HelperTarget(path) => write!(
+                f,
+                "helper.path is {path}, whose cargo configuration sets build.target; the helper is built once and run by every job on its own runner, so it must be built for the runner host: remove build.target for it"
+            ),
             _ => Ok(()),
         }
     }
@@ -100,6 +106,10 @@ impl Reason {
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
+            ),
+            Self::TargetDirOutside(value) => write!(
+                f,
+                "build.target-dir is {value:?}, which is not a folder inside the repository below its root; the target cache can only save a folder of the checkout, so name one"
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -174,10 +184,11 @@ impl fmt::Display for Reason {
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) => self.fmt_setup(f),
+            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperTarget(_) => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
+            | Self::TargetDirOutside(_)
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => {
                 write!(

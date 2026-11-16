@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod cache_compat;
+mod cache_key_defects;
 mod cache_keys;
 mod cargo_lock;
 mod classify;
@@ -46,9 +48,13 @@ mod release_workflow;
 mod release_yml;
 mod release_yml_binaries;
 mod release_yml_cargo;
+mod release_yml_finalize;
 mod release_yml_isolation;
+mod release_yml_keys;
+mod release_yml_limits;
 mod release_yml_quoting;
 mod release_yml_security;
+mod render_empty_key;
 mod repo_sample;
 mod restored_term;
 mod rule_config;
@@ -58,6 +64,7 @@ mod ruleset;
 mod select;
 mod setup_action;
 mod setup_action_cache;
+mod setup_action_owner;
 mod setup_action_swap;
 mod setup_action_tool_cache;
 mod tool_pins;

@@ -36,7 +36,11 @@ fn ruleset_on_the_golden_prints_the_recorded_json() -> TestResult {
 
 #[test]
 fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name() -> TestResult {
-    let trees: serde_json::Value = serde_json::from_str(&golden()?)?;
+    let trees: serde_json::Value = golden()?
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<serde_json::Value>, _>>()?
+        .into();
     assert_eq!(trees.as_array().map(Vec::len), Some(2));
     let tree = &trees[0];
     assert_eq!(tree["name"], "release-tags");
@@ -67,6 +71,22 @@ fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name(
     );
     assert_eq!(immutable["bypass_actors"], serde_json::json!([]));
     assert_eq!(immutable["conditions"], tree["conditions"]);
+    Ok(())
+}
+
+#[test]
+fn ruleset_prints_one_request_body_per_line() -> TestResult {
+    let json = golden()?;
+    let lines: Vec<&str> = json.lines().collect();
+    assert_eq!(lines.len(), 2);
+    for line in lines {
+        let body: serde_json::Value = serde_json::from_str(line)?;
+        assert!(body.is_object(), "{line}");
+        assert!(
+            body["name"].is_string() && body["rules"].is_array(),
+            "{line}"
+        );
+    }
     Ok(())
 }
 
@@ -106,10 +126,73 @@ fn ruleset_refuses_a_published_package_that_names_another_registry() -> TestResu
 }
 
 #[test]
+fn ruleset_does_not_budget_a_publish_timeout_because_it_publishes_nothing() -> TestResult {
+    let root = Root {
+        publishes: true,
+        ..APP
+    };
+    let mut view = release_view(&[root], Some(""))?;
+    let text = String::from_utf8(
+        view.files
+            .get(&RepoPath::new("release-plz.toml")?)
+            .ok_or("no release-plz.toml")?
+            .clone(),
+    )?
+    .replace("publish_timeout = \"5m\"", "publish_timeout = \"26m\"");
+    view.files
+        .insert(RepoPath::new("release-plz.toml")?, text.into_bytes());
+    assert!(release_ruleset(&view).is_ok());
+    Ok(())
+}
+
+#[test]
 fn the_release_ruleset_command_parses() -> TestResult {
     let cli = parse_cli(["velnor-gen", "release", "ruleset"])?;
     assert_eq!(cli.command, Cmd::Release(ReleaseCommand::Ruleset));
     assert!(parse_cli(["velnor-gen", "release"]).is_err());
+    Ok(())
+}
+
+fn help_one_liner() -> Result<String, Box<dyn Error>> {
+    let help = parse_cli(["velnor-gen", "release", "ruleset", "--help"])
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    let line = help
+        .split("create each with one request: ")
+        .nth(1)
+        .and_then(|rest| rest.split("; then").next())
+        .map(|rest| rest.split_whitespace().collect::<Vec<_>>().join(" "))
+        .ok_or("the help has no one-liner")?;
+    Ok(line.replace("<owner>/<repo>", "o/r"))
+}
+
+#[test]
+fn the_help_one_liner_stops_at_the_first_failed_post() -> TestResult {
+    let line = help_one_liner()?;
+    let dir = std::env::temp_dir().join(format!("velnor-help-{}", std::process::id()));
+    fs::create_dir_all(&dir)?;
+    for (name, body) in [
+        ("velnor-gen", "#!/bin/sh\nprintf '%s\\n' one two\n"),
+        (
+            "gh",
+            "#!/bin/sh\ncat > /dev/null\necho x >> \"$CALLS\"\n[ \"$(wc -l < \"$CALLS\")\" -gt 1 ]\n",
+        ),
+    ] {
+        let path = dir.join(name);
+        fs::write(&path, body)?;
+        fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))?;
+    }
+    let calls = dir.join("calls");
+    let status = Command::new("/bin/sh")
+        .args(["-c", &line])
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+        .env("CALLS", &calls)
+        .status()?;
+    let posts = fs::read_to_string(&calls)?.lines().count();
+    fs::remove_dir_all(&dir)?;
+    assert_eq!(status.code(), Some(1), "{line}");
+    assert_eq!(posts, 1, "{line}");
     Ok(())
 }
 

@@ -45,6 +45,14 @@ pub enum Command {
     )]
     Build(BuildArgs),
     #[command(
+        about = "Check Docker, the images and velnor-host with local mode; print ok or miss per part with the fix, and exit 1 on any miss"
+    )]
+    Doctor(DoctorArgs),
+    #[command(
+        about = "Show the mode, the authority, the ledger size, each pair and the last refusal of one state directory"
+    )]
+    Status(DownArgs),
+    #[command(
         hide = true,
         about = "Register a throwaway ephemeral runner at runner.server and write its configuration as a JIT file"
     )]
@@ -85,6 +93,15 @@ pub struct BuildArgs {
         help = "Repository root that holds images/ and .velnor/runner.lock"
     )]
     pub root: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct DoctorArgs {
+    #[arg(
+        long,
+        help = "velnor-host to check instead of the one built in the checkout that holds this executable"
+    )]
+    pub velnor_host: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -144,10 +161,9 @@ pub struct EnvironmentArgs {
     pub runner: RunnerMode,
     #[arg(
         long,
-        default_value = "crates/velnor-runner/target/release/velnor-host",
-        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it"
+        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
     )]
-    pub velnor_host: PathBuf,
+    pub velnor_host: Option<PathBuf>,
 }
 
 impl EnvironmentArgs {

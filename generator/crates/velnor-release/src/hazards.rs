@@ -67,6 +67,13 @@ fn names_other_default_registry(document: &Value) -> bool {
         .is_some_and(|default| default.as_str() != Some("crates-io"))
 }
 
+fn offline(document: &Value) -> bool {
+    document
+        .get("net")
+        .and_then(|net| net.get("offline"))
+        .is_some_and(|offline| offline.as_bool() != Some(false))
+}
+
 fn is_builtin(value: &Value) -> bool {
     match value {
         Value::String(name) => name == BUILTIN_PROVIDER,
@@ -75,18 +82,28 @@ fn is_builtin(value: &Value) -> bool {
     }
 }
 
+const TOML_CONFIG_SUFFIX: &str = ".cargo/config.toml";
+
+pub fn shadowed_by_extensionless_config(file: &str, exists: impl Fn(&str) -> bool) -> bool {
+    file.strip_suffix(".toml")
+        .filter(|_| file.ends_with(TOML_CONFIG_SUFFIX))
+        .is_some_and(exists)
+}
+
 pub fn refuse_cargo_config(
     file: &str,
     text: &str,
     publishes_to_crates_io: bool,
+    shadowed: bool,
 ) -> Result<(), String> {
-    cargo_config(file, text, publishes_to_crates_io).map_err(|error| error.to_string())
+    cargo_config(file, text, publishes_to_crates_io, shadowed).map_err(|error| error.to_string())
 }
 
 pub(crate) fn cargo_config(
     file: &str,
     text: &str,
     publishes_to_crates_io: bool,
+    shadowed: bool,
 ) -> Result<(), ReleaseError> {
     let document = text
         .parse::<toml::Table>()
@@ -125,6 +142,11 @@ pub(crate) fn cargo_config(
             file: file.to_owned(),
         });
     }
+    if publishes_to_crates_io && !shadowed && offline(&document) {
+        return Err(ReleaseError::CargoOffline {
+            file: file.to_owned(),
+        });
+    }
     if let Some(key) = unknown_key(&document) {
         return Err(ReleaseError::CargoConfigKeyNotAllowed {
             file: file.to_owned(),
@@ -134,7 +156,62 @@ pub(crate) fn cargo_config(
     Ok(())
 }
 
+fn names_nightly(text: &str) -> bool {
+    let channel = match text.parse::<toml::Table>() {
+        Ok(document) => document
+            .get("toolchain")
+            .and_then(Value::as_table)
+            .and_then(|toolchain| toolchain.get("channel"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        Err(_) => Some(text.trim().to_owned()),
+    };
+    channel.is_some_and(|channel| channel.starts_with("nightly"))
+}
+
+const STABILIZED_CARGO_FEATURES: [&str; 7] = [
+    "edition2024",
+    "workspace-inheritance",
+    "named-profiles",
+    "strip",
+    "profile-overrides",
+    "rename-dependency",
+    "resolver",
+];
+
+fn needs_nightly_features(document: &toml::Table) -> bool {
+    match document.get("cargo-features") {
+        None => false,
+        Some(Value::Array(features)) => features.iter().any(|feature| {
+            !feature
+                .as_str()
+                .is_some_and(|name| STABILIZED_CARGO_FEATURES.contains(&name))
+        }),
+        Some(_) => true,
+    }
+}
+
+pub(crate) fn nightly_manifest(file: &str, text: &str) -> Result<(), ReleaseError> {
+    let nightly = text
+        .parse::<toml::Table>()
+        .is_ok_and(|document| needs_nightly_features(&document));
+    if nightly {
+        Err(ReleaseError::NightlyOnly {
+            file: file.to_owned(),
+            what: "cargo-features",
+        })
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn toolchain_path(file: &str, text: &str) -> Result<(), ReleaseError> {
+    if names_nightly(text) {
+        return Err(ReleaseError::NightlyOnly {
+            file: file.to_owned(),
+            what: "a nightly toolchain",
+        });
+    }
     let names_a_path = match text.parse::<toml::Table>() {
         Ok(document) => document
             .get("toolchain")

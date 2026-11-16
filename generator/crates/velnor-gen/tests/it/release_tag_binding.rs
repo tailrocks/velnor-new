@@ -57,13 +57,20 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
 #[test]
 fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_token() -> TestResult
 {
-    let found = refuse_steps("0.1.80")?;
+    let found = refuse_steps("0.1.81")?;
     assert_eq!(found.len(), 2);
-    for (_, step) in found {
+    for (id, step) in found {
+        let released = if id == "tag" {
+            " --released-versions"
+        } else {
+            ""
+        };
         assert_eq!(
             step,
             [
-                "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
+                &format!(
+                    "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --repo \"$REPOSITORY\" --manifests{released}"
+                ),
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
                 "CARGO_BUILD_RUSTC_WRAPPER=",
@@ -80,14 +87,32 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 }
 
 #[test]
-fn a_helper_that_predates_the_flag_is_never_given_it() -> TestResult {
+fn helper_0_1_80_gets_the_tag_patterns_but_not_released_versions() -> TestResult {
+    let found = refuse_steps("0.1.80")?;
+    assert_eq!(found.len(), 2);
+    for (_, step) in found {
+        assert!(
+            step[0].ends_with("--repo \"$REPOSITORY\" --manifests"),
+            "{}",
+            step[0]
+        );
+        assert!(!step[0].contains("--released-versions"));
+    }
+    Ok(())
+}
+
+#[test]
+fn a_helper_that_predates_the_release_checks_is_refused_with_the_version_to_pin() -> TestResult {
     for version in ["0.1.79", "0.1.0"] {
-        for (_, step) in refuse_steps(version)? {
-            assert_eq!(
-                step,
-                ["velnor-ci release check-config release-plz.toml tools/release-plz.toml"]
-            );
-        }
+        let error = refuse_steps(version)
+            .err()
+            .ok_or("accepted an old helper")?;
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci 0.1.80 or later with `velnor-gen pin-helper 0.1.80`"
+            )
+        );
     }
     Ok(())
 }

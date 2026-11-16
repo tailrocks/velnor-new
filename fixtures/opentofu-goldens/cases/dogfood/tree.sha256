@@ -1,7 +1,7 @@
 - fac7d1576a4fcdd8bd31153353e9eb2514cfc88928b9e6107795e4306d81dcf9  ./.github/AGENTS.md
 - 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
 - 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
-- 1304cfdf19898bfc7aff7a5281e4a30170e1daab4b74b4d69373a2e4e47b0d22  ./.github/actions/declared-task-0/action.yml
+- 35558f11b047b87538bd77d7a3944aaad90de5483a8914b840f401f16756d8b4  ./.github/actions/declared-task-0/action.yml
 - 7de19320afdabf584eb186e4468d54e3ae04ffc1e2a0934501220d8f73843eed  ./.github/actions/generator-release-build-linux/action.yml
 - 64bfe709c20e3b68df513e7f924e2aaa7fc16073623246e4a82a02f81e87c257  ./.github/actions/generator-release-build-macos-intel/action.yml
 - b352ac54a73075735550c2fc2dbaa79bddfe2d6eeb84f45fd6f735f44e391ffb  ./.github/actions/generator-release-build-macos/action.yml
@@ -20,10 +20,10 @@
 - 85fe78f59acce8269111acd36dd3a5442a23e0fbe264819ed51c75f40f9e2971  ./.github/dco.yml
 - 6afa8c8379923032675e19205a0de81d46052af720bd92efc2b47f86e9218f7d  ./.github/jactionlint.yaml
 - 96536aaddf245c41c4c1956d9b468d6415e9f558ede684003418187368136678  ./.github/scripts/velnor-tools-cache-identity.sh
-- b2439f289667ebc0b89a2a44b5a0b46362c7c3c57505f2a2b1e8851e2a8813c7  ./.github/velnor/producer-executions-v1.json
-- 0b5ccebd29c94d7736b4563c8654cd291a4a6941c3f6f11a22c30f936f9650f3  ./.github/velnor/task-execution-manifest-v1.json
+- 3d8db45f2be7df5eb79d9ed7cf7f0ca6e5240d7efe4a0f95fbca19a65d8e502b  ./.github/velnor/producer-executions-v1.json
+- 5855f943bd89e4052491381f75c3d33a5a9b75075fbf2ddf53bf860fba201ed6  ./.github/velnor/task-execution-manifest-v1.json
 - 8159f6da4e8dacf040c336704550a0c6e56f7091b60e9913b887cf8aeb301a64  ./.github/workflows/cache-prune.yml
-- d2cef4989d2f00a68c7e0b1ea405b8fa971f6ae4c473ca7f20eecd946440fd70  ./.github/workflows/ci.yml
+- 62275842ff84587d782f7bbcce90dab24ad21ac5d5859bbbc3bef43a99d93c60  ./.github/workflows/ci.yml
 - 169affc84d343f4e5e6f06933614f312afa200e08ac72af09063ddaa4cf5df3a  ./.github/workflows/freshness.yml
 - a02d900b282d0bba32469f1e0d6d72bfbe22958c1740e71aab2fe7f8846aba2a  ./.github/workflows/homebrew-adoption.yml
 - 673a052fb9c8e74fbcb57194bb3e116569c17082e2ac2ceb329defee581817fa  ./.github/workflows/job-image-candidate.yml
@@ -32,9 +32,9 @@
 - 0385d8f04707390694597f5636728dd3f7e49a05e79e70727f32cc7158a9fe76  ./.github/workflows/product-release-images.yml
 - 1af8f975e962729b48e793ac29bcabd2fc2a2bfad47034b1ba7e3a16b7a018c0  ./.github/workflows/product-release.yml
 - ee35331b7eeefaf1ef3247546c80d58df5571f5a1fa7171120b907f5d90c5451  ./.github/workflows/qualification.yml
-- a62e6fbd51e0367c8e20b75e9cca908d14d0a2f8334b332c7250f63abd49d934  ./.github/workflows/release-rust-ci-tools.yml
+- 28c2c0cc4dccb5c8bbff40807e9158e9e4eb4fc354ffb39e406101b81690c01d  ./.github/workflows/release-rust-ci-tools.yml
 - a4bd0eed062eda89a30d33dd7619800786b98392de6b8c59764dcf699e4fc26e  ./.github/workflows/source-preview-mac-proof.yml
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./.github/workflows/source-preview-runtime.yml
-- ec6be34bdf72ef8f5b3a2014a6eadf47b0b6e4e5bfcc29009ce200b013e12b44  ./.github/workflows/source-qualification.yml
-- 35ec54765901a43184f12378d80e529009c862832e8ece2b9fac0b4de5d0dfc3  ./.github/workflows/state-seal.yml
+- 961f18a57f452a450629678210e2b5b090b5920419546dd446f0d52f04829d78  ./.github/workflows/source-qualification.yml
+- 89b47832ccf61f655c6870fcea3dd58ccceb5908cf2fc48ea452d0174d08e1bd  ./.github/workflows/state-seal.yml

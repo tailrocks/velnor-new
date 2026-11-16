@@ -50,9 +50,27 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-FILES="$(find generator/samples -path '*/expected/*' \( -name '*.yml' -o -name '*.yaml' \) | sort)"
-test -n "$FILES"
-echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=
+# Each sample is linted as its own repository: jactionlint resolves the
+# workflow_run names against the git root's workflows, so inside this
+# repository it would check a sample against Velnor's own workflows. The
+# sample's hand-written workflows (view/) sit beside the generated ones.
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+CHECKED=0
+for EXPECTED in generator/samples/*/expected; do
+  FILES="$(cd "$EXPECTED" && find . \( -name '*.yml' -o -name '*.yaml' \) | sed 's|^\./||' | sort)"
+  test -n "$FILES" || continue
+  SAMPLE="$WORK/$(basename "$(dirname "$EXPECTED")")"
+  mkdir "$SAMPLE"
+  if test -d "$(dirname "$EXPECTED")/view/.github"; then
+    cp -R "$(dirname "$EXPECTED")/view/.github" "$SAMPLE/.github"
+  fi
+  cp -R "$EXPECTED/." "$SAMPLE"
+  git -C "$SAMPLE" init -q
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  CHECKED=$((CHECKED + 1))
+done
+test "$CHECKED" -gt 0
 '''
 
 [tasks.test-maintenance-helpers]

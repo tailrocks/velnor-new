@@ -29,6 +29,8 @@ pub(super) struct FakeRunners {
     pub(super) down: Mutex<Vec<Side>>,
     pub(super) stubborn: bool,
     pub(super) mint_fails: bool,
+    pub(super) mint_stalls: bool,
+    pub(super) minted: Mutex<u32>,
 }
 
 impl FakeRunners {
@@ -120,23 +122,38 @@ impl Backend for &FakeRunners {
         std::future::ready(Ok(()))
     }
 
-    fn mint(&self, side: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
-        if self.mint_fails {
-            return std::future::ready(Err(MintError {
-                name: "velnor-x-jit-1".to_owned(),
-                source: io::Error::other("the registration output was truncated"),
-            }));
+    fn mint(
+        &self,
+        side: Side,
+        name: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+        let name = name.unwrap_or("velnor-x-jit-1").to_owned();
+        async move {
+            *self.minted.lock().unwrap_or_else(|e| unreachable!("{e}")) += 1;
+            if self.mint_stalls {
+                std::future::pending::<()>().await;
+            }
+            if self.mint_fails {
+                self.agents
+                    .lock()
+                    .unwrap_or_else(|e| unreachable!("{e}"))
+                    .push((side, 9, name.clone()));
+                return Err(MintError {
+                    name,
+                    source: io::Error::other("the registration output was truncated"),
+                });
+            }
+            let down = self
+                .down
+                .lock()
+                .unwrap_or_else(|e| unreachable!("{e}"))
+                .contains(&side);
+            Ok((!down).then(|| Minted {
+                name,
+                jit: "e30=".to_owned(),
+                took: Duration::from_millis(1500),
+            }))
         }
-        let down = self
-            .down
-            .lock()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .contains(&side);
-        std::future::ready(Ok((!down).then(|| Minted {
-            name: "velnor-x-jit-1".to_owned(),
-            jit: "e30=".to_owned(),
-            took: Duration::from_millis(1500),
-        })))
     }
 }
 

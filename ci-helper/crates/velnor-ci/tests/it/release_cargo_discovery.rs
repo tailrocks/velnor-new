@@ -241,3 +241,59 @@ fn a_non_crates_io_default_registry_is_refused_only_for_a_root_that_publishes() 
         assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
     }
 }
+
+#[test]
+fn a_regular_file_named_dot_cargo_is_not_read_as_cargo_configuration() {
+    let checkout = Checkout::new("dot-cargo-file");
+    checkout.write("release-plz.toml", COMPLIANT);
+    checkout.write(".cargo", PROVIDER);
+    assert_eq!(checkout.check("release-plz.toml").0, Some(0));
+    let nested = Checkout::new("dot-cargo-file-nested");
+    nested.write("tools/release-plz.toml", COMPLIANT);
+    nested.write("tools/.cargo", "not = [valid toml\n");
+    assert_eq!(nested.check("tools/release-plz.toml").0, Some(0));
+}
+
+#[test]
+fn a_proxy_or_ca_override_is_refused_only_for_a_root_that_publishes_to_crates_io() {
+    for config in [
+        "[http]\nproxy = \"http://proxy.example:8080\"\n",
+        "[http]\ncainfo = \"ca.pem\"\n",
+    ] {
+        for (plz, code) in [
+            (COMPLIANT.to_owned(), Some(1)),
+            (format!("{COMPLIANT}publish = false\n"), Some(0)),
+            (format!("{COMPLIANT}git_only = true\n"), Some(0)),
+        ] {
+            let checkout = Checkout::new("proxy-mode");
+            checkout.write("tools/release-plz.toml", &plz);
+            checkout.write("tools/.cargo/config.toml", config);
+            assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
+        }
+    }
+}
+
+#[test]
+fn net_offline_counts_only_in_the_config_file_cargo_reads() {
+    let both = |extensionless: &str, toml: &str| {
+        let checkout = Checkout::new("offline-precedence");
+        checkout.write("release-plz.toml", COMPLIANT);
+        checkout.write(".cargo/config", extensionless);
+        checkout.write(".cargo/config.toml", toml);
+        checkout.check("release-plz.toml")
+    };
+    let offline = "[net]\noffline = true\n";
+    let online = "[net]\nretry = 3\n";
+    assert_eq!(both(online, offline).0, Some(0));
+    let (code, stderr) = both(offline, online);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(stderr.contains("offline"), "{stderr}");
+}
+
+#[test]
+fn net_offline_in_a_lone_config_toml_is_refused() {
+    let checkout = Checkout::new("offline-lone");
+    checkout.write("release-plz.toml", COMPLIANT);
+    checkout.write(".cargo/config.toml", "[net]\noffline = true\n");
+    refused(&checkout, "release-plz.toml", "offline");
+}

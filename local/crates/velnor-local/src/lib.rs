@@ -4,6 +4,7 @@
 pub mod authority;
 pub mod cli;
 pub mod conformance;
+pub mod doctor;
 pub mod event;
 pub mod images;
 pub mod io;
@@ -14,6 +15,7 @@ pub mod rest;
 pub mod scenario;
 pub mod side;
 pub mod standin;
+pub mod status;
 pub mod store;
 pub mod token;
 pub mod verdict;

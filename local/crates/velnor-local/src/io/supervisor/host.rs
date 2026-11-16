@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -11,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 
 use crate::cli::{EnvironmentArgs, RunnerMode};
-use crate::images::{DIND_TAG, RUNNER_TAG};
+use crate::images::{DIND_TAG, HOST_BINARY, RUNNER_TAG};
 use crate::io::env::{DockerCli, Environment, program};
 use crate::io::pair::write_private;
 use crate::pairs::{MARKER, PlanInput, listening, plan, slots};
@@ -20,12 +21,13 @@ use crate::side::Side;
 const LISTENING_TIMEOUT: Duration = Duration::from_secs(300);
 pub(super) const LOG: &str = "velnor-host.log";
 pub(super) const PID: &str = "pid";
+pub(super) const PLAN: &str = "plan.json";
 
 #[derive(Debug, Clone)]
-pub(crate) struct Pairs {
-    pub(super) host: PathBuf,
-    pub(super) trusted: u16,
-    pub(super) untrusted: u16,
+pub struct Pairs {
+    pub host: PathBuf,
+    pub trusted: u16,
+    pub untrusted: u16,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -43,17 +45,45 @@ async fn image(tag: &str) -> io::Result<String> {
     Ok(String::from_utf8_lossy(&id).trim().to_owned())
 }
 
+pub async fn default_host(exe: &Path) -> io::Result<PathBuf> {
+    let owner = fs::metadata(exe).await?.uid();
+    for root in exe.ancestors().skip(1) {
+        let candidate = root.join(HOST_BINARY);
+        let meta = match fs::symlink_metadata(&candidate).await {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        let mode = meta.mode();
+        if !meta.is_file() || meta.uid() != owner || mode & 0o022 != 0 || mode & 0o100 == 0 {
+            return Err(io::Error::other(format!(
+                "{} is not a regular, executable file owned by the owner of {} and not writable by others",
+                candidate.display(),
+                exe.display()
+            )));
+        }
+        return Ok(candidate);
+    }
+    Err(io::Error::other(format!(
+        "no {HOST_BINARY} in any folder above {}",
+        exe.display()
+    )))
+}
+
 pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
     if args.runner == RunnerMode::Plain {
         return Ok(None);
     }
     let missing = |error: io::Error| {
         io::Error::other(format!(
-            "velnor-host {}: {error}; fix: velnor-local build, or --runner plain",
-            args.velnor_host.display()
+            "velnor-host: {error}; fix: velnor-local build, --velnor-host <path>, or --runner plain"
         ))
     };
-    let host = std::path::absolute(&args.velnor_host).map_err(missing)?;
+    let host = match &args.velnor_host {
+        Some(explicit) => std::path::absolute(explicit),
+        None => default_host(&std::env::current_exe()?).await,
+    }
+    .map_err(missing)?;
     fs::metadata(&host).await.map_err(missing)?;
     for tag in [RUNNER_TAG, DIND_TAG] {
         image(tag).await?;
@@ -113,7 +143,7 @@ impl Pairs {
 }
 
 pub async fn write_plan(state: &Path, planned: &str) -> io::Result<()> {
-    write_private(&state.join("plan.json"), planned).await
+    write_private(&state.join(PLAN), planned).await
 }
 
 pub(super) async fn spawn(

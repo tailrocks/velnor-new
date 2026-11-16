@@ -9,26 +9,82 @@ The local GitHub environment, a development tool that is not shipped. It runs Gi
 | Cache server | `velnor-local cache-server` from this workspace, built by `docker/velnor-local/Dockerfile`. It owns the name `github.localhost`, answers the cache calls and forwards every other request to the stand-in unchanged |
 | Recorder | `mitmproxy/mitmproxy:12.1.2@sha256:0d7b2a14b4a71a908cd6f31b8f50e29bbc5c8720fe6caa706acf782da558e5c7`, used only to record runner calls: give it the alias `github.localhost` and `mitmdump --mode reverse:http://velnor-cache-server:80 --listen-port 80 --set keep_host_header=true`, and start the cache server without that alias |
 
-## Start
+## From zero to a run
 
-Build the images once, from the repository root, then build `velnor-local` from `local/`:
+You need an Apple Silicon Mac with OrbStack (or Docker Desktop), a Rust toolchain, and `git`. Everything below runs on the machine and spends no money. `$VELNOR` is a checkout of this repository, `$LAB` a checkout of the repository whose workflows you want to run, and `$STATE` a directory outside both, without spaces.
 
 ```sh
+export VELNOR="$HOME/src/velnor-new" LAB="$HOME/src/velnor-lab"
+git clone https://github.com/tailrocks/velnor-new "$VELNOR" && cd "$VELNOR"
+git clone https://github.com/tailrocks/velnor-lab "$LAB"
+export STATE="$HOME/.velnor/warm"
+
 docker build -t velnor-local/runner-server local/docker/runner-server
 docker build -t velnor-local/runner local/docker/runner
 docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile local
 cargo build --release --manifest-path local/Cargo.toml
+cargo build --release --manifest-path ci-helper/Cargo.toml -p velnor-ci
+export PATH="$VELNOR/local/target/release:$VELNOR/ci-helper/target/release:$PATH"
+
+velnor-local doctor
+velnor-local build
+velnor-local doctor
+velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab --keep
 ```
+
+`doctor` checks four parts and prints `ok` or `miss` for each (images read `n/a` when Docker is unreachable, because it cannot tell), with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when all are `ok`:
+
+| Part | `ok` when | `fix:` |
+|---|---|---|
+| docker | `docker info` answers and the daemon is linux/arm64; it names OrbStack or Docker and the socket | start OrbStack or Docker Desktop |
+| stand-in, cache server and plain runner images | `velnor-local/runner-server`, `velnor-local/runner` and `velnor-local/cache-server` exist | the `docker build` line of each missing image |
+| pair images | `velnor-local/pair-runner`, `velnor-local/pair-dind` and `velnor-local/pair-probe` exist | `velnor-local build` |
+| velnor-host with local mode | the `velnor-host` that `build` left in the checkout answers `local --help`, so it was built with `local-mode` | `velnor-local build` |
+
+`doctor --velnor-host <path>` checks another binary. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` four times. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it. `--keep` leaves the environment up after the verdict, so `status` has something to show. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
+
+To look at a running environment, ask for its status from another terminal while `run --keep` or `up` has it up:
+
+```sh
+velnor-local status --dir "$STATE"
+velnor-local down --dir "$STATE"
+```
+
+`status` prints the environment's name and age, the runner mode, the authority's address, the number of events in the ledger, each pair as `busy (run <id>, job <name>)` or `idle`, and the last refusal of the job-start check, or `none`. It reads the state directory only and changes nothing; when the authority is not running it exits 1 and says so. `down` removes the environment.
+
+## The three modes
+
+| | GitHub-hosted | Self-hosted scale set | Local (this tool) |
+|---|---|---|---|
+| Jobs come from | GitHub | GitHub's scale set service | `runner.server`, fed by the `velnor-local` driver |
+| Job containers | GitHub's | `velnor-host` pairs of dind and runner | `--runner pair` (the default): `velnor-host local` pairs; `--runner plain`: the official runner image |
+| The job-start check asks | nobody | `https://api.github.com` | the `velnor-local` authority on `127.0.0.1`; only in builds with the `local-mode` feature |
+| Cleanup | GitHub | the journal, then GitHub's admin API | containers, volumes, networks and agents removed by label and by name; no journal |
+
+`pair` runs your jobs the way the self-hosted runner does, behind the same job-start check; `plain` runs the official runner image with no check and is for a machine that cannot build the pair images (`doctor` says when `pair` cannot run and which command fixes it). The verdict names the mode and says what ran for real, what was stood in and what was not exercised.
+
+## Safety rules
+
+- The authority listens on `127.0.0.1` only, and every call needs its token, which each `up` replaces. The cache and API stub control ports answer only with their own token.
+- `velnor-host` with local mode exists only in builds made by `velnor-local build`. A release build refuses the `local-mode` feature, so production never carries the local check.
+- Local mode keeps no journal and no reservation. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
+- Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
+- `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
+- `build` refuses a working tree with uncommitted changes, because the images are named for `HEAD`.
+
+## The approved-workflows check and `--policy`
+
+The approved-workflows check is off in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning that says so. There is no `--policy` flag: the check cannot be turned on locally and every run prints that warning, so treat a passing local run as proof that the workflow runs, not that the real runner would approve it.
+
+## Environments, pairs and the authority
 
 `velnor-local build` builds the linux/arm64 images that pair mode runs, from the recipe in `images/runner/ubuntu-26.04/README.md`: the production runner image as `velnor-local/pair-runner`, the DinD image as `velnor-local/pair-dind` and the resource probe as `velnor-local/pair-probe`. Run it from the repository root, or pass `--root`; it prints each tag with its image id. The helper programs are compiled in a `rust` container into the volume `velnor-arm64-target`, which a later build reuses. It then builds `crates/velnor-runner/target/release/velnor-host` with `--features=local-mode` and without the release identity variables, because a release build refuses local mode.
 
-`up` and `run` take `--runner pair|plain`. `pair`, the default, runs every job in a velnor-host dind and runner pair: the authority process (`supervise`) starts `velnor-host --state "$STATE/runner" local` (`--velnor-host` names another binary; the default is relative to the working directory, like `--scenarios`) and writes its plan to its stdin and to `runner/plan.json` (0600): the authority's address and token, the Docker socket, the ids of `velnor-local/pair-runner` and `velnor-local/pair-dind`, and `--runners` trusted and `--fork-runners` untrusted pairs on the environment's networks. `up` returns when every pair prints `pair <side>-<n> listening` in `runner/velnor-host.log`. velnor-host checks each job at start against the authority and appends the decision to `runner/decisions.jsonl`; the verdict prints it under the job's run as `pair trusted-N, admitted (event <ledger id>)` or `REFUSED at job start: <reason>`, and a refused job makes `run` exit non-zero. `plain` runs the official runner image in containers with no job-start check, and its verdict says `job-start check: none (plain containers)`. `down` stops the authority, which stops velnor-host (it removes its pairs and deletes their agents), kills a velnor-host that outlived it, and then removes every container, volume and network labelled `velnor-local=<name>`.
+`up` and `run` take `--runner pair|plain`. `pair`, the default, runs every job in a velnor-host dind and runner pair: the authority process (`supervise`) starts `velnor-host --state "$STATE/runner" local` (`--velnor-host` names another binary; the default is the `velnor-host` that `velnor-local build` left in the checkout that holds the `velnor-local` executable, checked to be a regular executable file with the executable's owner and no group or other write bit, and never one found through the working directory) and writes its plan to its stdin and to `runner/plan.json` (0600): the authority's address and token, the Docker socket, the ids of `velnor-local/pair-runner` and `velnor-local/pair-dind`, and `--runners` trusted and `--fork-runners` untrusted pairs on the environment's networks. `up` waits until every pair prints `pair <side>-<n> listening` in `runner/velnor-host.log`, then until runner.server reports every pair's agent online (up to 60 s); it fails, and stops the authority and velnor-host it started, if an agent is still offline after that. velnor-host checks each job at start against the authority and appends the decision to `runner/decisions.jsonl`; the verdict prints it under the job's run as `pair trusted-N, admitted (event <ledger id>)` or `REFUSED at job start: <reason>`, and a refused job makes `run` exit non-zero. `plain` runs the official runner image in containers with no job-start check, and its verdict says `job-start check: none (plain containers)`. `down` stops the authority, which stops velnor-host (it removes its pairs and deletes their agents), kills a velnor-host that outlived it, and then removes every container, volume and network labelled `velnor-local=<name>`.
 
 `velnor-local up --dir "$STATE" --repo "$REPO" [--runners 2]` starts one environment and `velnor-local down --dir "$STATE"` removes its containers and network. `STATE` is a directory outside the checkout, without spaces. It holds `keys/` (the runtime token key pair, made once with `openssl` in the stand-in image), `cache/` (the cache server's archives and `index.json`) and `api/` (the API stub's `pulls.json`). The environment is named `velnor-local-<hash of STATE>`: a network of that name, the containers `<name>-standin`, `<name>-cache`, `<name>-api` and, with `--runner plain`, `<name>-runner-<n>`, all labelled `velnor-local=<name>`. Two state directories are two independent environments. Only the cache server and the API stub publish a port, each a control port on a free port of `127.0.0.1` that answers only requests carrying `Authorization: Bearer <the token in keys/control>` (made once per state directory) and refuses the rest with 401, because a container can reach the host's loopback ports; `up` prints the stub's address. With `--runner plain`, `up` returns when every runner has a session with runner.server.
 
-`up` also starts the local authority, a `velnor-local supervise --dir "$STATE"` process of the host, and prints `authority on 127.0.0.1:<port>`. It listens on `127.0.0.1` only (there is no address option) and every call needs `Authorization: Bearer <the token in keys/authority>`, a fresh 32-byte token that each `up` replaces and that is not the control token; without it the answer is 401. It serves `POST /ledger`, `POST /jit` with `{"side": "trusted"|"untrusted"}`, `GET /runs/<side>/<run id>/<attempt>` and `DELETE /agents/<side>/<name>`. The driver posts `{id, side, event, ref, sha, workflow}` to `/ledger` before each `Runner.Client` call, and the authority appends it to `authority/ledger.jsonl` with the ids of the runs the side's runner.server already had. `GET /runs` answers 404 when that side's runner.server has no such run or attempt, and otherwise returns the run's event, ref, sha, workflow and job keys with `"ledger"`, the id of the entry that dispatched it, or `null` and a `"refusal"`: `not_dispatched` when no entry matches event, ref, sha and workflow on that side before the run was created, which includes a run that a job scheduled through runner.server, and `wrong_side` when only an entry of the other side matches. `down` stops the authority; `run --keep` leaves the environment, the authority included, up after the verdict.
-
-The approved-workflows check is off in local mode: jobs run the checkout's workflows as they are, there is no prompt, and `up` and every `run` summary print a warning saying so (the check is not available yet, FAST-L.8.6).
+`up` also starts the local authority, a `velnor-local supervise --dir "$STATE"` process of the host, and prints `authority on 127.0.0.1:<port>`. It listens on `127.0.0.1` only (there is no address option) and every call needs `Authorization: Bearer <the token in keys/authority>`, a fresh 32-byte token that each `up` replaces and that is not the control token; without it the answer is 401. It serves `POST /ledger`, `POST /jit` with `{"side": "trusted"|"untrusted", "name": "<agent name>"}` (the name is required, a request without it is a 400), `GET /runs/<side>/<run id>/<attempt>` and `DELETE /agents/<side>/<name>`. The driver posts `{id, side, event, ref, sha, workflow}` to `/ledger` before each `Runner.Client` call, and the authority appends it to `authority/ledger.jsonl` with the ids of the runs the side's runner.server already had. `GET /runs` answers 404 when that side's runner.server has no such run or attempt, and otherwise returns the run's event, ref, sha, workflow and job keys with `"ledger"`, the id of the entry that dispatched it, or `null` and a `"refusal"`: `not_dispatched` when no entry matches event, ref, sha and workflow on that side before the run was created, which includes a run that a job scheduled through runner.server, and `wrong_side` when only an entry of the other side matches. `down` stops the authority; `run --keep` leaves the environment, the authority included, up after the verdict.
 
 Untrusted runs have a side of their own. With `--fork-runners <n>` (which `run` sets to one when a scenario opens a pull request from a fork), `up` also starts a second network `<name>-fork` with its own runner.server (`<name>-fork-standin`), cache server (`<name>-fork-cache`, same cache directory, started with `--restore-only`, so it refuses every cache write, as GitHub lets a fork pull request only read caches, and serves restores only to tokens for `refs/pull/<n>/merge` of a fork pull request the driver registered with it; a job that has the untrusted runner.server schedule a run on another ref gets no cache). A fork job therefore restores, read-only, from the scope of its own `refs/pull/<n>/merge`, its base branch and the default branch, as GitHub's rule for a pull request allows, and writes to none of them and runners (`<name>-fork-runner-<n>`). Both sides register the same runner labels; each runner registers with the runner.server of its own network only, so a runner of one side never takes a job of the other. That network has no `api-stub` and no API stub container, so a job there gets `GITHUB_API_URL=http://api-stub` like every job but cannot resolve or reach it. The untrusted runner.server signs its runtime tokens with its own key pair in `keys/fork/`, so the trusted cache server would refuse them. A fork pull request's run gets no metrics file and no start time, because the stub, which `velnor-ci bench collect` reads, cannot see its stand-in; the verdict says so, and its first-job time counts trusted runs only.
 

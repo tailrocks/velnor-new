@@ -15,7 +15,9 @@ use crate::{
     worker::{WorkerContainerRole, WorkerIdentityNames},
 };
 
-use super::{RemoteRunnerAudit, inspect_owned_container, inspect_owned_volume};
+use super::{
+    ExpectedContainer, OwnedPair, RemoteRunnerAudit, audit_pair_containers, inspect_owned_volume,
+};
 
 #[path = "inventory/settling.rs"]
 mod settling;
@@ -175,22 +177,27 @@ async fn audit_started_pair(
         return Err(HostError::Ownership);
     }
     let names = WorkerIdentityNames::from_private_volume(identity.private_volume())?;
-    inspect_owned_container(
+    audit_pair_containers(
         docker,
-        identity.runner_container_id(),
-        &names.container_name(WorkerContainerRole::Runner),
-        "runner",
-        identity,
-        binding.connection_id.as_str(),
-    )
-    .await?;
-    inspect_owned_container(
-        docker,
-        identity.dind_container_id(),
-        &names.container_name(WorkerContainerRole::Dind),
-        "dind",
-        identity,
-        binding.connection_id.as_str(),
+        &OwnedPair {
+            connection: binding.connection_id.as_str(),
+            reservation: identity.reservation_id(),
+            operation: identity.operation_id(),
+        },
+        &[
+            ExpectedContainer {
+                id: identity.runner_container_id(),
+                name: names.container_name(WorkerContainerRole::Runner),
+                role: "runner",
+                image_id: identity.runner_image_id(),
+            },
+            ExpectedContainer {
+                id: identity.dind_container_id(),
+                name: names.container_name(WorkerContainerRole::Dind),
+                role: "dind",
+                image_id: identity.dind_image_id(),
+            },
+        ],
     )
     .await?;
     for (role, name) in identity.volumes() {
@@ -247,6 +254,9 @@ impl InventoryEntry {
     }
 }
 
+#[cfg(test)]
+#[path = "inventory/end_to_end.rs"]
+mod end_to_end;
 #[cfg(test)]
 #[path = "inventory/tests.rs"]
 mod tests;

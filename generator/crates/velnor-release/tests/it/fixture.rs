@@ -15,6 +15,7 @@ git_release_draft = true
 release_always = false
 semver_check = false
 publish_no_verify = true
+publish_timeout = "5m"
 
 [[package]]
 name = "app"
@@ -45,6 +46,7 @@ pub(crate) fn files() -> ReleaseFiles {
         bin_targets: None,
         rust_metadata: None,
         workflow_names: None,
+        push_workflows: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
 }

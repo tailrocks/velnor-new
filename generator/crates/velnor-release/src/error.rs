@@ -120,6 +120,9 @@ pub enum ReleaseError {
     CargoRedirectsCratesIo {
         file: String,
     },
+    CargoOffline {
+        file: String,
+    },
     PublishNamesOtherRegistry {
         root: String,
         manifest: String,
@@ -165,8 +168,31 @@ pub enum ReleaseError {
         root: String,
         prefix: String,
     },
+    AfterMissingWorkflow {
+        name: String,
+    },
+    NightlyOnly {
+        file: String,
+        what: &'static str,
+    },
     ReleasePlzVersionNotExact {
         version: String,
+    },
+    InvalidPublishTimeout {
+        root: String,
+        value: String,
+    },
+    PackagePublishTimeout {
+        root: String,
+        package: String,
+    },
+    PublishBudgetOutlivesToken {
+        minutes: u64,
+        limit: u64,
+    },
+    ReleasePlzVersionTooOld {
+        version: String,
+        minimum: String,
     },
     PackageNotInRoot {
         root: String,
@@ -189,6 +215,10 @@ pub enum ReleaseError {
     },
     ReleasePlzNotLockedForLinux {
         tool: String,
+    },
+    ReleasePlzVersionsConflict {
+        first: String,
+        second: String,
     },
     ReleasePlzLockMismatch {
         configured: String,

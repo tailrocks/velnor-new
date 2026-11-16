@@ -7,6 +7,7 @@ use crate::error::ReleaseError;
 use crate::git_ref;
 use crate::settings::{Document, Settings, executable_key};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
+use crate::timeout;
 
 const DEFAULT_PR_BRANCH_PREFIX: &str = "release-plz-";
 
@@ -26,6 +27,9 @@ pub(crate) struct RootConfig {
     entries: BTreeMap<String, bool>,
     unreleased: BTreeSet<String>,
     unlisted_publish: bool,
+    pub(crate) listed_nanos: u128,
+    pub(crate) unlisted_publish_nanos: u128,
+    pub(crate) unlisted_check_nanos: u128,
 }
 
 impl RootConfig {
@@ -53,6 +57,14 @@ fn check_package(
     package: Option<&str>,
     settings: &Settings,
 ) -> Result<(), ReleaseError> {
+    if let Some(value) = &settings.publish_timeout
+        && !timeout::is_duration(value)
+    {
+        return Err(ReleaseError::InvalidPublishTimeout {
+            root: root.to_owned(),
+            value: value.clone(),
+        });
+    }
     let owned = || (root.to_owned(), package.map(str::to_owned));
     if settings.release_always != Some(false) {
         return Err(ReleaseError::ReleaseAlwaysNotFalse {
@@ -124,14 +136,8 @@ fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
             root: root.to_owned(),
             key,
         }),
-        None => Ok(document),
+        None => refuse_package_publish_timeout(root, &document).map(|()| document),
     }
-}
-
-pub fn root_publishes_to_crates_io(root: &str, text: &str) -> Result<bool, String> {
-    let document = parse_document(root, text).map_err(|error| error.to_string())?;
-    let released = released_packages(root, &document).map_err(|error| error.to_string())?;
-    Ok(publishes(&document.workspace, &released))
 }
 
 fn released_packages(
@@ -197,6 +203,20 @@ fn workspace_tags(
     Ok(vec![pattern])
 }
 
+fn refuse_package_publish_timeout(root: &str, document: &Document) -> Result<(), ReleaseError> {
+    match document
+        .package
+        .iter()
+        .find(|entry| entry.settings.publish_timeout.is_some())
+    {
+        Some(entry) => Err(ReleaseError::PackagePublishTimeout {
+            root: root.to_owned(),
+            package: entry.name.clone(),
+        }),
+        None => Ok(()),
+    }
+}
+
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document = parse_document(root, text)?;
     let workspace = &document.workspace;
@@ -255,7 +275,20 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .filter(|entry| entry.settings.over(workspace).release == Some(false))
         .map(|entry| entry.name.clone())
         .collect();
+    let listed_nanos = released
+        .iter()
+        .map(|(_, settings)| settings.registry_check_and_publish_nanos())
+        .fold(0u128, u128::saturating_add);
     Ok(RootConfig {
+        listed_nanos,
+        unlisted_publish_nanos: workspace.publish_nanos(),
+        unlisted_check_nanos: if workspace.release != Some(false)
+            && workspace.publishes_to_crates_io()
+        {
+            workspace.publish_nanos()
+        } else {
+            0
+        },
         entries,
         unreleased,
         unlisted_publish: workspace.release != Some(false) && workspace.publishes_to_crates_io(),

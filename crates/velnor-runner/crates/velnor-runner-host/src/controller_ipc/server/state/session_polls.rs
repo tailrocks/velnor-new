@@ -271,6 +271,24 @@ impl ControlState {
 }
 
 impl SessionPollReceipt {
+    #[cfg(test)]
+    pub(crate) fn for_session(
+        connection_id: &str,
+        scale_set_id: i64,
+        session_intent_id: i64,
+        session_id: &str,
+    ) -> Self {
+        Self {
+            connection_id: connection_id.to_owned(),
+            binding_sha256: String::new(),
+            scale_set_id,
+            session_intent_id,
+            session_id: session_id.to_owned(),
+            generation: 1,
+            observed_at: Instant::now(),
+        }
+    }
+
     pub(crate) fn connection_id(&self) -> &str {
         &self.connection_id
     }

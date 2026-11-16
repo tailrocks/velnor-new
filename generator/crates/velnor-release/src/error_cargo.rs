@@ -87,6 +87,14 @@ impl ReleaseError {
 
     fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::AfterMissingWorkflow { name } => write!(
+                f,
+                ".velnor/release.toml: workflow {name:?} runs on push and is not in after, so when it finishes last the gate has already answered ready=false and nothing starts Release again"
+            ),
+            Self::NightlyOnly { file, what } => write!(
+                f,
+                "{file}: {what} needs a nightly Rust, and the release jobs run release-plz and cargo on stable"
+            ),
             Self::CargoConfigInclude { file } => write!(
                 f,
                 "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"
@@ -94,6 +102,30 @@ impl ReleaseError {
             Self::CargoConfigKeyNotAllowed { file, key } => write!(
                 f,
                 "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
+            ),
+            Self::InvalidPublishTimeout { root, value } => write!(
+                f,
+                "{root}/release-plz.toml: publish_timeout {value:?} is not a duration such as \"10m\" or \"1h 30m\""
+            ),
+            Self::PackagePublishTimeout { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: [[package]] {package} sets publish_timeout, which release-plz 0.4.3 reads only under [workspace], where it applies to every package; move it to [workspace]"
+            ),
+            Self::PublishBudgetOutlivesToken { minutes, limit } => write!(
+                f,
+                "the release-plz.toml publish_timeout of the released packages adds up to {minutes} minutes (release-plz applies it once to the registry check and once more to the publish of every released package that publishes, so each publishing package needs 2 x publish_timeout, and 30 minutes wherever none is set; packages with publish = false or git_only cost nothing), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run (set publish_timeout under [workspace]; for example, with one publishing package set publish_timeout = \"10m\" or anything up to 25m, since 2 x 25m = 50m)"
+            ),
+            Self::ReleasePlzVersionTooOld { version, minimum } => write!(
+                f,
+                "mise.toml: release-plz {version} cannot authenticate the git fetch of a checkout without persisted credentials; pin release-plz {minimum} or newer"
+            ),
+            Self::CargoOffline { file } => write!(
+                f,
+                "{file}: net.offline stops cargo publish from reaching crates.io"
+            ),
+            Self::ReleasePlzVersionsConflict { first, second } => write!(
+                f,
+                "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
             ),
             _ => Ok(()),
         }

@@ -62,7 +62,7 @@ pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
 
 pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
-        "publish_no_verify = true"
+        "publish_no_verify = true\npublish_timeout = \"5m\""
     } else {
         "git_only = true"
     };
@@ -109,7 +109,8 @@ pub(crate) fn release_view(
         }
     }
     view.tracked_paths.insert(LOCK_PATH);
-    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.80").into_bytes());
     view.files.insert(
         RepoPath::new("mise.toml")?,
         b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
@@ -120,7 +121,7 @@ pub(crate) fn release_view(
     );
     view.files.insert(
         RepoPath::new(".github/workflows/lint.yml")?,
-        b"name: Lint\non: push\n".to_vec(),
+        b"name: Lint\non: pull_request\n".to_vec(),
     );
     if let Some(text) = release_toml {
         view.files

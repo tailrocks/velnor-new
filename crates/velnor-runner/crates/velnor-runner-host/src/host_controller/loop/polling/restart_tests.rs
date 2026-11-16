@@ -171,10 +171,39 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(live_reservations(&journal).await?, live);
 
     restart(&journal, &docker, &mut controller, &engine).await?;
-    assert_eq!(fixture.take_requests(), Vec::<String>::new());
-    assert_eq!(seed::recorded(&journal, 2).await?, recovered);
+    let mut volume_requests = fixture
+        .take_requests()
+        .into_iter()
+        .filter(|request| request.contains(" /volumes/"))
+        .collect::<Vec<_>>();
+    volume_requests.sort();
+    let volume = |method: &str, role: &str| format!("{method} /volumes/{PRIVATE_VOLUME}{role}");
+    let expected = [
+        volume("DELETE", "-home"),
+        volume("DELETE", "-metadata"),
+        volume("DELETE", "-work"),
+        volume("GET", ""),
+        volume("GET", "-docker"),
+        volume("GET", "-home"),
+        volume("GET", "-home"),
+        volume("GET", "-metadata"),
+        volume("GET", "-metadata"),
+        volume("GET", "-work"),
+        volume("GET", "-work"),
+    ];
+    assert_eq!(volume_requests, expected);
+    let mut released = recovered;
+    released[0] = Some("released".to_owned());
+    assert_eq!(seed::recorded(&journal, 2).await?, released);
+    assert_eq!(seed::cleanup_proven(&journal, 2).await?, (1, 1, 1));
     assert_eq!(live_reservations(&journal).await?, live);
-    assert_eq!(controller.prepared.recovery_pass, 3);
+
+    fixture.take_requests();
+    restart(&journal, &docker, &mut controller, &engine).await?;
+    assert_eq!(fixture.take_requests(), Vec::<String>::new());
+    assert_eq!(seed::recorded(&journal, 2).await?, released);
+    assert_eq!(live_reservations(&journal).await?, live);
+    assert_eq!(controller.prepared.recovery_pass, 4);
     Ok(())
 }
 

@@ -21,6 +21,7 @@ struct State {
     helper: Option<(String, Value)>,
     requests: Vec<String>,
     hang_on: Option<String>,
+    removed_volumes: Vec<String>,
 }
 
 pub(super) struct FixtureDocker {
@@ -87,7 +88,14 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> T
         ("GET", ["images", IMAGE_ID, "json"]) => Some(
             json!({"Id": IMAGE_ID, "Os": "linux", "Architecture": "amd64", "Config": {"Env": [IMAGE_ENV]}}),
         ),
-        ("GET", ["volumes", name]) => volume(name),
+        ("GET", ["volumes", name]) => {
+            let removed = lock(state).removed_volumes.contains(&(*name).to_owned());
+            volume(name).filter(|_| !removed)
+        }
+        ("DELETE", ["volumes", name]) => {
+            lock(state).removed_volumes.push((*name).to_owned());
+            volume(name).map(|_| Value::Null)
+        }
         ("POST", ["containers", "create"]) => {
             let name = query.split('&').find_map(|pair| pair.strip_prefix("name="));
             let name = name.unwrap_or_default().to_owned();

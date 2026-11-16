@@ -14,7 +14,13 @@ fn scratch(name: &str) -> PathBuf {
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(dir.join("checkout")).unwrap_or_else(|e| unreachable!("{e}"));
+    let git = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir.join("checkout"))
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(git.success());
     dir
 }
 
@@ -59,6 +65,8 @@ struct Setup {
     rustc: bool,
     rust_ci_toml: Option<&'static str>,
     cargo_config: Option<&'static str>,
+    repo_cargo_config: Option<&'static str>,
+    release: &'static str,
     env: Vec<(&'static str, &'static str)>,
 }
 
@@ -72,6 +80,8 @@ impl Setup {
             rustc: true,
             rust_ci_toml: None,
             cargo_config: None,
+            repo_cargo_config: None,
+            release: "1.99.1",
             env: Vec::new(),
         }
     }
@@ -104,6 +114,11 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let cargo_home = dir.join("cargo-home");
     fs::create_dir_all(checkout.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
+    if let Some(text) = setup.repo_cargo_config {
+        fs::create_dir_all(checkout.join(".cargo")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(checkout.join(".cargo/config.toml"), text)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
     fs::write(checkout.join("mise.toml"), &setup.mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
     let ci_toml = checkout.join(".velnor/rust-ci.toml");
     match setup.rust_ci_toml {
@@ -134,7 +149,8 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         );
     }
     if setup.rustc {
-        script(&bin.join("rustc"), &format!("cat <<'EOF'\n{RUSTC}EOF"));
+        let report = RUSTC.replace("1.99.1\n", &format!("{}\n", setup.release));
+        script(&bin.join("rustc"), &format!("cat <<'EOF'\n{report}EOF"));
     }
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -591,4 +607,69 @@ fn prepare_names_a_base_component_missing_under_a_minimal_or_default_profile() {
             "{name}: {stderr}"
         );
     }
+}
+
+fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    change(&mut setup);
+    let run = prepare(name, &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    digest(&run).to_owned()
+}
+
+#[test]
+fn compat_follows_a_repository_dependency_profile_override() {
+    let none = compat_with("compat-inputs", |_| {});
+    let debug = compat_with("compat-inputs", |setup| {
+        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
+    });
+    let off = compat_with("compat-inputs", |setup| {
+        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = false\n");
+    });
+    let unrelated = compat_with("compat-inputs", |setup| {
+        setup.repo_cargo_config = Some("[build]\njobs = 2\n");
+    });
+    assert_ne!(none, debug);
+    assert_ne!(debug, off);
+    assert_eq!(none, unrelated);
+}
+
+#[test]
+fn compat_follows_the_runner_image() {
+    let image = |value: Option<&'static str>| {
+        compat_with("compat-inputs", |setup| {
+            if let Some(value) = value {
+                setup.env.push(("ImageOS", value));
+            }
+        })
+    };
+    let (unset, new, old) = (
+        image(None),
+        image(Some("ubuntu24")),
+        image(Some("ubuntu22")),
+    );
+    assert_ne!(new, old);
+    assert_ne!(new, unset);
+    assert_eq!(new, image(Some("ubuntu24")));
+}
+
+#[test]
+fn rust_before_1_71_gets_numeric_debug_values() {
+    let mut setup = Setup::new(reported("1.70.0", Some("0.9.151")));
+    setup.release = "1.70.0";
+    setup.mise_toml = MISE.replace("1.99.1", "1.70.0");
+    let run = prepare("old-rust", &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert!(
+        run.env_file.contains("CARGO_PROFILE_DEV_DEBUG=1\n"),
+        "{}",
+        run.env_file
+    );
+    assert!(run.env_file.contains("CARGO_PROFILE_TEST_DEBUG=1\n"));
+    assert!(
+        run.velnor_config.contains("debug = 0\n"),
+        "{}",
+        run.velnor_config
+    );
+    assert!(!run.velnor_config.contains("\"none\""));
 }

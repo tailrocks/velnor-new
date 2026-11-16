@@ -102,6 +102,7 @@ fn inline(value: &Yaml) -> String {
 
 fn key_text(key: &str) -> String {
     if !key.is_empty()
+        && !reserved(key)
         && key
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -123,10 +124,16 @@ fn scalar(text: &str) -> String {
     }
 }
 
+const RESERVED: [&str; 11] = [
+    "true", "false", "yes", "no", "on", "off", "null", "y", "n", "nan", "inf",
+];
+
+fn reserved(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    lower != "on" && RESERVED.contains(&lower.as_str())
+}
+
 fn plain(text: &str) -> bool {
-    const RESERVED: [&str; 11] = [
-        "true", "false", "yes", "no", "on", "off", "null", "y", "n", "nan", "inf",
-    ];
     text.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
         && !text.ends_with(' ')
         && text

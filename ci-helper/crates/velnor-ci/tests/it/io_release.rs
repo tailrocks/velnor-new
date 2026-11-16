@@ -211,3 +211,39 @@ fn release_publish_exits_1_and_changes_nothing_when_a_file_is_missing_on_disk() 
     assert!(fake.is_draft(id));
     assert_eq!(fake.assets(id), BTreeMap::new());
 }
+
+fn publish_without_files(api: &Path, extra: &[&str]) -> Output {
+    let mut args = vec![
+        "release",
+        "publish",
+        "--repo",
+        REPO,
+        "--tag",
+        TAG,
+        "--app",
+        "velnor-release",
+    ];
+    args.extend(extra);
+    velnor_ci(&args, &[("GITHUB_API_URL", api)])
+}
+
+#[test]
+fn release_publish_no_files_un_drafts_an_empty_app_draft_and_conflicts_with_named_files() {
+    let (api, fake) = serve();
+    let id = fake.app_draft();
+    let output = publish_without_files(Path::new(&api), &["--no-files", "velnor-ci-linux-x64"]);
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(fake.is_draft(id));
+    let output = publish_without_files(Path::new(&api), &[]);
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(fake.is_draft(id));
+    let output = publish_without_files(Path::new(&api), &["--no-files"]);
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .ends_with(&format!("published release {TAG} ({id}) with 0 files\n")),
+        "{output:?}"
+    );
+    assert!(!fake.is_draft(id));
+    assert_eq!(fake.assets(id), BTreeMap::new());
+}

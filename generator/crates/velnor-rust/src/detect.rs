@@ -186,20 +186,23 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
     let Some(path) = &config.helper else {
         return Ok(());
     };
-    let holds_helper = rust_roots.iter().any(|root| {
+    let root = rust_roots.iter().find(|root| {
         root.manifest.parent().as_ref() == Some(path)
             && root
                 .members
                 .iter()
                 .any(|member| member.name.as_str() == HELPER_PACKAGE)
     });
-    if holds_helper {
-        Ok(())
-    } else {
-        Err(DetectError::invalid(
+    match root {
+        None => Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::HelperBox(path.clone()),
-        ))
+        )),
+        Some(root) if root.sets_build_target => Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::HelperTarget(path.clone()),
+        )),
+        Some(_) => Ok(()),
     }
 }
 

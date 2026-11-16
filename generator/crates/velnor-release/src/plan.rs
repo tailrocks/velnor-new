@@ -6,13 +6,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
+use crate::hazards::{
+    cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
+    toolchain_path,
+};
 use crate::lock_version::check_versions;
-use crate::members::{check_inventory, check_registries, inherited_tag, owner, settle_publishing};
+use crate::members::{
+    check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
+};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
 use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -28,6 +34,7 @@ pub struct ReleaseFiles {
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
     pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
+    pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
 
@@ -37,6 +44,8 @@ pub struct RootPlan {
     pub pr_branch_prefix: String,
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
+    pub inherited: Vec<String>,
+    pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -166,6 +175,10 @@ fn config_reaches(file: &str, root: &str) -> bool {
     reaches(base, root)
 }
 
+fn manifest_under(directory: &str, root: &str) -> bool {
+    root == "." || directory == root || directory.starts_with(&format!("{root}/"))
+}
+
 fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
@@ -192,6 +205,13 @@ fn check_reality(config: &VelnorConfig, files: &ReleaseFiles) -> Result<(), Rele
     {
         return Err(ReleaseError::UnknownWorkflow {
             name: unknown.clone(),
+        });
+    }
+    if let Some(pushed) = &files.push_workflows
+        && let Some(missing) = pushed.iter().find(|name| !config.after.contains(*name))
+    {
+        return Err(ReleaseError::AfterMissingWorkflow {
+            name: missing.clone(),
         });
     }
     Ok(())
@@ -246,6 +266,61 @@ fn plan_binaries(
     Ok(binaries)
 }
 
+fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
+    let publishing = inherited
+        .iter()
+        .filter(|package| config.publishes(package))
+        .count();
+    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
+    let publishing = publishing.max(usize::from(none_known)) as u128;
+    config
+        .listed_nanos
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
+}
+
+#[must_use]
+pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
+    let nanos = roots.iter().fold(0u128, |total, root| {
+        total.saturating_add(root.publish_budget_nanos)
+    });
+    crate::timeout::minutes_ceil(nanos)
+}
+
+fn plan_roots(
+    configs: Vec<RootConfig>,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<Vec<RootPlan>, ReleaseError> {
+    let roots: Vec<RootPlan> = configs
+        .into_iter()
+        .map(|config| {
+            let inherited = inherited_packages(&config, metadata);
+            let budget = publish_budget(&config, &inherited);
+            RootPlan {
+                inherited,
+                publish_budget_nanos: budget,
+                root: config.root,
+                pr_branch_prefix: config.pr_branch_prefix,
+                publishes_to_crates_io: config.publishes_to_crates_io,
+                packages: config
+                    .packages
+                    .into_iter()
+                    .map(|package| (package.name, package.tag_pattern))
+                    .collect(),
+                workspace_tags: config.workspace_tags,
+            }
+        })
+        .collect();
+    if metadata.is_some() {
+        let minutes = publish_budget_minutes(&roots);
+        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+        if minutes > limit {
+            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
+        }
+    }
+    Ok(roots)
+}
+
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
@@ -286,36 +361,31 @@ impl ReleasePlan {
                     file,
                     text,
                     reached.any(|config| config.publishes_to_crates_io),
+                    shadowed_by_extensionless_config(file, |other| {
+                        files.cargo_configs.contains_key(other)
+                    }),
                 )?;
             }
         }
-        for (file, text) in &files.toolchain_files {
-            let base = file.rsplit_once('/').map_or(".", |(base, _)| base);
-            let within = |root: &str| root == "." || base.starts_with(&format!("{root}/"));
-            if config
-                .roots
-                .iter()
-                .any(|root| reaches(base, root) || within(root))
-            {
-                toolchain_path(file, text)?;
+        for (file, text) in &files.cargo_manifest_texts {
+            let directory = file.strip_suffix("/Cargo.toml").unwrap_or(".");
+            if configs.iter().any(|config| {
+                reaches(directory, &config.root) || manifest_under(directory, &config.root)
+            }) {
+                nightly_manifest(file, text)?;
             }
         }
+        for (file, text) in files
+            .toolchain_files
+            .iter()
+            .filter(|(file, _)| !file.contains('/'))
+        {
+            toolchain_path(file, text)?;
+        }
         let binaries = plan_binaries(&config, &configs, files)?;
+        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
         Ok(ReleasePlan {
-            roots: configs
-                .into_iter()
-                .map(|config| RootPlan {
-                    root: config.root,
-                    pr_branch_prefix: config.pr_branch_prefix,
-                    publishes_to_crates_io: config.publishes_to_crates_io,
-                    packages: config
-                        .packages
-                        .into_iter()
-                        .map(|package| (package.name, package.tag_pattern))
-                        .collect(),
-                    workspace_tags: config.workspace_tags,
-                })
-                .collect(),
+            roots,
             after: config.after,
             binaries,
             release_plz_version: release_plz.version,
