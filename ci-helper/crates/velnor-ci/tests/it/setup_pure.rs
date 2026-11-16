@@ -18,6 +18,7 @@ fn pins(requested: &[&str], locked: &[&str]) -> ToolPins {
                 requested: requested.iter().map(|v| (*v).to_owned()).collect(),
                 locked: locked.iter().map(|v| (*v).to_owned()).collect(),
                 os_filters: BTreeMap::new(),
+                ..ToolPin::default()
             },
         )]),
     }
