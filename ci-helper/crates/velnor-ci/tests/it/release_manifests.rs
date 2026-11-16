@@ -189,3 +189,51 @@ fn a_toolchain_the_checkout_could_pick_is_refused() {
     assert_eq!(code, Some(1), "{stderr}");
     assert!(stderr.contains("RUSTUP_TOOLCHAIN is not set"), "{stderr}");
 }
+
+#[test]
+fn an_absolute_release_plz_path_is_checked_like_a_relative_one() {
+    let checkout = Checkout::new("absolute");
+    checkout
+        .package("", "app", "publish = [\"company\"]\n")
+        .write("release-plz.toml", PLZ);
+    let absolute = checkout.0.join("release-plz.toml");
+    let canonical = absolute
+        .canonicalize()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    refused(
+        &checkout,
+        &[&canonical.display().to_string()],
+        "names registry company",
+    );
+}
+
+fn partition(checkout: &Checkout, hidden_a: &str, hidden_b: &str) {
+    let plz = |prefix: &str, hidden: &str| {
+        let extra = if hidden.is_empty() {
+            String::new()
+        } else {
+            format!("\n[[package]]\nname = \"{hidden}\"\nrelease = false\n")
+        };
+        format!("{PLZ}pr_branch_prefix = \"{prefix}-\"\n{extra}")
+            .replace("{{ package }}-v", &format!("{prefix}-{{{{ package }}}}-v"))
+    };
+    checkout
+        .write("Cargo.toml", "[workspace]\nmembers = [\"a\", \"b\"]\n")
+        .package("a", "pkg-a", "")
+        .package("b", "pkg-b", "")
+        .write("a/release-plz.toml", &plz("a", hidden_a))
+        .write("b/release-plz.toml", &plz("b", hidden_b));
+}
+
+#[test]
+fn roots_that_partition_a_shared_workspace_with_release_false_are_accepted() {
+    let checkout = Checkout::new("partition");
+    partition(&checkout, "pkg-b", "pkg-a");
+    accepted(&checkout, &["a/release-plz.toml", "b/release-plz.toml"]);
+    partition(&checkout, "pkg-b", "");
+    refused(
+        &checkout,
+        &["a/release-plz.toml", "b/release-plz.toml"],
+        "released from several roots",
+    );
+}

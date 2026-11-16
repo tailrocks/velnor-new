@@ -13,7 +13,7 @@ use velnor_gen::{GenerateError, release_ruleset};
 use velnor_model::RepoPath;
 
 use crate::golden::{load, samples};
-use crate::release_fixture::{APP, release_view};
+use crate::release_fixture::{APP, Root, release_view};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -81,6 +81,26 @@ fn ruleset_needs_a_release_config_and_a_valid_plan() -> TestResult {
     assert!(matches!(
         release_ruleset(&view),
         Err(GenerateError::Release(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn ruleset_refuses_a_published_package_that_names_another_registry() -> TestResult {
+    let root = Root {
+        publishes: true,
+        ..APP
+    };
+    let mut view = release_view(&[root], Some(""))?;
+    view.files.insert(
+        RepoPath::new("Cargo.toml")?,
+        b"[package]\nname = \"app\"\nversion = \"0.1.0\"\npublish = [\"company\"]\n".to_vec(),
+    );
+    assert!(matches!(
+        release_ruleset(&view),
+        Err(GenerateError::Release(
+            velnor_release::ReleaseError::PublishNamesOtherRegistry { .. }
+        ))
     ));
     Ok(())
 }

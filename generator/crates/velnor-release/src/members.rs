@@ -26,6 +26,15 @@ pub(crate) fn owner<'a>(
     })
 }
 
+fn owning<'a>(
+    root: &str,
+    metadata: &'a Metadata,
+) -> Result<(&'a RepoPath, &'a RustMetadata), ReleaseError> {
+    owner(root, metadata).ok_or_else(|| ReleaseError::RootWithoutWorkspace {
+        root: root.to_owned(),
+    })
+}
+
 pub(crate) fn check_inventory(
     configs: &[RootConfig],
     metadata: Option<&Metadata>,
@@ -35,18 +44,16 @@ pub(crate) fn check_inventory(
     };
     let mut released: BTreeMap<&str, &str> = BTreeMap::new();
     for config in configs {
-        let known: Option<BTreeSet<&str>> = owner(&config.root, metadata).map(|(_, workspace)| {
-            workspace
-                .members
-                .iter()
-                .map(|member| member.name.as_str())
-                .collect()
-        });
-        if let Some(known) = &known
-            && let Some(package) = config
-                .packages
-                .iter()
-                .find(|package| !known.contains(package.name.as_str()))
+        let (_, workspace) = owning(&config.root, metadata)?;
+        let known: BTreeSet<&str> = workspace
+            .members
+            .iter()
+            .map(|member| member.name.as_str())
+            .collect();
+        if let Some(package) = config
+            .packages
+            .iter()
+            .find(|package| !known.contains(package.name.as_str()))
         {
             return Err(ReleaseError::PackageNotInRoot {
                 root: config.root.clone(),
@@ -56,7 +63,7 @@ pub(crate) fn check_inventory(
         let inherited = known
             .iter()
             .filter(|_| !config.workspace_tags.is_empty())
-            .flatten()
+            .filter(|name| config.releases(name))
             .copied();
         let listed = config.packages.iter().map(|package| package.name.as_str());
         for name in listed.chain(inherited) {
@@ -79,9 +86,8 @@ pub(crate) fn check_registries(
     manifests: &BTreeMap<String, String>,
 ) -> Result<(), ReleaseError> {
     for config in configs {
-        if let Some((workspace, known)) = owner(&config.root, metadata) {
-            check_publish_registries(config, workspace, known, manifests)?;
-        }
+        let (workspace, known) = owning(&config.root, metadata)?;
+        check_publish_registries(config, workspace, known, manifests)?;
     }
     Ok(())
 }

@@ -32,6 +32,10 @@ impl ReleaseError {
                 f,
                 "{manifest}: the manifest cargo metadata lists is missing or does not parse, so its package.publish cannot be checked"
             ),
+            Self::RootWithoutWorkspace { root } => write!(
+                f,
+                "{root}: no Cargo workspace known from cargo metadata owns this release root, so its packages and publish registries cannot be checked"
+            ),
             Self::ToolchainFromPath { file } => write!(
                 f,
                 "{file}: a toolchain taken from a path makes rustup run repository code while release-plz holds the release App token"

@@ -52,7 +52,13 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
     if args.manifests {
         let roots: Vec<String> = args.files.iter().map(|path| root_of(&top, path)).collect();
         let known = super::manifests::read(&top, &roots)?;
-        check_manifests(&files, &known.metadata, &known.manifests)?;
+        let relative: Vec<(String, String)> = args
+            .files
+            .iter()
+            .zip(&files)
+            .map(|(path, (_, text))| (relative_to(&top, path), text.clone()))
+            .collect();
+        check_manifests(&relative, &known.metadata, &known.manifests)?;
     }
     let patterns = args.tag_patterns();
     check_tag_patterns(&files, &patterns)?;
@@ -66,9 +72,18 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
     Ok(output)
 }
 
-fn root_of(top: &Path, file: &Path) -> String {
+fn relative_to(top: &Path, file: &Path) -> String {
     file.strip_prefix(top)
         .unwrap_or(file)
+        .components()
+        .filter(|part| !matches!(part, Component::CurDir))
+        .collect::<std::path::PathBuf>()
+        .display()
+        .to_string()
+}
+
+fn root_of(top: &Path, file: &Path) -> String {
+    Path::new(&relative_to(top, file))
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())

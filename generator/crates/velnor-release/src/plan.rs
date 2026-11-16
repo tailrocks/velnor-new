@@ -9,6 +9,7 @@ use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
 use crate::members::{check_inventory, check_registries};
 use crate::mise;
+use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::velnor_config::{VelnorConfig, parse};
@@ -255,8 +256,13 @@ impl ReleasePlan {
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
         }
-        if let Some(metadata) = &files.rust_metadata {
-            check_registries(&configs, metadata, &files.cargo_manifest_texts)?;
+        match &files.rust_metadata {
+            Some(metadata) => check_registries(&configs, metadata, &files.cargo_manifest_texts)?,
+            None => {
+                for config in &configs {
+                    check_publish_registries_in_text(config, &files.cargo_manifest_texts)?;
+                }
+            }
         }
         for (file, text) in &files.cargo_configs {
             let mut reached = configs

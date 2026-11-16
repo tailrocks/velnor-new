@@ -24,10 +24,15 @@ pub(crate) struct RootConfig {
     pub(crate) packages: Vec<Package>,
     pub(crate) workspace_tags: Vec<TagPattern>,
     entries: BTreeMap<String, bool>,
+    unreleased: BTreeSet<String>,
     unlisted_publish: bool,
 }
 
 impl RootConfig {
+    pub(crate) fn releases(&self, package: &str) -> bool {
+        !self.unreleased.contains(package)
+    }
+
     pub(crate) fn publishes(&self, package: &str) -> bool {
         self.publishes_to_crates_io
             && self
@@ -224,8 +229,15 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             )
         })
         .collect();
+    let unreleased = document
+        .package
+        .iter()
+        .filter(|entry| entry.settings.over(workspace).release == Some(false))
+        .map(|entry| entry.name.clone())
+        .collect();
     Ok(RootConfig {
         entries,
+        unreleased,
         unlisted_publish: workspace.release != Some(false) && workspace.publishes_to_crates_io(),
         root: root.to_owned(),
         publishes_to_crates_io,

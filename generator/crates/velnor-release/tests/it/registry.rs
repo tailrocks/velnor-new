@@ -245,3 +245,16 @@ fn a_cargo_config_is_judged_by_the_roots_it_reaches_not_by_other_roots() -> Test
     ));
     Ok(())
 }
+
+#[test]
+fn a_root_no_metadata_workspace_owns_is_refused_not_skipped() {
+    let mut files = files();
+    files.rust_metadata = Some(metadata(&[(
+        "other/Cargo.toml",
+        &[("app", "other/Cargo.toml")],
+    )]));
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::RootWithoutWorkspace { .. })
+    ));
+}
