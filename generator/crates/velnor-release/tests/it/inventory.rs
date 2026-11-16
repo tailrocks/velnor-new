@@ -35,7 +35,7 @@ fn two_workspaces(root_plz: &str, tools_plz: &str) -> ReleaseFiles {
 }
 
 #[test]
-fn a_release_root_that_is_a_workspace_member_checks_the_package_inventory() -> TestResult {
+fn a_release_root_that_is_a_workspace_member_checks_the_package_inventory() {
     let plz = |name: &str| PLZ.replace("name = \"app\"", &format!("name = \"{name}\""));
     let members = [
         ("foo", "crates/foo/Cargo.toml"),
@@ -56,7 +56,6 @@ fn a_release_root_that_is_a_workspace_member_checks_the_package_inventory() -> T
         "{error:?}"
     );
     assert_eq!(refusal(&build("foo")), None);
-    Ok(())
 }
 
 #[test]
@@ -74,7 +73,6 @@ fn an_inherited_member_name_that_recording_rejects_is_refused_at_generation() ->
 
 #[test]
 fn an_unlisted_member_tag_is_compared_with_every_effective_tag_of_the_root() -> TestResult {
-    let plz = listing("git_tag_name = \"other-v{{ version }}\"\n")?;
     let members = [("app", "Cargo.toml"), ("other", "other/Cargo.toml")];
     let stolen = listing("git_tag_name = \"other-v{{ version }}\"\n")?;
     let error = refusal(&rooted(&stolen, &members));
@@ -106,7 +104,7 @@ fn a_binary_of_a_workspace_inherited_member_takes_the_instantiated_workspace_tag
 }
 
 #[test]
-fn a_member_a_root_disables_is_not_inherited_by_it() -> TestResult {
+fn a_member_a_root_disables_is_not_inherited_by_it() {
     let root = PLZ.replace(
         "name = \"app\"\n",
         "name = \"app\"\n\n[[package]]\nname = \"shared\"\nrelease = false\n",
@@ -124,7 +122,6 @@ fn a_member_a_root_disables_is_not_inherited_by_it() -> TestResult {
         ],
     );
     assert_eq!(refusal(&files), None);
-    Ok(())
 }
 
 #[test]
