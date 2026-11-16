@@ -56,7 +56,7 @@ pub enum Command {
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
-        about = "Run after every cache is restored: every action that must follow the restores"
+        about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore"
     )]
     Restored,
     #[command(
