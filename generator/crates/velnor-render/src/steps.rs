@@ -200,7 +200,10 @@ fn publish_helper(binary: &RepoPath) -> RenderedStep {
         uses: Some(UPLOAD_ARTIFACT.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            ("path".to_owned(), Value::Text(crate::cache::glob_literal(binary.as_str()))),
+            (
+                "path".to_owned(),
+                Value::Text(crate::cache::glob_literal(binary.as_str())),
+            ),
             ("include-hidden-files".to_owned(), Value::Bool(true)),
             (
                 "if-no-files-found".to_owned(),
