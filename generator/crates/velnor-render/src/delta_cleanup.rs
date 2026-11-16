@@ -63,7 +63,10 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
             entry(
                 "concurrency",
                 Yaml::Map(vec![
-                    entry("group", text("velnor-pr-delta-cleanup")),
+                    entry(
+                        "group",
+                        Yaml::Expr("velnor-pr-delta-cleanup-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}".to_owned()),
+                    ),
                     entry("cancel-in-progress", Yaml::Bool(false))
                 ])
             ),

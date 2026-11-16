@@ -67,6 +67,10 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     value.contains("github.event_name == ''pull_request''"),
                     "{value}"
                 );
+                assert!(
+                    !value.contains("github.event.repository.private"),
+                    "{value}"
+                );
                 if name == "Save the delta cache" || name == "velnor-ci delta stage" {
                     assert!(
                         value.contains("head.repo.full_name == github.repository"),
@@ -91,6 +95,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
             assert!(step(&lane, "velnor-ci delta stage").is_some_and(|s| s.contains("--package")));
         }
     }
+    private_delta_visibility()?;
     let mut custom = pinned("0.1.81", "")?;
     let config = RepoPath::new(".cargo/config.toml")?;
     custom.tracked_paths.insert(config.clone());
@@ -101,6 +106,38 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
     assert!(text.contains("path: build"), "{text}");
     assert!(!text.contains("velnor-ci delta"), "{text}");
     assert!(!text.contains("the delta cache"), "{text}");
+    Ok(())
+}
+
+fn private_delta_visibility() -> TestResult {
+    let mut private_sources = pinned("0.1.81", "")?;
+    private_sources.files.insert(
+        RepoPath::new("Cargo.lock")?,
+        b"version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
+    );
+    let private_workflow = workflow(&private_sources)?;
+    let lanes = crate::archive::jobs_of(&private_workflow);
+    let (_, lane) = lanes
+        .iter()
+        .find(|(id, _)| id == "rust")
+        .ok_or("no rust lane")?;
+    for name in [
+        "velnor-ci delta prepare",
+        "Restore the delta cache",
+        "velnor-ci delta apply",
+        "velnor-ci delta stage",
+        "Save the delta cache",
+    ] {
+        let value = step(lane, name).ok_or("no private delta step")?;
+        let condition = value
+            .lines()
+            .find(|line| line.trim_start().starts_with("if: "))
+            .ok_or("no delta condition")?;
+        assert!(
+            condition.contains("github.event.repository.private == true"),
+            "{value}"
+        );
+    }
     Ok(())
 }
 
@@ -135,6 +172,11 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
         }
         let cleanup = cleanup.ok_or("no cleanup")?;
         assert!(cleanup.contains("workflow_run:"), "{cleanup}");
+        assert!(
+            cleanup.contains("group: 'velnor-pr-delta-cleanup-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}'"),
+            "{cleanup}"
+        );
+        assert!(cleanup.contains("cancel-in-progress: false"), "{cleanup}");
         assert!(cleanup.contains("- Rust CI"), "{cleanup}");
         assert!(cleanup.contains("- completed"), "{cleanup}");
         assert!(cleanup.contains("  rust-trim:"), "{cleanup}");

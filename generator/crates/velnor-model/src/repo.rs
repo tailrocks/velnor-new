@@ -25,6 +25,7 @@ pub struct RustMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustPackage {
     pub name: PackageName,
+    pub version: Option<String>,
     pub manifest: RepoPath,
     pub dependencies: Vec<PackageDependency>,
     pub targets: Vec<Target>,
@@ -79,6 +80,7 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
+    pub private_sources: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub weakenings: Vec<Weakening>,

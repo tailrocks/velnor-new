@@ -3,13 +3,21 @@
 
 use velnor_gen::{Drift, drift, generated_files};
 use velnor_model::{DependencyKind, RepoPath, RepoView, TargetKind};
-use velnor_rust::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata, sha256_hex};
+use velnor_rust::{
+    LOCK_PATH, METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata, sha256_hex,
+};
 
 use crate::facts::{TestResult, package, path};
-use crate::pipeline::view;
+use crate::pipeline::{HELPER_LOCK, view};
+
+fn pin(files: &mut RepoView, version: &str) {
+    let lock = String::from_utf8_lossy(HELPER_LOCK).replace("0.1.79", version);
+    files.files.insert(LOCK_PATH, lock.into_bytes());
+}
 
 fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut files = view(&["Cargo.toml", "tool/Cargo.toml"], None)?;
+    pin(&mut files, "0.1.81");
     let core = package(
         "core",
         "core/Cargo.toml",
@@ -169,7 +177,11 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     let generated = generated_files(&files)?;
     assert_eq!(
         generated.keys().cloned().collect::<Vec<_>>(),
-        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
+        [
+            velnor_render::DELTA_CLEANUP_PATH,
+            path(".github/workflows/rust-ci.yml")?,
+            METADATA_PATH,
+        ]
     );
     let on_disk = generated
         .iter()
@@ -272,5 +284,66 @@ fn only_a_rust_file_in_a_discovered_folder_changes_the_recorded_layout() -> Test
         recorded_metadata(&extra, Some(text.as_bytes())),
         Err(MetadataFileError::Layout)
     );
+    Ok(())
+}
+
+#[test]
+fn a_file_written_before_versions_were_recorded_is_refused_with_the_regenerate_command()
+-> TestResult {
+    let files = two_workspaces()?;
+    let mut json: serde_json::Value = serde_json::from_str(&recorded(&files)?)?;
+    for root in json["roots"].as_object_mut().ok_or("roots")?.values_mut() {
+        for member in root["members"].as_array_mut().ok_or("members")? {
+            member.as_object_mut().ok_or("member")?.remove("version");
+        }
+    }
+    let old = serde_json::to_string(&json)?;
+    assert!(!old.contains("\"version\""));
+    let Err(error) = recorded_metadata(&files, Some(old.as_bytes())) else {
+        return Err("an old-format file was accepted".into());
+    };
+    assert!(matches!(error, MetadataFileError::Unreadable(_)));
+    let message = error.to_string();
+    assert!(message.contains(".velnor/rust-metadata.json"), "{message}");
+    assert!(message.contains("version"), "{message}");
+    assert!(message.ends_with("run velnor-gen generate"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
+    let mut files = two_workspaces()?;
+    pin(&mut files, "0.1.79");
+    let old = recorded(&files)?;
+    assert!(!old.contains("\"version\""), "{old}");
+    assert!(generated_files(&files).is_ok());
+    let read = recorded_metadata(&files, Some(old.as_bytes()))?;
+    assert!(
+        read.values()
+            .flat_map(|workspace| &workspace.members)
+            .all(|member| member.version.is_none())
+    );
+    pin(&mut files, "0.1.81");
+    assert!(recorded(&files)?.contains("\"version\""));
+    Ok(())
+}
+
+#[test]
+fn the_pin_decides_whether_a_recorded_version_is_read() -> TestResult {
+    let files = two_workspaces()?;
+    let new = recorded(&files)?;
+    let mut old_pin = files.clone();
+    pin(&mut old_pin, "0.1.79");
+    let read = recorded_metadata(&old_pin, Some(new.as_bytes()))?;
+    assert!(
+        read.values()
+            .flat_map(|workspace| &workspace.members)
+            .all(|member| member.version.is_none())
+    );
+    let old = recorded(&old_pin)?;
+    assert!(matches!(
+        recorded_metadata(&files, Some(old.as_bytes())),
+        Err(MetadataFileError::Unreadable(_))
+    ));
     Ok(())
 }

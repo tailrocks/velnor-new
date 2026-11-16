@@ -172,6 +172,7 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       base_prefix: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -331,7 +332,7 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-archive-guard --locked
       - name: Build the tests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
@@ -386,6 +387,7 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       base_prefix: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -488,7 +490,7 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-ci --locked
       - name: Build the tests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -546,6 +548,7 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       base_prefix: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -690,7 +693,7 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-qualification --locked
       - name: Build the tests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -748,6 +751,7 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       base_prefix: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -868,7 +872,7 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-rust --locked
       - name: Build the tests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -926,6 +930,7 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       base_prefix: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1034,7 +1039,7 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-local --locked
       - name: Build the tests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -1299,58 +1304,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
-  rust-trim:
-    needs:
-      - rust-root
-      - rust-ci_helper
-      - rust-crates_velnor_runner
-      - rust-generator
-      - rust-local
-    if: '${{ !cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
-    permissions:
-      actions: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
-      - name: Delete the older rust-root entries
-        if: '${{ needs.rust-root.outputs.base_save == ''true'' }}'
-        env:
-          CACHE_PREFIX: '${{ needs.rust-root.outputs.base_prefix }}'
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: 'velnor-ci cache trim --prefix "$CACHE_PREFIX"'
-      - name: Delete the older rust-ci_helper entries
-        if: '${{ needs.rust-ci_helper.outputs.base_save == ''true'' }}'
-        env:
-          CACHE_PREFIX: '${{ needs.rust-ci_helper.outputs.base_prefix }}'
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: 'velnor-ci cache trim --prefix "$CACHE_PREFIX"'
-      - name: Delete the older rust-crates_velnor_runner entries
-        if: '${{ needs.rust-crates_velnor_runner.outputs.base_save == ''true'' }}'
-        env:
-          CACHE_PREFIX: '${{ needs.rust-crates_velnor_runner.outputs.base_prefix }}'
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: 'velnor-ci cache trim --prefix "$CACHE_PREFIX"'
-      - name: Delete the older rust-generator entries
-        if: '${{ needs.rust-generator.outputs.base_save == ''true'' }}'
-        env:
-          CACHE_PREFIX: '${{ needs.rust-generator.outputs.base_prefix }}'
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: 'velnor-ci cache trim --prefix "$CACHE_PREFIX"'
-      - name: Delete the older rust-local entries
-        if: '${{ needs.rust-local.outputs.base_save == ''true'' }}'
-        env:
-          CACHE_PREFIX: '${{ needs.rust-local.outputs.base_prefix }}'
-          GITHUB_TOKEN: '${{ github.token }}'
-        run: 'velnor-ci cache trim --prefix "$CACHE_PREFIX"'
   required:
     name: Required
     needs:
