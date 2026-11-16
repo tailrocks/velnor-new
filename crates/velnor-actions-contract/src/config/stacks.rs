@@ -150,6 +150,7 @@ fn default_configurations() -> Vec<RustConfiguration> {
         features: vec!["default".to_owned()],
         all_features: false,
         target: "host".to_owned(),
+        packages: Vec::new(),
     }]
 }
 
@@ -165,6 +166,16 @@ pub struct RustConfiguration {
     pub all_features: bool,
 
     pub target: String,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub packages: Vec<String>,
+}
+
+impl RustConfiguration {
+    #[must_use]
+    pub fn applies_to(&self, package: &str) -> bool {
+        self.packages.is_empty() || self.packages.iter().any(|name| name == package)
+    }
 }
 
 #[must_use]
@@ -325,6 +336,16 @@ impl RustStackConfig {
                         file,
                         "stacks.rust.configurations.features",
                         format!("bad_feature:{feature}"),
+                    ));
+                }
+            }
+            let mut scoped = BTreeSet::new();
+            for package in &config.packages {
+                if package.trim().is_empty() || !scoped.insert(package.as_str()) {
+                    return Err(ContractError::config(
+                        file,
+                        "stacks.rust.configurations.packages",
+                        format!("bad_package:{}:{package}", config.name),
                     ));
                 }
             }

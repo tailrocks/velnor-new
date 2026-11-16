@@ -267,6 +267,7 @@ fn derive_all(
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = true;
     let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
+    crate::derive_groups::check_scoped_packages(&rust.configurations, workspaces)?;
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();

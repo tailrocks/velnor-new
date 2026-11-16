@@ -53,6 +53,32 @@ pub(crate) fn declared_union(
     union
 }
 
+pub(crate) fn check_scoped_packages(
+    configurations: &[RustConfiguration],
+    workspaces: &[PlannedWorkspace],
+) -> Result<(), OrchestratorError> {
+    let known: BTreeSet<&str> = workspaces
+        .iter()
+        .flat_map(|workspace| &workspace.record.packages)
+        .filter(|package| package.in_workspace && !package.external)
+        .map(|package| package.name.as_str())
+        .collect();
+    for configuration in configurations {
+        if let Some(unknown) = configuration
+            .packages
+            .iter()
+            .find(|package| !known.contains(package.as_str()))
+        {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.configurations.packages",
+                format!("unknown_package:{}:{unknown}", configuration.name),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn derive_for_config(
     config: &VelnorConfig,
     index: &FileIndex,
@@ -80,6 +106,7 @@ pub(crate) fn derive_for_config(
         if !package.in_workspace
             || package.external
             || !index.contains(&package.manifest)
+            || !rust_config.applies_to(&package.name)
             || repository_maintenance_member(
                 config.workflow.policy,
                 &record.workspace_root,

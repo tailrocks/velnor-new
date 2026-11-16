@@ -141,6 +141,8 @@ mod rust_tree_pin_jobs;
 mod rust_tree_pin_rendered;
 #[path = "workflow_configuration_public/scoped_check_selection.rs"]
 mod scoped_check_selection;
+#[path = "workflow_configuration_public/scoped_configuration.rs"]
+mod scoped_configuration;
 #[path = "workflow_configuration_public/scoped_workspace.rs"]
 mod scoped_workspace;
 #[path = "workflow_configuration_public/seed_ids.rs"]
