@@ -44,6 +44,7 @@ mod rulesets;
 mod run;
 mod run_capture;
 mod run_group;
+mod run_process;
 mod setup_pure;
 mod support;
 mod telemetry;
