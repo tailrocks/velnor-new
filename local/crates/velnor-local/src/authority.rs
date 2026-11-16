@@ -39,17 +39,14 @@ impl Entry {
             .any(|claim| claim.workflow == facts.workflow && claim.run == facts.id)
     }
 
-    fn bound(&self) -> Option<&str> {
-        self.workflow
-            .as_deref()
-            .or_else(|| self.claims.first().map(|claim| claim.workflow.as_str()))
-    }
-
     fn describes(&self, event: &str, git_ref: &str, sha: &str, workflow: &str) -> bool {
         self.event == event
             && self.git_ref == git_ref
             && self.sha == sha
-            && self.bound().is_none_or(|bound| bound == workflow)
+            && self
+                .workflow
+                .as_deref()
+                .is_none_or(|bound| bound == workflow)
     }
 
     fn open_for(&self, workflow: &str) -> bool {
@@ -236,6 +233,7 @@ fn next_free<'a>(
 ) -> Option<&'a Entry> {
     let mut taken: Vec<u64> = entries
         .iter()
+        .filter(|entry| entry.side == side)
         .flat_map(|entry| &entry.claims)
         .filter(|claim| claim.workflow == facts.workflow)
         .map(|claim| claim.run)

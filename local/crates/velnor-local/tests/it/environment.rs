@@ -351,3 +351,40 @@ async fn up_waits_for_runner_server_and_the_cache_even_when_no_plain_runner_star
         "up returned before the service answered"
     );
 }
+
+async fn stalling_service() -> String {
+    use tokio::io::AsyncReadExt;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((mut stream, _)) = listener.accept().await {
+            let mut buffer = [0_u8; 2048];
+            let _ = stream.read(&mut buffer).await;
+            held.push(stream);
+        }
+    });
+    address.to_string()
+}
+
+#[tokio::test(start_paused = true)]
+async fn up_fails_at_the_readiness_deadline_when_the_upstream_never_answers() {
+    let dir = temp_dir("environment-pair-stalled");
+    let address = stalling_service().await;
+    let env = Environment::at(&dir, Published(address))
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut args = plain(&dir, 1, 0);
+    args.runner = RunnerMode::Pair;
+    let limit = std::time::Duration::from_secs(70);
+    let up = tokio::time::timeout(limit, env.up(&dir, &args)).await;
+    let error = up
+        .unwrap_or_else(|_| unreachable!("up hung past the readiness deadline"))
+        .err()
+        .unwrap_or_else(|| unreachable!("up succeeded against a stalled upstream"));
+    assert!(error.to_string().contains("did not connect"), "{error}");
+}

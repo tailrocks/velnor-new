@@ -48,8 +48,10 @@ pub async fn default_host(exe: &Path) -> io::Result<PathBuf> {
     let owner = fs::metadata(exe).await?.uid();
     for root in exe.ancestors().skip(1) {
         let candidate = root.join(HOST_BINARY);
-        let Ok(meta) = fs::symlink_metadata(&candidate).await else {
-            continue;
+        let meta = match fs::symlink_metadata(&candidate).await {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
         };
         let mode = meta.mode();
         if !meta.is_file() || meta.uid() != owner || mode & 0o022 != 0 || mode & 0o100 == 0 {

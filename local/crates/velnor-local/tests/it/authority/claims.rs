@@ -59,7 +59,7 @@ async fn authority_keeps_a_claim_across_a_restart() {
 }
 
 #[tokio::test]
-async fn authority_binds_an_entry_without_a_workflow_to_the_file_that_claims_it_first() {
+async fn authority_admits_every_workflow_one_unscoped_dispatch_created_once_each() {
     let runners = FakeRunners::default();
     let authority = authority("authority-claims-files", &runners).await;
     post(
@@ -72,8 +72,42 @@ async fn authority_binds_an_entry_without_a_workflow_to_the_file_that_claims_it_
     let (_, ci) = run_facts(&authority, "trusted", 1).await;
     let (_, lint) = run_facts(&authority, "trusted", 2).await;
     assert_eq!(ci["ledger"], "1-push", "{ci}");
-    assert_eq!(lint["ledger"], Value::Null, "{lint}");
-    assert_eq!(lint["refusal"], "not_dispatched", "{lint}");
+    assert_eq!(lint["ledger"], "1-push", "{lint}");
+    runners.create_file(Side::Trusted, 3, "lint.yml", "push", "refs/heads/main", SHA);
+    let (_, again) = run_facts(&authority, "trusted", 3).await;
+    assert_eq!(again["refusal"], "not_dispatched", "{again}");
+    runners.create_file(
+        Side::Trusted,
+        4,
+        "ci.yml",
+        "pull_request",
+        "refs/heads/main",
+        SHA,
+    );
+    let (_, other) = run_facts(&authority, "trusted", 4).await;
+    assert_eq!(other["refusal"], "not_dispatched", "{other}");
+}
+
+#[tokio::test]
+async fn authority_does_not_count_the_other_sides_claim_of_the_same_run_id() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-claims-sides", &runners).await;
+    post(
+        &authority,
+        entry("1-push", "untrusted", "push", "refs/heads/main"),
+    )
+    .await;
+    post(
+        &authority,
+        entry("2-push", "trusted", "push", "refs/heads/main"),
+    )
+    .await;
+    runners.create(Side::Untrusted, 1, "push", "refs/heads/main", SHA);
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    let (_, untrusted) = run_facts(&authority, "untrusted", 1).await;
+    let (_, trusted) = run_facts(&authority, "trusted", 1).await;
+    assert_eq!(untrusted["ledger"], "1-push", "{untrusted}");
+    assert_eq!(trusted["ledger"], "2-push", "{trusted}");
 }
 
 #[tokio::test]

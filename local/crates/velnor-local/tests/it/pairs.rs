@@ -365,3 +365,24 @@ fn the_cli_never_picks_a_velnor_host_planted_in_its_working_directory() {
         "{stderr}"
     );
 }
+
+#[tokio::test]
+async fn a_default_host_candidate_that_cannot_be_inspected_is_an_error_not_a_miss() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = temp_dir("pairs-host-unreadable");
+    let (exe, _) = installed(&root, 0o755);
+    let blocked = root.join("crates");
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o000))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let resolved = velnor_local::io::supervisor::default_host(&exe).await;
+    std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let error = resolved
+        .err()
+        .unwrap_or_else(|| unreachable!("resolved a host"));
+    assert_eq!(
+        error.kind(),
+        std::io::ErrorKind::PermissionDenied,
+        "{error}"
+    );
+}

@@ -33,13 +33,17 @@ pub(super) async fn wait_for(
     deadline: tokio::time::Instant,
     what: &str,
 ) -> io::Result<()> {
-    while request(proxy, "GET", path, "").await.is_none() {
-        if tokio::time::Instant::now() > deadline {
+    loop {
+        if let Ok(Some(_)) =
+            tokio::time::timeout_at(deadline, request(proxy, "GET", path, "")).await
+        {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
             return Err(io::Error::other(format!(
                 "{what} did not connect within 60 s"
             )));
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
-    Ok(())
 }
