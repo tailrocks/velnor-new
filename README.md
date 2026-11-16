@@ -76,6 +76,9 @@ relative `CARGO_TARGET_DIR` cannot select a stale repository binary.
 
 ## Consumer installation
 
+The Rust generator's release settings are documented in the
+[release configuration reference](docs/implemented/generator-release-config.md).
+
 Consumers install an official `velnor-actions` release, then run
 `velnor-actions init` and `velnor-actions generate`. Per the
 [bootstrap contract](docs/proposed/bootstrap-and-release-contract.md) §2,

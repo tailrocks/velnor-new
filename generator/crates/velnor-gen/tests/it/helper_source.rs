@@ -75,11 +75,25 @@ fn the_plan_job_and_the_helper_job_use_the_released_helper() -> TestResult {
 }
 
 #[test]
+fn the_job_that_builds_the_helper_uploads_the_fingerprint_log_too() -> TestResult {
+    let text = text_of(&sample(None)?)?;
+    let start = text.find("  rust-helper:\n").ok_or("no helper job")?;
+    let body = &text[start..];
+    let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
+    assert!(
+        body[..end].contains("Upload the cargo fingerprint log"),
+        "{}",
+        &body[..end]
+    );
+    Ok(())
+}
+
+#[test]
 fn without_the_helper_key_no_job_builds_or_downloads_the_helper() -> TestResult {
     let text = text_of(&sample(Some("exclude = [\"fixtures/**\"]\n"))?)?;
     assert!(!job_ids(&text).contains(&"rust-helper"));
     assert!(!text.contains("Download velnor-ci"));
-    assert!(!text.contains("upload-artifact"));
+    assert!(!text.contains("Upload velnor-ci"));
     assert!(!text.contains("cargo build -p"));
     assert!(text.matches("Install velnor-ci").count() > 2);
     Ok(())

@@ -3,6 +3,7 @@
 
 mod audit_job;
 mod build_profile;
+mod build_script;
 mod cargo_lock;
 mod classify;
 mod compat;
@@ -47,6 +48,7 @@ mod weaken_scope;
 mod weaken_targets;
 
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
+pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
 pub use config::{CONFIG_PATH, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;

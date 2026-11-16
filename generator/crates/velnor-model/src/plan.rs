@@ -197,6 +197,7 @@ pub enum When {
     Always,
     Scheduled,
     ScheduledOrPush,
+    CacheDebug,
     SaveToolsOnDefaultBranch,
 }
 
@@ -231,6 +232,7 @@ pub enum StepKind {
     FailWhenANeedFailed,
     FailOnDraftRun,
     Verdict(VerdictSpec),
+    UploadCargoLog,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -356,12 +358,8 @@ impl CargoCommand {
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
-            Self::NextestRun { .. } => &[GateNeed::TestFilter, GateNeed::PackageArgs],
-            Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
-            Self::Clippy { .. } | Self::Doc | Self::NextestArchive { .. } => {
-                &[GateNeed::PackageArgs]
-            }
-            Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
+            Self::NextestRun { .. } | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::Doctest => &[GateNeed::DoctestsKnown],
             _ => &[],
         }
     }

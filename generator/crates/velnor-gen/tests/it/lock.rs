@@ -13,7 +13,7 @@ use crate::pipeline::{view, workflow};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const SUMS: &str = "\
+pub(crate) const SUMS: &str = "\
 4679c5492ab36252ccae31aab4f6c8a454ef2ab0e30d4dcdd3d6080d49c1cbe6  COMMIT
 10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e  velnor-ci-linux-x64
 56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6  velnor-ci-linux-arm64
@@ -24,7 +24,7 @@ const SUMS: &str = "\
 ";
 
 const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
-const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
+pub(crate) const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
 
 fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut view = view(&["Cargo.toml"], None)?;
@@ -33,7 +33,7 @@ fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
     Ok(view)
 }
 
-fn locked(version: &str) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) fn locked(version: &str) -> Result<RepoView, Box<dyn Error>> {
     with_lock(&pin_lock(version, COMMIT_FILE, SUMS)?)
 }
 

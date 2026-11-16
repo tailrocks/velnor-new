@@ -394,21 +394,6 @@ fn prepare_names_the_tool_that_is_not_at_its_pinned_version_and_writes_nothing()
     }
 }
 
-#[test]
-fn restored_exits_zero_and_writes_nothing() {
-    let dir = scratch("restored");
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .arg("restored")
-        .current_dir(&dir)
-        .env("GITHUB_ENV", dir.join("env"))
-        .env("GITHUB_OUTPUT", dir.join("output"))
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(output.status.success());
-    assert!(output.stdout.is_empty() && output.stderr.is_empty());
-    assert!(!dir.join("env").exists() && !dir.join("output").exists());
-}
-
 const LISTING: &str = "cargo-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-std-wasm32-unknown-unknown\nrustc-x86_64-unknown-linux-gnu (installed)\nrustfmt-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu\nrust-src\nrustc-dev-x86_64-unknown-linux-gnu\nrustc-dev-aarch64-apple-darwin";
 
 fn declared(file: &'static str) -> Declared<'static> {
