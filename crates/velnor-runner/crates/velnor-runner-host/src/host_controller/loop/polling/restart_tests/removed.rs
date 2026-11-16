@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::time::{Duration, Instant};
 use std::os::unix::fs::PermissionsExt;
+use std::time::{Duration, Instant};
 
 use bollard::Docker;
 

@@ -6,13 +6,10 @@ use std::time::{Duration, Instant};
 use super::retire_pending_pair;
 use crate::journal::Journal;
 use crate::launch::VerifiedWorkerImages;
-use crate::launch::bootstrap::unbound_pair_fixtures::{
-    FAILED, fixture::FixtureDocker, seed,
-};
-use crate::launch::scoped_runtime::scoped_prepare_context;
+use crate::launch::bootstrap::unbound_pair_fixtures::{FAILED, fixture::FixtureDocker, seed};
+use crate::launch::scoped_runtime::ScopedPrepareContext;
 
-const IMAGE_ID: &str =
-    "sha256:4444444444444444444444444444444444444444444444444444444444444444";
+const IMAGE_ID: &str = "sha256:4444444444444444444444444444444444444444444444444444444444444444";
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -31,15 +28,15 @@ async fn the_turn_deadline_reaches_the_retirement_of_a_pending_pair() -> TestRes
     ));
 
     let started = Instant::now();
-    let context = scoped_prepare_context(
-        &docker,
-        &scope,
-        &journal,
-        &(),
-        &engine,
-        &images,
-        started + Duration::from_millis(500),
-    );
+    let context = ScopedPrepareContext {
+        docker: &docker,
+        scoped: &scope,
+        host: &journal,
+        provider: &(),
+        engine: &engine,
+        images: &images,
+        deadline: started + Duration::from_millis(500),
+    };
     tokio::time::timeout(
         Duration::from_secs(60),
         retire_pending_pair(context, FAILED.reservation),
