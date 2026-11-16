@@ -284,3 +284,15 @@ fn the_inputs_audit_runs_only_where_one_job_has_built_every_cargo_root() -> Test
     assert!(!lanes.contains("inputs audit"), "{lanes}");
     Ok(())
 }
+
+#[test]
+fn the_inputs_audit_also_runs_on_a_merge_group_when_every_push_is_a_full_run() -> TestResult {
+    let config = Some(b"on_main = \"everything\"\n".as_slice());
+    let single = text(&view(&["Cargo.toml"], config)?)?;
+    let audit = step(&single, "velnor-ci inputs audit").join("\n");
+    assert!(
+        audit.contains("github.event_name == 'merge_group'"),
+        "{single}"
+    );
+    Ok(())
+}

@@ -8,6 +8,7 @@ use crate::steps::PREPARE_STEP;
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
+const RUN_ATTEMPT: &str = "${{ github.run_attempt }}";
 const DELTA_BASE: &str = "${{ steps.restored.outputs.base8 }}";
 const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 
@@ -52,6 +53,7 @@ pub fn render_key(key: &CacheKey) -> RenderedKey {
                 &lock,
                 COMMIT,
                 RUN_ID,
+                RUN_ATTEMPT,
             ],
             fallbacks: &[7, 6],
         },
@@ -65,6 +67,7 @@ pub fn render_key(key: &CacheKey) -> RenderedKey {
                 &compat,
                 DELTA_BASE,
                 RUN_ID,
+                RUN_ATTEMPT,
             ],
             fallbacks: &[7],
         },

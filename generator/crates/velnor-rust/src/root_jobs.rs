@@ -96,7 +96,7 @@ impl RootJobs<'_> {
             return None;
         }
         let when = match (self.facts.config.on_main, &self.facts.config.full_run) {
-            (OnMain::Everything, _) => When::ScheduledOrPush,
+            (OnMain::Everything, _) => When::ScheduledOrMain,
             (OnMain::Affected, FullRun::Off) => return None,
             (OnMain::Affected, _) => When::Scheduled,
         };

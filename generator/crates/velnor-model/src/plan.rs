@@ -168,7 +168,7 @@ pub enum When {
     Success,
     NotCancelled,
     Scheduled,
-    ScheduledOrPush,
+    ScheduledOrMain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

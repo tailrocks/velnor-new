@@ -77,7 +77,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}'
           restore-keys: |
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-

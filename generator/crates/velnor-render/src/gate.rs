@@ -9,6 +9,7 @@ const NOT_CANCELLED: &str = "!cancelled()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
+const MERGE_GROUP: &str = "merge_group";
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     if need.is_global() {
@@ -55,8 +56,8 @@ pub(crate) fn condition(
             }
         }
         When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
-        When::ScheduledOrPush => parts.push(format!(
-            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
+        When::ScheduledOrMain => parts.push(format!(
+            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}' || github.event_name == '{MERGE_GROUP}')"
         )),
     }
     if skip_draft {

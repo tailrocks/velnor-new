@@ -54,7 +54,7 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
         target("rust-lint", "Cargo.toml")?,
         RenderedKey {
             key: format!(
-                "velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-{lock}-${{{{ github.sha }}}}-${{{{ github.run_id }}}}"
+                "velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-{lock}-${{{{ github.sha }}}}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}"
             ),
             restore_keys: vec![
                 format!("velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-{lock}-"),
@@ -70,7 +70,7 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
         }),
         RenderedKey {
             key: format!(
-                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-${{{{ github.run_id }}}}"
+                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}"
             ),
             restore_keys: vec![format!(
                 "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-"
@@ -383,5 +383,23 @@ fn a_dependency_bump_changes_no_byte_of_the_workflow() -> TestResult {
         b"[[package]]\nname = \"serde\"\nversion = \"1.0.2\"\n".to_vec(),
     );
     assert_eq!(workflow(&before)?, workflow(&after)?);
+    Ok(())
+}
+
+#[test]
+fn a_rerun_of_the_same_run_gets_its_own_target_and_delta_keys() -> TestResult {
+    let unique = "${{ github.run_id }}-${{ github.run_attempt }}";
+    let target = target("rust-lint", "Cargo.toml")?;
+    assert!(
+        target.key.ends_with(&format!("-{unique}")),
+        "{}",
+        target.key
+    );
+    let delta = render_key(&CacheKey::Delta {
+        job: JobId::new("rust-test")?,
+        root: root("Cargo.toml")?,
+        host: Host,
+    });
+    assert!(delta.key.ends_with(&format!("-{unique}")), "{}", delta.key);
     Ok(())
 }
