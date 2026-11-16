@@ -300,6 +300,13 @@ fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() -> TestRe
             true,
         ),
         ("name: Extra\non:\n  - push\n", true),
+        ("name: Extra\non: {push: {branches: [dev]}}\n", true),
+        ("name: Extra\non: {pull_request: {}, push: null}\n", true),
+        ("name: Extra\non: [push]\n", true),
+        (
+            "name: Extra\non: {pull_request: {branches: [push]}}\n",
+            false,
+        ),
         ("name: Extra\non: pull_request\n", false),
         ("name: Extra\non:\n  workflow_dispatch:\n", false),
     ] {
