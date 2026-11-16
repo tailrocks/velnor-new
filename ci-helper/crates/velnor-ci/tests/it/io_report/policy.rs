@@ -114,63 +114,74 @@ fn unknown_external_targets_have_unknown_compilation_identity() -> super::Result
 }
 
 fn normalization(case: &str, prefix: &str, duplicate: bool) -> super::ResultTest {
-    let artifacts = Repo::new("report-normalized-artifacts");
-    let base = super::fixture("report-normalized-checkout")?;
-    for index in 0..2 {
-        let repo = base.fork("report-normalized-checkout-fork");
-        let root = std::fs::canonicalize(repo.root())?;
-        let external = format!("/external/{index}/build");
-        let filename = if case == "checkout" {
-            format!("{}/target/debug/deps/libdemo-hash.rmeta", root.display())
-        } else {
-            format!("{external}/debug/deps/libdemo-hash.rmeta")
-        };
-        let mut invocation = crate::report::lane()["invocations"][0].clone();
-        invocation["root"] = json!(root);
-        invocation["compilations"] = json!([]);
-        invocation["progress"] = json!([]);
-        invocation["target_directory"] = if case == "configured" {
-            json!(external)
-        } else {
-            json!(null)
-        };
-        invocation["artifacts"] = json!([{
-            "package_id":"registry+https://example.invalid/index#demo@0.1.0", "manifest_path":"registry/demo/Cargo.toml",
-            "target":{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":"registry/demo/src/lib.rs"},
-            "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
-            "features":[],"filenames":[filename],"fresh":false
-        }]);
-        std::fs::write(
-            repo.root().join("velnor-invocations.jsonl"),
-            format!("{invocation}\n"),
-        )?;
-        let mut metrics = super::report(&repo, &json!([]), "{}")?;
-        let filename = &metrics.invocations[0].artifacts[0].filenames[0];
-        assert!(filename.starts_with(prefix), "{case}: {filename}");
-        assert_eq!(
-            metrics
-                .diagnostics
-                .iter()
-                .any(|message| message.contains("identity unknown for 1")),
-            !duplicate,
-            "{case}: {:?}",
-            metrics.diagnostics
+    let repo = super::fixture("report-normalized-checkout")?;
+    let root = std::fs::canonicalize(repo.root())?;
+    let external = "/external/build";
+    let filename = if case == "checkout" {
+        format!("{}/target/debug/deps/libdemo-hash.rmeta", root.display())
+    } else {
+        format!("{external}/debug/deps/libdemo-hash.rmeta")
+    };
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["argv"] = json!(["cargo", "check", "--manifest-path", root.join("Cargo.toml")]);
+    invocation["compilations"] = json!([]);
+    invocation["progress"] = json!([]);
+    invocation["target_directory"] = if case == "configured" {
+        json!(external)
+    } else {
+        json!(null)
+    };
+    invocation["artifacts"] = json!([{
+        "package_id":format!("path+file://{}#demo@0.1.0", root.display()), "manifest_path":root.join("Cargo.toml"),
+        "target":{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":root.join("src/lib.rs")},
+        "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+        "features":[],"filenames":[filename],"fresh":false
+    }]);
+    let raw = format!("{invocation}\n");
+    let path = repo.root().join("velnor-invocations.jsonl");
+    std::fs::write(&path, &raw)?;
+    let metrics = super::report(&repo, &json!([]), "{}")?;
+    let observed = &metrics.invocations[0];
+    let artifact = &observed.artifacts[0];
+    assert_eq!(observed.root, ".");
+    assert_eq!(artifact.manifest_path, "checkout/Cargo.toml");
+    assert_eq!(artifact.target.src_path, "checkout/src/lib.rs");
+    assert_eq!(artifact.package_id, "path+file://checkout#demo@0.1.0");
+    let expected = if duplicate {
+        format!("{prefix}debug/deps/libdemo-hash.rmeta")
+    } else {
+        filename
+    };
+    assert_eq!(artifact.filenames, [expected], "{case}");
+    assert_eq!(json!(observed.argv), invocation["argv"]);
+    assert_eq!(
+        json!(observed.target_directory),
+        invocation["target_directory"]
+    );
+    assert_eq!(std::fs::read_to_string(path)?, raw);
+    assert_eq!(
+        metrics
+            .diagnostics
+            .iter()
+            .any(|message| message.contains("identity unknown for 1")),
+        !duplicate,
+        "{case}: {:?}",
+        metrics.diagnostics
+    );
+    let mut other = metrics.clone();
+    "other".clone_into(&mut other.lane);
+    let checked = velnor_ci::report::check(&[metrics, other]);
+    assert_eq!(checked.is_err(), duplicate, "{case}: {checked:?}");
+    if duplicate {
+        assert!(
+            checked
+                .err()
+                .ok_or("duplicate compilation")?
+                .to_string()
+                .contains("identical observed compilation unit")
         );
-        metrics.lane = format!("lane{index}");
-        std::fs::create_dir_all(artifacts.root().join(format!("lane{index}")))?;
-        std::fs::write(
-            artifacts
-                .root()
-                .join(format!("lane{index}/ci-metrics.json")),
-            serde_json::to_string(&metrics)?,
-        )?;
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["report", "--check"])
-        .arg(artifacts.root())
-        .env("VELNOR_REPORT_NEEDS", "{}")
-        .output()?;
-    assert_eq!(!output.status.success(), duplicate, "{case}: {output:?}");
     Ok(())
 }
 
