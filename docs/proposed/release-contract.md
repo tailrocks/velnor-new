@@ -68,7 +68,7 @@ At that qualified Action tag, `action.yml` declares the `version` input with
 the Action downloads the CLI from the official `release-plz/release-plz`
 release assets. Generated release steps do not use that Action. They invoke
 the CLI as
-`mise --no-config --no-env --no-hooks exec rust@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
+`mise --no-config --no-env --no-hooks exec rust[profile=minimal]@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
 then the subcommand.
 
 ## 3. Selection contract
