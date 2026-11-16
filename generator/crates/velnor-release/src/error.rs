@@ -53,6 +53,7 @@ pub enum ReleaseError {
     UnsafeRoot {
         root: String,
     },
+    VersionEndsInLock(String, String),
     DuplicateBinary {
         package: String,
     },
