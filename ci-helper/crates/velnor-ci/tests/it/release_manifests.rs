@@ -308,7 +308,8 @@ fn a_root_whose_members_all_opt_out_of_crates_io_may_set_a_proxy() {
 }
 
 #[test]
-fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_only_where_it_will_be_tagged() {
+fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_only_where_it_will_be_tagged()
+ {
     let checkout = Checkout::new("lock-version");
     let version = |version: &str| {
         checkout

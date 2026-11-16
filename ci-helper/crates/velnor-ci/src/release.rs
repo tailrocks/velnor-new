@@ -196,8 +196,9 @@ pub fn check_manifests(
 ) -> Result<(), CiError> {
     velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)?;
     match versions {
-        Some(versions) => velnor_release::check_release_versions(files, metadata, versions)
-            .map_err(CiError::new),
+        Some(versions) => {
+            velnor_release::check_release_versions(files, metadata, versions).map_err(CiError::new)
+        }
         None => Ok(()),
     }
 }
