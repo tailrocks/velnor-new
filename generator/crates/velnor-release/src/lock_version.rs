@@ -9,6 +9,7 @@ use crate::error::ReleaseError;
 use crate::registry::within;
 use crate::release_plz::RootConfig;
 use crate::tag::TagPattern;
+use crate::workspace_root::{unparsable_package_name, workspace_root};
 
 fn parse(manifests: &BTreeMap<String, String>, path: &str) -> Result<Value, ReleaseError> {
     manifests[path]
@@ -23,32 +24,17 @@ fn parse(manifests: &BTreeMap<String, String>, path: &str) -> Result<Value, Rele
 fn workspace_version(
     manifests: &BTreeMap<String, String>,
     manifest: &str,
+    package: &Value,
 ) -> Result<Option<String>, ReleaseError> {
-    let mut directory = manifest
-        .strip_suffix("Cargo.toml")
-        .map(|d| d.trim_end_matches('/'));
-    while let Some(current) = directory {
-        let candidate = if current.is_empty() {
-            "Cargo.toml".to_owned()
-        } else {
-            format!("{current}/Cargo.toml")
-        };
-        if manifests.contains_key(&candidate) {
-            let document = parse(manifests, &candidate)?;
-            if let Some(workspace) = document.get("workspace") {
-                return Ok(workspace
-                    .get("package")
-                    .and_then(|package| package.get("version"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned));
-            }
-        }
-        directory = match current {
-            "" => None,
-            _ => Some(current.rsplit_once('/').map_or("", |(parent, _)| parent)),
-        };
-    }
-    Ok(None)
+    let Some(root) = workspace_root(manifests, manifest, package, parse)? else {
+        return Ok(None);
+    };
+    Ok(parse(manifests, &root)?
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("version"))
+        .and_then(Value::as_str)
+        .map(str::to_owned))
 }
 
 fn effective_version(
@@ -59,7 +45,7 @@ fn effective_version(
     match package.get("version") {
         Some(Value::String(version)) => Ok(Some(version.clone())),
         Some(Value::Table(table)) if table.get("workspace") == Some(&Value::Boolean(true)) => {
-            workspace_version(manifests, path)
+            workspace_version(manifests, path, package)
         }
         _ => Ok(None),
     }
@@ -91,7 +77,13 @@ pub(crate) fn check_versions(
             .any(TagPattern::ends_with_version)
     }) {
         for path in manifests.keys().filter(|path| within(&config.root, path)) {
-            let document = parse(manifests, path)?;
+            let document = match parse(manifests, path) {
+                Ok(document) => document,
+                Err(error) => match unparsable_package_name(&manifests[path]) {
+                    Some(name) if receives_version_tag(config, &name) => return Err(error),
+                    _ => continue,
+                },
+            };
             let Some(package) = document.get("package") else {
                 continue;
             };

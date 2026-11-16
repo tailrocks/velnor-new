@@ -19,6 +19,7 @@ mod tag;
 mod timeout;
 mod velnor_config;
 mod versions;
+mod workspace_root;
 
 pub use error::ReleaseError;
 pub use hazards::{

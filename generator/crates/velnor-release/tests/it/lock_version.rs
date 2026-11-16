@@ -40,7 +40,7 @@ fn an_unparsable_manifest_under_a_release_root_fails_and_names_the_file() {
         .insert("Cargo.toml".to_owned(), manifest("app", "1.2.3"));
     files.cargo_manifest_texts.insert(
         "broken/Cargo.toml".to_owned(),
-        "[package\nname = ".to_owned(),
+        "[package]\nname = \"app\"\nversion = \n".to_owned(),
     );
     let error = refusal(&files);
     assert!(
@@ -59,7 +59,8 @@ fn a_member_root_inheriting_a_lock_workspace_version_is_refused() {
         .insert("member".to_owned(), PLZ.to_owned());
     files.cargo_manifest_texts.insert(
         "Cargo.toml".to_owned(),
-        "[workspace.package]\nversion = \"1.2.3.lock\"\n".to_owned(),
+        "[workspace]\nmembers = [\"member\"]\n[workspace.package]\nversion = \"1.2.3.lock\"\n"
+            .to_owned(),
     );
     files.cargo_manifest_texts.insert(
         "member/Cargo.toml".to_owned(),
@@ -72,7 +73,67 @@ fn a_member_root_inheriting_a_lock_workspace_version_is_refused() {
     );
     files.cargo_manifest_texts.insert(
         "Cargo.toml".to_owned(),
-        "[workspace.package]\nversion = \"1.2.3\"\n".to_owned(),
+        "[workspace]\nmembers = [\"member\"]\n[workspace.package]\nversion = \"1.2.3\"\n"
+            .to_owned(),
     );
     assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn a_nested_non_member_workspace_does_not_supply_the_inherited_version() {
+    let mut files = files();
+    files.cargo_manifest_texts.insert(
+        "Cargo.toml".to_owned(),
+        "[workspace]\nmembers = [\"tools/app\"]\n[workspace.package]\nversion = \"1.2.3\"\n"
+            .to_owned(),
+    );
+    files.cargo_manifest_texts.insert(
+        "tools/Cargo.toml".to_owned(),
+        "[workspace]\nmembers = [\"x\"]\n[workspace.package]\nversion = \"9.9.9.lock\"\n"
+            .to_owned(),
+    );
+    files.cargo_manifest_texts.insert(
+        "tools/app/Cargo.toml".to_owned(),
+        "[package]\nname = \"app\"\nversion.workspace = true\n".to_owned(),
+    );
+    assert_eq!(refusal(&files), None);
+    files.cargo_manifest_texts.insert(
+        "tools/Cargo.toml".to_owned(),
+        "[workspace]\nmembers = [\"a*\"]\n[workspace.package]\nversion = \"9.9.9.lock\"\n"
+            .to_owned(),
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::VersionEndsInLock(..))
+    ));
+}
+
+#[test]
+fn an_unrelated_broken_manifest_under_the_root_does_not_block_generation() {
+    let mut files = files();
+    files
+        .cargo_manifest_texts
+        .insert("Cargo.toml".to_owned(), manifest("app", "1.2.3"));
+    files.cargo_manifest_texts.insert(
+        "testdata/Cargo.toml".to_owned(),
+        "[package\nname = ".to_owned(),
+    );
+    assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn a_broken_workspace_manifest_a_member_inherits_from_fails_and_names_the_file() {
+    let mut files = files();
+    files
+        .cargo_manifest_texts
+        .insert("Cargo.toml".to_owned(), "[workspace\nversion = ".to_owned());
+    files.cargo_manifest_texts.insert(
+        "app/Cargo.toml".to_owned(),
+        "[package]\nname = \"app\"\nversion.workspace = true\n".to_owned(),
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::InvalidToml { file, .. }) if file == "Cargo.toml"),
+        "{error:?}"
+    );
 }
