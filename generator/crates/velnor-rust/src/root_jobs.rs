@@ -95,11 +95,7 @@ impl RootJobs<'_> {
         if self.facts.rust_roots.len() != 1 {
             return None;
         }
-        let when = match (self.facts.config.on_main, &self.facts.config.full_run) {
-            (OnMain::Everything, _) => When::ScheduledOrPush,
-            (OnMain::Affected, FullRun::Off) => return None,
-            (OnMain::Affected, _) => When::Scheduled,
-        };
+        let when = audit_when(self.facts)?;
         Some(Step {
             when,
             gate: self.lane.steps(),
@@ -283,6 +279,14 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
+    }
+}
+
+pub(crate) fn audit_when(facts: &RepoFacts) -> Option<When> {
+    match (facts.config.on_main, &facts.config.full_run) {
+        (OnMain::Everything, _) => Some(When::ScheduledOrPush),
+        (OnMain::Affected, FullRun::Off) => None,
+        (OnMain::Affected, _) => Some(When::Scheduled),
     }
 }
 
