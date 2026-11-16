@@ -279,11 +279,12 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
     if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
         return None;
     }
-    let prefixes: String = plan
+    let prefixes = plan
         .roots
         .iter()
-        .map(|root| format!(" --branch-prefix {}", shell_word(&root.pr_branch_prefix)))
-        .collect();
+        .map(|root| shell_word(&root.pr_branch_prefix))
+        .collect::<Vec<_>>()
+        .join(" --branch-prefix ");
     Some(RenderedStep {
         name: "Check that release-plz would tag the verified commit".to_owned(),
         env: variables(&[
@@ -292,7 +293,7 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
             ("COMMIT", VERIFIED_COMMIT),
         ]),
         run: Some(format!(
-            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\"{prefixes}"
+            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --branch-prefix {prefixes}"
         )),
         ..RenderedStep::default()
     })
