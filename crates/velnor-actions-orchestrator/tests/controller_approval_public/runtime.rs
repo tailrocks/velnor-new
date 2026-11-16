@@ -42,7 +42,11 @@ fn shipped_controller_078_accepts_its_lock_and_renders_qualified_identities()
         value["active"]["commit"],
         "ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905"
     );
-    assert!(value["staged"].is_null());
+    assert_eq!(value["staged"]["version"], "0.1.79");
+    assert_eq!(
+        value["staged"]["commit"],
+        "4ed121e19c828ceb5cc109656a628fde3772a411"
+    );
     let ci = rendered_ci(approvals, lock)?;
     assert_runtime_identities(
         &ci,
