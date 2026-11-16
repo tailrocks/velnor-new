@@ -8,6 +8,7 @@ mod jit;
 mod preparation;
 mod provider_entry;
 mod registry;
+mod retirement;
 
 pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, ScopedHostContext,
@@ -110,6 +111,7 @@ struct ScopedPrepareContext<'a, P> {
     provider: &'a P,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+    deadline: Instant,
 }
 
 impl<P> Copy for ScopedPrepareContext<'_, P> {}
@@ -141,28 +143,9 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
             return Ok(ScopedRuntimeOutcome::NoStart);
         };
         let reservation_id = prepared.acquired().reservation_id();
-        let outcome = Box::pin(prepare_started_and_bound(
-            prepared,
-            context.docker,
-            context.scoped,
-            context.host,
-            context.provider,
-            context.engine,
-            context.images,
-        ))
-        .await?;
-        if matches!(outcome, ScopedRuntimeOutcome::Pending(_))
-            && let Err(error) = Box::pin(super::bootstrap::abandon_and_retire_unbound_pair(
-                context.docker,
-                context.scoped,
-                context.engine,
-                reservation_id,
-            ))
-            .await
-        {
-            eprintln!(
-                "host controller kept an unbound pair charged reservation={reservation_id} reason={error}"
-            );
+        let outcome = Box::pin(prepare_started_and_bound(prepared, context)).await?;
+        if matches!(outcome, ScopedRuntimeOutcome::Pending(_)) {
+            Box::pin(retirement::retire_pending_pair(context, reservation_id)).await;
         }
         Ok(outcome)
     })
@@ -175,6 +158,7 @@ fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
     provider: &'a P,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+    deadline: Instant,
 ) -> ScopedPrepareContext<'a, P> {
     ScopedPrepareContext {
         docker,
@@ -183,6 +167,7 @@ fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
         provider,
         engine,
         images,
+        deadline,
     }
 }
 
@@ -198,23 +183,12 @@ where
 {
     let ScopedHostContext {
         docker,
-        host,
         scoped,
-        secret: image_authority,
         engine,
         images,
+        ..
     } = *context;
-    let bound = match prepare_and_bind_scoped(
-        outcome,
-        docker,
-        scoped,
-        host,
-        image_authority,
-        engine,
-        images,
-    )
-    .await?
-    {
+    let bound = match prepare_and_bind_scoped(outcome, context, deadline).await? {
         ScopedRuntimeOutcome::NoStart => return Ok(ScopedChannelOutcome::NoStart),
         ScopedRuntimeOutcome::Pending(pending) => {
             return Ok(ScopedChannelOutcome::PendingPreparation(pending));

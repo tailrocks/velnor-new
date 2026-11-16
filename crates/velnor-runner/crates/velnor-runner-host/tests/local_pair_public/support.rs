@@ -13,8 +13,11 @@ use bollard::query_parameters::{
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
+#[path = "guard.rs"]
+mod guard;
 #[path = "program.rs"]
 mod program;
+pub(crate) use guard::Guard;
 pub(crate) use program::Program;
 
 pub(crate) type TestResult<T> = Result<T, Box<dyn Error>>;
@@ -137,6 +140,7 @@ pub(crate) struct Fixture {
     pub(crate) network: String,
     pub(crate) image: String,
     tag: String,
+    pub(crate) guard: Guard,
 }
 
 impl Fixture {
@@ -159,6 +163,7 @@ impl Fixture {
         Ok(Self {
             docker,
             environment: format!("test-{suffix}"),
+            guard: Guard::new(&format!("test-{suffix}"), &tag, &network),
             network,
             image,
             tag,

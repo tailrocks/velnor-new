@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::markdown::{block_lines, code_block, tested};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Token<'a> {
     Ident(&'a str),
     Punct(char),
-    Doc { fenced: bool },
+    Doc { fenced: bool, tested: bool },
+    Str(&'a str),
     Other,
 }
 
@@ -63,11 +66,29 @@ impl<'a> Lexer<'a> {
             .map_or(self.text.len(), |n| start + n);
         self.at = end;
         let body = &self.text[start..end];
-        let rest = body
-            .strip_prefix("///")
-            .or_else(|| body.strip_prefix("//!"))?;
-        (body.starts_with("//!") || !rest.starts_with('/')).then(|| Token::Doc {
-            fenced: code_block(rest),
+        let kind = body
+            .get(..3)
+            .filter(|kind| matches!(*kind, "///" | "//!"))?;
+        if kind == "///" && body[3..].starts_with('/') {
+            return None;
+        }
+        let mut lines = vec![&body[3..]];
+        loop {
+            let after = &self.text[self.at..];
+            let next = after.trim_start();
+            if !next.starts_with(kind) || (kind == "///" && next[3..].starts_with('/')) {
+                break;
+            }
+            let from = self.at + (after.len() - next.len());
+            let to = self.text[from..]
+                .find('\n')
+                .map_or(self.text.len(), |n| from + n);
+            lines.push(&self.text[from + 3..to]);
+            self.at = to;
+        }
+        Some(Token::Doc {
+            fenced: lines.iter().any(|line| code_block(line)),
+            tested: tested(lines.iter().copied()),
         })
     }
 
@@ -93,29 +114,40 @@ impl<'a> Lexer<'a> {
             }
         }
         self.at = at;
-        documented.then_some(Token::Doc { fenced: true })
+        documented.then(|| {
+            let lines = block_lines(&self.text[start + 3..at]);
+            Token::Doc {
+                fenced: lines.iter().any(|line| code_block(line)),
+                tested: tested(lines.iter().copied()),
+            }
+        })
     }
 
     fn string(&mut self, from: usize) -> Token<'a> {
         let mut at = from;
+        let mut end = None;
         while let Some(&byte) = self.bytes.get(at) {
-            at += 1;
             match byte {
-                b'\\' => at += 1,
-                b'"' => break,
-                _ => {}
+                b'\\' => at += 2,
+                b'"' => {
+                    end = Some(at);
+                    at += 1;
+                    break;
+                }
+                _ => at += 1,
             }
         }
         self.at = at.min(self.bytes.len());
-        Token::Other
+        Token::Str(&self.text[from..end.unwrap_or(self.at).max(from)])
     }
 
     fn raw_string(&mut self, hashes: usize, from: usize) -> Token<'a> {
         let closing = format!("\"{}", "#".repeat(hashes));
-        self.at = self.text[from..]
+        let end = self.text[from..]
             .find(&closing)
-            .map_or(self.text.len(), |n| from + n + closing.len());
-        Token::Other
+            .map_or(self.text.len(), |n| from + n);
+        self.at = (end + closing.len()).min(self.text.len());
+        Token::Str(&self.text[from..end])
     }
 
     fn quote(&mut self) -> Token<'a> {
@@ -190,34 +222,4 @@ impl<'a> Lexer<'a> {
 
 fn is_word(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte >= 0x80
-}
-
-pub(crate) fn code_block(rest: &str) -> bool {
-    if rest.contains("```") || rest.contains("~~~") {
-        return true;
-    }
-    let mut text = rest;
-    loop {
-        let trimmed = text.trim_start_matches([' ', '\t']);
-        let indent = &text[..text.len() - trimmed.len()];
-        if indent.contains('\t') || indent.len() >= 4 {
-            return true;
-        }
-        match trimmed.strip_prefix('>').or_else(|| list_marker(trimmed)) {
-            Some(after) => text = after,
-            None => return false,
-        }
-    }
-}
-
-fn list_marker(text: &str) -> Option<&str> {
-    let after = text.strip_prefix(['*', '-', '+']).or_else(|| {
-        let digits = text.trim_start_matches(|c: char| c.is_ascii_digit());
-        if digits.len() < text.len() {
-            digits.strip_prefix(['.', ')'])
-        } else {
-            None
-        }
-    })?;
-    after.starts_with([' ', '\t']).then_some(after)
 }
