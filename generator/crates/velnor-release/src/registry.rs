@@ -7,7 +7,7 @@ use toml::Value;
 use velnor_model::{RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::release_plz::RootConfig;
+use crate::release_plz::{RootConfig, valid_crates_io_name};
 
 const CRATES_IO: &str = "crates-io";
 
@@ -21,6 +21,29 @@ fn names_other_registry(publish: &Value) -> Option<String> {
         Value::Boolean(_) => None,
         other => Some(other.to_string()),
     }
+}
+
+fn publishes_to_crates_io(publish: Option<&Value>) -> bool {
+    match publish {
+        None => true,
+        Some(Value::Boolean(publishes)) => *publishes,
+        Some(Value::Array(items)) => items.iter().any(|item| item.as_str() == Some(CRATES_IO)),
+        Some(_) => false,
+    }
+}
+
+fn check_name(
+    config: &RootConfig,
+    name: &str,
+    publish: Option<&Value>,
+) -> Result<(), ReleaseError> {
+    if config.publishes(name) && publishes_to_crates_io(publish) && !valid_crates_io_name(name) {
+        return Err(ReleaseError::InvalidPackageName {
+            root: config.root.clone(),
+            package: name.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 fn document(manifests: &BTreeMap<String, String>, path: &str) -> Result<Value, ReleaseError> {
@@ -77,11 +100,12 @@ pub(crate) fn check_publish_registries(
                 registry,
             });
         }
+        check_name(config, member.name.as_str(), publish.as_ref())?;
     }
     Ok(())
 }
 
-fn within(root: &str, manifest: &str) -> bool {
+pub(crate) fn within(root: &str, manifest: &str) -> bool {
     root == "." || manifest.starts_with(&format!("{root}/"))
 }
 
@@ -96,6 +120,7 @@ pub(crate) fn check_publish_registries_in_text(
         .get(&crate::plan::manifest_of(&config.root))
         .and_then(|text| text.parse::<toml::Table>().ok())
         .map(Value::Table);
+    let mut seen = std::collections::BTreeSet::new();
     for (path, text) in manifests
         .iter()
         .filter(|(path, _)| within(&config.root, path))
@@ -127,6 +152,17 @@ pub(crate) fn check_publish_registries_in_text(
                 registry,
             });
         }
+        if let Some(name) = package.get("name").and_then(Value::as_str) {
+            seen.insert(name.to_owned());
+            check_name(config, name, publish.as_ref())?;
+        }
+    }
+    for package in config
+        .packages
+        .iter()
+        .filter(|package| !seen.contains(&package.name))
+    {
+        check_name(config, &package.name, None)?;
     }
     Ok(())
 }

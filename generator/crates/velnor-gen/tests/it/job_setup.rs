@@ -27,6 +27,7 @@ fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestRe
         other.clone(),
         b"[tools]\nrust = \"1.99.1\"\nnextest-helper = \"1\"\n".to_vec(),
     );
+    crate::facts::lock_pinned_tools(&mut unpinned)?;
     assert_eq!(
         expected_with_notes(&unpinned).map(|(files, _)| files),
         Err(GenerateError::Detect(DetectError::NextestRequired {
