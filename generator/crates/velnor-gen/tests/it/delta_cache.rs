@@ -78,6 +78,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     );
                 }
             }
+            assert_delta_saves_are_not_cancelled(&lane)?;
             let stage = at("velnor-ci delta stage")?;
             assert_eq!(order[stage - 1], "velnor-ci inputs save");
             assert_eq!(order[stage + 1], "Save the delta cache");
@@ -106,6 +107,23 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
     assert!(text.contains("path: build"), "{text}");
     assert!(!text.contains("velnor-ci delta"), "{text}");
     assert!(!text.contains("the delta cache"), "{text}");
+    Ok(())
+}
+
+fn assert_delta_saves_are_not_cancelled(lane: &str) -> TestResult {
+    let rendered_steps = crate::base_save::steps(lane);
+    let guarded_delta_saves: Vec<_> = rendered_steps
+        .iter()
+        .filter(|rendered| rendered.contains("head.repo.full_name == github.repository"))
+        .collect();
+    assert_eq!(guarded_delta_saves.len(), 3, "{lane}");
+    for rendered in guarded_delta_saves {
+        let condition = rendered
+            .lines()
+            .find(|line| line.trim_start().starts_with("if: "))
+            .ok_or("no guarded delta condition")?;
+        assert!(condition.contains("!cancelled()"), "{rendered}");
+    }
     Ok(())
 }
 

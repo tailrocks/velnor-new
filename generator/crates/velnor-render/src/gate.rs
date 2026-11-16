@@ -109,6 +109,7 @@ pub(crate) fn condition(
         When::PullRequest | When::SaveDelta | When::SaveDeltaDecided => {
             parts.push("github.event_name == 'pull_request'".to_owned());
             if when != When::PullRequest {
+                parts.push(NOT_CANCELLED.to_owned());
                 parts.push(
                     "github.event.pull_request.head.repo.full_name == github.repository".to_owned(),
                 );
