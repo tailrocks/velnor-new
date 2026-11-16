@@ -22,7 +22,7 @@ out=
 max=
 while [ $# -gt 0 ]; do
   if [ "$1" = "--output" ]; then out="$2"; fi
-  if [ "$1" = "--max-filesize" ]; then max="$2"; fi
+  if [ "$1" = "--max-filesize" ] && [ -z "$STUB_IGNORE_MAX" ]; then max="$2"; fi
   shift
 done
 if [ -n "$max" ] && [ "$(wc -c < "$STUB_PAYLOAD")" -gt "$max" ]; then
@@ -94,8 +94,9 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.stub_log.unlink(missing_ok=True)
         self.github_path.write_text("")
 
-    def install(self, expected_digest, path=None):
+    def install(self, expected_digest, path=None, extra_env=None):
         env = {
+            **(extra_env or {}),
             "PATH": path or f"{self.stub_bin}{os.pathsep}{os.environ['PATH']}",
             "VERSION": "0.1.79",
             "SHA256_LINUX_X64": expected_digest,
@@ -159,6 +160,17 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(installed_files(self.tool_cache), [], result.output)
         self.assertEqual(self.github_path.read_text(), "")
         self.assertEqual(installed_files(self.runner_temp), [], result.output)
+
+    def test_a_download_above_the_size_limit_is_refused_when_curl_ignores_the_cap(self):
+        with self.payload.open("r+b") as handle:
+            handle.truncate(268435457)
+        result = self.install(
+            hashlib.sha256(PAYLOAD).hexdigest(), extra_env={"STUB_IGNORE_MAX": "1"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("download is larger than 268435456 bytes", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
 
     def test_a_binary_with_the_pinned_sha256_is_installed_and_put_on_path(self):
         for tool in DIGEST_TOOLS:
