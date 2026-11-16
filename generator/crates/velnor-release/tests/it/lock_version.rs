@@ -13,7 +13,7 @@ fn set_version(files: &mut ReleaseFiles, manifest: &str, version: &str) -> TestR
     let metadata = files.rust_metadata.as_mut().ok_or("no metadata")?;
     for member in metadata.values_mut().flat_map(|known| &mut known.members) {
         if member.manifest.as_str() == manifest {
-            member.version = version.to_owned();
+            version.clone_into(&mut member.version);
         }
     }
     Ok(())
