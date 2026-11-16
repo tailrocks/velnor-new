@@ -25,6 +25,7 @@ use crate::verdict::{Check, conclude, verdict};
 
 mod outcome;
 mod pulls;
+mod refusal;
 mod send;
 mod steps;
 
