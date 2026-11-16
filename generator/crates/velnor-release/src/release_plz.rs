@@ -91,6 +91,12 @@ fn check_package(
     Ok(())
 }
 
+pub(crate) fn valid_crates_io_name(name: &str) -> bool {
+    name.len() <= 64
+        && name.starts_with(|c: char| c.is_ascii_alphabetic())
+        && valid_package_name(name)
+}
+
 pub(crate) fn valid_package_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     bytes
@@ -150,6 +156,15 @@ fn released_packages(
             });
         }
         let effective = entry.settings.over(&document.workspace);
+        if effective.release != Some(false)
+            && effective.publishes_to_crates_io()
+            && !valid_crates_io_name(&entry.name)
+        {
+            return Err(ReleaseError::InvalidPackageName {
+                root: root.to_owned(),
+                package: entry.name.clone(),
+            });
+        }
         if effective.release != Some(false) {
             released.push((entry.name.clone(), effective));
         }

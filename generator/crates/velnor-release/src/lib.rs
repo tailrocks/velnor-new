@@ -7,6 +7,7 @@ mod error;
 mod error_cargo;
 mod git_ref;
 mod hazards;
+mod lock_version;
 mod members;
 mod mise;
 mod plan;

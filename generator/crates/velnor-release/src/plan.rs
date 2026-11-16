@@ -7,6 +7,7 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
+use crate::lock_version::check_versions;
 use crate::members::{check_inventory, check_registries, inherited_tag, owner, settle_publishing};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
@@ -262,6 +263,7 @@ impl ReleasePlan {
         if let Some(metadata) = &files.rust_metadata {
             settle_publishing(&mut configs, metadata);
         }
+        check_versions(&configs, &files.cargo_manifest_texts)?;
         let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;

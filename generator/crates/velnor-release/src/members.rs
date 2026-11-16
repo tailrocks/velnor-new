@@ -9,7 +9,7 @@ use crate::collisions::check_effective_tags;
 use crate::error::ReleaseError;
 use crate::plan::{manifest_of, read_all};
 use crate::registry::check_publish_registries;
-use crate::release_plz::{RootConfig, valid_package_name};
+use crate::release_plz::{RootConfig, valid_crates_io_name, valid_package_name};
 use crate::tag::TagPattern;
 
 type Metadata = BTreeMap<RepoPath, RustMetadata>;
@@ -65,7 +65,9 @@ pub(crate) fn check_inventory(
         let inherited: Vec<&str> = inherited(config, workspace)
             .map(|member| member.name.as_str())
             .collect();
-        if let Some(name) = inherited.iter().find(|name| !valid_package_name(name)) {
+        if let Some(name) = inherited.iter().find(|name| {
+            !valid_package_name(name) || (config.publishes(name) && !valid_crates_io_name(name))
+        }) {
             return Err(ReleaseError::InvalidPackageName {
                 root: config.root.clone(),
                 package: (*name).to_owned(),

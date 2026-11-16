@@ -81,7 +81,7 @@ pub(crate) fn check_publish_registries(
     Ok(())
 }
 
-fn within(root: &str, manifest: &str) -> bool {
+pub(crate) fn within(root: &str, manifest: &str) -> bool {
     root == "." || manifest.starts_with(&format!("{root}/"))
 }
 

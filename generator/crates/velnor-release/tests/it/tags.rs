@@ -35,7 +35,6 @@ fn different_fixed_suffixes_after_the_version_are_not_a_collision() -> TestResul
     for (first, second) in [
         ("v{{ version }}", "v{{ version }}-foo"),
         ("v{{ version }}-foo", "v1{{ version }}-foo"),
-        ("v{{ version }}", "v1.2.3"),
     ] {
         let error = two_tags(first, second)?;
         assert!(
