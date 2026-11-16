@@ -36,6 +36,11 @@ pub(crate) fn release_workflow(
     let reality = Reality { facts, generated };
     let plan =
         ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
+    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 81)) {
+        return Err(GenerateError::PrOnlyChecksHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
     for root in &plan.roots {
         let manifest = if root.root == "." {
             "Cargo.toml".to_owned()

@@ -19,6 +19,66 @@ fn two_tags(first: &str, second: &str) -> Result<Option<ReleaseError>, String> {
 }
 
 #[test]
+fn nested_tag_prefixes_collide_only_when_the_gap_can_start_a_version() -> TestResult {
+    for (first, second, collision) in [
+        ("x{{ version }}", "xa{{ version }}", false),
+        ("x{{ version }}", "x1{{ version }}", true),
+        ("{{ version }}", "1{{ version }}", true),
+        ("{{ version }}", "a{{ version }}", false),
+        ("x{{ version }}", "x{{ version }}", true),
+        ("x{{ version }}", "y{{ version }}", false),
+    ] {
+        for (left, right) in [(first, second), (second, first)] {
+            let error = two_tags(left, right)?;
+            if collision {
+                assert!(
+                    matches!(
+                        error,
+                        Some(
+                            ReleaseError::TagsMayCollide { .. }
+                                | ReleaseError::DuplicateTagPattern { .. }
+                        )
+                    ),
+                    "{left} / {right}: {error:?}"
+                );
+            } else {
+                assert_eq!(error, None, "{left} / {right}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn nested_tag_suffixes_collide_only_when_the_gap_can_belong_to_a_version() -> TestResult {
+    for (first, second, collision) in [
+        ("v{{ version }}", "v{{ version }}_z", false),
+        ("v{{ version }}", "v{{ version }}-z", true),
+        ("v{{ version }}-foo", "v{{ version }}-bar", false),
+        ("{{ version }}_z", "{{ version }}_z", true),
+    ] {
+        for (left, right) in [(first, second), (second, first)] {
+            let error = two_tags(left, right)?;
+            if collision {
+                assert!(
+                    matches!(
+                        error,
+                        Some(
+                            ReleaseError::TagsMayCollide { .. }
+                                | ReleaseError::DuplicateTagPattern { .. }
+                        )
+                    ),
+                    "{left} / {right}: {error:?}"
+                );
+            } else {
+                assert_eq!(error, None, "{left} / {right}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn a_template_with_two_version_placeholders_is_refused() -> TestResult {
     let error = two_tags("x{{ version }}_foo{{ version }}", "x1.2.3_foo{{ version }}")?;
     assert!(

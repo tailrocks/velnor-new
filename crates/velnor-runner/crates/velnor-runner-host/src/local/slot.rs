@@ -281,7 +281,14 @@ impl Supervisor {
             outcome = &mut exited => return outcome,
             request = self.next_request(pair) => request?,
         };
-        let verdict = decide(&self.client, slot.side, &challenge, &request).await;
+        let verdict = decide(
+            &self.client,
+            slot.side,
+            self.policy.as_ref(),
+            &challenge,
+            &request,
+        )
+        .await;
         self.record(slot, &challenge, &verdict).await?;
         publish_decision(&self.docker, pair, &verdict.decision).await?;
         tokio::select! {

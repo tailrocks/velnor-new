@@ -319,6 +319,7 @@ fn fake_authority(dir: &Path) -> (std::path::PathBuf, supervisor::Pairs) {
         host: script.clone(),
         trusted: 1,
         untrusted: 0,
+        policy: None,
     };
     (script, pairs)
 }

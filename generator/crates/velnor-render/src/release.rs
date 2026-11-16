@@ -10,7 +10,7 @@ use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_steps::{
     app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
-    release_plz_arguments, release_plz_step, variables,
+    release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -40,7 +40,11 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![gate(helper), release_pr(plan, helper), tag(plan, helper)];
+    let mut jobs = vec![
+        gate(plan, helper),
+        release_pr(plan, helper),
+        tag(plan, helper),
+    ];
     jobs.extend(binary_jobs(plan, helper));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
@@ -107,7 +111,12 @@ fn escape_filter(name: &str) -> String {
         .collect()
 }
 
-fn gate(helper: &HelperRelease) -> RenderedJob {
+fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
+    let mut command = "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned();
+    for name in &plan.pr_only_checks {
+        command.push_str(" --pr-only-check=");
+        command.push_str(&shell_word(name));
+    }
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
@@ -132,9 +141,7 @@ fn gate(helper: &HelperRelease) -> RenderedJob {
                     ("REPOSITORY", "${{ github.repository }}"),
                     ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
                 ]),
-                run: Some(
-                    "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned(),
-                ),
+                run: Some(command),
                 ..RenderedStep::default()
             },
         ],

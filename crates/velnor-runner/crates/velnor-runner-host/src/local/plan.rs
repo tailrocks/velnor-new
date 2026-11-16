@@ -92,6 +92,8 @@ struct Raw {
     dind_image: String,
     limits: Limits,
     sides: Vec<SidePlan>,
+    #[serde(default)]
+    policy: Option<String>,
 }
 
 pub struct Plan {
@@ -104,6 +106,7 @@ pub struct Plan {
     pub dind_image: String,
     pub limits: Limits,
     pub sides: Vec<SidePlan>,
+    pub policy: Option<String>,
 }
 
 impl std::fmt::Debug for Plan {
@@ -155,6 +158,7 @@ impl Plan {
             dind_image: raw.dind_image,
             limits: raw.limits,
             sides: raw.sides,
+            policy: raw.policy,
         })
     }
 }

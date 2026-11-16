@@ -64,6 +64,7 @@ impl Controller {
             assigned_total: None,
             poll_cursor: 0,
             poll_retry_at: None,
+            restore_retry_at: None,
             guest_image,
             completion: None,
             credentials: None,
