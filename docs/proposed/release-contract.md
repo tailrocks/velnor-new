@@ -46,28 +46,17 @@ an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 
-The table records the initial 2026-09-30 qualification. The current release-plz
-CLI pin is `0.4.3` (`RELEASE_PLZ_VERSION` in
+The release-plz CLI pin is `0.4.3` (`RELEASE_PLZ_VERSION` in
 `crates/velnor-actions-mise/src/catalog.rs`, and `release-plz` in
-`.velnor/version-policy.toml`). The release path installs and runs that CLI
-through mise. It does not pin `release-plz/action`. `0.3.172` remains only as
-the pin named by the 2026-10-17 freshness record. Its crate checksum and source
-evidence stay in
-[`freshness-evidence-2026-10-13.md`](../implemented/freshness-evidence-2026-10-13.md).
-Reverify at execution. No runtime `latest` lookup and no recompilation of the
-coordinator on every release.
+`.velnor/version-policy.toml`). The coordinator checksum of that pin is
+`RELEASE_PLZ_CKSUM`
+(`69bbc232e23322cfaf77a60540e69e2dbd83879e843c4fc9d6ad1ead97d257f6`) in
+`crates/velnor-actions-mise/src/release_plz.rs`. The release path installs
+and runs that CLI through mise. It does not pin `release-plz/action`. No
+runtime `latest` lookup and no recompilation of the coordinator on every
+release.
 
-| Component | Selection | Evidence |
-|---|---|---|
-| release-plz CLI | `0.3.169` (initial qualified baseline) | `release-plz-v0.3.169` release exists; tag `63a04978…`, commit `786894b6…` |
-| GitHub Action | `release-plz/action@v0.5.139` at full SHA `b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5` (2026-09-30 qualification record, not a current pin) | Tag verified via `git ls-remote` on `release-plz/action`; peeled commit recorded |
-| Binary digest | TBD-integrator | Upstream publishes no checksum asset for `release-plz-v0.3.169`; the integrator MUST measure and record the SHA-256 of the exact consumed artifact out of band before protected use |
-
-At that qualified Action tag, `action.yml` declares the `version` input with
-`default: "0.3.169"`. The Action release is paired with the CLI release, and
-the Action downloads the CLI from the official `release-plz/release-plz`
-release assets. Generated release steps do not use that Action. They invoke
-the CLI as
+Generated release steps do not use `release-plz/action`. They invoke the CLI as
 `mise --no-config --no-env --no-hooks exec rust[profile=minimal]@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
 then the subcommand.
 
@@ -236,9 +225,6 @@ registry, and immutable source. A dispatch MUST NOT widen this record.
 
 ## 9. Tag collision and registry absence
 
-The inspected release-plz 0.3.169 code returns early from the per-package
-release path when its expected tag already exists. Therefore:
-
 - Tag-exists-but-crate-absent is a collision/incomplete release report, never
   success. A zero exit, an existing tag, or an empty release-plz result is not
   proof of publication.
@@ -303,8 +289,7 @@ headers, credential-provider output, or private key material.
 - For exact-source bootstrap, the config comes from the trusted
   workflow/policy checkout while release-plz operates on a separate clean
   source checkout; never dirty the release checkout to insert config.
-- Qualified release-plz 0.3.169 requirements (observed 2026-09-30): the
-  git token arrives via the `GIT_TOKEN` env binding (upstream never
+- The git token arrives via the `GIT_TOKEN` env binding (upstream never
   reads `GITHUB_TOKEN`) and is required in every phase, including
   `--dry-run`; `release-pr` pushes its branch and `release` pushes
   tags, so those checkouts persist credentials while all others stay
