@@ -10,31 +10,38 @@ use super::inputs::tracked_paths;
 use crate::error::CiError;
 
 pub(super) fn check_target(root: &Path, target: &Path) -> Result<(), CiError> {
-    let target = resolve(&root.join(target))?;
+    let path = root.join(target);
+    let object = match path.parent().zip(path.file_name()) {
+        Some((parent, name)) => resolve(parent)?.join(name),
+        None => resolve(&path)?,
+    };
+    let targets = [object, resolve(&path)?];
     let root = resolve(root)?;
     let tracked = tracked_paths(&root)?;
+    let top = resolve(&tracked.top)?;
     if tracked.non_utf8 > 0 {
         return Err(CiError::new(
             "cannot verify target directory: tracked paths are not valid UTF-8",
         ));
     }
     let metadata = [
-        resolve(&tracked.top.join(".git"))?,
+        resolve(&top.join(".git"))?,
         git_path(&root, "--absolute-git-dir")?,
         git_path(&root, "--git-common-dir")?,
     ];
-    if root.starts_with(&target)
-        || metadata
-            .iter()
-            .any(|path| path.starts_with(&target) || target.starts_with(path))
-        || tracked
-            .paths
-            .iter()
-            .any(|path| tracked.top.join(path).starts_with(&target))
-    {
+    if targets.iter().any(|target| {
+        root.starts_with(target)
+            || metadata
+                .iter()
+                .any(|path| path.starts_with(target) || target.starts_with(path))
+            || tracked
+                .paths
+                .iter()
+                .any(|path| top.join(path).starts_with(target))
+    }) {
         return Err(CiError::new(format!(
             "target directory {} contains checkout files",
-            target.display()
+            path.display()
         )));
     }
     Ok(())

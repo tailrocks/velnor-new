@@ -292,7 +292,7 @@ fn file_name(text: &str) -> Result<PlainName, CiError> {
 #[derive(Debug, Subcommand)]
 pub enum InputsCommand {
     #[command(
-        about = "Write .velnor/inputs.tsv in the target directory: path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in the worktree; paths a TSV field cannot hold are counted and left out"
+        about = "Write a root-specific snapshot under .velnor in the target directory: inputs.tsv at the Git root, inputs-<SHA256 of Git-relative root prefix>.tsv below it. Record path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in scope; paths a TSV field cannot hold are counted and left out"
     )]
     Save(InputsArgs),
     #[command(
@@ -310,7 +310,7 @@ pub struct InputsArgs {
     #[arg(
         long,
         default_value = "target",
-        help = "Cargo target directory containing .velnor/inputs.tsv, relative to the working directory or absolute"
+        help = "Cargo target directory containing root-specific .velnor/inputs*.tsv snapshots, relative to the working directory or absolute"
     )]
     pub target_dir: PathBuf,
 }

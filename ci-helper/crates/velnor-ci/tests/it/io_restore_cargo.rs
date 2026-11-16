@@ -92,7 +92,11 @@ fn warm_and_changed(target: Option<&str>) {
     repo.git(&["add", "--all"]);
     inputs(&app, "save", target);
     let target_path = app.join(target.unwrap_or("target"));
-    assert!(target_path.join(".velnor/inputs.tsv").is_file());
+    assert!(
+        target_path
+            .join(velnor_ci::inputs::inputs_file("app/"))
+            .is_file()
+    );
     if target.is_some() {
         assert!(!app.join("target").exists());
     }
@@ -233,4 +237,114 @@ fn linked_worktree_git_metadata_cannot_be_used_as_a_target() {
         reject_target(&worktree, metadata);
         reject_target(&worktree, &metadata.join("objects"));
     }
+}
+
+fn reject_tracked_target_links(operation: &str) {
+    for spelling in ["target", "absolute", "alias", "src/../target"] {
+        let repo = Repo::new("tracked-target-link");
+        let external = Repo::new("external-target-link");
+        repo.write("src/lib.rs", "pub fn one() {}\n");
+        let mtime = if operation == "restored" {
+            SystemTime::UNIX_EPOCH - Duration::from_secs(1)
+        } else {
+            SystemTime::UNIX_EPOCH + Duration::from_secs(1)
+        };
+        repo.set_mtime("src/lib.rs", mtime);
+        external.write_unstaged("artifacts/marker", "cached artifact\n");
+        external.write_unstaged("artifacts/.velnor/inputs.tsv", "invalid\n");
+        let cache = external.root().join("artifacts");
+        let link = repo.root().join("target");
+        std::os::unix::fs::symlink(&cache, &link).unwrap_or_else(|e| unreachable!("{e}"));
+        repo.git(&["add", "--force", "target"]);
+        let index =
+            std::fs::read(repo.root().join(".git/index")).unwrap_or_else(|e| unreachable!("{e}"));
+        let absolute = std::fs::canonicalize(repo.root())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join("target");
+        let absolute = absolute
+            .strip_prefix("/private")
+            .map_or_else(|_| absolute.clone(), |path| Path::new("/").join(path));
+        let alias = external.root().join("checkout");
+        std::os::unix::fs::symlink(repo.root(), &alias).unwrap_or_else(|e| unreachable!("{e}"));
+        let target = match spelling {
+            "absolute" => absolute,
+            "alias" => alias.join("target"),
+            path => Path::new(path).to_path_buf(),
+        };
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        if operation == "restored" {
+            command.arg(operation);
+        } else {
+            command
+                .args(["inputs", operation, "--target-dir"])
+                .arg(target);
+        }
+        let output = command
+            .current_dir(repo.root())
+            .env_remove("CARGO_TARGET_DIR")
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            std::fs::read_link(&link).unwrap_or_default(),
+            cache,
+            "{operation} {spelling}: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            std::fs::read(repo.root().join(".git/index")).ok(),
+            Some(index)
+        );
+        assert_eq!(
+            std::fs::read_to_string(repo.root().join("src/lib.rs")).unwrap_or_default(),
+            "pub fn one() {}\n"
+        );
+        assert_eq!(repo.mtime("src/lib.rs"), mtime);
+        for (path, text) in [
+            ("marker", "cached artifact\n"),
+            (".velnor/inputs.tsv", "invalid\n"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(cache.join(path)).unwrap_or_default(),
+                text
+            );
+        }
+        assert!(!output.status.success(), "{operation} {spelling}");
+    }
+}
+
+#[test]
+fn tracked_target_links_preserve_checkout_and_external_cache_on_restore() {
+    reject_tracked_target_links("restore");
+}
+
+#[test]
+fn tracked_target_links_preserve_checkout_and_external_cache_on_save() {
+    reject_tracked_target_links("save");
+}
+
+#[test]
+fn tracked_target_links_preserve_checkout_and_external_cache_on_restored() {
+    reject_tracked_target_links("restored");
+}
+
+#[test]
+fn untracked_target_links_restore_source_times_with_an_external_cache() {
+    let repo = Repo::new("untracked-target-link");
+    let external = Repo::new("untracked-external-cache");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    external.write_unstaged("artifacts/marker", "cached artifact\n");
+    let cache = external.root().join("artifacts");
+    let link = repo.root().join("target");
+    std::os::unix::fs::symlink(&cache, &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let built = repo.mtime("src/lib.rs");
+    inputs(repo.root(), "save", None);
+    repo.set_mtime("src/lib.rs", built + Duration::from_secs(10));
+    inputs(repo.root(), "restore", None);
+    assert_eq!(repo.mtime("src/lib.rs"), built);
+    assert_eq!(
+        std::fs::read_to_string(cache.join("marker")).unwrap_or_default(),
+        "cached artifact\n"
+    );
+    assert_eq!(std::fs::read_link(link).ok(), Some(cache));
 }

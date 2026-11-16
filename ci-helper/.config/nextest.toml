@@ -10,5 +10,5 @@ final-status-level = "flaky"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = "test(io_restore_cargo::) | test(io_cold_targets::)"
+filter = "test(io_restore_cargo::) | test(io_cold_targets::) | test(io_shared_targets::)"
 slow-timeout = { period = "30s", terminate-after = 1 }

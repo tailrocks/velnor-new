@@ -22,6 +22,7 @@ mod io_release;
 mod io_restore;
 mod io_restore_cargo;
 mod io_restore_links;
+mod io_shared_targets;
 mod io_stderr;
 mod logscan;
 mod plan;

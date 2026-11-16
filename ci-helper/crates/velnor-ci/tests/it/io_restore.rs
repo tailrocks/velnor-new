@@ -187,15 +187,20 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     let report =
         restore_inputs(&workspace, Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
-    assert!(workspace.join("target/.velnor/inputs.tsv").is_file());
+    let snapshot = Path::new("target").join(velnor_ci::inputs::inputs_file("rust/"));
+    assert!(workspace.join(&snapshot).is_file());
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
     assert_eq!(repo.mtime("shared/src/lib.rs"), built);
     assert_eq!(repo.mtime("other/src/lib.rs"), checkout);
     assert_eq!(repo.mtime(".gitignore"), checkout);
+    let saved_report = format!(
+        "saved 2 tracked files and 0 symlinks to {}; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+        snapshot.display()
+    );
     assert_eq!(
         (saved.as_str(), report.as_str()),
         (
-            "saved 2 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+            saved_report.as_str(),
             "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
         )
     );

@@ -11,14 +11,14 @@ use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
+    SavedInput, Tracked, TrackedFile, format_inputs, inputs_file, is_representable, parse_inputs,
     parse_ls_files, plan_restore, with_worktree_blobs,
 };
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
-    let relative = target.join(INPUTS_FILE);
+    let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
@@ -65,7 +65,7 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    let relative = target.join(INPUTS_FILE);
+    let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
@@ -77,7 +77,8 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let saved = parse_inputs(&text)?;
+    let saved = parse_inputs(&text)
+        .map_err(|e| CiError::new(format!("{}: {e}", path.display())))?;
     let (top, tracked) = worktree_files(root)?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
@@ -144,10 +145,15 @@ fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     Ok((top, tracked))
 }
 
-fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
+fn git_prefix(root: &Path) -> Result<String, CiError> {
     let prefix = git(root, &["rev-parse", "--show-prefix"], None)?;
     let prefix = String::from_utf8(prefix)
         .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
+    Ok(prefix.trim_end_matches(['\n', '\r']).to_owned())
+}
+
+fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
+    let prefix = git_prefix(root)?;
     let listed = match fs::read(top.join(INPUTS_LOCK.as_str())) {
         Ok(bytes) => parse_inputs_lock(&bytes)
             .map_err(|e| CiError::new(e.to_string()))?
@@ -157,8 +163,7 @@ fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
         Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
     };
-    let prefix = prefix.trim_end_matches(['\n', '\r']);
-    let mut scope = Scope::new(prefix, listed);
+    let mut scope = Scope::new(&prefix, listed);
     if top.join(METADATA_PATH.as_str()).exists() {
         let checkout =
             velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;

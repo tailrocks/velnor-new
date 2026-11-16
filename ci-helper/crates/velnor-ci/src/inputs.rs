@@ -7,6 +7,18 @@ use crate::error::CiError;
 
 pub const INPUTS_FILE: &str = ".velnor/inputs.tsv";
 
+#[must_use]
+pub fn inputs_file(prefix: &str) -> String {
+    if prefix.is_empty() {
+        INPUTS_FILE.to_owned()
+    } else {
+        format!(
+            ".velnor/inputs-{}.tsv",
+            velnor_rust::sha256_hex(prefix.as_bytes())
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TrackedFile {
     pub path: String,
@@ -156,7 +168,7 @@ pub fn parse_inputs(text: &str) -> Result<Vec<SavedInput>, CiError> {
         .map(|(index, line)| {
             parse_inputs_line(line).ok_or_else(|| {
                 CiError::new(format!(
-                    "{INPUTS_FILE} line {} is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `{line}`",
+                    "inputs snapshot line {} is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `{line}`",
                     index + 1
                 ))
             })
