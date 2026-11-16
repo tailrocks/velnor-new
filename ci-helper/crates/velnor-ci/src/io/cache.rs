@@ -81,25 +81,37 @@ fn remove_file(path: &Path) -> Result<(), CiError> {
     }
 }
 
-fn remove_incremental(dir: &Path) -> Result<u64, CiError> {
-    let Ok(entries) = fs::read_dir(dir) else {
+fn remove_incremental(target: &Path) -> Result<u64, CiError> {
+    let Ok(entries) = fs::read_dir(target) else {
         return Ok(0);
     };
     let mut removed = 0;
     for entry in entries.flatten() {
-        let path = entry.path();
         if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
             continue;
         }
-        if entry.file_name() == INCREMENTAL {
-            fs::remove_dir_all(&path)
-                .map_err(|e| CiError::new(format!("cannot remove {}: {e}", path.display())))?;
-            removed += 1;
-        } else {
-            removed += remove_incremental(&path)?;
+        let path = entry.path();
+        removed += remove_incremental_child(&path)?;
+        let Ok(nested) = fs::read_dir(&path) else {
+            continue;
+        };
+        for child in nested.flatten() {
+            if child.file_type().is_ok_and(|kind| kind.is_dir()) {
+                removed += remove_incremental_child(&child.path())?;
+            }
         }
     }
     Ok(removed)
+}
+
+fn remove_incremental_child(dir: &Path) -> Result<u64, CiError> {
+    let path = dir.join(INCREMENTAL);
+    if !fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_dir()) {
+        return Ok(0);
+    }
+    fs::remove_dir_all(&path)
+        .map_err(|e| CiError::new(format!("cannot remove {}: {e}", path.display())))?;
+    Ok(1)
 }
 
 fn directory_size(dir: &Path) -> u64 {
