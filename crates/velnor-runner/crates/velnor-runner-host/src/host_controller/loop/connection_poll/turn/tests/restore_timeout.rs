@@ -80,7 +80,7 @@ async fn timed_out_restore() -> TestResult<()> {
     assert!(fixture.prepared.credentials.is_none());
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs(30)).await;
-    let recovered = restore(&mut fixture, Duration::from_secs(2)).await?;
+    let recovered = restore(&mut fixture, Duration::from_secs(10)).await?;
     let after = refreshes(&fixture).await?;
     eprintln!(
         "restore evidence first={first:?} after={after:?} recovered={recovered} credentials={}",
@@ -100,8 +100,9 @@ async fn timed_out_restore() -> TestResult<()> {
             (2, "succeeded".to_owned())
         ]
     );
-    std::thread::sleep(Duration::from_millis(2100));
+    std::thread::sleep(Duration::from_millis(10_100));
     assert!(fixture.poll().await?.is_some());
+    assert!(fixture.control.complete_session_poll_receipts()?.is_some());
     Ok(())
 }
 

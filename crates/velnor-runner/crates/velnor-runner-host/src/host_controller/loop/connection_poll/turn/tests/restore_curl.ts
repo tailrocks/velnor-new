@@ -29,7 +29,7 @@ if (url.includes("/repos/owner/repo")) {
   }
   body = { sessionId: "session-test", messageQueueUrl: "https://actions.test/queue", messageQueueAccessToken: "queue-test" };
 } else if (url.includes("/queue")) {
-  status = 204;
+  status = 202;
 } else {
   throw new Error(`unexpected URL ${url}`);
 }
