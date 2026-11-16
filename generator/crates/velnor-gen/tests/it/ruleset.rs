@@ -36,7 +36,11 @@ fn ruleset_on_the_golden_prints_the_recorded_json() -> TestResult {
 
 #[test]
 fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name() -> TestResult {
-    let trees: serde_json::Value = serde_json::from_str(&golden()?)?;
+    let trees: serde_json::Value = golden()?
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<serde_json::Value>, _>>()?
+        .into();
     assert_eq!(trees.as_array().map(Vec::len), Some(2));
     let tree = &trees[0];
     assert_eq!(tree["name"], "release-tags");
@@ -67,6 +71,22 @@ fn ruleset_lets_only_the_release_app_create_the_tags_the_release_plz_files_name(
     );
     assert_eq!(immutable["bypass_actors"], serde_json::json!([]));
     assert_eq!(immutable["conditions"], tree["conditions"]);
+    Ok(())
+}
+
+#[test]
+fn ruleset_prints_one_request_body_per_line() -> TestResult {
+    let json = golden()?;
+    let lines: Vec<&str> = json.lines().collect();
+    assert_eq!(lines.len(), 2);
+    for line in lines {
+        let body: serde_json::Value = serde_json::from_str(line)?;
+        assert!(body.is_object(), "{line}");
+        assert!(
+            body["name"].is_string() && body["rules"].is_array(),
+            "{line}"
+        );
+    }
     Ok(())
 }
 

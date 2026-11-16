@@ -12,9 +12,12 @@ fn plz_refusal(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
 fn rulesets(
     files: &velnor_release::ReleaseFiles,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    Ok(serde_json::from_str(&ruleset_json(&ReleasePlan::read(
-        files,
-    )?))?)
+    let lines = ruleset_json(&ReleasePlan::read(files)?);
+    Ok(lines
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<serde_json::Value>, _>>()?
+        .into())
 }
 
 fn ruleset(

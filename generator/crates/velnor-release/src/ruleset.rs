@@ -62,5 +62,5 @@ pub fn ruleset_json(plan: &ReleasePlan) -> String {
         "rules": [{ "type": "update" }, { "type": "deletion" }],
         "bypass_actors": []
     });
-    format!("{:#}\n", json!([creation, immutable]))
+    format!("{creation}\n{immutable}\n")
 }
