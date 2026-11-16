@@ -22,6 +22,9 @@ pub(super) async fn remove_labelled(
     docker: &Docker,
     labels: &[String],
 ) -> Result<Removed, HostError> {
+    if labels.is_empty() || labels.iter().any(|label| label.is_empty()) {
+        return Err(HostError::Ownership);
+    }
     let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
     let containers = docker_deadline(docker.list_containers(Some(ListContainersOptions {
         all: true,
@@ -97,3 +100,7 @@ pub(super) async fn labelled_agents(
     agents.dedup();
     Ok(agents)
 }
+
+#[cfg(test)]
+#[path = "remove_tests.rs"]
+mod tests;
