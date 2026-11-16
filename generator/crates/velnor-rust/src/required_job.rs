@@ -41,7 +41,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
     let when = match job.when {
         When::Scheduled => Some(JobCondition::Schedule),
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
-        When::Success | When::NotCancelled | When::Always => None,
+        When::Success | When::NotCancelled | When::Always | When::SaveToolsOnDefaultBranch => None,
     };
     gate.into_iter().chain(when).collect()
 }
