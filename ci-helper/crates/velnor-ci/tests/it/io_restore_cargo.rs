@@ -37,6 +37,30 @@ fn cargo(root: &Path) -> String {
     run(root, "cargo", &["build", "--offline", "-v"])
 }
 
+fn reject_target(root: &Path, target: &Path) {
+    for operation in ["restore", "save"] {
+        let snapshot = target.join(".velnor/inputs.tsv");
+        if operation == "restore" {
+            std::fs::create_dir_all(snapshot.parent().unwrap_or_else(|| unreachable!()))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            std::fs::write(&snapshot, "invalid\n").unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["inputs", operation, "--target-dir"])
+            .arg(target)
+            .current_dir(root)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(root.join("src/lib.rs").is_file());
+        run(root, "git", &["rev-parse", "--show-toplevel"]);
+        assert!(!output.status.success(), "{operation} {}", target.display());
+        assert_eq!(
+            std::fs::read_to_string(&snapshot).unwrap_or_else(|e| unreachable!("{e}")),
+            "invalid\n"
+        );
+    }
+}
+
 fn warm_and_changed(target: Option<&str>) {
     let repo = Repo::new("restore-cargo");
     repo.write_all(&[
@@ -127,6 +151,22 @@ fn configured_target_dirs_keep_the_snapshot_with_the_actual_cargo_artifacts() {
 
 #[test]
 fn absolute_target_dirs_restore_times_and_cold_fallback_removes_only_that_target() {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        let non_utf8 = Repo::new("non-utf8-target");
+        non_utf8.write("src/lib.rs", "pub fn one() {}\n");
+        let unsafe_target = non_utf8.root().join("unsafe");
+        std::fs::create_dir(&unsafe_target).unwrap_or_else(|e| unreachable!("{e}"));
+        let source = unsafe_target.join(std::ffi::OsString::from_vec(vec![0xff]));
+        std::fs::write(&source, "keep\n").unwrap_or_else(|e| unreachable!("{e}"));
+        non_utf8.git(&["add", "--all"]);
+        reject_target(non_utf8.root(), &unsafe_target);
+        assert_eq!(
+            std::fs::read_to_string(&source).unwrap_or_else(|e| unreachable!("{e}")),
+            "keep\n"
+        );
+    }
     let repo = Repo::new("absolute-target");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let target = repo.root().join("custom");
@@ -142,6 +182,9 @@ fn absolute_target_dirs_restore_times_and_cold_fallback_removes_only_that_target
     assert!(inputs(repo.root(), "restore", Some(target)).contains("building cold"));
     assert!(!Path::new(target).exists());
     assert!(repo.root().join("target/marker").is_file());
+    for target in [".git", ".git/objects"] {
+        reject_target(repo.root(), &repo.root().join(target));
+    }
     std::os::unix::fs::symlink(repo.root(), repo.root().join("alias"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     for ancestor in [".", "..", "src", "alias"] {
@@ -165,4 +208,28 @@ fn absolute_target_dirs_restore_times_and_cold_fallback_removes_only_that_target
     assert!(!failed.status.success());
     assert!(inputs(repo.root(), "restore", Some(target)).contains("building cold"));
     assert!(!Path::new(target).exists());
+}
+
+#[test]
+fn linked_worktree_git_metadata_cannot_be_used_as_a_target() {
+    let repo = Repo::new("linked-target");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.commit();
+    let worktree = repo.root().join("linked-checkout");
+    repo.git(&[
+        "worktree",
+        "add",
+        "--detach",
+        worktree.to_str().unwrap_or_else(|| unreachable!()),
+    ]);
+    for option in ["--absolute-git-dir", "--git-common-dir"] {
+        let metadata = run(
+            &worktree,
+            "git",
+            &["rev-parse", "--path-format=absolute", option],
+        );
+        let metadata = Path::new(metadata.trim());
+        reject_target(&worktree, metadata);
+        reject_target(&worktree, &metadata.join("objects"));
+    }
 }
