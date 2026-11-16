@@ -11,7 +11,6 @@ pub const PROBE_TAG: &str = "velnor-local/pair-probe";
 pub const TARGETS: [&str; 3] = [RUNNER_TAG, DIND_TAG, PROBE_TAG];
 const RUST_IMAGE: &str =
     "rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
-const RUST_DIGEST: &str = "8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
 const TARGET_VOLUME: &str = "velnor-arm64-target";
 const CARGO_VOLUME: &str = "velnor-arm64-cargo";
 const CARGO_HOME: &str = "/cargo-home";
@@ -142,10 +141,7 @@ fn helpers(root: &str, stages: &str, source_sha: &str) -> Vec<String> {
         "-v",
         &format!("{CARGO_VOLUME}:{CARGO_HOME}"),
         "-v",
-        &format!(
-            "velnor-arm64-rustup-{}:/usr/local/rustup",
-            &RUST_DIGEST[..12]
-        ),
+        &format!("{}:/usr/local/rustup", rustup_volume()),
         "-e",
         "CARGO_TARGET_DIR=/target",
         "-e",
@@ -159,6 +155,13 @@ fn helpers(root: &str, stages: &str, source_sha: &str) -> Vec<String> {
     ]
     .map(str::to_owned)
     .to_vec()
+}
+
+fn rustup_volume() -> String {
+    let digest = RUST_IMAGE
+        .rsplit_once("sha256:")
+        .map_or("", |(_, digest)| digest);
+    format!("velnor-arm64-rustup-{}", &digest[..digest.len().min(12)])
 }
 
 pub fn refuse_dirty(porcelain: &str) -> Result<(), String> {
