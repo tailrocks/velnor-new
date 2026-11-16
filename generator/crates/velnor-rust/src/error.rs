@@ -89,7 +89,7 @@ impl Reason {
             ),
             Self::HelperTarget(path) => write!(
                 f,
-                "helper.path is {path}, whose cargo config sets build.target to something other than one target triple, so the place of the built velnor-ci is not known"
+                "helper.path is {path}, whose cargo configuration sets build.target; the helper is built once and run by every job on its own runner, so it must be built for the runner host: remove build.target for it"
             ),
             _ => Ok(()),
         }

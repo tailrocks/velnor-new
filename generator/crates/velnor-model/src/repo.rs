@@ -157,30 +157,10 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
-    pub build_target: BuildTarget,
+    pub sets_build_target: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BuildTarget {
-    Host,
-    Triple(String),
-    Unsupported,
-}
-
-impl RustRoot {
-    #[must_use]
-    pub fn debug_binary(&self, name: &str) -> Option<RepoPath> {
-        match &self.build_target {
-            BuildTarget::Host => Some(self.target_dir.child(&format!("debug/{name}"))),
-            BuildTarget::Triple(triple) => {
-                Some(self.target_dir.child(&format!("{triple}/debug/{name}")))
-            }
-            BuildTarget::Unsupported => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

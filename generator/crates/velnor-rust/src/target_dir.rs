@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BuildTarget, RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView};
 
 use crate::error::{DetectError, Reason};
 use crate::roots::{patch_files, resolve};
@@ -41,28 +41,21 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
     }
 }
 
-pub(crate) fn build_target(
-    view: &RepoView,
-    manifest: &RepoPath,
-) -> Result<BuildTarget, DetectError> {
-    let Some((_, _, value)) = nearest(view, manifest, "target")? else {
-        return Ok(BuildTarget::Host);
-    };
-    let one = match &value {
-        toml::Value::String(triple) => Some(triple.as_str()),
-        toml::Value::Array(items) if items.len() == 1 => items[0].as_str(),
-        _ => None,
-    };
-    Ok(one
-        .filter(|triple| {
-            !triple.is_empty()
-                && !triple.to_ascii_lowercase().ends_with(".json")
-                && !triple.contains(['/', '\\'])
-                && !triple.starts_with('.')
-        })
-        .map_or(BuildTarget::Unsupported, |triple| {
-            BuildTarget::Triple(triple.to_owned())
-        }))
+pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
+    for (file, bytes, _) in patch_files(view, manifest) {
+        if file == manifest {
+            continue;
+        }
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        if parsed
+            .get("build")
+            .and_then(|build| build.get("target"))
+            .is_some()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn nearest<'v>(

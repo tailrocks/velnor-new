@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    AllTrigger, BuildTarget, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob,
-    PolicyTools, RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection,
-    SelectionReason, Target, TargetKind, ToolPins, UnownedPackage,
+    AllTrigger, ChangeSet, DependencyKind, MemberDependency, PackageName, PathGlob, PolicyTools,
+    RepoFacts, RepoPath, RustCiConfig, RustMember, RustRoot, RustSelection, SelectionReason,
+    Target, TargetKind, ToolPins, UnownedPackage,
 };
 use velnor_rust::select;
 
@@ -43,7 +43,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         .map(|(manifest, members)| RustRoot {
             manifest: path(manifest),
             target_dir: path("target"),
-            build_target: BuildTarget::Host,
+            sets_build_target: false,
             members,
             depends_on: Vec::new(),
             external_dependencies: Vec::new(),

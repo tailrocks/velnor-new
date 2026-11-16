@@ -183,46 +183,54 @@ fn helper_path(config: Option<&str>) -> Result<String, Box<dyn std::error::Error
         .ok_or_else(|| "no upload path".into())
 }
 
+fn helper_with_configs(files: &[(&str, &str)]) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut view = sample(None)?;
+    for (name, config) in files {
+        let file = path(name)?;
+        view.tracked_paths.insert(file.clone());
+        view.files.insert(file, config.as_bytes().to_vec());
+    }
+    Ok(view)
+}
+
 #[test]
-fn the_upload_path_follows_the_repository_cargo_config_only() -> TestResult {
+fn the_upload_path_follows_the_repository_target_dir() -> TestResult {
     assert_eq!(helper_path(None)?, "ci-helper/target/debug/velnor-ci");
     assert_eq!(
         helper_path(Some("[build]\ntarget-dir = \"out\"\n"))?,
         "ci-helper/out/debug/velnor-ci"
     );
-    assert_eq!(
-        helper_path(Some("[build]\ntarget = \"x86_64-unknown-linux-gnu\"\n"))?,
-        "ci-helper/target/x86_64-unknown-linux-gnu/debug/velnor-ci"
-    );
-    assert_eq!(
-        helper_path(Some(
-            "[build]\ntarget-dir = \"out\"\ntarget = [\"aarch64-unknown-linux-gnu\"]\n"
-        ))?,
-        "ci-helper/out/aarch64-unknown-linux-gnu/debug/velnor-ci"
-    );
     Ok(())
 }
 
 #[test]
-fn several_or_unusable_build_targets_refuse_the_helper() -> TestResult {
-    for config in [
-        "[build]\ntarget = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
-        "[build]\ntarget = 3\n",
+fn a_build_target_in_any_config_of_the_helper_root_refuses_the_helper() -> TestResult {
+    let triple = "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n";
+    let array = "[build]\ntarget = [\"aarch64-unknown-linux-gnu\"]\n";
+    for files in [
+        vec![(".cargo/config.toml", triple)],
+        vec![("ci-helper/.cargo/config.toml", triple)],
+        vec![("ci-helper/.cargo/config.toml", array)],
+        vec![
+            (".cargo/config.toml", array),
+            (
+                "ci-helper/.cargo/config.toml",
+                "[build]\ntarget-dir = \"out\"\n",
+            ),
+        ],
     ] {
-        let mut view = sample(None)?;
-        let file = path("ci-helper/.cargo/config.toml")?;
-        view.tracked_paths.insert(file.clone());
-        view.files.insert(file, config.as_bytes().to_vec());
-        let error = expected_files(&view).err().ok_or("accepted")?;
+        let error = expected_files(&helper_with_configs(&files)?)
+            .err()
+            .ok_or("accepted")?;
         assert!(
             matches!(
                 error,
                 velnor_gen::GenerateError::Detect(DetectError::Invalid {
-                    reason: Reason::HelperTarget(_) | Reason::UndeclaredTarget(_),
+                    reason: Reason::HelperTarget(_),
                     ..
                 })
             ),
-            "{config}: {error:?}"
+            "{files:?}: {error:?}"
         );
     }
     Ok(())
