@@ -68,7 +68,7 @@ fn release() -> Result<HelperRelease, Box<dyn Error>> {
     )?)
 }
 
-fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
+pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
     Ok(WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {

@@ -101,7 +101,8 @@ fn inline(value: &Yaml) -> String {
 }
 
 fn key_text(key: &str) -> String {
-    if !reserved(key)
+    if !key.is_empty()
+        && !reserved(key)
         && key
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
