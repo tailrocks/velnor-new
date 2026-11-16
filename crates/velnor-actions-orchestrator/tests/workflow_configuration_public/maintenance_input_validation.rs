@@ -87,6 +87,14 @@ pub(super) fn assert_metadata_input_closures(root: &Path) -> TestResult {
         assert!(!globs.is_empty(), "missing complete inputs for {package}");
         assert_workspace_metadata(root, &globs)?;
         assert_package_inputs(root, package, &globs)?;
+        if package == "velnor-actions-freshness" {
+            assert!(
+                !globs
+                    .iter()
+                    .any(|glob| velnor_actions_contract::matches_glob(glob, FRESHNESS_ONLY_INPUT)),
+                "freshness package inputs must not include {FRESHNESS_ONLY_INPUT}"
+            );
+        }
     }
     for package in [
         "velnor-actions-rust",
@@ -106,6 +114,30 @@ pub(super) fn assert_metadata_input_closures(root: &Path) -> TestResult {
             .collect::<Vec<_>>();
         assert!(!globs.is_empty(), "missing complete inputs for {package}");
         assert_package_inputs(root, package, &globs)?;
+        if package == "velnor-archive-guard" {
+            assert_freshness_only_inputs_excluded(root, &globs)?;
+        }
+    }
+    Ok(())
+}
+
+const FRESHNESS_ONLY_INPUT: &str = ".velnor/freshness-inventory.json";
+
+fn assert_freshness_only_inputs_excluded(root: &Path, archive_globs: &[&str]) -> TestResult {
+    let output = Command::new("git")
+        .args(["ls-files", "--", ".velnor"])
+        .current_dir(root)
+        .output()?;
+    assert!(output.status.success(), "git ls-files failed for .velnor");
+    for path in String::from_utf8(output.stdout)?.lines() {
+        let covered = archive_globs
+            .iter()
+            .any(|glob| velnor_actions_contract::matches_glob(glob, path));
+        assert_eq!(
+            covered,
+            path != FRESHNESS_ONLY_INPUT,
+            "archive guard inputs must cover {path} exactly when it is not freshness-only"
+        );
     }
     Ok(())
 }
@@ -165,7 +197,6 @@ fn assert_workspace_metadata(root: &Path, globs: &[&str]) -> TestResult {
 fn assert_package_inputs(root: &Path, package: &str, globs: &[&str]) -> TestResult {
     let paths: &[&str] = match package {
         "velnor-actions-freshness" => &[
-            ".velnor/freshness-inventory.json",
             ".velnor/version-policy.toml",
             ".cargo/mutants.toml",
             "deny.toml",
@@ -208,7 +239,7 @@ fn assert_package_inputs(root: &Path, package: &str, globs: &[&str]) -> TestResu
         "velnor-archive-guard" => &[
             ".config",
             ".github",
-            ".velnor",
+            ".velnor/config.toml",
             "crates/velnor-actions-cli/src/main.rs",
             "fixtures",
             "images",
