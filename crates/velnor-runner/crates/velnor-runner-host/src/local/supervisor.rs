@@ -13,6 +13,7 @@ use tokio::task::JoinSet;
 use crate::error::HostError;
 
 use super::authority::Client;
+use super::minted::MintedAgents;
 use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
 use super::remove::{labelled_agents, remove_labelled};
@@ -33,6 +34,7 @@ pub(super) struct Supervisor {
     pub(super) client: Client,
     pub(super) plan: Plan,
     pub(super) decisions: PathBuf,
+    pub(super) minted: MintedAgents,
     pub(super) sequence: AtomicU32,
     pub(super) pairs_removed: AtomicUsize,
     pub(super) agents_removed: AtomicUsize,
@@ -79,7 +81,10 @@ impl Supervisor {
 
     async fn sweep(&self) -> Result<(), HostError> {
         let label = format!("{ENVIRONMENT_LABEL}={}", self.plan.environment);
-        let agents = labelled_agents(&self.docker, &label).await?;
+        let mut agents = labelled_agents(&self.docker, &label).await?;
+        agents.extend(self.minted.unretired().await?);
+        agents.sort();
+        agents.dedup();
         let pairs = [label.clone(), PAIR_LABEL.to_owned()];
         let removed = remove_labelled(&self.docker, &pairs).await?;
         let mut cleanup = Ok(());
@@ -91,6 +96,9 @@ impl Supervisor {
                 eprintln!("agent {name} was not deleted at runner.server");
                 cleanup = Err(HostError::Cleanup);
             }
+        }
+        if cleanup.is_ok() {
+            self.minted.clear().await?;
         }
         if removed.containers + removed.volumes > 0 {
             println!(
@@ -122,6 +130,7 @@ pub async fn supervise(
         client,
         plan,
         decisions: state.join(DECISIONS_FILE),
+        minted: MintedAgents::new(state),
         sequence: AtomicU32::new(0),
         pairs_removed: AtomicUsize::new(0),
         agents_removed: AtomicUsize::new(0),

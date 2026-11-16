@@ -89,10 +89,14 @@ impl Supervisor {
             }
             match self.one_pair(&slot, &mut stop).await {
                 Err(failure)
-                    if failure.error == HostError::Docker && failed + 1 < PAIR_ATTEMPTS =>
+                    if matches!(failure.error, HostError::Docker | HostError::Endpoint)
+                        && failed + 1 < PAIR_ATTEMPTS =>
                 {
                     failed += 1;
-                    eprintln!("pair {} failed at Docker, attempt {failed}", slot.label);
+                    eprintln!(
+                        "pair {} failed: {}, attempt {failed}",
+                        slot.label, failure.error
+                    );
                     leftover = failure.leftover;
                     pause(&mut stop).await;
                 }
@@ -109,11 +113,16 @@ impl Supervisor {
         stop: &mut watch::Receiver<bool>,
     ) -> Result<(), PairFailure> {
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
-        let minted = self
-            .client
-            .mint(slot.side)
-            .await
-            .map_err(|_| PairFailure::from(HostError::Endpoint))?;
+        let minted = tokio::select! {
+            () = stopped(stop) => return Ok(()),
+            minted = self.client.mint(slot.side) => {
+                minted.map_err(|_| PairFailure::from(HostError::Endpoint))?
+            }
+        };
+        if let Err(error) = self.minted.minted(slot.side.name(), &minted.name).await {
+            self.retire_agent(slot.side, &minted.name).await?;
+            return Err(PairFailure::from(error));
+        }
         let request = self.request(slot, &minted.name, sequence);
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
@@ -145,6 +154,7 @@ impl Supervisor {
             .delete_agent(side, name)
             .await
             .map_err(|_| HostError::Cleanup)?;
+        self.minted.retired(side.name(), name).await?;
         self.agents_removed.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

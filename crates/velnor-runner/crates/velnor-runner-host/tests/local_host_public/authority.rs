@@ -34,6 +34,8 @@ pub(crate) struct Fake {
     pub(crate) reachable: AtomicBool,
     unauthorized: AtomicUsize,
     minted: AtomicUsize,
+    pub(crate) mint_failures: AtomicUsize,
+    pub(crate) stall_mint: AtomicBool,
 }
 
 pub(crate) struct Served {
@@ -86,7 +88,7 @@ impl Fake {
     async fn answer(&self, method: &str, path: &str) -> (u16, String) {
         let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
         match (method, parts.as_slice()) {
-            ("POST", ["jit"]) => (200, self.jit().await),
+            ("POST", ["jit"]) => self.mint().await,
             ("GET", ["runs", side, id, attempt]) => self.run(side, id, attempt),
             ("DELETE", ["agents", side, name]) => {
                 self.log(format!("delete:{side}:{name}"));
@@ -94,6 +96,24 @@ impl Fake {
             }
             _ => (404, "{}".to_owned()),
         }
+    }
+
+    async fn mint(&self) -> (u16, String) {
+        if self.stall_mint.load(Ordering::SeqCst) {
+            self.log("mint-stalled".to_owned());
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        }
+        let failing = self
+            .mint_failures
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok();
+        if failing {
+            self.log("mint-failed".to_owned());
+            return (500, "{}".to_owned());
+        }
+        (200, self.jit().await)
     }
 
     async fn jit(&self) -> String {
@@ -207,6 +227,8 @@ pub(crate) async fn serve(docker: Docker, environment: &str) -> TestResult<Serve
         reachable: AtomicBool::new(true),
         unauthorized: AtomicUsize::new(0),
         minted: AtomicUsize::new(0),
+        mint_failures: AtomicUsize::new(0),
+        stall_mint: AtomicBool::new(false),
     });
     let handler = Arc::clone(&fake);
     tokio::spawn(async move {
