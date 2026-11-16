@@ -121,7 +121,42 @@ fn exact_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, ReleaseError> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReleasePlzDownload {
+    pub(crate) version: String,
+    pub(crate) url: String,
+    pub(crate) sha256: String,
+}
+
+fn linux_x64_download(entry: &toml::Value, wanted: &str) -> Option<ReleasePlzDownload> {
+    let entries = match entry {
+        toml::Value::Array(entries) => entries.iter().collect(),
+        other => vec![other],
+    };
+    let platform = entries
+        .into_iter()
+        .find(|entry| entry.get("version").and_then(toml::Value::as_str) == Some(wanted))?
+        .get("platforms.linux-x64")?;
+    let sha256 = platform
+        .get("checksum")?
+        .as_str()?
+        .strip_prefix("sha256:")?
+        .to_owned();
+    let url = platform.get("url")?.as_str()?.to_owned();
+    let hex = sha256.len() == 64 && sha256.bytes().all(|byte| byte.is_ascii_hexdigit());
+    (hex && url.starts_with(RELEASE_PLZ_DOWNLOAD) && own_download(&url)).then(|| {
+        ReleasePlzDownload {
+            version: wanted.to_owned(),
+            url,
+            sha256: sha256.to_ascii_lowercase(),
+        }
+    })
+}
+
+pub(crate) fn check(
+    mise_tomls: &[String],
+    mise_lock: &str,
+) -> Result<ReleasePlzDownload, ReleaseError> {
     let mise_tomls = mise_tomls
         .iter()
         .map(|text| parse("mise.toml", text))
@@ -141,7 +176,7 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
     let locked = release_plz_tools(&mise_lock);
-    let mut pinned = String::new();
+    let mut pinned = None;
     for (key, value) in configured {
         if let Some(field) = value
             .as_table()
@@ -178,7 +213,10 @@ pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, Re
                 locked: versions,
             });
         }
-        wanted.clone_into(&mut pinned);
+        pinned = Some(
+            linux_x64_download(entry, wanted)
+                .ok_or_else(|| ReleaseError::ReleasePlzNotLockedForLinux { tool: key.clone() })?,
+        );
     }
-    Ok(pinned)
+    pinned.ok_or(ReleaseError::ReleasePlzNotInMiseToml)
 }

@@ -51,6 +51,8 @@ pub struct ReleasePlan {
     pub after: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
     pub release_plz_version: String,
+    pub release_plz_url: String,
+    pub release_plz_sha256: String,
 }
 
 fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
@@ -273,7 +275,7 @@ impl ReleasePlan {
         }
         check_unique(&configs)?;
         check_inventory(&configs, files)?;
-        let release_plz_version = mise::check(&files.mise_tomls, &files.mise_lock)?;
+        let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
         }
@@ -312,7 +314,9 @@ impl ReleasePlan {
                 .collect(),
             after: config.after,
             binaries,
-            release_plz_version,
+            release_plz_version: release_plz.version,
+            release_plz_url: release_plz.url,
+            release_plz_sha256: release_plz.sha256,
         })
     }
 }

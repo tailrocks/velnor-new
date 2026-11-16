@@ -31,8 +31,6 @@ pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-pub(crate) const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 

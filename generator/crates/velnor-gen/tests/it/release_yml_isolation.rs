@@ -8,9 +8,9 @@ use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const MISE: &str = "\"$RUNNER_TEMP/mise\"";
-const ISOLATED: &str = "--no-config --no-env --no-hooks";
-const MISE_SHA256: &str = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9";
+const RELEASE_PLZ: &str = "\"$RUNNER_TEMP/release-plz\"";
+const RELEASE_PLZ_SHA256: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+const RELEASE_PLZ_URL: &str = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz";
 
 type TokenJob<'a> = (&'static str, &'a [Node]);
 
@@ -32,17 +32,15 @@ fn position(all: &[Node], matches: impl Fn(&Node) -> bool) -> Result<usize, Box<
 }
 
 #[test]
-fn mise_is_downloaded_verified_and_used_to_install_release_plz_before_the_repository_is_checked_out()
+fn release_plz_is_downloaded_from_the_locked_url_and_verified_against_the_locked_digest_before_the_token()
 -> TestResult {
     let (_, tree) = two_roots()?;
     for (id, all) in token_jobs(&tree)? {
         let at = |needle: &str| position(all, |step| run(step).contains(needle));
-        let download = at("curl ")?;
-        let digest = at(MISE_SHA256)?;
+        let download = at(RELEASE_PLZ_URL)?;
+        let digest = at(RELEASE_PLZ_SHA256)?;
         let verify = at("sha256sum --check")?;
-        let install = at(&format!(
-            "{MISE} {ISOLATED} install aqua:release-plz/release-plz@0.4.3"
-        ))?;
+        let unpack = at("tar --extract")?;
         let checkout = position(all, |step| {
             uses(step).is_some_and(|u| u.starts_with("actions/checkout@"))
         })?;
@@ -50,24 +48,22 @@ fn mise_is_downloaded_verified_and_used_to_install_release_plz_before_the_reposi
             uses(step).is_some_and(|u| u.starts_with(APP_TOKEN))
         })?;
         assert!(
-            download < digest && digest < verify && verify < install && install < checkout,
+            download < digest && digest < verify && verify < unpack && unpack < checkout,
             "{id}"
         );
         assert!(checkout < token, "{id}");
-        assert!(
-            run(&all[download]).contains("/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64")
-        );
+        assert!(run(&all[download]).starts_with("curl "), "{id}");
         for step in all {
+            let text = run(step);
             assert!(
                 !uses(step).is_some_and(|u| u.starts_with("jdx/mise-action@")),
                 "{id}"
             );
+            assert!(!text.contains("mise"), "{id}: {text}");
         }
         for step in all.iter().filter(|step| run(step).contains("release-plz ")) {
             assert!(
-                run(step).starts_with(&format!(
-                    "{MISE} {ISOLATED} exec aqua:release-plz/release-plz@0.4.3 -- release-plz "
-                )),
+                run(step).starts_with(&format!("{RELEASE_PLZ} release")),
                 "{id}: {}",
                 run(step)
             );
@@ -90,7 +86,7 @@ fn every_release_plz_step_pins_the_rust_toolchain_that_the_job_installed_before_
         assert!(installed < checkout, "{id}");
         let steps: Vec<&Node> = all
             .iter()
-            .filter(|step| run(step).contains(" -- release-plz "))
+            .filter(|step| run(step).starts_with("\"$RUNNER_TEMP/release-plz\" release"))
             .collect();
         assert!(!steps.is_empty(), "{id}");
         for step in steps {
@@ -111,7 +107,7 @@ fn the_release_plz_steps_cancel_every_program_hook_cargo_reads_from_the_environm
     for (id, all) in token_jobs(&tree)? {
         let steps: Vec<&Node> = all
             .iter()
-            .filter(|step| run(step).contains(" -- release-plz "))
+            .filter(|step| run(step).starts_with("\"$RUNNER_TEMP/release-plz\" release"))
             .collect();
         assert!(!steps.is_empty(), "{id}");
         for step in steps {

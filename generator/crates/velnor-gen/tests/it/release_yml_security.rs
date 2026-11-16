@@ -156,7 +156,7 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
             let runs_release_plz = step
                 .get("run")
                 .and_then(Node::text)
-                .is_some_and(|run| run.contains(" -- release-plz "));
+                .is_some_and(|run| run.starts_with("\"$RUNNER_TEMP/release-plz\" release"));
             assert_eq!(
                 token == Some("${{ steps.app.outputs.token }}"),
                 runs_release_plz,
@@ -179,16 +179,14 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
             .collect())
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
-    let install = "\"$RUNNER_TEMP/mise\" --no-config --no-env --no-hooks install aqua:release-plz/release-plz@0.4.3";
-    let exec = "\"$RUNNER_TEMP/mise\" --no-config --no-env --no-hooks exec aqua:release-plz/release-plz@0.4.3 -- release-plz";
+    let exec = "\"$RUNNER_TEMP/release-plz\"";
     let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml";
     let mut prepared: Vec<String> = [
-        "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/mise\" https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-linux-x64",
-        "printf '%s  %s/mise\\n' 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/mise.sha256\"",
-        "sha256sum --check \"$RUNNER_TEMP/mise.sha256\"",
-        "chmod 0755 \"$RUNNER_TEMP/mise\"",
+        "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
+        "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",
+        "sha256sum --check \"$RUNNER_TEMP/release-plz.sha256\"",
+        "tar --extract --gzip --file \"$RUNNER_TEMP/release-plz.tar.gz\" --directory \"$RUNNER_TEMP\" release-plz",
         "rustup toolchain install stable --profile minimal --no-self-update",
-        install,
         refuse,
     ]
     .map(str::to_owned)

@@ -169,6 +169,9 @@ pub enum ReleaseError {
     },
     ReleasePlzNotInMiseToml,
     ReleasePlzNotInMiseLock,
+    ReleasePlzNotLockedForLinux {
+        tool: String,
+    },
     ReleasePlzLockMismatch {
         configured: String,
         locked: Vec<String>,
@@ -284,6 +287,10 @@ impl ReleaseError {
             }
             Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
+            Self::ReleasePlzNotLockedForLinux { tool } => write!(
+                f,
+                "mise.lock: {tool} has no platforms.linux-x64 entry with a sha256 checksum and a release-plz GitHub release url, so the release job cannot verify the download; run `mise lock` again"
+            ),
             Self::ReleasePlzLockMismatch { configured, locked } => write!(
                 f,
                 "mise.toml requests release-plz {configured} but mise.lock locks {}",
