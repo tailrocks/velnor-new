@@ -122,11 +122,20 @@ fn a_publish_list_inherited_from_a_workspace_above_the_release_root_is_refused()
 
 #[test]
 fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
-    let checkout = Checkout::new("excluded");
+    let checkout = Checkout::new("excluded ' quote");
     let marker = checkout.0.join("wrapper-ran");
-    let cargo = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+    checkout.write("shadow/cargo", "#!/bin/sh\nexit 99\n");
+    let search = std::env::join_paths(std::iter::once(checkout.0.join("shadow")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let cargo = std::env::split_paths(&search)
         .map(|dir| dir.join("cargo"))
-        .find(|path| path.is_file())
+        .find(|path| {
+            path.metadata().is_ok_and(|metadata| {
+                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+            })
+        })
         .unwrap_or_else(|| unreachable!("cargo is not on PATH"));
     let stub = checkout.0.join("bin/cargo");
     checkout
@@ -140,16 +149,13 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .write("release-plz.toml", PLZ)
         .write(
             "bin/cargo",
-            &format!(
-                "#!/bin/sh\nif [ \"${{RUSTC_WRAPPER+x}}\" = x ]; then touch '{}'; fi\nexec '{}' \"$@\"\n",
-                marker.display(), cargo.display()
-            ),
+            "#!/bin/sh\nif [ \"${RUSTC_WRAPPER+x}\" = x ]; then touch \"$VELNOR_TEST_WRAPPER_MARKER\"; fi\nexec \"$VELNOR_TEST_REAL_CARGO\" \"$@\"\n",
         );
     fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let path = std::env::join_paths(std::iter::once(checkout.0.join("bin")).chain(
-        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
-    ))
+    let path = std::env::join_paths(
+        std::iter::once(checkout.0.join("bin")).chain(std::env::split_paths(&search)),
+    )
     .unwrap_or_else(|e| unreachable!("{e}"));
     let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -157,6 +163,8 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .current_dir(&checkout.0)
         .env("RUSTUP_TOOLCHAIN", toolchain)
         .env("RUSTC_WRAPPER", "must-be-removed")
+        .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
+        .env("VELNOR_TEST_REAL_CARGO", cargo)
         .env("PATH", path)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
