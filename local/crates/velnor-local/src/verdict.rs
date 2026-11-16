@@ -21,6 +21,17 @@ impl Check {
         }
     }
 
+    fn unadmitted(&self, outcomes: &[Outcome]) -> bool {
+        match self {
+            Self::Plain => false,
+            Self::Pairs(decisions) => outcomes.iter().any(|outcome| {
+                !decisions
+                    .iter()
+                    .any(|decision| decision.allow && decision.of(outcome.id, outcome.trusted))
+            }),
+        }
+    }
+
     fn under(&self, outcome: &Outcome) -> Vec<String> {
         match self {
             Self::Plain => Vec::new(),
@@ -73,6 +84,9 @@ impl Check {
 pub fn conclude(check: &Check, outcomes: &[Outcome]) -> Result<(), &'static str> {
     if check.refused() {
         return Err("a job was refused at job start");
+    }
+    if check.unadmitted(outcomes) {
+        return Err("a job has no job-start decision");
     }
     if !outcomes.iter().all(Outcome::passed) {
         return Err("a run did not succeed");
