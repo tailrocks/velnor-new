@@ -32,7 +32,8 @@ fn names_of(lane: &str) -> Vec<&str> {
 }
 
 #[test]
-fn every_lane_restores_the_file_times_of_its_root_right_after_the_caches() -> TestResult {
+fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
+-> TestResult {
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     for lane in ["rust-root", "rust-lab"] {
         let header = format!("  {lane}:\n");
@@ -46,9 +47,9 @@ fn every_lane_restores_the_file_times_of_its_root_right_after_the_caches() -> Te
             .iter()
             .position(|name| *name == "velnor-ci restored")
             .ok_or("no restored step")?;
-        assert_eq!(order[restored - 1], "Restore the target cache", "{lane}");
-        assert_eq!(order[restored + 1], "velnor-ci inputs restore", "{lane}");
-        assert_eq!(order[restored + 2], "Format", "{lane}");
+        assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
+        assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
+        assert_eq!(order[restored + 1], "Format", "{lane}");
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");

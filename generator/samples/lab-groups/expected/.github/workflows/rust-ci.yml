@@ -106,11 +106,11 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-lint-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-lint-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
@@ -212,11 +212,11 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-test-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-test-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
@@ -352,12 +352,12 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-lint-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
             velnor-tgt-rust-lint-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - id: restored
-        name: velnor-ci restored
-        run: velnor-ci restored
       - name: velnor-ci inputs restore
         working-directory: lab
         run: velnor-ci inputs restore
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
@@ -446,12 +446,12 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-test-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
             velnor-tgt-rust-test-lab-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - id: restored
-        name: velnor-ci restored
-        run: velnor-ci restored
       - name: velnor-ci inputs restore
         working-directory: lab
         run: velnor-ci inputs restore
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
@@ -600,14 +600,14 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-inputs-audit-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit-lab-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - id: restored
-        name: velnor-ci restored
-        run: velnor-ci restored
       - name: velnor-ci inputs restore
         run: velnor-ci inputs restore
       - name: velnor-ci inputs restore
         working-directory: lab
         run: velnor-ci inputs restore
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:

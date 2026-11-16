@@ -41,8 +41,8 @@ const LANE_SETUP: [&str; 10] = [
     "velnor-ci check-metadata",
     "Restore the sources cache",
     "Restore the target cache",
-    "velnor-ci restored",
     "velnor-ci inputs restore",
+    "velnor-ci restored",
 ];
 
 #[test]

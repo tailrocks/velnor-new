@@ -52,3 +52,32 @@ fn a_corrupt_inputs_file_is_an_error_that_names_the_line() {
         )
     );
 }
+
+#[test]
+fn breaking_ties_never_lands_on_a_time_another_file_already_has() {
+    use velnor_ci::ties::{TIE_STEP_NS, break_ties};
+    let t = 5_000_000;
+    let files: Vec<(String, u64)> = vec![
+        ("a".into(), t),
+        ("b".into(), t),
+        ("c".into(), t - TIE_STEP_NS),
+        ("d".into(), t),
+    ];
+    let moved = break_ties(&files);
+    let mut times: Vec<u64> = files
+        .iter()
+        .filter(|(path, _)| path == "a" || path == "c")
+        .map(|(_, time)| *time)
+        .chain(moved.iter().map(|(_, time)| *time))
+        .collect();
+    times.sort_unstable();
+    times.dedup();
+    assert_eq!(times.len(), 4);
+    assert_eq!(
+        moved
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        ["b", "d"]
+    );
+}

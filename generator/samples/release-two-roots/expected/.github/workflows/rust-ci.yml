@@ -105,11 +105,11 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
@@ -202,12 +202,12 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - id: restored
-        name: velnor-ci restored
-        run: velnor-ci restored
       - name: velnor-ci inputs restore
         working-directory: tools
         run: velnor-ci inputs restore
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
@@ -317,14 +317,14 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - id: restored
-        name: velnor-ci restored
-        run: velnor-ci restored
       - name: velnor-ci inputs restore
         run: velnor-ci inputs restore
       - name: velnor-ci inputs restore
         working-directory: tools
         run: velnor-ci inputs restore
+      - id: restored
+        name: velnor-ci restored
+        run: velnor-ci restored
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:

@@ -92,6 +92,22 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     ))
 }
 
+pub(super) fn tracked_paths(root: &Path) -> Result<(PathBuf, Vec<String>), CiError> {
+    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
+    let top = PathBuf::from(
+        String::from_utf8(top)
+            .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
+            .trim_end_matches(['\n', '\r']),
+    );
+    let listed = git(&top, &["ls-files", "-z", "--recurse-submodules"], None)?;
+    let paths = listed
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .filter_map(|path| String::from_utf8(path.to_vec()).ok())
+        .collect();
+    Ok((top, paths))
+}
+
 fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
@@ -208,7 +224,7 @@ fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiEr
     Ok(output.stdout)
 }
 
-fn modified_ns(path: &Path) -> Result<u64, CiError> {
+pub(super) fn modified_ns(path: &Path) -> Result<u64, CiError> {
     let modified = fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .map_err(|e| CiError::new(format!("cannot read mtime of {}: {e}", path.display())))?;
@@ -219,7 +235,7 @@ fn modified_ns(path: &Path) -> Result<u64, CiError> {
         .ok_or_else(|| CiError::new(format!("mtime of {} is out of range", path.display())))
 }
 
-fn set_modified_ns(path: &Path, mtime_ns: u64) -> Result<(), CiError> {
+pub(super) fn set_modified_ns(path: &Path, mtime_ns: u64) -> Result<(), CiError> {
     let time = SystemTime::UNIX_EPOCH + Duration::from_nanos(mtime_ns);
     File::options()
         .write(true)

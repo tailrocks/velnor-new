@@ -81,13 +81,13 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci restored
-      - name: velnor-ci inputs restore
-        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
-        run: velnor-ci inputs restore
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:

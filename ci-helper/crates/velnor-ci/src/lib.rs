@@ -23,5 +23,6 @@ pub mod rulesets;
 pub mod setup;
 pub mod stream;
 pub mod tests_run;
+pub mod ties;
 pub mod time;
 pub mod timings;

@@ -9,6 +9,7 @@ mod inputs;
 mod manifests;
 mod plan;
 mod release;
+mod restored;
 mod run;
 mod setup;
 mod timings;
@@ -21,6 +22,7 @@ use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::restored::break_time_ties;
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
@@ -108,7 +110,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Timings(args) => timings::run_timings(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
-        Command::Restored => Ok(String::new()),
+        Command::Restored => break_time_ties(&current_dir()?),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
 }

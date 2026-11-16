@@ -246,8 +246,8 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     toolchain.extend(restore_file_times(roots));
+    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step

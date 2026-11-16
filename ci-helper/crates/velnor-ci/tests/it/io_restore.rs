@@ -5,7 +5,7 @@ use std::fs::{self, Permissions};
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, UNIX_EPOCH};
 
-use velnor_ci::io::{restore_inputs, save_inputs};
+use velnor_ci::io::{break_time_ties, restore_inputs, save_inputs};
 
 use crate::io::Repo;
 
@@ -379,4 +379,74 @@ fn restore_without_saved_inputs_changes_nothing() {
         report,
         "no target/.velnor/inputs.tsv; nothing restored (cold run)\n"
     );
+}
+
+#[test]
+fn files_that_share_a_modification_time_get_distinct_ones_so_cargo_never_picks_the_newest_by_chance()
+ {
+    let repo = Repo::new("ties");
+    for path in ["build.rs", "src/lib.rs", "src/main.rs", "other.txt"] {
+        repo.write(path, "x\n");
+    }
+    let tied = UNIX_EPOCH + Duration::new(1_700_000_000, 193_657_627);
+    let alone = UNIX_EPOCH + Duration::new(1_700_000_100, 5);
+    for path in [".gitignore", "build.rs", "src/lib.rs", "src/main.rs"] {
+        repo.set_mtime(path, tied);
+    }
+    repo.set_mtime("other.txt", alone);
+    let report = break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        report,
+        "gave 3 tracked files a modification time no other tracked file has, out of 5\n"
+    );
+    assert_eq!(repo.mtime(".gitignore"), tied);
+    assert_eq!(repo.mtime("other.txt"), alone);
+    let step = Duration::from_nanos(1_000);
+    assert_eq!(repo.mtime("build.rs"), tied - step);
+    assert_eq!(repo.mtime("src/lib.rs"), tied - 2 * step);
+    assert_eq!(repo.mtime("src/main.rs"), tied - 3 * step);
+    let again = break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        again,
+        "gave 0 tracked files a modification time no other tracked file has, out of 5\n"
+    );
+}
+
+#[test]
+fn restore_then_tie_breaking_leaves_the_restored_times_of_distinct_files_alone() {
+    let repo = Repo::new("ties-after-restore");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("build.rs", "fn main() {}\n");
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+    let later = UNIX_EPOCH + Duration::new(1_700_000_000, 223_456_789);
+    repo.set_mtime(".gitignore", built);
+    repo.set_mtime("src/lib.rs", later);
+    repo.set_mtime("build.rs", built - Duration::from_secs(1));
+    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in [".gitignore", "src/lib.rs", "build.rs"] {
+        repo.set_mtime(path, checkout);
+    }
+    restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(repo.mtime("src/lib.rs"), later);
+    assert_eq!(repo.mtime(".gitignore"), built);
+    assert_eq!(repo.mtime("build.rs"), built - Duration::from_secs(1));
+}
+
+#[test]
+fn the_restored_command_prints_its_report_and_writes_no_output_file() {
+    let repo = Repo::new("restored-command");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(repo.root())
+        .env("GITHUB_ENV", repo.root().join("env"))
+        .env("GITHUB_OUTPUT", repo.root().join("output"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).starts_with("gave "));
+    assert_eq!(output.stderr.len(), 0);
+    assert!(!repo.root().join("env").exists() && !repo.root().join("output").exists());
 }
