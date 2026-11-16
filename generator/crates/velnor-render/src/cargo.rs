@@ -5,24 +5,28 @@ use velnor_model::{
     CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind, TargetName,
 };
 
+use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
-const DOC_RUN: &str = "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
+const FINGERPRINT_LOG: &str =
+    "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
+const DOC_RUN: &str =
+    "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
             LINT_STEP.into(),
-            ["cargo-clippy clippy $PACKAGE_ARGS --all-targets --locked -- -D warnings"]
+            ["cargo-clippy clippy --workspace --all-targets --locked -- -D warnings"]
                 .into_iter()
                 .chain(extra.iter().map(String::as_str))
                 .collect::<Vec<_>>()
                 .join(" "),
             vec![],
         ),
-        CargoCommand::NextestRun { filter } => nextest_run("$PACKAGE_ARGS --locked", filter),
+        CargoCommand::NextestRun { filter } => nextest_run("--workspace --locked", filter),
         CargoCommand::NextestRunArchive { file, filter } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
@@ -33,7 +37,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::NextestArchive { file } => (
             "Build the tests".into(),
             format!(
-                "cargo-nextest nextest archive $PACKAGE_ARGS --locked --archive-file '{}'",
+                "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
             ),
             vec![],
@@ -54,7 +58,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
         ),
         CargoCommand::Doctest => (
             "Doctests".into(),
-            "cargo test --doc $PACKAGE_ARGS --locked".into(),
+            "cargo test --doc --workspace --locked".into(),
             vec![],
         ),
         CargoCommand::Doc => ("Documentation".into(), DOC_RUN.into(), vec![]),
@@ -84,10 +88,19 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
-        env,
+        env: env.into_iter().chain([cache_debug_env()]).collect(),
         run: Some(format!("{prefix} {run}")),
         ..RenderedStep::default()
     }
+}
+
+fn cache_debug_env() -> (String, Value) {
+    (
+        "CARGO_LOG".to_owned(),
+        Value::Expr(format!(
+            "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
+        )),
+    )
 }
 
 fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
