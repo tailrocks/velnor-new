@@ -6,6 +6,8 @@ use crate::pipeline::{view, workflow};
 
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
+const MIRROR_GUARD: &str = "${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}";
+
 #[test]
 fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     for (runner, mirror_runner, enabled) in [
@@ -16,55 +18,73 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
         ("ubuntu-future", "ubuntu-future", true),
         ("ubuntu-latest", "mirror-box", false),
     ] {
-        let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
-        repo.files.insert(
-            path(".velnor/rust-ci.toml")?,
-            format!(
-                "runner = '{runner}'\n{}",
-                MIRROR.replace("mirror-box", mirror_runner)
-            )
-            .into_bytes(),
-        );
-        let lock = path(".velnor/rust-ci.lock")?;
-        let old = String::from_utf8(repo.files[&lock].clone())?;
-        repo.files
-            .insert(lock.clone(), old.replace("0.1.79", "0.1.81").into_bytes());
-        let text = workflow(&repo)?;
-        assert_eq!(text.contains("velnor-ci crates-mirror"), enabled, "{text}");
-        if enabled {
-            let yaml: serde_json::Value = serde_saphyr::from_str(&text)?;
-            let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
-            for (_, job) in jobs {
-                let steps = job["steps"].as_array().ok_or("steps missing")?;
-                let mirror = steps.iter().position(|step| {
-                    step["run"]
-                        .as_str()
-                        .is_some_and(|run| run.starts_with("velnor-ci crates-mirror"))
-                });
-                if let Some(tools) = steps.iter().position(|step| {
-                    step["uses"]
-                        .as_str()
-                        .is_some_and(|uses| uses.starts_with("jdx/mise-action"))
-                }) {
-                    assert!(mirror.is_some_and(|index| index < tools));
+        for shape in ["", "shape = 'groups'\n"] {
+            let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+            repo.files.insert(
+                path(".velnor/rust-ci.toml")?,
+                format!(
+                    "runner = '{runner}'\n{shape}{}",
+                    MIRROR.replace("mirror-box", mirror_runner)
+                )
+                .into_bytes(),
+            );
+            let lock = path(".velnor/rust-ci.lock")?;
+            let old = String::from_utf8(repo.files[&lock].clone())?;
+            repo.files
+                .insert(lock.clone(), old.replace("0.1.79", "0.1.81").into_bytes());
+            let text = workflow(&repo)?;
+            assert_eq!(text.contains("velnor-ci crates-mirror"), enabled, "{text}");
+            if enabled {
+                let yaml: serde_json::Value = serde_saphyr::from_str(&text)?;
+                let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
+                if !shape.is_empty() {
+                    assert!(text.contains("install_args: 'aqua:nextest-rs/nextest/cargo-nextest'"));
                 }
-                if let Some(index) = mirror {
-                    assert_eq!(
-                        steps[index]["if"].as_str(),
-                        Some(
-                            "${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}"
-                        ),
-                        "{runner}: {}",
-                        steps[index]
-                    );
+                let mut saw_mise = false;
+                for (_, job) in jobs {
+                    let steps = job["steps"].as_array().ok_or("steps missing")?;
+                    let mirror = steps.iter().position(|step| {
+                        step["run"]
+                            .as_str()
+                            .is_some_and(|run| run.starts_with("velnor-ci crates-mirror"))
+                    });
+                    for (tools, _) in steps.iter().enumerate().filter(|(_, step)| {
+                        step["uses"]
+                            .as_str()
+                            .is_some_and(|uses| uses.starts_with("jdx/mise-action@"))
+                    }) {
+                        saw_mise = true;
+                        assert!(mirror.is_some_and(|index| index < tools));
+                        let repeated = steps.get(tools + 1).ok_or("mirror missing after Mise")?;
+                        assert!(
+                            repeated["run"]
+                                .as_str()
+                                .is_some_and(|run| run.starts_with("velnor-ci crates-mirror")),
+                            "{runner}: {repeated}"
+                        );
+                        assert_eq!(
+                            repeated["if"].as_str(),
+                            Some(MIRROR_GUARD),
+                            "{runner}: {repeated}"
+                        );
+                    }
+                    if let Some(index) = mirror {
+                        assert_eq!(
+                            steps[index]["if"].as_str(),
+                            Some(MIRROR_GUARD),
+                            "{runner}: {}",
+                            steps[index]
+                        );
+                    }
                 }
+                assert!(saw_mise);
             }
+            repo.files
+                .insert(lock, old.replace("0.1.79", "0.1.80").into_bytes());
+            assert!(workflow(&repo).is_err_and(|error| error.to_string().contains("0.1.81")));
+            repo.files.remove(&path(".velnor/rust-ci.toml")?);
+            assert!(!workflow(&repo)?.contains("crates-mirror"));
         }
-        repo.files
-            .insert(lock, old.replace("0.1.79", "0.1.80").into_bytes());
-        assert!(workflow(&repo).is_err_and(|error| error.to_string().contains("0.1.81")));
-        repo.files.remove(&path(".velnor/rust-ci.toml")?);
-        assert!(!workflow(&repo)?.contains("crates-mirror"));
     }
     Ok(())
 }

@@ -169,6 +169,7 @@ pub enum When {
     NotCancelled,
     Scheduled,
     ScheduledOrPush,
+    SaveToolsOnDefaultBranch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

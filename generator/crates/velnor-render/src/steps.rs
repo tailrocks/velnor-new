@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, condition, output, plan_source};
+use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -236,6 +236,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         ));
     }
     RenderedStep {
+        id: (fallbacks && matches!(key, CacheKey::Tools { .. })).then(|| TOOLS_STEP.to_owned()),
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         with,

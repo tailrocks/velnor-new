@@ -8,7 +8,10 @@ use velnor_model::{
     RepoFacts, RootSlug, Step, StepKind, When,
 };
 
-use crate::plan::{CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, step};
+use crate::plan::{
+    CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, mirror_step, step, tools_install,
+    tools_restore, tools_save,
+};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");
@@ -139,11 +142,25 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     if !facts.tools.tools.is_empty() {
-        steps.push(Step {
-            gate: lane.plan.is_none().then(|| lane.gate(GateNeed::Policy)),
-            ..step(StepKind::InstallTools { only: None })
-        });
-        steps.extend(crate::plan::mirror_step(facts));
+        let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
+        steps.extend(
+            [
+                tools_restore(facts),
+                tools_install(facts),
+                mirror_step(facts),
+                tools_save(facts),
+            ]
+            .into_iter()
+            .flatten()
+            .map(|step| Step {
+                gate: if matches!(step.kind, StepKind::CratesMirror(_)) {
+                    None
+                } else {
+                    policy_gate.clone()
+                },
+                ..step
+            }),
+        );
     }
     if facts.policy.deny {
         steps.extend(facts.rust_roots.iter().map(|root| {
