@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{
     CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
-    RepoFacts, RootSlug, Step, StepKind, When,
+    RepoFacts, RootSlug, Step, StepKind, Visibility, When,
 };
 
 use crate::plan::{
@@ -89,6 +89,7 @@ impl Lane {
             kind: StepKind::Cargo(command),
             directory,
             when: When::NotCancelled,
+            visibility: Visibility::Any,
             skip_on_draft: false,
         }
     }

@@ -18,7 +18,7 @@ pub use plan::{
     Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand,
     HelperRelease, Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform,
     PullRequestType, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan,
+    TrimFamily, Visibility, When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,

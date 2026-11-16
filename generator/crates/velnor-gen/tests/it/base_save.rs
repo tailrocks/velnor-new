@@ -216,6 +216,11 @@ fn restored_carries_the_age_limit_on_the_events_that_build_a_clean_base() -> Tes
     let every_run =
         format!("VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {ref_is_main} && ''7'' || ''0'' }}}}'");
     assert_eq!(limit("on_main = \"everything\"\n")?, every_run);
-    assert_eq!(limit("full_run = \"off\"\n")?, every_run);
+    assert_eq!(
+        limit("full_run = \"off\"\n")?,
+        format!(
+            "VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {ref_is_main} && github.event_name == ''workflow_dispatch'' && ''7'' || ''0'' }}}}'"
+        )
+    );
     Ok(())
 }

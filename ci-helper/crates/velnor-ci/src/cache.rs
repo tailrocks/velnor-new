@@ -55,6 +55,7 @@ pub fn stale_entries(entries: &[CacheEntry], prefix: &str, keep: usize) -> Vec<u
 
 pub const KEEP_NEWEST: usize = 2;
 const PAGE: usize = 100;
+pub const MAX_PAGES: usize = 20;
 
 pub fn trim(
     github: &dyn GitHubWrite,
@@ -66,18 +67,36 @@ pub fn trim(
     if prefix.is_empty() {
         return Err(CiError::new("the cache prefix is empty"));
     }
-    let listing = github.get(&format!(
-        "/repos/{repo}/actions/caches?key={}&ref={}&per_page={PAGE}",
-        encode(prefix),
-        encode(reference)
-    ))?;
-    let entries = parse_entries(&listing)?;
+    let mut entries = Vec::new();
+    let mut truncated = false;
+    for page in 1..=MAX_PAGES {
+        let listing = github.get(&format!(
+            "/repos/{repo}/actions/caches?key={}&ref={}&per_page={PAGE}&page={page}",
+            encode(prefix),
+            encode(reference)
+        ))?;
+        let batch = parse_entries(&listing)?;
+        let full = batch.len() >= PAGE;
+        entries.extend(batch);
+        truncated = full && page == MAX_PAGES;
+        if !full {
+            break;
+        }
+    }
     let stale = stale_entries(&entries, prefix, keep);
     for id in &stale {
         github.delete(&format!("/repos/{repo}/actions/caches/{id}"))?;
     }
+    let warning = if truncated {
+        format!(
+            "::warning::cache trim stopped after {MAX_PAGES} pages ({} entries) for {prefix}; the rest is trimmed by the next run\n",
+            entries.len()
+        )
+    } else {
+        String::new()
+    };
     Ok(format!(
-        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n",
+        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n{warning}",
         entries
             .iter()
             .filter(|entry| entry.key.starts_with(prefix))
