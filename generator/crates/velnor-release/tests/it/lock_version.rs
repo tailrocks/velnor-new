@@ -50,7 +50,7 @@ fn an_unparsable_manifest_under_a_release_root_fails_and_names_the_file() {
 }
 
 #[test]
-fn a_member_root_inheriting_a_lock_workspace_version_is_refused() -> TestResult {
+fn a_member_root_inheriting_a_lock_workspace_version_is_refused() {
     let mut files = files();
     files.release_toml = Some("roots = [\"member\"]\n".to_owned());
     files.release_plz_toml.clear();
@@ -75,5 +75,4 @@ fn a_member_root_inheriting_a_lock_workspace_version_is_refused() -> TestResult 
         "[workspace.package]\nversion = \"1.2.3\"\n".to_owned(),
     );
     assert_eq!(refusal(&files), None);
-    Ok(())
 }
