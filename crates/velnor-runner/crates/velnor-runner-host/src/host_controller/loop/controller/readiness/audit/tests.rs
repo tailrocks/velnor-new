@@ -72,10 +72,9 @@ fn a_container_with_another_reservation_is_refused() {
 
 #[test]
 fn a_stopped_pair_container_is_refused() {
-    assert_eq!(
-        check(&inspected(pair_labels(), false)),
-        Err(HostError::Ownership)
-    );
+    let mut labels = pair_labels();
+    labels.extend(image_labels());
+    assert_eq!(check(&inspected(labels, false)), Err(HostError::Ownership));
 }
 
 #[test]
