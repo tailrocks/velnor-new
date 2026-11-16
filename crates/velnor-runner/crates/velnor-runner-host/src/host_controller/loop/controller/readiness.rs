@@ -48,7 +48,34 @@ async fn refresh(
     .await
 }
 
+/// Fails closed: any error while re-proving readiness withdraws the proof
+/// published by an earlier refresh before the error propagates.
 async fn refresh_with_dependencies(
+    state: &std::path::Path,
+    docker: &Docker,
+    journal: &Journal,
+    selected: &SelectedEngineContext,
+    control: &ControlState,
+    secret: Option<&ImageAuthority>,
+    dependencies: &RefreshDependencies<'_>,
+) -> Result<(), HostError> {
+    let outcome = refresh_unguarded(
+        state,
+        docker,
+        journal,
+        selected,
+        control,
+        secret,
+        dependencies,
+    )
+    .await;
+    if outcome.is_err() {
+        control.clear_readiness()?;
+    }
+    outcome
+}
+
+async fn refresh_unguarded(
     state: &std::path::Path,
     docker: &Docker,
     journal: &Journal,

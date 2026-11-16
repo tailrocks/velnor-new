@@ -13,7 +13,7 @@ use crate::launch::ReadinessSample;
 
 const OPERATIONAL_CAPACITY: &str = "UPDATE host_capacity_policy SET operational_cpu_millicores = 1000, operational_memory_bytes = 1073741824";
 
-async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
+async fn primed(world: &World) -> TestResult<ControlState> {
     std::fs::write(world.dir.path().join("host.toml"), seed::CONFIG)?;
     seed::unguarded(&world.journal, &[OPERATIONAL_CAPACITY.to_owned()]).await?;
     let control = ControlState::new(&world.config);
@@ -28,13 +28,21 @@ async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
         None,
     )?;
     control.cache_readiness_sample(ReadinessSample::for_test(&world.seeded.selected))?;
+    Ok(control)
+}
+
+async fn refresh_against(
+    world: &World,
+    docker: &bollard::Docker,
+    control: &ControlState,
+) -> TestResult<(Result<(), HostError>, bool)> {
     let remote_present = |_: &_, _: Option<&_>, _: i64| Ok(true);
     let outcome = refresh_with_dependencies(
         world.dir.path(),
-        &world.docker,
+        docker,
         &world.journal,
         &world.seeded.selected,
-        &control,
+        control,
         None,
         &RefreshDependencies {
             remote_audit: &remote_present,
@@ -53,6 +61,10 @@ async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
         Instant::now(),
     )?;
     Ok((outcome, published))
+}
+
+async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
+    refresh_against(world, &world.docker, &primed(world).await?).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -79,5 +91,24 @@ async fn refreshing_a_pair_with_a_wrong_image_kind_publishes_no_readiness() -> T
         let world = world(containers).await?;
         assert_eq!(refreshed(&world).await?, (Err(HostError::Ownership), false));
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_audit_withdraws_readiness_published_by_an_earlier_refresh() -> TestResult<()> {
+    let world = world(engine::healthy()?).await?;
+    let control = primed(&world).await?;
+    assert_eq!(
+        refresh_against(&world, &world.docker, &control).await?,
+        (Ok(()), true)
+    );
+    let socket = world.dir.path().join("swapped.sock");
+    let swapped = engine::containers((seed::RUNNER_IMAGE, None), (seed::DIND_IMAGE, Some("dind")))?;
+    engine::serve(&socket, swapped)?;
+    let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
+    assert_eq!(
+        refresh_against(&world, &docker, &control).await?,
+        (Err(HostError::Ownership), false)
+    );
     Ok(())
 }
