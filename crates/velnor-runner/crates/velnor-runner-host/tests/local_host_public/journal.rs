@@ -120,3 +120,35 @@ async fn local_sweep_keeps_a_journaled_name_the_authority_does_not_know_yet() ->
     assert!(kept.contains("gone-name"), "{kept}");
     Ok(())
 }
+
+#[tokio::test]
+async fn local_failed_mint_keeps_its_name_while_the_agent_is_not_visible_yet() -> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    scenario.fake().mint_failures.store(1, Ordering::SeqCst);
+    scenario.fake().agents_absent.store(true, Ordering::SeqCst);
+    let plan = scenario.plan(1, 0)?;
+    scenario.start(plan);
+    let started = std::time::Instant::now();
+    while !scenario
+        .fake()
+        .events()
+        .iter()
+        .any(|event| event.starts_with("delete:"))
+        && started.elapsed() < Duration::from_secs(60)
+    {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let stopped = scenario.stop().await?;
+    let events = scenario.fake().events();
+    let kept = std::fs::read_to_string(scenario.state.path().join(JOURNAL)).unwrap_or_default();
+    scenario.finish().await?;
+    assert_eq!(stopped, Ok(()), "{events:?}");
+    let refused: Vec<&str> = events
+        .iter()
+        .filter_map(|event| event.strip_prefix("mint-refused:"))
+        .collect();
+    assert_eq!(refused.len(), 1, "{events:?}");
+    assert!(kept.contains(&format!("+ trusted {}", refused[0])), "{kept}");
+    assert!(!kept.contains(&format!("- trusted {}", refused[0])), "{kept}");
+    Ok(())
+}

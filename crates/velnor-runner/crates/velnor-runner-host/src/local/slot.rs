@@ -209,7 +209,7 @@ impl Supervisor {
     }
 
     async fn abandon(&self, side: Side, name: &str) {
-        if self.client.delete_agent(side, name).await.is_ok() {
+        if matches!(self.client.delete_agent(side, name).await, Ok(true)) {
             let _kept = self.minted.retired(side.name(), name).await;
         }
     }

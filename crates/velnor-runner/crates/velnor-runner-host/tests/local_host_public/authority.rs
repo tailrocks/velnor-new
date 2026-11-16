@@ -132,6 +132,7 @@ impl Fake {
             .is_ok();
         if failing {
             self.log("mint-failed".to_owned());
+            self.log(format!("mint-refused:{}", requested_name(body)));
             return (500, "{}".to_owned());
         }
         (200, self.jit(&requested_name(body)).await)
