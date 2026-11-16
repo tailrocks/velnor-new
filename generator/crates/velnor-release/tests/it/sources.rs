@@ -67,7 +67,7 @@ fn the_plan_installs_the_exact_configured_version_whatever_key_or_options_mise_h
 
 #[test]
 fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
-    let stale = "[tools]\nrelease-plz = \"0.3.0\"\n".to_owned();
+    let stale = "[tools]\nrelease-plz = \"0.4.2\"\n".to_owned();
     let current = "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned();
     let mut files = files();
     files.mise_tomls = vec![stale.clone(), current.clone()];
