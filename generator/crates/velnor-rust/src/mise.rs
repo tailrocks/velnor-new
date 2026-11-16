@@ -8,6 +8,7 @@ use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
+use crate::mise_lock::{is_rustup_tool, lock_platform, prebuilt_platforms};
 use crate::toml_file::table;
 
 pub static MISE_CONFIGS: [RepoPath; 2] = [
@@ -78,12 +79,15 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
             ));
         }
     }
-    let mut locked = files
-        .get(&MISE_LOCK)
-        .map(|bytes| versions(bytes).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason)))
-        .transpose()?
-        .unwrap_or_default();
+    let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
+        Some(lock) => (
+            versions(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
+            prebuilt_platforms(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
+        ),
+        None => Default::default(),
+    };
     Ok(ToolPins {
+        locked_file: files.contains_key(&MISE_LOCK),
         configs: present
             .iter()
             .map(|(config, _)| (*config).clone())
@@ -98,12 +102,14 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
                     .map(|request| request.version)
                     .collect();
                 let (requested, os_filters) = split_requests(&requested);
+                let prebuilt = prebuilt.remove(&name).unwrap_or_default();
                 (
                     name,
                     ToolPin {
                         requested,
                         locked,
                         os_filters,
+                        prebuilt,
                     },
                 )
             })
@@ -123,6 +129,9 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    if !facts.tools.locked_file {
+        return Err(DetectError::MiseLockRequired { path: MISE_LOCK });
+    }
     if let Some((file, mise)) = toolchain_conflict(facts) {
         return Err(DetectError::ToolchainConflict { file, mise });
     }
@@ -142,6 +151,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             },
         ));
     }
+    check_prebuilt(facts)?;
     let tested = facts
         .rust_roots
         .iter()
@@ -153,6 +163,29 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         });
     }
     Ok(())
+}
+
+fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
+    let Some(platform) = lock_platform(&facts.config.runner) else {
+        return Ok(());
+    };
+    let os = platform.split('-').next().unwrap_or(platform);
+    let source_built = facts.tools.tools.iter().find(|(name, pin)| {
+        let filtered_out = !pin.os_filters.is_empty()
+            && pin.os_filters.len() == pin.requested.len()
+            && pin
+                .os_filters
+                .values()
+                .all(|names| !names.iter().any(|filter| filter == os));
+        !is_rustup_tool(name) && !filtered_out && !pin.prebuilt.contains(platform)
+    });
+    match source_built {
+        Some((tool, _)) => Err(DetectError::ToolNotPrebuilt {
+            tool: tool.clone(),
+            platform: platform.to_owned(),
+        }),
+        None => Ok(()),
+    }
 }
 
 fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {

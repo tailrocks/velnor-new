@@ -34,7 +34,7 @@ fn every_job_adds_the_components_and_targets_the_toolchain_file_declares() -> Te
         [
             "component add clippy llvm-tools rustfmt",
             "target add wasm32-unknown-unknown",
-            "component add llvm-tools",
+            "component add clippy llvm-tools rustfmt",
             "target add wasm32-unknown-unknown",
         ]
     );

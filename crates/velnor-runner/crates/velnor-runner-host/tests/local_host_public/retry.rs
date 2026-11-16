@@ -321,3 +321,33 @@ async fn local_slot_keeps_the_start_failure_when_retiring_the_agent_also_fails()
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn local_slot_retires_the_agent_of_a_pair_that_failed_to_start_before_minting_again()
+-> TestResult<()> {
+    let scenario = Scenario::new().await?;
+    let mut plan = scenario.plan(1, 0)?;
+    plan.runner_image = format!("sha256:{}", "0".repeat(64));
+    let docker = scenario.fixture.docker.clone();
+    let state = scenario.state.path().to_path_buf();
+    let ended = tokio::time::timeout(
+        Duration::from_secs(300),
+        supervise(docker, plan, &state, std::future::pending()),
+    )
+    .await;
+    let events = scenario.fake().events();
+    scenario.finish().await?;
+    assert_eq!(ended?, Err(HostError::Docker), "{events:?}");
+    let names = minted_names(&events);
+    assert!(names.len() > 1, "{events:?}");
+    for pair in names.windows(2) {
+        let deleted = events
+            .iter()
+            .position(|event| *event == format!("delete:trusted:{}", pair[0]));
+        let next = events
+            .iter()
+            .position(|event| event.starts_with(&format!("mint:{}", pair[1])));
+        assert!(deleted.is_some() && deleted < next, "{pair:?} {events:?}");
+    }
+    Ok(())
+}

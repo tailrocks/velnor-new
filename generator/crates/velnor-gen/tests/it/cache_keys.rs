@@ -5,7 +5,7 @@ use velnor_model::{
     CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PullRequestType, RepoPath,
     RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
-use velnor_render::{RenderedKey, render, render_key};
+use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -29,12 +29,21 @@ fn target(job: &str, manifest: &str) -> Result<RenderedKey, Box<dyn std::error::
 }
 
 #[test]
+fn a_mise_bump_changes_the_tools_key() {
+    let key = CacheKey::Tools { host: Host };
+    let old = render_key_with_mise(&key, "2026.11.1");
+    let new = render_key_with_mise(&key, "2026.12.0");
+    assert_ne!(old.key, new.key);
+    assert!(new.key.contains("mise2026.12.0"), "{}", new.key);
+}
+
+#[test]
 fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
     let tools = render_key(&CacheKey::Tools { host: Host });
     assert_eq!(
         tools,
         RenderedKey {
-            key: format!("velnor-tools-{HOST}-${{{{ hashFiles('mise.lock') }}}}"),
+            key: format!("velnor-tools-{HOST}-mise2026.11.1-${{{{ hashFiles('mise.lock') }}}}"),
             restore_keys: vec![],
         }
     );
