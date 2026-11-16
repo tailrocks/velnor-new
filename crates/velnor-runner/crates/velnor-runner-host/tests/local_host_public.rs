@@ -312,7 +312,7 @@ fn local_plan_refuses_one_network_shared_by_two_sides() {
             "{{\"environment\":\"e\",\"authority\":\"http://127.0.0.1:53114\",\"token\":\"{TOKEN}\",\"docker\":\"unix:///var/run/docker.sock\",\"platform\":\"linux/arm64\",\"runner_image\":\"a\",\"dind_image\":\"b\",\"limits\":{{\"runner_cpu_millicores\":1500,\"runner_memory_bytes\":1073741824,\"dind_cpu_millicores\":500,\"dind_memory_bytes\":1073741824}},\"sides\":[{{\"side\":\"trusted\",\"network\":\"{trusted}\",\"pairs\":1}},{{\"side\":\"untrusted\",\"network\":\"{untrusted}\",\"pairs\":1}}]}}"
         )
     };
-    assert!(Plan::parse(plan("net-a", "net-b").as_bytes()).is_ok());
+    assert!(Plan::parse(plan("net-a", "net-b").as_bytes()).is_err());
     assert_eq!(
         Plan::parse(plan("net-a", "net-a").as_bytes()).err(),
         Some(HostError::Config)
