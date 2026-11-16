@@ -130,7 +130,7 @@ fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
             root: root.to_owned(),
             key,
         }),
-        None => Ok(document),
+        None => refuse_package_publish_timeout(root, &document).map(|()| document),
     }
 }
 
@@ -194,6 +194,20 @@ fn workspace_tags(
     Ok(vec![pattern])
 }
 
+fn refuse_package_publish_timeout(root: &str, document: &Document) -> Result<(), ReleaseError> {
+    match document
+        .package
+        .iter()
+        .find(|entry| entry.settings.publish_timeout.is_some())
+    {
+        Some(entry) => Err(ReleaseError::PackagePublishTimeout {
+            root: root.to_owned(),
+            package: entry.name.clone(),
+        }),
+        None => Ok(()),
+    }
+}
+
 pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     let document = parse_document(root, text)?;
     let workspace = &document.workspace;
@@ -215,16 +229,6 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         return Err(ReleaseError::InvalidPrBranchPrefix {
             root: root.to_owned(),
             prefix,
-        });
-    }
-    if let Some(entry) = document
-        .package
-        .iter()
-        .find(|entry| entry.settings.publish_timeout.is_some())
-    {
-        return Err(ReleaseError::PackagePublishTimeout {
-            root: root.to_owned(),
-            package: entry.name.clone(),
         });
     }
     let released = released_packages(root, &document)?;
