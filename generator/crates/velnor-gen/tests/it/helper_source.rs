@@ -67,6 +67,7 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
             .replace("[tools]\n", "[tools]\ncargo-machete = \"0.9.1\"\n")
             .into_bytes(),
     );
+    view.files.remove(&path("mise.lock")?);
     crate::facts::lock_pinned_tools(&mut view)?;
     let text = text_of(&view)?;
     assert!(job_ids(&text).contains(&"policy"));
