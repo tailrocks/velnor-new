@@ -133,6 +133,49 @@ fn the_release_ruleset_command_parses() -> TestResult {
     Ok(())
 }
 
+fn help_one_liner() -> Result<String, Box<dyn Error>> {
+    let help = parse_cli(["velnor-gen", "release", "ruleset", "--help"])
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    let line = help
+        .split("create each with one request: ")
+        .nth(1)
+        .and_then(|rest| rest.split("; then").next())
+        .map(|rest| rest.split_whitespace().collect::<Vec<_>>().join(" "))
+        .ok_or("the help has no one-liner")?;
+    Ok(line.replace("<owner>/<repo>", "o/r"))
+}
+
+#[test]
+fn the_help_one_liner_stops_at_the_first_failed_post() -> TestResult {
+    let line = help_one_liner()?;
+    let dir = std::env::temp_dir().join(format!("velnor-help-{}", std::process::id()));
+    fs::create_dir_all(&dir)?;
+    for (name, body) in [
+        ("velnor-gen", "#!/bin/sh\nprintf '%s\\n' one two\n"),
+        (
+            "gh",
+            "#!/bin/sh\ncat > /dev/null\necho x >> \"$CALLS\"\n[ \"$(wc -l < \"$CALLS\")\" -gt 1 ]\n",
+        ),
+    ] {
+        let path = dir.join(name);
+        fs::write(&path, body)?;
+        fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))?;
+    }
+    let calls = dir.join("calls");
+    let status = Command::new("/bin/sh")
+        .args(["-c", &line])
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+        .env("CALLS", &calls)
+        .status()?;
+    let posts = fs::read_to_string(&calls)?.lines().count();
+    fs::remove_dir_all(&dir)?;
+    assert_eq!(status.code(), Some(1), "{line}");
+    assert_eq!(posts, 1, "{line}");
+    Ok(())
+}
+
 fn live() -> Result<serde_json::Value, Box<dyn Error>> {
     Ok(serde_json::from_str(&fs::read_to_string(
         samples().join("release-two-roots/live-rulesets.json"),

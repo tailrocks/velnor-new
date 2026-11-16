@@ -54,7 +54,7 @@ pub enum Command {
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum ReleaseCommand {
     #[command(
-        about = "Print the two tag rulesets that let only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files, as one JSON object per line; create each with one request: velnor-gen release ruleset | while IFS= read -r ruleset; do printf '%s' \"$ruleset\" | gh api --method POST repos/<owner>/<repo>/rulesets --input -; done"
+        about = "Print the two tag rulesets that let only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files, as one JSON object per line; create each with one request: velnor-gen release ruleset | while IFS= read -r ruleset; do printf '%s' \"$ruleset\" | gh api --method POST repos/<owner>/<repo>/rulesets --input - || exit 1; done; then check both with release ruleset-drift"
     )]
     Ruleset,
     #[command(
