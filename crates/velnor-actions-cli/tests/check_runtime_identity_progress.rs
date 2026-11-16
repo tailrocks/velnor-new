@@ -16,7 +16,7 @@ fn failed_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
     assert_eq!(
         observed,
         pin.bytes,
-        "precondition: the mise on PATH ({}) must be the pinned release {} of {} bytes, found {observed} bytes; install it with `mise install` from the repository root",
+        "precondition: the mise on PATH ({}) must be the pinned release {} of {} bytes, found {observed} bytes; install the pinned release with `mise install aqua:jdx/mise@2026.11.1` and put its bin directory first on PATH (`~/.local/share/mise/installs/aqua-jdx-mise/2026.11.1/mise/bin`), because the ~/.local/bin/mise shim is not the pinned binary",
         runtime.display(),
         pin.version,
         pin.bytes
