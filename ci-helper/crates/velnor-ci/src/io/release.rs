@@ -12,7 +12,9 @@ use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns, record,
+use crate::release::{
+    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns,
+    publishes_to_crates_io, record,
 };
 use crate::rulesets::check_tag_rulesets;
 
@@ -43,8 +45,14 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         .collect::<Result<Vec<_>, CiError>>()?;
     let top = std::env::current_dir()
         .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
-    for path in &args.files {
-        check_cargo_discovery(&discovery(&top, path)?)?;
+    for (path, (_, text)) in args.files.iter().zip(&files) {
+        let relative = path.strip_prefix(&top).unwrap_or(path);
+        let root = relative
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string());
+        let publishes = publishes_to_crates_io(&root, text)?;
+        check_cargo_discovery(&discovery(&top, path)?, publishes)?;
     }
     let output = check_config(&files)?;
     let patterns = args.tag_patterns();

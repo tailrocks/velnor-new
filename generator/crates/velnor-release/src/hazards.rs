@@ -60,6 +60,13 @@ fn redirects_crates_io(value: &Value) -> bool {
     }
 }
 
+fn names_other_default_registry(document: &Value) -> bool {
+    document
+        .get("registry")
+        .and_then(|registry| registry.get("default"))
+        .is_some_and(|default| default.as_str() != Some("crates-io"))
+}
+
 fn is_builtin(value: &Value) -> bool {
     match value {
         Value::String(name) => name == BUILTIN_PROVIDER,
@@ -68,8 +75,12 @@ fn is_builtin(value: &Value) -> bool {
     }
 }
 
-pub fn refuse_cargo_config(file: &str, text: &str) -> Result<(), String> {
-    cargo_config(file, text, true).map_err(|error| error.to_string())
+pub fn refuse_cargo_config(
+    file: &str,
+    text: &str,
+    publishes_to_crates_io: bool,
+) -> Result<(), String> {
+    cargo_config(file, text, publishes_to_crates_io).map_err(|error| error.to_string())
 }
 
 pub(crate) fn cargo_config(
@@ -107,7 +118,9 @@ pub(crate) fn cargo_config(
             file: file.to_owned(),
         });
     }
-    if publishes_to_crates_io && redirects_crates_io(&document) {
+    if publishes_to_crates_io
+        && (redirects_crates_io(&document) || names_other_default_registry(&document))
+    {
         return Err(ReleaseError::CargoRedirectsCratesIo {
             file: file.to_owned(),
         });

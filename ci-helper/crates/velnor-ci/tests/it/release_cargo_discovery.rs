@@ -153,11 +153,12 @@ fn the_pure_check_names_the_first_symlink_or_hazard() {
         symlink,
         text: text.map(str::to_owned),
     };
-    assert!(check_cargo_discovery(&[]).is_ok());
-    assert!(check_cargo_discovery(&[entry(".cargo", false, None)]).is_ok());
-    let linked = check_cargo_discovery(&[entry(".cargo", true, None)]).err();
+    assert!(check_cargo_discovery(&[], true).is_ok());
+    assert!(check_cargo_discovery(&[entry(".cargo", false, None)], true).is_ok());
+    let linked = check_cargo_discovery(&[entry(".cargo", true, None)], true).err();
     assert!(linked.is_some_and(|e| e.to_string().starts_with(".cargo: ")));
-    let hazard = check_cargo_discovery(&[entry(".cargo/config.toml", false, Some(PROVIDER))]).err();
+    let hazard =
+        check_cargo_discovery(&[entry(".cargo/config.toml", false, Some(PROVIDER))], true).err();
     assert!(hazard.is_some_and(|e| e.to_string().starts_with(".cargo/config.toml: ")));
 }
 
@@ -223,4 +224,20 @@ fn a_cargo_config_of_harmless_keys_passes_on_the_checkout() {
         "[build]\ntarget-dir = \"out\"\njobs = 2\n[net]\nretry = 3\n[term]\ncolor = \"never\"\n[profile.release]\nlto = true\n[registries.mirror]\nindex = \"sparse+https://example.org/index/\"\n",
     );
     assert_eq!(checkout.check("tools/release-plz.toml").0, Some(0));
+}
+
+const OTHER_DEFAULT: &str = "[registry]\ndefault = \"company\"\n[registries.company]\nindex = \"sparse+https://example.test/\"\n";
+
+#[test]
+fn a_non_crates_io_default_registry_is_refused_only_for_a_root_that_publishes() {
+    for (plz, code) in [
+        (COMPLIANT.to_owned(), Some(1)),
+        (format!("{COMPLIANT}publish = false\n"), Some(0)),
+        (format!("{COMPLIANT}git_only = true\n"), Some(0)),
+    ] {
+        let checkout = Checkout::new("default-registry");
+        checkout.write("tools/release-plz.toml", &plz);
+        checkout.write(".cargo/config.toml", OTHER_DEFAULT);
+        assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
+    }
 }
