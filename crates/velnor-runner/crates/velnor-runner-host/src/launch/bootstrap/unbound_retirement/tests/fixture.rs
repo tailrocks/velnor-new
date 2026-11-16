@@ -81,6 +81,27 @@ impl FixtureDocker {
         Ok(fixture)
     }
 
+    pub(super) fn add_initializer(&self, pair: Pair) {
+        lock(&self.state).containers.insert(
+            pair.helper_id(),
+            Container {
+                name: pair.helper_name(),
+                labels: json!({"velnor.role": "storage-initializer", "velnor.operation": format!("{}-1", pair.reservation - 1)}),
+                running: false,
+            },
+        );
+    }
+
+    pub(super) fn relabel_initializer(&self, pair: Pair) {
+        if let Some(container) = lock(&self.state).containers.get_mut(&pair.helper_id()) {
+            container.labels["velnor.operation"] = json!("999-1");
+        }
+    }
+
+    pub(super) fn has_initializer(&self, pair: Pair) -> bool {
+        lock(&self.state).containers.contains_key(&pair.helper_id())
+    }
+
     pub(super) fn hang_after(&self, request: String) {
         lock(&self.state).hang_after = Some(request);
     }

@@ -3,7 +3,9 @@
 
 use crate::{
     error::HostError,
-    launch::bootstrap::{UncertainRecovery, recover_uncertain_reservations},
+    launch::bootstrap::{
+        UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs,
+    },
 };
 
 use super::PositivePollContext;
@@ -23,5 +25,6 @@ pub(super) async fn reconcile(
         image_authority: context.image_authority,
         pass,
     }))
-    .await
+    .await?;
+    retire_uncertain_unbound_pairs(context.docker, scope, context.selected_engine).await
 }

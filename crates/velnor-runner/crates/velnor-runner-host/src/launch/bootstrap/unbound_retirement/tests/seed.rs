@@ -58,6 +58,14 @@ impl Pair {
         format!("{}{:063x}", digit, self.reservation)
     }
 
+    pub(super) fn helper_id(self) -> String {
+        format!("c{:063x}", self.reservation)
+    }
+
+    pub(super) fn helper_name(self) -> String {
+        format!("velnor-init-{}-1", self.reservation - 1)
+    }
+
     pub(super) fn network_id(self) -> String {
         format!("e{:063x}", self.reservation)
     }
@@ -154,6 +162,31 @@ pub(super) async fn started_pairs(
         execute(journal, &sql).await?;
     }
     Ok((scope, engine))
+}
+
+pub(super) const INITIALIZER_TABLE: &str = "CREATE TABLE capacity_reservation_storage_initialization (reservation_id INTEGER, remove_state TEXT, abort_state TEXT, helper_name TEXT, helper_id TEXT, abort_helper_id TEXT, operation_key TEXT)";
+
+pub(super) async fn initializer(
+    journal: &Journal,
+    pair: Pair,
+    remove_state: &str,
+    abort_state: &str,
+) -> TestResult<()> {
+    unguarded(
+        journal,
+        &[
+            "DROP TABLE capacity_reservation_storage_initialization".to_owned(),
+            INITIALIZER_TABLE.to_owned(),
+            format!(
+                "INSERT INTO capacity_reservation_storage_initialization VALUES ({}, '{remove_state}', '{abort_state}', '{}', '{}', NULL, '{}-1')",
+                pair.reservation,
+                pair.helper_name(),
+                pair.helper_id(),
+                pair.reservation - 1
+            ),
+        ],
+    )
+    .await
 }
 
 pub(super) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {

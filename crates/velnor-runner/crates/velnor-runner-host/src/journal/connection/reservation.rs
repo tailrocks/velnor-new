@@ -210,7 +210,7 @@ pub(in crate::journal) use provisioning::recover_unbound_pairs_at_startup;
 pub(crate) use provisioning::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
 };
-pub(crate) use provisioning::{UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use provisioning::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
 
 pub(crate) use provisioning::{
     CreateInterruptionOutcome, PhysicalSuccessorReservationResult,

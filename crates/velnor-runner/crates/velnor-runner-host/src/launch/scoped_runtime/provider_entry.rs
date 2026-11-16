@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use bollard::Docker;
 
 use crate::{
@@ -21,6 +23,7 @@ pub(crate) fn prepare_and_bind_scoped<'a>(
     image_authority: &'a ImageAuthority,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+    deadline: Instant,
 ) -> ScopedPrepareFuture<'a> {
     Box::pin(async move {
         let provider = crate::launch::resource_probe::image_provider(
@@ -30,7 +33,7 @@ pub(crate) fn prepare_and_bind_scoped<'a>(
         )?;
         prepare_and_bind_scoped_with_provider(
             outcome,
-            scoped_prepare_context(docker, scoped, host, &provider, engine, images),
+            scoped_prepare_context(docker, scoped, host, &provider, engine, images, deadline),
         )
         .await
     })

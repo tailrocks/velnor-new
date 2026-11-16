@@ -18,7 +18,7 @@ mod inventory;
 #[path = "unbound_retirement/settlement.rs"]
 mod settlement;
 
-use inventory::{containers, current_claim, eligible, volumes};
+use inventory::{containers, current_claim, eligible, initializer, volumes};
 
 const CLAIM_SECONDS: i64 = 45;
 
@@ -27,6 +27,8 @@ pub(super) const UNBOUND_PAIR: &str = "s.bootstrap_start_state IN ('started', 'u
 const ABANDON_RESERVATIONS: &str = "UPDATE capacity_reservations SET state = 'uncertain' WHERE (?1 IS NULL OR id = ?1) AND (?2 IS NULL OR connection_id = ?2) AND state = 'reserved' AND remote_cleanup_proven = 0 AND local_cleanup_proven = 0 AND EXISTS (SELECT 1 FROM connection_intents AS i JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = capacity_reservations.id WHERE i.id = capacity_reservations.intent_id AND i.connection_id = capacity_reservations.connection_id AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.jit_requested = 0 AND {pair})";
 
 const ABANDON_INTENTS: &str = "UPDATE connection_intents SET state = 'uncertain' WHERE kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 0 AND EXISTS (SELECT 1 FROM capacity_reservations AS r JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.intent_id = connection_intents.id AND r.connection_id = connection_intents.connection_id AND (?1 IS NULL OR r.id = ?1) AND (?2 IS NULL OR r.connection_id = ?2) AND r.state = 'uncertain' AND r.remote_cleanup_proven = 0 AND r.local_cleanup_proven = 0 AND {pair})";
+
+const UNCERTAIN_PAIRS: &str = "SELECT r.id FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.connection_id = ?1 AND r.state = 'uncertain' AND r.remote_cleanup_proven = 0 AND r.local_cleanup_proven = 0 AND i.kind = 'launch' AND i.state = 'uncertain' AND i.cleanup_proven = 0 AND {pair} ORDER BY r.id";
 
 #[must_use]
 #[derive(Clone, Debug)]
@@ -39,6 +41,7 @@ pub(crate) struct UnboundRetirementClaim {
     generation: Arc<AtomicI64>,
     lease_until: Arc<AtomicI64>,
     containers: Vec<UnboundContainer>,
+    initializer: Option<UnboundInitializer>,
     volumes: Vec<UnboundVolume>,
 }
 
@@ -47,6 +50,13 @@ pub(crate) struct UnboundContainer {
     pub(crate) role: String,
     pub(crate) name: String,
     pub(crate) id: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct UnboundInitializer {
+    pub(crate) name: String,
+    pub(crate) id: Option<String>,
+    pub(crate) operation_key: String,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +105,10 @@ impl UnboundRetirementClaim {
         &self.containers
     }
 
+    pub(crate) fn initializer(&self) -> Option<&UnboundInitializer> {
+        self.initializer.as_ref()
+    }
+
     pub(crate) fn volumes(&self) -> &[UnboundVolume] {
         &self.volumes
     }
@@ -109,6 +123,26 @@ impl ConnectionJournal {
         in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             abandon_unbound_pairs(connection, Some(reservation_id), Some(&connection_id)).await
+        })
+        .await
+    }
+
+    pub(crate) async fn uncertain_unbound_pairs(&self) -> Result<Vec<i64>, HostError> {
+        let connection_id = self.connection_id().as_str().to_owned();
+        read_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            let mut rows = connection
+                .query(
+                    &UNCERTAIN_PAIRS.replace("{pair}", UNBOUND_PAIR),
+                    [connection_id.as_str()],
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let mut ids = Vec::new();
+            while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+                ids.push(row.get(0).map_err(|_| HostError::Journal)?);
+            }
+            Ok(ids)
         })
         .await
     }
@@ -170,6 +204,7 @@ impl ConnectionJournal {
                 generation: Arc::new(AtomicI64::new(generation)),
                 lease_until: Arc::new(AtomicI64::new(lease_until)),
                 containers: containers(connection, reservation_id).await?,
+                initializer: initializer(connection, reservation_id).await?,
                 volumes: volumes(connection, reservation_id).await?,
             }))
         })

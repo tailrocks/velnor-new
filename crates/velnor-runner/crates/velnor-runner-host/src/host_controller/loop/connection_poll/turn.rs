@@ -46,6 +46,9 @@ pub(super) async fn poll_connection(
 ) -> Result<Option<PollTurnResult>, HostError> {
     let connection_id = prepared.binding.connection_id.as_str().to_owned();
     let result = poll_connection_inner(prepared, context, pending_retirements, turn).await;
+    let unpolled_removal = matches!(result, Ok(None))
+        && context.config.connection(&prepared.binding.connection_id).is_none()
+        && pending_retirements.iter().any(|binding| prepared.is_for(binding));
     if !result
         .as_ref()
         .is_ok_and(|result| result.as_ref().is_some_and(|turn| turn.receipt_recorded))
@@ -53,6 +56,9 @@ pub(super) async fn poll_connection(
         context
             .control_state
             .invalidate_session_poll(&connection_id)?;
+    }
+    if unpolled_removal {
+        reconcile_removed(prepared, context).await?;
     }
     result
 }
@@ -265,6 +271,14 @@ async fn execute_poll(
     }
 }
 
+async fn reconcile_removed(
+    prepared: &mut PreparedConnection,
+    context: &ConnectionPollContext<'_>,
+) -> Result<(), HostError> {
+    let positive = positive_poll_context(context);
+    Box::pin(super::super::polling::reconcile_removed_pre_jit(prepared, &positive)).await
+}
+
 async fn reconcile_poll(
     prepared: &mut PreparedConnection,
     context: &ConnectionPollContext<'_>,
@@ -273,11 +287,7 @@ async fn reconcile_poll(
 ) -> Result<(), HostError> {
     prepared.record_assigned_total(outcome.assigned_total);
     if is_removed {
-        Box::pin(super::super::polling::reconcile_removed_pre_jit(
-            prepared,
-            &positive_poll_context(context),
-        ))
-        .await?;
+        reconcile_removed(prepared, context).await?;
     } else {
         Box::pin(super::super::polling::reconcile_assigned_population(
             prepared,

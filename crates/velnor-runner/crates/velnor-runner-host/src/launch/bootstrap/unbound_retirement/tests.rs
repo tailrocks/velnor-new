@@ -5,6 +5,8 @@
 mod eligibility;
 #[path = "tests/fixture.rs"]
 mod fixture;
+#[path = "tests/initializer.rs"]
+mod initializer;
 #[path = "tests/renewal.rs"]
 mod renewal;
 #[path = "tests/safety.rs"]

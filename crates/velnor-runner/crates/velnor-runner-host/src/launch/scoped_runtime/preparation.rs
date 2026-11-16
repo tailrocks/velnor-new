@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use bollard::Docker;
 
 use super::{
@@ -26,20 +28,21 @@ pub(super) async fn prepare_started_and_bound<P: ImageProvider>(
     provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    deadline: Instant,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
     let StartedPairPreparation {
         mut prepared,
         network,
         started,
     } = match Box::pin(prepare_network_and_started_pair(
-        prepared, docker, scoped, host, provider, engine, images,
+        prepared, docker, scoped, host, provider, engine, images, deadline,
     ))
     .await
     {
         Ok(preparation) => preparation,
         Err(pending) => return Ok(*pending),
     };
-    let context = super::scoped_prepare_context(docker, scoped, host, provider, engine, images);
+    let context = super::scoped_prepare_context(docker, scoped, host, provider, engine, images, deadline);
     let reservation_id = prepared.acquired().reservation_id();
     let initialization = match Box::pin(
         crate::worker::storage_initialization::finish_after_pair_mounts(
@@ -102,6 +105,7 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
     provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    deadline: Instant,
 ) -> Result<StartedPairPreparation, Box<ScopedRuntimeOutcome>> {
     let reservation_id = prepared.acquired().reservation_id();
     let Some(initializer) = prepared.storage().pending_initialization() else {
@@ -148,7 +152,9 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
                     error,
                     pending_pair,
                     reservation_id,
-                    super::scoped_prepare_context(docker, scoped, host, provider, engine, images),
+                    super::scoped_prepare_context(
+                        docker, scoped, host, provider, engine, images, deadline,
+                    ),
                 )
                 .await,
             ));

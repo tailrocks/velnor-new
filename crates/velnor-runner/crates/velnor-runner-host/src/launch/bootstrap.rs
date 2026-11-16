@@ -33,7 +33,10 @@ pub(crate) use pre_jit_recovery::{
     recover_pre_jit_reservation, remove_bootstrap_after_terminal_failure,
 };
 pub(crate) use publication::JobFactsPublication;
-pub(crate) use unbound_retirement::{abandon_and_retire_unbound_pair, retire_unbound_pair};
+pub(crate) use unbound_retirement::{
+    abandon_and_retire_unbound_pair, abandon_and_retire_unbound_pair_before, retire_uncertain_unbound_pairs,
+    retire_unbound_pair,
+};
 pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
 
 pub(crate) use publication::job_facts_publication;

@@ -86,6 +86,16 @@ pub(super) async fn prepare_startup(
 
     let worker_images =
         prepare_worker_images(docker, journal, selected_engine, image_authority).await?;
+    setup::reconcile_removed_at_startup(&setup::RemovedStartup {
+        state,
+        config: current,
+        journal,
+        docker,
+        engine: selected_engine,
+        images: &worker_images,
+        image_authority,
+    })
+    .await;
     let admission_ready =
         prepare_storage_profile(current, docker, journal, image_authority, &worker_images).await?;
     Ok(StartupResources {

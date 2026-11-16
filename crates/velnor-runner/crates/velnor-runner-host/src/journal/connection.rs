@@ -50,7 +50,7 @@ pub(crate) use reservation::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
     PreJitNetworkIdentity, PreJitStorageObject,
 };
-pub(crate) use reservation::{UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use reservation::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
 
 pub(in crate::journal) async fn validate_resources_bound(
     connection: &turso::Connection,

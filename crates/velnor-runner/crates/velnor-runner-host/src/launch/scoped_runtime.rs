@@ -110,6 +110,7 @@ struct ScopedPrepareContext<'a, P> {
     provider: &'a P,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+    deadline: Instant,
 }
 
 impl<P> Copy for ScopedPrepareContext<'_, P> {}
@@ -149,10 +150,12 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
             context.provider,
             context.engine,
             context.images,
+            context.deadline,
         ))
         .await?;
         if matches!(outcome, ScopedRuntimeOutcome::Pending(_))
-            && let Err(error) = Box::pin(super::bootstrap::abandon_and_retire_unbound_pair(
+            && let Err(error) = Box::pin(super::bootstrap::abandon_and_retire_unbound_pair_before(
+                context.deadline,
                 context.docker,
                 context.scoped,
                 context.engine,
@@ -175,6 +178,7 @@ fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
     provider: &'a P,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+    deadline: Instant,
 ) -> ScopedPrepareContext<'a, P> {
     ScopedPrepareContext {
         docker,
@@ -183,6 +187,7 @@ fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
         provider,
         engine,
         images,
+        deadline,
     }
 }
 
@@ -212,6 +217,7 @@ where
         image_authority,
         engine,
         images,
+        deadline,
     )
     .await?
     {
