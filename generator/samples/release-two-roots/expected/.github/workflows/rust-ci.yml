@@ -234,9 +234,7 @@ jobs:
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: |
-            tools/target
-            target/.velnor/inputs.tsv
+          path: tools/target
           key: 'velnor-tgt-rust-tools.tools.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''tools/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
             velnor-tgt-rust-tools.tools.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
@@ -371,9 +369,7 @@ jobs:
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: |
-            tools/target
-            target/.velnor/inputs.tsv
+          path: tools/target
           key: 'velnor-tgt-rust-inputs-audit.tools.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''tools/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
             velnor-tgt-rust-inputs-audit.tools.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-

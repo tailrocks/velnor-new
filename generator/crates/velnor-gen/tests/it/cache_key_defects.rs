@@ -147,11 +147,11 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
     ]));
     assert!(paths.contains(&vec![
         "out/lab".to_owned(),
-        "target/.velnor/inputs.tsv".to_owned()
+        "lab/target/.velnor/inputs.tsv".to_owned()
     ]));
     assert!(paths.contains(&vec![
         "tools/build".to_owned(),
-        "target/.velnor/inputs.tsv".to_owned()
+        "tools/target/.velnor/inputs.tsv".to_owned()
     ]));
     assert!(!paths.contains(&vec!["lab/target".to_owned()]));
 
@@ -159,7 +159,7 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
     assert!(
         target_cache_paths(&plain)?
             .iter()
-            .all(|paths| { paths == &["lab/target", "target/.velnor/inputs.tsv"] })
+            .all(|paths| paths == &["lab/target"])
     );
 
     let root_default = workflow(&view(&["Cargo.toml"], None)?)?;

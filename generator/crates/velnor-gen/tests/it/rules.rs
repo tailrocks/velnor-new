@@ -8,8 +8,8 @@ use std::path::Path;
 
 use velnor_model::{
     CommitSha, Concurrency, HelperCommand, HelperRelease, HelperVersion, Job, JobId, Permissions,
-    Platform, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, Visibility,
-    WORKFLOW_PATH, When, WorkflowPlan,
+    Platform, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    WorkflowPlan,
 };
 use velnor_render::{
     HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow,
@@ -86,7 +86,6 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            visibility: Visibility::Any,
             skip_on_draft: false,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
@@ -99,7 +98,6 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     kind,
                     directory: None,
                     when: When::Success,
-                    visibility: Visibility::Any,
                     skip_on_draft: false,
                     gate: None,
                     reads: None,
