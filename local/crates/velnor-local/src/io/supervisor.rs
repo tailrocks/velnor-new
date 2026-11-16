@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod host;
+mod online;
 
 use std::io;
 use std::net::SocketAddr;
@@ -18,20 +19,23 @@ use tokio::net::TcpListener;
 use tokio::process::{Child, Command};
 use tokio::signal::unix::{SignalKind, signal};
 
-pub(super) use host::{Pairs, pairs};
-pub use host::{default_host, write_plan};
+pub(super) use host::pairs;
+pub use host::{Pairs, default_host, write_plan};
+pub use online::await_online;
 
-use super::authority::{Authority, LEDGER, Runners};
+use super::authority::{Authority, Backend, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};
 use super::keys;
 use super::pair::{private_folder, write_private};
 use super::run::accept;
 use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
-use host::{LOG, PID, runner_dir};
+use crate::side::Side;
+use host::{LOG, PID, PLAN, runner_dir};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
+const ONLINE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
 pub struct Endpoint {
@@ -82,7 +86,39 @@ pub async fn start_binary(dir: &Path, binary: &Path) -> io::Result<Endpoint> {
 }
 
 pub(super) async fn start_with(dir: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
-    launch(dir, &std::env::current_exe()?, pairs).await
+    let binary = std::env::current_exe()?;
+    let Some(pairs) = pairs else {
+        return launch(dir, &binary, None).await;
+    };
+    let open = async |dir: &Path| Runners::open(Environment::at(dir, DockerCli).await?).await;
+    start_pairs(dir, &binary, pairs, open, ONLINE_TIMEOUT).await
+}
+
+pub async fn start_pairs<B, O>(
+    dir: &Path,
+    binary: &Path,
+    pairs: &Pairs,
+    open: O,
+    timeout: Duration,
+) -> io::Result<Endpoint>
+where
+    B: Backend,
+    O: AsyncFnOnce(&Path) -> io::Result<B>,
+{
+    let endpoint = launch(dir, binary, Some(pairs)).await?;
+    let sides = [
+        (Side::Trusted, pairs.trusted),
+        (Side::Untrusted, pairs.untrusted),
+    ];
+    let ready = async {
+        let backend = open(dir).await?;
+        await_online(&backend, &sides, timeout).await
+    };
+    if let Err(error) = ready.await {
+        let _ = stop(dir).await;
+        return Err(error);
+    }
+    Ok(endpoint)
 }
 
 async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
@@ -93,7 +129,7 @@ async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<
     for file in [LEDGER, "address", "pid", "binary"] {
         forget(&authority.join(file)).await?;
     }
-    for file in [DECISIONS, LOG, PID] {
+    for file in [DECISIONS, LOG, PID, PLAN] {
         forget(&runner_dir(dir).join(file)).await?;
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
@@ -194,7 +230,19 @@ async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
     Ok(stopped.map(str::to_owned))
 }
 
-fn alive(pid: &str) -> bool {
+pub(super) async fn authority_running(dir: &Path) -> io::Result<bool> {
+    let authority = authority_dir(dir);
+    let (Ok(pid), Ok(binary)) = (
+        fs::read_to_string(authority.join("pid")).await,
+        fs::read_to_string(authority.join("binary")).await,
+    ) else {
+        return Ok(false);
+    };
+    let pid = pid.trim();
+    Ok(pid.parse::<u32>().is_ok() && ours(pid, dir, &binary).await?)
+}
+
+pub(super) fn alive(pid: &str) -> bool {
     let Ok(pid) = pid.parse::<i32>() else {
         return true;
     };

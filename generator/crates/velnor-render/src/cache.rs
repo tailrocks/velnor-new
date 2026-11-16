@@ -90,7 +90,7 @@ fn hash_files(path: &RepoPath) -> String {
     )
 }
 
-fn glob_literal(text: &str) -> String {
+pub(crate) fn glob_literal(text: &str) -> String {
     let escaped: String = text
         .chars()
         .flat_map(|c| match c {

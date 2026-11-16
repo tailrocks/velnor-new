@@ -21,12 +21,13 @@ use crate::side::Side;
 const LISTENING_TIMEOUT: Duration = Duration::from_secs(300);
 pub(super) const LOG: &str = "velnor-host.log";
 pub(super) const PID: &str = "pid";
+pub(super) const PLAN: &str = "plan.json";
 
 #[derive(Debug, Clone)]
-pub(crate) struct Pairs {
-    pub(super) host: PathBuf,
-    pub(super) trusted: u16,
-    pub(super) untrusted: u16,
+pub struct Pairs {
+    pub host: PathBuf,
+    pub trusted: u16,
+    pub untrusted: u16,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -142,7 +143,7 @@ impl Pairs {
 }
 
 pub async fn write_plan(state: &Path, planned: &str) -> io::Result<()> {
-    write_private(&state.join("plan.json"), planned).await
+    write_private(&state.join(PLAN), planned).await
 }
 
 pub(super) async fn spawn(
