@@ -10,6 +10,9 @@ const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
+pub(crate) const TOOLS_STEP: &str = "tools";
+const ON_DEFAULT_BRANCH: &str =
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
@@ -42,6 +45,10 @@ pub(crate) fn condition(
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
         )),
+        When::SaveToolsOnDefaultBranch => {
+            parts.push(ON_DEFAULT_BRANCH.to_owned());
+            parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
+        }
     }
     if skip_draft {
         parts.push(NOT_DRAFT.to_owned());

@@ -73,6 +73,7 @@ mod setup_action_tool_cache;
 mod tool_pins;
 mod toolchain;
 mod toolchain_components;
+mod tools_cache;
 mod unowned;
 mod version;
 mod weaken;

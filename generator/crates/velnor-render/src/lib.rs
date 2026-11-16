@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
-pub use crate::cache::{RenderedKey, render_key};
+pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
