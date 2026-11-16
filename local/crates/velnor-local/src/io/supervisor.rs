@@ -194,7 +194,7 @@ async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
     Ok(stopped.map(str::to_owned))
 }
 
-fn alive(pid: &str) -> bool {
+pub(super) fn alive(pid: &str) -> bool {
     let Ok(pid) = pid.parse::<i32>() else {
         return true;
     };

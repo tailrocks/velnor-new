@@ -4,6 +4,7 @@
 pub mod api_stub;
 pub mod authority;
 pub mod checkout;
+pub mod doctor;
 mod drive;
 pub mod env;
 mod git;
@@ -14,6 +15,7 @@ mod probe;
 mod proxy;
 mod reply;
 mod run;
+pub mod status;
 pub mod supervisor;
 
 pub use run::{RestoreOnly, guarded, open};
