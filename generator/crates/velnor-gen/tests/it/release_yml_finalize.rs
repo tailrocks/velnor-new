@@ -129,11 +129,10 @@ fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
 
 #[test]
 fn a_helper_that_cannot_publish_an_assetless_release_gets_no_finalizer() -> TestResult {
-    for version in ["0.1.80"] {
-        let tree = render_with(version, &[APP], "roots = [\".\"]\n")?;
-        assert!(tree.at(&["jobs", "finalize"]).is_none(), "{version}");
-        assert!(job(&tree, "tag")?.get("outputs").is_none(), "{version}");
-    }
+    let version = "0.1.80";
+    let tree = render_with(version, &[APP], "roots = [\".\"]\n")?;
+    assert!(tree.at(&["jobs", "finalize"]).is_none(), "{version}");
+    assert!(job(&tree, "tag")?.get("outputs").is_none(), "{version}");
     Ok(())
 }
 
@@ -146,14 +145,13 @@ fn notes_with(helper: &str, config: &str) -> Result<Vec<String>, Box<dyn Error>>
 
 #[test]
 fn an_old_helper_with_an_assetless_package_warns_naming_the_version_to_pin() -> TestResult {
-    for version in ["0.1.80"] {
-        let notes = notes_with(version, "roots = [\".\"]\n")?;
-        assert_eq!(notes.len(), 1, "{version}: {notes:?}");
-        assert!(notes[0].starts_with("WARNING: "), "{notes:?}");
-        assert!(notes[0].contains(version), "{notes:?}");
-        assert!(notes[0].contains("app"), "{notes:?}");
-        assert!(notes[0].contains("0.1.81"), "{notes:?}");
-    }
+    let version = "0.1.80";
+    let notes = notes_with(version, "roots = [\".\"]\n")?;
+    assert_eq!(notes.len(), 1, "{version}: {notes:?}");
+    assert!(notes[0].starts_with("WARNING: "), "{notes:?}");
+    assert!(notes[0].contains(version), "{notes:?}");
+    assert!(notes[0].contains("app"), "{notes:?}");
+    assert!(notes[0].contains("0.1.81"), "{notes:?}");
     assert_eq!(
         notes_with("0.1.81", "roots = [\".\"]\n")?,
         Vec::<String>::new()
