@@ -69,6 +69,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         toolchain: None,
         tools: ToolPins {
             configs: Vec::new(),
+            locked_file: true,
             tools: BTreeMap::new(),
         },
         config: RustCiConfig::default(),

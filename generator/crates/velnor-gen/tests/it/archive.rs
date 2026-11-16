@@ -9,7 +9,7 @@ use crate::job_shape::{job_ids, target};
 use crate::pipeline::{view, workflow};
 use crate::select::{facts, member};
 
-fn jobs_of(text: &str) -> Vec<(String, String)> {
+pub(crate) fn jobs_of(text: &str) -> Vec<(String, String)> {
     let mut jobs: Vec<(String, String)> = Vec::new();
     let mut in_jobs = false;
     for line in text.lines() {
@@ -77,7 +77,8 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "{run}"
         );
         for forbidden in [
-            "rustup",
+            "rustup component",
+            "rustup target",
             "velnor-ci prepare",
             "velnor-ci restored",
             "nextest archive",
@@ -85,11 +86,15 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "cargo doc",
             "cargo check",
             "cargo-clippy",
-            "cache/restore",
+            "Restore the sources cache",
+            "Restore the target cache",
+            "cache/save",
             "Compiling",
         ] {
             assert!(!run.contains(forbidden), "{slug}: {forbidden}\n{run}");
         }
+        assert_eq!(run.matches("uses: actions/cache/restore@").count(), 1);
+        assert!(run.contains("Restore the tools cache"), "{run}");
         assert!(run.contains("install_args: 'aqua:nextest-rs/nextest/cargo-nextest'"));
         assert!(run.contains("--no-tests=pass"));
     }

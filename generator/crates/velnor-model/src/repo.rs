@@ -207,6 +207,7 @@ pub struct Toolchain {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolPins {
     pub configs: Vec<RepoPath>,
+    pub locked_file: bool,
     pub tools: BTreeMap<String, ToolPin>,
 }
 
@@ -215,6 +216,7 @@ pub struct ToolPin {
     pub requested: Vec<String>,
     pub locked: Vec<String>,
     pub os_filters: BTreeMap<String, Vec<String>>,
+    pub prebuilt: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
