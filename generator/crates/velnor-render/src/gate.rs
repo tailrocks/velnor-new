@@ -47,7 +47,7 @@ pub(crate) fn condition(
     after_setup: bool,
     skip_draft: bool,
 ) -> Option<String> {
-    wrapped(condition_parts(when, gate, after_setup, skip_draft))
+    wrapped(&condition_parts(when, gate, after_setup, skip_draft))
 }
 
 pub(crate) fn job_condition(job: &Job) -> Option<String> {
@@ -67,10 +67,10 @@ pub(crate) fn job_condition(job: &Job) -> Option<String> {
             parts.push(format!("({})", alternatives.join(" || ")));
         }
     }
-    wrapped(parts)
+    wrapped(&parts)
 }
 
-fn wrapped(parts: Vec<String>) -> Option<String> {
+fn wrapped(parts: &[String]) -> Option<String> {
     if parts.is_empty() {
         None
     } else {
