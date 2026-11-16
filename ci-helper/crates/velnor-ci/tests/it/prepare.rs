@@ -109,10 +109,10 @@ pub(crate) struct Run {
 }
 
 fn replace_text(path: &Path, body: &str) {
+    static TICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     if fs::read_to_string(path).is_ok_and(|have| have == body) {
         return;
     }
-    static TICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let temporary = path.with_file_name(format!(
         ".{}.{}.{}",
         path.file_name().unwrap_or_default().to_string_lossy(),
