@@ -34,6 +34,15 @@ INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, doc
 
 const INTERRUPTED: &str = "INSERT INTO capacity_reservation_storage_initialization (reservation_id, connection_id, operation_id, generation, engine_id, docker_root_digest, image_runtime_id, image_source_sha, nano_cpus, memory_bytes, pids_limit, home_volume, work_volume, layout_version, metadata_volume, metadata_volume_id, helper_name, create_dispatch_state, create_state, start_state, result_state, remove_state, abort_state, operation_key) VALUES ({r}, 'conn-test-1', {i}, 1, 'engine-test', '{root}', '{image}', '{hex40}', 500000000, 67108864, 16, '{volume}-home', '{volume}-work', 2, '{volume}-metadata', '{volume}-metadata', 'velnor-init-{i}-1', 'dispatched', 'requested', 'not_requested', 'not_requested', 'not_requested', '{abort}', '{i}-1')";
 
+const NONCE: &str = "0123456789abcdef0123456789abcdef";
+
+const PHYSICAL: &str = "UPDATE capacity_reservations SET assignment_key = 'v1|conn-test-1|7|remote|6:runner|32:{nonce}' WHERE id = {r};
+UPDATE connection_intents SET assignment_key = 'v1|conn-test-1|7|remote|6:runner|32:{nonce}', runner_name = 'v{nonce}' WHERE id = {i};
+INSERT INTO connection_request_authorizations (connection_id, scale_set_id, request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json, acquire_state) VALUES ('conn-test-1', 7, {r}, 0, 'branch_restricted', 'created_empty_exclusive_admin_session_v1', '{binding}', '{hex64}', '{}', 'authorized');
+INSERT INTO physical_attempt_lineages (lineage_id, connection_id, scale_set_id, binding_digest) VALUES ({r}, 'conn-test-1', 7, '{binding}');
+INSERT INTO physical_attempts (lineage_id, generation, reservation_id, intent_id, physical_nonce, connection_id, scale_set_id, witness_request_id, binding_digest, source_digest, engine_id, docker_root_digest, created_at) VALUES ({r}, 1, {r}, {i}, '{nonce}', 'conn-test-1', 7, {r}, '{binding}', '{hex64}', 'engine-test', '{root}', 0);
+INSERT INTO physical_attempt_current (lineage_id, generation, reservation_id, intent_id) VALUES ({r}, 1, {r}, {i})";
+
 const CLAIMED_CONTAINER: &str = "INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, create_state, start_state) VALUES ({r}, 'runner', '{volume}-runner', 'requested', 'not_requested')";
 
 const RECORDED: &str = "SELECT reservation.state, intent.state, init.create_dispatch_state, init.create_state, init.start_state, init.abort_state, init.abort_helper_id FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id JOIN capacity_reservation_storage_initialization AS init ON init.reservation_id = reservation.id WHERE reservation.id = ?1";
@@ -152,6 +161,8 @@ pub(super) async fn reservation_at_storage_initialization(
     };
     execute(journal, &fill(profile, 0, "", CRASHED)).await?;
     execute_all(journal, &fill(RESERVATION, 2, PRIVATE_VOLUME, CRASHED)).await?;
+    let physical = fill(PHYSICAL, 2, PRIVATE_VOLUME, CRASHED).replace("{nonce}", NONCE);
+    unguarded(journal, &physical).await?;
     let guard = trigger_sql(journal, "storage_initialization_insert_guard").await?;
     execute(journal, "DROP TRIGGER storage_initialization_insert_guard").await?;
     for (reservation, shape) in LIVE_RESERVATIONS.zip(LIVE) {
@@ -168,6 +179,28 @@ pub(super) async fn reservation_at_storage_initialization(
     }
     execute(journal, &guard).await?;
     Ok((scope, root))
+}
+
+async fn unguarded(journal: &Journal, statements: &str) -> TestResult<()> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
+            (),
+        )
+        .await?;
+    let mut saved = Vec::new();
+    while let Some(row) = rows.next().await? {
+        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
+    }
+    for (name, _) in &saved {
+        execute(journal, &format!("DROP TRIGGER {name}")).await?;
+    }
+    execute_all(journal, statements).await?;
+    for (_, sql) in saved {
+        execute(journal, &sql).await?;
+    }
+    Ok(())
 }
 
 async fn execute_all(journal: &Journal, rows: &str) -> TestResult<()> {
@@ -201,4 +234,19 @@ pub(super) async fn recorded(
     Ok((0..7)
         .map(|index| row.get::<Option<String>>(index))
         .collect::<Result<_, _>>()?)
+}
+
+pub(super) async fn cleanup_proven(
+    journal: &Journal,
+    reservation: i64,
+) -> TestResult<(i64, i64, i64)> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT reservation.remote_cleanup_proven, reservation.local_cleanup_proven, intent.cleanup_proven FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id WHERE reservation.id = ?1",
+            [reservation],
+        )
+        .await?;
+    let row = rows.next().await?.ok_or("reservation missing")?;
+    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
 }

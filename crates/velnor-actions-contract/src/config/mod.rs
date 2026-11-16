@@ -42,6 +42,7 @@ mod release;
 mod release_validation;
 mod resources;
 mod runs_on;
+mod rust_configuration_validate;
 mod rust_inputs;
 mod rust_non_inputs;
 mod rust_suites;

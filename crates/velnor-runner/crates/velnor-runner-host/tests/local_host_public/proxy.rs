@@ -3,7 +3,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
@@ -23,6 +23,7 @@ pub(crate) struct Faults {
     waits: fn(usize) -> Wait,
     waited: AtomicUsize,
     removals: AtomicUsize,
+    pub(crate) hang_creations: AtomicBool,
 }
 
 impl Faults {
@@ -31,7 +32,14 @@ impl Faults {
             waits,
             waited: AtomicUsize::new(0),
             removals: AtomicUsize::new(removals),
+            hang_creations: AtomicBool::new(false),
         })
+    }
+
+    fn hangs(&self, line: &str) -> bool {
+        self.hang_creations.load(Ordering::SeqCst)
+            && line.starts_with("POST ")
+            && (line.contains("/volumes/create") || line.contains("/containers/create"))
     }
 
     fn answer(&self, line: &str) -> Option<(u16, &'static str)> {
@@ -121,6 +129,9 @@ async fn relay(mut client: UnixStream, upstream: &str, faults: &Faults) -> io::R
         };
         let head = String::from_utf8_lossy(&pending[..end]).into_owned();
         let line = head.lines().next().unwrap_or_default();
+        if faults.hangs(line) {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        }
         if let Some((status, body)) = faults.answer(line) {
             let reply = format!(
                 "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
