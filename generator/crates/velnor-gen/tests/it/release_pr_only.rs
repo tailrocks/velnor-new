@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::release_fixture::{APP, LOCK, release_view};
-use crate::yaml_tree::parse;
+use crate::yaml_tree::{Node, parse};
 use std::error::Error;
 use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
@@ -33,7 +33,18 @@ fn absent_and_empty_pr_only_checks_preserve_release_output_for_old_and_new_helpe
 #[test]
 fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> TestResult {
     let text = render("0.1.81", "pr_only_checks = [\"DCO\", \"-team's check\"]\n")?;
-    assert!(parse(&text)?.scalars().contains(&"velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\" --pr-only-check=DCO --pr-only-check='-team'\\''s check'"));
+    let tree = parse(&text)?;
+    assert!(tree.scalars().contains(&"velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\" --pr-only-check=DCO --pr-only-check='-team'\\''s check'"));
+    let permissions = tree
+        .at(&["jobs", "gate", "permissions"])
+        .ok_or("no gate permissions")?;
+    assert_eq!(
+        permissions.keys(),
+        ["actions", "contents", "statuses", "checks"]
+    );
+    for scope in permissions.keys() {
+        assert_eq!(permissions.get(scope).and_then(Node::text), Some("read"));
+    }
     Ok(())
 }
 

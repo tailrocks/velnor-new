@@ -17,6 +17,7 @@ ruleset cannot prove enforcement; another applicable ruleset without bypass
 actors can. Classic-only branch protection cannot authorize exemptions.
 GitHub [returns `bypass_actors` only with ruleset write access](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset),
 so read-only credentials may refuse exemptions.
+The generated gate also requests `checks: read` when exemptions are configured.
 At least one required push check must remain after exemptions. Stale names or
 removal of the enforced PR rule refuse release. Exempted checks may belong to
 external GitHub Apps. A listed name with a push job, commit status or Checks API

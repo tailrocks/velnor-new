@@ -113,6 +113,14 @@ fn escape_filter(name: &str) -> String {
 
 fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut command = "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned();
+    let mut scopes = vec![
+        ("actions", "read"),
+        ("contents", "read"),
+        ("statuses", "read"),
+    ];
+    if !plan.pr_only_checks.is_empty() {
+        scopes.push(("checks", "read"));
+    }
     for name in &plan.pr_only_checks {
         command.push_str(" --pr-only-check=");
         command.push_str(&shell_word(name));
@@ -120,11 +128,7 @@ fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
-        permissions: permissions(&[
-            ("actions", "read"),
-            ("contents", "read"),
-            ("statuses", "read"),
-        ]),
+        permissions: permissions(&scopes),
         outputs: vec![(
             "ready".to_owned(),
             "${{ steps.gate.outputs.ready }}".to_owned(),
