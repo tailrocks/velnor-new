@@ -116,6 +116,10 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     let steps: Value =
         json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
     for cache in &mut metrics.caches {
+        cache.requested_key = steps[&cache.restore_step]["outputs"]["cache-primary-key"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
         cache.matched_key = steps[&cache.restore_step]["outputs"]["cache-matched-key"]
             .as_str()
             .filter(|key| !key.is_empty())
@@ -126,13 +130,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             None => Hit::Miss,
         };
         cache.usable &= cache.hit != Hit::Miss;
-        cache.usable_same_lock = cache.usable
-            && cache.matched_key.as_ref().is_some_and(|key| {
-                cache
-                    .lock_prefix
-                    .as_ref()
-                    .is_some_and(|prefix| key.starts_with(prefix))
-            });
+        cache.usable_same_lock &= cache.usable;
         cache.save_failed = env("GITHUB_REF")
             == format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH"))
             && matches!(

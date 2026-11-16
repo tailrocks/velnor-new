@@ -28,6 +28,28 @@ fn read(repo: &Repo) -> LaneMetrics {
     .unwrap_or_else(|error| unreachable!("{error}"))
 }
 
+fn report(
+    repo: &Repo,
+    cache: &serde_json::Value,
+    steps: &str,
+) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("report")
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env("GITHUB_JOB", "rust")
+        .env("VELNOR_TESTS_RUN", "7")
+        .env(
+            "VELNOR_REPORT_CACHES",
+            cache.to_string().replace('$', "\\u0024"),
+        )
+        .env("VELNOR_REPORT_STEPS", steps)
+        .env_remove("GITHUB_TOKEN")
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    Ok(read(repo))
+}
+
 #[test]
 fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output() -> ResultTest {
     let repo = Repo::new("report-provenance");
@@ -63,7 +85,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     let fixture = repo.root().join("cargo-fixture");
     symlink("/bin/sh", &fixture)?;
     let script = format!(
-        "printf '\\377\\n'; printf '   Compiling demo v0.1.0 ({})\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; exit 7",
+        "printf '\\377\\n'; printf '   Compiling demo v0.1.0 ({})\\n   Compiling dependency v1.0.0\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; exit 7",
         fs::canonicalize(repo.root())?.display()
     );
     assert_eq!(
@@ -75,22 +97,13 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
         .code(),
         Some(7)
     );
-    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","lock_prefix":"target-lock-","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false}]);
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .arg("report")
-        .current_dir(repo.root())
-        .env("RUNNER_TEMP", repo.root())
-        .env("GITHUB_JOB", "rust")
-        .env("VELNOR_TESTS_RUN", "7")
-        .env("VELNOR_REPORT_CACHES", cache.to_string())
-        .env(
-            "VELNOR_REPORT_STEPS",
-            r#"{"target_root":{"outputs":{"cache-matched-key":"target-lock-old"}}}"#,
-        )
-        .env_remove("GITHUB_TOKEN")
-        .output()?;
-    assert!(output.status.success(), "{output:?}");
-    let metrics = read(&repo);
+    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"descriptor-marker","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent","requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false}]);
+    let report = |steps: &str| report(&repo, &cache, steps);
+    let steps = r#"{"target_root":{"outputs":{"cache-primary-key":"primary-marker","cache-matched-key":"matched-marker"}}}"#;
+    let metrics = report(steps)?;
+    assert_eq!(metrics.caches[0].requested_key, "primary-marker");
+    assert_eq!(metrics.caches[1].root.as_deref(), Some("literal${{root}}"));
+    assert!(metrics.caches[0].usable_same_lock);
     assert!(
         !metrics.invocations[0].compilations.is_empty(),
         "{metrics:?}"
@@ -98,13 +111,23 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     assert_eq!(metrics.invocations[0].compilations[0].package, "demo");
     assert!(metrics.invocations[0].compilations[0].workspace);
     assert!(!metrics.invocations[0].compilations[0].unchanged);
-    assert!(metrics.violations.is_empty(), "{:?}", metrics.violations);
+    assert_eq!(metrics.violations.len(), 1, "{:?}", metrics.violations);
+    assert!(metrics.violations[0].contains("dependency v1.0.0"));
     assert_eq!(metrics.tests_run, Some(7));
     assert_eq!(
         metrics.slowest_tests,
         vec![("demo::it failing_test".to_owned(), 0.125)]
     );
     assert!(metrics.invocations[0].seconds > 0.0);
+    repo.write(
+        "Cargo.lock",
+        "version = 4\n[[package]]\nname='demo'\nversion='0.2.0'\n",
+    );
+    let metrics = report(steps)?;
+    assert!(!metrics.caches[0].usable_same_lock);
+    assert!(metrics.violations.is_empty(), "{:?}", metrics.violations);
+    let metrics = report(r#"{"target_root":{"outputs":{"cache-matched-key":"matched-marker"}}}"#)?;
+    assert_eq!(metrics.caches[0].requested_key, "");
     Ok(())
 }
 

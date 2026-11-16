@@ -29,10 +29,12 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<()
             .map(|text| parse_inputs(&text))
             .transpose()?;
         let usable = saved.is_some();
+        let same_lock = same_lock(&root.manifest, &current, saved.as_deref())?;
         let unchanged = unchanged(&facts, root, &current, saved);
         for cache in &mut metrics.caches {
             if cache.family == "target" && cache.root.as_deref() == Some(root_text) {
                 cache.usable = usable;
+                cache.usable_same_lock = usable && same_lock;
             }
         }
         for invocation in &mut metrics.invocations {
@@ -91,6 +93,20 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<()
         }
     }
     Ok(())
+}
+
+fn same_lock(
+    manifest: &RepoPath,
+    current: &crate::inputs::Tracked,
+    saved: Option<&[crate::inputs::SavedInput]>,
+) -> Result<bool, CiError> {
+    let lock = manifest.sibling(&RepoPath::new("Cargo.lock").map_err(ci)?);
+    Ok(saved.is_some_and(|saved| {
+        saved
+            .iter()
+            .find(|input| input.file.path == lock.as_str())
+            .is_some_and(|input| current.files.contains(&input.file))
+    }))
 }
 
 fn unchanged(

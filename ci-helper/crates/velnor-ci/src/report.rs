@@ -40,8 +40,8 @@ pub struct Cache {
     pub root: Option<String>,
     pub restore_step: String,
     pub save_step: String,
+    #[serde(default)]
     pub requested_key: String,
-    pub lock_prefix: Option<String>,
     pub matched_key: Option<String>,
     pub hit: Hit,
     pub bytes: Option<u64>,
