@@ -53,7 +53,7 @@ pub(crate) use connection::{
 pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
 };
-pub(crate) use connection::{UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use connection::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
 
 pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,

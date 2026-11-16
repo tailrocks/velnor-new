@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::HostError;
-use crate::journal::schema::UNBOUND_SHAPE;
 
-use super::{UnboundContainer, UnboundVolume};
+use super::{UnboundContainer, UnboundInitializer, UnboundVolume, unbound_pair};
 
-const ELIGIBLE: &str = "SELECT r.remote_cleanup_proven + r.local_cleanup_proven, i.jit_requested, (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND {pair}), (SELECT COUNT(*) FROM connection_runner_jits AS jit WHERE jit.intent_id = i.id), (SELECT COUNT(*) FROM connection_execution_proofs AS proof WHERE proof.intent_id = i.id) + (SELECT COUNT(*) FROM connection_execution_decisions AS decision WHERE decision.intent_id = i.id) + (SELECT COUNT(*) FROM execution_publication_operations AS publication WHERE publication.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = r.id AND init.remove_state != 'removed' AND init.abort_state != 'absent'), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id AND b.create_state = 'created' AND b.container_id IS NOT NULL), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = r.id AND o.create_state IN ('requested', 'uncertain')), (SELECT COUNT(*) FROM capacity_reservation_pre_jit_cleanup_claims AS pre WHERE pre.reservation_id = r.id) + (SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_claims AS post WHERE post.reservation_id = r.id), (SELECT COUNT(*) FROM physical_attempt_current AS current WHERE current.reservation_id = r.id AND current.intent_id = i.id) FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id WHERE r.id = ?1 AND r.connection_id = ?2";
+const ELIGIBLE: &str = "SELECT r.remote_cleanup_proven + r.local_cleanup_proven, i.jit_requested, (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND {pair}), (SELECT COUNT(*) FROM connection_runner_jits AS jit WHERE jit.intent_id = i.id), (SELECT COUNT(*) FROM connection_execution_proofs AS proof WHERE proof.intent_id = i.id) + (SELECT COUNT(*) FROM connection_execution_decisions AS decision WHERE decision.intent_id = i.id) + (SELECT COUNT(*) FROM execution_publication_operations AS publication WHERE publication.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id AND b.create_state = 'created' AND b.container_id IS NOT NULL), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = r.id AND o.create_state IN ('requested', 'uncertain')), (SELECT COUNT(*) FROM capacity_reservation_pre_jit_cleanup_claims AS pre WHERE pre.reservation_id = r.id) + (SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_claims AS post WHERE post.reservation_id = r.id), (SELECT COUNT(*) FROM physical_attempt_current AS current WHERE current.reservation_id = r.id AND current.intent_id = i.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND s.bootstrap_start_state = 'not_requested') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id WHERE r.id = ?1 AND r.connection_id = ?2";
 
 pub(super) async fn eligible(
     connection: &turso::Connection,
@@ -15,7 +14,7 @@ pub(super) async fn eligible(
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
-            &ELIGIBLE.replace("{pair}", &UNBOUND_SHAPE.replace("{s}", "s")),
+            &ELIGIBLE.replace("{pair}", &unbound_pair()),
             (reservation_id, connection_id),
         )
         .await
@@ -30,10 +29,10 @@ pub(super) async fn eligible(
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
         return Err(HostError::Journal);
     }
-    Ok(values[..6] == [0, 0, 1, 0, 0, 0]
-        && values[6] == values[7]
-        && matches!(values[7], 0 | 2)
-        && values[8..] == [0, 0, 1])
+    Ok(values[..5] == [0, 0, 1, 0, 0]
+        && (values[5] == values[6] || (values[5] == 0 && values[10] == 1))
+        && matches!(values[6], 0 | 2)
+        && values[7..10] == [0, 0, 1])
 }
 
 pub(super) async fn current_claim(
@@ -97,4 +96,25 @@ pub(super) async fn volumes(
         });
     }
     Ok(volumes)
+}
+
+pub(super) async fn initializer(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<Option<UnboundInitializer>, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT helper_name, COALESCE(helper_id, abort_helper_id), operation_key FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1 AND remove_state != 'removed' AND abort_state != 'absent'",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(None);
+    };
+    Ok(Some(UnboundInitializer {
+        name: row.get(0).map_err(|_| HostError::Journal)?,
+        id: row.get(1).map_err(|_| HostError::Journal)?,
+        operation_key: row.get(2).map_err(|_| HostError::Journal)?,
+    }))
 }
