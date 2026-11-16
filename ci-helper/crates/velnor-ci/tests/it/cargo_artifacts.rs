@@ -62,6 +62,11 @@ fn artifacts_preserve_cargo_identity_across_every_chunk_size() {
     assert_eq!(expected[0].profile.debuginfo, "line-tables-only");
     assert!(!expected[0].fresh);
     assert!(expected[1].fresh);
+    let mut draining = ArtifactTap::default();
+    draining.feed(format!("{}\n{}", record(false), record(true)).as_bytes());
+    assert_eq!(draining.take_ready().artifacts, expected[..1]);
+    assert_eq!(draining.take_ready().artifacts, []);
+    assert_eq!(draining.finish().artifacts, expected[1..]);
 }
 
 #[test]
