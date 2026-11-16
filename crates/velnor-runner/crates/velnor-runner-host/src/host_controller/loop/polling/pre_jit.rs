@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::{Duration, Instant};
+
 use crate::{
     error::HostError,
     launch::bootstrap::{
@@ -9,6 +11,8 @@ use crate::{
 };
 
 use super::PositivePollContext;
+
+const TURN_DEADLINE: Duration = Duration::from_secs(120);
 use crate::journal::ConnectionJournal;
 
 pub(super) async fn reconcile(
@@ -26,5 +30,11 @@ pub(super) async fn reconcile(
         pass,
     }))
     .await?;
-    retire_uncertain_unbound_pairs(context.docker, scope, context.selected_engine).await
+    retire_uncertain_unbound_pairs(
+        Instant::now() + TURN_DEADLINE,
+        context.docker,
+        scope,
+        context.selected_engine,
+    )
+    .await
 }

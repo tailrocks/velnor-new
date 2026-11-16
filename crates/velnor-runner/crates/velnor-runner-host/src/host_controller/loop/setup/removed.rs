@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use bollard::Docker;
 
@@ -10,9 +13,13 @@ use crate::{
     journal::Journal,
     launch::{
         ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
-        bootstrap::{UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs},
+        bootstrap::{
+            UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs,
+        },
     },
 };
+
+const RETIREMENT_DEADLINE: Duration = Duration::from_secs(120);
 
 pub(crate) struct RemovedStartup<'a> {
     pub(crate) state: &'a Path,
@@ -24,9 +31,7 @@ pub(crate) struct RemovedStartup<'a> {
     pub(crate) image_authority: &'a ImageAuthority,
 }
 
-pub(crate) async fn reconcile_removed_at_startup(
-    startup: &RemovedStartup<'_>,
-) {
+pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
     let mut removed = Vec::new();
     super::discover_retirements(startup.state, startup.config, &mut removed);
     for binding in &removed {
@@ -50,7 +55,13 @@ pub(crate) async fn reconcile_removed_at_startup(
             pass: 0,
         }))
         .await;
-        let retired = retire_uncertain_unbound_pairs(startup.docker, &scope, startup.engine).await;
+        let retired = retire_uncertain_unbound_pairs(
+            Instant::now() + RETIREMENT_DEADLINE,
+            startup.docker,
+            &scope,
+            startup.engine,
+        )
+        .await;
         if let Err(error) = recovered.and(retired) {
             eprintln!(
                 "host controller removed connection held connection={} reason={error}",

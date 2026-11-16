@@ -36,7 +36,8 @@ const FRESH: Pair = Pair {
     reservation: 6,
     bound: false,
 };
-pub(crate) const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
+pub(crate) const RETIRED: &str =
+    "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_released() -> TestResult<()>

@@ -8,8 +8,8 @@ use super::seed::{self, RESERVATION};
 use super::{FAILED, RETIRED, TestResult, abandon_and_retire_unbound_pair, retire_unbound_pair};
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_started_pair_with_a_live_storage_initializer_is_retired_with_its_helper() -> TestResult<()>
-{
+async fn a_started_pair_with_a_live_storage_initializer_is_retired_with_its_helper()
+-> TestResult<()> {
     let dir = tempfile::tempdir()?;
     let socket = dir.path().join("docker.sock");
     let fixture = FixtureDocker::start(&socket, &[FAILED])?;

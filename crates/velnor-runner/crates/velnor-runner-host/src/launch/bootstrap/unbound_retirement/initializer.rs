@@ -19,10 +19,7 @@ impl Effects<'_> {
             .authorized(inspect_container(self.docker, &helper.name))
             .await?;
         let by_id = match helper.id.as_deref() {
-            Some(id) => {
-                self.authorized(inspect_container(self.docker, id))
-                    .await?
-            }
+            Some(id) => self.authorized(inspect_container(self.docker, id)).await?,
             None => None,
         };
         let Some(inspected) = by_name else {
@@ -53,10 +50,8 @@ impl Effects<'_> {
                     signal: None,
                 }),
             );
-            Box::pin(
-                self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) }),
-            )
-            .await?;
+            Box::pin(self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) }))
+                .await?;
         }
         let remove = self.docker.remove_container(
             &id,
@@ -66,10 +61,8 @@ impl Effects<'_> {
                 link: false,
             }),
         );
-        Box::pin(
-            self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }),
-        )
-        .await?;
+        Box::pin(self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }))
+            .await?;
         if self
             .authorized(inspect_container(self.docker, &id))
             .await?

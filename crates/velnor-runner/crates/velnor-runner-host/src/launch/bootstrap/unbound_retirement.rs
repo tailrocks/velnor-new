@@ -21,8 +21,12 @@ use crate::{
     launch::SelectedEngineContext,
 };
 
+#[path = "unbound_retirement/bounded.rs"]
+mod bounded;
 #[path = "unbound_retirement/initializer.rs"]
 mod initializer;
+
+pub(crate) use bounded::{abandon_and_retire_unbound_pair_before, retire_uncertain_unbound_pairs};
 
 #[cfg(test)]
 #[path = "unbound_retirement/tests.rs"]
@@ -38,40 +42,6 @@ async fn abandon_and_retire_unbound_pair(
 ) -> Result<bool, HostError> {
     scope.abandon_unbound_pair(reservation_id).await?;
     Box::pin(retire_unbound_pair(docker, scope, engine, reservation_id)).await
-}
-
-pub(crate) async fn abandon_and_retire_unbound_pair_before(
-    deadline: std::time::Instant,
-    docker: &Docker,
-    scope: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    reservation_id: i64,
-) -> Result<bool, HostError> {
-    let deadline = tokio::time::Instant::from_std(deadline);
-    tokio::time::timeout_at(
-        deadline,
-        abandon_and_retire_unbound_pair(docker, scope, engine, reservation_id),
-    )
-    .await
-    .map_err(|_| HostError::Docker)?
-}
-
-pub(crate) async fn retire_uncertain_unbound_pairs(
-    docker: &Docker,
-    scope: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-) -> Result<(), HostError> {
-    for reservation_id in scope.uncertain_unbound_pairs().await? {
-        if let Err(error) =
-            Box::pin(retire_unbound_pair(docker, scope, engine, reservation_id)).await
-        {
-            eprintln!(
-                "The controller keeps an unbound pair charged for retirement. connection={} reservation={reservation_id} reason={error}",
-                scope.connection_id().as_str()
-            );
-        }
-    }
-    Ok(())
 }
 
 pub(crate) async fn retire_unbound_pair(

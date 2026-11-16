@@ -48,8 +48,8 @@ pub(super) async fn poll_connection(
 ) -> Result<Option<PollTurnResult>, HostError> {
     let connection_id = prepared.binding.connection_id.as_str().to_owned();
     let result = poll_connection_inner(prepared, context, pending_retirements, turn).await;
-    let unpolled_removal = matches!(result, Ok(None))
-        && removed::pending(prepared, context, pending_retirements);
+    let unpolled_removal =
+        matches!(result, Ok(None)) && removed::pending(prepared, context, pending_retirements);
     if !result
         .as_ref()
         .is_ok_and(|result| result.as_ref().is_some_and(|turn| turn.receipt_recorded))

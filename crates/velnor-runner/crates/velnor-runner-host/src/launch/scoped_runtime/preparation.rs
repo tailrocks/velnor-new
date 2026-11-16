@@ -42,7 +42,8 @@ pub(super) async fn prepare_started_and_bound<P: ImageProvider>(
         Ok(preparation) => preparation,
         Err(pending) => return Ok(*pending),
     };
-    let context = super::scoped_prepare_context(docker, scoped, host, provider, engine, images, deadline);
+    let context =
+        super::scoped_prepare_context(docker, scoped, host, provider, engine, images, deadline);
     let reservation_id = prepared.acquired().reservation_id();
     let initialization = match Box::pin(
         crate::worker::storage_initialization::finish_after_pair_mounts(

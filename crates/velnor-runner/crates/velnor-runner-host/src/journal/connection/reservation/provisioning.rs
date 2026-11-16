@@ -18,7 +18,9 @@ mod request_link;
 mod storage_plan;
 mod unbound_retirement;
 pub(in crate::journal) use unbound_retirement::recover_unbound_pairs_at_startup;
-pub(crate) use unbound_retirement::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use unbound_retirement::{
+    UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase,
+};
 
 pub(in crate::journal) use cleanup::validate_retirement_digest;
 
