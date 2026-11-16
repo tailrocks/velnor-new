@@ -85,6 +85,15 @@ fn the_pairs_are_ready_only_when_every_slot_listens() {
 }
 
 #[test]
+fn a_slot_that_logged_listening_and_then_exited_is_not_counted_ready() {
+    let slots = slots(2, 0);
+    let log = "pair trusted-1 listening\npair trusted-2 listening\npair trusted-1 removed\n";
+    assert_eq!(listening(log, &slots), ["trusted-2"]);
+    let log = format!("{log}pair trusted-1 listening\n");
+    assert_eq!(listening(&log, &slots), ["trusted-1", "trusted-2"]);
+}
+
+#[test]
 fn each_decision_reads_as_admitted_with_its_event_or_refused_with_its_reason() {
     let read = read(&[ADMITTED, REFUSED, "", MALFORMED]);
     let lines: Vec<String> = read.iter().map(Decision::line).collect();
