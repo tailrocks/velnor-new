@@ -9,13 +9,12 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use http_body_util::{BodyExt, Full};
-use hyper::Request;
 use serde_json::Value;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
+use super::probe::wait_for;
 use super::proxy::Proxy;
 use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
@@ -105,41 +104,6 @@ pub(super) async fn program(
     let error = String::from_utf8_lossy(&output.stderr);
     let failed = format!("{program} {}: {}", args.join(" "), error.trim());
     Err(io::Error::other(failed))
-}
-
-pub(super) async fn request(
-    proxy: &Proxy,
-    method: &str,
-    path: &str,
-    body: &str,
-) -> Option<Vec<u8>> {
-    let body = Full::new(bytes::Bytes::from(body.to_owned()));
-    let request = Request::builder()
-        .method(method)
-        .uri(path)
-        .body(body.map_err(|never| match never {}).boxed_unsync())
-        .ok()?;
-    let response = proxy.forward(request).await.ok()?;
-    let ok = response.status().is_success();
-    let bytes = response.into_body().collect().await.ok()?.to_bytes();
-    ok.then(|| bytes.to_vec())
-}
-
-async fn wait_for(
-    proxy: &Proxy,
-    path: &str,
-    deadline: tokio::time::Instant,
-    what: &str,
-) -> io::Result<()> {
-    while request(proxy, "GET", path, "").await.is_none() {
-        if tokio::time::Instant::now() > deadline {
-            return Err(io::Error::other(format!(
-                "{what} did not connect within 60 s"
-            )));
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-    Ok(())
 }
 
 impl<E: Engine> Environment<E> {

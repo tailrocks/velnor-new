@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_local::io::authority::Authority;
+use velnor_local::authority::{Entry, Facts, Refusal, admit};
+use velnor_local::io::authority::{Authority, mint_or_retire};
 use velnor_local::side::Side;
+use velnor_local::standin::Run;
 
 use super::fake::{FakeRunners, SHA, TOKEN, ask, authority, entry, post, run_facts};
 use crate::support::temp_dir;
@@ -228,5 +230,110 @@ async fn authority_gives_two_identical_events_their_runs_in_creation_order_when_
     assert_eq!(
         (one["ledger"].as_str(), two["ledger"].as_str()),
         (Some("1-push"), Some("2-push"))
+    );
+}
+
+#[tokio::test]
+async fn a_jit_that_fails_to_pack_leaves_no_agent_registered() {
+    let runners = FakeRunners {
+        mint_fails: true,
+        ..FakeRunners::default()
+    };
+    runners
+        .agents
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .push((Side::Trusted, 9, "velnor-x-jit-1".to_owned()));
+    let minted = mint_or_retire(&&runners, Side::Trusted).await;
+    let left = runners
+        .agents
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .len();
+    assert!(minted.is_err());
+    assert_eq!(left, 0);
+}
+
+#[test]
+fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
+    let facts = |id: u64, workflow: &str| Facts {
+        id,
+        attempt: 1,
+        event: "push".to_owned(),
+        git_ref: "refs/heads/main".to_owned(),
+        sha: SHA.to_owned(),
+        workflow: workflow.to_owned(),
+        jobs: vec!["ci".to_owned()],
+    };
+    let entry = |side, workflow: Option<&str>, existing: Vec<u64>| Entry {
+        id: "1-push".to_owned(),
+        side,
+        event: "push".to_owned(),
+        git_ref: "refs/heads/main".to_owned(),
+        sha: SHA.to_owned(),
+        workflow: workflow.map(str::to_owned),
+        existing,
+        claims: Vec::new(),
+    };
+    let runs = |ids: &[u64], file: &str| -> Vec<Run> {
+        ids.iter()
+            .map(|id| Run {
+                id: *id,
+                file_name: file.to_owned(),
+                display_name: None,
+                event_name: Some("push".to_owned()),
+                git_ref: Some("refs/heads/main".to_owned()),
+                sha: Some(SHA.to_owned()),
+                result: None,
+                status: None,
+            })
+            .collect()
+    };
+    let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
+    assert!(
+        admit(
+            &entries,
+            Side::Trusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        )
+        .is_ok()
+    );
+    assert_eq!(
+        admit(
+            &entries,
+            Side::Trusted,
+            &facts(1, "b.yml"),
+            &runs(&[1], "b.yml")
+        ),
+        Err(Refusal::NotDispatched)
+    );
+    assert_eq!(
+        admit(
+            &entries,
+            Side::Untrusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        ),
+        Err(Refusal::WrongSide)
+    );
+    let seen = [entry(Side::Trusted, None, vec![1])];
+    assert_eq!(
+        admit(
+            &seen,
+            Side::Trusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        ),
+        Err(Refusal::NotDispatched)
+    );
+    assert!(
+        admit(
+            &seen,
+            Side::Trusted,
+            &facts(2, "a.yml"),
+            &runs(&[1, 2], "a.yml")
+        )
+        .is_ok()
     );
 }

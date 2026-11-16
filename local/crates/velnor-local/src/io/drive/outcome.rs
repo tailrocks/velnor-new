@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 use super::Driver;
 use crate::io::RESTORES;
-use crate::io::env::request;
+use crate::io::probe::request;
 use crate::scenario::{Outcome, restores};
 use crate::side::Side;
 use crate::standin;
