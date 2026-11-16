@@ -18,6 +18,7 @@ mod pair_inputs;
 mod pairs;
 mod pairs_host;
 mod policy;
+mod removal_audit;
 mod report;
 mod restore;
 mod runners;

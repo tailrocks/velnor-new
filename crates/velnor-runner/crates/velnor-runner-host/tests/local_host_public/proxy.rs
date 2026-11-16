@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::{TcpStream, UnixListener, UnixStream};
 use tokio::task::JoinHandle;
 
-use super::support::TestResult;
+use super::support::{Endpoint, TestResult};
 
 #[derive(Clone, Copy)]
 pub(crate) enum Wait {
@@ -23,6 +23,7 @@ pub(crate) struct Faults {
     waits: fn(usize) -> Wait,
     waited: AtomicUsize,
     removals: AtomicUsize,
+    sweep_removals: AtomicUsize,
     pub(crate) hang_creations: AtomicBool,
 }
 
@@ -32,6 +33,17 @@ impl Faults {
             waits,
             waited: AtomicUsize::new(0),
             removals: AtomicUsize::new(removals),
+            sweep_removals: AtomicUsize::new(usize::MAX),
+            hang_creations: AtomicBool::new(false),
+        })
+    }
+
+    pub(crate) fn fail_second_removal() -> Arc<Self> {
+        Arc::new(Self {
+            waits: |_| Wait::Forward,
+            waited: AtomicUsize::new(0),
+            removals: AtomicUsize::new(0),
+            sweep_removals: AtomicUsize::new(0),
             hang_creations: AtomicBool::new(false),
         })
     }
@@ -43,6 +55,13 @@ impl Faults {
     }
 
     fn answer(&self, line: &str) -> Option<(u16, &'static str)> {
+        if line.starts_with("DELETE ")
+            && line.contains("/containers/")
+            && self.sweep_removals.load(Ordering::SeqCst) != usize::MAX
+            && self.sweep_removals.fetch_add(1, Ordering::SeqCst) == 1
+        {
+            return Some((500, "{\"message\":\"injected\"}"));
+        }
         if line.starts_with("POST ")
             && line.contains("/containers/")
             && line.contains("/wait")
@@ -75,13 +94,11 @@ pub(crate) struct Proxy {
 }
 
 impl Proxy {
-    pub(crate) fn start(faults: Arc<Faults>) -> TestResult<Self> {
+    pub(crate) fn start(upstream: &Endpoint, faults: Arc<Faults>) -> TestResult<Self> {
         let directory = tempfile::tempdir()?;
         let socket = directory.path().join("docker.sock");
         let listener = UnixListener::bind(&socket)?;
-        let upstream = std::env::var("DOCKER_HOST")
-            .unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
-        let upstream = upstream.trim_start_matches("unix://").to_owned();
+        let upstream = upstream.clone();
         let task = tokio::spawn(async move {
             while let Ok((client, _)) = listener.accept().await {
                 let upstream = upstream.clone();
@@ -113,7 +130,7 @@ fn head_end(bytes: &[u8]) -> Option<usize> {
         .map(|at| at + 4)
 }
 
-async fn relay(mut client: UnixStream, upstream: &str, faults: &Faults) -> io::Result<()> {
+async fn relay(mut client: UnixStream, upstream: &Endpoint, faults: &Faults) -> io::Result<()> {
     let mut pending = Vec::new();
     loop {
         let end = loop {
@@ -147,9 +164,18 @@ async fn relay(mut client: UnixStream, upstream: &str, faults: &Faults) -> io::R
         }
         forwarded.extend_from_slice(b"\r\n");
         forwarded.extend_from_slice(&pending[end..]);
-        let mut server = UnixStream::connect(upstream).await?;
-        server.write_all(&forwarded).await?;
-        copy_bidirectional(&mut client, &mut server).await?;
+        match upstream {
+            Endpoint::Unix(path) => {
+                let mut server = UnixStream::connect(path).await?;
+                server.write_all(&forwarded).await?;
+                copy_bidirectional(&mut client, &mut server).await?;
+            }
+            Endpoint::Tcp(address) => {
+                let mut server = TcpStream::connect(address).await?;
+                server.write_all(&forwarded).await?;
+                copy_bidirectional(&mut client, &mut server).await?;
+            }
+        }
         return Ok(());
     }
 }

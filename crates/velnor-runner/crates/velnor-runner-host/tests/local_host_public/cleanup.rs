@@ -32,8 +32,12 @@ async fn assert_removed(docker: &Docker, containers: &[String], networks: &[Stri
 
 #[tokio::test]
 async fn local_fixture_cleanup_removes_owned_endpoints_before_their_networks() -> TestResult<()> {
-    let scenario = Scenario::new().await?;
-    let foreign = Fixture::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
+    let Some(foreign) = Fixture::new().await? else {
+        return Ok(());
+    };
     let docker = scenario.fixture.docker.clone();
     let trusted = Box::pin(start_pair(&docker, &scenario.fixture.request())).await?;
     let mut request = scenario.fixture.request();

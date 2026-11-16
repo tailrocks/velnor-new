@@ -37,15 +37,18 @@ pub(crate) struct Live {
 }
 
 impl Scenario {
-    pub(crate) async fn new() -> TestResult<Self> {
+    pub(crate) async fn new() -> TestResult<Option<Self>> {
         Self::with(Fixture::new().await?).await
     }
 
-    pub(crate) async fn running(program: Program) -> TestResult<Self> {
+    pub(crate) async fn running(program: Program) -> TestResult<Option<Self>> {
         Self::with(Fixture::running(program).await?).await
     }
 
-    async fn with(fixture: Fixture) -> TestResult<Self> {
+    async fn with(fixture: Option<Fixture>) -> TestResult<Option<Self>> {
+        let Some(fixture) = fixture else {
+            return Ok(None);
+        };
         let served = serve(fixture.docker.clone(), &fixture.environment).await?;
         let fork_network = format!("{}-fork", fixture.network);
         fixture.guard.track_network(&fork_network);
@@ -56,14 +59,14 @@ impl Scenario {
                 ..Default::default()
             })
             .await?;
-        Ok(Self {
+        Ok(Some(Self {
             fixture,
             served,
             state: tempfile::tempdir()?,
             fork_network,
             stop: None,
             task: None,
-        })
+        }))
     }
 
     pub(crate) fn fake(&self) -> &Fake {

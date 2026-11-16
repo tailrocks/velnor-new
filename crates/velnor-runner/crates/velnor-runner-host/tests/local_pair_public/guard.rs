@@ -13,6 +13,7 @@ use bollard::query_parameters::{
 use velnor_runner_host::local::ENVIRONMENT_LABEL;
 
 pub(crate) struct Guard {
+    docker: Docker,
     environment: String,
     image: String,
     networks: Mutex<Vec<String>>,
@@ -20,8 +21,9 @@ pub(crate) struct Guard {
 }
 
 impl Guard {
-    pub(crate) fn new(environment: &str, image: &str, network: &str) -> Self {
+    pub(crate) fn new(docker: Docker, environment: &str, image: &str, network: &str) -> Self {
         Self {
+            docker,
             environment: environment.to_owned(),
             image: image.to_owned(),
             networks: Mutex::new(vec![network.to_owned()]),
@@ -35,12 +37,12 @@ impl Guard {
         }
     }
 
-    pub(crate) async fn finish(&mut self, docker: &Docker) -> super::TestResult<()> {
+    pub(crate) async fn finish(&mut self) -> super::TestResult<()> {
         let networks = self
             .networks
             .get_mut()
             .map_err(|_| "network lock poisoned")?;
-        cleanup(docker, &self.environment, &self.image, networks).await?;
+        cleanup(&self.docker, &self.environment, &self.image, networks).await?;
         self.finished = true;
         Ok(())
     }
@@ -51,6 +53,7 @@ impl Drop for Guard {
         if self.finished {
             return;
         }
+        let docker = self.docker.clone();
         let environment = self.environment.clone();
         let image = self.image.clone();
         let networks = self
@@ -58,12 +61,12 @@ impl Drop for Guard {
             .lock()
             .map(|networks| networks.clone())
             .unwrap_or_default();
-        let sweep = std::thread::spawn(move || sweep(&environment, &image, &networks));
+        let sweep = std::thread::spawn(move || sweep(&docker, &environment, &image, &networks));
         let _joined = sweep.join();
     }
 }
 
-fn sweep(environment: &str, image: &str, networks: &[String]) {
+fn sweep(docker: &Docker, environment: &str, image: &str, networks: &[String]) {
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -71,10 +74,7 @@ fn sweep(environment: &str, image: &str, networks: &[String]) {
         return;
     };
     runtime.block_on(async {
-        let Ok(docker) = super::docker() else {
-            return;
-        };
-        let _removed = cleanup(&docker, environment, image, networks).await;
+        let _removed = cleanup(docker, environment, image, networks).await;
     });
 }
 

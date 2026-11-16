@@ -11,6 +11,10 @@ use bollard::query_parameters::{BuildImageOptions, ListContainersOptions, ListVo
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
+#[path = "endpoint.rs"]
+mod endpoint;
+pub(crate) use endpoint::Endpoint;
+
 #[path = "guard.rs"]
 mod guard;
 #[path = "program.rs"]
@@ -20,10 +24,10 @@ pub(crate) use program::Program;
 
 pub(crate) type TestResult<T> = Result<T, Box<dyn Error>>;
 
-pub(crate) fn docker() -> TestResult<Docker> {
-    let socket =
-        std::env::var("DOCKER_HOST").unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
-    Ok(velnor_runner_host::connect_unix(&socket)?)
+pub(crate) fn docker() -> TestResult<Option<Docker>> {
+    Endpoint::selected()?
+        .map(|endpoint| endpoint.docker())
+        .transpose()
 }
 
 pub(crate) fn suffix() -> TestResult<String> {
@@ -134,6 +138,7 @@ pub(crate) async fn labelled(docker: &Docker, environment: &str) -> TestResult<(
 
 pub(crate) struct Fixture {
     pub(crate) docker: Docker,
+    pub(crate) endpoint: Endpoint,
     pub(crate) environment: String,
     pub(crate) network: String,
     pub(crate) image: String,
@@ -141,12 +146,15 @@ pub(crate) struct Fixture {
 }
 
 impl Fixture {
-    pub(crate) async fn new() -> TestResult<Self> {
+    pub(crate) async fn new() -> TestResult<Option<Self>> {
         Self::running(Program::Sleep).await
     }
 
-    pub(crate) async fn running(program: Program) -> TestResult<Self> {
-        let docker = docker()?;
+    pub(crate) async fn running(program: Program) -> TestResult<Option<Self>> {
+        let Some(endpoint) = Endpoint::selected()? else {
+            return Ok(None);
+        };
+        let docker = endpoint.docker()?;
         let suffix = suffix()?;
         let tag = format!("velnor-local-test-sleeper:{suffix}");
         let network = format!("velnor-local-test-{suffix}");
@@ -157,13 +165,14 @@ impl Fixture {
                 ..Default::default()
             })
             .await?;
-        Ok(Self {
-            docker,
+        Ok(Some(Self {
+            endpoint,
+            docker: docker.clone(),
             environment: format!("test-{suffix}"),
-            guard: Guard::new(&format!("test-{suffix}"), &tag, &network),
+            guard: Guard::new(docker, &format!("test-{suffix}"), &tag, &network),
             network,
             image,
-        })
+        }))
     }
 
     pub(crate) fn request(&self) -> LocalPairRequest {
@@ -171,6 +180,6 @@ impl Fixture {
     }
 
     pub(crate) async fn finish(mut self) -> TestResult<()> {
-        self.guard.finish(&self.docker).await
+        self.guard.finish().await
     }
 }

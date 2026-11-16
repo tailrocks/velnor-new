@@ -68,6 +68,7 @@ velnor-local down --dir "$STATE"
 - The authority listens on `127.0.0.1` only, and every call needs its token, which each `up` replaces. The cache and API stub control ports answer only with their own token.
 - `velnor-host` with local mode exists only in builds made by `velnor-local build`. A release build refuses the `local-mode` feature, so production never carries the local check.
 - Local mode keeps no journal and no reservation. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
+- `down` appends its exact label filter and each removal's intent and result to `$STATE/cleanup.jsonl`. The host sweep writes the same records to `$STATE/runner/cleanup.jsonl`. Successful removals remain recorded when a later removal fails. Volumes are removed only through the label filter, without implicit anonymous-volume deletion.
 - Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
 - `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
 - `build` refuses a working tree with uncommitted changes, because the images are named for `HEAD`.
@@ -198,3 +199,15 @@ velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" 
 `--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub has no authentication, like the cache server's pull request registration: it serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
 
 The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.
+
+## Docker integration tests
+
+The runner's `local_pair_public` and `local_host_public` tests skip Docker work with a message unless `VELNOR_TEST_DOCKER_HOST` explicitly selects an isolated daemon. The local `it` binary's `removal_audit::` tests require the same explicit endpoint. These tests ignore `DOCKER_HOST` and the default socket. An empty, malformed or unreachable explicit endpoint fails. Daemon-free checks still run.
+
+From the repository root, this command starts a uniquely named disposable daemon on a dynamically assigned loopback port, waits for readiness, runs both suites and removes that exact daemon and its anonymous volumes on exit. It requires a Docker host that permits privileged containers.
+
+```sh
+( set -eu; name="velnor-test-dind-$(uuidgen | tr '[:upper:]' '[:lower:]')"; docker run -d --privileged --name "$name" -e DOCKER_TLS_CERTDIR= -p 127.0.0.1::2375 docker:29-dind >/dev/null; trap 'docker rm -fv "$name" >/dev/null' EXIT; endpoint="tcp://$(docker port "$name" 2375/tcp)"; attempts=0; until docker -H "$endpoint" info >/dev/null 2>&1; do attempts=$((attempts + 1)); [ "$attempts" -lt 60 ]; sleep 1; done; VELNOR_TEST_DOCKER_HOST="$endpoint" cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --features local-mode -p velnor-runner-host --test local_pair_public --test local_host_public --no-tests fail )
+```
+
+The CI profile opts into `unix:///var/run/docker.sock` for these two binaries and the local `removal_audit::` tests only on Linux when `GITHUB_ACTIONS=true` and `VELNOR_TEST_DOCKER_HOST` is unset. It preserves an explicit endpoint, including an empty value that fails validation. A local `--profile ci` run still needs an explicit endpoint.
