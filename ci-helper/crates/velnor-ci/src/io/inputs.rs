@@ -95,7 +95,13 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     ))
 }
 
-pub(super) fn tracked_paths(root: &Path) -> Result<(PathBuf, Vec<String>), CiError> {
+pub(super) struct TrackedPaths {
+    pub top: PathBuf,
+    pub paths: Vec<String>,
+    pub non_utf8: usize,
+}
+
+pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
         String::from_utf8(top)
@@ -103,12 +109,22 @@ pub(super) fn tracked_paths(root: &Path) -> Result<(PathBuf, Vec<String>), CiErr
             .trim_end_matches(['\n', '\r']),
     );
     let listed = git(&top, &["ls-files", "-z", "--recurse-submodules"], None)?;
-    let paths = listed
+    let mut paths = Vec::new();
+    let mut non_utf8 = 0;
+    for path in listed
         .split(|byte| *byte == 0)
         .filter(|path| !path.is_empty())
-        .filter_map(|path| String::from_utf8(path.to_vec()).ok())
-        .collect();
-    Ok((top, paths))
+    {
+        match String::from_utf8(path.to_vec()) {
+            Ok(path) => paths.push(path),
+            Err(_) => non_utf8 += 1,
+        }
+    }
+    Ok(TrackedPaths {
+        top,
+        paths,
+        non_utf8,
+    })
 }
 
 fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {

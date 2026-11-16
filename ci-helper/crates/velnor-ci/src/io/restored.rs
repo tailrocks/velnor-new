@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use super::inputs::{modified_ns, set_modified_ns, tracked_paths};
+use super::inputs::{TrackedPaths, modified_ns, set_modified_ns, tracked_paths};
 use crate::error::CiError;
 use crate::ties::break_ties;
 
@@ -17,7 +17,16 @@ pub fn break_time_ties_with(
     root: &Path,
     set: &dyn Fn(&Path, u64) -> Result<(), CiError>,
 ) -> Result<String, CiError> {
-    let (top, paths) = tracked_paths(root)?;
+    let TrackedPaths {
+        top,
+        paths,
+        non_utf8,
+    } = tracked_paths(root)?;
+    if non_utf8 > 0 {
+        return Err(CiError::new(format!(
+            "{non_utf8} tracked paths are not valid UTF-8 and cannot be tie-broken, so the cache is not used"
+        )));
+    }
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
         let full = top.join(&path);

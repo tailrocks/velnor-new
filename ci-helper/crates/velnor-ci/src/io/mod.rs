@@ -3,6 +3,7 @@
 
 mod audit;
 mod build_inputs;
+mod cold;
 mod configurations;
 mod git;
 mod http;
@@ -22,6 +23,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
+pub use self::cold::{cold_on_failure, every_root_target, root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
@@ -98,7 +100,12 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
-        Command::Inputs(InputsCommand::Restore) => restore_inputs(&current_dir()?),
+        Command::Inputs(InputsCommand::Restore) => {
+            let root = current_dir()?;
+            cold_on_failure(&root_target(&root), "inputs restore", || {
+                restore_inputs(&root)
+            })
+        }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
             audit_inputs(&current_dir()?, write)
         }
@@ -112,7 +119,12 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
-        Command::Restored => break_time_ties(&current_dir()?),
+        Command::Restored => {
+            let root = current_dir()?;
+            cold_on_failure(&every_root_target(&root), "restored", || {
+                break_time_ties(&root)
+            })
+        }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
 }
