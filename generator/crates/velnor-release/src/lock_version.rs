@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::members::owner;
+use crate::members::{inherited_packages, owner};
 use crate::registry::within;
 use crate::release_plz::RootConfig;
 use crate::tag::TagPattern;
@@ -43,12 +43,13 @@ fn check_metadata(
     let Some((_, workspace)) = owner(&config.root, metadata) else {
         return Ok(());
     };
+    let inherited = inherited_packages(config, Some(metadata));
     for member in &workspace.members {
         let path = member.manifest.as_str();
-        if within(&config.root, path)
-            && receives_version_tag(config, member.name.as_str())
-            && ends_in_lock(&member.version)
-        {
+        let name = member.name.as_str();
+        let released = inherited.iter().any(|inherited| inherited == name)
+            || config.packages.iter().any(|package| package.name == name);
+        if released && receives_version_tag(config, name) && ends_in_lock(&member.version) {
             return Err(ReleaseError::VersionEndsInLock(
                 path.to_owned(),
                 member.version.clone(),

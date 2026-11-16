@@ -154,3 +154,19 @@ fn an_independent_nested_workspace_does_not_block_the_root() -> TestResult {
     assert!(lock_refusal(&files, "Cargo.toml"));
     Ok(())
 }
+
+#[test]
+fn a_released_member_outside_the_root_directory_is_checked() -> TestResult {
+    let mut files = files();
+    member_root(&mut files);
+    with_metadata(
+        &mut files,
+        &[(
+            "root/Cargo.toml",
+            &[("app", "member/Cargo.toml"), ("sibling", "sibling/Cargo.toml")],
+        )],
+    );
+    set_version(&mut files, "sibling/Cargo.toml", "1.2.3-alpha.lock")?;
+    assert!(lock_refusal(&files, "sibling/Cargo.toml"));
+    Ok(())
+}
