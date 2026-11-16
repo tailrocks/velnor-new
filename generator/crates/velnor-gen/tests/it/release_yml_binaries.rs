@@ -28,7 +28,7 @@ pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Erro
         .ok_or_else(|| format!("no job {id}"))?)
 }
 
-fn permissions(job: &Node) -> Vec<(String, String)> {
+pub(crate) fn permissions(job: &Node) -> Vec<(String, String)> {
     job.get("permissions").map_or_else(Vec::new, |node| {
         node.keys()
             .into_iter()

@@ -4,7 +4,7 @@
 use std::error::Error;
 
 use crate::release_fixture::{APP, TOOLS, render, steps, two_binaries};
-use crate::release_yml_binaries::job;
+use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -18,10 +18,8 @@ fn a_package_without_a_binaries_entry_gets_a_job_that_publishes_its_draft_releas
         Some(vec!["gate", "tag-0"])
     );
     assert_eq!(
-        finalize
-            .at(&["permissions", "contents"])
-            .and_then(Node::text),
-        Some("write")
+        permissions(finalize),
+        [("contents".to_owned(), "write".to_owned())]
     );
     let all = steps(finalize);
     assert_eq!(all.len(), 1);
