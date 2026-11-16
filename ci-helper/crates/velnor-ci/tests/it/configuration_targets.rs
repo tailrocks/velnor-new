@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 
 use crate::io::Repo;
 
+mod contexts;
+
 fn metadata(extra: bool) -> Value {
     json!({
         "workspace_members": ["app-id", "member-id"],

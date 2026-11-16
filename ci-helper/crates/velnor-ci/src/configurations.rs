@@ -8,6 +8,8 @@ use serde::Deserialize;
 use crate::error::CiError;
 use crate::escape::inert;
 
+mod contexts;
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Configuration {
@@ -194,24 +196,29 @@ struct Node {
 
 #[derive(Deserialize)]
 struct Dependency {
+    pkg: Option<PackageId>,
     dep_kinds: Option<Vec<serde_json::Value>>,
+}
+
+impl Dependency {
+    fn context_free(&self) -> bool {
+        self.dep_kinds.as_ref().is_some_and(|kinds| {
+            !kinds.is_empty()
+                && kinds.iter().all(|kind| {
+                    kind.get("target").is_some_and(serde_json::Value::is_null)
+                        && kind
+                            .get("kind")
+                            .is_some_and(|kind| kind.is_null() || kind.as_str() == Some("dev"))
+                })
+        })
+    }
 }
 
 impl Node {
     fn context_free(&self) -> bool {
-        self.deps.as_ref().is_some_and(|dependencies| {
-            dependencies.iter().all(|dependency| {
-                dependency.dep_kinds.as_ref().is_some_and(|kinds| {
-                    !kinds.is_empty()
-                        && kinds.iter().all(|kind| {
-                            kind.get("target").is_some_and(serde_json::Value::is_null)
-                                && kind.get("kind").is_some_and(|kind| {
-                                    kind.is_null() || kind.as_str() == Some("dev")
-                                })
-                        })
-                })
-            })
-        })
+        self.deps
+            .as_ref()
+            .is_some_and(|dependencies| dependencies.iter().all(Dependency::context_free))
     }
 }
 
@@ -234,6 +241,7 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
     if metadata.resolve.nodes.is_empty() {
         return Err(CiError::new("cargo metadata resolve has no nodes"));
     }
+    let contexts = contexts::FeatureContexts::new(&packages, &metadata.resolve.nodes);
     let mut features = BTreeMap::new();
     for node in metadata.resolve.nodes {
         context_free &= node.context_free();
@@ -255,7 +263,7 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
             .get(&member)
             .ok_or_else(|| CiError::new("cargo metadata workspace member has no resolve node"))?;
         for target in required_test_targets(package)? {
-            let availability = if !context_free {
+            let availability = if contexts.uncertain(&member) {
                 Availability::Unknown
             } else if target.required_features.is_subset(member_features) {
                 Availability::Enabled
