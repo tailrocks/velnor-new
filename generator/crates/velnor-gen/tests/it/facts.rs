@@ -68,7 +68,7 @@ pub(crate) fn package(
 ) -> Result<RustPackage, Box<dyn Error>> {
     Ok(RustPackage {
         name: PackageName::new(name)?,
-        version: Some("0.1.0".to_owned()),
+        version: "0.1.0".to_owned(),
         manifest: path(manifest)?,
         dependencies: dependencies
             .iter()

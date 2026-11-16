@@ -25,7 +25,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
         view.tracked_paths.insert(manifest.clone());
         let member = RustPackage {
             name: PackageName::new(format!("package-{index}"))?,
-            version: Some("0.1.0".to_owned()),
+            version: "0.1.0".to_owned(),
             manifest: manifest.clone(),
             dependencies: Vec::new(),
             targets: vec![Target {

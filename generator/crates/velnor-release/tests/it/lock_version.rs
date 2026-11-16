@@ -13,7 +13,7 @@ fn set_version(files: &mut ReleaseFiles, manifest: &str, version: &str) -> TestR
     let metadata = files.rust_metadata.as_mut().ok_or("no metadata")?;
     for member in metadata.values_mut().flat_map(|known| &mut known.members) {
         if member.manifest.as_str() == manifest {
-            member.version = Some(version.to_owned());
+            version.clone_into(&mut member.version);
         }
     }
     Ok(())
@@ -139,32 +139,18 @@ fn an_unrelated_broken_manifest_under_the_root_does_not_block_generation() {
 }
 
 #[test]
-fn a_member_recorded_without_a_version_falls_back_to_its_literal_version() -> TestResult {
+fn an_independent_nested_workspace_does_not_block_the_root() -> TestResult {
     let mut files = files();
-    member_root(&mut files);
     with_metadata(
         &mut files,
-        &[("Cargo.toml", &[("app", "member/Cargo.toml")])],
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            ("tools/Cargo.toml", &[("util", "tools/util/Cargo.toml")]),
+        ],
     );
-    for member in files
-        .rust_metadata
-        .as_mut()
-        .ok_or("no metadata")?
-        .values_mut()
-        .flat_map(|known| &mut known.members)
-    {
-        member.version = None;
-    }
-    files.cargo_manifest_texts.insert(
-        "member/Cargo.toml".to_owned(),
-        manifest("app", "1.2.3-alpha.lock"),
-    );
-    assert!(lock_refusal(&files, "member/Cargo.toml"));
-    files.cargo_manifest_texts.insert(
-        "member/Cargo.toml".to_owned(),
-        "[package]\nname = \"app\"\nversion.workspace = true\n[workspace.package]\nversion = \"1.2.3-alpha.lock\"\n"
-            .to_owned(),
-    );
+    set_version(&mut files, "tools/util/Cargo.toml", "1.2.3-alpha.lock")?;
     assert_eq!(refusal(&files), None);
+    set_version(&mut files, "Cargo.toml", "1.2.3-alpha.lock")?;
+    assert!(lock_refusal(&files, "Cargo.toml"));
     Ok(())
 }

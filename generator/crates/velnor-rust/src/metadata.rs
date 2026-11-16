@@ -86,7 +86,7 @@ pub fn reduce_metadata(
         .map(|package| {
             Ok(RustPackage {
                 name: PackageName::new(package.name).map_err(invalid)?,
-                version: Some(package.version),
+                version: package.version,
                 manifest: repo_path(repository, &package.manifest_path)?,
                 dependencies: package
                     .dependencies

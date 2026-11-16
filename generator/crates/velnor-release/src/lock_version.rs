@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::{RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
+use crate::members::owner;
 use crate::registry::within;
 use crate::release_plz::RootConfig;
 use crate::tag::TagPattern;
@@ -38,25 +39,20 @@ fn literal_version(text: &str) -> Option<(String, String)> {
 fn check_metadata(
     config: &RootConfig,
     metadata: &BTreeMap<RepoPath, RustMetadata>,
-    manifests: &BTreeMap<String, String>,
 ) -> Result<(), ReleaseError> {
-    for member in metadata.values().flat_map(|known| &known.members) {
+    let Some((_, workspace)) = owner(&config.root, metadata) else {
+        return Ok(());
+    };
+    for member in &workspace.members {
         let path = member.manifest.as_str();
-        if !within(&config.root, path) || !receives_version_tag(config, member.name.as_str()) {
-            continue;
-        }
-        let version = match &member.version {
-            Some(version) => Some(version.clone()),
-            None => manifests
-                .get(path)
-                .and_then(|text| literal_version(text))
-                .filter(|(name, _)| name == member.name.as_str())
-                .map(|(_, version)| version),
-        };
-        if let Some(version) = version
-            && ends_in_lock(&version)
+        if within(&config.root, path)
+            && receives_version_tag(config, member.name.as_str())
+            && ends_in_lock(&member.version)
         {
-            return Err(ReleaseError::VersionEndsInLock(path.to_owned(), version));
+            return Err(ReleaseError::VersionEndsInLock(
+                path.to_owned(),
+                member.version.clone(),
+            ));
         }
     }
     Ok(())
@@ -94,7 +90,7 @@ pub(crate) fn check_versions(
             .any(TagPattern::ends_with_version)
     }) {
         match metadata {
-            Some(metadata) => check_metadata(config, metadata, manifests)?,
+            Some(metadata) => check_metadata(config, metadata)?,
             None => check_text(config, manifests)?,
         }
     }

@@ -65,8 +65,7 @@ struct Root {
 #[serde(deny_unknown_fields)]
 struct Member {
     name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
+    version: String,
     manifest: String,
     dependencies: Vec<Edge>,
     targets: Vec<Goal>,
