@@ -101,3 +101,39 @@ fn a_setting_the_generator_refuses_is_refused_at_runtime_too() {
         assert!(checked(&text).is_err(), "{new}");
     }
 }
+
+fn two_roots(a: &str, b: &str) -> Result<String, String> {
+    check_config(&[
+        ("a/release-plz.toml".to_owned(), a.to_owned()),
+        ("b/release-plz.toml".to_owned(), b.to_owned()),
+    ])
+    .map_err(|e| e.to_string())
+}
+
+#[test]
+fn two_roots_sharing_a_tag_pattern_are_refused_at_runtime() {
+    let error = two_roots(COMPLIANT, COMPLIANT);
+    assert!(
+        error.is_err_and(|message| message.contains("v{{ version }}")),
+        "shared tag"
+    );
+}
+
+#[test]
+fn two_roots_with_overlapping_pr_branch_prefixes_are_refused_at_runtime() {
+    let tagged = |tag: &str| COMPLIANT.replace("v{{ version }}", tag);
+    let error = two_roots(&tagged("a-v{{ version }}"), &tagged("b-v{{ version }}"));
+    assert!(
+        error.is_err_and(|message| message.contains("release-plz-")),
+        "shared prefix"
+    );
+    let apart =
+        |tag: &str, prefix: &str| format!("{}pr_branch_prefix = \"{prefix}\"\n", tagged(tag));
+    assert_eq!(
+        two_roots(
+            &apart("a-v{{ version }}", "a-plz-"),
+            &apart("b-v{{ version }}", "b-plz-")
+        ),
+        Ok(String::new())
+    );
+}

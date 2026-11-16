@@ -5,7 +5,7 @@ use velnor_ci::release::check_tag_patterns;
 
 fn config(tag: &str) -> String {
     format!(
-        "[workspace]\nrelease_always = false\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\ngit_tag_name = \"{tag}\"\n[[package]]\nname = \"app\"\n"
+        "[workspace]\nrelease_always = false\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\nrelease = false\n[[package]]\nname = \"app\"\nrelease = true\ngit_tag_name = \"{tag}\"\n"
     )
 }
 

@@ -143,8 +143,8 @@ pub fn publishes_to_crates_io(root: &str, text: &str) -> Result<bool, CiError> {
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
     for (file, text) in files {
         velnor_release::refuse_external_commands(file, text).map_err(CiError::new)?;
-        velnor_release::check_release_plz_config(file, text).map_err(CiError::new)?;
     }
+    velnor_release::check_release_plz_configs(files).map_err(CiError::new)?;
     Ok(String::new())
 }
 

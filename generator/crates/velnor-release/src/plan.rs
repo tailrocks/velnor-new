@@ -9,7 +9,7 @@ use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
 use crate::mise;
 use crate::registry::check_publish_registries;
-use crate::release_plz::{RootConfig, read};
+use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::velnor_config::{VelnorConfig, parse};
 
@@ -57,7 +57,7 @@ pub struct ReleasePlan {
     pub release_plz_sha256: String,
 }
 
-fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
+pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
     for config in configs {
         for package in &config.packages {
@@ -143,6 +143,14 @@ fn check_prefixes(configs: &[RootConfig]) -> Result<(), ReleaseError> {
         }
     }
     Ok(())
+}
+
+pub fn check_release_plz_configs(files: &[(String, String)]) -> Result<(), String> {
+    let mut configs = Vec::new();
+    for (file, text) in files {
+        configs.push(read(root_of(file), text).map_err(|error| format!("{file}: {error}"))?);
+    }
+    check_unique(&configs).map_err(|error| error.to_string())
 }
 
 fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), ReleaseError> {
