@@ -9,10 +9,6 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const HELPER_FROM_ARTIFACT_RUN: &str = "\
-chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
-echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
-
 pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
@@ -225,11 +221,7 @@ fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
 
 fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     let mut rules = Vec::new();
-    if let Some(run) = step
-        .run
-        .as_deref()
-        .filter(|run| *run != HELPER_FROM_ARTIFACT_RUN)
-    {
+    if let Some(run) = step.run.as_deref() {
         run_rules(run, &mut rules);
     }
     if step.run.is_some() == step.uses.is_some() {

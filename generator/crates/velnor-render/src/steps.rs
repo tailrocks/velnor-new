@@ -10,9 +10,7 @@ use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
 use crate::permission_pairs;
-use crate::rules::{
-    HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
-};
+use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 const RESTORED_STEP: &str = "restored";
@@ -87,13 +85,6 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 
 fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
     let mut rendered = vec![step_body(&step.kind)];
-    if step.kind == StepKind::HelperFromArtifact {
-        rendered.push(RenderedStep {
-            name: "Make velnor-ci executable".to_owned(),
-            run: Some(HELPER_FROM_ARTIFACT_RUN.to_owned()),
-            ..RenderedStep::default()
-        });
-    }
     for body in &mut rendered {
         if let Some(condition) =
             condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft)
@@ -180,7 +171,6 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::UploadCargoLog => upload_cargo_log(),
-        StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
@@ -213,21 +203,6 @@ fn upload_cargo_log() -> RenderedStep {
                 Value::Int(CARGO_LOG_RETENTION_DAYS),
             ),
             ("overwrite".to_owned(), Value::Bool(true)),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-fn download_helper() -> RenderedStep {
-    RenderedStep {
-        name: "Download velnor-ci".to_owned(),
-        uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
-        with: vec![
-            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            (
-                "path".to_owned(),
-                Value::Expr("${{ runner.temp }}/vbin".to_owned()),
-            ),
         ],
         ..RenderedStep::default()
     }

@@ -48,18 +48,15 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane::root(RootSlug::of(&root.manifest), single, helper_root.is_some());
+            let lane = Lane::root(RootSlug::of(&root.manifest), single);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
     if suffixed {
-        jobs.extend(audit_job(facts, helper_root.is_some()));
+        jobs.extend(audit_job(facts));
     }
     if facts.policy.any() {
-        jobs.push(policy_job(
-            facts,
-            &Lane::policy(single, helper_root.is_some()),
-        ));
+        jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     let draft_guard = facts
         .config
@@ -111,7 +108,6 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
-        from_source: false,
     };
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
@@ -150,18 +146,14 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth })];
-    if from_source {
-        steps.push(step(StepKind::HelperFromArtifact));
-    } else {
-        steps.extend(
-            facts
-                .helper
-                .iter()
-                .map(|release| step(StepKind::InstallHelper(release.clone()))),
-        );
-    }
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
+    );
     steps
 }
 
@@ -202,7 +194,6 @@ pub(crate) fn setup_roots(
         } else {
             CHECKOUT_DEPTH
         },
-        lane.from_source,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
@@ -257,7 +248,7 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    if lane.from_source || breaks_ties(facts) {
+    if breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
     toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));

@@ -14,7 +14,7 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
+    CHECKOUT_DEPTH, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
 };
 
 const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
@@ -78,13 +78,7 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         Job {
-            needs: self
-                .lane
-                .plan
-                .clone()
-                .into_iter()
-                .chain(self.lane.from_source.then_some(HELPER_JOB))
-                .collect(),
+            needs: self.lane.plan.clone().into_iter().collect(),
             gate: self.lane.job(),
             steps,
             ..job(self.facts, id)
@@ -256,7 +250,7 @@ impl RootJobs<'_> {
             ),
         );
         build.extend(self.audit());
-        let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        let mut group = head(self.facts, CHECKOUT_DEPTH);
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
             ..restore

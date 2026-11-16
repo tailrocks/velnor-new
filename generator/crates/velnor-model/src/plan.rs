@@ -197,7 +197,6 @@ pub enum StepKind {
     Helper(HelperCommand),
     GeneratorCheck,
     InstallHelper(HelperRelease),
-    HelperFromArtifact,
     PublishHelper {
         binary: RepoPath,
     },

@@ -12,8 +12,8 @@ use velnor_model::{
     WorkflowPlan,
 };
 use velnor_render::{
-    HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow,
-    Rule, RuleViolation, check_rules, render, render_workflow,
+    MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
+    check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -345,10 +345,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
                 .take_while(|next| next.starts_with(&" ".repeat(indent + 1)))
                 .map(|next| next.trim_start())
                 .collect();
-            let block = block.join("\n");
-            if block != HELPER_FROM_ARTIFACT_RUN {
-                found.push(block);
-            }
+            found.push(block.join("\n"));
         } else if value.is_empty() || quoted_open {
             found.push(value.to_owned());
         }
@@ -357,16 +354,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_constant()
--> TestResult {
-    let allowed = format!(
-        "run: |\n{}\n",
-        HELPER_FROM_ARTIFACT_RUN
-            .lines()
-            .map(|line| format!("  {line}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+fn no_golden_workflow_has_a_multi_line_run() -> TestResult {
     let rejected = [
         "run: |\n  echo one\n  echo two\n",
         "run: >\n  echo one\n",
@@ -377,7 +365,6 @@ fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_c
         multi_line_runs("run: cargo-fmt --all --check\n"),
         Vec::<String>::new()
     );
-    assert_eq!(multi_line_runs(&allowed), Vec::<String>::new());
     for text in rejected {
         assert_eq!(multi_line_runs(text).len(), 1, "{text}");
     }

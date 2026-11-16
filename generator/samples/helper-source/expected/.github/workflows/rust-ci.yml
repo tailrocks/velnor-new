@@ -163,7 +163,6 @@ jobs:
   rust-root:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       contents: read
@@ -178,15 +177,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -234,8 +231,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -344,7 +339,6 @@ jobs:
   rust-ci_helper:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
@@ -359,15 +353,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -418,9 +410,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-ci_helper-ci_helper-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('ci-helper/Cargo.lock') }}-
             velnor-tgt-rust-ci_helper-ci_helper-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: ci-helper
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -469,7 +458,6 @@ jobs:
   rust-crates_velnor_runner:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') }}'
     permissions:
       contents: read
@@ -484,15 +472,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -543,9 +529,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-crates_velnor_runner-crates_velnor_runner-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('crates/velnor-runner/Cargo.lock') }}-
             velnor-tgt-rust-crates_velnor_runner-crates_velnor_runner-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -636,7 +619,6 @@ jobs:
   rust-generator:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_generator_mode != ''none'') }}'
     permissions:
       contents: read
@@ -651,15 +633,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -710,9 +690,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-generator-generator-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('generator/Cargo.lock') }}-
             velnor-tgt-rust-generator-generator-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: generator
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -779,7 +756,6 @@ jobs:
   rust-local:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_local_mode != ''none'') }}'
     permissions:
       contents: read
@@ -794,15 +770,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -853,9 +827,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-local-local-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('local/Cargo.lock') }}-
             velnor-tgt-rust-local-local-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        working-directory: local
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -909,7 +880,6 @@ jobs:
   rust-inputs-audit:
     needs:
       - rust-plan
-      - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''schedule'') }}'
     permissions:
       contents: read
@@ -921,15 +891,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Download velnor-ci
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      - name: Install velnor-ci 0.1.79
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
         with:
-          name: velnor-ci
-          path: '${{ runner.temp }}/vbin'
-      - name: Make velnor-ci executable
-        run: |
-          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
-          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+          version: '0.1.79'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1057,20 +1025,6 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-inputs-audit-local-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('local/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit-local-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
-      - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
-      - name: velnor-ci inputs restore
-        working-directory: ci-helper
-        run: velnor-ci inputs restore
-      - name: velnor-ci inputs restore
-        working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore
-      - name: velnor-ci inputs restore
-        working-directory: generator
-        run: velnor-ci inputs restore
-      - name: velnor-ci inputs restore
-        working-directory: local
-        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
