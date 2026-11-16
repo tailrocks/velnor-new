@@ -169,9 +169,9 @@ let mut command = std::process::Command::new(program);
         }
     }"#);
     let paths = [
+        root.join(proxy),
         wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
         root.join("shadow"),
-        root.join(proxy),
         std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME")?).join(".cargo/bin"),
     ]
     .into_iter()

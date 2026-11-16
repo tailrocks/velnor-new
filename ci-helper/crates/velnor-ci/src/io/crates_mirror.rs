@@ -134,6 +134,13 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
         _ => actual_cargo(cargo, selected.as_deref())?,
     };
     let executable = linked_cargo(&cargo.executable, &wrapper)?;
+    let path = std::env::join_paths(
+        wrapper
+            .parent()
+            .into_iter()
+            .chain(paths.iter().map(PathBuf::as_path)),
+    )
+    .map_err(|error| CiError::new(format!("cannot configure Cargo PATH: {error}")))?;
     let mut command = Command::new(executable);
     if let Some(toolchain) = cargo.toolchain {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
@@ -142,6 +149,7 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
         .arg("--config")
         .arg(config)
         .args(args)
+        .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
         .env("CARGO", wrapper)
         .status()
