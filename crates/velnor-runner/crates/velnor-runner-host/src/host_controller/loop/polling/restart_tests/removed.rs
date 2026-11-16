@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::time::{Duration, Instant};
 use std::os::unix::fs::PermissionsExt;
 
 use bollard::Docker;
@@ -17,6 +18,8 @@ use crate::launch::SelectedEngineContext;
 use crate::launch::bootstrap::unbound_pair_fixtures::{
     FAILED, RETIRED, fixture::FixtureDocker, seed,
 };
+
+use crate::host_controller::loop_driver::controller::{FinishInputs, finish_startup};
 
 use super::controller::Controller;
 use super::{HOST_CONFIG, TestResult};
@@ -81,6 +84,7 @@ impl Controller {
         journal: &Journal,
         docker: &Docker,
         engine: &SelectedEngineContext,
+        budget: Duration,
     ) {
         reconcile_removed_at_startup(&RemovedStartup {
             state: self.state.path(),
@@ -90,6 +94,7 @@ impl Controller {
             engine,
             images: &self.images,
             image_authority: &self.image_authority,
+            deadline: Instant::now() + budget,
         })
         .await;
     }
@@ -187,7 +192,71 @@ async fn a_removed_connection_whose_poll_fails_has_its_unbound_pair_retired() ->
 async fn a_restart_retires_the_unbound_pair_of_a_removed_connection() -> TestResult<()> {
     let (restarted, controller) = restarted_with_a_removed_connection().await?;
     controller
-        .clean_up_at_startup(&restarted.journal, &restarted.docker, &restarted.engine)
+        .clean_up_at_startup(
+            &restarted.journal,
+            &restarted.docker,
+            &restarted.engine,
+            Duration::from_secs(60),
+        )
         .await;
     assert_retired(&restarted).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_connection_that_is_never_polled_has_its_unbound_pair_retired() -> TestResult<()>
+{
+    let (restarted, controller) = restarted_with_a_removed_connection().await?;
+    assert_eq!(controller.prepared.session_intent, 0);
+    controller
+        .poll_removed(&restarted.journal, &restarted.docker, &restarted.engine)
+        .await?;
+    assert_retired(&restarted).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_startup_sequence_retires_the_unbound_pair_of_a_removed_connection() -> TestResult<()> {
+    let (restarted, controller) = restarted_with_a_removed_connection().await?;
+    finish_startup(
+        FinishInputs {
+            current: &controller.config,
+            state: controller.state.path(),
+            docker: &restarted.docker,
+            selected_engine: &restarted.engine,
+            journal: &restarted.journal,
+            image_authority: &controller.image_authority,
+        },
+        &controller.images,
+    )
+    .await?;
+    assert_retired(&restarted).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stalled_docker_cannot_hold_the_startup_reconcile_past_its_deadline() -> TestResult<()> {
+    let (restarted, controller) = restarted_with_a_removed_connection().await?;
+    restarted.fixture.hang_after(format!(
+        "DELETE /containers/{}",
+        FAILED.container_id("runner")
+    ));
+    let started = Instant::now();
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        controller.clean_up_at_startup(
+            &restarted.journal,
+            &restarted.docker,
+            &restarted.engine,
+            Duration::from_millis(500),
+        ),
+    )
+    .await?;
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(
+        seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
+        UNCERTAIN
+    );
+    Ok(())
 }

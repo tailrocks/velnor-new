@@ -8,6 +8,7 @@ mod jit;
 mod preparation;
 mod provider_entry;
 mod registry;
+mod retirement;
 
 pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, ScopedHostContext,
@@ -143,19 +144,8 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
         };
         let reservation_id = prepared.acquired().reservation_id();
         let outcome = Box::pin(prepare_started_and_bound(prepared, context)).await?;
-        if matches!(outcome, ScopedRuntimeOutcome::Pending(_))
-            && let Err(error) = Box::pin(super::bootstrap::abandon_and_retire_unbound_pair_before(
-                context.deadline,
-                context.docker,
-                context.scoped,
-                context.engine,
-                reservation_id,
-            ))
-            .await
-        {
-            eprintln!(
-                "host controller kept an unbound pair charged reservation={reservation_id} reason={error}"
-            );
+        if matches!(outcome, ScopedRuntimeOutcome::Pending(_)) {
+            Box::pin(retirement::retire_pending_pair(context, reservation_id)).await;
         }
         Ok(outcome)
     })

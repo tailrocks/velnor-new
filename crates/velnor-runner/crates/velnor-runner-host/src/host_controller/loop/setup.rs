@@ -25,7 +25,7 @@ mod credential;
 mod removed;
 
 pub(crate) use credential::connection_pat;
-pub(super) use removed::{RemovedStartup, reconcile_removed_at_startup};
+pub(super) use removed::{REMOVED_STARTUP_BUDGET, RemovedStartup, reconcile_removed_at_startup};
 
 pub(super) struct PrepareConnectionRequest<'a> {
     pub(super) state: &'a Path,

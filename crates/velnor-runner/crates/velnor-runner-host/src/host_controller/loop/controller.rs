@@ -35,6 +35,8 @@ mod startup;
 mod worker_health;
 
 pub(super) use startup::run_controller;
+#[cfg(test)]
+pub(super) use startup::{FinishInputs, finish_startup};
 
 use doctor::DoctorProbeWorker;
 
