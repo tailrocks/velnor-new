@@ -48,19 +48,6 @@ impl ReleaseError {
                 f,
                 "mise.toml: release-plz must be pinned to an exact MAJOR.MINOR.PATCH version, not {version:?}"
             ),
-            Self::InvalidPublishTimeout { root, value } => write!(
-                f,
-                "{root}/release-plz.toml: publish_timeout {value:?} is not a duration such as \"10m\" or \"1h 30m\""
-            ),
-            Self::PublishTimeoutTooLong { root, minutes } => write!(
-                f,
-                "{root}/release-plz.toml: the publish_timeout of its packages needs a {minutes} minute tag job, and GitHub stops a job after {} minutes",
-                crate::timeout::MAX_JOB_MINUTES
-            ),
-            Self::ReleasePlzVersionTooOld { version, minimum } => write!(
-                f,
-                "mise.toml: release-plz {version} cannot authenticate the git fetch of a checkout without persisted credentials; pin release-plz {minimum} or newer"
-            ),
             Self::RootWithoutCargoManifest { root } => write!(
                 f,
                 ".velnor/release.toml: root {root} has no tracked Cargo.toml"
@@ -107,6 +94,19 @@ impl ReleaseError {
             Self::CargoConfigKeyNotAllowed { file, key } => write!(
                 f,
                 "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
+            ),
+            Self::InvalidPublishTimeout { root, value } => write!(
+                f,
+                "{root}/release-plz.toml: publish_timeout {value:?} is not a duration such as \"10m\" or \"1h 30m\""
+            ),
+            Self::PublishTimeoutTooLong { root, minutes } => write!(
+                f,
+                "{root}/release-plz.toml: the publish_timeout of its packages needs a {minutes} minute tag job, and GitHub stops a job after {} minutes",
+                crate::timeout::MAX_JOB_MINUTES
+            ),
+            Self::ReleasePlzVersionTooOld { version, minimum } => write!(
+                f,
+                "mise.toml: release-plz {version} cannot authenticate the git fetch of a checkout without persisted credentials; pin release-plz {minimum} or newer"
             ),
             _ => Ok(()),
         }
