@@ -201,12 +201,15 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     })
 }
 
-pub fn check_release_plz_config(file: &str, text: &str) -> Result<(), String> {
-    let root = match file.rsplit_once('/') {
+pub(crate) fn root_of(file: &str) -> &str {
+    match file.rsplit_once('/') {
         Some((root, _)) if !root.is_empty() => root,
         _ => ".",
-    };
-    read(root, text)
+    }
+}
+
+pub fn check_release_plz_config(file: &str, text: &str) -> Result<(), String> {
+    read(root_of(file), text)
         .map(drop)
         .map_err(|error| format!("{file}: {error}"))
 }
