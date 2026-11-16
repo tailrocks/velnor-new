@@ -16,9 +16,10 @@ use crate::inputs::{
 };
 use crate::scope::Scope;
 
-pub fn save_inputs(root: &Path) -> Result<String, CiError> {
+pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
-    let path = root.join(INPUTS_FILE);
+    let relative = target.join(INPUTS_FILE);
+    let path = root.join(&relative);
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -53,21 +54,26 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
+        "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
+        relative.display(),
         tracked.absent.len(),
         tracked.unsupported,
         tracked.submodules
     ))
 }
 
-pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
-    let path = root.join(INPUTS_FILE);
+pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
+    let relative = target.join(INPUTS_FILE);
+    let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Ok(format!("no {INPUTS_FILE}; nothing restored (cold run)\n"));
+            return Ok(format!(
+                "no {}; nothing restored (cold run)\n",
+                relative.display()
+            ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };

@@ -7,6 +7,7 @@ mod cold;
 mod configurations;
 mod git;
 mod http;
+mod input_target;
 mod inputs;
 mod manifests;
 mod plan;
@@ -99,11 +100,16 @@ fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
-        Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
-        Command::Inputs(InputsCommand::Restore) => {
+        Command::Inputs(InputsCommand::Save(args)) => {
             let root = current_dir()?;
-            cold_on_failure(&root_target(&root), "inputs restore", || {
-                restore_inputs(&root)
+            input_target::check_target(&root, &args.target_dir)?;
+            save_inputs(&root, &args.target_dir)
+        }
+        Command::Inputs(InputsCommand::Restore(args)) => {
+            let root = current_dir()?;
+            input_target::check_target(&root, &args.target_dir)?;
+            cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
+                restore_inputs(&root, &args.target_dir)
             })
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {

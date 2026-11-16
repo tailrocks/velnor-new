@@ -40,6 +40,7 @@ fn cargo(root: &Path) -> String {
 fn warm_and_changed(target: Option<&str>) {
     let repo = Repo::new("restore-cargo");
     repo.write_all(&[
+        ("mise.toml", "[tools]\nrust='1.99.1'\n"),
         (".gitignore", "**/target/\n/cache dir/\n"),
         (".velnor/rust-ci.toml", "exclude = [\"fixtures/**\", \"other\"]\n"),
         ("app/Cargo.toml", "[package]\nname='app'\nversion='0.1.0'\nedition='2024'\n[dependencies]\nsibling={path='../fixtures/sibling'}\n"),
@@ -141,7 +142,9 @@ fn absolute_target_dirs_restore_times_and_cold_fallback_removes_only_that_target
     assert!(inputs(repo.root(), "restore", Some(target)).contains("building cold"));
     assert!(!Path::new(target).exists());
     assert!(repo.root().join("target/marker").is_file());
-    for ancestor in [".", ".."] {
+    std::os::unix::fs::symlink(repo.root(), repo.root().join("alias"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    for ancestor in [".", "..", "src", "alias"] {
         for operation in ["save", "restore"] {
             let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
                 .args(["inputs", operation, "--target-dir", ancestor])
@@ -152,4 +155,14 @@ fn absolute_target_dirs_restore_times_and_cold_fallback_removes_only_that_target
             assert!(repo.root().join("src/lib.rs").is_file());
         }
     }
+    inputs(repo.root(), "save", Some(target));
+    repo.write_unstaged(".velnor/rust-metadata.json", "invalid\n");
+    let failed = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["inputs", "save", "--target-dir", target])
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!failed.status.success());
+    assert!(inputs(repo.root(), "restore", Some(target)).contains("building cold"));
+    assert!(!Path::new(target).exists());
 }

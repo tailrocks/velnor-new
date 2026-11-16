@@ -159,6 +159,14 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         },
         StepKind::Cargo(command) => cargo_step(command),
         StepKind::Helper(command) => helper_step(*command),
+        StepKind::InputsRestore { target_dir } => RenderedStep {
+            name: "velnor-ci inputs restore".to_owned(),
+            run: Some(format!(
+                "velnor-ci inputs restore --target-dir \"${{GITHUB_WORKSPACE}}\"/{}",
+                crate::release_steps::shell_word(target_dir.as_str())
+            )),
+            ..RenderedStep::default()
+        },
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
@@ -276,7 +284,6 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored => "restored",
         HelperCommand::InputsSave => "inputs save",
-        HelperCommand::InputsRestore => "inputs restore",
         HelperCommand::InputsAudit => "inputs audit",
     }
 }

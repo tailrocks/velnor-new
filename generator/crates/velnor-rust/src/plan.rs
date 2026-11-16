@@ -299,7 +299,9 @@ fn breaks_ties(facts: &RepoFacts) -> bool {
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
     roots.iter().map(|root| Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Helper(HelperCommand::InputsRestore))
+        ..step(StepKind::InputsRestore {
+            target_dir: root.target_dir.clone(),
+        })
     })
 }
 

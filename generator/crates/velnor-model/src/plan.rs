@@ -195,6 +195,9 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    InputsRestore {
+        target_dir: RepoPath,
+    },
     GeneratorCheck,
     InstallHelper(HelperRelease),
     HelperFromArtifact,
@@ -213,7 +216,6 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored,
     InputsSave,
-    InputsRestore,
     InputsAudit,
 }
 

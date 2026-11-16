@@ -312,14 +312,16 @@ fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_di
 fn one_command_steps_render_a_single_line_each() -> TestResult {
     let files = render(&plan(vec![
         StepKind::Helper(HelperCommand::InputsSave),
-        StepKind::Helper(HelperCommand::InputsRestore),
+        StepKind::InputsRestore {
+            target_dir: velnor_model::RepoPath::new("target")?,
+        },
         StepKind::GeneratorCheck,
     ])?)
     .map_err(|found| format!("{found:?}"))?;
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;
     for line in [
         "run: velnor-ci inputs save",
-        "run: velnor-ci inputs restore",
+        "run: 'velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/target'",
         "run: velnor-gen check",
     ] {
         assert!(text.contains(line), "{line} missing in {text}");
