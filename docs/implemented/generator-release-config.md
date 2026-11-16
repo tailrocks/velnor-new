@@ -22,7 +22,9 @@ At least one required push check must remain after exemptions. Stale names or
 removal of the enforced PR rule refuse release. Exempted checks may belong to
 external GitHub Apps. A listed name with a push job, commit status or Checks API
 run on the verified commit refuses release, regardless of its App, status or
-conclusion. Every check-run page is required, including historical runs.
+conclusion. The gate enumerates every suite and every run page within each
+suite, including historical runs. It does not rely on the commit check-runs
+endpoint, which GitHub limits to the newest 1,000 suites.
 An unreadable or incomplete response refuses release. Every other required
 check still needs a successful GitHub Actions push job on the default branch
 at the exact release commit. Missing, failed, skipped, pull request or

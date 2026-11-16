@@ -16,6 +16,11 @@ struct CheckRun {
 }
 
 #[derive(Deserialize)]
+struct CheckSuite {
+    id: u64,
+}
+
+#[derive(Deserialize)]
 struct Ruleset {
     id: u64,
     source: String,
@@ -35,13 +40,20 @@ pub(super) fn check_names(
     if pr_only_checks.is_empty() {
         return Ok(BTreeSet::new());
     }
-    let runs: Vec<CheckRun> = all_pages(github, "check runs", |page| {
-        format!("/repos/{repo}/commits/{sha}/check-runs?filter=all&per_page=100&page={page}")
+    let suites: Vec<CheckSuite> = all_pages(github, "check suites", |page| {
+        format!("/repos/{repo}/commits/{sha}/check-suites?per_page=100&page={page}")
     })?;
-    Ok(runs
-        .into_iter()
-        .map(|run| run.name.to_lowercase())
-        .collect())
+    let mut names = BTreeSet::new();
+    for suite in suites {
+        let runs: Vec<CheckRun> = all_pages(github, "check runs", |page| {
+            format!(
+                "/repos/{repo}/check-suites/{}/check-runs?filter=all&per_page=100&page={page}",
+                suite.id
+            )
+        })?;
+        names.extend(runs.into_iter().map(|run| run.name.to_lowercase()));
+    }
+    Ok(names)
 }
 
 pub(super) fn require_pull_request(

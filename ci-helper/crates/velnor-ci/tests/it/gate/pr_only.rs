@@ -27,14 +27,22 @@ pub(super) fn ruleset() -> Value {
 
 pub(super) fn checks_path(page: u32) -> String {
     format!(
-        "/repos/tailrocks/velnor-new/commits/{GREEN}/check-runs?filter=all&per_page=100&page={page}"
+        "/repos/tailrocks/velnor-new/check-suites/9/check-runs?filter=all&per_page=100&page={page}"
     )
+}
+
+pub(super) fn suites_path(page: u32) -> String {
+    format!("/repos/tailrocks/velnor-new/commits/{GREEN}/check-suites?per_page=100&page={page}")
 }
 
 pub(super) fn protected() -> Recorded {
     Recorded::new()
         .rules(vec![pr_rule(), required(&[check("Required"), dco()])])
         .set(RULESET.to_owned(), ruleset())
+        .set(
+            suites_path(1),
+            json!({"total_count": 1, "check_suites": [{"id": 9}]}),
+        )
         .set(checks_path(1), json!({"total_count": 0, "check_runs": []}))
 }
 

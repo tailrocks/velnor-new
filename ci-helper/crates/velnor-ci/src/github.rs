@@ -149,6 +149,7 @@ pub struct ApiPage<T> {
         alias = "workflow_runs",
         alias = "jobs",
         alias = "check_runs",
+        alias = "check_suites",
         alias = "statuses"
     )]
     pub items: Vec<T>,
