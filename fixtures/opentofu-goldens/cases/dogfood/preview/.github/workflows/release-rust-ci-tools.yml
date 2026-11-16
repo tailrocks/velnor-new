@@ -1,5 +1,8 @@
 name: Release Rust CI tools
 "on":
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
   push:
     tags:
       - rust-ci-v*
@@ -9,8 +12,57 @@ concurrency:
   group: ${{ github.workflow_ref }}
   cancel-in-progress: false
 jobs:
+  tag-ruleset-drift:
+    name: Tag ruleset drift
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check tag immutability rulesets
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          TAG_RULESET_ADMIN_READ_TOKEN: ${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}
+        with:
+          github-token: ${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}
+          script: |
+            if (!process.env.TAG_RULESET_ADMIN_READ_TOKEN) {
+              throw new Error('Provision TAG_RULESET_ADMIN_READ_TOKEN with Administration: read (#949)');
+            }
+            const { owner, repo } = context.repo;
+            const listed = await github.paginate('GET /repos/{owner}/{repo}/rulesets', {
+              owner, repo, per_page: 100
+            });
+            const rulesets = [];
+            for (const listedRuleset of listed.filter(rule => rule.target === 'tag')) {
+              const { data } = await github.request('GET /repos/{owner}/{repo}/rulesets/{ruleset_id}', {
+                owner, repo, ruleset_id: listedRuleset.id
+              });
+              rulesets.push(data);
+            }
+            const baseline = rulesets.filter(rule => rule.name === 'protect-tags');
+            const [protection] = baseline;
+            if (baseline.length !== 1 || protection.target !== 'tag' || protection.enforcement !== 'active'
+                || !protection.conditions?.ref_name?.include?.includes('~ALL')
+                || protection.conditions?.ref_name?.exclude?.length !== 0
+                || !['update', 'deletion'].every(type => protection.rules?.some(rule => rule.type === type))) {
+              throw new Error('protect-tags must actively prevent all tag updates and deletion without exclusions');
+            }
+            for (const ruleset of rulesets) {
+              if (ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
+                if (!Array.isArray(ruleset.bypass_actors)) {
+                  throw new Error(`${ruleset.name}: bypass_actors unreadable; require Administration: read`);
+                }
+                if (ruleset.bypass_actors.length !== 0) {
+                  throw new Error(`${ruleset.name}: tag immutability bypass actors detected`);
+                }
+              }
+            }
   gate:
     name: Gate
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

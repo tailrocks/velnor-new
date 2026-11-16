@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -13,6 +14,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
 const WRITER: &str = "release";
+const TAG_PUSH: &str =
+    "    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')";
 const PINNED: (&str, &str) = (
     "0.1.80",
     "659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c",
@@ -59,6 +62,19 @@ fn values<'a>(lines: &[&'a str], key: &str) -> Vec<&'a str> {
         .collect()
 }
 
+fn release_jobs(text: &str) -> BTreeMap<String, Vec<&str>> {
+    let jobs = jobs(text);
+    let mut ids: Vec<&str> = jobs.iter().map(|(id, _)| id.as_str()).collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        ["build", "checksums", "gate", "release", "tag-ruleset-drift"]
+    );
+    jobs.into_iter()
+        .filter(|(id, _)| id != "tag-ruleset-drift")
+        .collect()
+}
+
 fn steps(lines: &[&str]) -> Vec<RenderedStep> {
     let uses = values(lines, "uses")
         .into_iter()
@@ -78,8 +94,7 @@ fn steps(lines: &[&str]) -> Vec<RenderedStep> {
 #[test]
 fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
     let text = read()?;
-    let jobs = jobs(&text);
-    assert!(jobs.len() >= 3, "{} jobs", jobs.len());
+    let jobs = release_jobs(&text);
     let rendered = RenderedWorkflow {
         jobs: jobs
             .iter()
@@ -94,20 +109,25 @@ fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
     };
     assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
     assert_eq!(check_rules(&rendered), Ok(()));
-    assert!(!text.contains("run: |"));
-    assert!(!text.contains("run: >"));
+    for lines in jobs.values() {
+        assert!(
+            values(lines, "run")
+                .iter()
+                .all(|run| !run.starts_with(['|', '>']))
+        );
+    }
     Ok(())
 }
 
 #[test]
-fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() -> TestResult {
+fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> TestResult {
     let text = read()?;
-    let jobs = jobs(&text);
-    let (id, gate) = &jobs[0];
-    assert_eq!(id, "gate");
+    let jobs = release_jobs(&text);
+    let gate = &jobs["gate"];
     let (version, digest) = PINNED;
     let expected = format!(
         "    name: Gate
+{TAG_PUSH}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -125,12 +145,21 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
         run: velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
     );
     assert_eq!(gate.join("\n"), expected);
-    assert_eq!(values(&jobs[1].1, "needs"), ["gate"]);
+    assert_eq!(values(gate, "needs"), [] as [&str; 0]);
+    for (id, dependency) in [
+        ("build", "gate"),
+        ("checksums", "build"),
+        (WRITER, "checksums"),
+    ] {
+        assert_eq!(values(&jobs[id], "needs"), [dependency], "{id}");
+    }
     for (id, lines) in &jobs {
         for line in lines {
             let key = line.trim_start().trim_start_matches("- ");
             assert!(
-                !key.starts_with("if:") || key.contains("runner.os"),
+                !key.starts_with("if:")
+                    || (id == "gate" && *line == TAG_PUSH)
+                    || (line.starts_with("        if:") && key.contains("runner.os")),
                 "{id}: {line}"
             );
             assert!(!key.starts_with("continue-on-error:"), "{id}: {line}");
@@ -140,7 +169,7 @@ fn the_first_job_gates_the_tag_with_a_pinned_release_and_the_build_needs_it() ->
 }
 
 #[test]
-fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_publishes()
+fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_publishes()
 -> TestResult {
     let text = read()?;
     assert!(text.lines().any(|line| line == "permissions: {}"));
@@ -166,7 +195,8 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             "{id}"
         );
     }
-    let tag_checks: Vec<&str> = values(&jobs[1].1, "run")
+    let release_jobs = release_jobs(&text);
+    let tag_checks: Vec<&str> = values(&release_jobs["build"], "run")
         .into_iter()
         .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
         .collect();
@@ -177,9 +207,7 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             "dist/velnor-gen-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\""
         ]
     );
-    assert_eq!(jobs[1].0, "build");
-    assert_eq!(jobs.last().map(|(id, _)| id.as_str()), Some(WRITER));
-    let writer = &jobs[jobs.len() - 1].1;
+    let writer = &release_jobs[WRITER];
     let runs = values(writer, "run");
     let verify = runs
         .iter()
@@ -199,11 +227,7 @@ fn only_the_last_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_
             .iter()
             .any(|run| run.contains("dist/COMMIT >") || run.contains("> dist/COMMIT"))
     );
-    let checksums = jobs
-        .iter()
-        .find(|(id, _)| id == "checksums")
-        .ok_or("no checksums job")?;
-    let checksum_runs = values(&checksums.1, "run");
+    let checksum_runs = values(&release_jobs["checksums"], "run");
     let record = checksum_runs
         .iter()
         .position(|run| *run == "echo \"$GITHUB_SHA\" > dist/COMMIT")
