@@ -48,6 +48,10 @@ pub enum Command {
     )]
     Prepare,
     #[command(
+        about = "Write the crates mirror to $CARGO_HOME/config.toml and install a Cargo wrapper for every working directory and Cargo home"
+    )]
+    CratesMirror(CratesMirrorArgs),
+    #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
     CheckMetadata,
@@ -310,4 +314,12 @@ pub struct CompareArgs {
     pub a: PathBuf,
     #[arg(help = "Metrics file of the second run")]
     pub b: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct CratesMirrorArgs {
+    #[arg(long)]
+    pub registry: String,
+    #[arg(long)]
+    pub cainfo: PathBuf,
 }

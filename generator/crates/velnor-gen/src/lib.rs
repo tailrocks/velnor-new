@@ -86,6 +86,9 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
+    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
+        return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
     Ok(release)
 }
 

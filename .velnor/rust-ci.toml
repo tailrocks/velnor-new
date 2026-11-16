@@ -2,3 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 exclude = ["fixtures/**"]
+
+[crates_mirror]
+runner = "ubuntu-26.04-scale-set"
+registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"
+cainfo = "/opt/velnor/crates-mirror/ca-bundle.pem"

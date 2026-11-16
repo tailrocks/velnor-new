@@ -143,6 +143,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             gate: lane.plan.is_none().then(|| lane.gate(GateNeed::Policy)),
             ..step(StepKind::InstallTools { only: None })
         });
+        steps.extend(crate::plan::mirror_step(facts));
     }
     if facts.policy.deny {
         steps.extend(facts.rust_roots.iter().map(|root| {

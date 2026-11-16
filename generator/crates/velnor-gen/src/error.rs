@@ -20,6 +20,7 @@ pub enum GenerateError {
     ReleaseToolchainPath,
     HelperNotPinned,
     ReleaseHelperTooOld(HelperVersion),
+    MirrorHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -51,6 +52,7 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
+            Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
