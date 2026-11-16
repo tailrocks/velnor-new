@@ -3,10 +3,12 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
@@ -23,9 +25,14 @@ class InventoryCliTests(unittest.TestCase):
         self.source = "crates/velnor-actions-cli/src/main.rs"
         manifest = "crates/velnor-actions-cli/Cargo.toml"
         files = {
-            self.source: "fn main() {}\n", manifest: "fixture manifest\n",
-            "Cargo.toml": "fixture workspace\n", "Cargo.lock": "fixture lock\n",
-            inventory.GENERATOR: "fixture generator\n", inventory.INVENTORY: "",
+            self.source: "fn main() {}\n",
+            manifest: (
+                '[package]\nname = "velnor-actions-cli"\nversion = "0.1.0"\nedition = "2024"\n'
+                '[[bin]]\nname = "velnor-actions"\npath = "src/main.rs"\n'
+            ),
+            "Cargo.toml": '[workspace]\nmembers = ["crates/velnor-actions-cli"]\nresolver = "3"\n',
+            "Cargo.lock": 'version = 4\n\n[[package]]\nname = "velnor-actions-cli"\nversion = "0.1.0"\n',
+            inventory.GENERATOR: Path(inventory.__file__).read_text(), inventory.INVENTORY: "",
             inventory.SUPPLEMENTAL: "mise.toml\n", "mise.toml": "fixture supplemental\n",
         }
         self.expected = sorted(files)
@@ -93,6 +100,49 @@ class InventoryCliTests(unittest.TestCase):
         ))
         result = self.assert_cli(status=1)
         self.assertIn("mise.toml", result.stderr)
+
+    def test_configured_task_rejects_new_tracked_compiler_input(self):
+        repository = Path(__file__).resolve().parents[1]
+        toolchain = Path(os.environ.get("RUSTUP_TOOLCHAIN", ""))
+        if not toolchain.is_absolute():
+            toolchain = Path(subprocess.check_output(
+                ["rustc", "--print", "sysroot"], cwd=repository,
+                env=dict(os.environ, RUSTUP_AUTO_INSTALL="0"), text=True,
+            ).strip())
+        binaries = toolchain / "bin"
+        task = tomllib.loads((repository / "mise.toml").read_text())["tasks"]["check-native-image-inventory"]["run"]
+        work = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        environment = {
+            key: value for key, value in os.environ.items()
+            if not key.startswith("CARGO_") and key not in (
+                "RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC", "RUSTDOC",
+                "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
+            )
+        }
+        environment.update(
+            PATH=os.pathsep.join((str(binaries), str(Path(sys.executable).parent), os.environ["PATH"])),
+            RUSTC=str(binaries / "rustc"), RUSTUP_AUTO_INSTALL="0", CARGO_NET_OFFLINE="true",
+            CARGO_HOME=str(work / "cargo-home"), CARGO_TARGET_DIR=str(work / "target"),
+        )
+        script = (
+            "uname() { case \"$1\" in -s) printf 'Linux\\n';; -m) printf 'x86_64\\n';; esac; }\n"
+            + task
+        )
+        result = subprocess.run(
+            ["/bin/sh", "-c", script], cwd=self.root, env=environment,
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        added = "crates/velnor-actions-cli/src/added.rs"
+        self.write(added, "")
+        self.write(self.source, "mod added;\nfn main() {}\n")
+        self.git("add", added, self.source)
+        result = subprocess.run(
+            ["/bin/sh", "-c", script], cwd=self.root, env=environment,
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(added, result.stderr)
 
 
 class DepInfoTests(unittest.TestCase):
