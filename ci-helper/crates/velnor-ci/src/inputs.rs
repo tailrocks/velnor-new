@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CiError;
+use crate::scope::Scope;
 
 #[must_use]
 pub fn inputs_file(prefix: &str) -> String {
@@ -64,10 +65,10 @@ enum Entry {
 }
 
 #[must_use]
-pub fn parse_ls_files(staged: &[u8]) -> Tracked {
+pub fn parse_ls_files(staged: &[u8], scope: &Scope) -> Tracked {
     let mut tracked = Tracked::default();
     for record in staged.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
-        match parse_ls_files_record(record) {
+        match parse_ls_files_record(record, scope) {
             Entry::File(file) => tracked.files.push(file),
             Entry::Link(link) => tracked.links.push(link),
             Entry::Unsupported => tracked.unsupported += 1,
@@ -84,10 +85,13 @@ pub fn is_representable(text: &str) -> bool {
     !text.is_empty() && !text.contains(['\t', '\n', '\r'])
 }
 
-fn parse_ls_files_record(record: &[u8]) -> Entry {
+fn parse_ls_files_record(record: &[u8], scope: &Scope) -> Entry {
     let Some(tab) = record.iter().position(|byte| *byte == b'\t') else {
         return Entry::Skipped;
     };
+    if !scope.contains_bytes(&record[tab + 1..]) {
+        return Entry::Skipped;
+    }
     let Ok(meta) = std::str::from_utf8(&record[..tab]) else {
         return Entry::Skipped;
     };

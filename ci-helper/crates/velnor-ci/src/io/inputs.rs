@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use velnor_model::CompileInputs;
 use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
 
 use crate::error::CiError;
@@ -211,32 +212,29 @@ fn git_prefix(root: &Path) -> Result<String, CiError> {
 fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
     let prefix = git_prefix(root)?;
     let listed = match fs::read(top.join(INPUTS_LOCK.as_str())) {
-        Ok(bytes) => parse_inputs_lock(&bytes)
-            .map_err(|e| CiError::new(e.to_string()))?
-            .into_keys()
-            .map(|path| path.map_or_else(String::new, |path| path.as_str().to_owned()))
-            .collect(),
-        Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
+        Ok(bytes) => parse_inputs_lock(&bytes).map_err(|e| CiError::new(e.to_string()))?,
+        Err(e) if e.kind() == ErrorKind::NotFound => CompileInputs::new(),
         Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
     };
-    let mut scope = Scope::new(&prefix, listed);
-    if top.join(METADATA_PATH.as_str()).exists() {
+    let facts = if top.join(METADATA_PATH.as_str()).exists() {
         let checkout =
             velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;
-        let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
-        scope.include_packages(&facts, &format!("{prefix}Cargo.toml"));
-    }
-    Ok(scope)
+        Some(detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?)
+    } else {
+        None
+    };
+    Ok(Scope::new(&prefix, &listed, facts.as_ref()))
 }
 
 fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
-    let mut index = parse_ls_files(&git(
-        root,
-        &["ls-files", "-s", "-z", "--recurse-submodules"],
-        None,
-    )?);
-    index.files.retain(|file| scope.contains(&file.path));
-    index.links.retain(|link| scope.contains(&link.path));
+    let index = parse_ls_files(
+        &git(
+            root,
+            &["ls-files", "-s", "-z", "--recurse-submodules"],
+            None,
+        )?,
+        scope,
+    );
     let mut present = Vec::with_capacity(index.files.len());
     let mut absent = Vec::new();
     for file in index.files {
