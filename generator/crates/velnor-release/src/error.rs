@@ -189,6 +189,10 @@ pub enum ReleaseError {
     ReleasePlzNotLockedForLinux {
         tool: String,
     },
+    ReleasePlzVersionsConflict {
+        first: String,
+        second: String,
+    },
     ReleasePlzLockMismatch {
         configured: String,
         locked: Vec<String>,

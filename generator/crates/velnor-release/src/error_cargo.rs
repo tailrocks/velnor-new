@@ -24,6 +24,10 @@ impl ReleaseError {
                 f,
                 "{file}: net.offline stops cargo publish from reaching crates.io"
             ),
+            Self::ReleasePlzVersionsConflict { first, second } => write!(
+                f,
+                "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
+            ),
             Self::PublishNamesOtherRegistry {
                 root,
                 manifest,
