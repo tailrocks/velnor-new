@@ -8,6 +8,10 @@ use crate::error::ReleaseError;
 impl ReleaseError {
     pub(crate) fn fmt_cargo(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::VersionEndsInLock(manifest, version) => write!(
+                f,
+                "{manifest}: version {version:?} would end a release tag in \".lock\", which git refuses"
+            ),
             Self::CargoCredentialProvider { file } => write!(
                 f,
                 "{file}: a cargo credential provider or alias makes cargo run a program while release-plz holds the release App token"

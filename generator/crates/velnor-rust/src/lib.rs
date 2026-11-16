@@ -19,6 +19,7 @@ mod manifest_diff;
 mod metadata;
 mod metadata_file;
 mod mise;
+mod mise_lock;
 mod os_pins;
 mod owners;
 mod plan;
