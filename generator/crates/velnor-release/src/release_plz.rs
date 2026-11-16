@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::ReleaseError;
 use crate::git_ref;
@@ -23,6 +23,24 @@ pub(crate) struct RootConfig {
     pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
     pub(crate) workspace_tags: Vec<TagPattern>,
+    entries: BTreeMap<String, bool>,
+    unreleased: BTreeSet<String>,
+    unlisted_publish: bool,
+}
+
+impl RootConfig {
+    pub(crate) fn releases(&self, package: &str) -> bool {
+        !self.unreleased.contains(package)
+    }
+
+    pub(crate) fn publishes(&self, package: &str) -> bool {
+        self.publishes_to_crates_io
+            && self
+                .entries
+                .get(package)
+                .copied()
+                .unwrap_or(self.unlisted_publish)
+    }
 }
 
 fn check_package(
@@ -200,7 +218,27 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     }
     let workspace_tags = workspace_tags(root, workspace, released.is_empty())?;
     let publishes_to_crates_io = publishes(workspace, &released);
+    let entries = document
+        .package
+        .iter()
+        .map(|entry| {
+            let effective = entry.settings.over(workspace);
+            (
+                entry.name.clone(),
+                effective.release != Some(false) && effective.publishes_to_crates_io(),
+            )
+        })
+        .collect();
+    let unreleased = document
+        .package
+        .iter()
+        .filter(|entry| entry.settings.over(workspace).release == Some(false))
+        .map(|entry| entry.name.clone())
+        .collect();
     Ok(RootConfig {
+        entries,
+        unreleased,
+        unlisted_publish: workspace.release != Some(false) && workspace.publishes_to_crates_io(),
         root: root.to_owned(),
         publishes_to_crates_io,
         pr_branch_prefix: prefix,

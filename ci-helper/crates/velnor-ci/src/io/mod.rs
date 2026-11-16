@@ -5,6 +5,7 @@ mod audit;
 mod git;
 mod http;
 mod inputs;
+mod manifests;
 mod plan;
 mod release;
 mod run;

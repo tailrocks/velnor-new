@@ -135,6 +135,13 @@ pub(crate) fn release_view(
         if let Some(metadata) = view.rust_metadata.get_mut(&manifest) {
             metadata.members[0].name = PackageName::new(root.package)?;
         }
+        view.files.entry(manifest).or_insert_with(|| {
+            format!(
+                "[package]\nname = \"{}\"\nversion = \"0.1.0\"\n",
+                root.package
+            )
+            .into_bytes()
+        });
         let path = if root.dir == "." {
             "release-plz.toml".to_owned()
         } else {

@@ -6,6 +6,7 @@ mod error;
 mod error_cargo;
 mod git_ref;
 mod hazards;
+mod members;
 mod mise;
 mod plan;
 mod registry;
@@ -17,6 +18,7 @@ mod velnor_config;
 
 pub use error::ReleaseError;
 pub use hazards::{refuse_cargo_config, refuse_external_commands};
+pub use members::check_release_manifests;
 pub use plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, check_release_plz_configs};
 pub use release_plz::release_tag_patterns;
 pub use release_plz::root_publishes_to_crates_io;

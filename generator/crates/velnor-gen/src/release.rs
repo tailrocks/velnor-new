@@ -95,21 +95,6 @@ fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
     found
 }
 
-fn root_members(facts: &RepoFacts) -> BTreeMap<String, BTreeSet<String>> {
-    facts
-        .rust_roots
-        .iter()
-        .map(|root| {
-            let directory = root
-                .manifest
-                .parent()
-                .map_or_else(|| ".".to_owned(), |parent| parent.to_string());
-            let names = root.members.iter().map(|member| member.name.to_string());
-            (directory, names.collect())
-        })
-        .collect()
-}
-
 fn workflow_name(text: &str) -> Option<String> {
     let value = text
         .lines()
@@ -201,7 +186,7 @@ fn release_files(
         cargo_configs,
         toolchain_files,
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
-        root_members: reality.map(|known| root_members(known.facts)),
+        rust_metadata: reality.map(|_| view.rust_metadata.clone()),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),

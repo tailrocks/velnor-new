@@ -28,6 +28,7 @@ mod prepare_install;
 mod release_cargo_discovery;
 mod release_check_config;
 mod release_fake;
+mod release_manifests;
 mod release_publish;
 mod release_publish_guards;
 mod release_record;
