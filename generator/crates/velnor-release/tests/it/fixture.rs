@@ -40,6 +40,7 @@ pub(crate) fn files() -> ReleaseFiles {
         toolchain_files: BTreeMap::new(),
         symlinks: std::collections::BTreeSet::new(),
         cargo_manifests: None,
+        cargo_manifest_texts: BTreeMap::new(),
         bin_targets: None,
         root_members: None,
         workflow_names: None,

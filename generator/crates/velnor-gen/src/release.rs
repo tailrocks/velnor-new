@@ -178,6 +178,13 @@ fn release_files(
             cargo_configs.insert(name.to_owned(), text(path)?.unwrap_or_default());
         }
     }
+    let mut cargo_manifest_texts = BTreeMap::new();
+    for path in view.files.keys() {
+        let name = path.as_str();
+        if name == "Cargo.toml" || name.ends_with("/Cargo.toml") {
+            cargo_manifest_texts.insert(name.to_owned(), text(path)?.unwrap_or_default());
+        }
+    }
     let mut toolchain_files = BTreeMap::new();
     for path in view.files.keys() {
         if matches!(
@@ -196,6 +203,7 @@ fn release_files(
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
         root_members: reality.map(|known| root_members(known.facts)),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
+        cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
         workflow_names: reality.map(|known| workflow_names(view, known.generated)),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),

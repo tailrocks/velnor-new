@@ -117,7 +117,10 @@ pub struct CargoPathEntry {
     pub text: Option<String>,
 }
 
-pub fn check_cargo_discovery(entries: &[CargoPathEntry]) -> Result<(), CiError> {
+pub fn check_cargo_discovery(
+    entries: &[CargoPathEntry],
+    publishes_to_crates_io: bool,
+) -> Result<(), CiError> {
     for entry in entries {
         if entry.symlink {
             return Err(CiError::new(format!(
@@ -126,10 +129,15 @@ pub fn check_cargo_discovery(entries: &[CargoPathEntry]) -> Result<(), CiError> 
             )));
         }
         if let Some(text) = &entry.text {
-            velnor_release::refuse_cargo_config(&entry.path, text).map_err(CiError::new)?;
+            velnor_release::refuse_cargo_config(&entry.path, text, publishes_to_crates_io)
+                .map_err(CiError::new)?;
         }
     }
     Ok(())
+}
+
+pub fn publishes_to_crates_io(root: &str, text: &str) -> Result<bool, CiError> {
+    velnor_release::root_publishes_to_crates_io(root, text).map_err(CiError::new)
 }
 
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
