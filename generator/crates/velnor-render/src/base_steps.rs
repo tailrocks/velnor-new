@@ -60,6 +60,33 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         .collect()
 }
 
+pub(crate) fn with_saved_lane(condition: String, steps: &[Step]) -> String {
+    let mut terms = Vec::new();
+    for step in steps {
+        if let StepKind::CacheTrim {
+            lane,
+            family: TrimFamily::Target,
+        } = &step.kind
+        {
+            let term = trimmed_lane(lane, TrimFamily::Target);
+            if !terms.contains(&term) {
+                terms.push(term);
+            }
+        }
+    }
+    if terms.is_empty() {
+        return condition;
+    }
+    let clause = format!("({})", terms.join(" || "));
+    let Some(inner) = condition
+        .strip_prefix("${{ ")
+        .and_then(|rest| rest.strip_suffix(" }}"))
+    else {
+        return format!("{condition} && {clause}");
+    };
+    format!("${{{{ {inner} && {clause} }}}}")
+}
+
 pub(crate) fn trimmed_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => format!("needs.{lane}.outputs.{BASE_SAVE_OUTPUT} == 'true'"),

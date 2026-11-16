@@ -6,7 +6,9 @@ use velnor_model::{
     TESTS_RUN_OUTPUT,
 };
 
-use crate::base_steps::{base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane};
+use crate::base_steps::{
+    base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane,
+};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{PLAN_STEP, TOOLS_STEP, admission, condition, output, plan_source, sources_step};
@@ -48,7 +50,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(admission(job.when, job.gate.as_ref(), job.skip_on_draft)),
+        condition: Some(with_saved_lane(
+            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            &job.steps,
+        )),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,

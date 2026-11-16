@@ -65,6 +65,34 @@ fn a_run_that_compiled_a_crate_saves_after_dropping_what_must_not_be_cached() {
 }
 
 #[test]
+fn a_build_script_incremental_directory_survives_while_cargo_incremental_state_is_removed() {
+    let repo = Checkout::new("decide-build-script-incremental");
+    seed(&repo);
+    repo.write_unstaged("target/debug/build/app-hash/out/incremental/asset", "keep");
+    repo.write_unstaged(
+        "target/x86_64-unknown-linux-gnu/release/incremental/app/work",
+        "cross",
+    );
+    let (output, written) = decide(&repo, Some(COMPILED));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert_eq!(written, "save=true\n");
+    assert!(!repo.root().join("target/debug/incremental").exists());
+    assert!(
+        !repo
+            .root()
+            .join("target/x86_64-unknown-linux-gnu/release/incremental")
+            .exists()
+    );
+    assert!(
+        repo.root()
+            .join("target/debug/build/app-hash/out/incremental/asset")
+            .is_file()
+    );
+    assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+}
+
+#[test]
 fn a_warm_run_or_a_run_with_no_log_saves_nothing_and_removes_nothing() {
     for log in [Some(WARM), None] {
         let repo = Checkout::new("decide-warm");
