@@ -20,6 +20,10 @@ impl ReleaseError {
                 f,
                 "{file}: a cargo proxy, CA override or non-crates.io default registry would redirect the crates.io publish token"
             ),
+            Self::CargoOffline { file } => write!(
+                f,
+                "{file}: net.offline stops cargo publish from reaching crates.io"
+            ),
             Self::PublishNamesOtherRegistry {
                 root,
                 manifest,
