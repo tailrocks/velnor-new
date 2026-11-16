@@ -31,6 +31,11 @@ pub struct SummaryTap {
 }
 
 impl SummaryTap {
+    #[must_use]
+    pub const fn tests_run(&self) -> Option<u64> {
+        self.tests_run
+    }
+
     pub fn feed(&mut self, chunk: &[u8]) {
         for part in chunk.split_inclusive(|byte| *byte == b'\n') {
             let (text, ended) = match part.strip_suffix(b"\n") {
