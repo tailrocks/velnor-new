@@ -108,6 +108,22 @@ pub(crate) struct Run {
     pub velnor_config: String,
 }
 
+fn replace_text(path: &Path, body: &str) {
+    if fs::read_to_string(path).is_ok_and(|have| have == body) {
+        return;
+    }
+    static TICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let temporary = path.with_file_name(format!(
+        ".{}.{}.{}",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id(),
+        TICK.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    fs::write(&temporary, body)
+        .and_then(|()| fs::rename(&temporary, path))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
 fn script(path: &Path, body: &str) {
     let text = format!("#!/bin/sh\n{body}\n");
     let unchanged = fs::read_to_string(path).is_ok_and(|have| have == text)
@@ -121,11 +137,10 @@ fn script(path: &Path, body: &str) {
 }
 
 fn record_default_root(checkout: &Path) {
-    fs::write(
-        checkout.join(".velnor/rust-metadata.json"),
+    replace_text(
+        &checkout.join(".velnor/rust-metadata.json"),
         "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
+    );
 }
 
 fn prepare_in(dir: &Path, setup: &Setup) -> Run {
@@ -149,7 +164,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     if let Some(populate) = &setup.populate {
         populate(&checkout);
     }
-    fs::write(checkout.join("mise.toml"), &setup.mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
+    replace_text(&checkout.join("mise.toml"), &setup.mise_toml);
     let ci_toml = checkout.join(".velnor/rust-ci.toml");
     match setup.rust_ci_toml {
         Some(text) => fs::write(ci_toml, text).unwrap_or_else(|e| unreachable!("{e}")),
