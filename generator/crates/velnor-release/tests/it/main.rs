@@ -14,6 +14,7 @@ mod fixture;
 mod hardening;
 mod inheritance;
 mod inventory;
+mod lock_version;
 mod mise_lock;
 mod publishing_shared;
 mod refs;

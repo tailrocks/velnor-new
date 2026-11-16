@@ -82,3 +82,14 @@ fn windows_special_filenames_are_refused_for_publishing_packages() -> TestResult
     }
     Ok(())
 }
+
+#[test]
+fn a_digit_leading_name_is_refused_for_a_crates_io_publishing_package() -> TestResult {
+    for with_metadata in [false, true] {
+        assert!(
+            invalid_name(&named("1x", "", with_metadata)?),
+            "{with_metadata}"
+        );
+    }
+    Ok(())
+}
