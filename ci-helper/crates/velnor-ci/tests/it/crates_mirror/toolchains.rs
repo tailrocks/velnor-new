@@ -8,7 +8,7 @@ use std::process::Command;
 
 use crate::io::Repo;
 
-use super::fixture::{TestResult, mirror_fixture};
+use super::fixture::{TestResult, mirror_fixture, rustup_binary};
 
 #[test]
 fn hardlinked_rustup_cargo_fetches_uncached_crates() -> TestResult {
@@ -26,7 +26,13 @@ fn toolchain_file_selection_reaches_cargo_children_in_tmp() -> TestResult {
             "rust-toolchain.toml",
             "[toolchain]\nchannel='mirror-selected'\n",
         );
-        super::child_fetches_using(repo, wrapper, config, "proxy-bin", Some(&home))
+        super::child_fetches_using(
+            repo,
+            wrapper,
+            config,
+            "proxy-bin",
+            Some((&home, "mirror-selected")),
+        )
     })
 }
 
@@ -40,14 +46,44 @@ fn directory_override_selection_reaches_cargo_children_in_tmp() -> TestResult {
             .arg(repo.root().join("outer"))
             .output()?;
         assert!(output.status.success(), "{output:?}");
-        super::child_fetches_using(repo, wrapper, config, "proxy-bin", Some(&home))
+        super::child_fetches_using(
+            repo,
+            wrapper,
+            config,
+            "proxy-bin",
+            Some((&home, "mirror-selected")),
+        )
+    })
+}
+
+#[test]
+fn path_toolchain_with_spaces_reaches_cargo_children_in_tmp() -> TestResult {
+    mirror_fixture(|repo, wrapper, config| {
+        let home = private_toolchains(repo)?;
+        let output = rustup_command(repo, &home)
+            .args(["which", "cargo"])
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+        let cargo = PathBuf::from(String::from_utf8(output.stdout)?.trim());
+        let toolchain = cargo.parent().and_then(Path::parent).ok_or("toolchain")?;
+        let selected = repo.root().join("custom toolchain");
+        std::os::unix::fs::symlink(toolchain, &selected)?;
+        repo.write_unstaged(
+            "rust-toolchain.toml",
+            &format!("[toolchain]\npath={}\n", serde_json::to_string(&selected)?),
+        );
+        super::child_fetches_using(
+            repo,
+            wrapper,
+            config,
+            "proxy-bin",
+            Some((&home, selected.to_str().ok_or("toolchain path")?)),
+        )
     })
 }
 
 fn rustup_proxy(repo: &Repo, hardlink: bool) -> TestResult {
-    let output = Command::new("mise").args(["which", "rustup"]).output()?;
-    assert!(output.status.success(), "{output:?}");
-    let installed = fs::canonicalize(String::from_utf8(output.stdout)?.trim())?;
+    let installed = rustup_binary().ok_or("rustup unavailable")?;
     let bin = repo.root().join("proxy-bin");
     fs::create_dir(&bin)?;
     let rustup = bin.join("rustup");
@@ -91,6 +127,7 @@ fn private_toolchains(repo: &Repo) -> Result<PathBuf, Box<dyn std::error::Error>
 fn rustup_command(repo: &Repo, home: &Path) -> Command {
     let mut command = Command::new(repo.root().join("proxy-bin/rustup"));
     command
+        .current_dir(repo.root())
         .env("RUSTUP_HOME", home)
         .env_remove("RUSTUP_TOOLCHAIN");
     command

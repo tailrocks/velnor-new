@@ -10,7 +10,7 @@ use crate::io::Repo;
 
 mod fixture;
 mod toolchains;
-use fixture::{TestResult, active_toolchain, mirror_fixture, setup};
+use fixture::{TestResult, active_toolchain, mirror_fixture, rustup_binary, setup};
 
 #[test]
 fn cargo_fetches_uncached_crates_with_changed_homes_and_explicit_toolchain() -> TestResult {
@@ -23,7 +23,9 @@ fn build_scripts_fetch_uncached_crates_from_tmp_through_path_and_cargo_env() -> 
 }
 
 fn mise_shim(repo: &Repo) -> TestResult {
-    let output = Command::new("rustup").args(["which", "cargo"]).output()?;
+    let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
+        .args(["which", "cargo"])
+        .output()?;
     assert!(output.status.success(), "{output:?}");
     let cargo = String::from_utf8(output.stdout)?;
     fs::create_dir(repo.root().join("native"))?;
@@ -127,14 +129,7 @@ fn child_fetches(repo: &Repo, wrapper: &Path, config: &Path) -> TestResult {
     child_fetches_using(repo, wrapper, config, "mise-shims", None)
 }
 
-fn child_fetches_using(
-    repo: &Repo,
-    wrapper: &Path,
-    config: &Path,
-    proxy: &str,
-    rustup: Option<&Path>,
-) -> TestResult {
-    let root = repo.root();
+fn child_projects(repo: &Repo) {
     repo.write_unstaged("tmp-0/Cargo.toml", "[package]\nname='consumer'\nversion='1.0.0'\nedition='2024'\n[dependencies]\nprobe='=1.0.0'\n");
     repo.write_unstaged("tmp-0/src/lib.rs", "");
     repo.write_unstaged(
@@ -150,12 +145,12 @@ fn child_fetches_using(
             }
             if let Ok(expected) = std::env::var("MIRROR_EXPECTED_TOOLCHAIN") {
                 assert_eq!(std::env::var("RUSTUP_TOOLCHAIN").unwrap(), expected);
-                let selected = std::process::Command::new("rustup").args(["show", "active-toolchain"])
+                let selected = std::process::Command::new(std::env::var_os("MIRROR_RUSTUP").unwrap()).args(["show", "active-toolchain"])
                     .current_dir(std::env::temp_dir()).output().unwrap();
                 assert!(selected.status.success());
-                assert_eq!(String::from_utf8(selected.stdout).unwrap().split_whitespace().next().unwrap(), expected);
+                assert_eq!(String::from_utf8(selected.stdout).unwrap(), format!("{expected} (overridden by environment variable RUSTUP_TOOLCHAIN)\n"));
             }
-let mut command = std::process::Command::new(program);
+            let mut command = std::process::Command::new(program);
             if name == "env" {
                 if let Ok(toolchain) = std::env::var("MIRROR_EXPLICIT_TOOLCHAIN") {
                     command.arg(format!("+{toolchain}"));
@@ -168,6 +163,17 @@ let mut command = std::process::Command::new(program);
             assert!(status.success());
         }
     }"#);
+}
+
+fn child_fetches_using(
+    repo: &Repo,
+    wrapper: &Path,
+    config: &Path,
+    proxy: &str,
+    rustup: Option<(&Path, &str)>,
+) -> TestResult {
+    child_projects(repo);
+    let root = repo.root();
     let paths = [
         root.join(proxy),
         wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
@@ -180,11 +186,11 @@ let mut command = std::process::Command::new(program);
     ))
     .collect::<Vec<_>>();
     let mut command = Command::new(wrapper);
-    if let Some(home) = rustup {
+    if let Some((home, expected)) = rustup {
         command
             .env_remove("RUSTUP_TOOLCHAIN")
             .env("RUSTUP_HOME", home)
-            .env("MIRROR_EXPECTED_TOOLCHAIN", "mirror-selected");
+            .env("MIRROR_EXPECTED_TOOLCHAIN", expected);
     } else {
         command
             .env_remove("RUSTUP_TOOLCHAIN")
@@ -198,6 +204,10 @@ let mut command = std::process::Command::new(program);
         .env_remove("RUSTC_WRAPPER")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .env("MIRROR_FIXTURE_ROOT", root)
+        .env(
+            "MIRROR_RUSTUP",
+            rustup_binary().ok_or("rustup unavailable")?,
+        )
         .env("CARGO_HOME", root.join("outer-home"))
         .env("CARGO_TARGET_DIR", root.join("outer-target"))
         .env("VELNOR_CARGO_CONFIG", config)

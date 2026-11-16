@@ -211,18 +211,20 @@ fn actual_cargo(
             .trim_start_matches('+')
             .to_owned()
     } else {
-        query(Command::new(&rustup).args(["show", "active-toolchain"]))?
-            .split_whitespace()
-            .next()
-            .ok_or_else(|| CiError::new("Rustup returned no active toolchain"))?
-            .to_owned()
+        let active = query(Command::new(&rustup).args(["show", "active-toolchain"]))?;
+        let toolchain = active
+            .rsplit_once(" (")
+            .map_or(active.as_str(), |(name, _)| name);
+        if toolchain.is_empty() {
+            return Err(CiError::new("Rustup returned no active toolchain"));
+        }
+        toolchain.to_owned()
     };
-    let executable = PathBuf::from(query(Command::new(rustup).args([
-        "which",
-        "--toolchain",
-        &toolchain,
-        "cargo",
-    ]))?);
+    let executable = PathBuf::from(query(
+        Command::new(rustup)
+            .env("RUSTUP_TOOLCHAIN", &toolchain)
+            .args(["which", "cargo"]),
+    )?);
     Ok(ResolvedCargo {
         executable,
         toolchain: Some(toolchain.into()),
