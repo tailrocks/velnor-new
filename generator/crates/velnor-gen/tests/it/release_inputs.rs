@@ -23,13 +23,13 @@ fn release_pr_stays_on_a_branch_and_rechecks_the_live_default_branch_tip() -> Te
         .ok_or("no tip check")?;
     let run = all[tip].get("run").and_then(Node::text).ok_or("no run")?;
     assert!(
-        run.contains("git/ref/heads/main") && run.contains(".object.sha == env.COMMIT"),
+        run.contains("git/ref/heads/$BRANCH") && run.contains(".object.sha == env.COMMIT"),
         "{run}"
     );
     let switch = all
         .iter()
         .position(|step| {
-            step.get("run").and_then(Node::text) == Some("git switch --force-create main")
+            step.get("run").and_then(Node::text) == Some("git switch --force-create \"$BRANCH\"")
         })
         .ok_or("no branch switch")?;
     assert!(tip < switch);
@@ -169,8 +169,49 @@ fn the_release_workflow_follows_the_configured_default_branch() -> TestResult {
         .get(&velnor_model::RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     assert!(text.contains("    branches:\n      - trunk\n"), "{text}");
-    assert!(text.contains("git/ref/heads/trunk"), "{text}");
-    assert!(text.contains("git switch --force-create trunk"), "{text}");
+    assert!(text.contains("git/ref/heads/$BRANCH"), "{text}");
+    assert!(
+        text.contains("git switch --force-create \"$BRANCH\""),
+        "{text}"
+    );
     assert!(!text.contains("main"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_default_branch_with_shell_or_filter_characters_reaches_the_shell_only_through_the_environment()
+-> TestResult {
+    for name in ["release/c++", "a$(id)", "x;y&z`w`", "${{secrets.T}}"] {
+        let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+        view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
+        view.files.insert(
+            velnor_rust::CONFIG_PATH,
+            format!("default_branch = \"{name}\"\n").into_bytes(),
+        );
+        let files = expected_files(&view)?;
+        let text = files
+            .get(&velnor_model::RELEASE_WORKFLOW_PATH)
+            .ok_or("no release.yml")?;
+        let shell: Vec<&str> = text.lines().filter(|l| l.contains("run:")).collect();
+        assert!(shell.iter().all(|l| !l.contains(name)), "{name}: {text}");
+        assert!(
+            text.contains("BRANCH: '${{ github.event.repository.default_branch }}'"),
+            "{text}"
+        );
+    }
+    let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+    view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
+    view.files.insert(
+        velnor_rust::CONFIG_PATH,
+        b"default_branch = \"release/c++\"\n".to_vec(),
+    );
+    let files = expected_files(&view)?;
+    let text = files
+        .get(&velnor_model::RELEASE_WORKFLOW_PATH)
+        .ok_or("no release.yml")?;
+    assert!(
+        text.contains("      - release/c\\+\\+\n") || text.contains("'release/c\\+\\+'"),
+        "{text}"
+    );
     Ok(())
 }
