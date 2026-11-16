@@ -338,7 +338,11 @@ impl ReleasePlan {
         if let Some(metadata) = &files.rust_metadata {
             settle_publishing(&mut configs, metadata);
         }
-        check_versions(&configs, &files.cargo_manifest_texts)?;
+        check_versions(
+            &configs,
+            &files.cargo_manifest_texts,
+            files.rust_metadata.as_ref(),
+        )?;
         let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;

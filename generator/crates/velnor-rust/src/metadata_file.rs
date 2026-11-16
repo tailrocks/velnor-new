@@ -65,6 +65,7 @@ struct Root {
 #[serde(deny_unknown_fields)]
 struct Member {
     name: String,
+    version: String,
     manifest: String,
     dependencies: Vec<Edge>,
     targets: Vec<Goal>,
@@ -156,6 +157,7 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
 fn member(package: &RustPackage) -> Member {
     Member {
         name: package.name.to_string(),
+        version: package.version.clone(),
         manifest: package.manifest.to_string(),
         dependencies: package
             .dependencies
@@ -287,6 +289,7 @@ fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
         |error: velnor_model::InvalidId| MetadataFileError::Unreadable(error.to_string());
     Ok(RustPackage {
         name: PackageName::new(member.name).map_err(unreadable)?,
+        version: member.version,
         manifest: path_of(&member.manifest)?,
         dependencies: member
             .dependencies
