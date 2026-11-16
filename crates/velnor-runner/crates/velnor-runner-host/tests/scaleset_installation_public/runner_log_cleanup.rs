@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "runner_log_cleanup/helper_scenario.rs"]
+mod helper_scenario;
 #[path = "runner_log_cleanup/seed.rs"]
 mod seed;
 #[path = "runner_log_cleanup/state_mode.rs"]
@@ -15,6 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+pub(crate) use self::helper_scenario::run_cancelled_before_start_scenario;
+use self::helper_scenario::{VolumeState, read_diagnostics_files, write_volume_response};
 use serde_json::{Value, json};
 use velnor_runner_host::{
     CompletionWorker, HostError, Journal, RepositoryConnection, WorkflowEvent, connect_unix,
@@ -49,6 +53,7 @@ struct StubState {
     runner_present: bool,
     exec_creates: usize,
     exec_inspected: usize,
+    volumes: VolumeState,
 }
 
 struct LocalDockerStub {
@@ -85,6 +90,7 @@ fn spawn_docker_stub(
         runner_present: true,
         exec_creates: 0,
         exec_inspected: 0,
+        volumes: VolumeState::default(),
     }));
     let (thread_stop, thread_entered, thread_release, thread_state) = (
         Arc::clone(&stopping),
@@ -176,7 +182,11 @@ fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String
     let clean = raw_path.split('?').next().unwrap_or(raw_path);
     let stripped = clean.strip_prefix('/').unwrap_or(clean);
     let api_path = match stripped.split_once('/') {
-        Some((ver, rest)) if ver.starts_with('v') => rest.to_owned(),
+        Some((ver, rest))
+            if ver.starts_with('v') && ver[1..].bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            rest.to_owned()
+        }
         _ => stripped.to_owned(),
     };
     Ok((method, api_path))
@@ -192,7 +202,7 @@ fn container_labels(role: &str) -> Value {
     })
 }
 
-fn write_json(
+pub(super) fn write_json(
     stream: &mut UnixStream,
     status: u16,
     reason: &str,
@@ -240,7 +250,7 @@ fn write_route_response(
             )?;
             stream.shutdown(std::net::Shutdown::Both)
         }
-        ("GET", p) if p == format!("containers/{DIND_ID}/json") => {
+        ("GET", p) if p == format!("containers/{DIND_ID}/json") && !state.volumes.dind_removed => {
             let body = json!({"Id": DIND_ID, "Name": format!("/{PRIVATE_VOLUME}-dind"), "Config": {"Labels": container_labels("dind")}, "Mounts": [{"Type": "volume", "Name": format!("{PRIVATE_VOLUME}-home"), "Destination": "/home/runner", "RW": true}], "State": {"Running": true, "ExitCode": 0}});
             write_json(stream, 200, "OK", &body)
         }
@@ -282,7 +292,7 @@ fn write_exec_response(
             let body = json!({"ID": exec_id, "ContainerID": DIND_ID, "Running": false, "ExitCode": state.exit_code});
             write_json(stream, 200, "OK", &body)
         }
-        _ => write_json(stream, 404, "Not Found", &json!({"message": "unknown"})),
+        _ => write_volume_response(stream, method, path, &mut state.volumes),
     }
 }
 
@@ -373,26 +383,4 @@ pub(super) fn run_runner_log_cleanup_scenario(
         capture_state,
         runner_logs_projection,
     })
-}
-
-fn read_opt_json(path: &Path) -> TestResult<Option<Value>> {
-    path.exists()
-        .then(|| Ok(serde_json::from_slice(&std::fs::read(path)?)?))
-        .transpose()
-}
-
-fn read_diagnostics_files(state_dir: &Path) -> TestResult<(Option<Value>, Option<Value>)> {
-    for entry in std::fs::read_dir(state_dir.join("completion-diagnostics"))
-        .into_iter()
-        .flatten()
-    {
-        let path = entry?.path();
-        if path.is_dir() {
-            return Ok((
-                read_opt_json(&path.join("i1-r2-runner-log-state.json"))?,
-                read_opt_json(&path.join("i1-g1-runner-logs.json"))?,
-            ));
-        }
-    }
-    Ok((None, None))
 }

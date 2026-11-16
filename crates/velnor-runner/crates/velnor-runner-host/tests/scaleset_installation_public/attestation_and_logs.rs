@@ -9,7 +9,9 @@ use sha2::{Digest, Sha256};
 use tar::{Builder, EntryType, Header};
 use velnor_runner_host::{HostError, WorkerImage, verify_worker_attestation_manifest};
 
-use self::runner_log_cleanup::run_runner_log_cleanup_scenario;
+use self::runner_log_cleanup::{
+    run_cancelled_before_start_scenario, run_runner_log_cleanup_scenario,
+};
 use super::{MANIFEST_DIGEST, RUNNER_NAMED_LOCALS, SOURCE_SHA, TestResult, slsa_statement};
 
 const LAYER_DIGEST: &str =
@@ -287,5 +289,13 @@ fn public_runner_log_capture_completes_as_unavailable_when_diag_missing_or_tampe
     assert!(exit1_obs.replay.is_none());
     assert!(exit1_obs.runner_present);
     assert_eq!(exit1_obs.exec_creates, 3);
+    Ok(())
+}
+
+#[test]
+fn public_cancelled_run_cleanup_removes_helper_containers_before_volumes() -> TestResult<()> {
+    let observed = run_cancelled_before_start_scenario()?;
+    assert!(!observed.helper_present);
+    assert_eq!(observed.volumes_left, 0);
     Ok(())
 }

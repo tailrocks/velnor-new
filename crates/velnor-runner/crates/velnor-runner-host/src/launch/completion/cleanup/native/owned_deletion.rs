@@ -19,6 +19,8 @@ use crate::launch::completion::diagnostics;
 
 use super::super::super::{Context, EffectBudget, Failure, run_effect};
 
+#[path = "owned_deletion/helpers.rs"]
+mod helpers;
 #[path = "owned_deletion/identity.rs"]
 mod identity;
 #[path = "owned_deletion/retirement.rs"]
@@ -116,7 +118,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
     .await
 }
 
-async fn remove_container_and_check(
+pub(super) async fn remove_container_and_check(
     context: &Context<'_>,
     launch: &CompletedLaunch,
     claim: CleanupClaim,
@@ -141,7 +143,7 @@ async fn remove_container_and_check(
                 }),
             ))
             .await?
-            .map_err(|_| HostError::Docker)
+            .map_err(|error| helpers::docker_error("container remove", id, &error))
         },
     )
     .await?;
@@ -197,6 +199,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
             continue;
         };
         validate_volume(&volume, name, *role, identity, context)?;
+        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name).await?;
         request_effect(
             context,
             launch,
@@ -212,7 +215,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
                     ),
                 )
                 .await?
-                .map_err(|_| HostError::Docker)
+                .map_err(|error| helpers::docker_error("volume remove", name, &error))
             },
         )
         .await?;
