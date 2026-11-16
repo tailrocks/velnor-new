@@ -199,7 +199,7 @@ where
     };
     let disposition = record_acquire_disposition(scoped, &identity, durable, disposition).await?;
     match disposition {
-        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
+        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Unauthorized),
         AcquireDisposition::Uncertain => match result {
             Err(error) => Err(crate::listen::map_listen(error)),
             Ok(_) => Err(EnsureError::Uncertain),

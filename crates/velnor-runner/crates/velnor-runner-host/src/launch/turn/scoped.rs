@@ -265,7 +265,7 @@ pub(super) async fn poll_scoped_queue(
                     Ok((polled, path, queue))
                 }
 
-                PollPathResult::RefreshRequired => Err(EnsureError::Uncertain),
+                PollPathResult::RefreshRequired => Err(EnsureError::Unauthorized),
             }
         }
     }

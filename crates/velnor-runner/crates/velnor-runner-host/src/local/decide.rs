@@ -8,6 +8,7 @@ use crate::launch::execution_authorization::ExecutionSourceRequest;
 
 use super::authority::{CallError, Client, RunAnswer};
 use super::plan::Side;
+use super::policy::Policy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,6 +19,7 @@ pub(super) enum Reason {
     AuthorityUnreachable,
     RequestMalformed,
     RequestMismatch,
+    Policy,
 }
 
 impl Reason {
@@ -29,6 +31,7 @@ impl Reason {
             Self::AuthorityUnreachable => "authority_unreachable",
             Self::RequestMalformed => "request_malformed",
             Self::RequestMismatch => "request_mismatch",
+            Self::Policy => "policy",
         }
     }
 }
@@ -54,6 +57,7 @@ pub(super) struct Verdict {
 pub(super) async fn decide(
     client: &Client,
     side: Side,
+    policy: Option<&Policy>,
     challenge: &Challenge,
     bytes: &[u8],
 ) -> Verdict {
@@ -75,13 +79,14 @@ pub(super) async fn decide(
         return refused(challenge, bytes, Some(facts), Reason::RequestMismatch);
     }
     let answer = client.run(side, facts.run_id, facts.attempt).await;
-    judge(challenge, bytes, &request, facts, answer)
+    judge(challenge, bytes, &request, (side, policy), facts, answer)
 }
 
-fn judge(
+pub(super) fn judge(
     challenge: &Challenge,
     bytes: &[u8],
     request: &ExecutionSourceRequest,
+    (side, policy): (Side, Option<&Policy>),
     facts: Facts,
     answer: Result<Option<RunAnswer>, CallError>,
 ) -> Verdict {
@@ -100,6 +105,11 @@ fn judge(
         };
         return refused(challenge, bytes, Some(facts), reason);
     };
+    if policy
+        .is_some_and(|policy| !policy.approves(request, side, answer.workflow_sha256.as_deref()))
+    {
+        return refused(challenge, bytes, Some(facts), Reason::Policy);
+    }
     let Some(actual_request_id) = i64::try_from(facts.run_id).ok().filter(|id| *id > 0) else {
         return refused(challenge, bytes, Some(facts), Reason::RequestMalformed);
     };
@@ -128,7 +138,7 @@ fn describes(request: &ExecutionSourceRequest, answer: &RunAnswer) -> bool {
         && answer.jobs.iter().any(|job| job == request.job_key())
 }
 
-fn workflow_path<'a>(workflow_ref: &'a str, repository: &str) -> Option<&'a str> {
+pub(super) fn workflow_path<'a>(workflow_ref: &'a str, repository: &str) -> Option<&'a str> {
     let path = workflow_ref.strip_prefix(repository)?.strip_prefix('/')?;
     path.rsplit_once('@').map(|(path, _)| path)
 }

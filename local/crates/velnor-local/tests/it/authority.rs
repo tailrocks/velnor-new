@@ -3,6 +3,7 @@
 
 mod claims;
 mod fake;
+mod hashing;
 mod mints;
 
 use serde_json::{Value, json};
@@ -331,7 +332,15 @@ fn authority_has_no_address_option_and_run_takes_keep() {
         let names = command.get_arguments().map(|arg| arg.get_id().to_string());
         (command.is_hide_set(), names.collect::<Vec<_>>())
     });
-    let names = ["dir", "velnor_host", "pairs", "fork_pairs"].map(str::to_owned);
+    let names = [
+        "dir",
+        "velnor_host",
+        "pairs",
+        "fork_pairs",
+        "policy",
+        "repo",
+    ]
+    .map(str::to_owned);
     assert_eq!(supervise, Some((true, names.to_vec())));
     let parsed = Cli::try_parse_from([
         "velnor-local",

@@ -1,0 +1,6 @@
+{
+  "description": "Push to the default branch once, to run one workflow and see whether the approved-workflows check admits it.",
+  "steps": [
+    {"push": "{default}"}
+  ]
+}
