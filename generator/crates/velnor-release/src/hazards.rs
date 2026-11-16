@@ -159,7 +159,7 @@ fn names_nightly(text: &str) -> bool {
     channel.is_some_and(|channel| channel.starts_with("nightly"))
 }
 
-const STABILIZED_CARGO_FEATURES: [&str; 9] = [
+const STABILIZED_CARGO_FEATURES: [&str; 7] = [
     "edition2024",
     "workspace-inheritance",
     "named-profiles",
@@ -167,8 +167,6 @@ const STABILIZED_CARGO_FEATURES: [&str; 9] = [
     "profile-overrides",
     "rename-dependency",
     "resolver",
-    "namespaced-features",
-    "weak-dep-features",
 ];
 
 fn needs_nightly_features(document: &toml::Table) -> bool {
