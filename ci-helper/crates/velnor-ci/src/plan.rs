@@ -73,7 +73,8 @@ pub fn tests_outputs(expected: &BTreeMap<RepoPath, bool>) -> String {
                 if *run { "run" } else { "skip" }
             )
         })
-        .collect()
+        .collect::<Vec<String>>()
+        .concat()
 }
 
 fn package_args(names: &[&str]) -> String {

@@ -43,15 +43,18 @@ pub(crate) fn plan_command(repo: &Repo) -> Command {
 
 pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command
-        .current_dir(repo.root())
-        .env_remove("GITHUB_OUTPUT")
-        .env_remove("GITHUB_STEP_SUMMARY")
-        .env_remove("GITHUB_EVENT_NAME")
-        .env_remove("GITHUB_EVENT_PATH")
-        .env_remove("GITHUB_REPOSITORY")
-        .env_remove("GITHUB_TOKEN")
-        .env_remove("GITHUB_API_URL");
+    command.current_dir(repo.root());
+    for variable in [
+        "GITHUB_OUTPUT",
+        "GITHUB_STEP_SUMMARY",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "GITHUB_TOKEN",
+        "GITHUB_API_URL",
+    ] {
+        command.env_remove(variable);
+    }
     command
 }
 

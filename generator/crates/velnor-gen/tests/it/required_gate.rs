@@ -38,7 +38,7 @@ fn selected() -> Outputs {
 struct Run {
     outputs: Outputs,
     results: Vec<(&'static str, &'static str)>,
-    tests_run: Option<&'static str>,
+    count: Option<&'static str>,
     event: Option<&'static str>,
 }
 
@@ -53,7 +53,7 @@ fn passing() -> Run {
             ("policy", "skipped"),
             ("audit", "skipped"),
         ],
-        tests_run: Some("12"),
+        count: Some("12"),
         event: Some("pull_request"),
     }
 }
@@ -83,7 +83,7 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
                 .collect();
         }
         if *job == "rust-test"
-            && let Some(count) = run.tests_run
+            && let Some(count) = run.count
         {
             need.outputs
                 .insert("tests_run".to_owned(), count.to_owned());
@@ -95,8 +95,8 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
 }
 
 fn expect(run: &Run, passes: bool, mention: &str) -> TestResult {
-    let (passed, table) = judge(run)?;
-    assert_eq!(passed, passes, "{mention}\n{table}");
+    let (green, table) = judge(run)?;
+    assert_eq!(green, passes, "{mention}\n{table}");
     assert!(table.contains(mention), "{mention}\n{table}");
     Ok(())
 }
@@ -113,7 +113,7 @@ fn a_failed_or_missing_plan_fails() -> TestResult {
         expect(&run, false, "the plan job rust-plan did not succeed")?;
     }
     let run = with(passing(), |run| {
-        run.results.retain(|(job, _)| *job != "rust-plan")
+        run.results.retain(|(job, _)| *job != "rust-plan");
     });
     expect(&run, false, "the plan job rust-plan is not in needs")
 }
@@ -121,7 +121,7 @@ fn a_failed_or_missing_plan_fails() -> TestResult {
 #[test]
 fn a_missing_or_invalid_plan_output_fails() -> TestResult {
     let run = with(passing(), |run| {
-        run.outputs.retain(|(key, _)| *key != "rust_root_mode")
+        run.outputs.retain(|(key, _)| *key != "rust_root_mode");
     });
     expect(&run, false, "the plan output rust_root_mode is missing")?;
     for bad in ["", "everything", "NONE"] {
@@ -132,11 +132,11 @@ fn a_missing_or_invalid_plan_output_fails() -> TestResult {
         expect(&run, false, "the plan output rust_root_mode is")?;
     }
     let run = with(passing(), |run| {
-        run.outputs.retain(|(key, _)| *key != "rust_root_tests")
+        run.outputs.retain(|(key, _)| *key != "rust_root_tests");
     });
     expect(&run, false, "the plan output rust_root_tests is missing")?;
     let run = with(passing(), |run| {
-        run.outputs.retain(|(key, _)| *key != "rust_deny")
+        run.outputs.retain(|(key, _)| *key != "rust_deny");
     });
     expect(&run, false, "the plan output rust_deny is missing")
 }
@@ -154,7 +154,7 @@ fn a_scheduled_job_that_did_not_succeed_fails() -> TestResult {
 fn a_job_the_plan_did_not_schedule_may_be_skipped_and_a_success_is_a_warning() -> TestResult {
     expect(&passing(), true, "| rust-docs | not scheduled | skipped |")?;
     let run = with(passing(), |run| {
-        set(&mut run.results, "rust-docs", "success")
+        set(&mut run.results, "rust-docs", "success");
     });
     expect(
         &run,
@@ -170,16 +170,16 @@ fn a_job_the_plan_did_not_schedule_may_be_skipped_and_a_success_is_a_warning() -
 
 #[test]
 fn zero_tests_in_a_lane_whose_selected_packages_have_tests_fails() -> TestResult {
-    let run = with(passing(), |run| run.tests_run = Some("0"));
+    let run = with(passing(), |run| run.count = Some("0"));
     expect(&run, false, "0 tests ran for root")?;
     let run = with(passing(), |run| {
         run.outputs.iter_mut().for_each(|(key, value)| {
             if *key == "rust_root_tests" {
                 *value = "skip";
             }
-        })
+        });
     });
-    let run = with(run, |run| run.tests_run = Some("0"));
+    let run = with(run, |run| run.count = Some("0"));
     expect(&run, true, "Required: pass")
 }
 
@@ -195,7 +195,7 @@ fn a_missing_empty_or_garbled_tests_run_fails() -> TestResult {
         Some("+5"),
         Some("99999999999999999999999"),
     ] {
-        let run = with(passing(), |run| run.tests_run = bad);
+        let run = with(passing(), |run| run.count = bad);
         expect(
             &run,
             false,
@@ -208,11 +208,11 @@ fn a_missing_empty_or_garbled_tests_run_fails() -> TestResult {
 #[test]
 fn a_job_missing_from_needs_or_unknown_to_the_gate_fails() -> TestResult {
     let run = with(passing(), |run| {
-        run.results.retain(|(job, _)| *job != "rust-lint")
+        run.results.retain(|(job, _)| *job != "rust-lint");
     });
     expect(&run, false, "rust-lint has no result in needs")?;
     let run = with(passing(), |run| {
-        run.results.push(("added-later", "success"))
+        run.results.push(("added-later", "success"));
     });
     expect(
         &run,

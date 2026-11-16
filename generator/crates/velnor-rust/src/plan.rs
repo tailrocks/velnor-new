@@ -14,9 +14,7 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
-use crate::required_job::{
-    has_gate, plan_outputs as gate_outputs, spec as verdict_spec, verdict_step,
-};
+use crate::required_job::{expose_in_single, gate_outputs, has_gate, verdict_job};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -25,7 +23,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 
@@ -77,41 +74,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         }
         jobs.insert(0, plan_job(facts, used));
     } else if gate {
-        let outputs = gate_outputs(&jobs);
-        for job in jobs.iter_mut().filter(|job| job.id == RUST_JOB) {
-            job.plan_outputs.clone_from(&outputs);
-        }
+        expose_in_single(&mut jobs);
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    let verdict_steps = if gate {
-        let plan_id = if single { RUST_JOB } else { PLAN_JOB };
-        let install = match (&helper_root, facts.helper.as_ref()) {
-            (Some(_), _) => Some(step(StepKind::HelperFromArtifact)),
-            (None, release) => {
-                release.map(|release| step(StepKind::InstallHelper(release.clone())))
-            }
-        };
-        install
-            .into_iter()
-            .chain([verdict_step(verdict_spec(plan_id, &jobs))])
-            .collect()
-    } else {
-        vec![step(StepKind::FailWhenANeedFailed)]
-    };
-    jobs.push(Job {
-        name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
-        needs: jobs.iter().map(|job| job.id.clone()).collect(),
-        when: if gate {
-            When::Always
-        } else {
-            When::NotCancelled
-        },
-        steps: draft_guard.into_iter().chain(verdict_steps).collect(),
-        ..job(facts, VERDICT_JOB)
-    });
+    let required = verdict_job(facts, &jobs, single, helper_root.is_some(), draft_guard);
+    jobs.push(required);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {

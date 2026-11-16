@@ -9,6 +9,10 @@ use velnor_model::{
 };
 
 use crate::harness::uses_nextest;
+use crate::lane::PLAN_JOB;
+use crate::plan::{RUST_JOB, job, step};
+
+const VERDICT_JOB: JobId = JobId::from_static("required");
 
 pub(crate) const VERDICT_HELPER: (u64, u64, u64) = (0, 1, 81);
 
@@ -56,7 +60,7 @@ pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {
     }
 }
 
-pub(crate) fn plan_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
+pub(crate) fn gate_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
     let slugs: BTreeSet<RootSlug> = jobs.iter().filter_map(tests_lane).collect();
     slugs
         .into_iter()
@@ -64,8 +68,50 @@ pub(crate) fn plan_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
         .collect()
 }
 
-pub(crate) fn verdict_step(spec: VerdictSpec) -> Step {
-    crate::plan::step(StepKind::Verdict(spec))
+pub(crate) fn expose_in_single(jobs: &mut [Job]) {
+    let outputs = gate_outputs(jobs);
+    for job in jobs.iter_mut().filter(|job| job.id == RUST_JOB) {
+        job.plan_outputs.clone_from(&outputs);
+    }
+}
+
+pub(crate) fn verdict_job(
+    facts: &RepoFacts,
+    jobs: &[Job],
+    single: bool,
+    from_source: bool,
+    draft_guard: Option<Step>,
+) -> Job {
+    let gate = has_gate(facts);
+    let steps: Vec<Step> = if gate {
+        let install = if from_source {
+            Some(step(StepKind::HelperFromArtifact))
+        } else {
+            facts
+                .helper
+                .as_ref()
+                .map(|release| step(StepKind::InstallHelper(release.clone())))
+        };
+        let plan = if single { RUST_JOB } else { PLAN_JOB };
+        install
+            .into_iter()
+            .chain([step(StepKind::Verdict(spec(plan, jobs)))])
+            .collect()
+    } else {
+        vec![step(StepKind::FailWhenANeedFailed)]
+    };
+    Job {
+        name: Some(facts.config.required_check.clone()),
+        skip_on_draft: false,
+        needs: jobs.iter().map(|job| job.id.clone()).collect(),
+        when: if gate {
+            When::Always
+        } else {
+            When::NotCancelled
+        },
+        steps: draft_guard.into_iter().chain(steps).collect(),
+        ..job(facts, VERDICT_JOB)
+    }
 }
 
 #[must_use]
