@@ -69,6 +69,7 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         41 => Box::pin(super::registry_image_import::migrate_v41_to_v42(conn)),
         42 => Box::pin(super::unbound_retirement::migrate_v42_to_v43(conn)),
         43 => Box::pin(super::unbound_retirement::migrate_v43_to_v44(conn)),
+        44 => Box::pin(super::unbound_retirement::migrate_v44_to_v45(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -76,7 +77,7 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=43 => Some(version + 1),
+        0..=8 | 10..=44 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
