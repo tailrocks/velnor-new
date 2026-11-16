@@ -26,13 +26,87 @@ const EVENTS: &str = r"on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.pull_request.state != 'closed' }}
 ";
 
 pub(crate) const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
 
 const DRAFT: &str = "github.event.pull_request.draft != true";
+const ACTIVE_EVENT: &str =
+    "(github.event_name != 'pull_request' || github.event.pull_request.state != 'closed')";
+
+#[test]
+fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> TestResult {
+    let workflows = [
+        with(&[], None)?,
+        with(&[], Some(b"shape = \"lint-test\"\n"))?,
+        workflow(&view(&["Cargo.toml", "tools/Cargo.toml"], None)?)?,
+        with(
+            &[("deny.toml", ""), ("mise.toml", DENY_MISE)],
+            Some(b"shape = \"lint-test\"\nskip_draft_pull_requests = true\n"),
+        )?,
+        workflow(&crate::golden::load(
+            &crate::golden::samples().join("helper-source"),
+        )?)?,
+    ];
+    for text in workflows {
+        let tree = serde_saphyr::from_str::<serde_json::Value>(&text)?;
+        assert!(
+            tree.pointer("/on/pull_request/types")
+                .ok_or("no pull request trigger")?
+                .as_array()
+                .ok_or("no event types")?
+                .iter()
+                .any(|kind| kind.as_str() == Some("edited")),
+            "{text}"
+        );
+        let jobs = tree
+            .get("jobs")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("no jobs")?;
+        for id in jobs.keys() {
+            let condition = jobs
+                .get(id)
+                .and_then(|job| job.get("if"))
+                .and_then(serde_json::Value::as_str);
+            assert!(
+                condition.is_some_and(|value| {
+                    value == format!("${{{{ {ACTIVE_EVENT} }}}}")
+                        || value.starts_with(&format!("${{{{ {ACTIVE_EVENT} && ("))
+                            && value.ends_with(") }}")
+                }),
+                "{id} must reject closed PR edits while admitting open or unknown PR state and non-PR events: {condition:?}"
+            );
+        }
+        assert_eq!(
+            jobs.get("required")
+                .and_then(|job| job.get("if"))
+                .and_then(serde_json::Value::as_str),
+            Some(format!("${{{{ {ACTIVE_EVENT} && (!cancelled()) }}}}").as_str())
+        );
+        if let Some(condition) = jobs
+            .get("rust-test")
+            .and_then(|job| job.get("if"))
+            .and_then(serde_json::Value::as_str)
+        {
+            assert!(
+                condition.contains("needs.rust-plan.outputs.rust_root_mode != 'none'"),
+                "{condition}"
+            );
+            if jobs.get("policy").is_some() {
+                assert!(condition.contains(DRAFT), "{condition}");
+                let policy = jobs
+                    .get("policy")
+                    .and_then(|job| job.get("if"))
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or("no policy condition")?;
+                assert!(policy.contains("needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run'"), "{policy}");
+            }
+        }
+    }
+    Ok(())
+}
 
 fn with(files: &[(&str, &str)], config: Option<&[u8]>) -> TestResult2 {
     let mut view = view(&["Cargo.toml"], config)?;

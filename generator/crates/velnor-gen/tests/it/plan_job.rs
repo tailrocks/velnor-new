@@ -106,7 +106,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n    if: '${{{{ needs.rust-plan.outputs.rust_{slug}_mode != ''none'' }}}}'\n"
+            "    needs:\n      - rust-plan\n    if: '${{{{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (needs.rust-plan.outputs.rust_{slug}_mode != ''none'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");
@@ -114,7 +114,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     assert_eq!(lane[..11], LANE_SETUP);
     assert!(lane[11].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
-        "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
+        "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (!cancelled()) }}'\n"
     ));
     Ok(())
 }

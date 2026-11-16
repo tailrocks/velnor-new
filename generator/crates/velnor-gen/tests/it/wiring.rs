@@ -156,7 +156,7 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
     assert!(job.contains("needs:\n      - rust-plan"), "{job}");
     assert!(
         job.contains(
-            "if: '${{ (needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run') }}'"
+            "if: '${{ (github.event_name != 'pull_request' || github.event.pull_request.state != 'closed') && ((needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run')) }}'"
         ),
         "{job}"
     );
@@ -295,7 +295,7 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .ok_or("no audit job")?;
     assert!(
         audit.contains(
-            "if: '${{ (github.event_name == 'schedule' || github.event_name == 'push') }}'"
+            "if: '${{ (github.event_name != 'pull_request' || github.event.pull_request.state != 'closed') && ((github.event_name == 'schedule' || github.event_name == 'push')) }}'"
         ),
         "{audit}"
     );
@@ -320,7 +320,7 @@ fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
     let scheduled = text(&view(&roots, Some(b"full_run = \"nightly\"\n".as_slice()))?)?;
     assert!(scheduled.contains("rust-inputs-audit:"), "{scheduled}");
     assert!(
-        scheduled.contains("if: '${{ github.event_name == 'schedule' }}'"),
+        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || github.event.pull_request.state != 'closed') && (github.event_name == 'schedule') }}'"),
         "{scheduled}"
     );
     let off = text(&view(&roots, Some(b"full_run = \"off\"\n".as_slice()))?)?;
