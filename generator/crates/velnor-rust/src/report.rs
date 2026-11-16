@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::plan::{head, job, step};
-use velnor_model::{Job, JobId, RepoFacts, Step, StepKind, When};
+use velnor_model::{HelperVersion, Job, JobId, RepoFacts, Step, StepKind, When};
 
 pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
     let released = facts
@@ -13,6 +13,15 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
     if !released && !from_source {
         return None;
     }
+    let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
+        .and_then(|name| facts.tools.tools.get(name))
+        .is_some_and(|pin| {
+            !pin.locked.is_empty()
+                && pin.locked.iter().all(|version| {
+                    HelperVersion::new(version.clone())
+                        .is_ok_and(|version| version.at_least((0, 9, 123)))
+                })
+        });
     let mut needs = Vec::new();
     for job in jobs {
         if !job
@@ -35,12 +44,18 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
             })
             .collect();
         job.steps.extend(
-            [StepKind::ReportCaches(caches), StepKind::UploadMetrics]
-                .into_iter()
-                .map(|kind| Step {
-                    when: When::Finalizer,
-                    ..step(kind)
-                }),
+            [
+                StepKind::ReportCaches {
+                    caches,
+                    nextest_artifacts,
+                },
+                StepKind::UploadMetrics,
+            ]
+            .into_iter()
+            .map(|kind| Step {
+                when: When::Finalizer,
+                ..step(kind)
+            }),
         );
     }
     let mut steps = head(facts, 1, from_source);

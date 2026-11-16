@@ -214,7 +214,10 @@ pub enum StepKind {
     FailWhenANeedFailed,
     FailOnDraftRun,
     UploadCargoLog,
-    ReportCaches(Vec<CacheKey>),
+    ReportCaches {
+        caches: Vec<CacheKey>,
+        nextest_artifacts: bool,
+    },
     UploadMetrics,
     DownloadMetrics,
     CheckMetrics,

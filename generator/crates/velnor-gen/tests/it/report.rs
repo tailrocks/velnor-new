@@ -7,6 +7,73 @@ use velnor_model::{HelperRelease, HelperVersion, RepoPath, StepKind, When};
 use velnor_rust::{detect, plan};
 
 #[test]
+fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult {
+    for helper in ["0.1.80", "0.1.81"] {
+        for nextest in ["0.9.122", "0.9.123"] {
+            for shape in ["one-job", "lint-test", "groups"] {
+                let config = format!("shape = \"{shape}\"\n");
+                let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+                for (path, bytes) in &mut view.files {
+                    if path.as_str() == ".velnor/rust-ci.lock" {
+                        *bytes = String::from_utf8(bytes.clone())?
+                            .replace("0.1.79", helper)
+                            .into_bytes();
+                    } else if path.as_str() == "mise.toml" {
+                        *bytes = String::from_utf8(bytes.clone())?
+                            .replace("0.9.151", nextest)
+                            .into_bytes();
+                    } else if path.as_str() == "mise.lock" {
+                        *bytes = String::from_utf8(bytes.clone())?
+                        .replace("example.invalid", "fixtures.invalid")
+                        .replace(
+                            "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"1\"",
+                            &format!("[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"{nextest}\""),
+                        )
+                        .into_bytes();
+                    }
+                }
+                let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+                let mut cargo = 0;
+                let mut nextest_commands = 0;
+                for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
+                    for step in job["steps"].as_array().ok_or("steps")? {
+                        let Some(run) = step["run"].as_str() else {
+                            continue;
+                        };
+                        let compiler = run.contains("cargo-clippy clippy ")
+                            || run.contains(" cargo check ")
+                            || run.contains(" cargo build ")
+                            || run.contains(" cargo doc ")
+                            || run.contains(" cargo test ");
+                        let builds_tests = run.contains("cargo-nextest nextest ")
+                            && !run.contains("nextest run --archive-file");
+                        let flag = "--message-format=json-render-diagnostics";
+                        assert_eq!(run.contains(flag), compiler && helper == "0.1.81", "{run}");
+                        assert_eq!(
+                            run.contains("--cargo-message-format=json-render-diagnostics"),
+                            builds_tests && helper == "0.1.81" && nextest == "0.9.123",
+                            "{run}"
+                        );
+                        if compiler {
+                            cargo += 1;
+                            if let Some(separator) = run.find(" -- -D") {
+                                assert!(
+                                    helper == "0.1.80"
+                                        || run.find(flag).is_some_and(|at| at < separator)
+                                );
+                            }
+                        }
+                        nextest_commands += usize::from(builds_tests);
+                    }
+                }
+                assert!(cargo > 0 && nextest_commands > 0);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() -> TestResult {
     for (version, blocks) in [("0.1.80", false), ("0.1.81", false), ("0.1.81", true)] {
         let config = format!("cache_check_blocks = {blocks}\n");
@@ -42,7 +109,7 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
             let report = lane
                 .steps
                 .iter()
-                .position(|step| matches!(step.kind, StepKind::ReportCaches(_)))
+                .position(|step| matches!(step.kind, StepKind::ReportCaches { .. }))
                 .ok_or("report")?;
             assert!(
                 lane.steps.iter().skip(report + 1).any(

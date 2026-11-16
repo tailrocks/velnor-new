@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::base_steps::{base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
-use crate::cargo::{cargo_step, reports_tests};
+use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
 use crate::gate::{PLAN_STEP, condition, output, plan_source, sources_step};
 use crate::permission_pairs;
 use crate::rules::{
@@ -40,6 +40,20 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+    let artifacts = job
+        .steps
+        .iter()
+        .find_map(|step| match step.kind {
+            StepKind::ReportCaches {
+                nextest_artifacts, ..
+            } => Some(if nextest_artifacts {
+                ArtifactFormat::All
+            } else {
+                ArtifactFormat::CargoOnly
+            }),
+            _ => None,
+        })
+        .unwrap_or(ArtifactFormat::Disabled);
     let tests = job
         .steps
         .iter()
@@ -76,14 +90,19 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores, tests))
+            .flat_map(|step| rendered_steps(step, restores, tests, artifacts))
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool, tests: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind, tests)];
+fn rendered_steps(
+    step: &Step,
+    restores: bool,
+    tests: bool,
+    artifacts: ArtifactFormat,
+) -> Vec<RenderedStep> {
+    let mut rendered = vec![step_body(&step.kind, tests, artifacts)];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -137,9 +156,9 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind, tests: bool) -> RenderedStep {
+fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> RenderedStep {
     match kind {
-        StepKind::ReportCaches(caches) => crate::report::lane(caches, tests),
+        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics => crate::report::check(),
@@ -183,7 +202,7 @@ fn step_body(kind: &StepKind, tests: bool) -> RenderedStep {
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command),
+        StepKind::Cargo(command) => cargo_step(command, artifacts),
         StepKind::Helper(command) => helper_step(*command),
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
