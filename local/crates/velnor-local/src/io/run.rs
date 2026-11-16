@@ -52,6 +52,8 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::Run(args) => drive::run(args).await,
         Command::Conformance(args) => conformance(args).await,
         Command::Build(args) => super::pair::build(args).await,
+        Command::Doctor(args) => super::doctor::run(args).await,
+        Command::Status(args) => super::status::run(&args.dir).await,
         Command::Jit(args) => super::pair::jit(args).await,
         Command::Supervise(args) => super::supervisor::serve(args).await,
     }

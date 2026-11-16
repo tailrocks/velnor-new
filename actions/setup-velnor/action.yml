@@ -74,7 +74,8 @@ runs:
             bounded_copy "$dir/velnor-ci" "$staging/velnor-ci" || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
-            curl --fail --silent --show-error --location --retry 3 --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
+            curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform" || fail "downloading velnor-ci $VERSION $platform failed, or the file is larger than $MAX_BYTES bytes"
+            [ "$(wc -c < "$staging/velnor-ci")" -le "$MAX_BYTES" ] || fail "the velnor-ci $VERSION $platform download is larger than $MAX_BYTES bytes"
           fi
           if [ "$(digest "$staging/velnor-ci")" = "$expected" ]; then
             verified="$source"

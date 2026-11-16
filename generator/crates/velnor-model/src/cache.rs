@@ -4,7 +4,6 @@
 use crate::ids::{JobId, RepoPath, RootSlug};
 
 const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
-const TARGET: RepoPath = RepoPath::from_static("target");
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Host;
@@ -13,14 +12,16 @@ pub struct Host;
 pub struct CacheRoot {
     slug: RootSlug,
     manifest: RepoPath,
+    target_dir: RepoPath,
 }
 
 impl CacheRoot {
     #[must_use]
-    pub fn new(manifest: &RepoPath) -> Self {
+    pub fn new(manifest: &RepoPath, target_dir: RepoPath) -> Self {
         Self {
             slug: RootSlug::of(manifest),
             manifest: manifest.clone(),
+            target_dir,
         }
     }
 
@@ -35,8 +36,8 @@ impl CacheRoot {
     }
 
     #[must_use]
-    pub fn target_dir(&self) -> RepoPath {
-        self.manifest.sibling(&TARGET)
+    pub fn target_dir(&self) -> &RepoPath {
+        &self.target_dir
     }
 }
 
@@ -92,7 +93,7 @@ impl CacheKey {
                 CachePath::CargoGitDb,
             ],
             Self::Target { root, .. } | Self::Delta { root, .. } => {
-                vec![CachePath::Target(root.target_dir())]
+                vec![CachePath::Target(root.target_dir().clone())]
             }
         }
     }

@@ -12,9 +12,12 @@ fn plz_refusal(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
 fn rulesets(
     files: &velnor_release::ReleaseFiles,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    Ok(serde_json::from_str(&ruleset_json(&ReleasePlan::read(
-        files,
-    )?))?)
+    let lines = ruleset_json(&ReleasePlan::read(files)?);
+    Ok(lines
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<serde_json::Value>, _>>()?
+        .into())
 }
 
 fn ruleset(
@@ -230,6 +233,40 @@ fn a_toolchain_taken_from_a_path_is_refused_for_every_root() -> TestResult {
         assert_eq!(refusal(&files), None, "{file}");
     }
     Ok(())
+}
+
+#[test]
+fn a_repository_that_needs_nightly_rust_is_refused() {
+    for (file, text) in [
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"nightly\"\n",
+        ),
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"nightly-2026-01-01\"\n",
+        ),
+        ("rust-toolchain", "nightly\n"),
+    ] {
+        let mut files = files();
+        files
+            .toolchain_files
+            .insert(file.to_owned(), text.to_owned());
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::NightlyOnly { .. })),
+            "{file} {text}"
+        );
+    }
+    let mut features = files();
+    features.cargo_manifest_texts.insert(
+        "Cargo.toml".to_owned(),
+        "cargo-features = [\"edition2024\", \"test-dummy-unstable\"]\n[package]\nname = \"app\"\n"
+            .to_owned(),
+    );
+    assert!(matches!(
+        refusal(&features),
+        Some(ReleaseError::NightlyOnly { .. })
+    ));
 }
 
 #[test]

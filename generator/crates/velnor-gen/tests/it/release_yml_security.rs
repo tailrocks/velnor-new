@@ -167,7 +167,14 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
                 ]);
             let branch_only =
                 env_is(&[("BRANCH", "${{ github.event.repository.default_branch }}")]);
-            assert!(newest || branch_only || step.get("env").is_none(), "{id}");
+            let check = step
+                .get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.starts_with("velnor-ci release check-config"));
+            assert!(
+                newest || branch_only || check || step.get("env").is_none(),
+                "{id}"
+            );
         }
         for step in &all[created + 1..] {
             let token = step.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text);
@@ -198,7 +205,7 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
     let exec = "\"$RUNNER_TEMP/release-plz\"";
-    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml";
+    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests";
     let mut prepared: Vec<String> = [
         "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
         "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",

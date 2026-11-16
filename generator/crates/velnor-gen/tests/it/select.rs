@@ -42,6 +42,8 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         .into_iter()
         .map(|(manifest, members)| RustRoot {
             manifest: path(manifest),
+            target_dir: path("target"),
+            sets_build_target: false,
             members,
             depends_on: Vec::new(),
             external_dependencies: Vec::new(),

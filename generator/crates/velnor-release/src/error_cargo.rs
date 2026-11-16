@@ -87,6 +87,14 @@ impl ReleaseError {
 
     fn fmt_cargo_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::AfterMissingWorkflow { name } => write!(
+                f,
+                ".velnor/release.toml: workflow {name:?} runs on push and is not in after, so when it finishes last the gate has already answered ready=false and nothing starts Release again"
+            ),
+            Self::NightlyOnly { file, what } => write!(
+                f,
+                "{file}: {what} needs a nightly Rust, and the release jobs run release-plz and cargo on stable"
+            ),
             Self::CargoConfigInclude { file } => write!(
                 f,
                 "{file}: a cargo config include loads a file velnor-gen never checked while release-plz holds the release App token"

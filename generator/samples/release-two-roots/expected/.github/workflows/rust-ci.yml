@@ -41,13 +41,13 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+      - name: Install velnor-ci 0.1.80
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
         with:
-          version: '0.1.79'
-          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
-          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
-          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+          version: '0.1.80'
+          sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
+          sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
+          sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
       - id: plan
         name: velnor-ci plan
         run: velnor-ci plan --explain
@@ -69,13 +69,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+      - name: Install velnor-ci 0.1.80
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
         with:
-          version: '0.1.79'
-          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
-          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
-          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+          version: '0.1.80'
+          sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
+          sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
+          sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -149,13 +149,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+      - name: Install velnor-ci 0.1.80
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
         with:
-          version: '0.1.79'
-          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
-          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
-          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+          version: '0.1.80'
+          sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
+          sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
+          sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -232,13 +232,13 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+      - name: Install velnor-ci 0.1.80
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
         with:
-          version: '0.1.79'
-          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
-          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
-          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+          version: '0.1.80'
+          sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
+          sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
+          sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:

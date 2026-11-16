@@ -8,7 +8,7 @@ use crate::protocol::Error;
 use crate::side::Side;
 use crate::standin::{Job, Run};
 
-pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are; the check is not available yet (see FAST-L.8.6)";
+pub const WARNING: &str = "WARNING: the approved-workflows check is off in local mode, and jobs run the checkout's workflows as they are";
 pub const RUNS_PATH: &str = "/_apis/v1/Message/workflow/runs";
 pub const AGENTS_PATH: &str = "/_apis/v1/Agent/0";
 
@@ -93,6 +93,16 @@ impl Posted {
 #[serde(deny_unknown_fields)]
 pub struct JitRequest {
     pub side: Side,
+    pub name: String,
+}
+
+#[must_use]
+pub fn agent_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,14 +131,6 @@ pub fn call<'a>(method: &str, path: &'a str) -> Call<'a> {
         }
         _ => Call::Unknown,
     }
-}
-
-fn agent_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 128
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
 }
 
 #[derive(Debug, PartialEq, Eq)]

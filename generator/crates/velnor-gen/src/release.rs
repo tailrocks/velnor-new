@@ -3,6 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::workflow_triggers::runs_on_push;
+use crate::yaml_scalar::scalar;
 use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
@@ -10,7 +12,7 @@ use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
 use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
-use crate::GenerateError;
+use crate::{GenerateError, RELEASE_HELPER_MINIMUM};
 
 pub(crate) fn release_workflow(
     view: &RepoView,
@@ -20,6 +22,9 @@ pub(crate) fn release_workflow(
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
+    }
+    if !helper.version().at_least(RELEASE_HELPER_MINIMUM) {
+        return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
     }
     if facts
         .toolchain
@@ -104,22 +109,12 @@ fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
 }
 
 fn workflow_name(text: &str) -> Option<String> {
-    let value = text
-        .lines()
-        .find_map(|line| line.strip_prefix("name:"))?
-        .trim();
-    for quote in ['"', '\''] {
-        if let Some(inner) = value.strip_prefix(quote) {
-            return inner.split_once(quote).map(|(name, _)| name.to_owned());
-        }
-    }
-    let plain = value.split(" #").next().unwrap_or(value);
-    Some(plain.trim().to_owned())
+    let value = text.lines().find_map(|line| line.strip_prefix("name:"))?;
+    scalar(value)
 }
 
-fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {
-    let tracked = view
-        .files
+fn tracked_workflows(view: &RepoView) -> impl Iterator<Item = String> + '_ {
+    view.files
         .iter()
         .filter(|(path, _)| {
             let name = path.as_str();
@@ -129,9 +124,28 @@ fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BT
                     .is_some_and(|ext| ext == "yml" || ext == "yaml")
         })
         .filter(|(_, bytes)| owner_of(bytes) != Owner::VelnorGen)
-        .filter_map(|(_, bytes)| workflow_name(&String::from_utf8_lossy(bytes)));
-    let made = generated.values().filter_map(|text| workflow_name(text));
-    tracked.chain(made).collect()
+        .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
+}
+
+fn all_workflows(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> Vec<String> {
+    tracked_workflows(view)
+        .chain(generated.values().cloned())
+        .collect()
+}
+
+fn workflow_names(texts: &[String]) -> BTreeSet<String> {
+    texts
+        .iter()
+        .filter_map(|text| workflow_name(text))
+        .collect()
+}
+
+fn push_workflows(texts: &[String]) -> BTreeSet<String> {
+    texts
+        .iter()
+        .filter(|text| runs_on_push(text))
+        .filter_map(|text| workflow_name(text))
+        .collect()
 }
 
 fn release_files(
@@ -198,7 +212,8 @@ fn release_files(
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
-        workflow_names: reality.map(|known| workflow_names(view, known.generated)),
+        workflow_names: reality.map(|known| workflow_names(&all_workflows(view, known.generated))),
+        push_workflows: reality.map(|known| push_workflows(&all_workflows(view, known.generated))),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

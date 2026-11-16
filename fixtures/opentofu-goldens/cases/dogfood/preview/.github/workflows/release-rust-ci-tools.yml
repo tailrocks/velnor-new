@@ -17,11 +17,11 @@ jobs:
       contents: read
       checks: read
     steps:
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@9ee3aedc9d3a9ebf90a212d960c9a5cfaae6c46b
+      - name: Install velnor-ci 0.1.80
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c
         with:
-          version: 0.1.79
-          sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
+          version: 0.1.80
+          sha256-linux-x64: 659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c
       - name: Check that the tagged commit is on the default branch and passed Required
         env:
           GITHUB_TOKEN: ${{ github.token }}

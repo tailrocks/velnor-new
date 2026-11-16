@@ -273,3 +273,20 @@ fn two_binaries_entries_for_one_package_are_refused() {
     );
     assert!(error.is_some_and(|error| error.to_string().contains("app")));
 }
+
+#[test]
+fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() {
+    let pushed = |names: &[&str]| Some(names.iter().map(|name| (*name).to_owned()).collect());
+    let mut files = files();
+    files.release_toml = Some("after = [\"Rust CI\"]\n".to_owned());
+    files.push_workflows = pushed(&["Rust CI", "Lint"]);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::AfterMissingWorkflow { name }) if name == "Lint"
+    ));
+    files.push_workflows = pushed(&["Rust CI"]);
+    assert_eq!(refusal(&files), None);
+    files.release_toml = Some("after = [\"Rust CI\", \"Lint\"]\n".to_owned());
+    files.push_workflows = pushed(&["Rust CI", "Lint"]);
+    assert_eq!(refusal(&files), None);
+}
