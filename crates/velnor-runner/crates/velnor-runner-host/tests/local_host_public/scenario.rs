@@ -118,11 +118,8 @@ impl Scenario {
 
     pub(crate) async fn finish(mut self) -> TestResult<()> {
         let stopped = self.stop().await;
-        let network = self.fork_network.clone();
-        let removed = self.fixture.docker.remove_network(&network).await;
         self.fixture.finish().await?;
         stopped??;
-        removed?;
         Ok(())
     }
 }

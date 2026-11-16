@@ -7,9 +7,7 @@ use std::fmt::Write as _;
 
 use bollard::Docker;
 use bollard::models::NetworkCreateRequest;
-use bollard::query_parameters::{
-    BuildImageOptions, ListContainersOptions, ListVolumesOptions, RemoveImageOptions,
-};
+use bollard::query_parameters::{BuildImageOptions, ListContainersOptions, ListVolumesOptions};
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
@@ -139,7 +137,6 @@ pub(crate) struct Fixture {
     pub(crate) environment: String,
     pub(crate) network: String,
     pub(crate) image: String,
-    tag: String,
     pub(crate) guard: Guard,
 }
 
@@ -166,7 +163,6 @@ impl Fixture {
             guard: Guard::new(&format!("test-{suffix}"), &tag, &network),
             network,
             image,
-            tag,
         })
     }
 
@@ -174,11 +170,7 @@ impl Fixture {
         request(&self.environment, &self.network, &self.image)
     }
 
-    pub(crate) async fn finish(self) -> TestResult<()> {
-        self.docker.remove_network(&self.network).await?;
-        self.docker
-            .remove_image(&self.tag, None::<RemoveImageOptions>, None)
-            .await?;
-        Ok(())
+    pub(crate) async fn finish(mut self) -> TestResult<()> {
+        self.guard.finish(&self.docker).await
     }
 }

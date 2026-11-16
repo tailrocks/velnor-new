@@ -20,6 +20,8 @@ use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/cleanup.rs"]
+mod cleanup;
 #[path = "local_host_public/journal.rs"]
 mod journal;
 #[path = "local_host_public/proxy.rs"]

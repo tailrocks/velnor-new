@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use bollard::Docker;
+use bollard::errors::Error;
 use bollard::query_parameters::{
     ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveImageOptions,
     RemoveVolumeOptions,
@@ -14,6 +16,7 @@ pub(crate) struct Guard {
     environment: String,
     image: String,
     networks: Mutex<Vec<String>>,
+    finished: bool,
 }
 
 impl Guard {
@@ -22,6 +25,7 @@ impl Guard {
             environment: environment.to_owned(),
             image: image.to_owned(),
             networks: Mutex::new(vec![network.to_owned()]),
+            finished: false,
         }
     }
 
@@ -30,10 +34,23 @@ impl Guard {
             networks.push(network.to_owned());
         }
     }
+
+    pub(crate) async fn finish(&mut self, docker: &Docker) -> super::TestResult<()> {
+        let networks = self
+            .networks
+            .get_mut()
+            .map_err(|_| "network lock poisoned")?;
+        cleanup(docker, &self.environment, &self.image, networks).await?;
+        self.finished = true;
+        Ok(())
+    }
 }
 
 impl Drop for Guard {
     fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
         let environment = self.environment.clone();
         let image = self.image.clone();
         let networks = self
@@ -57,20 +74,40 @@ fn sweep(environment: &str, image: &str, networks: &[String]) {
         let Ok(docker) = super::docker() else {
             return;
         };
-        let filters = HashMap::from([(
-            "label".to_owned(),
-            vec![format!("{ENVIRONMENT_LABEL}={environment}")],
-        )]);
-        let containers = docker
-            .list_containers(Some(ListContainersOptions {
-                all: true,
-                filters: Some(filters.clone()),
-                ..Default::default()
-            }))
-            .await
-            .unwrap_or_default();
-        for container in containers.into_iter().filter_map(|container| container.id) {
-            let _removed = docker
+        let _removed = cleanup(&docker, environment, image, networks).await;
+    });
+}
+
+fn removed(result: Result<(), Error>) -> super::TestResult<()> {
+    match result {
+        Ok(())
+        | Err(Error::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+async fn cleanup(
+    docker: &Docker,
+    environment: &str,
+    image: &str,
+    networks: &[String],
+) -> super::TestResult<()> {
+    let filters = HashMap::from([(
+        "label".to_owned(),
+        vec![format!("{ENVIRONMENT_LABEL}={environment}")],
+    )]);
+    let containers = docker
+        .list_containers(Some(ListContainersOptions {
+            all: true,
+            filters: Some(filters.clone()),
+            ..Default::default()
+        }))
+        .await?;
+    for container in containers.into_iter().filter_map(|container| container.id) {
+        removed(
+            docker
                 .remove_container(
                     &container,
                     Some(RemoveContainerOptions {
@@ -79,25 +116,29 @@ fn sweep(environment: &str, image: &str, networks: &[String]) {
                         ..Default::default()
                     }),
                 )
-                .await;
-        }
-        let volumes = docker
-            .list_volumes(Some(ListVolumesOptions {
-                filters: Some(filters),
-            }))
-            .await
-            .map(|listed| listed.volumes.unwrap_or_default())
-            .unwrap_or_default();
-        for volume in volumes {
-            let _removed = docker
+                .await,
+        )?;
+    }
+    let volumes = docker
+        .list_volumes(Some(ListVolumesOptions {
+            filters: Some(filters),
+        }))
+        .await?;
+    for volume in volumes.volumes.unwrap_or_default() {
+        removed(
+            docker
                 .remove_volume(&volume.name, None::<RemoveVolumeOptions>)
-                .await;
-        }
-        for network in networks {
-            let _removed = docker.remove_network(network).await;
-        }
-        let _removed = docker
+                .await,
+        )?;
+    }
+    for network in networks {
+        removed(docker.remove_network(network).await)?;
+    }
+    removed(
+        docker
             .remove_image(image, None::<RemoveImageOptions>, None)
-            .await;
-    });
+            .await
+            .map(|_| ()),
+    )?;
+    Ok(())
 }
