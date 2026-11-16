@@ -42,7 +42,7 @@ pub fn render_release(
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     let tag_job = tag(plan, helper);
-    let collisions = output_collisions(&tag_job);
+    let collisions = output_collisions(plan, helper, &tag_job.id);
     if !collisions.is_empty() {
         return Err(collisions);
     }
@@ -139,7 +139,7 @@ fn gate(helper: &HelperRelease) -> RenderedJob {
                     ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
                 ]),
                 run: Some(
-                    "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned(),
+                    "velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"".to_owned(),
                 ),
                 ..RenderedStep::default()
             },
@@ -262,15 +262,36 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn output_collisions(tag: &RenderedJob) -> Vec<RuleViolation> {
-    let mut seen = BTreeSet::new();
-    tag.outputs
+fn recorded_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<String> {
+    let packages: BTreeSet<&String> = plan
+        .roots
         .iter()
-        .filter(|(name, _)| !seen.insert(name.as_str()))
-        .map(|(name, _)| RuleViolation {
-            job: tag.id.clone(),
+        .flat_map(|root| {
+            root.packages
+                .iter()
+                .map(|(package, _)| package)
+                .chain(&root.inherited)
+        })
+        .chain(plan.binaries.iter().map(|binary| &binary.package))
+        .collect();
+    let commits = helper.version().at_least(TAGGED_COMMIT_HELPER);
+    packages
+        .into_iter()
+        .flat_map(|package| {
+            std::iter::once(package.clone()).chain(commits.then(|| commit_output(package)))
+        })
+        .collect()
+}
+
+fn output_collisions(plan: &ReleasePlan, helper: &HelperRelease, job: &str) -> Vec<RuleViolation> {
+    let mut seen = BTreeSet::new();
+    recorded_outputs(plan, helper)
+        .into_iter()
+        .filter(|name| !seen.insert(name.clone()))
+        .map(|name| RuleViolation {
+            job: job.to_owned(),
             step: 0,
-            rule: Rule::OutputNameCollision(name.clone()),
+            rule: Rule::OutputNameCollision(name),
         })
         .collect()
 }
@@ -282,9 +303,9 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
     let prefixes = plan
         .roots
         .iter()
-        .map(|root| shell_word(&root.pr_branch_prefix))
+        .map(|root| format!("--branch-prefix={}", shell_word(&root.pr_branch_prefix)))
         .collect::<Vec<_>>()
-        .join(" --branch-prefix ");
+        .join(" ");
     Some(RenderedStep {
         name: "Check that release-plz would tag the verified commit".to_owned(),
         env: variables(&[
@@ -293,7 +314,7 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
             ("COMMIT", VERIFIED_COMMIT),
         ]),
         run: Some(format!(
-            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --branch-prefix {prefixes}"
+            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {prefixes}"
         )),
         ..RenderedStep::default()
     })
@@ -318,7 +339,7 @@ fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
             ("COMMIT", VERIFIED_COMMIT),
         ]),
         run: Some(format!(
-            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" {files}"
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {files}"
         )),
         ..RenderedStep::default()
     }

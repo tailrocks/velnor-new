@@ -173,7 +173,7 @@ pub struct ReleaseGateArgs {
 #[derive(Debug, Subcommand)]
 pub enum ReleaseCommand {
     #[command(
-        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released (with --repo and --verified-commit, also one line <package>_commit=<sha> for the commit its tag is on, which must be the verified commit or in its history); exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
+        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released (with --repo and --verified-commit, also one line <package>_commit=<sha> for the commit its tag is on, which must be the verified commit itself); exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
     )]
     Record(RecordArgs),
     #[command(
@@ -253,7 +253,7 @@ pub struct RecordArgs {
         long,
         value_name = "SHA",
         requires = "repo",
-        help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit or in its history. Reads GITHUB_TOKEN, which needs contents: read"
+        help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit itself. Reads GITHUB_TOKEN, which needs contents: read"
     )]
     pub verified_commit: Option<String>,
 }
@@ -271,6 +271,7 @@ pub struct PreflightArgs {
     #[arg(
         long = "branch-prefix",
         required = true,
+        allow_hyphen_values = true,
         value_name = "PREFIX",
         help = "A pr_branch_prefix of a release-plz root; give one per root"
     )]

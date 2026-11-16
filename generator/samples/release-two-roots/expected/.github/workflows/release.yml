@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release-gate --repo "$REPOSITORY" --sha "$COMMIT"'
+        run: 'velnor-ci release-gate --repo="$REPOSITORY" --sha="$COMMIT"'
   release-pr:
     needs:
       - gate
@@ -102,7 +102,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -197,7 +197,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -453,7 +453,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
   build-tools-linux-x64:
     needs:
       - gate
@@ -616,4 +616,4 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.tools }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist tools-linux-x64.tar.gz tools-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist tools-linux-x64.tar.gz tools-macos-arm64.tar.gz'

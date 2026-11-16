@@ -43,7 +43,7 @@ fn find_check<'a>(build: &'a Node, check: &str) -> Result<&'a Node, Box<dyn Erro
 }
 
 #[test]
-fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified_history()
+fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_to_equal_the_verified_commit()
 -> TestResult {
     let tree = binaries("0.1.81")?;
     let tag = job(&tree, "tag")?;
@@ -54,7 +54,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
     assert_eq!(
         record.get("run").and_then(Node::text),
         Some(
-            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
         )
     );
     for (key, value) in [
@@ -109,7 +109,7 @@ fn the_tag_job_checks_the_release_source_read_only_before_the_app_token_is_minte
     assert_eq!(
         step.get("run").and_then(Node::text),
         Some(
-            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --branch-prefix release-plz-app- --branch-prefix release-plz-tools-"
+            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" --branch-prefix=release-plz-app- --branch-prefix=release-plz-tools-"
         )
     );
     assert_eq!(
@@ -229,5 +229,46 @@ fn a_package_named_like_another_packages_commit_output_is_refused_at_generation(
         violations[0].to_string(),
         "the tag job would define the output app_commit twice: it is both a released package and the commit output of another package; rename the package"
     );
+    Ok(())
+}
+
+#[test]
+fn an_assetless_package_named_like_another_packages_commit_output_is_refused_at_generation()
+-> TestResult {
+    const SHADOW: Root = Root {
+        dir: "tools",
+        package: "app_commit",
+        prefix: "release-plz-shadow-",
+        publishes: false,
+    };
+    let mut view = release_view(&[APP, SHADOW], Some("roots = [\".\", \"tools\"]\n"))?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
+    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+        return Err("rendered".into());
+    };
+    assert_eq!(violations.len(), 1);
+    assert_eq!(
+        violations[0].to_string(),
+        "the tag job would define the output app_commit twice: it is both a released package and the commit output of another package; rename the package"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_prefix_that_looks_like_an_option_is_attached_to_its_flag() -> TestResult {
+    const HELP: Root = Root {
+        dir: ".",
+        package: "app",
+        prefix: "-h",
+        publishes: false,
+    };
+    let tree = render_with("0.1.81", &[HELP], "[[binaries]]\npackage = \"app\"\n")?;
+    let run = steps(job(&tree, "tag")?)
+        .iter()
+        .filter_map(|step| step.get("run").and_then(Node::text))
+        .find(|run| run.starts_with("velnor-ci release preflight"))
+        .ok_or("no preflight step")?;
+    assert!(run.ends_with(" --branch-prefix=-h"), "{run}");
     Ok(())
 }

@@ -135,7 +135,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
     let (name, expected, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
         (
-            "Check that the tag is the commit the tag job found it on in the verified history",
+            "Check that the tag is on the verified commit itself",
             format!(
                 "${{{{ needs.tag.outputs.{} }}}}",
                 commit_output(&binary.package)
@@ -213,7 +213,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             ),
         ]),
         run: Some(format!(
-            "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {RELEASE_APP_SLUG} --dir {DIST} {}",
+            "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
             assets(binary).join(" ")
         )),
         ..RenderedStep::default()
