@@ -3,6 +3,7 @@
 
 mod audit;
 mod cache;
+mod cargo_artifacts;
 mod check_configurations;
 mod check_metadata;
 mod check_metadata_gen;
