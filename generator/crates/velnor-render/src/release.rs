@@ -165,13 +165,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             &format!("release-plz release-pr {}", release_plz_arguments(root)),
         )
     }));
-    let after_newest = steps
-        .iter()
-        .position(|step| step.id.as_deref() == Some("newest"))
-        .map_or(0, |index| index + 1);
-    for step in &mut steps[after_newest..] {
-        step.condition = Some(expression(NEWEST_OUTPUT));
-    }
+    only_while_newest(&mut steps);
     RenderedJob {
         condition: Some(expression(&format!(
             "{GATE_IS_READY} && {FROM_A_PASSED_PUSH} && {STILL_NEWEST}"
@@ -186,10 +180,21 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
+fn only_while_newest(steps: &mut [RenderedStep]) {
+    let after_newest = steps
+        .iter()
+        .position(|step| step.id.as_deref() == Some("newest"))
+        .map_or(0, |index| index + 1);
+    for step in &mut steps[after_newest..] {
+        step.condition = Some(expression(NEWEST_OUTPUT));
+    }
+}
+
 fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = install_release_plz(plan);
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
+    steps.push(newest_check());
     steps.push(refuse_commands(&plan.roots));
     steps.push(app_token(&[
         ("contents", "write"),
@@ -213,6 +218,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         run: Some(format!("velnor-ci release record {}", files.join(" "))),
         ..RenderedStep::default()
     });
+    only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));

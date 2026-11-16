@@ -297,7 +297,7 @@ impl ReleaseError {
             Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
             Self::ReleasePlzBackendNotDownloadable { tool } => write!(
                 f,
-                "mise.toml: {tool} builds release-plz from source and has no GitHub release archive to verify; use `release-plz`, `aqua:release-plz/release-plz`, `github:release-plz/release-plz` or `ubi:release-plz/release-plz`"
+                "mise.toml: {tool} builds release-plz from source and has no GitHub release archive to verify; use `release-plz`, `aqua:release-plz/release-plz` or `github:release-plz/release-plz`"
             ),
             Self::ReleasePlzNotLockedForLinux { tool } => write!(
                 f,
@@ -351,7 +351,7 @@ impl ReleaseError {
             ),
             Self::ReleasePlzArtifactElsewhere { tool, url } => write!(
                 f,
-                "mise.lock: {tool} downloads from {url}, which is not a release-plz release on GitHub, so the downloaded program would run with the release App token in scope; run `mise lock` again"
+                "mise.lock: {tool} downloads from {url}, which is not the release-plz archive of the configured version, so the downloaded program would run with the release App token in scope; run `mise lock` again"
             ),
             _ => self.fmt_cargo(f),
         }

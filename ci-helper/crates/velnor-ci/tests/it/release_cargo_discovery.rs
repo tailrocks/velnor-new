@@ -10,6 +10,8 @@ use velnor_ci::release::{CargoPathEntry, check_cargo_discovery};
 
 const PROVIDER: &str = "[registry]\ncredential-provider = [\"./steal\"]\n";
 
+const COMPLIANT: &str = "[workspace]\nrelease_always = false\ngit_release_draft = true\nsemver_check = false\npublish_no_verify = true\ngit_tag_name = \"v{{ version }}\"\n";
+
 struct Checkout(PathBuf);
 
 impl Checkout {
@@ -63,7 +65,7 @@ fn refused(checkout: &Checkout, file: &str, needle: &str) {
 #[test]
 fn a_cargo_symlink_hiding_a_credential_provider_is_refused_on_the_checkout() {
     let checkout = Checkout::new("cargo-link");
-    checkout.write("release-plz.toml", "[workspace]\n");
+    checkout.write("release-plz.toml", COMPLIANT);
     checkout.write("cfg/config.toml", PROVIDER);
     assert_eq!(checkout.check("release-plz.toml").0, Some(0));
     checkout.link(".cargo", "cfg");
@@ -82,12 +84,12 @@ fn a_symlink_anywhere_on_the_discovery_path_of_a_root_is_refused() {
     ] {
         let checkout = Checkout::new("path");
         checkout.write("elsewhere.toml", "[workspace]\n");
-        checkout.write("real/release-plz.toml", "[workspace]\n");
+        checkout.write("real/release-plz.toml", COMPLIANT);
         fs::create_dir_all(checkout.0.join("tools/inner")).ok();
         if link == "tools" {
             fs::remove_dir_all(checkout.0.join("tools")).ok();
         } else {
-            checkout.write("tools/release-plz.toml", "[workspace]\n");
+            checkout.write("tools/release-plz.toml", COMPLIANT);
         }
         if link.starts_with(".cargo/") {
             fs::create_dir_all(checkout.0.join(".cargo")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -124,7 +126,7 @@ fn a_cargo_config_on_the_path_that_runs_a_program_or_redirects_is_refused() {
             "tools/.cargo/config.toml",
         ] {
             let checkout = Checkout::new("config");
-            checkout.write("tools/release-plz.toml", "[workspace]\n");
+            checkout.write("tools/release-plz.toml", COMPLIANT);
             checkout.write(place, config);
             refused(&checkout, "tools/release-plz.toml", place);
         }
@@ -134,7 +136,7 @@ fn a_cargo_config_on_the_path_that_runs_a_program_or_redirects_is_refused() {
 #[test]
 fn a_clean_path_a_builtin_provider_and_a_config_off_the_path_pass() {
     let checkout = Checkout::new("clean");
-    checkout.write("tools/release-plz.toml", "[workspace]\n");
+    checkout.write("tools/release-plz.toml", COMPLIANT);
     checkout.write(
         ".cargo/config.toml",
         "[registry]\ncredential-provider = \"cargo:token\"\n[build]\njobs = 2\n",
@@ -179,7 +181,7 @@ fn a_cargo_config_include_is_refused_in_every_form_on_the_checkout() {
             "tools/.cargo/config.toml",
         ] {
             let checkout = Checkout::new("include");
-            checkout.write("tools/release-plz.toml", "[workspace]\n");
+            checkout.write("tools/release-plz.toml", COMPLIANT);
             checkout.write("cfg/extra.toml", STEAL);
             checkout.write("tools/cfg/extra.toml", STEAL);
             checkout.write(place, config);
@@ -206,7 +208,7 @@ fn a_cargo_config_key_off_the_harmless_list_is_refused_on_the_checkout() {
         "[future_key]\nanything = 1\n",
     ] {
         let checkout = Checkout::new("unknown");
-        checkout.write("tools/release-plz.toml", "[workspace]\n");
+        checkout.write("tools/release-plz.toml", COMPLIANT);
         checkout.write(".cargo/config.toml", config);
         refused(&checkout, "tools/release-plz.toml", ".cargo/config.toml");
         refused(&checkout, "tools/release-plz.toml", "not on the list");
@@ -216,7 +218,7 @@ fn a_cargo_config_key_off_the_harmless_list_is_refused_on_the_checkout() {
 #[test]
 fn a_cargo_config_of_harmless_keys_passes_on_the_checkout() {
     let checkout = Checkout::new("harmless");
-    checkout.write("tools/release-plz.toml", "[workspace]\n");
+    checkout.write("tools/release-plz.toml", COMPLIANT);
     checkout.write(
         ".cargo/config.toml",
         "[build]\ntarget-dir = \"out\"\njobs = 2\n[net]\nretry = 3\n[term]\ncolor = \"never\"\n[profile.release]\nlto = true\n[registries.mirror]\nindex = \"sparse+https://example.org/index/\"\n",
@@ -229,12 +231,12 @@ const OTHER_DEFAULT: &str = "[registry]\ndefault = \"company\"\n[registries.comp
 #[test]
 fn a_non_crates_io_default_registry_is_refused_only_for_a_root_that_publishes() {
     for (plz, code) in [
-        ("[workspace]\n", Some(1)),
-        ("[workspace]\npublish = false\n", Some(0)),
-        ("[workspace]\ngit_only = true\n", Some(0)),
+        (COMPLIANT.to_owned(), Some(1)),
+        (format!("{COMPLIANT}publish = false\n"), Some(0)),
+        (format!("{COMPLIANT}git_only = true\n"), Some(0)),
     ] {
         let checkout = Checkout::new("default-registry");
-        checkout.write("tools/release-plz.toml", plz);
+        checkout.write("tools/release-plz.toml", &plz);
         checkout.write(".cargo/config.toml", OTHER_DEFAULT);
         assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
     }
