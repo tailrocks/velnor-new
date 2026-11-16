@@ -118,13 +118,11 @@ async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {
 }
 
 fn engine_digest(engine_id: &str) -> String {
-    use std::fmt::Write;
     Sha256::digest(engine_id.as_bytes())
         .iter()
-        .fold(String::new(), |mut encoded, byte| {
-            let _ = write!(encoded, "{byte:02x}");
-            encoded
-        })
+        .flat_map(|byte| [byte >> 4, byte & 0x0f])
+        .filter_map(|nibble| char::from_digit(u32::from(nibble), 16))
+        .collect()
 }
 
 fn is_helper_of(

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "runner_log_cleanup/helper_cases.rs"]
+mod helper_cases;
 #[path = "runner_log_cleanup/helper_scenario.rs"]
 mod helper_scenario;
 #[path = "runner_log_cleanup/seed.rs"]
