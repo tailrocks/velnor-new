@@ -57,7 +57,7 @@ async fn authority_keeps_a_claim_across_a_restart() {
 }
 
 #[tokio::test]
-async fn authority_admits_one_run_per_workflow_file_for_one_event() {
+async fn authority_binds_an_entry_without_a_workflow_to_the_file_that_claims_it_first() {
     let runners = FakeRunners::default();
     let authority = authority("authority-claims-files", &runners).await;
     post(
@@ -70,7 +70,25 @@ async fn authority_admits_one_run_per_workflow_file_for_one_event() {
     let (_, ci) = run_facts(&authority, "trusted", 1).await;
     let (_, lint) = run_facts(&authority, "trusted", 2).await;
     assert_eq!(ci["ledger"], "1-push", "{ci}");
-    assert_eq!(lint["ledger"], "1-push", "{lint}");
+    assert_eq!(lint["ledger"], Value::Null, "{lint}");
+    assert_eq!(lint["refusal"], "not_dispatched", "{lint}");
+}
+
+#[tokio::test]
+async fn authority_gives_the_entry_to_the_lowest_new_run_not_to_a_look_alike_decided_first() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-claims-lowest", &runners).await;
+    post(
+        &authority,
+        entry("1-push", "trusted", "push", "refs/heads/main"),
+    )
+    .await;
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    runners.create(Side::Trusted, 2, "push", "refs/heads/main", SHA);
+    let (_, look_alike) = run_facts(&authority, "trusted", 2).await;
+    assert_eq!(look_alike["ledger"], Value::Null, "{look_alike}");
+    let (_, real) = run_facts(&authority, "trusted", 1).await;
+    assert_eq!(real["ledger"], "1-push", "{real}");
 }
 
 #[tokio::test]
@@ -193,4 +211,22 @@ async fn authority_records_an_entry_only_when_the_whole_ledger_is_written() {
     let kept =
         std::fs::read_to_string(at.join("ledger.jsonl")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(kept.lines().count(), 2, "{kept}");
+}
+
+#[tokio::test]
+async fn authority_gives_two_identical_events_their_runs_in_creation_order_when_the_first_is_decided_first()
+ {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-claims-first", &runners).await;
+    for id in ["1-push", "2-push"] {
+        post(&authority, entry(id, "trusted", "push", "refs/heads/main")).await;
+    }
+    runners.create(Side::Trusted, 1, "push", "refs/heads/main", SHA);
+    runners.create(Side::Trusted, 2, "push", "refs/heads/main", SHA);
+    let (_, one) = run_facts(&authority, "trusted", 1).await;
+    let (_, two) = run_facts(&authority, "trusted", 2).await;
+    assert_eq!(
+        (one["ledger"].as_str(), two["ledger"].as_str()),
+        (Some("1-push"), Some("2-push"))
+    );
 }

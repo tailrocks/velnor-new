@@ -16,6 +16,7 @@ mod pair_inputs;
 mod pairs;
 mod report;
 mod restore;
+mod runners;
 mod side;
 mod standin;
 mod store;

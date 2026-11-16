@@ -225,6 +225,10 @@ async fn a_cancelled_start_stops_the_authority_process_it_spawned() {
     assert!(cancelled.is_err(), "the fake authority should never answer");
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
     let pid = pid.trim().to_owned();
+    assert!(
+        pid.parse::<u32>().is_ok(),
+        "the cancelled start recorded no pid: {pid:?}"
+    );
     let mut gone = false;
     for _ in 0..40 {
         let state = Command::new("ps")

@@ -312,6 +312,15 @@ impl<E: Engine> Environment<E> {
             .ok_or_else(|| io::Error::other(format!("{role} publishes no port: {ports}")))
     }
 
+    pub(super) async fn published_if_present(&self, role: &str) -> io::Result<Option<String>> {
+        let filter = format!("name=^/{}-{role}$", self.name);
+        let listed = self.docker("ps -aq --filter", &[&filter]).await?;
+        if listed.trim().is_empty() {
+            return Ok(None);
+        }
+        self.published(role).await.map(Some)
+    }
+
     async fn ready(&self, args: &EnvironmentArgs) -> io::Result<Addresses> {
         let token = fs::read_to_string(self.dir.join("keys/control")).await?;
         let stub = self.published("api").await?;

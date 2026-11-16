@@ -39,10 +39,21 @@ impl Entry {
             .any(|claim| claim.workflow == facts.workflow && claim.run == facts.id)
     }
 
-    fn open_for(&self, facts: &Facts) -> bool {
-        self.claims
-            .iter()
-            .all(|claim| claim.workflow != facts.workflow)
+    fn bound(&self) -> Option<&str> {
+        self.workflow
+            .as_deref()
+            .or_else(|| self.claims.first().map(|claim| claim.workflow.as_str()))
+    }
+
+    fn describes(&self, event: &str, git_ref: &str, sha: &str, workflow: &str) -> bool {
+        self.event == event
+            && self.git_ref == git_ref
+            && self.sha == sha
+            && self.bound().is_none_or(|bound| bound == workflow)
+    }
+
+    fn open_for(&self, workflow: &str) -> bool {
+        self.claims.iter().all(|claim| claim.workflow != workflow)
     }
 }
 
@@ -179,27 +190,33 @@ impl Refusal {
 }
 
 fn describes(entry: &Entry, facts: &Facts) -> bool {
-    entry.event == facts.event
-        && entry.git_ref == facts.git_ref
-        && entry.sha == facts.sha
-        && entry
-            .workflow
-            .as_ref()
-            .is_none_or(|workflow| *workflow == facts.workflow)
+    entry.describes(&facts.event, &facts.git_ref, &facts.sha, &facts.workflow)
 }
 
-pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a Entry, Refusal> {
+fn is_look_alike(entry: &Entry, run: &Run) -> bool {
+    entry.describes(
+        run.event_name.as_deref().unwrap_or_default(),
+        run.git_ref.as_deref().unwrap_or_default(),
+        run.sha.as_deref().unwrap_or_default(),
+        &run.file_name,
+    )
+}
+
+pub fn admit<'a>(
+    entries: &'a [Entry],
+    side: Side,
+    facts: &Facts,
+    runs: &[Run],
+) -> Result<&'a Entry, Refusal> {
     let own = |entry: &&Entry| {
         entry.side == side && describes(entry, facts) && !entry.existing.contains(&facts.id)
     };
-    let held = entries.iter().filter(own).find(|entry| entry.holds(facts));
-    let free = || {
-        entries
-            .iter()
-            .filter(own)
-            .rfind(|entry| entry.open_for(facts))
-    };
-    if let Some(entry) = held.or_else(free) {
+    if let Some(entry) = entries
+        .iter()
+        .filter(own)
+        .find(|entry| entry.holds(facts))
+        .or_else(|| next_free(entries, side, facts, runs))
+    {
         return Ok(entry);
     }
     if entries
@@ -209,6 +226,39 @@ pub fn admit<'a>(entries: &'a [Entry], side: Side, facts: &Facts) -> Result<&'a 
         return Err(Refusal::WrongSide);
     }
     Err(Refusal::NotDispatched)
+}
+
+fn next_free<'a>(
+    entries: &'a [Entry],
+    side: Side,
+    facts: &Facts,
+    runs: &[Run],
+) -> Option<&'a Entry> {
+    let mut taken: Vec<u64> = entries
+        .iter()
+        .flat_map(|entry| &entry.claims)
+        .filter(|claim| claim.workflow == facts.workflow)
+        .map(|claim| claim.run)
+        .collect();
+    for entry in entries.iter().filter(|entry| entry.side == side) {
+        if !entry.open_for(&facts.workflow) || !describes(entry, facts) {
+            continue;
+        }
+        let Some(first) = runs
+            .iter()
+            .filter(|run| run.file_name == facts.workflow && !taken.contains(&run.id))
+            .filter(|run| !entry.existing.contains(&run.id) && is_look_alike(entry, run))
+            .map(|run| run.id)
+            .min()
+        else {
+            continue;
+        };
+        if first == facts.id {
+            return Some(entry);
+        }
+        taken.push(first);
+    }
+    None
 }
 
 pub fn claim(entries: &mut [Entry], id: &str, facts: &Facts) -> bool {

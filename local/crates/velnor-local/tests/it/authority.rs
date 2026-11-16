@@ -6,8 +6,9 @@ mod fake;
 
 use serde_json::{Value, json};
 use velnor_local::authority::{Call, Entry, Facts, Refusal, admit, call};
-use velnor_local::io::authority::Authority;
+use velnor_local::io::authority::{Authority, mint_or_retire};
 use velnor_local::side::Side;
+use velnor_local::standin::Run;
 
 use crate::support::temp_dir;
 use fake::{FakeRunners, SHA, TOKEN, ask, authority, entry, post, run_facts};
@@ -315,22 +316,67 @@ fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
         existing,
         claims: Vec::new(),
     };
+    let runs = |ids: &[u64], file: &str| -> Vec<Run> {
+        ids.iter()
+            .map(|id| Run {
+                id: *id,
+                file_name: file.to_owned(),
+                display_name: None,
+                event_name: Some("push".to_owned()),
+                git_ref: Some("refs/heads/main".to_owned()),
+                sha: Some(SHA.to_owned()),
+                result: None,
+                status: None,
+            })
+            .collect()
+    };
     let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
-    assert!(admit(&entries, Side::Trusted, &facts(1, "a.yml")).is_ok());
+    assert!(
+        admit(
+            &entries,
+            Side::Trusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        )
+        .is_ok()
+    );
     assert_eq!(
-        admit(&entries, Side::Trusted, &facts(1, "b.yml")),
+        admit(
+            &entries,
+            Side::Trusted,
+            &facts(1, "b.yml"),
+            &runs(&[1], "b.yml")
+        ),
         Err(Refusal::NotDispatched)
     );
     assert_eq!(
-        admit(&entries, Side::Untrusted, &facts(1, "a.yml")),
+        admit(
+            &entries,
+            Side::Untrusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        ),
         Err(Refusal::WrongSide)
     );
     let seen = [entry(Side::Trusted, None, vec![1])];
     assert_eq!(
-        admit(&seen, Side::Trusted, &facts(1, "a.yml")),
+        admit(
+            &seen,
+            Side::Trusted,
+            &facts(1, "a.yml"),
+            &runs(&[1], "a.yml")
+        ),
         Err(Refusal::NotDispatched)
     );
-    assert!(admit(&seen, Side::Trusted, &facts(2, "a.yml")).is_ok());
+    assert!(
+        admit(
+            &seen,
+            Side::Trusted,
+            &facts(2, "a.yml"),
+            &runs(&[1, 2], "a.yml")
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -367,4 +413,25 @@ fn authority_has_no_address_option_and_run_takes_keep() {
         ])
         .is_err()
     );
+}
+
+#[tokio::test]
+async fn a_jit_that_fails_to_pack_leaves_no_agent_registered() {
+    let runners = FakeRunners {
+        mint_fails: true,
+        ..FakeRunners::default()
+    };
+    runners
+        .agents
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .push((Side::Trusted, 9, "velnor-x-jit-1".to_owned()));
+    let minted = mint_or_retire(&&runners, Side::Trusted).await;
+    let left = runners
+        .agents
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .len();
+    assert!(minted.is_err());
+    assert_eq!(left, 0);
 }
