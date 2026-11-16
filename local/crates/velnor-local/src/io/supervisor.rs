@@ -18,8 +18,8 @@ use tokio::net::TcpListener;
 use tokio::process::{Child, Command};
 use tokio::signal::unix::{SignalKind, signal};
 
-pub use host::write_plan;
 pub(super) use host::{Pairs, pairs};
+pub use host::{default_host, write_plan};
 
 use super::authority::{Authority, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};

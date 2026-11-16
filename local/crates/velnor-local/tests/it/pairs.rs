@@ -159,7 +159,7 @@ fn pair_mode_is_the_default_and_names_the_velnor_host_it_runs() {
         unreachable!("{parsed:?}")
     };
     assert_eq!(up.environment.runner, RunnerMode::Pair);
-    assert_eq!(up.environment.velnor_host.to_str(), Some(HOST_BINARY));
+    assert_eq!(up.environment.velnor_host, None);
     assert_eq!(up.environment.containers(2), 0);
     let plain = ["velnor-local", "run", "warm", "--dir", "s", "--repo", "r"];
     let parsed = Cli::try_parse_from(plain.into_iter().chain(["--runner", "plain"]));
@@ -198,7 +198,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         fork_runners: 1,
         default_branch: "main".to_owned(),
         runner: RunnerMode::Pair,
-        velnor_host: HOST_BINARY.into(),
+        velnor_host: Some(HOST_BINARY.into()),
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();
@@ -288,4 +288,49 @@ async fn the_plan_file_holding_the_authority_token_is_private_to_its_owner() {
         std::fs::read_to_string(dir.join("plan.json")).unwrap_or_default(),
         "{}"
     );
+}
+
+fn installed(root: &std::path::Path, mode: u32) -> (std::path::PathBuf, std::path::PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let exe = root.join("local/target/release/velnor-local");
+    let host = root.join(HOST_BINARY);
+    for path in [&exe, &host] {
+        let parent = path.parent().unwrap_or_else(|| unreachable!());
+        std::fs::create_dir_all(parent).unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(path, "#!/bin/sh\n").unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    (exe, host)
+}
+
+#[tokio::test]
+async fn the_default_velnor_host_is_the_one_built_beside_the_installed_executable() {
+    let root = temp_dir("pairs-host-installed");
+    let (exe, host) = installed(&root, 0o755);
+    assert_eq!(
+        velnor_local::io::supervisor::default_host(&exe).await.ok(),
+        Some(host)
+    );
+}
+
+#[tokio::test]
+async fn a_velnor_host_planted_in_the_working_directory_is_never_the_default() {
+    let planted = temp_dir("pairs-host-planted");
+    installed(&planted, 0o755);
+    let elsewhere = temp_dir("pairs-host-elsewhere");
+    let exe = elsewhere.join("bin/velnor-local");
+    std::fs::create_dir_all(exe.parent().unwrap_or_else(|| unreachable!()))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(&exe, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let resolved = velnor_local::io::supervisor::default_host(&exe).await;
+    assert!(resolved.is_err(), "{resolved:?}");
+}
+
+#[tokio::test]
+async fn a_default_velnor_host_that_others_can_write_is_refused() {
+    let root = temp_dir("pairs-host-writable");
+    let (exe, _) = installed(&root, 0o775);
+    let resolved = velnor_local::io::supervisor::default_host(&exe).await;
+    assert!(resolved.is_err(), "{resolved:?}");
 }
