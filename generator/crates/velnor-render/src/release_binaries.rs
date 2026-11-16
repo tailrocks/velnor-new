@@ -8,7 +8,7 @@ use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedJob, RenderedStep, Rule, RuleViolation, Value};
 use crate::steps::install_helper;
 
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
@@ -21,26 +21,37 @@ const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 const DIST: &str = "dist";
 const SUMS_FILE: &str = "SHA256SUMS";
 
-pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
-    plan.binaries
-        .iter()
-        .flat_map(|binary| {
-            let tag = tag_id(
-                plan.roots
-                    .iter()
-                    .position(|root| root.root == binary.root)
-                    .unwrap_or_default(),
-            );
-            let mut jobs: Vec<RenderedJob> = binary
+pub(crate) fn binary_jobs(
+    plan: &ReleasePlan,
+    helper: &HelperRelease,
+) -> Result<Vec<RenderedJob>, Vec<RuleViolation>> {
+    let mut jobs = Vec::new();
+    for binary in &plan.binaries {
+        let index = plan
+            .roots
+            .iter()
+            .position(|root| root.root == binary.root)
+            .ok_or_else(|| {
+                vec![RuleViolation {
+                    job: String::new(),
+                    step: 0,
+                    rule: Rule::BinaryRootNotPlanned {
+                        package: binary.package.clone(),
+                        root: binary.root.clone(),
+                    },
+                }]
+            })?;
+        let tag = tag_id(index);
+        jobs.extend(
+            binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, &tag, *platform))
-                .collect();
-            jobs.push(sums(binary, &tag));
-            jobs.push(publish(binary, &tag, helper));
-            jobs
-        })
-        .collect()
+                .map(|platform| build(binary, &tag, *platform)),
+        );
+        jobs.push(sums(binary, &tag));
+        jobs.push(publish(binary, &tag, helper));
+    }
+    Ok(jobs)
 }
 
 fn target(platform: Platform) -> (&'static str, &'static str) {

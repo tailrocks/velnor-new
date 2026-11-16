@@ -42,7 +42,7 @@ pub fn render_release(
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     let mut jobs = vec![gate(helper), release_pr(plan, helper)];
     jobs.extend(tags(plan, helper));
-    jobs.extend(binary_jobs(plan, helper));
+    jobs.extend(binary_jobs(plan, helper)?);
     jobs.extend(finalize_jobs(plan));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
