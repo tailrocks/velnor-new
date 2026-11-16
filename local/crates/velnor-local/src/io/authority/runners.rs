@@ -70,10 +70,10 @@ impl Backend for Runners {
         self.send(side, Method::DELETE, path).await.map(|_| ())
     }
 
-    async fn mint(&self, side: Side, name: Option<&str>) -> Result<Option<Minted>, MintError> {
+    async fn mint(&self, side: Side, name: &str) -> Result<Option<Minted>, MintError> {
         if self.side(side).is_none() {
             return Ok(None);
         }
-        mint_named(&self.env, side, name).await.map(Some)
+        mint_named(&self.env, side, Some(name)).await.map(Some)
     }
 }

@@ -85,8 +85,7 @@ impl Posted {
 #[serde(deny_unknown_fields)]
 pub struct JitRequest {
     pub side: Side,
-    #[serde(default)]
-    pub name: Option<String>,
+    pub name: String,
 }
 
 #[must_use]

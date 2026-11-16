@@ -95,3 +95,28 @@ async fn local_sweep_never_deletes_a_name_cut_short_by_a_torn_last_journal_line(
     assert_eq!(deleted, ["delete:trusted:whole-name"], "{events:?}");
     Ok(())
 }
+
+#[tokio::test]
+async fn local_sweep_keeps_a_journaled_name_the_authority_does_not_know_yet() -> TestResult<()> {
+    let scenario = Scenario::new().await?;
+    let state = scenario.state.path().to_path_buf();
+    std::fs::write(
+        state.join(JOURNAL),
+        "+ trusted pending-name\n+ trusted gone-name\n",
+    )?;
+    scenario.fake().agents_absent.store(true, Ordering::SeqCst);
+    let docker = scenario.fixture.docker.clone();
+    let plan = scenario.plan(1, 0)?;
+    let ended = tokio::time::timeout(
+        Duration::from_secs(120),
+        supervise(docker, plan, &state, async {}),
+    )
+    .await;
+    let events = scenario.fake().events();
+    let kept = std::fs::read_to_string(state.join(JOURNAL)).unwrap_or_default();
+    scenario.finish().await?;
+    assert_eq!(ended?, Ok(()), "{events:?}");
+    assert!(kept.contains("pending-name"), "{kept}");
+    assert!(kept.contains("gone-name"), "{kept}");
+    Ok(())
+}

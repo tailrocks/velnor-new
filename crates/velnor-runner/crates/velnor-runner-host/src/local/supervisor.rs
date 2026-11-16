@@ -88,16 +88,21 @@ impl Supervisor {
         let pairs = [label.clone(), PAIR_LABEL.to_owned()];
         let removed = remove_labelled(&self.docker, &pairs).await?;
         let mut cleanup = Ok(());
-        for (side, name) in agents {
-            let Some(side) = Side::parse(&side) else {
+        let mut unconfirmed = false;
+        for (side_name, name) in agents {
+            let Some(side) = Side::parse(&side_name) else {
                 continue;
             };
-            if self.client.delete_agent(side, &name).await.is_err() {
-                eprintln!("agent {name} was not deleted at runner.server");
-                cleanup = Err(HostError::Cleanup);
+            match self.client.delete_agent(side, &name).await {
+                Ok(true) => self.minted.retired(&side_name, &name).await?,
+                Ok(false) => unconfirmed = true,
+                Err(_) => {
+                    eprintln!("agent {name} was not deleted at runner.server");
+                    cleanup = Err(HostError::Cleanup);
+                }
             }
         }
-        if cleanup.is_ok() {
+        if cleanup.is_ok() && !unconfirmed {
             self.minted.clear().await?;
         }
         if removed.containers + removed.volumes > 0 {

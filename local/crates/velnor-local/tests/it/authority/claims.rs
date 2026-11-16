@@ -160,7 +160,7 @@ async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
         "POST",
         "/jit",
         Some(TOKEN),
-        json!({"side": "trusted"}),
+        json!({"side": "trusted", "name": "velnor-x-jit-1"}),
     )
     .await;
     let left = runners
@@ -193,4 +193,17 @@ async fn authority_records_an_entry_only_when_the_whole_ledger_is_written() {
     let kept =
         std::fs::read_to_string(at.join("ledger.jsonl")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(kept.lines().count(), 2, "{kept}");
+}
+
+#[tokio::test]
+async fn authority_refuses_a_mint_that_names_no_agent() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-nameless", &runners).await;
+    for body in [
+        json!({"side": "trusted"}),
+        json!({"side": "trusted", "name": ""}),
+    ] {
+        let (status, reply) = ask(&authority, "POST", "/jit", Some(TOKEN), body).await;
+        assert_eq!(status, 400, "{reply}");
+    }
 }

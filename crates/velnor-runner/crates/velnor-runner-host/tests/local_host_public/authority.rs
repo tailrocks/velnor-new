@@ -36,6 +36,7 @@ pub(crate) struct Fake {
     minted: AtomicUsize,
     pub(crate) mint_failures: AtomicUsize,
     pub(crate) stall_mint: AtomicBool,
+    pub(crate) agents_absent: AtomicBool,
 }
 
 pub(crate) struct Served {
@@ -92,7 +93,11 @@ impl Fake {
             ("GET", ["runs", side, id, attempt]) => self.run(side, id, attempt),
             ("DELETE", ["agents", side, name]) => {
                 self.log(format!("delete:{side}:{name}"));
-                (200, format!("{{\"name\":\"{name}\",\"deleted\":true}}"))
+                let deleted = !self.agents_absent.load(Ordering::SeqCst);
+                (
+                    200,
+                    format!("{{\"name\":\"{name}\",\"deleted\":{deleted}}}"),
+                )
             }
             _ => (404, "{}".to_owned()),
         }
@@ -237,6 +242,7 @@ pub(crate) async fn serve(docker: Docker, environment: &str) -> TestResult<Serve
         minted: AtomicUsize::new(0),
         mint_failures: AtomicUsize::new(0),
         stall_mint: AtomicBool::new(false),
+        agents_absent: AtomicBool::new(false),
     });
     let handler = Arc::clone(&fake);
     tokio::spawn(async move {

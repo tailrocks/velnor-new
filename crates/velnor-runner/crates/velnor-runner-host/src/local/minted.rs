@@ -78,6 +78,7 @@ impl MintedAgents {
     pub(super) async fn intent(&self, side: &str, name: &str) -> Result<(), HostError> {
         let mut journal = self.journal.lock().await;
         self.append(INTENT, side, name).await?;
+        self.sync_directory().await?;
         journal.open.insert((side.to_owned(), name.to_owned()));
         journal.lines += 1;
         self.compact(&mut journal).await
@@ -153,6 +154,17 @@ impl MintedAgents {
         file.sync_data().await.map_err(|_| HostError::Path)?;
         drop(file);
         tokio::fs::rename(&fresh, &self.path)
+            .await
+            .map_err(|_| HostError::Path)?;
+        self.sync_directory().await
+    }
+
+    async fn sync_directory(&self) -> Result<(), HostError> {
+        let directory = self.path.parent().ok_or(HostError::Path)?;
+        tokio::fs::File::open(directory)
+            .await
+            .map_err(|_| HostError::Path)?
+            .sync_all()
             .await
             .map_err(|_| HostError::Path)
     }

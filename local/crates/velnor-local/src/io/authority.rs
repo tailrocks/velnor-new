@@ -39,7 +39,7 @@ pub trait Backend: Send + Sync {
     fn mint(
         &self,
         side: Side,
-        name: Option<&str>,
+        name: &str,
     ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
 }
 
@@ -175,10 +175,10 @@ impl<B: Backend> Authority<B> {
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
         let asked: JitRequest = parse(&read_small_body(request.into_body()).await?)?;
-        if asked.name.as_deref().is_some_and(|name| !agent_name(name)) {
+        if !agent_name(&asked.name) {
             return Err(Error::invalid("the agent name is not valid".to_owned()));
         }
-        let minted = match self.backend.mint(asked.side, asked.name.as_deref()).await {
+        let minted = match self.backend.mint(asked.side, &asked.name).await {
             Ok(minted) => minted,
             Err(error) => {
                 let _removed = self.remove(asked.side, &error.name).await;

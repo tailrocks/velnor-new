@@ -228,7 +228,7 @@ async fn authority_mints_a_jit_for_a_side_that_is_up_and_deletes_agents_by_name(
         "POST",
         "/jit",
         Some(TOKEN),
-        json!({"side": "trusted"}),
+        json!({"side": "trusted", "name": "agent-1"}),
     )
     .await;
     assert_eq!((status, jit["jit"].as_str()), (200, Some("e30=")), "{jit}");

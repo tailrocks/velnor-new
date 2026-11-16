@@ -123,7 +123,7 @@ impl Backend for &FakeRunners {
     fn mint(
         &self,
         side: Side,
-        name: Option<&str>,
+        name: &str,
     ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
         if self.mint_fails {
             return std::future::ready(Err(MintError {
@@ -136,7 +136,7 @@ impl Backend for &FakeRunners {
             .lock()
             .unwrap_or_else(|e| unreachable!("{e}"))
             .contains(&side);
-        let name = name.unwrap_or("velnor-x-jit-1").to_owned();
+        let name = name.to_owned();
         std::future::ready(Ok((!down).then(|| Minted {
             name,
             jit: "e30=".to_owned(),

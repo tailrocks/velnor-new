@@ -33,6 +33,16 @@ async fn the_journal_is_created_private_and_stays_bounded_while_agents_come_and_
 }
 
 #[tokio::test]
+async fn an_intent_is_refused_when_the_state_directory_entry_cannot_be_synced() {
+    let state = tempfile::tempdir().expect("state");
+    let journal = MintedAgents::new(state.path());
+    std::fs::set_permissions(state.path(), std::fs::Permissions::from_mode(0o300)).expect("chmod");
+    let refused = journal.intent("trusted", "needs-a-synced-entry").await;
+    std::fs::set_permissions(state.path(), std::fs::Permissions::from_mode(0o700)).expect("chmod");
+    assert!(refused.is_err());
+}
+
+#[tokio::test]
 async fn a_torn_or_malformed_line_never_names_an_agent_to_delete() {
     let state = tempfile::tempdir().expect("state");
     std::fs::write(
