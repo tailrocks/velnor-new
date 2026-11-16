@@ -95,7 +95,7 @@ impl<'a> Lexer<'a> {
         }
         self.at = at;
         documented.then(|| Token::Doc {
-            fenced: self.text[start + 3..at].lines().any(block_line),
+            fenced: block_fenced(&self.text[start + 3..at]),
         })
     }
 
@@ -200,11 +200,37 @@ fn is_word(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte >= 0x80
 }
 
-fn block_line(line: &str) -> bool {
-    let line = line.trim_start();
-    let line = line.strip_prefix('*').unwrap_or(line);
-    let line = line.strip_suffix("*/").unwrap_or(line);
-    !line.trim().is_empty() && code_block(line)
+fn block_fenced(body: &str) -> bool {
+    let body = body.strip_suffix("*/").unwrap_or(body);
+    let mut lines = body.lines();
+    let first = lines.next().unwrap_or("");
+    let rest: Vec<&str> = lines.collect();
+    let starred = rest
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .all(|line| line.trim_start().starts_with('*'));
+    let rest: Vec<&str> = rest
+        .into_iter()
+        .map(|line| {
+            if starred {
+                line.trim_start().strip_prefix('*').unwrap_or(line)
+            } else {
+                line
+            }
+        })
+        .collect();
+    let indent = rest
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start_matches([' ', '\t']).len())
+        .min()
+        .unwrap_or(0);
+    std::iter::once(first)
+        .chain(
+            rest.into_iter()
+                .map(|line| line.get(indent..).unwrap_or("")),
+        )
+        .any(|line| !line.trim().is_empty() && code_block(line))
 }
 
 pub(crate) fn fenced_text(text: &str) -> bool {

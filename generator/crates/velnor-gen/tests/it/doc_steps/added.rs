@@ -292,4 +292,28 @@ pub(super) const ADDED: &[Case] = &[
         NO_FENCE,
         RUN,
     ),
+    (
+        "star-less block doc with an indented code block",
+        Kind::Doctested,
+        "/**\n    Adds.\n\n        let x = 1;\n*/\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "star-prefixed block doc with an indented code block",
+        Kind::Doctested,
+        "/**\n * Adds.\n *\n *     let x = 1;\n */\npub fn f() {}\n",
+        false,
+        RUN,
+        RUN,
+    ),
+    (
+        "plain prose block doc",
+        Kind::Doctested,
+        "/**\n    Adds.\n\n    More prose.\n*/\npub fn f() {}\n",
+        false,
+        NO_FENCE,
+        RUN,
+    ),
 ];
