@@ -200,3 +200,13 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         workspace_tags,
     })
 }
+
+pub fn check_release_plz_config(file: &str, text: &str) -> Result<(), String> {
+    let root = match file.rsplit_once('/') {
+        Some((root, _)) if !root.is_empty() => root,
+        _ => ".",
+    };
+    read(root, text)
+        .map(drop)
+        .map_err(|error| format!("{file}: {error}"))
+}
