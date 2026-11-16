@@ -81,7 +81,7 @@ packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["generator/**", ".github/workflows/release-rust-ci-tools.yml"]
+globs = ["generator/**", ".github/workflows/release-rust-ci-tools.yml", "actions/setup-velnor/action.yml"]
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
 complete = true
 
