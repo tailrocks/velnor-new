@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod build_inputs;
 mod git;
 mod http;
 mod inputs;

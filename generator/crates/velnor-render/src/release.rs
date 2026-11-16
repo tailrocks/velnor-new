@@ -162,7 +162,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(on_the_default_branch());
-    steps.push(refuse_commands(&plan.roots, helper.version()));
+    steps.push(refuse_commands(&plan.roots, helper.version(), false));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "write"),
@@ -203,7 +203,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
-    steps.push(refuse_commands(&plan.roots, helper.version()));
+    steps.push(refuse_commands(&plan.roots, helper.version(), true));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),

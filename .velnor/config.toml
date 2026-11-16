@@ -121,7 +121,16 @@ complete = true
 globs = [
   ".config/**",
   ".github/**",
-  ".velnor/**",
+  ".velnor/config.toml",
+  ".velnor/controller-approvals.json",
+  ".velnor/generator.lock",
+  ".velnor/mise.lock",
+  ".velnor/mise.toml",
+  ".velnor/qualification/**",
+  ".velnor/runner.lock",
+  ".velnor/rust-ci.toml",
+  ".velnor/rust-toolchain.toml",
+  ".velnor/version-policy.toml",
   "crates/**",
   "fixtures/**",
   "images/**",
@@ -183,7 +192,6 @@ complete = true
 [[stacks.rust.inputs]]
 globs = [
   "crates/velnor-actions-freshness/**",
-  ".velnor/freshness-inventory.json",
   ".velnor/version-policy.toml",
   ".cargo/mutants.toml",
   "Cargo.toml",

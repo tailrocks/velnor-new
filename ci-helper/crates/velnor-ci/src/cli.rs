@@ -192,6 +192,12 @@ pub struct CheckConfigArgs {
         help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
     )]
     pub manifests: bool,
+    #[arg(
+        long,
+        requires = "manifests",
+        help = "With --manifests, also refuse a package whose current version would give a tag git cannot create; only for the job that tags the version already committed"
+    )]
+    pub released_versions: bool,
 }
 
 impl CheckConfigArgs {

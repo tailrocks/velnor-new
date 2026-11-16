@@ -6,7 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::hazards::{cargo_config, nightly_manifest, symlink_on_config_path, toolchain_path};
+use crate::hazards::{
+    cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
+    toolchain_path,
+};
 use crate::members::{
     check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
 };
@@ -341,6 +344,9 @@ impl ReleasePlan {
                     file,
                     text,
                     reached.any(|config| config.publishes_to_crates_io),
+                    shadowed_by_extensionless_config(file, |other| {
+                        files.cargo_configs.contains_key(other)
+                    }),
                 )?;
             }
         }
