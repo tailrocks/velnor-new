@@ -21,8 +21,11 @@ use super::state::PreparedConnection;
 mod connection;
 #[path = "setup/credential.rs"]
 mod credential;
+#[path = "setup/removed.rs"]
+mod removed;
 
 pub(crate) use credential::connection_pat;
+pub(super) use removed::{REMOVED_STARTUP_BUDGET, RemovedStartup, reconcile_removed_at_startup};
 
 pub(super) struct PrepareConnectionRequest<'a> {
     pub(super) state: &'a Path,

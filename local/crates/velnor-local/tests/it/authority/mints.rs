@@ -73,11 +73,45 @@ async fn authority_refuses_a_second_mint_under_a_name_that_is_being_minted() {
     let body = json!({"side": "trusted", "name": "velnor-x-jit-1"});
     let first = ask(&authority, "POST", "/jit", Some(TOKEN), body.clone());
     let second = ask(&authority, "POST", "/jit", Some(TOKEN), body);
-    let status = tokio::select! {
-        (status, _) = first => status,
-        (status, _) = second => status,
-    };
+    let status = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::select! {
+            (status, _) = first => status,
+            (status, _) = second => status,
+        }
+    })
+    .await
+    .unwrap_or_else(|error| unreachable!("concurrent mint did not return: {error}"));
     assert_eq!(status, 409);
+}
+
+#[tokio::test]
+async fn authority_releases_a_cancelled_mint_name_for_retry() {
+    let runners = FakeRunners {
+        stalled_mint_calls: 1,
+        ..FakeRunners::default()
+    };
+    let authority = authority("authority-mint-cancelled", &runners).await;
+    let body = json!({"side": "trusted", "name": "velnor-x-jit-1"});
+    {
+        let first = ask(&authority, "POST", "/jit", Some(TOKEN), body.clone());
+        tokio::pin!(first);
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            tokio::select! {
+                reply = &mut first => unreachable!("stalled mint returned: {reply:?}"),
+                () = runners.mint_entered.notified() => {}
+            }
+        })
+        .await
+        .unwrap_or_else(|error| unreachable!("mint did not enter backend: {error}"));
+    }
+    let (status, reply) = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        ask(&authority, "POST", "/jit", Some(TOKEN), body),
+    )
+    .await
+    .unwrap_or_else(|error| unreachable!("retry did not return: {error}"));
+    assert_eq!(status, 200, "{reply}");
+    assert_eq!(reply["name"], json!("velnor-x-jit-1"));
 }
 
 #[tokio::test]

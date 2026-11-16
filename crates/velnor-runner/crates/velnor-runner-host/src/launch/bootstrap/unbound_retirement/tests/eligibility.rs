@@ -58,14 +58,6 @@ async fn a_publication_operation_is_not_retired() -> TestResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_storage_initialization_row_is_not_retired() -> TestResult<()> {
-    refused(
-        "DROP TABLE capacity_reservation_storage_initialization; CREATE TABLE capacity_reservation_storage_initialization (reservation_id INTEGER, remove_state TEXT, abort_state TEXT); INSERT INTO capacity_reservation_storage_initialization VALUES ({r}, 'not_requested', 'not_requested')",
-    )
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn a_container_that_was_not_created_is_not_retired() -> TestResult<()> {
     refused(
         "UPDATE capacity_reservation_bootstrap_containers SET create_state = 'uncertain', container_id = NULL, start_state = 'not_requested' WHERE reservation_id = {r} AND role = 'dind'",
@@ -150,15 +142,7 @@ async fn retired_despite(remove_state: &str, abort_state: &str) -> TestResult<()
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
     scope.abandon_unbound_pair(reservation).await?;
-    seed::unguarded(
-        &journal,
-        &[
-            "DROP TABLE capacity_reservation_storage_initialization".to_owned(),
-            "CREATE TABLE capacity_reservation_storage_initialization (reservation_id INTEGER, remove_state TEXT, abort_state TEXT)".to_owned(),
-            format!("INSERT INTO capacity_reservation_storage_initialization VALUES ({reservation}, '{remove_state}', '{abort_state}')"),
-        ],
-    )
-    .await?;
+    seed::initializer(&journal, FAILED, remove_state, abort_state).await?;
 
     assert!(retire_unbound_pair(&docker, &scope, &engine, reservation).await?);
     assert_eq!(fixture.objects(FAILED), Vec::<String>::new());

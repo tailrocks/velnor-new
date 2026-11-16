@@ -312,5 +312,12 @@ async fn local_slot_keeps_the_start_failure_when_retiring_the_agent_also_fails()
     scenario.fake().delete_failures.store(0, Ordering::SeqCst);
     scenario.finish().await?;
     assert_eq!(ended?, Err(HostError::Docker), "{events:?}");
+    let names = minted_names(&events);
+    assert_eq!(names.len(), 1, "{events:?}");
+    let failed = format!("delete_failed:trusted:{}", names[0]);
+    assert!(
+        events.iter().filter(|event| **event == failed).count() >= 3,
+        "{events:?}"
+    );
     Ok(())
 }
