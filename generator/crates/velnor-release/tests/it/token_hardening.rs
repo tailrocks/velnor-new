@@ -3,7 +3,7 @@
 
 use velnor_release::ReleaseError;
 
-use crate::fixture::{TestResult, files, plz_refusal_of, refusal};
+use crate::fixture::{TestResult, files, locked, plz_refusal_of, refusal};
 
 #[test]
 fn a_tag_template_without_a_version_is_refused() -> TestResult {
@@ -65,11 +65,15 @@ fn publish_together_with_git_only_is_refused() -> TestResult {
 #[test]
 fn every_configured_release_plz_entry_must_be_locked_at_its_version() {
     let both = "[tools]\nrelease-plz = \"0.4.3\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n";
-    let lock_one = "[[tools.release-plz]]\nversion = \"0.4.3\"\n";
-    let lock_both =
-        format!("{lock_one}\n[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n");
-    let mismatch =
-        format!("{lock_one}\n[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.2\"\n");
+    let lock_one = locked("release-plz", "0.4.3");
+    let lock_both = format!(
+        "{lock_one}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.3")
+    );
+    let mismatch = format!(
+        "{lock_one}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.2")
+    );
     let refuse = |lock: &str| {
         let mut files = files();
         files.mise_tomls = vec![both.to_owned()];
@@ -78,7 +82,7 @@ fn every_configured_release_plz_entry_must_be_locked_at_its_version() {
     };
     assert_eq!(refuse(&lock_both), None);
     assert_eq!(
-        refuse(lock_one),
+        refuse(&lock_one),
         Some(ReleaseError::ReleasePlzNotInMiseLock)
     );
     assert!(matches!(
@@ -98,7 +102,7 @@ fn a_release_plz_from_another_publisher_is_not_the_qualified_tool() {
     ] {
         let mut files = files();
         files.mise_tomls = vec![format!("[tools]\n\"{key}\" = \"0.4.3\"\n")];
-        files.mise_lock = format!("[[tools.\"{key}\"]]\nversion = \"0.4.3\"\n");
+        files.mise_lock = locked(key, "0.4.3");
         assert_eq!(
             refusal(&files),
             Some(ReleaseError::ReleasePlzNotInMiseToml),
@@ -119,7 +123,7 @@ fn a_release_plz_tool_table_may_name_only_a_version() {
         files.mise_tomls = vec![format!(
             "[tools.release-plz]\nversion = \"0.4.3\"\n{extra}\n"
         )];
-        files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+        files.mise_lock = locked("release-plz", "0.4.3");
         assert!(
             matches!(
                 refusal(&files),
@@ -130,7 +134,7 @@ fn a_release_plz_tool_table_may_name_only_a_version() {
     }
     let mut files = files();
     files.mise_tomls = vec!["[tools.release-plz]\nversion = \"0.4.3\"\n".to_owned()];
-    files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+    files.mise_lock = locked("release-plz", "0.4.3");
     assert_eq!(refusal(&files), None);
 }
 
@@ -146,7 +150,7 @@ fn a_mise_setting_that_redirects_where_release_plz_is_downloaded_from_is_refused
         files.mise_tomls = vec![format!(
             "{settings}[tools.release-plz]\nversion = \"0.4.3\"\n"
         )];
-        files.mise_lock = "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned();
+        files.mise_lock = locked("release-plz", "0.4.3");
         assert!(
             matches!(
                 refusal(&files),

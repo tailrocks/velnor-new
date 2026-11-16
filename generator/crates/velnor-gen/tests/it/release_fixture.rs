@@ -115,7 +115,7 @@ pub(crate) fn release_view(
     );
     view.files.insert(
         RepoPath::new("mise.lock")?,
-        b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_vec(),
+        b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n\n[tools.\"aqua:release-plz/release-plz\".\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new(".github/workflows/lint.yml")?,

@@ -3,7 +3,7 @@
 
 use velnor_release::ReleaseError;
 
-use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, plz_edited, refusal};
+use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, locked, plz_edited, refusal};
 
 #[test]
 fn release_plz_missing_from_mise_is_refused() {
@@ -24,7 +24,7 @@ fn release_plz_missing_from_mise_is_refused() {
     let mut aqua = files();
     aqua.mise_tomls =
         vec![MISE_TOML.replace("release-plz =", "\"aqua:release-plz/release-plz\" =")];
-    aqua.mise_lock = "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    aqua.mise_lock = locked("aqua:release-plz/release-plz", "0.4.3");
     assert_eq!(refusal(&aqua), None);
 }
 
@@ -59,8 +59,7 @@ fn a_binary_that_release_plz_does_not_release_is_refused() -> TestResult {
 #[test]
 fn the_locked_tool_must_be_the_configured_one() {
     let mut files = files();
-    files.mise_lock =
-        "[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    files.mise_lock = locked("aqua:release-plz/release-plz", "0.4.3");
     assert_eq!(refusal(&files), Some(ReleaseError::ReleasePlzNotInMiseLock));
 }
 

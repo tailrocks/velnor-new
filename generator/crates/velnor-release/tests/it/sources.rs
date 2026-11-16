@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
-use crate::fixture::{PLZ, TestResult, edit, files, refusal};
+use crate::fixture::{PLZ, TestResult, edit, files, locked, refusal};
 
 fn with_mise(text: &str) -> ReleaseFiles {
     let mut files = files();
@@ -60,8 +60,7 @@ fn the_plan_installs_the_exact_configured_version_whatever_key_or_options_mise_h
     assert_eq!(ReleasePlan::read(&files())?.release_plz_version, "0.4.3");
     let mut files =
         with_mise("[tools]\n\"github:release-plz/release-plz\" = { version = \"0.4.3\" }\n");
-    files.mise_lock =
-        "[[tools.\"github:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    files.mise_lock = locked("github:release-plz/release-plz", "0.4.3");
     assert_eq!(ReleasePlan::read(&files)?.release_plz_version, "0.4.3");
     Ok(())
 }

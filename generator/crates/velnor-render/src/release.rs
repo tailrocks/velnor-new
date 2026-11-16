@@ -149,7 +149,7 @@ fn after_the_gate(id: &str) -> RenderedJob {
 }
 
 fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
-    let mut steps = install_release_plz(&plan.release_plz_version);
+    let mut steps = install_release_plz(plan);
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
@@ -162,7 +162,6 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.extend(plan.roots.iter().map(|root| {
         release_plz_step(
             format!("Open the release pull request of {}", label(root)),
-            &plan.release_plz_version,
             &format!("release-plz release-pr {}", release_plz_arguments(root)),
         )
     }));
@@ -188,7 +187,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
 }
 
 fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
-    let mut steps = install_release_plz(&plan.release_plz_version);
+    let mut steps = install_release_plz(plan);
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(refuse_commands(&plan.roots));
@@ -202,7 +201,6 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.extend(plan.roots.iter().zip(&files).map(|(root, file)| {
         release_plz_step(
             format!("Tag the releases of {}", label(root)),
-            &plan.release_plz_version,
             &format!(
                 "release-plz release {} -o json > {file}",
                 release_plz_arguments(root)

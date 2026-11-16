@@ -20,7 +20,16 @@ name = "app"
 "#;
 
 pub(crate) const MISE_TOML: &str = "[tools]\nrelease-plz = \"0.4.3\"\n";
-pub(crate) const MISE_LOCK: &str = "[[tools.release-plz]]\nversion = \"0.4.3\"\n";
+pub(crate) const RELEASE_PLZ_SHA256: &str =
+    "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+pub(crate) const RELEASE_PLZ_URL: &str = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz";
+pub(crate) const MISE_LOCK: &str = "[[tools.release-plz]]\nversion = \"0.4.3\"\n\n[tools.release-plz.\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n";
+
+pub(crate) fn locked(key: &str, version: &str) -> String {
+    format!(
+        "[[tools.\"{key}\"]]\nversion = \"{version}\"\n\n[tools.\"{key}\".\"platforms.linux-x64\"]\nchecksum = \"sha256:{RELEASE_PLZ_SHA256}\"\nurl = \"{RELEASE_PLZ_URL}\"\n"
+    )
+}
 
 pub(crate) fn files() -> ReleaseFiles {
     ReleaseFiles {
