@@ -54,7 +54,9 @@ pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
-pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata};
+pub use metadata_file::{
+    METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata, recorded_roots,
+};
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
@@ -63,7 +65,7 @@ pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
 };
-pub use repo_profile::repo_profile;
+pub use repo_profile::{cargo_config_paths, repo_profile};
 pub use select::{select, unknown_paths, unread_packages};
 pub use select_event::{select_event, selects_by_diff};
 pub use sha256::sha256_hex;

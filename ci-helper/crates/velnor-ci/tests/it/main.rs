@@ -27,6 +27,7 @@ mod plan_main;
 mod platform;
 mod prepare;
 mod prepare_components;
+mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
 mod release_cargo_discovery;

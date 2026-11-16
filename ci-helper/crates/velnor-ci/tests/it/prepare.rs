@@ -68,6 +68,7 @@ pub(crate) struct Setup {
     pub repo_cargo_config: Option<&'static str>,
     pub ignored: bool,
     pub plain: bool,
+    pub populate: Option<Box<dyn Fn(&Path) + Send + Sync>>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
 }
@@ -85,6 +86,7 @@ impl Setup {
             repo_cargo_config: None,
             ignored: false,
             plain: false,
+            populate: None,
             release: "1.99.1",
             env: Vec::new(),
         }
@@ -130,6 +132,9 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".gitignore"), ".cargo/\n"),
     );
     hide(setup.plain, fs::remove_dir_all(checkout.join(".git")));
+    if let Some(populate) = &setup.populate {
+        populate(&checkout);
+    }
     fs::write(checkout.join("mise.toml"), &setup.mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
     let ci_toml = checkout.join(".velnor/rust-ci.toml");
     match setup.rust_ci_toml {

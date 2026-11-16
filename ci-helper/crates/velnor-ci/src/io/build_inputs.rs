@@ -1,48 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+use std::io::ErrorKind;
 use std::path::Path;
 
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
-use velnor_rust::{repo_profile, rustc_release};
+use velnor_rust::{METADATA_PATH, cargo_config_paths, recorded_roots, repo_profile, rustc_release};
 
 use crate::error::CiError;
 
-const CONFIG_NAMES: [&str; 2] = ["config", "config.toml"];
 const OS_RELEASE: &str = "/etc/os-release";
 
 pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
-    let mut paths = Vec::new();
-    cargo_configs(root, root, &mut paths)?;
-    let files = read_files(root, &paths).map_err(|e| CiError::new(e.to_string()))?;
+    let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
+    let roots = recorded_roots(recorded.get(&METADATA_PATH).map(Vec::as_slice))
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let inside = root
+        .canonicalize()
+        .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", root.display())))?;
+    let mut files = BTreeMap::new();
+    for path in cargo_config_paths(&roots) {
+        if let Some(bytes) = read_config(root, &inside, &path)? {
+            files.insert(path, bytes);
+        }
+    }
     repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
 }
 
-fn cargo_configs(root: &Path, folder: &Path, found: &mut Vec<RepoPath>) -> Result<(), CiError> {
-    let listing = std::fs::read_dir(folder)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", folder.display())))?;
-    for entry in listing {
-        let entry = entry.map_err(|e| CiError::new(e.to_string()))?;
-        let kind = entry.file_type().map_err(|e| CiError::new(e.to_string()))?;
-        let name = entry.file_name();
-        let path = entry.path();
-        if kind.is_dir() && name != ".git" {
-            cargo_configs(root, &path, found)?;
-        } else if kind.is_file()
-            && CONFIG_NAMES.iter().any(|candidate| name == *candidate)
-            && folder.file_name().is_some_and(|parent| parent == ".cargo")
-        {
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|e| CiError::new(e.to_string()))?;
-            let text = relative
-                .to_str()
-                .ok_or_else(|| CiError::new("a cargo config path is not UTF-8".to_owned()))?;
-            found.push(RepoPath::new(text).map_err(|e| CiError::new(e.to_string()))?);
-        }
+fn read_config(root: &Path, inside: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {
+    let file = root.join(path.as_str());
+    let resolved = match file.canonicalize() {
+        Ok(resolved) => resolved,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(CiError::new(format!("cannot read {path}: {error}"))),
+    };
+    if !resolved.starts_with(inside) {
+        return Err(CiError::new(format!(
+            "{path} resolves to {}, outside the checkout",
+            resolved.display()
+        )));
     }
-    Ok(())
+    std::fs::read(&resolved)
+        .map(Some)
+        .map_err(|e| CiError::new(format!("cannot read {path}: {e}")))
 }
 
 pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {
