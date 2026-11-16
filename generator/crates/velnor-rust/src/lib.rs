@@ -24,6 +24,7 @@ mod owners;
 mod plan;
 mod policy;
 mod reads;
+mod repo_profile;
 mod root_jobs;
 mod roots;
 mod schedule;
@@ -32,6 +33,7 @@ mod select_event;
 mod sha256;
 mod shape;
 mod sibling_features;
+mod target_dir;
 mod timings;
 mod toml_file;
 mod toolchain;
@@ -41,7 +43,7 @@ mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
 
-pub use build_profile::{BuildProfile, build_profile};
+pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
 pub use config::{CONFIG_PATH, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
@@ -60,6 +62,7 @@ pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
 };
+pub use repo_profile::repo_profile;
 pub use select::{select, unknown_paths, unread_packages};
 pub use select_event::{select_event, selects_by_diff};
 pub use sha256::sha256_hex;
