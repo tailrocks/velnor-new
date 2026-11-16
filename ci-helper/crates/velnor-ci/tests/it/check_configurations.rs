@@ -29,6 +29,7 @@ if [ "$operation" = metadata ]; then
     cat "$feature.json"
 else
     if [ -f fail-check ]; then exit 29; fi
+    if [ -f fail-second ] && [ "$feature" = two ]; then exit 29; fi
 fi
 "#,
     );
@@ -37,8 +38,14 @@ fi
 }
 
 fn metadata(nodes: &Value) -> Value {
+    let mut nodes = nodes.clone();
+    for node in nodes.as_array_mut().unwrap_or_else(|| unreachable!()) {
+        node["deps"] = json!([]);
+    }
     json!({
-        "packages": [{"id": "app"}, {"id": "dep"}, {"id": "other"}],
+        "packages": (["app", "dep", "other"].map(|id| {
+            json!({"id": id, "targets": [{"kind": ["lib"]}]})
+        })),
         "resolve": {"nodes": nodes}
     })
 }
@@ -229,4 +236,119 @@ fn check_configurations_without_a_request_file_checks_default_once() {
         "metadata --format-version 1 --locked --offline --manifest-path Cargo.toml\ncheck --workspace --all-targets --locked --offline --manifest-path Cargo.toml\n"
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("1 configurations, 1 checks"));
+}
+
+#[test]
+fn check_configurations_preserves_build_and_target_context() {
+    let mut hazards = Vec::new();
+    for dep_kind in [
+        json!({"kind": "build", "target": null}),
+        json!({"kind": null, "target": "cfg(windows)"}),
+        json!({"kind": "future", "target": null}),
+    ] {
+        let mut graph = graph(&[], &[]);
+        graph["resolve"]["nodes"][0]["deps"] = json!([{"dep_kinds": [dep_kind]}]);
+        hazards.push(graph);
+    }
+    assert_context_hazards("configurations-edge-context", hazards);
+}
+
+#[test]
+fn check_configurations_preserves_unknown_target_context() {
+    let mut hazards = Vec::new();
+    for field in ["targets", "kind"] {
+        let mut graph = graph(&[], &[]);
+        if field == "targets" {
+            graph["packages"][0]
+                .as_object_mut()
+                .unwrap_or_else(|| unreachable!())
+                .remove(field);
+        } else {
+            graph["packages"][0]["targets"] = json!([{}]);
+        }
+        hazards.push(graph);
+    }
+    for kinds in [json!([]), json!(["proc-macro"])] {
+        let mut graph = graph(&[], &[]);
+        graph["packages"][0]["targets"][0]["kind"] = kinds;
+        hazards.push(graph);
+    }
+    assert_context_hazards("configurations-target-context", hazards);
+}
+
+#[test]
+fn check_configurations_preserves_unknown_dependency_context() {
+    let mut hazards = Vec::new();
+    for dep_kind in [json!({"kind": null}), json!({"target": null})] {
+        let mut graph = graph(&[], &[]);
+        graph["resolve"]["nodes"][0]["deps"] = json!([{"dep_kinds": [dep_kind]}]);
+        hazards.push(graph);
+    }
+    for deps in [json!(null), json!([{}]), json!([{"dep_kinds": []}])] {
+        let mut graph = graph(&[], &[]);
+        graph["resolve"]["nodes"][0]["deps"] = deps;
+        hazards.push(graph);
+    }
+    assert_context_hazards("configurations-dependency-context", hazards);
+}
+
+fn assert_context_hazards(name: &str, hazards: Vec<Value>) {
+    let repo = fixture(name);
+    repo.write_unstaged("fail-second", "");
+    let requests = json!([
+        {"name": "one", "features": ["one"]},
+        {"name": "two", "features": ["two"]}
+    ]);
+    for hazard in hazards {
+        for reverse in [false, true] {
+            let clear = graph(&[], &[]);
+            let (first, second) = if reverse {
+                (&clear, &hazard)
+            } else {
+                (&hazard, &clear)
+            };
+            write_json(&repo, "one.json", first);
+            write_json(&repo, "two.json", second);
+            repo.write_unstaged("calls", "");
+            let output = run(&repo, Some(&requests));
+            assert_eq!(output.status.code(), Some(1), "{output:?}: {hazard}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("cargo check for two failed"),
+                "{output:?}"
+            );
+            assert!(
+                String::from_utf8_lossy(&output.stdout).contains("2 configurations, 2 checks"),
+                "{output:?}: {hazard}"
+            );
+        }
+    }
+}
+
+#[test]
+fn check_configurations_folds_normalized_requests_and_harmless_dev_dependencies() {
+    let repo = fixture("configurations-normalized");
+    let requests = json!([
+        {"name": "one", "features": ["one,two", "one"]},
+        {"name": "two", "features": ["two one"]}
+    ]);
+    let mut hazard = graph(&[], &[]);
+    hazard["packages"][0]["targets"][0]["kind"] = json!(["proc-macro"]);
+    write_json(&repo, "one,two,one.json", &hazard);
+    write_json(&repo, "two one.json", &hazard);
+    let output = run(&repo, Some(&requests));
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("2 configurations, 1 checks"));
+    write_json(&repo, "default.json", &hazard);
+    let default_requests =
+        json!([{"name": "default"}, {"name": "minimal", "no_default_features": true}]);
+    let output = run(&repo, Some(&default_requests));
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("2 configurations, 2 checks"));
+    let mut harmless = graph(&[], &[]);
+    harmless["resolve"]["nodes"][0]["deps"] =
+        json!([{"dep_kinds": [{"kind": "dev", "target": null}]}]);
+    write_json(&repo, "default.json", &harmless);
+    let output = run(&repo, Some(&default_requests));
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("2 configurations, 1 checks"));
 }

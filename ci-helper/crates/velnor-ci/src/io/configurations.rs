@@ -39,10 +39,13 @@ pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
     }
     let mut representatives: Vec<usize> = Vec::new();
     for (index, configuration) in configurations.iter().enumerate() {
-        let representative = representatives
-            .iter()
-            .copied()
-            .find(|&previous| resolutions[previous] == resolutions[index]);
+        let representative = representatives.iter().copied().find(|&previous| {
+            resolutions[previous].equivalent(
+                &resolutions[index],
+                &configurations[previous],
+                configuration,
+            )
+        });
         if let Some(previous) = representative {
             println!(
                 "{} -> {}",

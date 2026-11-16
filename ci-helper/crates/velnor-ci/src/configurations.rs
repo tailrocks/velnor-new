@@ -68,8 +68,34 @@ pub(crate) fn requests(bytes: &[u8]) -> Result<Vec<Configuration>, CiError> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 struct PackageId(String);
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ResolvedFeatures(BTreeMap<PackageId, BTreeSet<String>>);
+#[derive(Debug)]
+pub(crate) struct ResolvedFeatures {
+    features: BTreeMap<PackageId, BTreeSet<String>>,
+    context_free: bool,
+}
+
+impl ResolvedFeatures {
+    pub(crate) fn equivalent(
+        &self,
+        other: &Self,
+        request: &Configuration,
+        other_request: &Configuration,
+    ) -> bool {
+        self.features == other.features
+            && ((self.context_free && other.context_free)
+                || (request.no_default_features == other_request.no_default_features
+                    && normalized_features(request) == normalized_features(other_request)))
+    }
+}
+
+fn normalized_features(configuration: &Configuration) -> BTreeSet<&str> {
+    configuration
+        .features
+        .iter()
+        .flat_map(|features| features.split(|c: char| c == ',' || c.is_whitespace()))
+        .filter(|feature| !feature.is_empty())
+        .collect()
+}
 
 #[derive(Deserialize)]
 struct Metadata {
@@ -80,6 +106,25 @@ struct Metadata {
 #[derive(Deserialize)]
 struct Package {
     id: PackageId,
+    targets: Option<Vec<Target>>,
+}
+
+#[derive(Deserialize)]
+struct Target {
+    kind: Option<Vec<String>>,
+}
+
+impl Package {
+    fn context_free(&self) -> bool {
+        self.targets.as_ref().is_some_and(|targets| {
+            !targets.is_empty()
+                && targets.iter().all(|target| {
+                    target.kind.as_ref().is_some_and(|kinds| {
+                        !kinds.is_empty() && !kinds.iter().any(|kind| kind == "proc-macro")
+                    })
+                })
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -91,13 +136,39 @@ struct Resolve {
 struct Node {
     id: PackageId,
     features: BTreeSet<String>,
+    deps: Option<Vec<Dependency>>,
+}
+
+#[derive(Deserialize)]
+struct Dependency {
+    dep_kinds: Option<Vec<serde_json::Value>>,
+}
+
+impl Node {
+    fn context_free(&self) -> bool {
+        self.deps.as_ref().is_some_and(|dependencies| {
+            dependencies.iter().all(|dependency| {
+                dependency.dep_kinds.as_ref().is_some_and(|kinds| {
+                    !kinds.is_empty()
+                        && kinds.iter().all(|kind| {
+                            kind.get("target").is_some_and(serde_json::Value::is_null)
+                                && kind.get("kind").is_some_and(|kind| {
+                                    kind.is_null() || kind.as_str() == Some("dev")
+                                })
+                        })
+                })
+            })
+        })
+    }
 }
 
 pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
     let metadata: Metadata = serde_json::from_slice(bytes)
         .map_err(|e| CiError::new(format!("invalid resolved cargo metadata: {e}")))?;
     let mut packages = BTreeSet::new();
+    let mut context_free = true;
     for package in metadata.packages {
+        context_free &= package.context_free();
         if package.id.0.is_empty() || !packages.insert(package.id) {
             return Err(CiError::new(
                 "empty or duplicate package ID in cargo metadata",
@@ -109,6 +180,7 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
     }
     let mut features = BTreeMap::new();
     for node in metadata.resolve.nodes {
+        context_free &= node.context_free();
         if !packages.contains(&node.id) {
             return Err(CiError::new(
                 "cargo metadata resolve node names an unknown package ID",
@@ -118,5 +190,8 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
             return Err(CiError::new("duplicate resolve node ID in cargo metadata"));
         }
     }
-    Ok(ResolvedFeatures(features))
+    Ok(ResolvedFeatures {
+        features,
+        context_free,
+    })
 }
