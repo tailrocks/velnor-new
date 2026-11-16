@@ -196,6 +196,7 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "cold",
             "docs",
             "fork",
+            "hello",
             "hub",
             "leaf",
             "lock",
@@ -207,6 +208,7 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "probe-event-payload",
             "probe-needs-result",
             "probe-token",
+            "scheduled-run",
             "story",
             "warm"
         ]

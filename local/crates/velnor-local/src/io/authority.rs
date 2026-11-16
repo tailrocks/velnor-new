@@ -4,6 +4,7 @@
 mod runners;
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -129,13 +130,10 @@ impl<B: Backend> Authority<B> {
         };
         let content = git.run(&["show", &format!("{sha}:{workflow}")]).await?;
         let digest = ring::digest::digest(&ring::digest::SHA256, &content);
-        Some(
-            digest
-                .as_ref()
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect(),
-        )
+        Some(digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        }))
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {

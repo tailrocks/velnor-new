@@ -13,11 +13,11 @@ const ROOT: &str = ".github/workflows/ci.yml";
 const CONTENT: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-fn context(event: &str, refs: &[&str], rules: Value) -> Value {
+fn context(event: &str, refs: &[&str], rules: &Value) -> Value {
     json!({"event": event, "refs": refs, "pull_request_rules": rules})
 }
 
-fn entry(job: &str, contexts: Vec<Value>) -> Value {
+fn entry(job: &str, contexts: &[Value]) -> Value {
     json!({
         "root_path": ROOT, "workflow_path": ROOT, "job_key": job, "role": "verification",
         "contexts": contexts, "permissions_declared": true, "permissions": {},
@@ -26,7 +26,7 @@ fn entry(job: &str, contexts: Vec<Value>) -> Value {
     })
 }
 
-fn document(calls: Value, jobs: Vec<Value>) -> Value {
+fn document(calls: &Value, jobs: &[Value]) -> Value {
     json!({
         "schema_version": 1, "connection_id": "local", "binding_sha256": CONTENT,
         "generation": 1, "policy_sha256": CONTENT,
@@ -48,12 +48,12 @@ fn approved() -> Policy {
         "head_repository_id": 7, "head_branch": "topic"
     }]);
     policy(&document(
-        json!([]),
-        vec![entry(
+        &json!([]),
+        &[entry(
             "ci",
-            vec![
-                context("push", &["refs/heads/main"], json!([])),
-                context("pull_request", &[], rule),
+            &[
+                context("push", &["refs/heads/main"], &json!([])),
+                context("pull_request", &[], &rule),
             ],
         )],
     ))
@@ -131,10 +131,10 @@ fn a_fork_pull_request_is_never_approved_and_other_branches_are_refused() {
 fn a_workflow_that_calls_others_is_refused_because_the_called_files_are_not_hashed() {
     let call = json!([{"repository_id": 7, "path": ".github/workflows/lib.yml", "content_sha256": CONTENT}]);
     let policy = policy(&document(
-        call,
-        vec![entry(
+        &call,
+        &[entry(
             "ci",
-            vec![context("push", &["refs/heads/main"], json!([]))],
+            &[context("push", &["refs/heads/main"], &json!([]))],
         )],
     ));
     assert!(!policy.approves(&push(), Side::Trusted, Some(CONTENT)));
@@ -142,7 +142,7 @@ fn a_workflow_that_calls_others_is_refused_because_the_called_files_are_not_hash
 
 #[test]
 fn a_policy_with_an_unknown_field_or_no_json_does_not_load() {
-    let mut extra = document(json!([]), Vec::new());
+    let mut extra = document(&json!([]), &[]);
     extra["surprise"] = json!(true);
     assert!(Policy::parse(extra.to_string().as_bytes()).is_err());
     assert!(Policy::parse(b"not json").is_err());

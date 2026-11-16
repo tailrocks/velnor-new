@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -40,11 +41,11 @@ fn commit(repo: &Path, content: &str) -> String {
 }
 
 fn sha256(content: &str) -> String {
-    ring::digest::digest(&ring::digest::SHA256, content.as_bytes())
-        .as_ref()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    let digest = ring::digest::digest(&ring::digest::SHA256, content.as_bytes());
+    digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
+        let _ = write!(hex, "{byte:02x}");
+        hex
+    })
 }
 
 async fn answered(
