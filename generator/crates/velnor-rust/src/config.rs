@@ -12,8 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 16] = [
-    "cache_check_blocks",
+const KEYS: [&str; 15] = [
     "runner",
     "timeout_minutes",
     "exclude",
@@ -34,7 +33,6 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
-    cache_check_blocks: Option<bool>,
     runner: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -116,7 +114,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     Ok(RustCiConfig {
-        cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         nextest_harnesses,
         default_branch,
         skip_draft_pull_requests: raw

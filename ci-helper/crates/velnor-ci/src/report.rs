@@ -23,7 +23,16 @@ pub struct Cache {
     pub bytes: Option<u64>,
     pub usable: bool,
     pub usable_same_lock: bool,
-    pub save_failed: bool,
+    pub save: SaveOutcome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SaveOutcome {
+    NotAttempted,
+    Saved,
+    Failed,
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +55,8 @@ pub struct LaneMetrics {
     pub slowest_tests: Vec<(String, f64)>,
     pub tests_run: Option<u64>,
     pub diagnostics: Vec<String>,
+    #[serde(default)]
+    pub verification_errors: Vec<String>,
     pub violations: Vec<String>,
 }
 
@@ -106,7 +117,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         metrics
             .caches
             .iter()
-            .filter(|cache| cache.save_failed)
+            .filter(|cache| cache.save == SaveOutcome::Failed)
             .map(|cache| {
                 format!(
                     "{} cache save failed: {}",
@@ -129,6 +140,7 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut units = BTreeMap::new();
     let mut violations = Vec::new();
     for lane in lanes {
+        validate_evidence(lane)?;
         if !identities.insert(&lane.lane) {
             return Err(CiError::new(format!(
                 "duplicate metrics for lane {}",
@@ -182,17 +194,18 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
 impl LaneMetrics {
     #[must_use]
     pub fn summary(&self) -> String {
-        let mut text = vec!["| Cache | Requested key | Matched key | Hit | Archive bytes |\n|---|---|---|---|---|\n".to_owned()];
+        let mut text = vec!["| Cache | Requested key | Matched key | Hit | Archive bytes | Save |\n|---|---|---|---|---|---|\n".to_owned()];
         for cache in &self.caches {
             text.push(format!(
-                "| {} | `{}` | `{}` | {:?} | {} |\n",
+                "| {} | `{}` | `{}` | {:?} | {} | {:?} |\n",
                 cache.family,
                 cache.requested_key,
                 cache.matched_key.as_deref().unwrap_or("none"),
                 cache.hit,
                 cache
                     .bytes
-                    .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string())
+                    .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string()),
+                cache.save
             ));
         }
         let events: Vec<&Compilation> = self
@@ -214,9 +227,43 @@ impl LaneMetrics {
         for (test, seconds) in &self.slowest_tests {
             text.push(format!("| {test} | {seconds:.3} |\n"));
         }
-        for diagnostic in self.diagnostics.iter().chain(&self.violations) {
+        for diagnostic in self
+            .diagnostics
+            .iter()
+            .chain(&self.verification_errors)
+            .chain(&self.violations)
+        {
             text.push(format!("\n{diagnostic}\n"));
         }
         text.join("")
     }
+}
+
+fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
+    if let Some(cache) = lane
+        .caches
+        .iter()
+        .find(|cache| cache.save == SaveOutcome::Unknown)
+    {
+        return Err(CiError::new(format!(
+            "cannot verify cache save for lane {}: {}",
+            lane.lane, cache.requested_key
+        )));
+    }
+    if !lane.verification_errors.is_empty() {
+        return Err(CiError::new(format!(
+            "cannot evaluate cache waste for lane {}: {}",
+            lane.lane,
+            lane.verification_errors.join("; ")
+        )));
+    }
+    for invocation in &lane.invocations {
+        if !invocation.capture_complete || invocation.rejected > 0 {
+            return Err(CiError::new(format!(
+                "cannot evaluate cache waste for lane {} root {}: capture complete={}, rejected artifact records={}",
+                lane.lane, invocation.root, invocation.capture_complete, invocation.rejected
+            )));
+        }
+    }
+    Ok(())
 }

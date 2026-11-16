@@ -47,9 +47,15 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<()
             {
                 continue;
             }
+            let progress = progress(invocation, log)?;
+            let progress = crate::progress_evidence::retain(
+                invocation,
+                progress,
+                &mut metrics.diagnostics,
+                &mut metrics.verification_errors,
+            );
             crate::observed_units::normalize(invocation, &checkout.root);
             root_text.clone_into(&mut invocation.root);
-            let progress = progress(invocation, log)?;
             invocation.downloads = progress
                 .iter()
                 .filter(|event| event.kind == ProgressKind::Downloaded)
@@ -58,24 +64,15 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<()
             invocation.compilations = progress
                 .iter()
                 .filter(|event| {
-                    matches!(event.kind, ProgressKind::Compiling | ProgressKind::Checking)
+                    matches!(
+                        event.kind,
+                        ProgressKind::Compiling
+                            | ProgressKind::Checking
+                            | ProgressKind::Documenting
+                    )
                 })
                 .map(|event| {
-                    let member = root.members.iter().find(|member| {
-                        member.name.as_str() == event.package
-                            && event.location.as_deref()
-                                == Some(
-                                    member
-                                        .directory
-                                        .as_ref()
-                                        .map_or_else(
-                                            || checkout.root.clone(),
-                                            |directory| checkout.root.join(directory.as_str()),
-                                        )
-                                        .to_string_lossy()
-                                        .as_ref(),
-                                )
-                    });
+                    let member = member(root, &checkout.root, event);
                     Compilation {
                         unchanged: unchanged.contains(event.package.as_str()),
                         workspace: member.is_some(),
@@ -208,4 +205,26 @@ fn progress(
     let mut tap = ArtifactTap::default();
     tap.feed(slice);
     Ok(tap.finish().progress)
+}
+
+fn member<'a>(
+    root: &'a velnor_model::RustRoot,
+    checkout: &Path,
+    event: &crate::cargo_artifacts::CargoProgress,
+) -> Option<&'a velnor_model::RustMember> {
+    root.members.iter().find(|member| {
+        member.name.as_str() == event.package
+            && event.location.as_deref()
+                == Some(
+                    member
+                        .directory
+                        .as_ref()
+                        .map_or_else(
+                            || checkout.to_path_buf(),
+                            |directory| checkout.join(directory.as_str()),
+                        )
+                        .to_string_lossy()
+                        .as_ref(),
+                )
+    })
 }

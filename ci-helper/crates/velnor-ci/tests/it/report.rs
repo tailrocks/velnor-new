@@ -6,7 +6,7 @@ use velnor_ci::report::{LaneMetrics, check, waste};
 use velnor_ci::telemetry::configuration;
 
 pub(crate) fn lane() -> Value {
-    json!({"schema":1,"lane":"rust","caches":[{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","matched_key":"target-lock-old","hit":"fallback","bytes":null,"usable":true,"usable_same_lock":true,"save_failed":false}],"invocations":[{"argv":["cargo","check"],"root":".","configuration":"default","started_at":10,"seconds":1.0,"log_start":0,"log_end":0,"compilations":[{"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]}],"downloads":[]}],"downloaded":0,"first_cargo_seconds":null,"slowest_tests":[],"tests_run":null,"diagnostics":[],"violations":[]})
+    json!({"schema":1,"lane":"rust","caches":[{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","matched_key":"target-lock-old","hit":"fallback","bytes":null,"usable":true,"usable_same_lock":true,"save":"not_attempted"}],"invocations":[{"argv":["cargo","check"],"root":".","configuration":"default","started_at":10,"seconds":1.0,"log_start":0,"log_end":0,"compilations":[{"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]}],"downloads":[],"capture_complete":true}],"downloaded":0,"first_cargo_seconds":null,"slowest_tests":[],"tests_run":null,"diagnostics":[],"violations":[]})
 }
 fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
@@ -49,7 +49,7 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
             }
             "save-failed" => {
                 value["caches"][0]["usable_same_lock"] = json!(false);
-                value["caches"][0]["save_failed"] = json!(true);
+                value["caches"][0]["save"] = json!("failed");
             }
             _ => {}
         }
@@ -116,6 +116,10 @@ fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_ve
 #[test]
 fn observed_units_distinguish_effective_features_outputs_and_repeated_execution() {
     for (case, fails) in [
+        ("complete-clean", false),
+        ("incomplete", true),
+        ("rejected", true),
+        ("mixed-rejected", true),
         ("identical", true),
         ("proc-so", true),
         ("proc-dylib", true),
@@ -157,6 +161,9 @@ fn observed_units_distinguish_effective_features_outputs_and_repeated_execution(
             value["invocations"][0]["artifacts"][0]["filenames"] =
                 json!(["target/debug/deps/libserde-opaque.dylib"]);
         }
+        if matches!(case, "complete-clean" | "incomplete" | "rejected") {
+            value["invocations"][0]["artifacts"] = json!([]);
+        }
         let first = metrics(value.clone());
         value["lane"] = json!("second");
         vary_unit(&mut value, case);
@@ -164,15 +171,19 @@ fn observed_units_distinguish_effective_features_outputs_and_repeated_execution(
         let result = check(&[first, second.clone()]);
         assert_eq!(result.is_err(), fails, "{case}: {result:?}");
         if fails {
-            assert!(
-                result
-                    .err()
-                    .is_some_and(|error| error.to_string().contains("serde"))
-            );
+            assert!(result.err().is_some_and(|error| error.to_string().contains(
+                if matches!(case, "incomplete" | "rejected" | "mixed-rejected") {
+                    "cannot evaluate"
+                } else {
+                    "serde"
+                }
+            )));
         }
         if !fails {
             value["lane"] = json!("third");
-            value["invocations"][0]["artifacts"][0]["fresh"] = json!(true);
+            if case != "complete-clean" {
+                value["invocations"][0]["artifacts"][0]["fresh"] = json!(true);
+            }
             assert!(check(&[second, metrics(value)]).is_ok(), "{case}");
         }
     }
@@ -180,6 +191,13 @@ fn observed_units_distinguish_effective_features_outputs_and_repeated_execution(
 
 fn vary_unit(value: &mut Value, case: &str) {
     match case {
+        "incomplete" => value["invocations"][0]["capture_complete"] = json!(false),
+        "rejected" | "mixed-rejected" => {
+            value["invocations"][0]["rejected"] = json!(1);
+            if case == "rejected" {
+                value["invocations"][0]["artifacts"] = json!([]);
+            }
+        }
         "proc-distinct" => {
             value["invocations"][0]["artifacts"][0]["filenames"] =
                 json!(["target/debug/deps/libserde-other.dylib"]);

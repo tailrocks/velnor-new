@@ -5,7 +5,7 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{Hit, LaneMetrics, SCHEMA, check, waste};
+use crate::report::{Hit, LaneMetrics, SCHEMA, SaveOutcome, check, waste};
 use crate::telemetry::{INVOCATIONS, Invocation};
 use serde_json::Value;
 use std::fs;
@@ -52,6 +52,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         slowest_tests: Vec::new(),
         tests_run: env("VELNOR_TESTS_RUN").parse().ok(),
         diagnostics: Vec::new(),
+        verification_errors: Vec::new(),
         violations: Vec::new(),
     };
     metrics.invocations.retain(|invocation| {
@@ -61,12 +62,12 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
                 .is_some_and(|name| name.to_string_lossy().starts_with("cargo"))
         })
     });
-    activity_metrics(&mut metrics, &log_bytes);
     if let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log_bytes) {
         metrics
             .diagnostics
             .push(format!("Restored input provenance unavailable: {error}"));
     }
+    activity_metrics(&mut metrics, &log_bytes);
     let steps: Value =
         json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
     for cache in &mut metrics.caches {
@@ -85,12 +86,16 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         };
         cache.usable &= cache.hit != Hit::Miss;
         cache.usable_same_lock &= cache.usable;
-        cache.save_failed = env("GITHUB_REF")
-            == format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH"))
-            && matches!(
-                steps[&cache.save_step]["outcome"].as_str(),
-                Some("success" | "failure" | "cancelled")
-            );
+        cache.save =
+            if env("GITHUB_REF") == format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH")) {
+                match steps[&cache.save_step]["outcome"].as_str() {
+                    Some("failure" | "cancelled") => SaveOutcome::Failed,
+                    Some("success") => SaveOutcome::Unknown,
+                    _ => SaveOutcome::NotAttempted,
+                }
+            } else {
+                SaveOutcome::NotAttempted
+            };
     }
     match api_metrics(&mut metrics, &steps) {
         Ok(()) => {}
@@ -175,8 +180,13 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
                     && (!saving || entry["ref"].as_str() == Some(&env("GITHUB_REF")))
             })
         });
-        cache.save_failed =
-            saving && (entry.is_none() || steps[&cache.save_step]["outcome"] != "success");
+        if saving && cache.save != SaveOutcome::Failed {
+            cache.save = if entry.is_some() {
+                SaveOutcome::Saved
+            } else {
+                SaveOutcome::Failed
+            };
+        }
         cache.bytes = entry.and_then(|entry| entry["size_in_bytes"].as_u64());
     }
     Ok(())

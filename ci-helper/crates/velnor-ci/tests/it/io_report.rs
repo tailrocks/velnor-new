@@ -52,18 +52,7 @@ fn report(
 
 #[test]
 fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output() -> ResultTest {
-    let repo = Repo::new("report-provenance");
-    repo.write(
-        "Cargo.toml",
-        "[package]\nname='demo'\nversion='0.1.0'\nedition='2024'\n",
-    );
-    repo.write("src/lib.rs", "pub fn value() {}\n");
-    repo.write(
-        "Cargo.lock",
-        "version = 4\n[[package]]\nname='demo'\nversion='0.1.0'\n",
-    );
-    metadata_inputs(&repo)?;
-    velnor_gen::io::write_metadata(repo.root())?;
+    let repo = fixture("report-provenance")?;
     repo.git(&["add", "."]);
     assert!(cli(&repo, &["inputs", "save"]).status.success());
     assert!(cli(&repo, &["inputs", "restore"]).status.success());
@@ -83,7 +72,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
         .code(),
         Some(7)
     );
-    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"descriptor-marker","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent","requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false}]);
+    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"descriptor-marker","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent","requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
     let report = |steps: &str| report(&repo, &cache, steps);
     let steps = r#"{"target_root":{"outputs":{"cache-primary-key":"primary-marker","cache-matched-key":"matched-marker"}}}"#;
     let metrics = report(steps)?;
@@ -97,8 +86,13 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     assert_eq!(metrics.invocations[0].compilations[0].package, "demo");
     assert!(metrics.invocations[0].compilations[0].workspace);
     assert!(!metrics.invocations[0].compilations[0].unchanged);
-    assert_eq!(metrics.violations.len(), 1, "{:?}", metrics.violations);
-    assert!(metrics.violations[0].contains("dependency v1.0.0"));
+    assert!(metrics.violations.is_empty(), "{:?}", metrics.violations);
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|message| message.contains("dependency v1.0.0"))
+    );
     assert_eq!(metrics.invocations[0].artifacts.len(), 3);
     assert_eq!(metrics.invocations[0].rejected, 1);
     assert!(
@@ -107,7 +101,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
             .iter()
             .any(|text| text.contains("identity unknown for 1"))
     );
-    assert_eq!(metrics.invocations[0].compilations.len(), 2);
+    assert_eq!(metrics.invocations[0].compilations.len(), 1);
     assert_eq!(metrics.tests_run, Some(7));
     assert_eq!(
         metrics.slowest_tests,
@@ -170,9 +164,10 @@ fn failed_setup_still_writes_metrics_with_unknown_provenance() {
 }
 
 fn interrupted_output(repo: &Repo) -> Result<String, Box<dyn std::error::Error>> {
+    let root = fs::canonicalize(repo.root())?;
     let artifact = json!({
-        "reason":"compiler-artifact", "package_id":"path+file:///demo#0.1.0", "manifest_path":"/demo/Cargo.toml",
-        "target":{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":"/demo/src/lib.rs"},
+        "reason":"compiler-artifact", "package_id":format!("path+file://{}#demo@0.1.0", root.display()), "manifest_path":root.join("Cargo.toml"),
+        "target":{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":root.join("src/lib.rs")},
         "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
         "features":["default"], "filenames":["target/debug/deps/libdemo-opaque.rmeta"], "fresh":false
     }).to_string();
@@ -208,4 +203,24 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
         repo.write(to, &fs::read_to_string(samples.join(from))?);
     }
     Ok(())
+}
+
+mod policy;
+
+fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
+    let repo = Repo::new(name);
+    repo.write_all(&[
+        (
+            "Cargo.toml",
+            "[package]\nname='demo'\nversion='0.1.0'\nedition='2024'\n",
+        ),
+        ("src/lib.rs", "pub fn value() {}\n"),
+        (
+            "Cargo.lock",
+            "version = 4\n[[package]]\nname='demo'\nversion='0.1.0'\n",
+        ),
+    ]);
+    metadata_inputs(&repo)?;
+    velnor_gen::io::write_metadata(repo.root())?;
+    Ok(repo)
 }
