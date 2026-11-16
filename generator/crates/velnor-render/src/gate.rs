@@ -121,6 +121,24 @@ pub(crate) fn condition(
     }
 }
 
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+
+pub(crate) fn admission(
+    when: When,
+    gate: Option<&Gate>,
+    skip_draft: bool,
+    visibility: Visibility,
+) -> String {
+    let extra = visibility_part(visibility).into_iter().collect::<Vec<_>>();
+    match condition(when, gate, false, skip_draft, &extra) {
+        Some(predicate) => format!(
+            "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
+            predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
+        ),
+        None => format!("${{{{ {ACTIVE_EVENT} }}}}"),
+    }
+}
+
 fn gate_parts(gate: &Gate) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
