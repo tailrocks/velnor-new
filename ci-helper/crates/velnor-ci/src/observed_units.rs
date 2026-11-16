@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::cargo_artifacts::CargoArtifact;
-use crate::report::Invocation;
+use crate::telemetry::Invocation;
 
 fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
     if artifact.filenames.is_empty()

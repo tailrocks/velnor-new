@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::CiError;
-use crate::report::{INVOCATIONS, Invocation};
+use crate::telemetry::{INVOCATIONS, Invocation};
 use std::fs;
 
 pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {

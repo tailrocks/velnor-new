@@ -71,7 +71,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let path = log_path()?;
     let started = Instant::now();
     let mut invocation =
-        super::report::start_invocation(&args.command).map_err(|e| (2, e.to_string()))?;
+        super::recording::start_invocation(&args.command).map_err(|e| (2, e.to_string()))?;
     let mut log =
         open_log(&path).map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
     let write_error = |e: std::io::Error| (2, format!("cannot write {}: {e}", path.display()));
@@ -128,7 +128,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     invocation.log_end =
         usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     invocation.seconds = started.elapsed().as_secs_f64();
-    if let Err(error) = super::report::save_invocation(&invocation) {
+    if let Err(error) = super::recording::save_invocation(&invocation) {
         if code == 0 {
             return Err((2, error.to_string()));
         }
@@ -194,7 +194,7 @@ fn collect(
     receiver: &mpsc::Receiver<bool>,
     streams: usize,
     capture: &Mutex<Capture>,
-    invocation: &mut crate::report::Invocation,
+    invocation: &mut crate::telemetry::Invocation,
 ) -> (Option<std::io::Error>, Option<u64>) {
     let deadline = Instant::now() + pump_grace();
     let mut completed = 0;

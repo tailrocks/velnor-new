@@ -27,6 +27,7 @@ pub mod rulesets;
 pub mod scope;
 pub mod setup;
 pub mod stream;
+pub mod telemetry;
 pub mod tests_run;
 pub mod ties;
 pub mod time;

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod activity;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -12,9 +13,9 @@ mod inputs;
 mod manifests;
 mod plan;
 pub mod pump;
+mod recording;
 mod release;
 mod report;
-mod report_activity;
 mod report_inputs;
 mod restored;
 mod run;
@@ -130,7 +131,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let log = std::env::var_os("RUNNER_TEMP")
                 .filter(|dir| !dir.is_empty())
                 .and_then(|dir| fs::read_to_string(Path::new(&dir).join("velnor-run.log")).ok());
-            let counts = report_activity::activity()?
+            let counts = activity::activity()?
                 .unwrap_or_else(|| log.as_deref().map(crate::logscan::scan).unwrap_or_default());
             let decision = cache::decide_counts(
                 &counts,

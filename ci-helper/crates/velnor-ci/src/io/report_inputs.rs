@@ -4,7 +4,8 @@
 use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
 use crate::inputs::parse_inputs;
-use crate::report::{Compilation, LaneMetrics, SNAPSHOT};
+use crate::report::{LaneMetrics, SNAPSHOT};
+use crate::telemetry::Compilation;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -195,7 +196,7 @@ fn dependencies(
 }
 
 fn progress(
-    invocation: &crate::report::Invocation,
+    invocation: &crate::telemetry::Invocation,
     log: &[u8],
 ) -> Result<Vec<crate::cargo_artifacts::CargoProgress>, CiError> {
     if let Some(progress) = &invocation.progress {

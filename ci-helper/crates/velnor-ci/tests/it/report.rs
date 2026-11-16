@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_ci::report::{LaneMetrics, check, configuration, waste};
+use velnor_ci::report::{LaneMetrics, check, waste};
+use velnor_ci::telemetry::configuration;
 
 pub(crate) fn lane() -> Value {
     json!({"schema":1,"lane":"rust","caches":[{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"target-lock-new","matched_key":"target-lock-old","hit":"fallback","bytes":null,"usable":true,"usable_same_lock":true,"save_failed":false}],"invocations":[{"argv":["cargo","check"],"root":".","configuration":"default","started_at":10,"seconds":1.0,"log_start":0,"log_end":0,"compilations":[{"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[]}],"downloads":[]}],"downloaded":0,"first_cargo_seconds":null,"slowest_tests":[],"tests_run":null,"diagnostics":[],"violations":[]})
@@ -110,85 +111,6 @@ fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_ve
     value["caches"] = json!([]);
     let value = metrics(value);
     assert!(check(&[value.clone(), value]).is_err());
-}
-
-#[test]
-fn configuration_ignores_command_purpose_and_normalizes_features() {
-    let argv = |words: &[&str]| words.iter().map(ToString::to_string).collect::<Vec<_>>();
-    assert_eq!(
-        configuration(&argv(&["cargo", "clippy", "--features", "b,a"])),
-        configuration(&argv(&[
-            "cargo-nextest",
-            "nextest",
-            "run",
-            "--features",
-            "a,b"
-        ]))
-    );
-    for words in [
-        vec!["cargo", "check", "--features=a,b"],
-        vec!["cargo", "check", "--features", "b", "--features", "a"],
-    ] {
-        assert_eq!(
-            configuration(&argv(&words)),
-            configuration(&argv(&["cargo", "check", "--features", "b,a"]))
-        );
-    }
-    assert_eq!(
-        configuration(&argv(&["cargo", "check", "--release"])),
-        configuration(&argv(&["cargo", "check", "--profile=release"]))
-    );
-    assert_ne!(
-        configuration(&argv(&["cargo", "check", "--release"])),
-        configuration(&argv(&["cargo", "check"]))
-    );
-    assert_ne!(
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target",
-            "x86_64-unknown-linux-gnu",
-            "--target",
-            "aarch64-unknown-linux-gnu"
-        ])),
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target",
-            "aarch64-unknown-linux-gnu"
-        ]))
-    );
-    assert_eq!(
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target",
-            "x86_64-unknown-linux-gnu",
-            "--target",
-            "aarch64-unknown-linux-gnu"
-        ])),
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target",
-            "aarch64-unknown-linux-gnu",
-            "--target",
-            "x86_64-unknown-linux-gnu"
-        ]))
-    );
-    assert_eq!(
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target=x86_64-unknown-linux-gnu"
-        ])),
-        configuration(&argv(&[
-            "cargo",
-            "check",
-            "--target",
-            "x86_64-unknown-linux-gnu"
-        ])),
-    );
 }
 
 #[test]

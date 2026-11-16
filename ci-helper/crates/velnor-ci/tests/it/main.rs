@@ -48,6 +48,7 @@ mod run_capture;
 mod run_group;
 mod setup_pure;
 mod support;
+mod telemetry;
 mod ties;
 mod time;
 mod timings;
