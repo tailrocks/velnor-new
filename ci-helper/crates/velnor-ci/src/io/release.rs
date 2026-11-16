@@ -12,8 +12,8 @@ use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_manifests,
-    check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
+    CargoPathEntry, PlainName, check_branch_prefixes, check_cargo_discovery, check_config,
+    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
 use crate::release_preflight::check_release_source;
@@ -101,6 +101,7 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         let publishes = publishes_to_crates_io(&root_of(&top, path), text, metadata)?;
         check_cargo_discovery(entries, publishes)?;
     }
+    check_branch_prefixes(&files, &args.branch_prefixes())?;
     let patterns = args.tag_patterns();
     check_tag_patterns(&files, &patterns)?;
     if let Some(repo) = &args.repo {
