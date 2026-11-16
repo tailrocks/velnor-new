@@ -187,3 +187,7 @@ pub async fn supervise(
     );
     failure.map_or(swept, Err)
 }
+
+#[cfg(test)]
+#[path = "supervisor_tests.rs"]
+mod tests;

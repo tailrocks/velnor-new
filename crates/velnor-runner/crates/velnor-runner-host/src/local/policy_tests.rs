@@ -206,3 +206,47 @@ fn the_decider_refuses_with_reason_policy_only_when_a_policy_is_given_and_does_n
     assert_eq!(judged(Some(&policy), Some(CONTENT)), None);
     assert_eq!(judged(None, Some(&other)), None);
 }
+
+#[test]
+fn a_fork_side_job_of_any_event_is_refused_even_when_the_policy_lists_it() {
+    let policy = approved();
+    let schedule = request("schedule", "refs/heads/main", "ci", false);
+    let dispatch = request("workflow_dispatch", "refs/heads/main", "ci", false);
+    for refused in [push(), schedule, dispatch, pull()] {
+        assert!(!policy.approves(&refused, Side::Untrusted, Some(CONTENT)));
+    }
+}
+
+#[test]
+fn a_policy_file_that_is_missing_unreadable_empty_or_unparsable_does_not_load() {
+    let state = tempfile::tempdir().expect("state");
+    let write =
+        |name: &str, bytes: &[u8]| std::fs::write(state.path().join(name), bytes).expect("write");
+    write("bad.json", b"not json");
+    write("empty.json", b"");
+    write("unknown.json", br#"{"surprise":true}"#);
+    std::os::unix::fs::symlink(
+        state.path().join("bad.json"),
+        state.path().join("link.json"),
+    )
+    .expect("link");
+    std::fs::create_dir(state.path().join("dir.json")).expect("dir");
+    for name in [
+        "missing.json",
+        "bad.json",
+        "empty.json",
+        "unknown.json",
+        "link.json",
+        "dir.json",
+        "",
+        "../x",
+        ".hidden",
+    ] {
+        assert!(Policy::load(state.path(), name).is_err(), "{name}");
+    }
+    write(
+        "good.json",
+        document(&json!([]), &[]).to_string().as_bytes(),
+    );
+    assert!(Policy::load(state.path(), "good.json").is_ok());
+}

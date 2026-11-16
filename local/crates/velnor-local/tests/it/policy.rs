@@ -169,3 +169,18 @@ fn plain_containers_refuse_policy_because_they_have_no_job_start_check() {
     assert!(!output.status.success());
     assert!(text.contains("--policy needs --runner pair"), "{text}");
 }
+
+#[tokio::test]
+async fn a_symlinked_policy_file_is_refused_and_nothing_is_copied() {
+    let dir = temp_dir("policy-symlink");
+    let target = dir.join("real.json");
+    let link = dir.join("link.json");
+    std::fs::write(&target, "{\"schema_version\":1}").unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&target, &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = start(&dir, Some(&link)).await;
+    assert!(
+        refused.is_err_and(|error| error.to_string().contains("regular file")),
+        "a link was accepted"
+    );
+    assert!(!dir.join("runner/policy.json").exists());
+}

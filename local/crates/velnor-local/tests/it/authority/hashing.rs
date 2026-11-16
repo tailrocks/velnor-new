@@ -99,3 +99,22 @@ async fn without_a_repository_or_with_a_commit_it_lacks_the_answer_has_no_hash()
     let option = answered(&FakeRunners::default(), Some(&repo), "--output=x", 5).await;
     assert!(option["workflow_sha256"].is_null(), "{option}");
 }
+
+#[tokio::test]
+async fn only_a_full_lowercase_commit_id_is_hashed_never_an_abbreviation() {
+    let repo = temp_dir("authority-hashing-abbrev");
+    git(&repo, &["init", "-q", "-b", "main"]);
+    let full = commit(&repo, "name: ci\n");
+    let abbreviated = answered(&FakeRunners::default(), Some(&repo), &full[..12], 6).await;
+    assert!(abbreviated["workflow_sha256"].is_null(), "{abbreviated}");
+    let upper = answered(
+        &FakeRunners::default(),
+        Some(&repo),
+        &full.to_uppercase(),
+        7,
+    )
+    .await;
+    assert!(upper["workflow_sha256"].is_null(), "{upper}");
+    let whole = answered(&FakeRunners::default(), Some(&repo), &full, 8).await;
+    assert_eq!(whole["workflow_sha256"], sha256("name: ci\n"));
+}

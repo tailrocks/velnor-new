@@ -51,6 +51,9 @@ impl Policy {
         side: Side,
         workflow_sha256: Option<&str>,
     ) -> bool {
+        if side == Side::Untrusted {
+            return false;
+        }
         let Ok(repository_id) = i64::try_from(request.repository_id()) else {
             return false;
         };
@@ -77,10 +80,7 @@ impl Policy {
             number: Some(number),
             base_repository_id: repository_id,
             base_branch: request.base_ref().unwrap_or_default().to_owned(),
-            head_repository_id: match side {
-                Side::Trusted => repository_id,
-                Side::Untrusted => 0,
-            },
+            head_repository_id: repository_id,
             head_branch: request.head_ref().unwrap_or_default().to_owned(),
         });
         let lookup = JobAuthorityLookup {

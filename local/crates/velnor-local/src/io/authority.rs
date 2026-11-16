@@ -120,7 +120,11 @@ impl<B: Backend> Authority<B> {
 
     async fn workflow_sha256(&self, sha: &str, workflow: &str) -> Option<String> {
         let repo = self.repo.clone()?;
-        if sha.is_empty() || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if !matches!(sha.len(), 40 | 64)
+            || !sha
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        {
             return None;
         }
         let git = Git {
