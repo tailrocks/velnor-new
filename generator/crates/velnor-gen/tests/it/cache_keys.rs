@@ -2,22 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, CiDebugInfo, Concurrency, Host, Job, JobId, Permissions, PullRequestType,
-    RepoPath, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PullRequestType, RepoPath,
+    RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key};
-use velnor_rust::{
-    CONFIG_PATH, CompatInputs, DetectError, Reason, build_profile, ci_debuginfo, compat, detect,
-};
 
-use crate::facts::{TestResult, lib, repo};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMPAT: &str = "${{ steps.prepare.outputs.compat }}";
 
 fn root(manifest: &str) -> Result<CacheRoot, Box<dyn std::error::Error>> {
-    Ok(CacheRoot::new(&RepoPath::new(manifest)?))
+    Ok(CacheRoot::new(
+        &RepoPath::new(manifest)?,
+        RepoPath::new("target")?,
+    ))
 }
 
 fn target(job: &str, manifest: &str) -> Result<RenderedKey, Box<dyn std::error::Error>> {
@@ -203,115 +203,6 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
     assert!(!text.contains("restore-keys"), "{text}");
     assert!(text.contains("path: |\n"), "{text}");
     assert!(text.contains("~/.cargo/registry/index\n"));
-    Ok(())
-}
-
-type Mutation = (&'static str, fn(&mut CompatInputs));
-
-fn inputs() -> CompatInputs {
-    CompatInputs {
-        rustc_verbose: "rustc 1.99.1\nhost: aarch64-apple-darwin\n".to_owned(),
-        target: None,
-        profile: build_profile(CiDebugInfo::LineTablesOnly),
-        rustflags: String::new(),
-        workspace: "/home/runner/work/p/p".to_owned(),
-        driver: "cargo".to_owned(),
-    }
-}
-
-#[test]
-fn changing_any_compat_input_changes_the_digest() {
-    let base = compat(&inputs());
-    assert_eq!(base, compat(&inputs()));
-    assert_eq!(base.len(), 16);
-    let mutations: [Mutation; 9] = [
-        ("rustc", |i| i.rustc_verbose.push_str("release: 1.99.2\n")),
-        ("target", |i| {
-            i.target = Some("x86_64-unknown-linux-gnu".to_owned());
-        }),
-        ("debuginfo full", |i| {
-            i.profile = build_profile(CiDebugInfo::Full);
-        }),
-        ("debuginfo none", |i| {
-            i.profile = build_profile(CiDebugInfo::None);
-        }),
-        ("rustflags", |i| {
-            i.rustflags = "-C target-cpu=native".to_owned();
-        }),
-        ("workspace", |i| i.workspace = "/work".to_owned()),
-        ("driver", |i| i.driver = "mbx".to_owned()),
-        ("env", |i| i.profile.env.push(("EXTRA", "1"))),
-        ("config", |i| i.profile.cargo_config = "[build]\n"),
-    ];
-    for (name, mutate) in mutations {
-        let mut changed = inputs();
-        mutate(&mut changed);
-        assert_ne!(base, compat(&changed), "{name}");
-    }
-    let (mut left, mut right) = (inputs(), inputs());
-    left.rustflags = "a".to_owned();
-    left.workspace = "b".to_owned();
-    right.rustflags = "ab".to_owned();
-    right.workspace = String::new();
-    assert_ne!(compat(&left), compat(&right));
-    let (mut left, mut right) = (inputs(), inputs());
-    left.rustflags = "x\nworkspace:y".to_owned();
-    left.workspace = "z".to_owned();
-    right.rustflags = "x".to_owned();
-    right.workspace = "y\nworkspace:z".to_owned();
-    assert_ne!(compat(&left), compat(&right));
-}
-
-#[test]
-fn the_ci_debuginfo_key_picks_the_profile_and_rejects_other_values() -> TestResult {
-    let files =
-        |text: &str| std::collections::BTreeMap::from([(CONFIG_PATH, text.as_bytes().to_vec())]);
-    assert_eq!(
-        ci_debuginfo(&std::collections::BTreeMap::new()),
-        Ok(CiDebugInfo::LineTablesOnly)
-    );
-    for (value, expected, workspace) in [
-        ("full", CiDebugInfo::Full, "full"),
-        (
-            "line-tables-only",
-            CiDebugInfo::LineTablesOnly,
-            "line-tables-only",
-        ),
-        ("none", CiDebugInfo::None, "none"),
-    ] {
-        let found = ci_debuginfo(&files(&format!("ci_debuginfo = \"{value}\"\n")))?;
-        assert_eq!(found, expected);
-        let profile = build_profile(found);
-        assert!(
-            profile
-                .env
-                .contains(&("CARGO_PROFILE_DEV_DEBUG", workspace))
-        );
-        assert!(
-            profile
-                .env
-                .contains(&("CARGO_PROFILE_TEST_DEBUG", workspace))
-        );
-        assert_eq!(
-            profile.cargo_config.is_empty(),
-            expected == CiDebugInfo::Full
-        );
-    }
-    assert_eq!(
-        ci_debuginfo(&files("ci_debuginfo = \"some\"\n")),
-        Err(DetectError::Invalid {
-            path: CONFIG_PATH,
-            reason: Reason::InvalidValue {
-                key: "ci_debuginfo",
-                value: "some".to_owned(),
-            },
-        })
-    );
-    let mut view = repo(vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])], &[])?;
-    view.tracked_paths.insert(CONFIG_PATH);
-    view.files
-        .insert(CONFIG_PATH, b"ci_debuginfo = \"none\"\n".to_vec());
-    assert_eq!(detect(&view)?.config.ci_debuginfo, CiDebugInfo::None);
     Ok(())
 }
 

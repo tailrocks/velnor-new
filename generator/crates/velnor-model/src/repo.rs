@@ -156,6 +156,7 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {
     pub manifest: RepoPath,
+    pub target_dir: RepoPath,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,

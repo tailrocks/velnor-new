@@ -272,3 +272,28 @@ fn a_proxy_or_ca_override_is_refused_only_for_a_root_that_publishes_to_crates_io
         }
     }
 }
+
+#[test]
+fn net_offline_counts_only_in_the_config_file_cargo_reads() {
+    let both = |extensionless: &str, toml: &str| {
+        let checkout = Checkout::new("offline-precedence");
+        checkout.write("release-plz.toml", COMPLIANT);
+        checkout.write(".cargo/config", extensionless);
+        checkout.write(".cargo/config.toml", toml);
+        checkout.check("release-plz.toml")
+    };
+    let offline = "[net]\noffline = true\n";
+    let online = "[net]\nretry = 3\n";
+    assert_eq!(both(online, offline).0, Some(0));
+    let (code, stderr) = both(offline, online);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(stderr.contains("offline"), "{stderr}");
+}
+
+#[test]
+fn net_offline_in_a_lone_config_toml_is_refused() {
+    let checkout = Checkout::new("offline-lone");
+    checkout.write("release-plz.toml", COMPLIANT);
+    checkout.write(".cargo/config.toml", "[net]\noffline = true\n");
+    refused(&checkout, "release-plz.toml", "offline");
+}

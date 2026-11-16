@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -42,11 +43,21 @@ impl Checkout {
     }
 
     fn check(&self, files: &[&str], toolchain: Option<&str>) -> (Option<i32>, String) {
+        self.check_with(files, toolchain, &[])
+    }
+
+    fn check_with(
+        &self,
+        files: &[&str],
+        toolchain: Option<&str>,
+        extra: &[&str],
+    ) -> (Option<i32>, String) {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command
             .args(["release", "check-config"])
             .args(files)
             .arg("--manifests")
+            .args(extra)
             .current_dir(&self.0)
             .env_remove("RUSTUP_TOOLCHAIN");
         if let Some(toolchain) = toolchain {
@@ -62,6 +73,11 @@ impl Checkout {
     fn run(&self, files: &[&str]) -> (Option<i32>, String) {
         let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
         self.check(files, Some(&toolchain))
+    }
+
+    fn run_released(&self, files: &[&str]) -> (Option<i32>, String) {
+        let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
+        self.check_with(files, Some(&toolchain), &["--released-versions"])
     }
 }
 
@@ -137,6 +153,38 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!marker.exists());
+}
+
+#[test]
+fn a_cargo_config_hazard_is_refused_before_cargo_metadata_runs() {
+    let checkout = Checkout::new("hazard-first");
+    let marker = checkout.0.join("cargo-ran");
+    let stub = checkout.0.join("bin/cargo");
+    checkout
+        .package("", "app", "")
+        .write("release-plz.toml", PLZ)
+        .write(
+            "bin/cargo",
+            &format!("#!/bin/sh\ntouch {}\nexit 1\n", marker.display()),
+        )
+        .write(".cargo/config.toml", "[build]\nrustc-wrapper = \"true\"\n");
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let path = std::env::join_paths(std::iter::once(checkout.0.join("bin")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["release", "check-config", "release-plz.toml", "--manifests"])
+        .current_dir(&checkout.0)
+        .env("RUSTUP_TOOLCHAIN", "stable")
+        .env("PATH", path)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains(".cargo/config.toml"), "{stderr}");
+    assert!(!marker.exists(), "cargo metadata ran before the refusal");
 }
 
 #[test]
@@ -236,4 +284,61 @@ fn roots_that_partition_a_shared_workspace_with_release_false_are_accepted() {
         &["a/release-plz.toml", "b/release-plz.toml"],
         "released from several roots",
     );
+}
+
+#[test]
+fn a_root_whose_members_all_opt_out_of_crates_io_may_set_a_proxy() {
+    let checkout = Checkout::new("proxy-opted-out");
+    checkout
+        .write("Cargo.toml", "[workspace]\nmembers = [\"app\"]\n")
+        .package("app", "app", "")
+        .write(
+            "release-plz.toml",
+            &format!("{PLZ}\n[[package]]\nname = \"app\"\ngit_only = true\n"),
+        )
+        .write(
+            ".cargo/config.toml",
+            "[http]\nproxy = \"http://proxy.example:8080\"\n",
+        );
+    accepted(&checkout, &["release-plz.toml"]);
+    checkout
+        .write("Cargo.toml", "[workspace]\nmembers = [\"app\", \"lib\"]\n")
+        .package("lib", "lib", "");
+    refused(&checkout, &["release-plz.toml"], "proxy");
+}
+
+#[test]
+fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_only_where_it_will_be_tagged()
+ {
+    let checkout = Checkout::new("lock-version");
+    let version = |version: &str| {
+        checkout
+            .write("Cargo.toml", "[workspace]\nmembers = [\"app\"]\n")
+            .write(
+                "app/Cargo.toml",
+                &format!(
+                    "[package]\nname = \"app\"\nversion = \"{version}\"\nedition = \"2021\"\n"
+                ),
+            )
+            .write("app/src/lib.rs", "");
+    };
+    checkout.write("release-plz.toml", PLZ);
+    version("1.2.3-alpha.lock");
+    accepted(&checkout, &["release-plz.toml"]);
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(stderr.contains("app-v1.2.3-alpha.lock"), "{stderr}");
+    version("1.2.3-alpha");
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    checkout.write(
+        "release-plz.toml",
+        &PLZ.replace(
+            "{{ package }}-v{{ version }}",
+            "v{{ version }}-{{ package }}",
+        ),
+    );
+    version("1.2.3-alpha.lock");
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(0), "{stderr}");
 }
