@@ -63,6 +63,9 @@ pub enum EnsureError {
     #[error("malformed message")]
     Malformed,
 
+    #[error("unauthorized")]
+    Unauthorized,
+
     #[error("effect uncertain")]
     Uncertain,
 
