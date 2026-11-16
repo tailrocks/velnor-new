@@ -482,3 +482,32 @@ publication and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
 **Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22, and also retires the separate zizmor job: [jactionlint decision](jactionlint-decision.md).
+
+## 11. Compile steps build the whole workspace, not the selected packages
+
+**Decision.** In generated Rust CI (velnor-gen), lint, the test build, the
+nextest archive, doctests and `cargo doc` run with `--workspace` instead of
+`-p` for the selected packages. Tests still run only the selected packages,
+filtered with `-E`. Alone-checks, docs and doctests are still planned from the
+selection.
+
+**Cause.** Cargo unifies features only over the selected packages. A `-p` run
+therefore builds shared dependencies with a different feature set than the
+workspace-wide build, so it rebuilds them and breaks the cache (reproduced on
+cargo 1.99.1; `velnor-lab` `leaf` compiled `hex`, `lib` and `app` instead of
+`app`).
+
+**Stable-cargo constraint.** `resolver.feature-unification = "workspace"`
+would fix it but needs `-Zfeature-unification`, which stable cargo ignores.
+
+**Costs.** Doctests of every crate run whenever any selected crate has
+doctests, because cargo never caches them. A cold or evicted cache builds the
+whole workspace, not the selected closure. Lint covers unselected crates, so a
+warning there fails an unrelated pull request.
+
+**Goals.** This bends [goals.md](goals.md) promise 1 ("A run checks only what
+it selects") for doctests and lint scope. No number in the goals changes and
+`docs/goals.md` is not edited.
+
+**Status.** Adopted; owner may revisit. Revisit when
+workspace feature unification stabilizes, then restore `-p` everywhere.

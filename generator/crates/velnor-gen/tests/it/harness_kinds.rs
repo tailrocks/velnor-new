@@ -332,10 +332,9 @@ fn the_per_package_steps_and_the_archive_build_follow_the_packages_the_plan_sele
         .find(|line| line.contains("nextest archive"))
         .unwrap_or_default();
     assert!(
-        archive.contains("archive $PACKAGE_ARGS --locked"),
+        archive.contains("archive --workspace --locked") && !archive.contains("PACKAGE_ARGS"),
         "{archive}"
     );
-    assert!(!archive.contains("--workspace"), "{archive}");
     for (name, package) in [
         ("Test a custom", "a"),
         ("Check a alone", "a"),
