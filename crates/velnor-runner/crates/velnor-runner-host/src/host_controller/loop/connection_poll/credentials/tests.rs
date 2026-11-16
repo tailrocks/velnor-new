@@ -3,50 +3,16 @@
 
 use std::time::Instant;
 
-use super::{RESTORE_RETRY, guarded_restore, restore_bound_session, restore_missing};
+use super::{
+    RESTORE_RETRY, guarded_restore, release_suspect_credentials, restore_bound_session,
+    restore_missing,
+};
 use crate::{
     config::HostConfig,
     error::HostError,
+    scale_set::EnsureError,
     journal::{ConnectionJournal, Journal},
 };
-
-struct Connection {
-    credentials: Option<u32>,
-    restores: u32,
-    recoveries: u32,
-}
-
-impl Connection {
-    async fn poll(&mut self, fail: bool) -> Result<(), ()> {
-        let restores = &mut self.restores;
-        restore_missing(&mut self.credentials, async || {
-            *restores += 1;
-            Ok::<_, ()>(7)
-        })
-        .await?;
-        if fail {
-            self.credentials.take();
-            return Err(());
-        }
-        self.recoveries += 1;
-        Ok(())
-    }
-}
-
-#[tokio::test]
-async fn a_held_poll_does_not_strand_the_next_poll() {
-    let mut connection = Connection {
-        credentials: Some(7),
-        restores: 0,
-        recoveries: 0,
-    };
-    assert!(connection.poll(true).await.is_err());
-    assert!(connection.credentials.is_none());
-    assert!(connection.poll(false).await.is_ok());
-    assert_eq!(connection.restores, 1);
-    assert_eq!(connection.recoveries, 1);
-    assert!(connection.credentials.is_some());
-}
 
 #[tokio::test]
 async fn present_credentials_are_not_reloaded() -> Result<(), ()> {
@@ -212,4 +178,53 @@ async fn a_failed_restore_is_not_retried_until_the_backoff_passes() {
     assert!(gate.run(true, start + RESTORE_RETRY, false).await);
     assert_eq!(gate.calls, 2);
     assert!(gate.retry_at.is_none());
+}
+
+async fn held_poll(gate: &mut Gate, error: &HostError, now: Instant) -> bool {
+    if !gate.run(true, now, false).await {
+        return false;
+    }
+    release_suspect_credentials(&mut gate.slot, error);
+    true
+}
+
+#[tokio::test]
+async fn a_local_hold_keeps_the_credentials_so_the_next_poll_restores_nothing() {
+    let mut gate = Gate::new(Some(1));
+    let now = Instant::now();
+    for error in [HostError::Config, HostError::poll(&EnsureError::Uncertain)] {
+        assert!(held_poll(&mut gate, &error, now).await);
+        assert_eq!(gate.slot, Some(1));
+    }
+    assert_eq!(gate.calls, 0);
+}
+
+#[tokio::test]
+async fn an_authorization_failure_drops_the_credentials_and_the_next_poll_restores_once() {
+    for cause in [
+        EnsureError::Forbidden,
+        EnsureError::Rejected,
+        EnsureError::Conflict,
+    ] {
+        let mut gate = Gate::new(Some(1));
+        let start = Instant::now();
+        assert!(held_poll(&mut gate, &HostError::poll(&cause), start).await);
+        assert!(gate.slot.is_none());
+        assert!(gate.run(true, start, false).await);
+        assert_eq!(gate.calls, 1);
+        assert_eq!(gate.slot, Some(9));
+        assert!(gate.run(true, start, false).await);
+        assert_eq!(gate.calls, 1);
+    }
+}
+
+#[tokio::test]
+async fn repeated_local_holds_never_reopen_a_session() {
+    let mut gate = Gate::new(Some(1));
+    let start = Instant::now();
+    for tick in 0..2000_u32 {
+        let now = start + std::time::Duration::from_secs(2 * u64::from(tick));
+        assert!(held_poll(&mut gate, &HostError::Keychain, now).await);
+    }
+    assert_eq!(gate.calls, 0);
 }

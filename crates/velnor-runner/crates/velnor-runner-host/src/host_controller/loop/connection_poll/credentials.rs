@@ -9,6 +9,7 @@ use std::{
 use crate::{
     config::RepositoryConnection, error::HostError, journal::ConnectionJournal,
     launch::open_connection_session, launch_blocking::ListenFault,
+    scale_set::EnsureError,
 };
 
 use super::{
@@ -29,6 +30,19 @@ async fn restore_missing<C, E>(
         *slot = Some(restore().await?);
     }
     Ok(())
+}
+
+pub(super) fn release_suspect_credentials<C>(slot: &mut Option<C>, error: &HostError) {
+    let suspect = [
+        EnsureError::Forbidden,
+        EnsureError::Rejected,
+        EnsureError::Conflict,
+    ]
+    .iter()
+    .any(|cause| HostError::poll(cause) == *error);
+    if suspect {
+        slot.take();
+    }
 }
 
 pub(super) async fn guarded_restore<C, E: Display>(

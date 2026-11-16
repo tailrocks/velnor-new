@@ -12,7 +12,7 @@ use crate::{
 mod poll_attempt;
 use poll_attempt::PollAttemptGuard;
 
-use super::credentials::restore_active_credentials;
+use super::credentials::{release_suspect_credentials, restore_active_credentials};
 
 use super::super::{
     polling::{
@@ -164,7 +164,6 @@ async fn prepare_poll(
             "host controller guest image metadata held connection={}",
             prepared.binding.connection_id
         );
-        prepared.credentials.take();
         return Ok(None);
     }
     let allocation = match prepared
@@ -178,7 +177,6 @@ async fn prepare_poll(
                 "host controller polling held connection={} reason={error}",
                 prepared.binding.connection_id
             );
-            prepared.credentials.take();
             return Ok(None);
         }
     };
@@ -194,7 +192,6 @@ async fn prepare_poll(
                     "host controller drain check held connection={} reason={error}",
                     prepared.binding.connection_id
                 );
-                prepared.credentials.take();
                 return Ok(None);
             }
         }
@@ -264,7 +261,7 @@ async fn execute_poll(
                 "host controller poll held connection={} reason={error}",
                 prepared.binding.connection_id
             );
-            prepared.credentials.take();
+            release_suspect_credentials(&mut prepared.credentials, &error);
             Ok(None)
         }
     }
