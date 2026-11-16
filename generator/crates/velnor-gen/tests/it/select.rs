@@ -339,7 +339,7 @@ fn a_package_at_the_root_of_its_workspace_claims_only_its_own_sources() {
 }
 
 #[test]
-fn two_members_of_one_workspace_that_share_a_target_source_are_both_selected() {
+fn a_target_source_outside_every_package_directory_selects_every_root() {
     let sharing = |package: &str, directory: &str| RustMember {
         targets: vec![Target {
             source: Some(path("shared/common.rs")),
@@ -358,12 +358,6 @@ fn two_members_of_one_workspace_that_share_a_target_source_are_both_selected() {
     )]);
     assert_selects(
         &facts,
-        vec![(
-            &["shared/common.rs"],
-            vec![some(&[
-                ("a", changed("shared/common.rs")),
-                ("b", changed("shared/common.rs")),
-            ])],
-        )],
+        vec![(&["shared/common.rs"], vec![unknown("shared/common.rs")])],
     );
 }
