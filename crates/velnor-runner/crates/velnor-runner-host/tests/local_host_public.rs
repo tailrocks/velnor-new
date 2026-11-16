@@ -8,7 +8,7 @@ use std::time::Instant;
 use bollard::models::ContainerInspectResponse;
 use bollard::query_parameters::ListContainersOptions;
 use velnor_runner_host::HostError;
-use velnor_runner_host::local::{LoopbackAuthority, check_state, run_local};
+use velnor_runner_host::local::{LoopbackAuthority, Plan, check_state, run_local};
 
 #[expect(
     dead_code,
@@ -20,6 +20,8 @@ use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/journal.rs"]
+mod journal;
 #[path = "local_host_public/proxy.rs"]
 mod proxy;
 #[path = "local_host_public/refusals.rs"]
@@ -301,6 +303,20 @@ fn local_authority_must_be_loopback_http() {
     for accepted in ["http://127.0.0.1:53114", "http://[::1]:53114"] {
         assert!(LoopbackAuthority::parse(accepted).is_ok(), "{accepted}");
     }
+}
+
+#[test]
+fn local_plan_refuses_one_network_shared_by_two_sides() {
+    let plan = |trusted: &str, untrusted: &str| {
+        format!(
+            "{{\"environment\":\"e\",\"authority\":\"http://127.0.0.1:53114\",\"token\":\"{TOKEN}\",\"docker\":\"unix:///var/run/docker.sock\",\"platform\":\"linux/arm64\",\"runner_image\":\"a\",\"dind_image\":\"b\",\"limits\":{{\"runner_cpu_millicores\":1500,\"runner_memory_bytes\":1073741824,\"dind_cpu_millicores\":500,\"dind_memory_bytes\":1073741824}},\"sides\":[{{\"side\":\"trusted\",\"network\":\"{trusted}\",\"pairs\":1}},{{\"side\":\"untrusted\",\"network\":\"{untrusted}\",\"pairs\":1}}]}}"
+        )
+    };
+    assert!(Plan::parse(plan("net-a", "net-b").as_bytes()).is_ok());
+    assert_eq!(
+        Plan::parse(plan("net-a", "net-a").as_bytes()).err(),
+        Some(HostError::Config)
+    );
 }
 
 #[tokio::test]

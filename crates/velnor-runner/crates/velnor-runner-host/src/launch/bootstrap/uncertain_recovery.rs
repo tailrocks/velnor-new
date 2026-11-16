@@ -104,19 +104,20 @@ async fn recover_pre_jit(
     recovery: &UncertainRecovery<'_>,
     reservation: &PhysicalRunnerReservation,
 ) {
-    if reservation.acquired_request.is_none() || reservation.ownership.assignment().is_none() {
+    if reservation.ownership.assignment().is_none() {
         return;
     }
-    if let Err(error) = Box::pin(recover_pre_jit_reservation(
-        recovery.docker,
-        recovery.journal,
-        recovery.scope,
-        recovery.engine,
-        recovery.images,
-        reservation.reservation_id,
-        recovery.image_authority,
-    ))
-    .await
+    if reservation.acquired_request.is_some()
+        && let Err(error) = Box::pin(recover_pre_jit_reservation(
+            recovery.docker,
+            recovery.journal,
+            recovery.scope,
+            recovery.engine,
+            recovery.images,
+            reservation.reservation_id,
+            recovery.image_authority,
+        ))
+        .await
     {
         report(
             recovery.scope,

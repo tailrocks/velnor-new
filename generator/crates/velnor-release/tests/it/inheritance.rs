@@ -143,3 +143,73 @@ fn release_plz_declared_only_in_the_dot_mise_file_is_found_and_checked() {
         .push("[tools]\nbun = \"1.4.4\"\n".to_owned());
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn a_literal_workspace_tag_shared_by_two_unlisted_members_is_refused_naming_both() {
+    let mut files = files();
+    files
+        .release_plz_toml
+        .insert(".".to_owned(), WORKSPACE_ONLY.to_owned());
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("lib", "lib/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["app", "lib"]
+    ));
+    let templated = WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}-v{{ version }}");
+    files.release_plz_toml.insert(".".to_owned(), templated);
+    assert_eq!(refusal(&files), None);
+    crate::fixture::with_metadata(&mut files, &[("Cargo.toml", &[("app", "Cargo.toml")])]);
+    files
+        .release_plz_toml
+        .insert(".".to_owned(), WORKSPACE_ONLY.to_owned());
+    assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn templated_workspace_tags_that_render_the_same_for_two_unlisted_members_are_refused() {
+    let mut files = files();
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}{{ version }}"),
+    );
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("a", "Cargo.toml"), ("a1", "a1/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["a", "a1"]
+    ));
+}
+
+#[test]
+fn an_unlisted_member_may_not_share_a_tag_with_a_listed_package() {
+    let mut files = files();
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        format!(
+            "{}\n[[package]]\nname = \"tool\"\ngit_tag_name = \"a{{{{ version }}}}\"\n",
+            WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}{{ version }}")
+        ),
+    );
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("a", "Cargo.toml"), ("tool", "tool/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["a", "tool"]
+    ));
+}

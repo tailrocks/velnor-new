@@ -3,7 +3,9 @@
 
 use velnor_release::ReleaseError;
 
-use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, locked, plz_edited, refusal};
+use crate::fixture::{
+    MISE_LOCK, MISE_TOML, PLZ, TestResult, edit, files, locked, plz_edited, refusal,
+};
 
 #[test]
 fn release_plz_missing_from_mise_is_refused() {
@@ -54,6 +56,35 @@ fn a_binary_that_release_plz_does_not_release_is_refused() -> TestResult {
     listed.release_toml = Some(binaries.to_owned());
     assert_eq!(refusal(&listed), None);
     Ok(())
+}
+
+#[test]
+fn two_selectors_that_resolve_to_different_release_plz_versions_are_refused() {
+    let mut files = files();
+    files.mise_tomls = vec![
+        "[tools]\nrelease-plz = \"0.4.3\"\n\"aqua:release-plz/release-plz\" = \"0.4.2\"\n"
+            .to_owned(),
+    ];
+    files.mise_lock = format!(
+        "{MISE_LOCK}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.2").replace("v0.4.3", "v0.4.2")
+    );
+    assert_eq!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzVersionsConflict {
+            first: "0.4.2".to_owned(),
+            second: "0.4.3".to_owned()
+        })
+    );
+    files.mise_tomls = vec![
+        "[tools]\nrelease-plz = \"0.4.3\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n"
+            .to_owned(),
+    ];
+    files.mise_lock = format!(
+        "{MISE_LOCK}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.3")
+    );
+    assert_eq!(refusal(&files), None);
 }
 
 #[test]

@@ -9,6 +9,7 @@ use velnor_model::{
     RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
+use crate::audit_job::audit_job;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -51,6 +52,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
+    if suffixed {
+        jobs.extend(audit_job(facts, helper_root.is_some()));
+    }
     if facts.policy.any() {
         jobs.push(policy_job(
             facts,
@@ -171,6 +175,17 @@ pub(crate) fn setup(
     lane: &Lane,
     job: &JobId,
 ) -> Vec<Step> {
+    setup_roots(facts, std::slice::from_ref(root), lint, lane, job)
+}
+
+pub(crate) fn setup_roots(
+    facts: &RepoFacts,
+    roots: &[RustRoot],
+    lint: bool,
+    lane: &Lane,
+    job: &JobId,
+) -> Vec<Step> {
+    let root = &roots[0];
     let mut steps = head(
         facts,
         if lane.plan.is_none() {
@@ -212,24 +227,26 @@ pub(crate) fn setup(
             }
         }
     }
-    let cache_root = CacheRoot::new(&root.manifest);
-    toolchain.extend([
-        step(StepKind::Helper(HelperCommand::Prepare)),
-        Step {
-            directory: root.manifest.parent(),
-            ..step(StepKind::Helper(HelperCommand::CheckMetadata))
-        },
-        step(StepKind::CacheRestore(CacheKey::Sources {
-            host: Host,
-            root: cache_root.clone(),
-        })),
-        step(StepKind::CacheRestore(CacheKey::Target {
-            job: job.clone(),
-            root: cache_root,
-            host: Host,
-        })),
-        step(StepKind::Helper(HelperCommand::Restored)),
-    ]);
+    toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
+    for root in roots {
+        let cache_root = CacheRoot::new(&root.manifest);
+        toolchain.extend([
+            Step {
+                directory: root.manifest.parent(),
+                ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+            },
+            step(StepKind::CacheRestore(CacheKey::Sources {
+                host: Host,
+                root: cache_root.clone(),
+            })),
+            step(StepKind::CacheRestore(CacheKey::Target {
+                job: job.clone(),
+                root: cache_root,
+                host: Host,
+            })),
+        ]);
+    }
+    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step

@@ -7,17 +7,9 @@ use std::fs;
 use std::path::Path;
 
 const ACTION: &str = "actions/setup-velnor/action.yml";
-const GENERATOR_PACKAGES: [&str; 5] = [
-    "velnor-gen",
-    "velnor-model",
-    "velnor-release",
-    "velnor-render",
-    "velnor-rust",
-];
 
 #[test]
-fn the_setup_velnor_action_file_is_owned_by_the_generator_packages_alone()
--> Result<(), Box<dyn Error>> {
+fn the_setup_velnor_action_file_is_owned_by_velnor_gen_alone() -> Result<(), Box<dyn Error>> {
     let config: toml::Table = fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.velnor/config.toml"),
     )?
@@ -42,7 +34,7 @@ fn the_setup_velnor_action_file_is_owned_by_the_generator_packages_alone()
         .filter(|rule| strings(rule, "globs").contains(ACTION))
         .map(|rule| strings(rule, "packages"))
         .collect();
-    let want: BTreeSet<String> = GENERATOR_PACKAGES.map(str::to_owned).into();
+    let want: BTreeSet<String> = ["velnor-gen".to_owned()].into();
     assert_eq!(owners, [want]);
     Ok(())
 }

@@ -116,6 +116,9 @@ pub enum ReleaseError {
     CargoRedirectsCratesIo {
         file: String,
     },
+    CargoOffline {
+        file: String,
+    },
     PublishNamesOtherRegistry {
         root: String,
         manifest: String,
@@ -192,6 +195,10 @@ pub enum ReleaseError {
     },
     ReleasePlzNotLockedForLinux {
         tool: String,
+    },
+    ReleasePlzVersionsConflict {
+        first: String,
+        second: String,
     },
     ReleasePlzLockMismatch {
         configured: String,

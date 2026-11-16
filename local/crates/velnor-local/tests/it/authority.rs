@@ -3,9 +3,10 @@
 
 mod claims;
 mod fake;
+mod mints;
 
 use serde_json::{Value, json};
-use velnor_local::authority::{Call, Entry, Facts, Refusal, admit, call};
+use velnor_local::authority::{Call, call};
 use velnor_local::io::authority::Authority;
 use velnor_local::side::Side;
 
@@ -192,6 +193,34 @@ async fn authority_keeps_the_ledger_on_disk_and_rejects_forged_or_repeated_entri
 }
 
 #[tokio::test]
+async fn authority_mints_under_the_name_the_caller_chose_and_refuses_an_invalid_one() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-named", &runners).await;
+    let (status, jit) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "host-chosen.1"}),
+    )
+    .await;
+    assert_eq!(
+        (status, jit["name"].as_str()),
+        (200, Some("host-chosen.1")),
+        "{jit}"
+    );
+    let (status, _) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "bad name/../x"}),
+    )
+    .await;
+    assert_eq!(status, 400);
+}
+
+#[tokio::test]
 async fn authority_mints_a_jit_for_a_side_that_is_up_and_deletes_agents_by_name() {
     let runners = FakeRunners::default();
     let authority = authority("authority-agents", &runners).await;
@@ -200,7 +229,7 @@ async fn authority_mints_a_jit_for_a_side_that_is_up_and_deletes_agents_by_name(
         "POST",
         "/jit",
         Some(TOKEN),
-        json!({"side": "trusted"}),
+        json!({"side": "trusted", "name": "agent-1"}),
     )
     .await;
     assert_eq!((status, jit["jit"].as_str()), (200, Some("e30=")), "{jit}");
@@ -292,45 +321,6 @@ fn authority_routes_only_its_four_calls() {
     ] {
         assert_eq!(call(method, path), Call::Unknown, "{method} {path}");
     }
-}
-
-#[test]
-fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
-    let facts = |id: u64, workflow: &str| Facts {
-        id,
-        attempt: 1,
-        event: "push".to_owned(),
-        git_ref: "refs/heads/main".to_owned(),
-        sha: SHA.to_owned(),
-        workflow: workflow.to_owned(),
-        jobs: vec!["ci".to_owned()],
-    };
-    let entry = |side, workflow: Option<&str>, existing: Vec<u64>| Entry {
-        id: "1-push".to_owned(),
-        side,
-        event: "push".to_owned(),
-        git_ref: "refs/heads/main".to_owned(),
-        sha: SHA.to_owned(),
-        workflow: workflow.map(str::to_owned),
-        existing,
-        claims: Vec::new(),
-    };
-    let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
-    assert!(admit(&entries, Side::Trusted, &facts(1, "a.yml")).is_ok());
-    assert_eq!(
-        admit(&entries, Side::Trusted, &facts(1, "b.yml")),
-        Err(Refusal::NotDispatched)
-    );
-    assert_eq!(
-        admit(&entries, Side::Untrusted, &facts(1, "a.yml")),
-        Err(Refusal::WrongSide)
-    );
-    let seen = [entry(Side::Trusted, None, vec![1])];
-    assert_eq!(
-        admit(&seen, Side::Trusted, &facts(1, "a.yml")),
-        Err(Refusal::NotDispatched)
-    );
-    assert!(admit(&seen, Side::Trusted, &facts(2, "a.yml")).is_ok());
 }
 
 #[test]

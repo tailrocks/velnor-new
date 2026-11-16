@@ -8,7 +8,7 @@ use velnor_actions_contract::Stack;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::native_authority::{
     CargoWorkspaceFact, GeneratedSourceFact, GradleRootFact, NativeToolOrigin, NativeToolPin,
-    RustTaskFact, TofuTaskFact, WorkflowSourceFact, WorkspaceFormatFact,
+    RustTaskFact, TofuTaskFact, WorkflowSourceFact, WorkspaceFormatFact, WorkspacePackageFact,
 };
 
 pub(super) fn tool_pins(
@@ -46,6 +46,17 @@ pub(super) fn cargo_workspaces(input: &WorkflowBuildInput<'_>) -> Vec<CargoWorks
                 root,
                 test_runner: workspace.profile.test_runner,
                 lockfile_path: input.root.join(&lock).is_file().then_some(lock),
+                packages: workspace
+                    .record
+                    .packages
+                    .iter()
+                    .filter(|package| package.in_workspace && !package.external)
+                    .map(|package| WorkspacePackageFact {
+                        id: package.id.clone(),
+                        name: package.name.clone(),
+                        manifest: package.manifest.clone(),
+                    })
+                    .collect(),
             }
         })
         .collect()

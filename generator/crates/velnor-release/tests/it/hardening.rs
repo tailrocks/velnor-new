@@ -260,11 +260,30 @@ fn a_repository_that_needs_nightly_rust_is_refused() {
     let mut features = files();
     features.cargo_manifest_texts.insert(
         "Cargo.toml".to_owned(),
-        "cargo-features = [\"edition2024\"]\n[package]\nname = \"app\"\n".to_owned(),
+        "cargo-features = [\"edition2024\", \"test-dummy-unstable\"]\n[package]\nname = \"app\"\n"
+            .to_owned(),
     );
     assert!(matches!(
         refusal(&features),
         Some(ReleaseError::NightlyOnly { .. })
+    ));
+}
+
+#[test]
+fn only_a_toolchain_file_rustup_finds_from_the_checkout_root_is_checked() {
+    let mut nested = files();
+    nested.toolchain_files.insert(
+        "tools/rust-toolchain.toml".to_owned(),
+        "[toolchain]\npath = \"/work/tc\"\n".to_owned(),
+    );
+    assert_eq!(refusal(&nested), None);
+    nested.toolchain_files.insert(
+        "rust-toolchain.toml".to_owned(),
+        "[toolchain]\npath = \"/work/tc\"\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&nested),
+        Some(ReleaseError::ToolchainFromPath { file }) if file == "rust-toolchain.toml"
     ));
 }
 

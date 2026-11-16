@@ -9,7 +9,7 @@ mod release;
 mod workflow_triggers;
 mod yaml_scalar;
 
-pub use crate::release::release_ruleset;
+pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 

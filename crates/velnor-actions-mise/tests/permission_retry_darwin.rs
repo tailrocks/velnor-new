@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
+mod fixture_recipe;
 mod support;
 
 use support::{ReleaseOnDrop, deadline, in_fixture_child, run_fixture, shell, shell_with_args};

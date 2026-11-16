@@ -3,6 +3,7 @@
 
 mod runners;
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -20,8 +21,8 @@ pub use runners::Runners;
 use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
-    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, answer, call, claim,
-    facts, run_ids,
+    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, agent_name, answer,
+    call, claim, facts, run_ids,
 };
 use crate::protocol::{Error, parse};
 use crate::side::Side;
@@ -36,7 +37,11 @@ pub trait Backend: Send + Sync {
         path: &str,
     ) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send;
     fn delete(&self, side: Side, path: &str) -> impl Future<Output = io::Result<()>> + Send;
-    fn mint(&self, side: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
+    fn mint(
+        &self,
+        side: Side,
+        name: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
 }
 
 #[derive(Debug)]
@@ -62,6 +67,22 @@ pub struct Authority<B> {
     key: hmac::Key,
     expected: hmac::Tag,
     ledger: Mutex<Ledger>,
+    minting: std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+}
+
+struct Reserved<'a> {
+    minting: &'a std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+    key: (&'static str, String),
+}
+
+impl Drop for Reserved<'_> {
+    fn drop(&mut self) {
+        let mut minting = self
+            .minting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        minting.remove(&self.key);
+    }
 }
 
 impl<B: Backend> Authority<B> {
@@ -83,6 +104,7 @@ impl<B: Backend> Authority<B> {
             key,
             expected,
             ledger: Mutex::new(Ledger { path, entries }),
+            minting: std::sync::Mutex::new(BTreeSet::new()),
         })
     }
 
@@ -155,7 +177,7 @@ impl<B: Backend> Authority<B> {
             .await?;
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
         let mut ledger = self.ledger.lock().await;
-        let admitted = admit(&ledger.entries, side, &found).cloned();
+        let admitted = admit(&ledger.entries, side, &found, &runs).cloned();
         if let Ok(entry) = &admitted {
             let before = ledger.entries.clone();
             if claim(&mut ledger.entries, &entry.id, &found)
@@ -171,38 +193,88 @@ impl<B: Backend> Authority<B> {
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
         let asked: JitRequest = parse(&read_small_body(request.into_body()).await?)?;
-        let minted = match self.backend.mint(asked.side).await {
-            Ok(minted) => minted,
-            Err(error) => {
-                let _removed = self.remove(asked.side, &error.name).await;
-                return Err(Error::upstream(format!("minting a JIT: {error}")));
-            }
+        if !agent_name(&asked.name) {
+            return Err(Error::invalid("the agent name is not valid".to_owned()));
         }
-        .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
+        let key = (asked.side.name(), asked.name.clone());
+        let taken = || {
+            Error::conflict(format!(
+                "{} is already registered or being minted",
+                asked.name
+            ))
+        };
+        if !self
+            .minting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key.clone())
+        {
+            return Err(taken());
+        }
+        let _reserved = Reserved {
+            minting: &self.minting,
+            key,
+        };
+        let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
+        let existing = self
+            .backend
+            .get(asked.side, AGENTS_PATH)
+            .await
+            .map_err(listing)?;
+        if existing.is_some_and(|bytes| agent_id(&bytes, &asked.name).is_some()) {
+            return Err(taken());
+        }
+        let minted = mint_or_retire(&self.backend, asked.side, Some(&asked.name))
+            .await?
+            .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
         let reply =
             json!({"name": minted.name, "jit": minted.jit, "seconds": minted.took.as_secs_f64()});
         Ok(json_response(200, &reply))
     }
 
     async fn remove(&self, side: Side, name: &str) -> Result<Response<Body>, Error> {
-        let listed = |bytes: Vec<u8>| agent_id(&bytes, name);
-        let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
-        let before = self.backend.get(side, AGENTS_PATH).await.map_err(listing)?;
-        let before = before
-            .ok_or_else(|| Error::not_found(format!("the {} side is not up", side.name())))?;
-        let Some(id) = listed(before) else {
-            return Ok(json_response(200, &json!({"name": name, "deleted": false})));
-        };
-        self.backend
-            .delete(side, &format!("{AGENTS_PATH}/{id}"))
-            .await
-            .map_err(listing)?;
-        let after = self.backend.get(side, AGENTS_PATH).await.map_err(listing)?;
-        if after.and_then(listed).is_some() {
-            return Err(Error::upstream(format!(
-                "{name} is still registered after its deletion"
-            )));
-        }
-        Ok(json_response(200, &json!({"name": name, "deleted": true})))
+        let deleted = retire(&self.backend, side, name).await?;
+        Ok(json_response(
+            200,
+            &json!({"name": name, "deleted": deleted}),
+        ))
     }
+}
+
+pub async fn mint_or_retire<B: Backend>(
+    backend: &B,
+    side: Side,
+    name: Option<&str>,
+) -> Result<Option<Minted>, Error> {
+    match backend.mint(side, name).await {
+        Ok(minted) => Ok(minted),
+        Err(error) => {
+            let cleaned = matches!(retire(backend, side, &error.name).await, Ok(true));
+            let mut failure = Error::upstream(format!("minting a JIT: {error}"));
+            failure.cleaned_up = cleaned;
+            Err(failure)
+        }
+    }
+}
+
+pub async fn retire<B: Backend>(backend: &B, side: Side, name: &str) -> Result<bool, Error> {
+    let listed = |bytes: Vec<u8>| agent_id(&bytes, name);
+    let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
+    let before = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
+    let before =
+        before.ok_or_else(|| Error::not_found(format!("the {} side is not up", side.name())))?;
+    let Some(id) = listed(before) else {
+        return Ok(false);
+    };
+    backend
+        .delete(side, &format!("{AGENTS_PATH}/{id}"))
+        .await
+        .map_err(listing)?;
+    let after = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
+    if after.and_then(listed).is_some() {
+        return Err(Error::upstream(format!(
+            "{name} is still registered after its deletion"
+        )));
+    }
+    Ok(true)
 }
