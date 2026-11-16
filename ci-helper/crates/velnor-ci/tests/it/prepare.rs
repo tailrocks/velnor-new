@@ -9,7 +9,7 @@ use std::process::{Command, Output};
 pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-fn scratch(name: &str) -> PathBuf {
+pub(crate) fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()));
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
@@ -66,6 +66,8 @@ pub(crate) struct Setup {
     pub rust_ci_toml: Option<&'static str>,
     pub cargo_config: Option<&'static str>,
     pub repo_cargo_config: Option<&'static str>,
+    pub ignored: bool,
+    pub plain: bool,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
 }
@@ -81,6 +83,8 @@ impl Setup {
             rust_ci_toml: None,
             cargo_config: None,
             repo_cargo_config: None,
+            ignored: false,
+            plain: false,
             release: "1.99.1",
             env: Vec::new(),
         }
@@ -119,6 +123,13 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".cargo/config.toml"), text)
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
+    let hide =
+        |ok: bool, op: std::io::Result<()>| ok.then(|| op.unwrap_or_else(|e| unreachable!("{e}")));
+    hide(
+        setup.ignored,
+        fs::write(checkout.join(".gitignore"), ".cargo/\n"),
+    );
+    hide(setup.plain, fs::remove_dir_all(checkout.join(".git")));
     fs::write(checkout.join("mise.toml"), &setup.mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
     let ci_toml = checkout.join(".velnor/rust-ci.toml");
     match setup.rust_ci_toml {
@@ -374,19 +385,4 @@ fn prepare_names_the_tool_that_is_not_at_its_pinned_version_and_writes_nothing()
             "{name}"
         );
     }
-}
-
-#[test]
-fn restored_exits_zero_and_writes_nothing() {
-    let dir = scratch("restored");
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .arg("restored")
-        .current_dir(&dir)
-        .env("GITHUB_ENV", dir.join("env"))
-        .env("GITHUB_OUTPUT", dir.join("output"))
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(output.status.success());
-    assert!(output.stdout.is_empty() && output.stderr.is_empty());
-    assert!(!dir.join("env").exists() && !dir.join("output").exists());
 }

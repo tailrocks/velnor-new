@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::prepare::{MISE, Setup, digest, prepare, reported};
+use std::process::Command;
+
+use super::prepare::{MISE, Setup, digest, prepare, reported, scratch};
 
 fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
@@ -26,6 +28,28 @@ fn compat_follows_a_repository_dependency_profile_override() {
     assert_ne!(none, debug);
     assert_ne!(debug, off);
     assert_eq!(none, unrelated);
+}
+
+#[test]
+fn compat_follows_a_gitignored_repository_profile_override() {
+    let none = compat_with("compat-ignored", |_| {});
+    let ignored = compat_with("compat-ignored", |setup| {
+        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
+        setup.ignored = true;
+    });
+    assert_ne!(none, ignored);
+}
+
+#[test]
+fn compat_reads_the_repository_profile_without_asking_git() {
+    let with_git = compat_with("compat-plain", |setup| {
+        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
+    });
+    let without_git = compat_with("compat-plain", |setup| {
+        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
+        setup.plain = true;
+    });
+    assert_eq!(with_git, without_git);
 }
 
 #[test]
@@ -66,4 +90,19 @@ fn rust_before_1_71_gets_numeric_debug_values() {
         run.velnor_config
     );
     assert!(!run.velnor_config.contains("\"none\""));
+}
+
+#[test]
+fn restored_exits_zero_and_writes_nothing() {
+    let dir = scratch("restored");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(&dir)
+        .env("GITHUB_ENV", dir.join("env"))
+        .env("GITHUB_OUTPUT", dir.join("output"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    assert!(!dir.join("env").exists() && !dir.join("output").exists());
 }
