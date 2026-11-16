@@ -40,6 +40,10 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+    let tests = job
+        .steps
+        .iter()
+        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
     let restores = job
         .steps
         .iter()
@@ -61,9 +65,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
-            .chain(job.steps.iter().any(|step| {
-                matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
-            }).then(|| {
+            .chain(tests.then(|| {
                 (
                     TESTS_RUN_OUTPUT.to_owned(),
                     format!("${{{{ steps.{TEST_STEP_ID}.outputs.{TESTS_RUN_OUTPUT} }}}}"),
@@ -74,14 +76,14 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .flat_map(|step| rendered_steps(step, restores, tests))
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind)];
+fn rendered_steps(step: &Step, restores: bool, tests: bool) -> Vec<RenderedStep> {
+    let mut rendered = vec![step_body(&step.kind, tests)];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -135,9 +137,9 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind) -> RenderedStep {
+fn step_body(kind: &StepKind, tests: bool) -> RenderedStep {
     match kind {
-        StepKind::ReportCaches(caches) => crate::report::lane(caches),
+        StepKind::ReportCaches(caches) => crate::report::lane(caches, tests),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics => crate::report::check(),

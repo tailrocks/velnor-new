@@ -28,7 +28,7 @@ pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
     )
 }
 
-pub(crate) fn lane(caches: &[CacheKey]) -> RenderedStep {
+pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
     let caches: Vec<_> = caches.iter().map(|key| {
         let rendered = render_key(key);
         let root = match key { CacheKey::Tools { .. } => None, CacheKey::Sources { root, .. } | CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.lock_file().parent().map_or_else(|| ".".to_owned(), |root| root.to_string())) };
@@ -51,14 +51,18 @@ pub(crate) fn lane(caches: &[CacheKey]) -> RenderedStep {
                 Value::Expr("${{ toJSON(steps) }}".to_owned()),
             ),
             (
-                "VELNOR_TESTS_RUN".to_owned(),
-                Value::Expr("${{ steps.test.outputs.tests_run }}".to_owned()),
-            ),
-            (
                 "VELNOR_REPORT_DEFAULT_BRANCH".to_owned(),
                 Value::Expr("${{ github.event.repository.default_branch }}".to_owned()),
             ),
-        ],
+        ]
+        .into_iter()
+        .chain(tests.then(|| {
+            (
+                "VELNOR_TESTS_RUN".to_owned(),
+                Value::Expr("${{ steps.test.outputs.tests_run }}".to_owned()),
+            )
+        }))
+        .collect(),
         ..RenderedStep::default()
     }
 }
@@ -94,6 +98,7 @@ pub(crate) fn artifact(upload: bool) -> RenderedStep {
                     Value::Text("error".to_owned()),
                 ),
                 ("retention-days".to_owned(), Value::Int(3)),
+                ("overwrite".to_owned(), Value::Bool(true)),
             ]
         } else {
             vec![

@@ -88,5 +88,32 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
                 .is_some_and(|action| action.starts_with("actions/cache/")))
             .all(|step| step["id"].is_string())
     );
+    for tests in [true, false] {
+        for metadata in view.rust_metadata.values_mut() {
+            for member in &mut metadata.members {
+                for target in &mut member.targets {
+                    target.tests = tests;
+                }
+            }
+        }
+        let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+        for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {
+            let steps = job["steps"].as_array().ok_or("steps")?;
+            let Some(report) = steps.iter().find(|step| step["run"] == "velnor-ci report") else {
+                continue;
+            };
+            let reports_tests = steps.iter().any(|step| step["id"] == "test");
+            assert_eq!(
+                report["env"]["VELNOR_TESTS_RUN"].as_str(),
+                reports_tests.then_some("${{ steps.test.outputs.tests_run }}"),
+                "{id} tests={tests}"
+            );
+            let upload = steps
+                .iter()
+                .find(|step| step["name"] == "Upload cache metrics")
+                .ok_or("metrics upload")?;
+            assert_eq!(upload["with"]["overwrite"], true, "{id} tests={tests}");
+        }
+    }
     Ok(())
 }
