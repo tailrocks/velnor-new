@@ -13,6 +13,7 @@ mod manifests;
 mod plan;
 mod release;
 mod restored;
+mod restored_targets;
 mod run;
 mod setup;
 mod timings;
@@ -108,6 +109,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
             input_target::check_target(&root, &args.target_dir)?;
+            restored_targets::record(&root, &args.target_dir)?;
             cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
                 restore_inputs(&root, &args.target_dir)
             })
@@ -127,9 +129,10 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Restored => {
             let root = current_dir()?;
-            cold_on_failure(&every_root_target(&root)?, "restored", || {
-                break_time_ties(&root)
-            })
+            let (targets, pending) = cold::targets_with_receipts(&root)?;
+            let report = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
+            pending.consume()?;
+            Ok(report)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }

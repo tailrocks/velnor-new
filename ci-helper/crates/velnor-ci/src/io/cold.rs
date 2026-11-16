@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::input_target::check_target;
 use super::inputs::tracked_paths;
+use super::restored_targets::{self, Pending};
 use crate::error::CiError;
 use velnor_rust::{METADATA_PATH, detect};
 
@@ -38,8 +39,13 @@ pub fn cold_on_failure(
 }
 
 pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
+    Ok(targets_with_receipts(root)?.0)
+}
+
+pub(super) fn targets_with_receipts(root: &Path) -> Result<(Vec<PathBuf>, Pending), CiError> {
+    let pending = restored_targets::read(root)?;
     let listed = tracked_paths(root)?;
-    let targets = if listed
+    let mut targets = if listed
         .top
         .join(METADATA_PATH.as_str())
         .try_exists()
@@ -70,8 +76,13 @@ pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
         }
         targets
     };
+    for target in &pending.targets {
+        if !targets.contains(target) {
+            targets.push(target.clone());
+        }
+    }
     for target in &targets {
         check_target(root, target)?;
     }
-    Ok(targets)
+    Ok((targets, pending))
 }
