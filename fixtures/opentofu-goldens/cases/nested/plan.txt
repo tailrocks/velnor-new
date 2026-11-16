@@ -22,9 +22,9 @@ Workflow to generate
     - rust-a (21 steps)
     - rust-lib (21 steps)
     - sources-producer (12 steps)
-    - tools-producer-36cc6f04 (9 steps)
-    - tools-producer-67ffdb60 (10 steps)
-    - tools-producer-dc27f1ea (11 steps)
+    - tools-producer-67ffdb60 (11 steps)
+    - tools-producer-aecb5d31 (10 steps)
+    - tools-producer-dc27f1ea (12 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
