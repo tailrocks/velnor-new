@@ -131,7 +131,6 @@ async fn stage_and_rename(fresh: &Path, path: &Path, content: &str) -> io::Resul
         .await?;
     file.write_all(content.as_bytes()).await?;
     file.flush().await?;
-    file.sync_all().await?;
     drop(file);
     fs::rename(fresh, path).await
 }

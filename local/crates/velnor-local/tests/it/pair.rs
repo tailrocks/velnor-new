@@ -211,6 +211,20 @@ async fn a_jit_file_is_private_and_replaces_the_one_before() {
 }
 
 #[tokio::test]
+async fn a_jit_file_holds_its_whole_content_the_moment_the_write_returns() {
+    let dir = temp_dir("pair-whole");
+    let payload = "jit-config-payload-0123456789".repeat(8);
+    for n in 0..300 {
+        let path = dir.join(format!("jit-{n}"));
+        write_private(&path, &payload)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let read = std::fs::read_to_string(&path).unwrap_or_default();
+        assert_eq!(read, payload, "write {n} was visible before it finished");
+    }
+}
+
+#[tokio::test]
 async fn concurrent_jit_writes_to_one_path_all_succeed() {
     let dir = temp_dir("pair-concurrent");
     let path = dir.join("jit");
