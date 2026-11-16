@@ -25,7 +25,7 @@ pub struct RustMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustPackage {
     pub name: PackageName,
-    pub version: String,
+    pub version: Option<String>,
     pub manifest: RepoPath,
     pub dependencies: Vec<PackageDependency>,
     pub targets: Vec<Target>,

@@ -17,7 +17,7 @@ fn view(timings: &str) -> RepoView {
     let manifest = path("Cargo.toml");
     let member = RustPackage {
         name: PackageName::new("a").unwrap_or_else(|e| unreachable!("{e}")),
-        version: "0.1.0".to_owned(),
+        version: Some("0.1.0".to_owned()),
         manifest: manifest.clone(),
         dependencies: Vec::new(),
         targets: vec![Target {

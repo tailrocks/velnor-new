@@ -73,7 +73,7 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
     let expected = RustMetadata {
         members: vec![RustPackage {
             name: PackageName::new("app")?,
-            version: "0.0.0".to_owned(),
+            version: Some("0.0.0".to_owned()),
             manifest: path("app/Cargo.toml")?,
             dependencies: vec![
                 dependency("lib", DependencyKind::Normal, Some("lib/Cargo.toml"))?,

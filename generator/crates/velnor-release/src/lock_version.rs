@@ -7,9 +7,17 @@ use velnor_model::{RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::members::{inherited_packages, owner};
+use crate::plan::ReleaseFiles;
 use crate::registry::within;
 use crate::release_plz::RootConfig;
 use crate::tag::TagPattern;
+
+fn records_versions(metadata: &BTreeMap<RepoPath, RustMetadata>) -> bool {
+    metadata
+        .values()
+        .flat_map(|workspace| &workspace.members)
+        .all(|member| member.version.is_some())
+}
 
 fn receives_version_tag(config: &RootConfig, name: &str) -> bool {
     match config.packages.iter().find(|package| package.name == name) {
@@ -49,10 +57,13 @@ fn check_metadata(
         let name = member.name.as_str();
         let released = inherited.iter().any(|inherited| inherited == name)
             || config.packages.iter().any(|package| package.name == name);
-        if released && receives_version_tag(config, name) && ends_in_lock(&member.version) {
+        if released
+            && receives_version_tag(config, name)
+            && member.version.as_deref().is_some_and(ends_in_lock)
+        {
             return Err(ReleaseError::VersionEndsInLock(
                 path.to_owned(),
-                member.version.clone(),
+                member.version.clone().unwrap_or_default(),
             ));
         }
     }
@@ -79,8 +90,7 @@ fn check_text(
 
 pub(crate) fn check_versions(
     configs: &[RootConfig],
-    manifests: &BTreeMap<String, String>,
-    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+    files: &ReleaseFiles,
 ) -> Result<(), ReleaseError> {
     for config in configs.iter().filter(|config| {
         config
@@ -90,9 +100,13 @@ pub(crate) fn check_versions(
             .chain(&config.workspace_tags)
             .any(TagPattern::ends_with_version)
     }) {
-        match metadata {
+        match files
+            .rust_metadata
+            .as_ref()
+            .filter(|metadata| records_versions(metadata))
+        {
             Some(metadata) => check_metadata(config, metadata)?,
-            None => check_text(config, manifests)?,
+            None => check_text(config, &files.cargo_manifest_texts)?,
         }
     }
     Ok(())
