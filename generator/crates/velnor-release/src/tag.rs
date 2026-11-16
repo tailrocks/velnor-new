@@ -126,3 +126,35 @@ pub(crate) fn checked(
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TagPattern;
+
+    #[test]
+    fn fixed_tags_collide_only_with_matching_version_like_values() {
+        for (first, second, collision) in [
+            ("vabc", "v{{ version }}", false),
+            ("v1.2.3", "v{{ version }}", true),
+            ("v1.2.3_z", "v{{ version }}", false),
+            ("v1.2.3_z", "v{{ version }}_z", true),
+            ("v1.2.3", "x{{ version }}", false),
+            ("v1.2.3", "v1.2.3", true),
+            ("v1.2.3", "v2.0.0", false),
+            ("v", "v{{ version }}", false),
+        ] {
+            let first = TagPattern(first.to_owned());
+            let second = TagPattern(second.to_owned());
+            assert_eq!(
+                first.may_collide(&second),
+                collision,
+                "{first:?} / {second:?}"
+            );
+            assert_eq!(
+                second.may_collide(&first),
+                collision,
+                "{second:?} / {first:?}"
+            );
+        }
+    }
+}

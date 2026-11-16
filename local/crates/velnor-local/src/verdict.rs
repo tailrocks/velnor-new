@@ -100,6 +100,7 @@ pub fn verdict(
     outcomes: &[Outcome],
     (up_at, up_seconds): (u64, f64),
     check: &Check,
+    warning: &str,
 ) -> String {
     let mut lines = vec![format!("Verdict of scenario {scenario}")];
     for outcome in outcomes {
@@ -121,7 +122,7 @@ pub fn verdict(
         )
     ));
     lines.extend(check.mode().map(str::to_owned));
-    lines.push(crate::authority::WARNING.to_owned());
+    lines.push(warning.to_owned());
     lines.iter().fold(String::new(), |mut text, line| {
         let _ = writeln!(text, "velnor-local {scenario}: {line}");
         text

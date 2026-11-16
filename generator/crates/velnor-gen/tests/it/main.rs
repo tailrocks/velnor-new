@@ -41,6 +41,7 @@ mod release_cargo_include;
 mod release_fixture;
 mod release_inputs;
 mod release_nested_toolchain;
+mod release_pr_only;
 mod release_record_recover;
 mod release_sample_names;
 mod release_symlink;

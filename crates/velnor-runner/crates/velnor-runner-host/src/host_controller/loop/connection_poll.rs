@@ -15,6 +15,8 @@ use crate::{
 
 use super::state::PreparedConnection;
 
+#[path = "connection_poll/credentials.rs"]
+mod credentials;
 #[path = "connection_poll/fairness.rs"]
 pub(super) mod fairness;
 #[path = "connection_poll/turn.rs"]

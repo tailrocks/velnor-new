@@ -114,7 +114,7 @@ pub struct ApiRuleParameters {
     pub required_status_checks: Option<Vec<ApiRequiredCheck>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ApiRequiredCheck {
     pub context: String,
     #[serde(alias = "app_id")]
