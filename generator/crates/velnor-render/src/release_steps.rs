@@ -8,6 +8,7 @@ use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
 pub(crate) const TAG_PATTERN_HELPER: (u64, u64, u64) = (0, 1, 80);
+pub(crate) const RELEASED_VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
 const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 const APP_TOKEN_VERSION: &str = "v3.3.0";
 pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
@@ -140,7 +141,11 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> RenderedStep {
+pub(crate) fn refuse_commands(
+    roots: &[RootPlan],
+    helper: &HelperVersion,
+    tags_released_version: bool,
+) -> RenderedStep {
     let files: Vec<String> = roots
         .iter()
         .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
@@ -195,6 +200,10 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> Ren
             ))
             .chain(tags)
             .chain(binds_tags.then(|| "--repo \"$REPOSITORY\" --manifests".to_owned()))
+            .chain(
+                (binds_tags && tags_released_version && helper.at_least(RELEASED_VERSIONS_HELPER))
+                    .then(|| "--released-versions".to_owned()),
+            )
             .collect::<Vec<_>>()
             .join(" "),
         ),

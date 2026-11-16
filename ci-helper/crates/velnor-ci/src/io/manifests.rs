@@ -6,7 +6,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use serde::Deserialize;
 use velnor_model::{RepoPath, RustMetadata};
+use velnor_release::Versions;
 use velnor_rust::reduce_metadata;
 
 use crate::error::CiError;
@@ -24,6 +26,18 @@ const PROGRAM_VARIABLES: [&str; 6] = [
 pub(super) struct Workspaces {
     pub(super) metadata: BTreeMap<RepoPath, RustMetadata>,
     pub(super) manifests: BTreeMap<String, String>,
+    pub(super) versions: Versions,
+}
+
+#[derive(Deserialize)]
+struct Listing {
+    packages: Vec<Listed>,
+}
+
+#[derive(Deserialize)]
+struct Listed {
+    name: String,
+    version: String,
 }
 
 pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> {
@@ -38,6 +52,7 @@ pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> 
         .canonicalize()
         .map_err(|e| CiError::new(format!("cannot resolve the working folder: {e}")))?;
     let mut metadata = BTreeMap::new();
+    let mut versions = Versions::new();
     for root in roots {
         let manifest = if root == "." {
             "Cargo.toml".to_owned()
@@ -71,6 +86,11 @@ pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> 
         }
         let (workspace, packages) = reduce_metadata(&repository, &output.stdout)
             .map_err(|e| CiError::new(format!("{manifest}: {e}")))?;
+        let listing: Listing = serde_json::from_slice(&output.stdout)
+            .map_err(|e| CiError::new(format!("{manifest}: cargo metadata is not JSON: {e}")))?;
+        for listed in listing.packages {
+            versions.insert((workspace.to_string(), listed.name), listed.version);
+        }
         metadata.insert(workspace, packages);
     }
     let mut manifests = BTreeMap::new();
@@ -85,5 +105,6 @@ pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> 
     Ok(Workspaces {
         metadata,
         manifests,
+        versions,
     })
 }
