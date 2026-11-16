@@ -79,13 +79,15 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
             ));
         }
     }
-    let lock = files
-        .get(&MISE_LOCK)
-        .ok_or(DetectError::MiseLockRequired { path: MISE_LOCK })?;
-    let mut locked = versions(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?;
-    let mut prebuilt =
-        prebuilt_platforms(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?;
+    let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
+        Some(lock) => (
+            versions(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
+            prebuilt_platforms(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
+        ),
+        None => Default::default(),
+    };
     Ok(ToolPins {
+        locked_file: files.contains_key(&MISE_LOCK),
         configs: present
             .iter()
             .map(|(config, _)| (*config).clone())
@@ -127,6 +129,9 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
+    if !facts.tools.locked_file {
+        return Err(DetectError::MiseLockRequired { path: MISE_LOCK });
+    }
     if let Some((file, mise)) = toolchain_conflict(facts) {
         return Err(DetectError::ToolchainConflict { file, mise });
     }

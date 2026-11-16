@@ -12,6 +12,7 @@ type Case<'a> = (&'a [&'a str], &'a [&'a str], &'a [(&'a str, bool)], bool);
 fn pins(requested: &[&str], locked: &[&str]) -> ToolPins {
     ToolPins {
         configs: Vec::new(),
+        locked_file: true,
         tools: BTreeMap::from([(
             "tool".to_owned(),
             ToolPin {
