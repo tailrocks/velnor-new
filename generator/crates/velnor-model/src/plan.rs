@@ -170,7 +170,6 @@ pub enum When {
     NotCancelled,
     Scheduled,
     ScheduledOrPush,
-    ScheduledMaintenance,
     CacheDebug,
     SaveToolsOnDefaultBranch,
     SaveBase,
@@ -191,8 +190,10 @@ pub enum StepKind {
         target: RepoPath,
         archive: Option<RepoPath>,
     },
-    CacheTrim(CacheKey),
-    CacheBudget(u64, Option<CacheKey>),
+    CacheTrim {
+        lane: JobId,
+    },
+    CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -318,6 +319,7 @@ pub enum CargoCommand {
         package: PackageName,
     },
     BuildAll,
+    NextestBuild,
     NextestRun {
         filter: FilterRef,
     },

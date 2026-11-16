@@ -10,7 +10,7 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::expiry;
+use crate::base_cache::{expiry, trim_job};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -73,12 +73,14 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    crate::cache_maintenance::add(facts, &mut jobs, helper_root.is_some());
     upload_cargo_logs(&mut jobs);
+    let verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
+    let trim = trim_job(facts, &jobs, helper_root.is_some());
+    jobs.extend(trim);
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
         skip_on_draft: false,
-        needs: jobs.iter().map(|job| job.id.clone()).collect(),
+        needs: verdict_needs,
         when: When::NotCancelled,
         steps: draft_guard
             .into_iter()

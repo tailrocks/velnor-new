@@ -1,13 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use velnor_model::{
-    BaseExpiry, CacheKey, CacheRoot, FullRun, HelperCommand, Host, JobId, OnMain, RepoFacts,
-    RepoPath, RustRoot, Step, StepKind, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, FullRun, HelperCommand, Host, Job, JobId, OnMain,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, When,
 };
 
 use crate::lane::Lane;
-use crate::plan::step;
+use crate::plan::{job, step};
+
+const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
@@ -64,11 +68,7 @@ pub(crate) fn save_steps(
         },
         Step {
             when: When::SaveBaseDecided,
-            ..step(StepKind::CacheSave(target.clone()))
-        },
-        Step {
-            when: When::SaveBaseDecided,
-            ..step(StepKind::CacheTrim(target))
+            ..step(StepKind::CacheSave(target))
         },
     ];
     if sources {
@@ -87,4 +87,56 @@ pub(crate) fn save_steps(
             ..saved
         })
         .collect()
+}
+
+fn trim_helper(facts: &RepoFacts, from_source: bool) -> Option<Step> {
+    match &facts.helper {
+        Some(release) if has_saving_helper(facts) => {
+            Some(step(StepKind::InstallHelper(release.clone())))
+        }
+        _ => from_source.then(|| step(StepKind::HelperFromArtifact)),
+    }
+}
+
+pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> Option<Job> {
+    let lanes: Vec<JobId> = jobs
+        .iter()
+        .filter(|lane| {
+            lane.steps
+                .iter()
+                .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
+        })
+        .map(|lane| lane.id.clone())
+        .collect();
+    if lanes.is_empty() {
+        return None;
+    }
+    let needs = jobs
+        .iter()
+        .filter(|job| {
+            job.steps
+                .iter()
+                .any(|step| matches!(step.kind, StepKind::CacheSave(_)))
+        })
+        .map(|job| job.id.clone())
+        .collect();
+    let steps = std::iter::once(trim_helper(facts, from_source)?)
+        .chain(
+            lanes
+                .iter()
+                .map(|lane| step(StepKind::CacheTrim { lane: lane.clone() })),
+        )
+        .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
+        .collect();
+    Some(Job {
+        needs,
+        when: When::SaveBase,
+        skip_on_draft: false,
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Actions, Access::Write),
+            (PermissionScope::PullRequests, Access::Read),
+        ])),
+        steps,
+        ..job(facts, TRIM_JOB)
+    })
 }

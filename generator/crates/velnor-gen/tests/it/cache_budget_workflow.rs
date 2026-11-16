@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::archive::jobs_of;
+use crate::base_save::step;
 use crate::facts::TestResult;
 use crate::lock::{COMMIT_FILE, SUMS};
 use crate::pipeline::{view, workflow};
@@ -17,36 +18,39 @@ fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Err
 }
 
 #[test]
-fn budget_runs_after_saves_with_configured_bytes_and_read_permission() -> TestResult {
+fn budget_runs_once_after_all_saves_with_configured_bytes_and_read_permission() -> TestResult {
     for (config, bytes) in [
         ("full_run = \"off\"\n", 8_000_000_000_u64),
         ("full_run = \"off\"\ncache_budget_bytes = 123\n", 123),
     ] {
         let text = render("0.1.81", config)?;
         let all = jobs_of(&text);
-        let lane = &all.iter().find(|(id, _)| id == "rust").ok_or("rust")?.1;
-        let steps: Vec<_> = lane.split("\n      - ").skip(1).collect();
-        let saves: Vec<_> = steps
+        let trim = &all
             .iter()
-            .enumerate()
-            .filter(|(_, step)| step.contains("name: Save the"))
-            .collect();
-        assert_eq!(saves.len(), 3);
-        for (index, saved) in saves {
-            let next = steps[index + 1];
-            assert!(
-                next.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")),
-                "{saved}\n{next}"
-            );
-            assert!(
-                next.contains("github.ref == format(''refs/heads/{0}''"),
-                "{next}"
-            );
-            assert!(!next.contains("pull_request"), "{next}");
-            assert!(next.contains("GITHUB_TOKEN:"), "{next}");
+            .find(|(id, _)| id == "rust-trim")
+            .ok_or("trim")?
+            .1;
+        assert_eq!(text.matches("velnor-ci cache budget").count(), 1);
+        let budget = step(trim, "Enforce the repository cache budget").ok_or("budget")?;
+        assert!(budget.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")));
+        assert!(budget.contains("GITHUB_TOKEN:"));
+        assert!(!budget.contains("    if:"), "{budget}");
+        assert!(trim.ends_with(budget), "{trim}");
+        assert!(trim.contains("actions: write"));
+        assert!(trim.contains("pull-requests: read"));
+        for (id, block) in &all {
+            if block.contains("name: Save the") {
+                assert!(trim.contains(&format!("      - {id}\n")), "{id}: {trim}");
+                assert!(!block.contains("actions: write"), "{id}");
+                assert!(!block.contains("cache budget"), "{id}");
+            }
         }
-        assert!(lane.contains("actions: write"));
-        assert!(lane.contains("pull-requests: read"));
+        let required = &all
+            .iter()
+            .find(|(id, _)| id == "required")
+            .ok_or("required")?
+            .1;
+        assert!(!required.contains("rust-trim"));
         assert!(!text.contains("rust-cache-budget:"));
     }
     for invalid in ["-1", "\"800\"", "1.5", "18446744073709551616"] {
@@ -57,32 +61,41 @@ fn budget_runs_after_saves_with_configured_bytes_and_read_permission() -> TestRe
 }
 
 #[test]
-fn scheduled_budget_waits_for_all_jobs_without_selection_and_old_helpers_omit_it() -> TestResult {
+fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skipped() -> TestResult
+{
     let text = render("0.1.81", "shape = \"groups\"\nfull_run = \"hourly\"\n")?;
     let all = jobs_of(&text);
-    let (_, scheduled) = all
-        .iter()
-        .find(|(id, _)| id == "rust-cache-budget")
-        .ok_or("maintenance")?;
+    let (_, trim) = all.iter().find(|(id, _)| id == "rust-trim").ok_or("trim")?;
+    let condition = trim
+        .lines()
+        .find(|line| line.starts_with("    if:"))
+        .ok_or("condition")?;
     assert!(
-        scheduled.contains("github.event_name == ''schedule''"),
-        "{scheduled}"
+        condition.contains("github.event_name == ''schedule''"),
+        "{condition}"
     );
-    assert!(scheduled.contains("!cancelled()"), "{scheduled}");
+    assert!(condition.contains("!cancelled()"), "{condition}");
     assert!(
-        scheduled.contains("github.ref == format(''refs/heads/{0}''"),
-        "{scheduled}"
+        condition.contains("github.ref == format(''refs/heads/{0}''"),
+        "{condition}"
     );
-    assert!(!scheduled.contains("outputs.rust"), "{scheduled}");
-    for (id, _) in &all {
-        if id != "rust-cache-budget" && id != "required" {
-            assert!(scheduled.contains(id), "{id}: {scheduled}");
+    assert!(!condition.contains("needs."), "{condition}");
+    assert!(!condition.contains("success()"), "{condition}");
+    assert!(!trim.contains("checkout"), "{trim}");
+    assert!(!trim.contains("cargo "), "{trim}");
+    let budget = step(trim, "Enforce the repository cache budget").ok_or("budget")?;
+    assert!(!budget.contains("base_save"), "{budget}");
+    assert!(!budget.contains("outputs.rust"), "{budget}");
+    let mut writers = 0;
+    for (id, block) in &all {
+        if block.contains("name: Save the") {
+            writers += 1;
+            assert!(trim.contains(&format!("      - {id}\n")), "{id}: {trim}");
         }
     }
-    assert!(scheduled.contains("actions: write"));
-    assert!(scheduled.contains("pull-requests: read"));
+    assert!(writers > 1);
     let old = render("0.1.80", "")?;
     assert!(!old.contains("cache budget"));
-    assert!(!old.contains("rust-cache-budget:"));
+    assert!(!old.contains("rust-trim:"));
     Ok(())
 }

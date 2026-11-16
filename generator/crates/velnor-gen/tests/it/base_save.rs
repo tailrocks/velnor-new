@@ -11,7 +11,7 @@ use crate::pipeline::{view, workflow};
 
 const EVENTS: &str = "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')";
 
-fn pinned(version: &str, config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn pinned(version: &str, config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files.insert(
@@ -21,22 +21,25 @@ fn pinned(version: &str, config: &str) -> Result<RepoView, Box<dyn std::error::E
     Ok(repo)
 }
 
-fn jobs(version: &str, config: &str) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+pub(crate) fn jobs(
+    version: &str,
+    config: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     Ok(jobs_of(&workflow(&pinned(version, config)?)?))
 }
 
-fn steps(block: &str) -> Vec<&str> {
+pub(crate) fn steps(block: &str) -> Vec<&str> {
     block.split("\n      - ").skip(1).collect()
 }
 
-fn step<'a>(block: &'a str, name: &str) -> Option<&'a str> {
+pub(crate) fn step<'a>(block: &'a str, name: &str) -> Option<&'a str> {
     steps(block).into_iter().find(|step| {
         step.lines()
             .any(|line| line.trim_start_matches("- ").trim() == format!("name: {name}"))
     })
 }
 
-fn names(block: &str) -> Vec<String> {
+pub(crate) fn names(block: &str) -> Vec<String> {
     steps(block)
         .iter()
         .filter_map(|step| {
@@ -51,7 +54,7 @@ fn saving(block: &str) -> bool {
 }
 
 #[test]
-fn the_one_job_lane_saves_after_its_last_cargo_step_in_this_order_and_only_on_the_default_branch()
+fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_the_default_branch()
 -> TestResult {
     let all = jobs("0.1.81", "")?;
     let (_, lane) = all
@@ -59,27 +62,25 @@ fn the_one_job_lane_saves_after_its_last_cargo_step_in_this_order_and_only_on_th
         .find(|(id, _)| id == "rust")
         .ok_or("no rust job")?;
     let order = names(lane);
-    let last_cargo = order
+    let build = order
         .iter()
-        .rposition(|name| name == "Check app alone" || name == "Documentation")
-        .ok_or("no doc step")?;
-    let tail: Vec<&str> = order[last_cargo + 1..].iter().map(String::as_str).collect();
+        .position(|name| name == "Build the tests")
+        .ok_or("no test build")?;
+    let saved: Vec<&str> = order[build + 1..build + 5]
+        .iter()
+        .map(String::as_str)
+        .collect();
     assert_eq!(
-        &tail[..7],
+        saved,
         [
             "velnor-ci inputs save",
             "Decide whether to save the build directory",
             "Save the target cache",
-            "Enforce the repository cache budget",
-            "Delete the older target entries",
             "Save the sources cache",
-            "Enforce the repository cache budget",
         ]
     );
-    for name in tail[..7]
-        .iter()
-        .filter(|name| **name != "Enforce the repository cache budget")
-    {
+    assert_eq!(order[build + 5], "Test");
+    for name in &saved {
         let text = step(lane, name).ok_or("missing step")?;
         assert!(text.contains(EVENTS), "{name}: {text}");
         assert!(text.contains("!cancelled()"), "{name}: {text}");
@@ -96,34 +97,11 @@ fn the_one_job_lane_saves_after_its_last_cargo_step_in_this_order_and_only_on_th
         "{sources}"
     );
     assert!(!sources.contains("steps.base"), "{sources}");
-    assert!(lane.contains("      actions: write\n"), "{lane}");
+    assert!(!lane.contains("actions: write"), "{lane}");
     let decide = step(lane, "Decide whether to save the build directory").ok_or("no decide")?;
     assert!(
         decide.contains("run: velnor-ci cache decide --target-dir target"),
         "{decide}"
-    );
-    Ok(())
-}
-
-#[test]
-fn the_trim_step_deletes_by_the_family_and_compat_prefix_with_a_token() -> TestResult {
-    let all = jobs("0.1.81", "")?;
-    let (_, lane) = all
-        .iter()
-        .find(|(id, _)| id == "rust")
-        .ok_or("no rust job")?;
-    let trim = step(lane, "Delete the older target entries").ok_or("no trim")?;
-    assert!(
-        trim.contains("CACHE_PREFIX: 'velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'"),
-        "{trim}"
-    );
-    assert!(
-        trim.contains("GITHUB_TOKEN: '${{ github.token }}'"),
-        "{trim}"
-    );
-    assert!(
-        trim.contains("velnor-ci cache trim --prefix \"$CACHE_PREFIX\""),
-        "{trim}"
     );
     Ok(())
 }
@@ -168,8 +146,11 @@ fn only_the_lint_and_test_lanes_save_and_the_sources_come_from_the_test_lane() -
     assert!(step(lint, "Save the target cache").is_some());
     assert!(step(test, "Save the target cache").is_some());
     for (id, block) in &all {
-        if !saving(block) && id != "rust-cache-budget" {
-            assert!(!block.contains("actions: write"), "{id}");
+        if !saving(block) {
+            assert!(
+                !block.contains("actions: write") || id == "rust-trim",
+                "{id}"
+            );
             assert!(!block.contains("Save the target cache"), "{id}");
         }
     }

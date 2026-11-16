@@ -4,9 +4,9 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    Access, CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
-    PackageName, PermissionScope, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step,
-    StepKind, TargetKind, When,
+    CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
+    PackageName, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind,
+    When,
 };
 
 use crate::base_cache::save_steps;
@@ -82,15 +82,6 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
-        let trims = steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::CacheTrim(_)));
-        let mut base = job(self.facts, id);
-        if trims {
-            base.permissions
-                .0
-                .insert(PermissionScope::Actions, Access::Write);
-        }
         Job {
             needs: self
                 .lane
@@ -101,7 +92,7 @@ impl RootJobs<'_> {
                 .collect(),
             gate: self.lane.job(),
             steps,
-            ..base
+            ..job(self.facts, id)
         }
     }
 
@@ -180,33 +171,46 @@ impl RootJobs<'_> {
 
     fn single(&self) -> Job {
         let draft = self.facts.config.skip_draft_pull_requests;
+        let skip_on_draft = |step: Step| Step {
+            skip_on_draft: draft
+                && matches!(
+                    step.kind,
+                    StepKind::Cargo(
+                        CargoCommand::NextestBuild
+                            | CargoCommand::NextestRun { .. }
+                            | CargoCommand::TestTarget { .. }
+                            | CargoCommand::Doctest
+                    )
+                ),
+            ..step
+        };
         let job_id = self.id(RUST_JOB);
         let mut steps = setup(self.facts, self.root, self.lane, &job_id);
-        steps.extend(
-            self.cargo(lint().into_iter().chain(self.tests()).collect())
-                .map(|step| Step {
-                    skip_on_draft: draft
-                        && matches!(
-                            step.kind,
-                            StepKind::Cargo(
-                                CargoCommand::NextestRun { .. }
-                                    | CargoCommand::TestTarget { .. }
-                                    | CargoCommand::Doctest
-                            )
-                        ),
-                    ..step
-                }),
-        );
-        steps.extend(self.audit());
-        steps.extend(
+        let saves = self.saves(&job_id, None, true);
+        let before_tests = self.nextest && !saves.is_empty();
+        let checks = || {
             self.cargo(
                 [CargoCommand::Doc]
                     .into_iter()
                     .chain(check_alone(self.root))
                     .collect(),
-            ),
-        );
-        steps.extend(self.saves(&job_id, None, true));
+            )
+        };
+        steps.extend(self.cargo(lint()));
+        if before_tests {
+            steps.extend(checks());
+            steps.extend(
+                self.cargo(vec![CargoCommand::NextestBuild])
+                    .map(skip_on_draft),
+            );
+            steps.extend(saves.iter().cloned());
+        }
+        steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+        steps.extend(self.audit());
+        if !before_tests {
+            steps.extend(checks());
+            steps.extend(saves);
+        }
         Job {
             skip_on_draft: false,
             ..self.lane_job(job_id, steps)
@@ -240,9 +244,17 @@ impl RootJobs<'_> {
         } else if !tests.is_empty() {
             let test_id = self.id(TEST_JOB);
             let mut steps = setup(self.facts, self.root, self.lane, &test_id);
+            let saves = self.saves(&test_id, None, true);
+            let before_tests = self.nextest && !saves.is_empty();
+            if before_tests {
+                steps.extend(self.cargo(vec![CargoCommand::NextestBuild]));
+                steps.extend(saves.iter().cloned());
+            }
             steps.extend(self.cargo(tests));
             steps.extend(self.audit());
-            steps.extend(self.saves(&test_id, None, true));
+            if !before_tests {
+                steps.extend(saves);
+            }
             jobs.push(self.lane_job(test_id, steps));
         }
         jobs
@@ -264,6 +276,11 @@ impl RootJobs<'_> {
             name: artifact.clone(),
             file: self.root.manifest.sibling(&ARCHIVE_FILE),
         }));
+        build.extend(self.saves(
+            &build_id,
+            Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
+            true,
+        ));
         build.extend(
             self.cargo(
                 self.direct_harnesses()
@@ -273,11 +290,6 @@ impl RootJobs<'_> {
             ),
         );
         build.extend(self.audit());
-        build.extend(self.saves(
-            &build_id,
-            Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
-            true,
-        ));
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),

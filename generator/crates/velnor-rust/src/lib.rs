@@ -6,7 +6,6 @@ mod base_cache;
 mod build_profile;
 mod build_script;
 mod cache_budget;
-mod cache_maintenance;
 mod cargo_lock;
 mod classify;
 mod compat;

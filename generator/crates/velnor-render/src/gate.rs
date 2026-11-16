@@ -72,11 +72,6 @@ pub(crate) fn condition(
                 parts.push(SETUP_DONE.to_owned());
             }
         }
-        When::ScheduledMaintenance => {
-            parts.push(NOT_CANCELLED.to_owned());
-            parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(format!("github.event_name == '{SCHEDULE}'"));
-        }
         When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"

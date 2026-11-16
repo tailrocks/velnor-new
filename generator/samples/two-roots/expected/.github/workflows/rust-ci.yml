@@ -120,10 +120,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
-            velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+            velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -243,10 +243,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: xtask/target
-          key: 'velnor-tgt-rust-xtask-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-xtask-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
-            velnor-tgt-rust-xtask-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+            velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
+            velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -354,10 +354,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-inputs-audit-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-inputs-audit.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-inputs-audit-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
-            velnor-tgt-rust-inputs-audit-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+            velnor-tgt-rust-inputs-audit.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-inputs-audit.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci check-metadata
         working-directory: xtask
         run: velnor-ci check-metadata
@@ -375,10 +375,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: xtask/target
-          key: 'velnor-tgt-rust-inputs-audit-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-inputs-audit.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-inputs-audit-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
-            velnor-tgt-rust-inputs-audit-xtask-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+            velnor-tgt-rust-inputs-audit.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
+            velnor-tgt-rust-inputs-audit.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored

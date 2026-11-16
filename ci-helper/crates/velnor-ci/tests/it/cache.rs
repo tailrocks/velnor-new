@@ -260,3 +260,46 @@ fn trim_deletes_nothing_when_the_family_has_no_more_than_the_kept_entries() {
     );
     assert_eq!(stale_entries(&entries, "nothing-", 2), Vec::<u64>::new());
 }
+
+#[test]
+fn restored_treats_a_build_directory_saved_without_a_born_file_as_expired() {
+    let repo = Checkout::new("expire-unborn");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write_unstaged("target/debug/deps/libapp.rlib", "rlib");
+    let output = restored(&repo, Some("7"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(stdout.contains("builds cold"), "{stdout}");
+    assert!(!repo.root().join("target").exists());
+    let unlimited = restored(&repo, None);
+    assert!(unlimited.status.success());
+}
+
+#[test]
+fn restored_keeps_a_build_directory_without_a_born_file_when_no_limit_is_set() {
+    let repo = Checkout::new("keep-unborn");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write_unstaged("target/debug/deps/libapp.rlib", "rlib");
+    for days in [None, Some("0")] {
+        assert!(restored(&repo, days).status.success());
+        assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+    }
+}
+
+#[test]
+fn trim_without_a_token_warns_and_exits_zero_like_every_other_trim_failure() {
+    let repo = Checkout::new("trim-no-token");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["cache", "trim", "--prefix", "velnor-tgt-rust-root-"])
+        .env("GITHUB_REPOSITORY", "owner/name")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env_remove("GITHUB_TOKEN")
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}{stderr}");
+    assert!(stdout.contains("::warning::cache trim"), "{stdout}{stderr}");
+    assert!(stdout.contains("GITHUB_TOKEN"), "{stdout}");
+}

@@ -117,14 +117,14 @@ pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<String,
     };
     let mut removed = Vec::new();
     for target in targets {
-        let Ok(born) = fs::read_to_string(target.join(BORN_FILE)) else {
-            continue;
+        let born = match fs::read_to_string(target.join(BORN_FILE)) {
+            Ok(born) if born_expired(&born, now_seconds, days) => born.trim().to_owned(),
+            Err(_) if target.is_dir() => "unknown".to_owned(),
+            Ok(_) | Err(_) => continue,
         };
-        if born_expired(&born, now_seconds, days) {
-            fs::remove_dir_all(target)
-                .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
-            removed.push(format!("{} (born {})", target.display(), born.trim()));
-        }
+        fs::remove_dir_all(target)
+            .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
+        removed.push(format!("{} (born {born})", target.display()));
     }
     Ok(if removed.is_empty() {
         String::new()
@@ -141,11 +141,12 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         .map_err(|_| CiError::new(format!("set {REPOSITORY_VARIABLE} to owner/name")))?;
     let reference = std::env::var(REF_VARIABLE)
         .map_err(|_| CiError::new(format!("set {REF_VARIABLE} to the ref that saved")))?;
-    let github = super::http::HttpGitHub::new(
-        super::api_url(),
-        super::token()?,
-        super::http::DEFAULT_TIMEOUT,
-    );
+    let token = match super::token() {
+        Ok(token) => token,
+        Err(error) => return Ok(trim_warning(&error)),
+    };
+    let github =
+        super::http::HttpGitHub::new(super::api_url(), token, super::http::DEFAULT_TIMEOUT);
     match trim(
         &github,
         &Repo::parse(&repository)?,
@@ -154,8 +155,10 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         keep.unwrap_or(KEEP_NEWEST),
     ) {
         Ok(report) => Ok(report),
-        Err(error) => Ok(format!(
-            "::warning::cache trim failed, older entries stay until the next save: {error}\n"
-        )),
+        Err(error) => Ok(trim_warning(&error)),
     }
+}
+
+fn trim_warning(error: &CiError) -> String {
+    format!("::warning::cache trim failed, older entries stay until the next save: {error}\n")
 }
