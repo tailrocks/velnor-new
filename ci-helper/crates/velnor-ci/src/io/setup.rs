@@ -11,6 +11,7 @@ use velnor_rust::{
     ci_debuginfo, compat, mise_files, tool_pins, toolchain,
 };
 
+use super::build_inputs::{image_identity, release_of, repository_profile};
 use super::{append_outputs, append_to, current_dir};
 use crate::error::CiError;
 use crate::setup::{
@@ -27,7 +28,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
     let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
     let files = read_files(&root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
-    let profile = build_profile(ci_debuginfo(&files).map_err(|e| CiError::new(e.to_string()))?);
+    let debuginfo = ci_debuginfo(&files).map_err(|e| CiError::new(e.to_string()))?;
     if !pins.tools.is_empty() {
         check_pinned_tools(&root, &pins)?;
     }
@@ -39,13 +40,17 @@ pub(super) fn prepare() -> Result<String, CiError> {
     {
         install_declared(&root, &declared)?;
     }
+    let rustc_verbose = rustc_verbose()?;
+    let profile = build_profile(debuginfo, release_of(&rustc_verbose)?);
     let inputs = CompatInputs {
-        rustc_verbose: rustc_verbose()?,
+        rustc_verbose,
         target: env_text("CARGO_BUILD_TARGET"),
         profile: profile.clone(),
         rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
         workspace: root.display().to_string(),
         driver: BUILD_DRIVER.to_owned(),
+        repo_profile: repository_profile(&root)?,
+        image: image_identity(),
     };
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;

@@ -33,6 +33,7 @@ fn binary() -> RustMember {
 fn root(members: Vec<RustMember>) -> RustRoot {
     RustRoot {
         manifest: path("Cargo.toml"),
+        target_dir: path("target"),
         members,
         depends_on: Vec::new(),
         external_dependencies: Vec::new(),

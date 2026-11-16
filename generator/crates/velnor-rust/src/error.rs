@@ -64,6 +64,7 @@ pub enum Reason {
     HelperBox(RepoPath),
     HelperTarget(RepoPath),
     CargoCredentialProvider(String),
+    TargetDirOutside(String),
 }
 
 impl DetectError {
@@ -105,6 +106,10 @@ impl Reason {
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
+            ),
+            Self::TargetDirOutside(value) => write!(
+                f,
+                "build.target-dir is {value:?}, which is not a folder inside the repository below its root; the target cache can only save a folder of the checkout, so name one"
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -183,6 +188,7 @@ impl fmt::Display for Reason {
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
+            | Self::TargetDirOutside(_)
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => {
                 write!(

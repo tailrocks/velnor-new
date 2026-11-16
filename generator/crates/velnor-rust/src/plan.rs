@@ -231,7 +231,7 @@ pub(crate) fn setup_roots(
     }
     toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
     for root in roots {
-        let cache_root = CacheRoot::new(&root.manifest);
+        let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
         toolchain.extend([
             Step {
                 directory: root.manifest.parent(),
