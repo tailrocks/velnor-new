@@ -171,6 +171,8 @@ pub enum When {
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
+    SaveBase,
+    SaveBaseDecided,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,6 +185,11 @@ pub enum StepKind {
     },
     CacheRestore(CacheKey),
     CacheSave(CacheKey),
+    CacheDecide {
+        target: RepoPath,
+        archive: Option<RepoPath>,
+    },
+    CacheTrim(CacheKey),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -207,11 +214,18 @@ pub enum StepKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BaseExpiry {
+    Never,
+    OnDefaultBranch,
+    OnDefaultBranchExceptPush,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelperCommand {
     Plan,
     Prepare,
     CheckMetadata,
-    Restored,
+    Restored(BaseExpiry),
     InputsSave,
     InputsRestore,
     InputsAudit,

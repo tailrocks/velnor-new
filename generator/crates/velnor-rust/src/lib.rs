@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit_job;
+mod base_cache;
 mod build_profile;
 mod build_script;
 mod cargo_lock;

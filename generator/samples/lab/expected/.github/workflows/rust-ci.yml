@@ -108,7 +108,8 @@ jobs:
         run: velnor-ci prepare
       - name: velnor-ci check-metadata
         run: velnor-ci check-metadata
-      - name: Restore the sources cache
+      - id: sources_root
+        name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -248,7 +249,8 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: lab
         run: velnor-ci check-metadata
-      - name: Restore the sources cache
+      - id: sources_lab
+        name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -360,7 +362,8 @@ jobs:
         run: velnor-ci prepare
       - name: velnor-ci check-metadata
         run: velnor-ci check-metadata
-      - name: Restore the sources cache
+      - id: sources_root
+        name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -380,7 +383,8 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: lab
         run: velnor-ci check-metadata
-      - name: Restore the sources cache
+      - id: sources_lab
+        name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |

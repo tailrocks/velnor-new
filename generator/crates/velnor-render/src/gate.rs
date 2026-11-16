@@ -11,8 +11,14 @@ const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
+pub(crate) const BASE_STEP: &str = "base";
+const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+pub(crate) fn sources_step(slug: &RootSlug) -> String {
+    format!("sources_{slug}")
+}
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     if need.is_global() {
@@ -48,6 +54,7 @@ pub(crate) fn condition(
     gate: Option<&Gate>,
     after_setup: bool,
     skip_draft: bool,
+    extra: &[String],
 ) -> Option<String> {
     let mut parts = Vec::new();
     match when {
@@ -69,6 +76,17 @@ pub(crate) fn condition(
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
         )),
+        When::SaveBase | When::SaveBaseDecided => {
+            parts.push(NOT_CANCELLED.to_owned());
+            if after_setup {
+                parts.push(SETUP_DONE.to_owned());
+            }
+            parts.push(ON_DEFAULT_BRANCH.to_owned());
+            parts.push(SAVING_EVENTS.to_owned());
+            if when == When::SaveBaseDecided {
+                parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
+            }
+        }
         When::SaveToolsOnDefaultBranch => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
@@ -77,6 +95,7 @@ pub(crate) fn condition(
     if skip_draft {
         parts.push(NOT_DRAFT.to_owned());
     }
+    parts.extend(extra.iter().cloned());
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate));
     }

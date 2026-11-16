@@ -10,6 +10,7 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
+use crate::base_cache::expiry;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -260,7 +261,9 @@ pub(crate) fn setup_roots(
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
-    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
+    toolchain.push(step(StepKind::Helper(HelperCommand::Restored(expiry(
+        facts, lane,
+    )))));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
@@ -278,7 +281,7 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             let gate = job
                 .steps
                 .iter()
-                .find(|step| step.kind == StepKind::Helper(HelperCommand::Restored))
+                .find(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(_))))
                 .and_then(|step| step.gate.clone());
             job.steps.push(Step {
                 when: When::CacheDebug,

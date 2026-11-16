@@ -4,11 +4,12 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
-    PackageName, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind,
-    When,
+    Access, CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
+    PackageName, PermissionScope, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step,
+    StepKind, TargetKind, When,
 };
 
+use crate::base_cache::save_steps;
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -76,7 +77,20 @@ impl RootJobs<'_> {
             .map(move |command| lane.cargo(command, directory.clone()))
     }
 
+    fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
+        save_steps(self.facts, self.root, self.lane, job, archive, sources)
+    }
+
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
+        let trims = steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::CacheTrim(_)));
+        let mut base = job(self.facts, id);
+        if trims {
+            base.permissions
+                .0
+                .insert(PermissionScope::Actions, Access::Write);
+        }
         Job {
             needs: self
                 .lane
@@ -87,7 +101,7 @@ impl RootJobs<'_> {
                 .collect(),
             gate: self.lane.job(),
             steps,
-            ..job(self.facts, id)
+            ..base
         }
     }
 
@@ -192,6 +206,7 @@ impl RootJobs<'_> {
                     .collect(),
             ),
         );
+        steps.extend(self.saves(&job_id, None, true));
         Job {
             skip_on_draft: false,
             ..self.lane_job(job_id, steps)
@@ -214,6 +229,7 @@ impl RootJobs<'_> {
         if tests.is_empty() {
             steps.extend(self.audit());
         }
+        steps.extend(self.saves(&lint_id, None, tests.is_empty()));
         let mut jobs = vec![Job {
             comment,
             skip_on_draft: false,
@@ -226,6 +242,7 @@ impl RootJobs<'_> {
             let mut steps = setup(self.facts, self.root, self.lane, &test_id);
             steps.extend(self.cargo(tests));
             steps.extend(self.audit());
+            steps.extend(self.saves(&test_id, None, true));
             jobs.push(self.lane_job(test_id, steps));
         }
         jobs
@@ -256,6 +273,11 @@ impl RootJobs<'_> {
             ),
         );
         build.extend(self.audit());
+        build.extend(self.saves(
+            &build_id,
+            Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
+            true,
+        ));
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
