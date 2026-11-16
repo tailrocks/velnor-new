@@ -3,12 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::Platform;
+use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
+use crate::members::{check_inventory, check_registries};
 use crate::mise;
-use crate::registry::check_publish_registries;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::velnor_config::{VelnorConfig, parse};
@@ -24,7 +24,7 @@ pub struct ReleaseFiles {
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
-    pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
+    pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
@@ -145,49 +145,15 @@ fn check_prefixes(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     Ok(())
 }
 
-pub fn check_release_plz_configs(files: &[(String, String)]) -> Result<(), String> {
-    let mut configs = Vec::new();
-    for (file, text) in files {
-        configs.push(read(root_of(file), text).map_err(|error| format!("{file}: {error}"))?);
-    }
-    check_unique(&configs).map_err(|error| error.to_string())
+pub(crate) fn read_all(files: &[(String, String)]) -> Result<Vec<RootConfig>, String> {
+    files
+        .iter()
+        .map(|(file, text)| read(root_of(file), text).map_err(|error| format!("{file}: {error}")))
+        .collect()
 }
 
-fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), ReleaseError> {
-    let Some(members) = &files.root_members else {
-        return Ok(());
-    };
-    let mut released: BTreeMap<&str, &str> = BTreeMap::new();
-    for config in configs {
-        if let Some(known) = members.get(&config.root)
-            && let Some(package) = config
-                .packages
-                .iter()
-                .find(|package| !known.contains(&package.name))
-        {
-            return Err(ReleaseError::PackageNotInRoot {
-                root: config.root.clone(),
-                package: package.name.clone(),
-            });
-        }
-        let inherited = members
-            .get(&config.root)
-            .filter(|_| !config.workspace_tags.is_empty())
-            .into_iter()
-            .flatten();
-        let listed = config.packages.iter().map(|package| &package.name);
-        for name in listed.chain(inherited) {
-            if let Some(first) = released.insert(name.as_str(), config.root.as_str())
-                && first != config.root
-            {
-                return Err(ReleaseError::DuplicatePackageName {
-                    package: name.clone(),
-                    roots: vec![first.to_owned(), config.root.clone()],
-                });
-            }
-        }
-    }
-    Ok(())
+pub fn check_release_plz_configs(files: &[(String, String)]) -> Result<(), String> {
+    check_unique(&read_all(files)?).map_err(|error| error.to_string())
 }
 
 fn config_reaches(file: &str, root: &str) -> bool {
@@ -202,7 +168,7 @@ fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
 
-fn manifest_of(root: &str) -> String {
+pub(crate) fn manifest_of(root: &str) -> String {
     if root == "." {
         "Cargo.toml".to_owned()
     } else {
@@ -284,13 +250,13 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        check_inventory(&configs, files)?;
+        check_inventory(&configs, files.rust_metadata.as_ref())?;
         let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
         }
-        for config in &configs {
-            check_publish_registries(config, &files.cargo_manifest_texts)?;
+        if let Some(metadata) = &files.rust_metadata {
+            check_registries(&configs, metadata, &files.cargo_manifest_texts)?;
         }
         for (file, text) in &files.cargo_configs {
             let mut reached = configs

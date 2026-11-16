@@ -28,6 +28,10 @@ impl ReleaseError {
                 f,
                 "{manifest}: package.publish names registry {registry}, so cargo would send the crates.io publish token of release root {root} to it; list only crates-io or set publish = false"
             ),
+            Self::ManifestUnreadable { manifest } => write!(
+                f,
+                "{manifest}: the manifest cargo metadata lists is missing or does not parse, so its package.publish cannot be checked"
+            ),
             Self::ToolchainFromPath { file } => write!(
                 f,
                 "{file}: a toolchain taken from a path makes rustup run repository code while release-plz holds the release App token"

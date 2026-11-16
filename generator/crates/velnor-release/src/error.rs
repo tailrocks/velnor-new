@@ -121,6 +121,9 @@ pub enum ReleaseError {
         manifest: String,
         registry: String,
     },
+    ManifestUnreadable {
+        manifest: String,
+    },
     CargoConfigInclude {
         file: String,
     },

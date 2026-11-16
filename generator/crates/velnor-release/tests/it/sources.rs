@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
-use crate::fixture::{PLZ, TestResult, edit, files, locked, refusal};
+use crate::fixture::{PLZ, TestResult, edit, files, locked, refusal, with_metadata};
 
 fn with_mise(text: &str) -> ReleaseFiles {
     let mut files = files();
@@ -159,40 +159,70 @@ fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
 
 #[test]
 fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
-    let members = |app: &[&str], tools: &[&str]| {
-        Some(std::collections::BTreeMap::from([
-            (".".to_owned(), names(app)),
-            ("tools".to_owned(), names(tools)),
-        ]))
-    };
     let mut files = two_roots(PLZ_TOOLS)?;
-    files.root_members = members(&["app"], &["app", "tools"]);
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            (
+                "tools/Cargo.toml",
+                &[
+                    ("app", "tools/app/Cargo.toml"),
+                    ("tools", "tools/Cargo.toml"),
+                ],
+            ),
+        ],
+    );
     let error = refusal(&files);
     assert!(
         matches!(&error, Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app"),
         "{error:?}"
     );
-    files.root_members = members(&["app"], &["tools"]);
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            ("tools/Cargo.toml", &[("tools", "tools/Cargo.toml")]),
+        ],
+    );
     assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn two_roots_that_share_an_ancestor_workspace_release_its_packages_twice() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("tools", "tools/Cargo.toml")],
+        )],
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { .. })),
+        "{error:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn a_package_entry_that_is_not_a_member_of_its_root_is_refused() {
     let mut files = files();
-    files.root_members = Some(std::collections::BTreeMap::from([(
-        ".".to_owned(),
-        names(&["other"]),
-    )]));
+    with_metadata(&mut files, &[("Cargo.toml", &[("other", "Cargo.toml")])]);
     let error = refusal(&files);
     assert!(
         matches!(&error, Some(ReleaseError::PackageNotInRoot { package, .. }) if package == "app"),
         "{error:?}"
     );
-    files.root_members = Some(std::collections::BTreeMap::from([(
-        ".".to_owned(),
-        names(&["app", "other"]),
-    )]));
+    with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("other", "other/Cargo.toml")],
+        )],
+    );
     assert_eq!(refusal(&files), None);
 }
 

@@ -6,6 +6,7 @@ use std::fmt;
 
 use serde::Deserialize;
 
+use velnor_model::{RepoPath, RustMetadata};
 use velnor_release::is_tag_name;
 
 use crate::error::CiError;
@@ -171,4 +172,12 @@ pub fn check_tag_patterns(
         }
     }
     Ok(())
+}
+
+pub fn check_manifests(
+    files: &[(String, String)],
+    metadata: &BTreeMap<RepoPath, RustMetadata>,
+    manifests: &BTreeMap<String, String>,
+) -> Result<(), CiError> {
+    velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)
 }

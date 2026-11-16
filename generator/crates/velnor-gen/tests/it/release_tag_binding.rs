@@ -63,9 +63,16 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
         assert_eq!(
             step,
             [
-                "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\"",
+                "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
+                "CARGO_BUILD_RUSTC=rustc",
+                "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
+                "CARGO_BUILD_RUSTC_WRAPPER=",
                 "GITHUB_TOKEN=${{ github.token }}",
                 "REPOSITORY=${{ github.repository }}",
+                "RUSTC=rustc",
+                "RUSTC_WORKSPACE_WRAPPER=",
+                "RUSTC_WRAPPER=",
+                "RUSTUP_TOOLCHAIN=stable",
             ]
         );
     }
@@ -121,7 +128,21 @@ fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
         let env = all[check].get("env").ok_or("no env")?;
         let mut keys = env.keys();
         keys.sort_unstable();
-        assert_eq!(keys, ["GITHUB_TOKEN", "REPOSITORY"], "{id}");
+        assert_eq!(
+            keys,
+            [
+                "CARGO_BUILD_RUSTC",
+                "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+                "CARGO_BUILD_RUSTC_WRAPPER",
+                "GITHUB_TOKEN",
+                "REPOSITORY",
+                "RUSTC",
+                "RUSTC_WORKSPACE_WRAPPER",
+                "RUSTC_WRAPPER",
+                "RUSTUP_TOOLCHAIN",
+            ],
+            "{id}"
+        );
         assert_eq!(
             env.get("GITHUB_TOKEN").and_then(Node::text),
             Some("${{ github.token }}")

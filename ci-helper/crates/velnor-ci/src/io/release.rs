@@ -12,8 +12,8 @@ use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns,
-    publishes_to_crates_io, record,
+    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_manifests,
+    check_tag_patterns, publishes_to_crates_io, record,
 };
 use crate::rulesets::check_tag_rulesets;
 
@@ -45,15 +45,15 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
     let top = std::env::current_dir()
         .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
     for (path, (_, text)) in args.files.iter().zip(&files) {
-        let relative = path.strip_prefix(&top).unwrap_or(path);
-        let root = relative
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string());
-        let publishes = publishes_to_crates_io(&root, text)?;
+        let publishes = publishes_to_crates_io(&root_of(&top, path), text)?;
         check_cargo_discovery(&discovery(&top, path)?, publishes)?;
     }
     let output = check_config(&files)?;
+    if args.manifests {
+        let roots: Vec<String> = args.files.iter().map(|path| root_of(&top, path)).collect();
+        let known = super::manifests::read(&top, &roots)?;
+        check_manifests(&files, &known.metadata, &known.manifests)?;
+    }
     let patterns = args.tag_patterns();
     check_tag_patterns(&files, &patterns)?;
     if let Some(repo) = &args.repo {
@@ -64,6 +64,14 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         )?;
     }
     Ok(output)
+}
+
+fn root_of(top: &Path, file: &Path) -> String {
+    file.strip_prefix(top)
+        .unwrap_or(file)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())
 }
 
 const CONFIG_ENTRIES: [&str; 3] = [".cargo", ".cargo/config", ".cargo/config.toml"];
