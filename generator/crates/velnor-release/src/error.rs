@@ -174,6 +174,22 @@ pub enum ReleaseError {
     ReleasePlzVersionNotExact {
         version: String,
     },
+    InvalidPublishTimeout {
+        root: String,
+        value: String,
+    },
+    PackagePublishTimeout {
+        root: String,
+        package: String,
+    },
+    PublishBudgetOutlivesToken {
+        minutes: u64,
+        limit: u64,
+    },
+    ReleasePlzVersionTooOld {
+        version: String,
+        minimum: String,
+    },
     PackageNotInRoot {
         root: String,
         package: String,

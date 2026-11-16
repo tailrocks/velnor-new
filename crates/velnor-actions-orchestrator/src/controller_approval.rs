@@ -239,7 +239,7 @@ mod tests {
         );
         let text = std::fs::read_to_string(path).expect("approvals file must exist");
         let approval = ControllerApprovedRelease::from_approvals_text(&text).expect("must parse");
-        assert_eq!(approval.as_authority().manifest.version, "0.1.78");
+        assert_eq!(approval.as_authority().manifest.version, "0.1.80");
     }
 
     #[test]

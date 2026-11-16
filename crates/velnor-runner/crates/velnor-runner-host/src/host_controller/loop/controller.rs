@@ -30,7 +30,7 @@ mod doctor;
 #[path = "controller/readiness.rs"]
 mod readiness;
 #[path = "controller/startup.rs"]
-mod startup;
+pub(super) mod startup;
 #[path = "controller/worker_health.rs"]
 mod worker_health;
 
