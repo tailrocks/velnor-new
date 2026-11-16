@@ -9,7 +9,8 @@ use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
-const FINGERPRINT_LOG: &str = "cargo::core::compiler::fingerprint=info";
+const FINGERPRINT_LOG: &str =
+    "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
 const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 

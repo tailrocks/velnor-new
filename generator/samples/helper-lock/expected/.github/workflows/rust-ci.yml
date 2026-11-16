@@ -91,24 +91,24 @@ jobs:
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_doctests == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'
         run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked'
       - name: velnor-ci inputs audit
@@ -117,12 +117,12 @@ jobs:
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check helper-sample alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' -p helper-sample '') || contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p helper-sample --locked
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'

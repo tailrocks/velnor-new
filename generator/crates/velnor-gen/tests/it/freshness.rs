@@ -8,7 +8,7 @@ use velnor_rust::silent_build_scripts;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'";
+const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
 
 fn steps(text: &str) -> Vec<&str> {
     text.split("\n      - ").skip(1).collect()

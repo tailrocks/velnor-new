@@ -115,40 +115,40 @@ jobs:
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_doctests == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           DOCTESTS_KNOWN: '${{ needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: 'velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p app '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p app --locked
       - name: Check core alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p core '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p core --locked
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -225,33 +225,33 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-fmt --all --check
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_xtask_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_xtask_mode != ''none'' && needs.rust-plan.outputs.rust_xtask_docs == ''run'' && needs.rust-plan.outputs.rust_xtask_package_args != '''' }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_xtask_package_args), '' -p xtask '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_xtask_package_args), '' --workspace '')) }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p xtask --locked
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -341,13 +341,13 @@ jobs:
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo build --workspace --all-targets --locked
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'
+          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo build --workspace --all-targets --locked
       - name: velnor-ci inputs audit
         run: velnor-ci inputs audit
