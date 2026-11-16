@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cache::render_key;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
 use velnor_model::CacheKey;
@@ -30,9 +29,8 @@ pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
 
 pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
     let caches: Vec<_> = caches.iter().map(|key| {
-        let rendered = render_key(key);
         let root = match key { CacheKey::Tools { .. } => None, CacheKey::Sources { root, .. } | CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.lock_file().parent().map_or_else(|| ".".to_owned(), |root| root.to_string())) };
-        serde_json::json!({"family":key.family(),"root":root,"restore_step":cache_id(key,true),"save_step":cache_id(key,false),"requested_key":rendered.key,"lock_prefix":rendered.restore_keys.first(),"matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false})
+        serde_json::json!({"family":key.family(),"root":root,"restore_step":cache_id(key,true),"save_step":cache_id(key,false),"requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false})
     }).collect();
     RenderedStep {
         name: "Report cache telemetry".to_owned(),
@@ -44,7 +42,11 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
             ),
             (
                 "VELNOR_REPORT_CACHES".to_owned(),
-                Value::Expr(serde_json::Value::Array(caches).to_string()),
+                Value::Text(
+                    serde_json::Value::Array(caches)
+                        .to_string()
+                        .replace('$', "\\u0024"),
+                ),
             ),
             (
                 "VELNOR_REPORT_STEPS".to_owned(),

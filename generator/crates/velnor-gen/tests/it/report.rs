@@ -62,6 +62,49 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
 }
 
 #[test]
+fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() -> TestResult {
+    for root in ["root${{ secrets.EXAMPLE }}", "root{\"quoted\"}"] {
+        let mut view = view(&[&format!("{root}/Cargo.toml")], None)?;
+        let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+        let bytes = view.files.get_mut(&lock).ok_or("lock")?;
+        *bytes = String::from_utf8(bytes.clone())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes();
+        let config = RepoPath::new(".cargo/config.toml")?;
+        view.tracked_paths.insert(config.clone());
+        view.files
+            .insert(config, b"[build]\ntarget-dir = \"shared\"\n".to_vec());
+        let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+        let mut reported_root = false;
+        for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
+            for report in job["steps"]
+                .as_array()
+                .ok_or("steps")?
+                .iter()
+                .filter(|step| step["run"] == "velnor-ci report")
+            {
+                let raw = report["env"]["VELNOR_REPORT_CACHES"]
+                    .as_str()
+                    .ok_or("cache descriptors")?;
+                assert!(!raw.contains("${{"), "{raw}");
+                assert!(!raw.contains("fromJSON"), "{raw}");
+                let caches: serde_json::Value = serde_json::from_str(raw)?;
+                for cache in caches.as_array().ok_or("caches")? {
+                    assert_eq!(cache["requested_key"], "");
+                    assert!(cache.get("lock_prefix").is_none());
+                    if !cache["root"].is_null() {
+                        assert_eq!(cache["root"], root);
+                        reported_root = true;
+                    }
+                }
+            }
+        }
+        assert!(reported_root);
+    }
+    Ok(())
+}
+
+#[test]
 fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult {
     let mut view = view(&["Cargo.toml"], None)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
