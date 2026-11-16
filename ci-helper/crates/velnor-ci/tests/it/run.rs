@@ -286,6 +286,21 @@ fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pi
     assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
 }
 
+#[test]
+fn run_waits_for_all_open_pipes_within_one_shared_grace_period() {
+    let temp = scratch("shared-grace");
+    let started = std::time::Instant::now();
+    let output = run_with_grace(
+        &temp,
+        "1000",
+        &["sh", "-c", "sleep 30 & echo out; echo err >&2; exit 5"],
+    );
+    let elapsed = started.elapsed();
+    assert_eq!(output.status.code(), Some(5), "{output:?}");
+    assert!(elapsed >= std::time::Duration::from_millis(900), "{elapsed:?}");
+    assert!(elapsed < std::time::Duration::from_millis(1900), "{elapsed:?}");
+}
+
 struct Flaky {
     chunks: Vec<std::io::Result<Vec<u8>>>,
 }

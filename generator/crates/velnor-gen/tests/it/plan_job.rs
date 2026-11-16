@@ -112,7 +112,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     assert_eq!(lane[..9], LANE_SETUP);
     assert!(lane[9].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
-        "      - rust-plan\n      - rust-root\n      - rust-lab\n    if: '${{ !cancelled() }}'\n"
+        "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
     ));
     Ok(())
 }
