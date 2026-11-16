@@ -126,7 +126,7 @@ fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), Stri
         release_toml: None,
         release_plz_toml: [(
             ".".to_owned(),
-            "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n[[package]]\nname = \"app\"\n".to_owned(),
+            "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\n[[package]]\nname = \"app\"\n".to_owned(),
         )]
         .into(),
         mise_tomls: vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()],

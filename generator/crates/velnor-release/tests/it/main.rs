@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod budget_sum;
 mod cargo_features;
 mod cargo_precedence;
 mod cargo_scope;
