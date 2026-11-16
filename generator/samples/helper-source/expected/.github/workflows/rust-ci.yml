@@ -18,10 +18,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
 jobs:
   rust-plan:
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
       contents: read
     outputs:
@@ -64,6 +65,7 @@ jobs:
         name: velnor-ci plan
         run: velnor-ci plan --explain
   rust-helper:
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -164,7 +166,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -335,7 +337,7 @@ jobs:
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
+        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci inputs save
@@ -379,7 +381,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -494,7 +496,7 @@ jobs:
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
+        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: ci-helper
@@ -540,7 +542,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -697,7 +699,7 @@ jobs:
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
+        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: crates/velnor-runner
@@ -743,7 +745,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ needs.rust-plan.outputs.rust_generator_mode != ''none'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_generator_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -876,7 +878,7 @@ jobs:
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
+        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: generator
@@ -922,7 +924,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ needs.rust-plan.outputs.rust_local_mode != ''none'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_local_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -1043,7 +1045,7 @@ jobs:
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-run
+        run: velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: local
@@ -1088,7 +1090,7 @@ jobs:
     needs:
       - rust-plan
       - rust-helper
-    if: '${{ github.event_name == ''schedule'' }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''schedule'') }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -1315,7 +1317,7 @@ jobs:
       - rust-generator
       - rust-local
       - rust-inputs-audit
-    if: '${{ !cancelled() }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_cache::{has_saving_helper, visibility};
+use crate::base_cache::has_saving_helper;
 use crate::lane::Lane;
 use crate::plan::step;
 use velnor_model::{
@@ -25,7 +25,6 @@ pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId) -> Vec<St
     .into_iter()
     .map(|kind| Step {
         when: When::PullRequest,
-        visibility: visibility(facts),
         ..step(kind)
     })
     .collect()
@@ -64,14 +63,14 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
     .into_iter()
     .map(|saved| Step {
         gate: lane.steps(),
-        visibility: visibility(facts),
         ..saved
     })
     .collect()
 }
 
 fn supported(facts: &RepoFacts, root: &RustRoot) -> bool {
-    has_saving_helper(facts)
+    facts.private_sources.is_none()
+        && has_saving_helper(facts)
         && root.target_dir
             == root
                 .manifest

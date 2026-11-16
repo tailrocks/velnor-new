@@ -96,7 +96,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
             assert!(step(&lane, "velnor-ci delta stage").is_some_and(|s| s.contains("--package")));
         }
     }
-    private_delta_visibility()?;
+    private_sources_disable_deltas()?;
     let mut custom = pinned("0.1.81", "")?;
     let config = RepoPath::new(".cargo/config.toml")?;
     custom.tracked_paths.insert(config.clone());
@@ -107,6 +107,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
     assert!(text.contains("path: build"), "{text}");
     assert!(!text.contains("velnor-ci delta"), "{text}");
     assert!(!text.contains("the delta cache"), "{text}");
+    assert!(!expected_files(&custom)?.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
     Ok(())
 }
 
@@ -127,35 +128,22 @@ fn assert_delta_saves_are_not_cancelled(lane: &str) -> TestResult {
     Ok(())
 }
 
-fn private_delta_visibility() -> TestResult {
+fn private_sources_disable_deltas() -> TestResult {
     let mut private_sources = pinned("0.1.81", "")?;
     private_sources.files.insert(
         RepoPath::new("Cargo.lock")?,
         b"version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
     );
-    let private_workflow = workflow(&private_sources)?;
-    let lanes = crate::archive::jobs_of(&private_workflow);
-    let (_, lane) = lanes
-        .iter()
-        .find(|(id, _)| id == "rust")
-        .ok_or("no rust lane")?;
-    for name in [
-        "velnor-ci delta prepare",
-        "Restore the delta cache",
-        "velnor-ci delta apply",
-        "velnor-ci delta stage",
-        "Save the delta cache",
+    let text = workflow(&private_sources)?;
+    for forbidden in [
+        "velnor-ci delta",
+        "the delta cache",
+        "velnor-dlt-",
+        ".velnor-delta",
     ] {
-        let value = step(lane, name).ok_or("no private delta step")?;
-        let condition = value
-            .lines()
-            .find(|line| line.trim_start().starts_with("if: "))
-            .ok_or("no delta condition")?;
-        assert!(
-            condition.contains("github.event.repository.private == true"),
-            "{value}"
-        );
+        assert!(!text.contains(forbidden), "{text}");
     }
+    assert!(!expected_files(&private_sources)?.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
     Ok(())
 }
 

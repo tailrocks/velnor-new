@@ -107,7 +107,7 @@ fn cache_debug_env() -> (String, Value) {
 fn nextest_build() -> (String, String, Vec<(String, Value)>) {
     (
         "Build the tests".into(),
-        "cargo-nextest nextest run --workspace --locked --no-run".into(),
+        "cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run".into(),
         vec![],
     )
 }

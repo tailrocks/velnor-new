@@ -16,7 +16,10 @@ pub use error::GenerateError;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
+use velnor_model::{
+    CacheKey, FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView,
+    StepKind,
+};
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
@@ -69,7 +72,13 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    if let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name) {
+    if plan
+        .jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
+        && let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name)
+    {
         files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
     }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;

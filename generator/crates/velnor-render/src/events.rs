@@ -5,8 +5,8 @@ use velnor_model::{Concurrency, PullRequestType, Triggers};
 
 use crate::yaml::{Yaml, entry, text};
 
-const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}";
-const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' }}";
+const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}";
+const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}";
 
 pub(crate) fn concurrency(concurrency: Concurrency) -> Yaml {
     let (group, cancel) = match concurrency {

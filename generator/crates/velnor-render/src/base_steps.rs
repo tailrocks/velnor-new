@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BaseExpiry, CacheKey, JobId, RepoPath, Step, StepKind, TrimFamily, Visibility};
+use velnor_model::{BaseExpiry, CacheKey, JobId, RepoPath, Step, StepKind, TrimFamily};
 
 use crate::cache::render_key;
-use crate::gate::{BASE_STEP, visibility_part};
+use crate::gate::BASE_STEP;
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
@@ -95,17 +95,7 @@ pub(crate) fn cache_trim(lane: &JobId, family: TrimFamily) -> RenderedStep {
     }
 }
 
-pub(crate) fn skipped_base_saves() -> RenderedStep {
-    RenderedStep {
-        name: "Explain the skipped base cache saves".to_owned(),
-        run: Some(
-            "echo \"::notice::Base cache saves skipped: this repository is public and has private or non-crates.io dependencies, so a cache built from them must not be readable by forks\"".to_owned(),
-        ),
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn base_age(expiry: BaseExpiry, visibility: Visibility) -> Vec<(String, Value)> {
+pub(crate) fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
     let on = match expiry {
         BaseExpiry::Never => return Vec::new(),
         BaseExpiry::OnDefaultBranch => DEFAULT_BRANCH_REF.to_owned(),
@@ -116,7 +106,6 @@ pub(crate) fn base_age(expiry: BaseExpiry, visibility: Visibility) -> Vec<(Strin
             format!("{DEFAULT_BRANCH_REF} && github.event_name != 'push'")
         }
     };
-    let on = visibility_part(visibility).map_or(on.clone(), |part| format!("{on} && {part}"));
     vec![(
         BASE_AGE_VARIABLE.to_owned(),
         Value::Expr(format!("${{{{ {on} && '{MAX_BASE_AGE_DAYS}' || '0' }}}}")),

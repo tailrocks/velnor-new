@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::RepoView;
+use velnor_model::{RepoView, Target, TargetKind, TargetName};
 use velnor_rust::{LOCK_PATH, pin_lock};
 
 use crate::archive::jobs_of;
@@ -51,6 +51,81 @@ pub(crate) fn names(block: &str) -> Vec<String> {
 
 fn saving(block: &str) -> bool {
     block.contains("velnor-ci cache decide")
+}
+
+fn with_library(config: &str, tested: bool) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut repo = pinned("0.1.81", config)?;
+    for metadata in repo.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            if !tested {
+                member.targets.clear();
+            }
+            member.targets.push(Target {
+                name: TargetName::new("lib")?,
+                kinds: vec![TargetKind::Lib],
+                tests: false,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            });
+        }
+    }
+    Ok(repo)
+}
+
+fn run_command(step: &str) -> Option<String> {
+    let line = step.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix("run: ")
+            .or_else(|| trimmed.strip_prefix("run: '"))
+    })?;
+    Some(line.trim_end_matches('\'').replace("''", "'"))
+}
+
+fn compile_selection(step: &str) -> Option<String> {
+    let run = run_command(step)?;
+    let command = run.split("velnor-ci run -- ").nth(1).or_else(|| {
+        run.split("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- ")
+            .nth(1)
+    })?;
+    if command.starts_with("cargo-fmt") {
+        return None;
+    }
+    let compiles = command.starts_with("cargo-clippy")
+        || command.starts_with("cargo-nextest")
+        || command.starts_with("cargo ");
+    if !compiles {
+        return None;
+    }
+    if let Some(package) = command.split(" -p ").nth(1) {
+        return Some(format!("-p {}", package.split_whitespace().next()?));
+    }
+    command
+        .contains("--workspace")
+        .then(|| "--workspace".to_owned())
+}
+
+fn saved_and_restored(block: &str) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let steps = steps(block);
+    let save = steps
+        .iter()
+        .position(|step| step.contains("name: Save the target cache"))
+        .ok_or("no target save")?;
+    let restore = steps
+        .iter()
+        .position(|step| step.contains("name: Restore the target cache"))
+        .ok_or("no target restore")?;
+    let saved = steps[..save]
+        .iter()
+        .rev()
+        .find_map(|step| compile_selection(step))
+        .ok_or("no build before the save")?;
+    let restored = steps[restore + 1..]
+        .iter()
+        .find_map(|step| compile_selection(step))
+        .ok_or("no build after the restore")?;
+    Ok((saved, restored))
 }
 
 #[test]
@@ -186,6 +261,50 @@ fn the_archive_build_job_removes_the_archive_and_the_group_jobs_save_nothing() -
         .position(|n| n == "Save the target cache")
         .ok_or("save")?;
     assert!(upload < save);
+    Ok(())
+}
+
+#[test]
+fn the_saved_lanes_build_command_equals_its_restore_time_command() -> TestResult {
+    for (config, tested, lanes) in [
+        ("", true, vec!["rust"]),
+        (
+            "shape = \"lint-test\"\n",
+            true,
+            vec!["rust-lint", "rust-test"],
+        ),
+        ("shape = \"groups\"\n", true, vec!["rust-lint", "rust-test"]),
+        ("", false, vec!["rust"]),
+    ] {
+        let repo = with_library(config, tested)?;
+        let jobs = jobs_of(&workflow(&repo)?);
+        for id in lanes {
+            let block = jobs
+                .iter()
+                .find(|(job, _)| job == id)
+                .map(|(_, block)| block.as_str())
+                .ok_or(id)?;
+            let (saved, restored) = saved_and_restored(block)?;
+            assert_eq!(saved, restored, "{config} tested={tested} {id}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_test_prebuild_ignores_a_nextest_default_filter() -> TestResult {
+    let text = workflow(&pinned("0.1.81", "")?)?;
+    let lane = jobs_of(&text)
+        .into_iter()
+        .find(|(id, _)| id == "rust")
+        .map(|(_, block)| block)
+        .ok_or("no lane")?;
+    let build = step(&lane, "Build the tests").ok_or("no prebuild")?;
+    let run = run_command(build).ok_or("no prebuild command")?;
+    assert_eq!(
+        run,
+        "velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run"
+    );
     Ok(())
 }
 
