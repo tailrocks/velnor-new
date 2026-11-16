@@ -15,6 +15,7 @@ mod layout;
 mod minted;
 mod pair;
 mod plan;
+mod policy;
 mod remove;
 mod request;
 mod slot;

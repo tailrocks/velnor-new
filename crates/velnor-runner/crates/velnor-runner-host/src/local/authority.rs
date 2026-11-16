@@ -51,6 +51,8 @@ pub(super) struct RunAnswer {
     pub(super) jobs: Vec<String>,
     pub(super) ledger: Option<String>,
     pub(super) refusal: Option<String>,
+    #[serde(default)]
+    pub(super) workflow_sha256: Option<String>,
 }
 
 #[derive(Deserialize)]
