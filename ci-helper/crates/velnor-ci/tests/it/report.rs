@@ -195,6 +195,13 @@ fn configuration_ignores_command_purpose_and_normalizes_features() {
 fn observed_units_distinguish_effective_features_outputs_and_repeated_execution() {
     for (case, fails) in [
         ("identical", true),
+        ("proc-so", true),
+        ("proc-dylib", true),
+        ("proc-dll", true),
+        ("proc-distinct", false),
+        ("proc-unhashed", false),
+        ("proc-outside", false),
+        ("dynamic", false),
         ("package-selection", true),
         ("features", false),
         ("metadata-full", false),
@@ -213,34 +220,24 @@ fn observed_units_distinguish_effective_features_outputs_and_repeated_execution(
             "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
             "features":["default"],"filenames":["target/debug/deps/libserde-opaque.rmeta"],"fresh":false
         }]);
+        if let Some(extension) = case.strip_prefix("proc-") {
+            value["invocations"][0]["artifacts"][0]["target"]["kind"] = json!(["proc-macro"]);
+            value["invocations"][0]["artifacts"][0]["target"]["crate_types"] =
+                json!(["proc-macro"]);
+            let filename = match extension {
+                "unhashed" => "target/debug/deps/libserde.dylib".to_owned(),
+                "outside" => "target/debug/libserde-opaque.dylib".to_owned(),
+                "distinct" => "target/debug/deps/libserde-opaque.dylib".to_owned(),
+                extension => format!("target/debug/deps/libserde-opaque.{extension}"),
+            };
+            value["invocations"][0]["artifacts"][0]["filenames"] = json!([filename]);
+        } else if case == "dynamic" {
+            value["invocations"][0]["artifacts"][0]["filenames"] =
+                json!(["target/debug/deps/libserde-opaque.dylib"]);
+        }
         let first = metrics(value.clone());
         value["lane"] = json!("second");
-        match case {
-            "features" => {
-                value["invocations"][0]["artifacts"][0]["features"] = json!(["default", "derive"]);
-                value["invocations"][0]["artifacts"][0]["filenames"] =
-                    json!(["target/debug/deps/libserde-other.rmeta"]);
-            }
-            "metadata-full" => {
-                value["invocations"][0]["artifacts"][0]["filenames"] =
-                    json!(["target/debug/deps/libserde-opaque.rlib"]);
-            }
-            "test-target" => {
-                value["invocations"][0]["artifacts"][0]["profile"]["test"] = json!(true);
-            }
-            "fresh" => value["invocations"][0]["artifacts"][0]["fresh"] = json!(true),
-            "opaque-unknown" => {
-                value["invocations"][0]["artifacts"][0]["filenames"] =
-                    json!(["target/debug/libserde.dylib"]);
-            }
-            "package-selection" => {
-                value["invocations"][0]["argv"] = json!(["cargo", "check", "-p", "different"]);
-            }
-            "execution" => {
-                value["invocations"][0]["execution"] = json!({"RUSTFLAGS":"-C target-cpu=native"});
-            }
-            _ => {}
-        }
+        vary_unit(&mut value, case);
         let second = metrics(value.clone());
         let result = check(&[first, second.clone()]);
         assert_eq!(result.is_err(), fails, "{case}: {result:?}");
@@ -256,5 +253,38 @@ fn observed_units_distinguish_effective_features_outputs_and_repeated_execution(
             value["invocations"][0]["artifacts"][0]["fresh"] = json!(true);
             assert!(check(&[second, metrics(value)]).is_ok(), "{case}");
         }
+    }
+}
+
+fn vary_unit(value: &mut Value, case: &str) {
+    match case {
+        "proc-distinct" => {
+            value["invocations"][0]["artifacts"][0]["filenames"] =
+                json!(["target/debug/deps/libserde-other.dylib"]);
+        }
+        "features" => {
+            value["invocations"][0]["artifacts"][0]["features"] = json!(["default", "derive"]);
+            value["invocations"][0]["artifacts"][0]["filenames"] =
+                json!(["target/debug/deps/libserde-other.rmeta"]);
+        }
+        "metadata-full" => {
+            value["invocations"][0]["artifacts"][0]["filenames"] =
+                json!(["target/debug/deps/libserde-opaque.rlib"]);
+        }
+        "test-target" => {
+            value["invocations"][0]["artifacts"][0]["profile"]["test"] = json!(true);
+        }
+        "fresh" => value["invocations"][0]["artifacts"][0]["fresh"] = json!(true),
+        "opaque-unknown" => {
+            value["invocations"][0]["artifacts"][0]["filenames"] =
+                json!(["target/debug/libserde.dylib"]);
+        }
+        "package-selection" => {
+            value["invocations"][0]["argv"] = json!(["cargo", "check", "-p", "different"]);
+        }
+        "execution" => {
+            value["invocations"][0]["execution"] = json!({"RUSTFLAGS":"-C target-cpu=native"});
+        }
+        _ => {}
     }
 }

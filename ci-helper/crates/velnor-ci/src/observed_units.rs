@@ -7,46 +7,6 @@ use std::path::Path;
 use crate::cargo_artifacts::CargoArtifact;
 use crate::report::Invocation;
 
-pub(crate) fn execution(argv: &[String]) -> BTreeMap<String, String> {
-    let mut settings: BTreeMap<String, String> = std::env::vars()
-        .filter(|(key, _)| {
-            matches!(
-                key.as_str(),
-                "RUSTUP_TOOLCHAIN"
-                    | "RUSTFLAGS"
-                    | "RUSTDOCFLAGS"
-                    | "RUSTC"
-                    | "RUSTDOC"
-                    | "RUSTC_WRAPPER"
-                    | "RUSTC_WORKSPACE_WRAPPER"
-                    | "RUSTC_BOOTSTRAP"
-            ) || key.starts_with("CARGO_PROFILE_")
-                || (key.starts_with("CARGO_TARGET_") && key != "CARGO_TARGET_DIR")
-                || matches!(
-                    key.as_str(),
-                    "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS"
-                )
-        })
-        .collect();
-    settings.insert(
-        "host-platform".to_owned(),
-        format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
-    );
-    let mut words = argv.iter();
-    let mut configs = Vec::new();
-    while let Some(word) = words.next() {
-        if let Some(config) = word.strip_prefix("--config=") {
-            configs.push(config.to_owned());
-        } else if word == "--config" {
-            configs.extend(words.next().cloned());
-        } else if word.starts_with('+') {
-            settings.insert("toolchain-argument".to_owned(), word.clone());
-        }
-    }
-    settings.insert("cargo-config-arguments".to_owned(), format!("{configs:?}"));
-    settings
-}
-
 fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
     if artifact.filenames.is_empty()
         || !artifact.filenames.iter().all(|filename| {
@@ -55,7 +15,12 @@ fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String>
                 && (matches!(
                     path.extension().and_then(|value| value.to_str()),
                     Some("rmeta" | "rlib")
-                ) || artifact.profile.test)
+                ) || artifact.profile.test
+                    || (artifact.target.kind.iter().any(|kind| kind == "proc-macro")
+                        && matches!(
+                            path.extension().and_then(|value| value.to_str()),
+                            Some("so" | "dylib" | "dll")
+                        )))
                 && path
                     .file_stem()
                     .and_then(|name| name.to_str())

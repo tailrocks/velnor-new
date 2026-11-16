@@ -55,7 +55,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         progress: Some(Vec::new()),
         tests: Vec::new(),
         rejected: 0,
-        execution: crate::observed_units::execution(argv),
+        execution: execution(argv),
         target_directory: Some(
             std::env::var_os("CARGO_TARGET_DIR")
                 .map_or_else(
@@ -344,4 +344,44 @@ fn activity_metrics(metrics: &mut LaneMetrics, log: &[u8]) {
         .slowest_tests
         .sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     metrics.slowest_tests.truncate(10);
+}
+
+fn execution(argv: &[String]) -> BTreeMap<String, String> {
+    let mut settings: BTreeMap<String, String> = std::env::vars()
+        .filter(|(key, _)| {
+            matches!(
+                key.as_str(),
+                "RUSTUP_TOOLCHAIN"
+                    | "RUSTFLAGS"
+                    | "RUSTDOCFLAGS"
+                    | "RUSTC"
+                    | "RUSTDOC"
+                    | "RUSTC_WRAPPER"
+                    | "RUSTC_WORKSPACE_WRAPPER"
+                    | "RUSTC_BOOTSTRAP"
+            ) || key.starts_with("CARGO_PROFILE_")
+                || (key.starts_with("CARGO_TARGET_") && key != "CARGO_TARGET_DIR")
+                || matches!(
+                    key.as_str(),
+                    "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS"
+                )
+        })
+        .collect();
+    settings.insert(
+        "host-platform".to_owned(),
+        format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+    );
+    let mut words = argv.iter();
+    let mut configs = Vec::new();
+    while let Some(word) = words.next() {
+        if let Some(config) = word.strip_prefix("--config=") {
+            configs.push(config.to_owned());
+        } else if word == "--config" {
+            configs.extend(words.next().cloned());
+        } else if word.starts_with('+') {
+            settings.insert("toolchain-argument".to_owned(), word.clone());
+        }
+    }
+    settings.insert("cargo-config-arguments".to_owned(), format!("{configs:?}"));
+    settings
 }
