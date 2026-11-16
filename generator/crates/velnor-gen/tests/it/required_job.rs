@@ -215,19 +215,19 @@ fn an_env_value_over_the_limit_is_a_rule_violation() {
     use velnor_render::{
         MAX_ENV_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules,
     };
-    let step = |length| RenderedStep {
+    let step = |value| RenderedStep {
         name: "step".to_owned(),
         run: Some("echo hi".to_owned()),
-        env: vec![("SPEC".to_owned(), Value::Text("a".repeat(length)))],
+        env: vec![("SPEC".to_owned(), value)],
         ..RenderedStep::default()
     };
-    let violations = |length| {
+    let violations = |value| {
         check_rules(&RenderedWorkflow {
             jobs: vec![RenderedJob {
                 id: "required".to_owned(),
                 runs_on: "ubuntu-latest".to_owned(),
                 timeout_minutes: 10,
-                steps: vec![step(length)],
+                steps: vec![step(value)],
                 ..RenderedJob::default()
             }],
         })
@@ -237,9 +237,29 @@ fn an_env_value_over_the_limit_is_a_rule_violation() {
         .map(|violation| violation.rule)
         .collect::<Vec<Rule>>()
     };
-    assert_eq!(violations(MAX_ENV_CHARACTERS), Vec::<Rule>::new());
     assert_eq!(
-        violations(MAX_ENV_CHARACTERS + 1),
+        violations(Value::Text("a".repeat(MAX_ENV_CHARACTERS))),
+        Vec::<Rule>::new()
+    );
+    assert_eq!(
+        violations(Value::Text("a".repeat(MAX_ENV_CHARACTERS + 1))),
         vec![Rule::EnvTooLong(MAX_ENV_CHARACTERS + 1)]
+    );
+    for bytes in [MAX_ENV_CHARACTERS, MAX_ENV_CHARACTERS + 1] {
+        assert_eq!(
+            violations(Value::BoundedExpr {
+                text: "${{ toJSON(needs) }}".to_owned(),
+                max_bytes: bytes,
+            }),
+            if bytes == MAX_ENV_CHARACTERS {
+                vec![]
+            } else {
+                vec![Rule::EnvTooLong(bytes)]
+            }
+        );
+    }
+    assert_eq!(
+        violations(Value::Text("é".repeat(MAX_ENV_CHARACTERS))),
+        vec![Rule::EnvTooLong(2 * MAX_ENV_CHARACTERS)]
     );
 }
