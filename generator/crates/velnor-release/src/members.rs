@@ -77,21 +77,33 @@ pub(crate) fn check_inventory(
             .map(str::to_owned)
             .collect();
         if let Some((pattern, packages)) = config.workspace_tags.iter().find_map(|pattern| {
-            let rendered: Vec<(&String, TagPattern)> = unlisted
+            let mut rendered: Vec<(String, TagPattern, bool)> = unlisted
                 .iter()
-                .filter_map(|name| Some((name, render(pattern.as_str(), name)?)))
+                .filter_map(|name| Some((name.clone(), render(pattern.as_str(), name)?, true)))
                 .collect();
-            let clashing: Vec<String> = rendered
+            rendered.extend(
+                config
+                    .packages
+                    .iter()
+                    .filter(|package| config.releases(&package.name))
+                    .map(|package| (package.name.clone(), package.tag_pattern.clone(), false)),
+            );
+            let mut clashing: Vec<String> = rendered
                 .iter()
                 .enumerate()
-                .filter(|(index, (_, tag))| {
+                .filter(|(index, (_, tag, inherited))| {
                     rendered
                         .iter()
                         .enumerate()
-                        .any(|(other, (_, rival))| other != *index && tag.may_collide(rival))
+                        .any(|(other, (_, rival, rival_inherited))| {
+                            other != *index
+                                && (*inherited || *rival_inherited)
+                                && tag.may_collide(rival)
+                        })
                 })
-                .map(|(_, (name, _))| (*name).clone())
+                .map(|(_, (name, _, _))| name.clone())
                 .collect();
+            clashing.sort();
             (!clashing.is_empty()).then(|| (pattern.as_str().to_owned(), clashing))
         }) {
             return Err(ReleaseError::DuplicateTagPattern { pattern, packages });

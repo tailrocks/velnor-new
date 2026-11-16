@@ -190,3 +190,26 @@ fn templated_workspace_tags_that_render_the_same_for_two_unlisted_members_are_re
         Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["a", "a1"]
     ));
 }
+
+#[test]
+fn an_unlisted_member_may_not_share_a_tag_with_a_listed_package() {
+    let mut files = files();
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        format!(
+            "{}\n[[package]]\nname = \"tool\"\ngit_tag_name = \"a{{{{ version }}}}\"\n",
+            WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}{{ version }}")
+        ),
+    );
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("a", "Cargo.toml"), ("tool", "tool/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["a", "tool"]
+    ));
+}
