@@ -46,6 +46,7 @@ pub(crate) fn files() -> ReleaseFiles {
         bin_targets: None,
         rust_metadata: None,
         workflow_names: None,
+        push_workflows: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
 }

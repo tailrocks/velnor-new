@@ -43,6 +43,20 @@ pub(crate) struct ReadinessSample {
 }
 
 impl ReadinessSample {
+    #[cfg(test)]
+    pub(crate) fn for_test(selected: &SelectedEngineContext) -> Self {
+        Self {
+            engine_id: selected.engine_id().to_owned(),
+            docker_root_digest: selected.docker_root_digest().to_owned(),
+            generation: "g".repeat(32),
+            observed_at: Instant::now(),
+            effective_cpu_millicores: 1_000_000,
+            memory_total_bytes: 1 << 50,
+            memory_available_bytes: 1 << 50,
+            pressure_sample: None,
+        }
+    }
+
     pub(crate) fn matches_engine(&self, selected: &SelectedEngineContext) -> bool {
         self.engine_id == selected.engine_id()
             && self.docker_root_digest == selected.docker_root_digest()
