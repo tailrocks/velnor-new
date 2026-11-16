@@ -328,12 +328,8 @@ impl CargoCommand {
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
-            Self::NextestRun { .. } => &[GateNeed::TestFilter, GateNeed::PackageArgs],
-            Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
-            Self::Clippy { .. } | Self::Doc | Self::NextestArchive { .. } => {
-                &[GateNeed::PackageArgs]
-            }
-            Self::Doctest => &[GateNeed::PackageArgs, GateNeed::DoctestsKnown],
+            Self::NextestRun { .. } | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::Doctest => &[GateNeed::DoctestsKnown],
             _ => &[],
         }
     }

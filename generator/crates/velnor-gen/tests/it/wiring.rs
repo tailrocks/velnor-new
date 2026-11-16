@@ -54,8 +54,7 @@ fn run_line<'a>(step: &[&'a str]) -> &'a str {
 }
 
 #[test]
-fn the_documentation_step_documents_only_the_planned_packages_and_an_empty_value_skips_it()
--> TestResult {
+fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it() -> TestResult {
     let single = text(&view(&["Cargo.toml"], None)?)?;
     let doc = step(&single, "Documentation");
     let condition = doc.join("\n");
@@ -67,16 +66,10 @@ fn the_documentation_step_documents_only_the_planned_packages_and_an_empty_value
         condition.contains("steps.plan.outputs.rust_root_docs == 'run'"),
         "{condition}"
     );
-    assert!(
-        condition.contains("PACKAGE_ARGS: '${{ steps.plan.outputs.rust_root_package_args }}'"),
-        "{condition}"
-    );
+    assert!(!condition.contains("PACKAGE_ARGS"), "{condition}");
     let run = run_line(&doc);
-    assert!(run.contains("cargo doc $PACKAGE_ARGS --no-deps"), "{run}");
-    assert!(
-        !run.contains("--workspace") && !run.contains("${{"),
-        "{run}"
-    );
+    assert!(run.contains("cargo doc --workspace --no-deps"), "{run}");
+    assert!(!run.contains("${{"), "{run}");
 
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let doc = step(&lanes, "Documentation").join("\n");
@@ -84,10 +77,7 @@ fn the_documentation_step_documents_only_the_planned_packages_and_an_empty_value
         doc.contains("needs.rust-plan.outputs.rust_root_package_args != ''"),
         "{doc}"
     );
-    assert!(
-        doc.contains("PACKAGE_ARGS: '${{ needs.rust-plan.outputs.rust_root_package_args }}'"),
-        "{doc}"
-    );
+    assert!(!doc.contains("PACKAGE_ARGS"), "{doc}");
     assert!(
         lanes.contains("rust_lab_package_args: '${{ steps.plan.outputs.rust_lab_package_args }}'")
     );
@@ -95,7 +85,7 @@ fn the_documentation_step_documents_only_the_planned_packages_and_an_empty_value
 }
 
 #[test]
-fn nextest_reads_the_packages_and_the_filter_the_plan_selected() -> TestResult {
+fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> TestResult {
     let single = text(&view(&["Cargo.toml"], None)?)?;
     let test = step(&single, "Test");
     let joined = test.join("\n");
@@ -103,19 +93,13 @@ fn nextest_reads_the_packages_and_the_filter_the_plan_selected() -> TestResult {
         joined.contains("TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'"),
         "{joined}"
     );
-    assert!(
-        joined.contains("PACKAGE_ARGS: '${{ steps.plan.outputs.rust_root_package_args }}'"),
-        "{joined}"
-    );
+    assert!(!joined.contains("PACKAGE_ARGS"), "{joined}");
     let run = run_line(&test);
     assert!(
-        run.contains("nextest run $PACKAGE_ARGS --locked") && run.contains("-E \"$TEST_FILTER\""),
+        run.contains("nextest run --workspace --locked") && run.contains("-E \"$TEST_FILTER\""),
         "{run}"
     );
-    assert!(
-        !run.contains("--workspace") && !run.contains("all()") && !run.contains("${{"),
-        "{run}"
-    );
+    assert!(!run.contains("all()") && !run.contains("${{"), "{run}");
     Ok(())
 }
 
@@ -127,7 +111,7 @@ fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestRes
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc $PACKAGE_ARGS --locked"
+        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked"
     );
     Ok(())
 }
@@ -235,18 +219,18 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
 }
 
 #[test]
-fn lint_and_the_doctests_follow_the_planned_packages() -> TestResult {
+fn lint_builds_the_whole_workspace_so_that_cargo_unifies_features_as_in_the_cached_build()
+-> TestResult {
     let single = text(&view(&["Cargo.toml"], None)?)?;
     let lint = step(&single, "Lint");
     assert!(
-        run_line(&lint).contains("clippy $PACKAGE_ARGS --all-targets"),
+        run_line(&lint).contains("clippy --workspace --all-targets"),
         "{lint:?}"
     );
     assert!(
-        lint.iter().any(|line| line.contains("PACKAGE_ARGS: ")),
+        !lint.iter().any(|line| line.contains("PACKAGE_ARGS")),
         "{lint:?}"
     );
-    assert!(!run_line(&lint).contains("--workspace"), "{lint:?}");
     Ok(())
 }
 

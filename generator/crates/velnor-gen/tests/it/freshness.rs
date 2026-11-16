@@ -132,3 +132,28 @@ fn a_build_script_without_a_rerun_directive_is_reported_with_the_line_to_add() -
     }
     Ok(())
 }
+
+#[test]
+fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifies_features_differently()
+-> TestResult {
+    for config in [None, Some(b"shape = \"groups\"\n".as_slice())] {
+        let text = workflow(&view(&["Cargo.toml"], config)?)?;
+        assert!(!text.contains("PACKAGE_ARGS"), "{text}");
+        for run in text
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("run: "))
+            .map(|run| run.trim_matches('\''))
+            .filter(|run| run.starts_with("velnor-ci run"))
+            .filter(|run| {
+                run.contains("clippy")
+                    || run.contains("nextest")
+                    || run.contains("cargo doc")
+                    || run.contains("--doc")
+            })
+        {
+            assert!(run.contains("--workspace"), "{run}");
+            assert!(!run.contains(" -p "), "{run}");
+        }
+    }
+    Ok(())
+}
