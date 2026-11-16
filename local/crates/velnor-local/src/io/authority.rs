@@ -4,6 +4,7 @@
 mod runners;
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ use tokio::sync::Mutex;
 
 pub use runners::Runners;
 
+use super::git::Git;
 use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
@@ -68,6 +70,7 @@ pub struct Authority<B> {
     expected: hmac::Tag,
     ledger: Mutex<Ledger>,
     minting: std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+    repo: Option<PathBuf>,
 }
 
 struct Reserved<'a> {
@@ -105,7 +108,44 @@ impl<B: Backend> Authority<B> {
             expected,
             ledger: Mutex::new(Ledger { path, entries }),
             minting: std::sync::Mutex::new(BTreeSet::new()),
+            repo: None,
         })
+    }
+
+    #[must_use]
+    pub fn hashing(mut self, repo: PathBuf) -> Self {
+        self.repo = Some(repo);
+        self
+    }
+
+    async fn workflow_sha256(&self, sha: &str, workflow: &str) -> Option<String> {
+        let repo = self.repo.clone()?;
+        if !matches!(sha.len(), 40 | 64)
+            || !sha
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            return None;
+        }
+        let git = Git {
+            repo,
+            diff_limit_bytes: 0,
+            last_diff: Mutex::new(None),
+        };
+        let content = git.run(&["show", &format!("{sha}:{workflow}")]).await?;
+        if !is_plain_relative(workflow) {
+            return None;
+        }
+        let path = git.repo.join(workflow);
+        let metadata = tokio::fs::symlink_metadata(&path).await.ok()?;
+        if !metadata.is_file() || tokio::fs::read(&path).await.ok()? != content {
+            return None;
+        }
+        let digest = ring::digest::digest(&ring::digest::SHA256, &content);
+        Some(digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        }))
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
@@ -188,7 +228,11 @@ impl<B: Backend> Authority<B> {
             }
         }
         let verdict = admitted.as_ref().map_err(|refusal| *refusal);
-        Ok(json_response(200, &answer(side, &found, verdict)))
+        let hashed = self.workflow_sha256(&found.sha, &found.workflow).await;
+        Ok(json_response(
+            200,
+            &answer(side, &found, verdict, hashed.as_deref()),
+        ))
     }
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
@@ -239,6 +283,14 @@ impl<B: Backend> Authority<B> {
             &json!({"name": name, "deleted": deleted}),
         ))
     }
+}
+
+fn is_plain_relative(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && path
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 pub async fn mint_or_retire<B: Backend>(

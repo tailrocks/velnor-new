@@ -28,6 +28,7 @@ pub struct Pairs {
     pub host: PathBuf,
     pub trusted: u16,
     pub untrusted: u16,
+    pub policy: Option<PathBuf>,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -72,6 +73,11 @@ pub async fn default_host(exe: &Path) -> io::Result<PathBuf> {
 
 pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
     if args.runner == RunnerMode::Plain {
+        if args.policy.is_some() {
+            return Err(io::Error::other(
+                "--policy needs --runner pair: plain containers have no job-start check",
+            ));
+        }
         return Ok(None);
     }
     let missing = |error: io::Error| {
@@ -85,6 +91,10 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
     }
     .map_err(missing)?;
     fs::metadata(&host).await.map_err(missing)?;
+    let policy = match &args.policy {
+        Some(file) => Some(std::path::absolute(file)?),
+        None => None,
+    };
     for tag in [RUNNER_TAG, DIND_TAG] {
         image(tag).await?;
     }
@@ -92,6 +102,7 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
         host,
         trusted: args.runners,
         untrusted: args.fork_runners,
+        policy,
     }))
 }
 
@@ -106,15 +117,20 @@ impl Pairs {
         )
     }
 
-    pub(super) fn arguments(&self) -> Vec<String> {
-        vec![
+    pub(super) fn arguments(&self, repo: &Path) -> Vec<String> {
+        let mut arguments = vec![
             "--velnor-host".to_owned(),
             self.host.display().to_string(),
             "--pairs".to_owned(),
             self.trusted.to_string(),
             "--fork-pairs".to_owned(),
             self.untrusted.to_string(),
-        ]
+        ];
+        if self.policy.is_some() {
+            arguments.extend(["--policy".to_owned(), "--repo".to_owned()]);
+            arguments.push(repo.display().to_string());
+        }
+        arguments
     }
 
     pub(super) async fn wait(&self, dir: &Path, supervise: &mut Child) -> io::Result<Vec<String>> {
@@ -142,6 +158,24 @@ impl Pairs {
     }
 }
 
+pub(super) const POLICY: &str = "policy.json";
+const MAX_POLICY_BYTES: u64 = 256 * 1024;
+
+pub(super) async fn read_policy(file: &Path) -> io::Result<String> {
+    let meta = fs::symlink_metadata(file).await?;
+    if !meta.is_file() || meta.len() == 0 || meta.len() > MAX_POLICY_BYTES {
+        return Err(io::Error::other(format!(
+            "--policy {} is not a regular file of 1 byte to 256 KiB",
+            file.display()
+        )));
+    }
+    fs::read_to_string(file).await
+}
+
+pub(super) async fn store_policy(state: &Path, text: &str) -> io::Result<()> {
+    write_private(&state.join(POLICY), text).await
+}
+
 pub async fn write_plan(state: &Path, planned: &str) -> io::Result<()> {
     write_private(&state.join(PLAN), planned).await
 }
@@ -152,6 +186,7 @@ pub(super) async fn spawn(
     authority: &str,
     token: &str,
     (trusted, untrusted): (u16, u16),
+    policy: bool,
 ) -> io::Result<Child> {
     let state = runner_dir(&env.dir);
     fs::create_dir_all(&state).await?;
@@ -180,6 +215,7 @@ pub(super) async fn spawn(
         runner_image: &runner_image,
         dind_image: &dind_image,
         sides: &sides,
+        policy: policy.then_some(POLICY),
     })
     .to_string();
     write_plan(&state, &planned).await?;

@@ -19,6 +19,7 @@ fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentA
         default_branch: "main".to_owned(),
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
+        policy: None,
     }
 }
 
@@ -161,6 +162,7 @@ async fn an_event_runs_on_the_side_its_payload_belongs_to() {
     let repository = Repository {
         full_name: "tailrocks/velnor-lab",
         default_branch: "main",
+        id: None,
     };
     let sha = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
     let pull = |fork| {

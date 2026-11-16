@@ -137,6 +137,16 @@ impl ApprovedJobAuthorityPolicy {
         validate::validate_policy(self, connection)
     }
 
+    #[cfg(feature = "local-mode")]
+    pub(crate) fn validate_structure(&self, repository_id: i64) -> Result<(), HostError> {
+        validate::validate_structure(self, repository_id)
+    }
+
+    #[cfg(all(test, feature = "local-mode"))]
+    pub(crate) fn expected_policy_sha256(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_vec(&self.content()).map(|bytes| sha256(&bytes))
+    }
+
     pub(crate) fn canonicalize(&mut self) {
         for workflow in &mut self.workflows {
             workflow.calls.sort();
@@ -205,12 +215,7 @@ impl ApprovedJobAuthorityPolicy {
         self.workflows
             .iter()
             .flat_map(|workflow| &workflow.jobs)
-            .find(|entry| {
-                entry.root_path == lookup.root_path
-                    && entry.workflow_path == lookup.workflow_path
-                    && entry.job_key == lookup.job_key
-                    && entry.contexts.iter().any(|context| context.matches(lookup))
-            })
+            .find(|entry| entry.matches(lookup))
     }
 }
 
@@ -228,6 +233,14 @@ impl<'a> ApprovedWorkflowSource<'a> {
 
     pub(crate) fn content_sha256(self) -> &'a str {
         &self.0.content_sha256
+    }
+
+    #[cfg(feature = "local-mode")]
+    pub(crate) fn entry(
+        self,
+        lookup: &JobAuthorityLookup<'_>,
+    ) -> Option<&'a ApprovedJobAuthorityEntry> {
+        self.0.jobs.iter().find(|entry| entry.matches(lookup))
     }
 
     pub(crate) fn calls(&self) -> impl Iterator<Item = ApprovedWorkflowCall<'a>> + 'a {
@@ -253,6 +266,13 @@ impl<'a> ApprovedWorkflowCall<'a> {
 }
 
 impl ApprovedJobAuthorityEntry {
+    fn matches(&self, lookup: &JobAuthorityLookup<'_>) -> bool {
+        self.root_path == lookup.root_path
+            && self.workflow_path == lookup.workflow_path
+            && self.job_key == lookup.job_key
+            && self.contexts.iter().any(|context| context.matches(lookup))
+    }
+
     pub(crate) const fn role(&self) -> JobAuthorityRole {
         self.role
     }
