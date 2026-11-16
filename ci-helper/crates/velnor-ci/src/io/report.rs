@@ -66,11 +66,20 @@ pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
     .map_err(ci)
 }
 
+fn read_log() -> Result<Vec<u8>, CiError> {
+    match fs::read(temp("velnor-run.log")) {
+        Ok(bytes) => Ok(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(ci(error)),
+    }
+}
+
 pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     if let Some(directory) = &args.check {
         return check_directory(directory);
     }
-    let log = fs::read_to_string(temp("velnor-run.log")).unwrap_or_default();
+    let log_bytes = read_log()?;
+    let log = String::from_utf8_lossy(&log_bytes);
     let invocations = fs::read_to_string(temp(INVOCATIONS))
         .unwrap_or_default()
         .lines()
@@ -99,7 +108,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         .slowest_tests
         .sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     metrics.slowest_tests.truncate(10);
-    if let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log) {
+    if let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log_bytes) {
         metrics
             .diagnostics
             .push(format!("Restored input provenance unavailable: {error}"));

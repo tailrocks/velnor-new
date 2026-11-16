@@ -13,7 +13,7 @@ fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
 }
 
-pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &str) -> Result<(), CiError> {
+pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<(), CiError> {
     let checkout = velnor_gen::io::read_recorded_checkout(&super::current_dir()?).map_err(ci)?;
     let facts = velnor_rust::detect(&checkout.view).map_err(ci)?;
     let (_, current) = super::inputs::worktree_files(&checkout.root)?;
@@ -48,6 +48,7 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &str) -> Result<(),
             let slice = log
                 .get(invocation.log_start..invocation.log_end)
                 .ok_or_else(|| CiError::new("invocation log range is invalid"))?;
+            let slice = String::from_utf8_lossy(slice);
             invocation.downloads = slice
                 .lines()
                 .filter_map(named_crate)

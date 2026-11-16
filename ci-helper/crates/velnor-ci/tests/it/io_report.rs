@@ -63,7 +63,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     let fixture = repo.root().join("cargo-fixture");
     symlink("/bin/sh", &fixture)?;
     let script = format!(
-        "printf '   Compiling demo v0.1.0 ({})\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; exit 7",
+        "printf '\\377\\n'; printf '   Compiling demo v0.1.0 ({})\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; exit 7",
         fs::canonicalize(repo.root())?.display()
     );
     assert_eq!(

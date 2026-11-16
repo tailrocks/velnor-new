@@ -60,18 +60,34 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
 fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_version() {
     for (dimension, fails) in [
         ("same", true),
+        ("package-selection", true),
         ("root", false),
         ("configuration", false),
         ("version", false),
     ] {
         let mut value = lane();
         value["caches"] = json!([]);
+        if dimension == "package-selection" {
+            value["invocations"][0]["configuration"] = json!(configuration(
+                &["cargo", "check", "-p", "a"].map(str::to_owned)
+            ));
+        }
         let first = metrics(value.clone());
         value["lane"] = json!("second");
+        if dimension == "package-selection" {
+            value["invocations"][0]["configuration"] = json!(configuration(
+                &["cargo", "check", "--package", "b"].map(str::to_owned)
+            ));
+        }
         let second = metrics(value.clone());
         assert!(check(&[first.clone(), second.clone()]).is_ok());
         value["lane"] = json!("third");
         match dimension {
+            "package-selection" => {
+                value["invocations"][0]["configuration"] = json!(configuration(
+                    &["cargo", "check", "-p", "c"].map(str::to_owned)
+                ));
+            }
             "root" => value["invocations"][0]["root"] = json!("tools"),
             "configuration" => value["invocations"][0]["configuration"] = json!("release"),
             "version" => value["invocations"][0]["compilations"][0]["version"] = json!("2.0.0"),
@@ -104,6 +120,19 @@ fn configuration_ignores_command_purpose_and_normalizes_features() {
             "--features",
             "a,b"
         ]))
+    );
+    for words in [
+        vec!["cargo", "check", "--features=a,b"],
+        vec!["cargo", "check", "--features", "b", "--features", "a"],
+    ] {
+        assert_eq!(
+            configuration(&argv(&words)),
+            configuration(&argv(&["cargo", "check", "--features", "b,a"]))
+        );
+    }
+    assert_eq!(
+        configuration(&argv(&["cargo", "check", "--release"])),
+        configuration(&argv(&["cargo", "check", "--profile=release"]))
     );
     assert_ne!(
         configuration(&argv(&["cargo", "check", "--release"])),

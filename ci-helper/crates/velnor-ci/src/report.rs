@@ -231,32 +231,39 @@ impl LaneMetrics {
 
 #[must_use]
 pub fn configuration(argv: &[String]) -> String {
-    let mut configuration = Vec::new();
+    let mut options = BTreeMap::new();
+    let mut features = BTreeSet::new();
+    let mut configs = Vec::new();
     let mut words = argv.iter();
     while let Some(word) = words.next() {
-        if [
-            "--features",
-            "--target",
-            "--profile",
-            "--config",
-            "-p",
-            "--package",
-        ]
-        .contains(&word.as_str())
-        {
-            configuration.push(word.clone());
-            configuration.extend(words.next().map(|value| {
-                let mut parts: Vec<_> = value.split(',').collect();
-                parts.sort_unstable();
-                parts.join(",")
-            }));
-        } else if ["--release", "--all-features", "--no-default-features"].contains(&word.as_str())
-            || ["--features=", "--target=", "--profile=", "--config="]
-                .iter()
-                .any(|prefix| word.starts_with(prefix))
-        {
-            configuration.push(word.clone());
+        let (flag, inline) = word
+            .split_once('=')
+            .map_or((word.as_str(), None), |(flag, value)| (flag, Some(value)));
+        match flag {
+            "--features" | "-F" | "--target" | "--profile" | "--config" => {
+                let Some(value) = inline.or_else(|| words.next().map(String::as_str)) else {
+                    continue;
+                };
+                match flag {
+                    "--features" | "-F" => features.extend(
+                        value
+                            .split(|character: char| character == ',' || character.is_whitespace())
+                            .filter(|feature| !feature.is_empty()),
+                    ),
+                    "--config" => configs.push(value),
+                    _ => {
+                        options.insert(flag, value);
+                    }
+                }
+            }
+            "--release" => {
+                options.insert("--profile", "release");
+            }
+            "--all-features" | "--no-default-features" => {
+                options.insert(flag, "");
+            }
+            _ => {}
         }
     }
-    configuration.join(" ")
+    format!("{options:?} {features:?} {configs:?}")
 }
