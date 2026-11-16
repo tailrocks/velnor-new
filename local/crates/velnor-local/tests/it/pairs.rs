@@ -345,8 +345,11 @@ fn the_cli_never_picks_a_velnor_host_planted_in_its_working_directory() {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     std::fs::write(&planted, "#!/bin/sh\n").unwrap_or_else(|e| unreachable!("{e}"));
-    std::fs::set_permissions(&planted, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::set_permissions(
+        &planted,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::copy(env!("CARGO_BIN_EXE_velnor-local"), &installed)
         .unwrap_or_else(|e| unreachable!("{e}"));
     let output = std::process::Command::new(&installed)
