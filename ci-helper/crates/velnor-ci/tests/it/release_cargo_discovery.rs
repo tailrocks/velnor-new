@@ -241,3 +241,15 @@ fn a_non_crates_io_default_registry_is_refused_only_for_a_root_that_publishes() 
         assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
     }
 }
+
+#[test]
+fn a_regular_file_named_dot_cargo_is_not_read_as_cargo_configuration() {
+    let checkout = Checkout::new("dot-cargo-file");
+    checkout.write("release-plz.toml", COMPLIANT);
+    checkout.write(".cargo", PROVIDER);
+    assert_eq!(checkout.check("release-plz.toml").0, Some(0));
+    let nested = Checkout::new("dot-cargo-file-nested");
+    nested.write("tools/release-plz.toml", COMPLIANT);
+    nested.write("tools/.cargo", "not = [valid toml\n");
+    assert_eq!(nested.check("tools/release-plz.toml").0, Some(0));
+}
