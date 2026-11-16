@@ -730,7 +730,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.80"
+version = "0.1.81"
 dependencies = [
  "clap",
  "libc",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.80"
+version = "0.1.81"
 dependencies = [
  "clap",
  "serde-saphyr",
