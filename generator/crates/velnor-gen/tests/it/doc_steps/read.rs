@@ -92,4 +92,97 @@ pub(super) const READ: &[(&str, Files, bool, bool)] = &[
         false,
         true,
     ),
+    (
+        "text fence in the library",
+        &[(
+            "a/src/lib.rs",
+            "/// ```text\n/// x\n/// ```\npub fn f() {}\n",
+        )],
+        false,
+        true,
+    ),
+    (
+        "text fence closed then no test",
+        &[(
+            "a/src/lib.rs",
+            "/**\n * ```python\n * x\n * ```\n */\npub fn f() {}\n",
+        )],
+        false,
+        true,
+    ),
+    (
+        "rustdoc attribute fence",
+        &[(
+            "a/src/lib.rs",
+            "/// ```should_panic,edition2021\n/// x\n/// ```\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "rust fence after a text fence",
+        &[(
+            "a/src/lib.rs",
+            "/// ```text\n/// x\n/// ```\n/// ```rust\n/// y\n/// ```\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "doc assignment in ordinary code",
+        &[("a/src/lib.rs", "pub fn f() {\n    let doc = \"```\";\n}\n")],
+        false,
+        true,
+    ),
+    (
+        "doc assignment after an attribute",
+        &[(
+            "a/src/lib.rs",
+            "#[allow(dead_code)]\nfn f() {\n    let doc = \"```\";\n}\n",
+        )],
+        false,
+        true,
+    ),
+    (
+        "cfg_attr doc literal with a fence",
+        &[(
+            "a/src/lib.rs",
+            "#[cfg_attr(all(), doc = \"```\\nx\\n```\")]\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "inner doc attribute literal with a fence",
+        &[("a/src/lib.rs", "#![doc = \"```\\nx\\n```\"]\n")],
+        true,
+        true,
+    ),
+    (
+        "block doc whose summary starts on the opening line",
+        &[(
+            "a/src/lib.rs",
+            "/** Adds one.\n *     assert!(true);\n */\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "doc literal with an indented code block",
+        &[(
+            "a/src/lib.rs",
+            "#[doc = r\"    assert!(true);\"]\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "block doc and indented prose without code",
+        &[(
+            "a/src/lib.rs",
+            "/** Adds one. */\n/**\n  Adds.\n  More.\n*/\npub fn f() {}\n",
+        )],
+        false,
+        false,
+    ),
 ];

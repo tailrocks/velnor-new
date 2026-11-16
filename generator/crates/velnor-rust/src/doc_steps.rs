@@ -8,6 +8,7 @@ use velnor_model::{
     OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, Target, TargetKind,
 };
 
+mod markdown;
 mod scan;
 mod tokens;
 
