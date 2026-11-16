@@ -3,7 +3,7 @@
 
 use velnor_release::ReleaseError;
 
-use crate::fixture::{PLZ, TestResult, files, refusal, with_metadata};
+use crate::fixture::{PLZ, files, refusal, with_metadata};
 
 const ROOT_A: &str = "[workspace]\npr_branch_prefix = \"a-\"\ngit_tag_name = \"{{ package }}{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 
@@ -29,7 +29,7 @@ fn two_roots(tool_tag: &str) -> velnor_release::ReleaseFiles {
 }
 
 #[test]
-fn an_inherited_tag_of_one_root_is_compared_with_a_listed_tag_of_another() -> TestResult {
+fn an_inherited_tag_of_one_root_is_compared_with_a_listed_tag_of_another() {
     let error = refusal(&two_roots("a{{ version }}"));
     assert!(
         matches!(
@@ -41,5 +41,4 @@ fn an_inherited_tag_of_one_root_is_compared_with_a_listed_tag_of_another() -> Te
     let text = error.map(|e| e.to_string()).unwrap_or_default();
     assert!(text.contains("a{{ version }}"), "{text}");
     assert_eq!(refusal(&two_roots("tool-v{{ version }}")), None);
-    Ok(())
 }
