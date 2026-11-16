@@ -74,6 +74,7 @@ mod tool_pins;
 mod toolchain;
 mod toolchain_components;
 mod tools_cache;
+mod trim_job;
 mod unowned;
 mod version;
 mod weaken;

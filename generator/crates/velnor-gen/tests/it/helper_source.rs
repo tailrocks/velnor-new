@@ -42,11 +42,13 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
     assert_eq!(jobs.iter().filter(|job| **job == "rust-helper").count(), 1);
     let lanes: Vec<&&str> = jobs
         .iter()
-        .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
+        .filter(|job| {
+            job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper" | "rust-trim")
+        })
         .collect();
     assert_eq!(lanes.len(), 6);
     assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len());
+    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len() + 1);
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
     for lane in lanes {
         let header = format!("  {lane}:\n    needs:\n      - rust-plan\n      - rust-helper\n");
@@ -125,10 +127,10 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     let text = text_of(&view)?;
     assert_eq!(
         job_ids(&text),
-        ["rust-plan", "rust-helper", "rust", "required"]
+        ["rust-plan", "rust-helper", "rust", "rust-trim", "required"]
     );
     assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), 1);
+    assert_eq!(text.matches("Download velnor-ci").count(), 2);
     Ok(())
 }
 

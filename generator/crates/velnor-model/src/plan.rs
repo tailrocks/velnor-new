@@ -189,7 +189,9 @@ pub enum StepKind {
         target: RepoPath,
         archive: Option<RepoPath>,
     },
-    CacheTrim(CacheKey),
+    CacheTrim {
+        lane: JobId,
+    },
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -315,6 +317,7 @@ pub enum CargoCommand {
         package: PackageName,
     },
     BuildAll,
+    NextestBuild,
     NextestRun {
         filter: FilterRef,
     },
