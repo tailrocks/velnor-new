@@ -24,7 +24,7 @@ type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 const OTHER_IMAGE: &str = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
 
 struct World {
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     journal: Journal,
     docker: bollard::Docker,
     config: HostConfig,
@@ -40,7 +40,7 @@ async fn world(containers: BTreeMap<String, Value>) -> TestResult<World> {
     let config = HostConfig::parse(seed::CONFIG)?;
     let seeded = seed::started_pair(&journal, &docker, &config).await?;
     Ok(World {
-        _dir: dir,
+        dir,
         journal,
         docker,
         config,

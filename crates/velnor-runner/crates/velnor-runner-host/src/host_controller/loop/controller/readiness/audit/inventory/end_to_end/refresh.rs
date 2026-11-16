@@ -14,7 +14,7 @@ use crate::launch::ReadinessSample;
 const OPERATIONAL_CAPACITY: &str = "UPDATE host_capacity_policy SET operational_cpu_millicores = 1000, operational_memory_bytes = 1073741824";
 
 async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
-    std::fs::write(world._dir.path().join("host.toml"), seed::CONFIG)?;
+    std::fs::write(world.dir.path().join("host.toml"), seed::CONFIG)?;
     seed::unguarded(&world.journal, &[OPERATIONAL_CAPACITY.to_owned()]).await?;
     let control = ControlState::new(&world.config);
     control.set_admission_ready(true);
@@ -30,7 +30,7 @@ async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
     control.cache_readiness_sample(ReadinessSample::for_test(&world.seeded.selected))?;
     let remote_present = |_: &_, _: Option<&_>, _: i64| Ok(true);
     let outcome = refresh_with_dependencies(
-        world._dir.path(),
+        world.dir.path(),
         &world.docker,
         &world.journal,
         &world.seeded.selected,
@@ -43,7 +43,7 @@ async fn refreshed(world: &World) -> TestResult<(Result<(), HostError>, bool)> {
     )
     .await;
     let (_, config_sha256) =
-        crate::readiness_scan::controller_config(world._dir.path()).ok_or("config")?;
+        crate::readiness_scan::controller_config(world.dir.path()).ok_or("config")?;
     let published = control.readiness_matches(
         &config_sha256,
         world.seeded.selected.engine_id(),
