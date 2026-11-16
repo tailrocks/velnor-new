@@ -98,15 +98,6 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
     let paths: Vec<PathBuf> = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
         .filter(|path| Some(path.as_path()) != wrapper.parent())
         .collect();
-    let cargo = paths
-        .iter()
-        .map(|path| path.join("cargo"))
-        .find(|path| {
-            path.is_file()
-                && is_executable(path)
-                && std::fs::canonicalize(path).is_ok_and(|path| path != wrapper)
-        })
-        .ok_or_else(|| CiError::new("cannot find cargo outside the mirror wrapper"))?;
     let mut args = std::env::args_os().skip(1).peekable();
     let selected = if args
         .peek()
@@ -116,12 +107,23 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
     } else {
         None
     };
-    let cargo = match (selected.as_deref(), std::env::var_os(REAL_ENV)) {
-        (None, Some(executable)) => ResolvedCargo {
+    let cargo = if let (None, Some(executable)) = (selected.as_deref(), std::env::var_os(REAL_ENV))
+    {
+        ResolvedCargo {
             executable: PathBuf::from(executable),
             toolchain: None,
-        },
-        _ => actual_cargo(cargo, selected.as_deref())?,
+        }
+    } else {
+        let cargo = paths
+            .iter()
+            .map(|path| path.join("cargo"))
+            .find(|path| {
+                path.is_file()
+                    && is_executable(path)
+                    && std::fs::canonicalize(path).is_ok_and(|path| path != wrapper)
+            })
+            .ok_or_else(|| CiError::new("cannot find cargo outside the mirror wrapper"))?;
+        actual_cargo(cargo, selected.as_deref())?
     };
     let cargo = ResolvedCargo {
         executable: std::fs::canonicalize(cargo.executable).map_err(|e| failed(&e))?,

@@ -37,6 +37,55 @@ fn relative_path_cargo_reaches_children_in_tmp() -> TestResult {
     })
 }
 
+#[test]
+fn nested_cargo_uses_saved_executable_when_relative_path_is_unavailable() -> TestResult {
+    mirror_fixture(|repo, wrapper, config| {
+        let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
+            .args(["which", "cargo"])
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+        let cargo = String::from_utf8(output.stdout)?;
+        let cargo = Path::new(cargo.trim());
+        let root = repo.root();
+        fs::create_dir(root.join("native"))?;
+        std::os::unix::fs::symlink(cargo, root.join("native/cargo"))?;
+        child_projects(repo);
+        let paths = [
+            Path::new("../native"),
+            wrapper.parent().ok_or("wrapper parent")?,
+        ];
+        let output = Command::new(wrapper)
+            .args(["build", "--manifest-path"])
+            .arg(root.join("outer/Cargo.toml"))
+            .current_dir(root.join("outer"))
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .env_remove("RUSTC_WRAPPER")
+            .env_remove("RUSTC_WORKSPACE_WRAPPER")
+            .env_remove("MIRROR_EXPLICIT_TOOLCHAIN")
+            .env_remove("VELNOR_CARGO_REAL")
+            .env("RUSTC", cargo.with_file_name("rustc"))
+            .env("RUSTFLAGS", "-Clinker=/usr/bin/cc")
+            .env("MIRROR_FIXTURE_ROOT", root)
+            .env("MIRROR_EXPECTED_NO_TOOLCHAIN", "1")
+            .env("CARGO_HOME", root.join("outer-home"))
+            .env("CARGO_TARGET_DIR", root.join("outer-target"))
+            .env("VELNOR_CARGO_CONFIG", config)
+            .env("VELNOR_CARGO_WRAPPER", wrapper)
+            .env("PATH", std::env::join_paths(paths)?)
+            .env("CARGO_NET_OFFLINE", "false")
+            .env("CARGO_HTTP_PROXY", "http://127.0.0.1:1")
+            .env("NO_PROXY", "127.0.0.1")
+            .env("CARGO_NET_RETRY", "0")
+            .env(
+                "CARGO_REGISTRIES_CRATES_IO_INDEX",
+                "sparse+http://127.0.0.1:1/index/",
+            )
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+        Ok(())
+    })
+}
+
 fn mise_shim(repo: &Repo) -> TestResult {
     let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
         .args(["which", "cargo"])
