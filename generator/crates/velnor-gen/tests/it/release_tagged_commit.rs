@@ -8,9 +8,9 @@ use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
-use velnor_gen::GenerateError;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::{Node, parse};
+use velnor_gen::GenerateError;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
