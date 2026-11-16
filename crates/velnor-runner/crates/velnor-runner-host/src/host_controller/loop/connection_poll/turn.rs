@@ -12,6 +12,8 @@ use crate::{
 mod poll_attempt;
 use poll_attempt::PollAttemptGuard;
 
+use super::credentials::restore_credentials;
+
 use super::super::{
     polling::{
         ControllerPollOutcome, PositivePollContext, poll_positive_connection,
@@ -64,6 +66,18 @@ async fn poll_connection_inner(
     turn: &mut FairnessTurn,
 ) -> Result<Option<PollTurnResult>, HostError> {
     prepared.collect_authorization().await?;
+    if context
+        .config
+        .connection(&prepared.binding.connection_id)
+        .is_some()
+        && let Err(error) = restore_credentials(prepared, context).await
+    {
+        eprintln!(
+            "host controller credential restore held connection={} reason={error}",
+            prepared.binding.connection_id
+        );
+        return Ok(None);
+    }
     if let Some(credentials) = prepared.credentials.as_ref() {
         context.control_state.invalidate_if_session_changed(
             &prepared.binding,

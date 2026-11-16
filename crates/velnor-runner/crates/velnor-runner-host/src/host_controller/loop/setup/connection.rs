@@ -39,6 +39,17 @@ pub(super) async fn prepare_connection(
     finish_connection_preparation(request, authority).await
 }
 
+pub(super) async fn restore_authority(
+    request: &PrepareConnectionRequest<'_>,
+) -> Result<(crate::listen::Link, crate::listen::Secret, i64), ListenFault> {
+    let authority = prepare_connection_authority(request).await?;
+    Ok((
+        authority.setup.link,
+        authority.github_pat,
+        authority.setup.set.id,
+    ))
+}
+
 async fn prepare_connection_authority(
     request: &PrepareConnectionRequest<'_>,
 ) -> Result<ConnectionAuthority, ListenFault> {
