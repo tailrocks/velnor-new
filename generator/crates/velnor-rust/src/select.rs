@@ -236,7 +236,7 @@ impl<'a> Graph<'a> {
             .filter(|(_, node)| in_root(node) && node.sources.contains(&path))
             .map(|(manifest, _)| *manifest)
             .collect();
-        let package: Vec<&RepoPath> = claimed.into_iter().chain(sourced).collect();
+        let owners: Vec<&RepoPath> = claimed.into_iter().chain(sourced).collect();
         let shared: Vec<&RepoPath> = self
             .nodes
             .iter()
@@ -245,16 +245,14 @@ impl<'a> Graph<'a> {
             })
             .map(|(manifest, _)| *manifest)
             .collect();
-        for manifest in &shared {
+        for manifest in owners.iter().chain(&shared) {
             walk.seed(manifest, SelectionReason::Changed(path.clone()));
         }
-        if !package.is_empty() {
-            for manifest in package {
-                walk.seed(manifest, SelectionReason::Changed(path.clone()));
-            }
-            return;
-        }
-        if !shared.is_empty() {
+        let inside = self
+            .nodes
+            .values()
+            .any(|node| node.directory.is_some() && contains(node.directory.as_ref(), path));
+        if claimed.is_some() || (inside && !(owners.is_empty() && shared.is_empty())) {
             return;
         }
         let is_root_manifest = self.roots.iter().any(|root| root.manifest == *path);
