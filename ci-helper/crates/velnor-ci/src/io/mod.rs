@@ -3,6 +3,7 @@
 
 mod audit;
 mod build_inputs;
+mod configurations;
 mod git;
 mod http;
 mod inputs;
@@ -110,6 +111,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Timings(args) => timings::run_timings(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
+        Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Restored => break_time_ties(&current_dir()?),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
