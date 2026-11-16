@@ -26,6 +26,7 @@ mod os_pins;
 mod owners;
 mod plan;
 mod policy;
+mod private_sources;
 mod reads;
 mod repo_profile;
 mod report;

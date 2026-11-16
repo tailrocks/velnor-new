@@ -9,7 +9,7 @@ use velnor_model::{
     When,
 };
 
-use crate::base_cache::save_steps;
+use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -201,7 +201,8 @@ impl RootJobs<'_> {
             steps.extend(checks());
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
-                    .map(skip_on_draft),
+                    .map(skip_on_draft)
+                    .map(|run| saving_run(self.facts, run)),
             );
             steps.extend(saves.iter().cloned());
         }
@@ -247,7 +248,10 @@ impl RootJobs<'_> {
             let saves = self.saves(&test_id, None, true);
             let before_tests = self.nextest && !saves.is_empty();
             if before_tests {
-                steps.extend(self.cargo(vec![CargoCommand::NextestBuild]));
+                steps.extend(
+                    self.cargo(vec![CargoCommand::NextestBuild])
+                        .map(|run| saving_run(self.facts, run)),
+                );
                 steps.extend(saves.iter().cloned());
             }
             steps.extend(self.cargo(tests));

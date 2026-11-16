@@ -82,7 +82,7 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
 pub(crate) fn finish(facts: &RepoFacts, jobs: &mut Vec<Job>, draft_guard: Option<Step>) {
     let cache = attach(facts, jobs);
     let mut verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
-    let trim = crate::base_cache::trim_job(facts, jobs, facts.config.helper.is_some());
+    let trim = crate::base_cache::trim_job(facts, jobs);
     jobs.extend(trim);
     if facts.config.cache_check_blocks {
         verdict_needs.extend(cache.iter().map(|job| job.id.clone()));
