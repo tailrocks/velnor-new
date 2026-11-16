@@ -5,8 +5,8 @@ use crate::errors::ContractError;
 use crate::workflow::cache_identity::Gc1Family;
 
 use super::{
-    CacheFamily, FamilySpec, GC1_HARD_CEILING_BYTES, GC1_MAX_GENERATION_SLOTS, ROOT_PLACEHOLDER,
-    RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
+    CACHE_VERSION_RUNNER_TEMP, CacheFamily, FamilySpec, GC1_HARD_CEILING_BYTES,
+    GC1_MAX_GENERATION_SLOTS, ROOT_PLACEHOLDER, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
 };
 
 /// Common contract policy shared by every cache family.
@@ -95,6 +95,14 @@ impl FamilySpec {
                 Some(locator) => path.replace(ROOT_PLACEHOLDER, locator),
                 None => (*path).to_owned(),
             })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn restore_version_paths(&self, root_locator: Option<&str>) -> Vec<String> {
+        self.resolved_paths(root_locator)
+            .iter()
+            .map(|path| path.replace(RUNNER_TEMP_EXPR, CACHE_VERSION_RUNNER_TEMP))
             .collect()
     }
 

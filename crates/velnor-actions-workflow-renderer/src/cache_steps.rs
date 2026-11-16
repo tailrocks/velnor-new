@@ -172,7 +172,14 @@ fn sources_subset_ok(path: &str) -> bool {
     if path.contains("..") || is_never_archive_path(path) {
         return false;
     }
-    let Some(suffix) = path.strip_prefix(&format!("{HOME}/")) else {
+    let version_home = HOME.replace(
+        velnor_actions_contract::workflow::cache_family::RUNNER_TEMP_EXPR,
+        velnor_actions_contract::workflow::cache_family::CACHE_VERSION_RUNNER_TEMP,
+    );
+    let Some(suffix) = path
+        .strip_prefix(&format!("{HOME}/"))
+        .or_else(|| path.strip_prefix(&format!("{version_home}/")))
+    else {
         return false;
     };
     if suffix.starts_with("registry/src") {

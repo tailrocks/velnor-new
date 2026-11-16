@@ -171,6 +171,8 @@ mod source_qualification_sources;
 mod source_qualification_sources_keys;
 #[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
 mod source_qualification_sources_support;
+#[path = "workflow_configuration_public/sources_cache_version.rs"]
+mod sources_cache_version;
 #[path = "workflow_configuration_public/stable_prepare_branch.rs"]
 mod stable_prepare_branch;
 #[path = "workflow_configuration_public/state_compat.rs"]

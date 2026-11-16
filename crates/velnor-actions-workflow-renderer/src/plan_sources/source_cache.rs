@@ -44,6 +44,11 @@ fn sources_step(restore: bool, key: &str, restore_keys: &str) -> Result<Step, Pl
     let paths = CacheFamily::Sources.spec().resolved_paths(None);
     validate_sources_subset(&paths, SHARED_CARGO_HOME)
         .map_err(|err| PlanSourcesError::CacheSourcesPolicy(err.to_string()))?;
+    let paths = if restore {
+        CacheFamily::Sources.spec().restore_version_paths(None)
+    } else {
+        paths
+    };
     let op = if restore { "restore" } else { "save" };
     let uses = PinnedActionRef::new(
         "actions/cache",

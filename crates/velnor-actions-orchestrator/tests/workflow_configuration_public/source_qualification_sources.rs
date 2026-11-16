@@ -10,6 +10,7 @@ use std::path::Path;
 use std::process::Command;
 
 use serde_json::Value;
+use velnor_actions_contract::workflow::cache_family::CACHE_VERSION_RUNNER_TEMP;
 
 use super::source_qualification_sources_support::{
     PREFETCH_PHASE, PREPARE_PHASE, RUNNER_TEMP_EXPR, gather_ids, only, output_refs, positions,
@@ -164,7 +165,7 @@ fn cargo_home_is_where_the_sources_cache_lands() -> Result<(), Box<dyn Error>> {
     let repo = sources_repo()?;
     let sq = render(repo.path())?.sq;
     for job in producer_ids(&sq) {
-        let home = resolved_cargo_home(&sq, &job, RUNNER_TEMP_EXPR)?;
+        let home = resolved_cargo_home(&sq, &job, CACHE_VERSION_RUNNER_TEMP)?;
         let steps = steps_of(&sq, &job)?;
         let restore = only(
             &positions(steps, |s| uses_prefix(s, "actions/cache/restore@")),

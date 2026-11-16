@@ -13,6 +13,8 @@ pub const RUSTUP_HOME_EXPR: &str = "${{ runner.temp }}/velnor/rustup";
 
 pub const RUNNER_TEMP_EXPR: &str = "${{ runner.temp }}";
 
+pub const CACHE_VERSION_RUNNER_TEMP: &str = "/home/runner/work/_temp";
+
 pub const RUNNER_TEMP_SHELL: &str = "$RUNNER_TEMP";
 
 pub const ROOT_PLACEHOLDER: &str = "{root}";

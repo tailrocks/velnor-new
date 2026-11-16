@@ -243,8 +243,7 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
         (Family::Tools, None) => !cache.save,
         (Family::Tools, Some(path)) => path == crate::cache_steps::TOOLS_CACHE_PATHS.join("\n"),
         (Family::Runtime(CacheFamily::Sources), Some(path)) => {
-            path == CacheFamily::Sources.spec().path_input(None)
-                && sources_restore_keys_ok(step, cache.save)
+            path == sources_path_input(cache.save) && sources_restore_keys_ok(step, cache.save)
         }
         (Family::Runtime(CacheFamily::TofuProviders), Some(path)) => tofu_slug(path)
             .is_some_and(|slug| path == CacheFamily::TofuProviders.spec().path_input(Some(slug))),
@@ -271,6 +270,15 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
         Ok(())
     } else {
         Err(doctor(job, &format!("i2_path_not_from_spec:{}", step.name)))
+    }
+}
+
+fn sources_path_input(save: bool) -> String {
+    let spec = CacheFamily::Sources.spec();
+    if save {
+        spec.path_input(None)
+    } else {
+        spec.restore_version_paths(None).join("\n")
     }
 }
 

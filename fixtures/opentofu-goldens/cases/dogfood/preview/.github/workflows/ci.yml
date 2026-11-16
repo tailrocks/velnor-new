@@ -331,7 +331,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: ${{steps.cache-keys.outputs.sources_key}}
-          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "/home/runner/work/_temp/velnor/cargo/registry/index\n/home/runner/work/_temp/velnor/cargo/registry/cache\n/home/runner/work/_temp/velnor/cargo/git/db"
           restore-keys: ${{steps.cache-keys.outputs.sources_restore_keys}}
       - &s15
         name: Fetch Cargo sources
@@ -659,7 +659,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: ${{needs.plan.outputs.sources_key}}
-          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "/home/runner/work/_temp/velnor/cargo/registry/index\n/home/runner/work/_temp/velnor/cargo/registry/cache\n/home/runner/work/_temp/velnor/cargo/git/db"
           restore-keys: ${{needs.plan.outputs.sources_restore_keys}}
       - &s22
         name: Verify Rust before MBX action
