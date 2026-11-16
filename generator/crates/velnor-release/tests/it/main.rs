@@ -14,4 +14,5 @@ mod refusals;
 mod registry;
 mod sources;
 mod symlinks;
+mod tags;
 mod token_hardening;
