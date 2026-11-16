@@ -72,6 +72,9 @@ fn the_default_branch_comes_from_the_config_and_a_malformed_name_is_refused() ->
         "feature/.hidden",
         "release.lock",
         "feature/x.lock/y",
+        "${{secrets.T}}",
+        "a{{b",
+        "a}}b",
     ] {
         let config = format!("default_branch = \"{name}\"\n");
         let mut bad = view(&["Cargo.toml"], Some(config.as_bytes()))?;
