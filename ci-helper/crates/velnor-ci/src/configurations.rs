@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 
 use crate::error::CiError;
+use crate::escape::inert;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -65,13 +66,60 @@ pub(crate) fn requests(bytes: &[u8]) -> Result<Vec<Configuration>, CiError> {
     Ok(requests)
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 struct PackageId(String);
 
 #[derive(Debug)]
 pub(crate) struct ResolvedFeatures {
     features: BTreeMap<PackageId, BTreeSet<String>>,
     context_free: bool,
+    pub(crate) test_targets: BTreeMap<RequiredTestTarget, Availability>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct RequiredTestTarget {
+    package_id: PackageId,
+    package_name: String,
+    name: String,
+    kinds: BTreeSet<String>,
+    required_features: BTreeSet<String>,
+}
+
+impl RequiredTestTarget {
+    pub(crate) fn description(&self) -> String {
+        format!(
+            "test target {} ({}) {} [{}] requires [{}]",
+            inert(&self.package_name),
+            inert(&self.package_id.0),
+            inert(&self.name),
+            inert(&self.kinds.iter().cloned().collect::<Vec<_>>().join(", ")),
+            inert(
+                &self
+                    .required_features
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Availability {
+    Enabled,
+    Unavailable,
+    Unknown,
+}
+
+impl Availability {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::Unavailable => "unavailable",
+            Self::Unknown => "unknown (feature contexts)",
+        }
+    }
 }
 
 impl ResolvedFeatures {
@@ -100,18 +148,23 @@ fn normalized_features(configuration: &Configuration) -> BTreeSet<&str> {
 #[derive(Deserialize)]
 struct Metadata {
     packages: Vec<Package>,
+    workspace_members: BTreeSet<PackageId>,
     resolve: Resolve,
 }
 
 #[derive(Deserialize)]
 struct Package {
     id: PackageId,
+    name: Option<String>,
     targets: Option<Vec<Target>>,
 }
 
 #[derive(Deserialize)]
 struct Target {
+    name: Option<String>,
     kind: Option<Vec<String>>,
+    #[serde(default, rename = "required-features")]
+    required_features: BTreeSet<String>,
 }
 
 impl Package {
@@ -165,11 +218,14 @@ impl Node {
 pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
     let metadata: Metadata = serde_json::from_slice(bytes)
         .map_err(|e| CiError::new(format!("invalid resolved cargo metadata: {e}")))?;
-    let mut packages = BTreeSet::new();
+    if metadata.workspace_members.is_empty() {
+        return Err(CiError::new("cargo metadata has no workspace members"));
+    }
+    let mut packages = BTreeMap::new();
     let mut context_free = true;
     for package in metadata.packages {
         context_free &= package.context_free();
-        if package.id.0.is_empty() || !packages.insert(package.id) {
+        if package.id.0.is_empty() || packages.insert(package.id.clone(), package).is_some() {
             return Err(CiError::new(
                 "empty or duplicate package ID in cargo metadata",
             ));
@@ -181,7 +237,7 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
     let mut features = BTreeMap::new();
     for node in metadata.resolve.nodes {
         context_free &= node.context_free();
-        if !packages.contains(&node.id) {
+        if !packages.contains_key(&node.id) {
             return Err(CiError::new(
                 "cargo metadata resolve node names an unknown package ID",
             ));
@@ -190,8 +246,64 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
             return Err(CiError::new("duplicate resolve node ID in cargo metadata"));
         }
     }
+    let mut test_targets = BTreeMap::new();
+    for member in metadata.workspace_members {
+        let package = packages.get(&member).ok_or_else(|| {
+            CiError::new("cargo metadata workspace member names an unknown package ID")
+        })?;
+        let member_features = features
+            .get(&member)
+            .ok_or_else(|| CiError::new("cargo metadata workspace member has no resolve node"))?;
+        for target in required_test_targets(package)? {
+            let availability = if !context_free {
+                Availability::Unknown
+            } else if target.required_features.is_subset(member_features) {
+                Availability::Enabled
+            } else {
+                Availability::Unavailable
+            };
+            test_targets.insert(target, availability);
+        }
+    }
     Ok(ResolvedFeatures {
         features,
         context_free,
+        test_targets,
     })
+}
+
+fn required_test_targets(package: &Package) -> Result<Vec<RequiredTestTarget>, CiError> {
+    let name = package
+        .name
+        .as_ref()
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| CiError::new("cargo metadata workspace package has no name"))?;
+    let targets = package
+        .targets
+        .as_ref()
+        .filter(|targets| !targets.is_empty())
+        .ok_or_else(|| CiError::new("cargo metadata workspace package has no targets"))?;
+    let mut required = Vec::new();
+    for target in targets {
+        let target_name = target
+            .name
+            .as_ref()
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| CiError::new("cargo metadata workspace target has no name"))?;
+        let kinds = target
+            .kind
+            .as_ref()
+            .filter(|kinds| !kinds.is_empty())
+            .ok_or_else(|| CiError::new("cargo metadata workspace target has no kind"))?;
+        if kinds.iter().any(|kind| kind == "test") && !target.required_features.is_empty() {
+            required.push(RequiredTestTarget {
+                package_id: package.id.clone(),
+                package_name: name.clone(),
+                name: target_name.clone(),
+                kinds: kinds.iter().cloned().collect(),
+                required_features: target.required_features.clone(),
+            });
+        }
+    }
+    Ok(required)
 }
