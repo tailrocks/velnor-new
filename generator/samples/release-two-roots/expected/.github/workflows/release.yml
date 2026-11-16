@@ -6,6 +6,7 @@ on:
     workflows:
       - CI
       - Qualification
+      - Rust CI
     types:
       - completed
     branches:

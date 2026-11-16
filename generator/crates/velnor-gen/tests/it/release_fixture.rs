@@ -120,7 +120,7 @@ pub(crate) fn release_view(
     );
     view.files.insert(
         RepoPath::new(".github/workflows/lint.yml")?,
-        b"name: Lint\non: push\n".to_vec(),
+        b"name: Lint\non: pull_request\n".to_vec(),
     );
     if let Some(text) = release_toml {
         view.files

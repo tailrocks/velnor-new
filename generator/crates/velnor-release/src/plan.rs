@@ -27,6 +27,7 @@ pub struct ReleaseFiles {
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
     pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
+    pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
 
@@ -191,6 +192,13 @@ fn check_reality(config: &VelnorConfig, files: &ReleaseFiles) -> Result<(), Rele
     {
         return Err(ReleaseError::UnknownWorkflow {
             name: unknown.clone(),
+        });
+    }
+    if let Some(pushed) = &files.push_workflows
+        && let Some(missing) = pushed.iter().find(|name| !config.after.contains(*name))
+    {
+        return Err(ReleaseError::AfterMissingWorkflow {
+            name: missing.clone(),
         });
     }
     Ok(())
