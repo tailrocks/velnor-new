@@ -19,6 +19,7 @@ mod io_plan_policy;
 mod io_policy;
 mod io_release;
 mod io_restore;
+mod io_restore_cargo;
 mod io_stderr;
 mod logscan;
 mod plan;

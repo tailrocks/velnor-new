@@ -70,15 +70,71 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
 
 #[test]
 fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -> TestResult {
-    let old = workflow(&locked("0.1.79")?)?;
-    assert!(!old.contains("inputs restore"), "{old}");
-    assert!(old.contains("name: velnor-ci restored"), "{old}");
+    for version in ["0.1.79", "0.1.80"] {
+        let old = workflow(&locked(version)?)?;
+        assert!(!old.contains("inputs restore"), "{old}");
+        assert!(old.contains("name: velnor-ci restored"), "{old}");
+    }
     for version in ["0.1.81", "0.1.100"] {
         let text = workflow(&locked(version)?)?;
         assert_eq!(
             named(&text, "velnor-ci inputs restore").len(),
             1,
             "{version}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory() -> TestResult {
+    let mut repo = locked("0.1.81")?;
+    let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    repo.rust_metadata = more.rust_metadata;
+    repo.tracked_paths.extend(more.tracked_paths);
+    for (path, text) in [
+        (
+            ".cargo/config.toml",
+            "[build]\ntarget-dir = \"cache dir\"\n",
+        ),
+        (
+            "lab/.cargo/config.toml",
+            "[build]\ntarget-dir = \"../lab's target\"\n",
+        ),
+    ] {
+        let path = RepoPath::new(path)?;
+        repo.tracked_paths.insert(path.clone());
+        repo.files.insert(path, text.as_bytes().to_vec());
+    }
+    let text = workflow(&repo)?;
+    let restores = named(&text, "velnor-ci inputs restore");
+    assert_eq!(restores.len(), 4, "{text}");
+    for target in ["'cache dir'", "'lab'\\''s target'"] {
+        let matching: Vec<_> = restores
+            .iter()
+            .filter(|step| {
+                step.contains("--target-dir")
+                    && step.contains(if target == "'cache dir'" {
+                        "cache dir"
+                    } else {
+                        "lab"
+                    })
+            })
+            .collect();
+        assert_eq!(matching.len(), 2, "{text}");
+        let step = matching[0];
+        let command = step
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("no command")?;
+        let yaml = crate::yaml_tree::parse(&format!("run: {command}"))?;
+        let command = yaml
+            .get("run")
+            .and_then(crate::yaml_tree::Node::text)
+            .ok_or("invalid scalar")?;
+        assert_eq!(
+            command,
+            format!("velnor-ci inputs restore --target-dir \"${{GITHUB_WORKSPACE}}\"/{target}")
         );
     }
     Ok(())
