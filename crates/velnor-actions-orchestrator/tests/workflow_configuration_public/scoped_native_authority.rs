@@ -26,38 +26,44 @@ fn scoped_preparation() -> Result<(tempfile::TempDir, GenerationPreparation), Bo
     Ok((repo, prepared))
 }
 
-fn authority_error(
-    prepared: &GenerationPreparation,
-    config: &velnor_actions_contract::VelnorConfig,
-    package: &str,
-    format: Option<&WorkspaceFormatFact>,
-) -> Result<String, Box<dyn Error>> {
+fn workspace_fact(prepared: &GenerationPreparation) -> Result<CargoWorkspaceFact, Box<dyn Error>> {
     let workspace = prepared
         .discovery
         .workspaces
         .first()
         .ok_or("workspace missing")?;
-    let packages: Vec<WorkspacePackageFact> = workspace
-        .record
-        .packages
-        .iter()
-        .map(|record| WorkspacePackageFact {
-            id: record.id.clone(),
-            name: record.name.clone(),
-        })
-        .collect();
-    let target = workspace
-        .record
-        .packages
-        .iter()
-        .find(|record| record.name == package)
-        .ok_or("package missing")?;
-    let workspaces = [CargoWorkspaceFact {
+    Ok(CargoWorkspaceFact {
         root: workspace.record.workspace_root.clone(),
         lockfile_path: None,
         test_runner: workspace.profile.test_runner,
-        packages,
-    }];
+        packages: workspace
+            .record
+            .packages
+            .iter()
+            .map(|record| WorkspacePackageFact {
+                id: record.id.clone(),
+                name: record.name.clone(),
+            })
+            .collect(),
+    })
+}
+
+fn task_and_job(
+    prepared: &GenerationPreparation,
+    package: &str,
+) -> Result<(RustTaskFact, LogicalJobFact), Box<dyn Error>> {
+    let target = prepared
+        .discovery
+        .workspaces
+        .first()
+        .and_then(|workspace| {
+            workspace
+                .record
+                .packages
+                .iter()
+                .find(|record| record.name == package)
+        })
+        .ok_or("package missing")?;
     let task = RustTaskFact {
         unit: target.id.clone(),
         no_targets: false,
@@ -67,16 +73,11 @@ fn authority_error(
         all_features: false,
         shard: None,
     };
-    let tasks: Vec<RustTaskFact> = if format.is_some() {
-        Vec::new()
-    } else {
-        vec![task]
-    };
     let ids = velnor_actions_contract::assign_crate_job_ids(
         &BTreeSet::from([(target.id.clone(), target.name.clone(), "scoped".to_owned())]),
         velnor_actions_contract::CRATE_JOB_ID_PREFIX,
     );
-    let mut jobs = vec![LogicalJobFact {
+    let job = LogicalJobFact {
         id: ids[&(target.id.clone(), "scoped".to_owned())].clone(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -90,10 +91,23 @@ fn authority_error(
             rust_manifest: Some(target.manifest.clone()),
             tofu: Vec::new(),
         }),
-    }];
-    if format.is_some() {
-        jobs.clear();
-    }
+    };
+    Ok((task, job))
+}
+
+fn authority_error(
+    prepared: &GenerationPreparation,
+    config: &velnor_actions_contract::VelnorConfig,
+    package: &str,
+    format: Option<&WorkspaceFormatFact>,
+) -> Result<String, Box<dyn Error>> {
+    let workspaces = [workspace_fact(prepared)?];
+    let (task, job) = task_and_job(prepared, package)?;
+    let (tasks, jobs) = if format.is_some() {
+        (Vec::new(), Vec::new())
+    } else {
+        (vec![task], vec![job])
+    };
     let input = NativeAuthorityInput {
         config,
         runner: "ubuntu-26.04",

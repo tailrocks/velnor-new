@@ -41,7 +41,7 @@ fn validate_configuration(
             .filter(|workspace| workspace.root == root)
             .flat_map(|workspace| &workspace.packages)
             .any(|package| configuration.applies_to(&package.name));
-        if !in_scope {
+        if !configuration.packages.is_empty() && !in_scope {
             return Err(invalid("native_workspace_format_scope"));
         }
     }
