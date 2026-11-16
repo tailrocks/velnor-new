@@ -30,13 +30,11 @@ mod doctor;
 #[path = "controller/readiness.rs"]
 mod readiness;
 #[path = "controller/startup.rs"]
-mod startup;
+pub(super) mod startup;
 #[path = "controller/worker_health.rs"]
 mod worker_health;
 
 pub(super) use startup::run_controller;
-#[cfg(test)]
-pub(super) use startup::{FinishInputs, finish_startup};
 
 use doctor::DoctorProbeWorker;
 

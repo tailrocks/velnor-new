@@ -19,7 +19,7 @@ use crate::launch::bootstrap::unbound_pair_fixtures::{
     FAILED, RETIRED, fixture::FixtureDocker, seed,
 };
 
-use crate::host_controller::loop_driver::controller::{FinishInputs, finish_startup};
+use crate::host_controller::loop_driver::controller::startup::{FinishInputs, finish_startup};
 
 use super::controller::Controller;
 use super::{HOST_CONFIG, TestResult};
