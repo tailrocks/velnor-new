@@ -78,26 +78,27 @@ fn plain_segment(segment: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'+' | b'-'))
 }
 
-fn own_download(url: &str) -> bool {
+fn own_download(url: &str, wanted: &str) -> bool {
     if let Some(rest) = url.strip_prefix(RELEASE_PLZ_DOWNLOAD) {
         let mut segments = rest.split('/');
         return matches!(
             (segments.next(), segments.next(), segments.next()),
-            (Some(tag), Some(asset), None) if plain_segment(tag) && plain_segment(asset)
+            (Some(tag), Some(asset), None)
+                if tag == format!("release-plz-v{wanted}") && plain_segment(asset)
         );
     }
     url.strip_prefix(RELEASE_PLZ_ASSET)
         .is_some_and(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-fn foreign_artifact(value: &toml::Value) -> Option<String> {
+fn foreign_artifact(value: &toml::Value, wanted: &str) -> Option<String> {
     match value {
-        toml::Value::Array(items) => items.iter().find_map(foreign_artifact),
+        toml::Value::Array(items) => items.iter().find_map(|item| foreign_artifact(item, wanted)),
         toml::Value::Table(table) => table.iter().find_map(|(key, inner)| match inner {
             toml::Value::String(url) if matches!(key.as_str(), "url" | "url_api") => {
-                (!own_download(url)).then(|| url.clone())
+                (!own_download(url, wanted)).then(|| url.clone())
             }
-            other => foreign_artifact(other),
+            other => foreign_artifact(other, wanted),
         }),
         _ => None,
     }
@@ -144,7 +145,7 @@ fn linux_x64_download(entry: &toml::Value, wanted: &str) -> Option<ReleasePlzDow
         .to_owned();
     let url = platform.get("url")?.as_str()?.to_owned();
     let hex = sha256.len() == 64 && sha256.bytes().all(|byte| byte.is_ascii_hexdigit());
-    (hex && url.starts_with(RELEASE_PLZ_DOWNLOAD) && own_download(&url)).then(|| {
+    (hex && url.starts_with(RELEASE_PLZ_DOWNLOAD) && own_download(&url, wanted)).then(|| {
         ReleasePlzDownload {
             version: wanted.to_owned(),
             url,
@@ -187,7 +188,7 @@ pub(crate) fn check(
                 field: field.clone(),
             });
         }
-        if key == "cargo:release-plz" {
+        if key == "cargo:release-plz" || key == "ubi:release-plz/release-plz" {
             return Err(ReleaseError::ReleasePlzBackendNotDownloadable { tool: key.clone() });
         }
         let wanted = configured_version(value).unwrap_or_default();
@@ -199,12 +200,6 @@ pub(crate) fn check(
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
             return Err(ReleaseError::ReleasePlzNotInMiseLock);
         };
-        if let Some(url) = foreign_artifact(entry) {
-            return Err(ReleaseError::ReleasePlzArtifactElsewhere {
-                tool: key.clone(),
-                url,
-            });
-        }
         let versions = locked_versions(entry);
         let matches = !versions.is_empty()
             && versions
@@ -214,6 +209,12 @@ pub(crate) fn check(
             return Err(ReleaseError::ReleasePlzLockMismatch {
                 configured: wanted.to_owned(),
                 locked: versions,
+            });
+        }
+        if let Some(url) = foreign_artifact(entry, wanted) {
+            return Err(ReleaseError::ReleasePlzArtifactElsewhere {
+                tool: key.clone(),
+                url,
             });
         }
         pinned = Some(
