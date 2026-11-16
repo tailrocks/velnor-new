@@ -143,3 +143,30 @@ fn release_plz_declared_only_in_the_dot_mise_file_is_found_and_checked() {
         .push("[tools]\nbun = \"1.4.4\"\n".to_owned());
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn a_literal_workspace_tag_shared_by_two_unlisted_members_is_refused_naming_both() {
+    let mut files = files();
+    files
+        .release_plz_toml
+        .insert(".".to_owned(), WORKSPACE_ONLY.to_owned());
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("lib", "lib/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["app", "lib"]
+    ));
+    let templated = WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}-v{{ version }}");
+    files.release_plz_toml.insert(".".to_owned(), templated);
+    assert_eq!(refusal(&files), None);
+    crate::fixture::with_metadata(&mut files, &[("Cargo.toml", &[("app", "Cargo.toml")])]);
+    files
+        .release_plz_toml
+        .insert(".".to_owned(), WORKSPACE_ONLY.to_owned());
+    assert_eq!(refusal(&files), None);
+}

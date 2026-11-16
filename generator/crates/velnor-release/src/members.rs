@@ -9,6 +9,7 @@ use crate::error::ReleaseError;
 use crate::plan::{manifest_of, read_all};
 use crate::registry::check_publish_registries;
 use crate::release_plz::RootConfig;
+use crate::tag::PACKAGE_WILDCARD;
 
 type Metadata = BTreeMap<RepoPath, RustMetadata>;
 
@@ -65,8 +66,28 @@ pub(crate) fn check_inventory(
             .filter(|_| !config.workspace_tags.is_empty())
             .filter(|name| config.releases(name))
             .copied();
-        let listed = config.packages.iter().map(|package| package.name.as_str());
-        for name in listed.chain(inherited) {
+        let listed: Vec<&str> = config
+            .packages
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect();
+        let unlisted: Vec<String> = inherited
+            .clone()
+            .filter(|name| !listed.contains(name))
+            .map(str::to_owned)
+            .collect();
+        if unlisted.len() > 1
+            && let Some(pattern) = config
+                .workspace_tags
+                .iter()
+                .find(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
+        {
+            return Err(ReleaseError::DuplicateTagPattern {
+                pattern: pattern.as_str().to_owned(),
+                packages: unlisted,
+            });
+        }
+        for name in listed.into_iter().chain(inherited) {
             if let Some(first) = released.insert(name, config.root.as_str())
                 && first != config.root
             {
