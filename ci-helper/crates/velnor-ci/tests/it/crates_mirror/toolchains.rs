@@ -45,12 +45,13 @@ fn directory_override_selection_reaches_cargo_children_in_tmp() -> TestResult {
 }
 
 fn rustup_proxy(repo: &Repo, hardlink: bool) -> TestResult {
-    let rustup = fs::canonicalize(
-        PathBuf::from(std::env::var_os("HOME").ok_or("HOME")?).join(".cargo/bin/rustup"),
-    )?;
+    let output = Command::new("mise").args(["which", "rustup"]).output()?;
+    assert!(output.status.success(), "{output:?}");
+    let installed = fs::canonicalize(String::from_utf8(output.stdout)?.trim())?;
     let bin = repo.root().join("proxy-bin");
     fs::create_dir(&bin)?;
-    std::os::unix::fs::symlink(&rustup, bin.join("rustup"))?;
+    let rustup = bin.join("rustup");
+    fs::copy(installed, &rustup)?;
     let cargo = bin.join("cargo");
     if hardlink {
         fs::hard_link(&rustup, &cargo)?;
