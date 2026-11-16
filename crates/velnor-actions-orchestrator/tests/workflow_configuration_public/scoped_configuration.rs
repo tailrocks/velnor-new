@@ -112,7 +112,10 @@ fn scoped_configuration_naming_only_an_ineligible_package_adds_no_task()
 -> Result<(), Box<dyn Error>> {
     let repo = feature_toggle_repo(false, false)?;
     write_config(repo.path(), "packages = [\"maintenance\"]\n")?;
-    let mut config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    let mut config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?.replace(
+        "features = [\"maintenance-only\"]",
+        "features = [\"default\"]",
+    );
     config.push_str("\n[discovery]\nexclude = [\"crates/maintenance/**\"]\n");
     fs::write(repo.path().join(".velnor/config.toml"), config)?;
     let prepared = prepare(repo.path())?;
@@ -158,6 +161,25 @@ fn scoped_configuration_is_accepted_when_rust_is_ignored() -> Result<(), Box<dyn
             .proposals
             .iter()
             .all(|task| task.stack_id != "rust")
+    );
+    Ok(())
+}
+
+#[test]
+fn scoped_configuration_naming_only_an_ineligible_package_still_validates_features()
+-> Result<(), Box<dyn Error>> {
+    let repo = feature_toggle_repo(false, false)?;
+    write_config(repo.path(), "packages = [\"maintenance\"]\n")?;
+    let mut config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    config = config.replace("features = [\"maintenance-only\"]", "features = [\"typo\"]");
+    config.push_str("\n[discovery]\nexclude = [\"crates/maintenance/**\"]\n");
+    fs::write(repo.path().join(".velnor/config.toml"), config)?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("undeclared feature accepted")?;
+    assert!(
+        error.to_string().contains("unknown_feature:scoped"),
+        "{error}"
     );
     Ok(())
 }

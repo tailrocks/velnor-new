@@ -118,6 +118,14 @@ pub(crate) fn derive_for_config(
                 && rust_config.applies_to(&package.name)
         })
     {
+        if !rust_config.all_features {
+            check_declared(
+                &rust_config.features,
+                union,
+                &rust_config.name,
+                &rust_config.packages.join(","),
+            )?;
+        }
         return Ok((Vec::new(), Vec::new()));
     }
     let mut groups = Vec::new();
@@ -178,6 +186,27 @@ fn repository_maintenance_member(
         && package.v1_task_owner == VelnorV1TaskOwner::RepositoryMaintenance
 }
 
+fn check_declared(
+    requested: &[String],
+    union: &BTreeSet<String>,
+    configuration: &str,
+    subject: &str,
+) -> Result<(), OrchestratorError> {
+    if requested.len() == 1 && requested[0] == "default" {
+        return Ok(());
+    }
+    for feature in requested {
+        if !union.contains(feature) {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.configurations.features",
+                format!("unknown_feature:{configuration}:{subject}:{feature}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn resolve_features(
     package: &velnor_actions_rust::PackageRecord,
     requested: &[String],
@@ -190,15 +219,7 @@ fn resolve_features(
     if requested.is_empty() {
         return Ok((Vec::new(), None));
     }
-    for feature in requested {
-        if !union.contains(feature) {
-            return Err(OrchestratorError::config(
-                CONFIG_REL,
-                "stacks.rust.configurations.features",
-                format!("unknown_feature:{configuration}:{}:{feature}", package.name),
-            ));
-        }
-    }
+    check_declared(requested, union, configuration, &package.name)?;
     let declared: BTreeSet<&str> = package.features.iter().map(String::as_str).collect();
     let mut applied: Vec<String> = requested
         .iter()

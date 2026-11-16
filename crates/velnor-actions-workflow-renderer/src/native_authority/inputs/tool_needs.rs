@@ -59,7 +59,7 @@ fn validate_configuration(
                     .cargo_workspaces
                     .iter()
                     .flat_map(|workspace| &workspace.packages)
-                    .find(|package| package.id == task.unit)
+                    .find(|package| package.id == task.unit && package.manifest == task.manifest)
                     .is_some_and(|package| configuration.applies_to(&package.name));
                 if !task.unit.is_empty() && !in_scope {
                     return Err(invalid("native_rust_task_package_scope"));

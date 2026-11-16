@@ -16,6 +16,7 @@ pub struct CargoWorkspaceFact {
 pub struct WorkspacePackageFact {
     pub id: String,
     pub name: String,
+    pub manifest: String,
 }
 #[derive(Debug, Clone)]
 pub struct RustTaskFact {

@@ -43,6 +43,7 @@ fn workspace_fact(prepared: &GenerationPreparation) -> Result<CargoWorkspaceFact
             .map(|record| WorkspacePackageFact {
                 id: record.id.clone(),
                 name: record.name.clone(),
+                manifest: record.manifest.clone(),
             })
             .collect(),
     })
@@ -101,8 +102,24 @@ fn authority_error(
     package: &str,
     format: Option<&WorkspaceFormatFact>,
 ) -> Result<String, Box<dyn Error>> {
+    authority_error_for(prepared, config, package, format, None)
+}
+
+fn authority_error_for(
+    prepared: &GenerationPreparation,
+    config: &velnor_actions_contract::VelnorConfig,
+    package: &str,
+    format: Option<&WorkspaceFormatFact>,
+    forged_manifest: Option<&str>,
+) -> Result<String, Box<dyn Error>> {
     let workspaces = [workspace_fact(prepared)?];
-    let (task, job) = task_and_job(prepared, package)?;
+    let (mut task, mut job) = task_and_job(prepared, package)?;
+    if let Some(manifest) = forged_manifest {
+        manifest.clone_into(&mut task.manifest);
+        if let LogicalJobSource::Task(source) = &mut job.source {
+            source.rust_manifest = Some(manifest.to_owned());
+        }
+    }
     let (tasks, jobs) = if format.is_some() {
         (Vec::new(), Vec::new())
     } else {
@@ -151,6 +168,24 @@ fn native_authority_refuses_a_task_for_a_package_outside_the_configuration_scope
     assert!(
         !inside.contains("native_rust_task_package_scope"),
         "{inside}"
+    );
+    Ok(())
+}
+
+#[test]
+fn native_authority_refuses_an_in_scope_unit_paired_with_an_out_of_scope_manifest()
+-> Result<(), Box<dyn Error>> {
+    let (_repo, prepared) = scoped_preparation()?;
+    let forged = authority_error_for(
+        &prepared,
+        &prepared.config,
+        "maintenance",
+        None,
+        Some("Cargo.toml"),
+    )?;
+    assert!(
+        forged.contains("native_rust_task_package_scope"),
+        "{forged}"
     );
     Ok(())
 }

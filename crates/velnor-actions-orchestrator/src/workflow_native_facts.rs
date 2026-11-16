@@ -54,6 +54,7 @@ pub(super) fn cargo_workspaces(input: &WorkflowBuildInput<'_>) -> Vec<CargoWorks
                     .map(|package| WorkspacePackageFact {
                         id: package.id.clone(),
                         name: package.name.clone(),
+                        manifest: package.manifest.clone(),
                     })
                     .collect(),
             }
