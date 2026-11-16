@@ -60,6 +60,13 @@ fn redirects_crates_io(value: &Value) -> bool {
     }
 }
 
+fn names_other_default_registry(document: &Value) -> bool {
+    document
+        .get("registry")
+        .and_then(|registry| registry.get("default"))
+        .is_some_and(|default| default.as_str() != Some("crates-io"))
+}
+
 fn is_builtin(value: &Value) -> bool {
     match value {
         Value::String(name) => name == BUILTIN_PROVIDER,
@@ -107,7 +114,9 @@ pub(crate) fn cargo_config(
             file: file.to_owned(),
         });
     }
-    if publishes_to_crates_io && redirects_crates_io(&document) {
+    if publishes_to_crates_io
+        && (redirects_crates_io(&document) || names_other_default_registry(&document))
+    {
         return Err(ReleaseError::CargoRedirectsCratesIo {
             file: file.to_owned(),
         });
