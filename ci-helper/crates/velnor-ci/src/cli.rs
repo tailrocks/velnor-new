@@ -154,7 +154,7 @@ pub struct ReleaseGateArgs {
 #[derive(Debug, Subcommand)]
 pub enum ReleaseCommand {
     #[command(
-        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released; exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
+        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released (with --repo and --verified-commit, also one line <package>_commit=<sha> for the commit its tag is on, which must be the verified commit or in its history); exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
     )]
     Record(RecordArgs),
     #[command(
@@ -219,6 +219,20 @@ pub struct RecordArgs {
         help = "Files that hold the JSON release-plz release -o json printed"
     )]
     pub outputs: Vec<PathBuf>,
+    #[arg(
+        long,
+        value_name = "OWNER/NAME",
+        requires = "verified_commit",
+        help = "Repository whose tags to resolve; with --verified-commit"
+    )]
+    pub repo: Option<String>,
+    #[arg(
+        long,
+        value_name = "SHA",
+        requires = "repo",
+        help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit or in its history. Reads GITHUB_TOKEN, which needs contents: read"
+    )]
+    pub verified_commit: Option<String>,
 }
 
 #[derive(Debug, Args)]

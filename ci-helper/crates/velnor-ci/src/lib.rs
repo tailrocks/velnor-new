@@ -19,6 +19,7 @@ pub mod plan;
 pub mod platform;
 pub mod publish;
 pub mod release;
+pub mod release_commit;
 pub mod rulesets;
 pub mod setup;
 pub mod stream;

@@ -69,6 +69,17 @@ struct PackageRelease {
 }
 
 pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
+    Ok(tag_lines(&recorded(outputs)?))
+}
+
+#[must_use]
+pub fn tag_lines(tags: &BTreeMap<PlainName, PlainName>) -> String {
+    tags.iter()
+        .map(|(package, tag)| [package.as_str(), "=", tag.as_str(), "\n"].concat())
+        .collect()
+}
+
+pub fn recorded(outputs: &[(String, String)]) -> Result<BTreeMap<PlainName, PlainName>, CiError> {
     let mut tags: BTreeMap<PlainName, PlainName> = BTreeMap::new();
     let mut packages: BTreeMap<PlainName, PlainName> = BTreeMap::new();
     for (file, text) in outputs {
@@ -92,10 +103,7 @@ pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
             }
         }
     }
-    Ok(tags
-        .iter()
-        .map(|(package, tag)| [package.as_str(), "=", tag.as_str(), "\n"].concat())
-        .collect())
+    Ok(tags)
 }
 
 fn output_name(package: &str) -> Result<PlainName, CiError> {

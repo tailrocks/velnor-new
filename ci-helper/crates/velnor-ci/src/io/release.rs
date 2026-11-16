@@ -13,8 +13,9 @@ use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
     CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_manifests,
-    check_tag_patterns, publishes_to_crates_io, record,
+    check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
+use crate::release_commit::tagged_commits;
 use crate::rulesets::check_tag_rulesets;
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
@@ -27,7 +28,17 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let lines = record(&outputs)?;
+    let tags = recorded(&outputs)?;
+    let mut lines = tag_lines(&tags);
+    if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
+        let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+        lines.push_str(&tagged_commits(
+            &github,
+            &Repo::parse(repo)?,
+            verified,
+            &tags,
+        )?);
+    }
     super::append_outputs(&lines)?;
     Ok(lines)
 }
