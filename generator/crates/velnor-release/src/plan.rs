@@ -277,16 +277,12 @@ impl ReleasePlan {
                 )?;
             }
         }
-        for (file, text) in &files.toolchain_files {
-            let base = file.rsplit_once('/').map_or(".", |(base, _)| base);
-            let within = |root: &str| root == "." || base.starts_with(&format!("{root}/"));
-            if config
-                .roots
-                .iter()
-                .any(|root| reaches(base, root) || within(root))
-            {
-                toolchain_path(file, text)?;
-            }
+        for (file, text) in files
+            .toolchain_files
+            .iter()
+            .filter(|(file, _)| !file.contains('/'))
+        {
+            toolchain_path(file, text)?;
         }
         let binaries = plan_binaries(&config, &configs, files)?;
         Ok(ReleasePlan {
