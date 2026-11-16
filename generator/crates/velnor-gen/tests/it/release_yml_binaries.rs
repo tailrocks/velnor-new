@@ -86,11 +86,10 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     assert_eq!(runner("build-app-linux-arm64")?, "ubuntu-24.04-arm");
     assert_eq!(runner("build-app-macos-arm64")?, "macos-15");
     let (_, without) = two_roots()?;
-    assert!(
-        jobs(&without)?
-            .iter()
-            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag-0" | "tag-1"))
-    );
+    assert!(jobs(&without)?.iter().all(|(id, _)| matches!(
+        *id,
+        "gate" | "release-pr" | "tag-0" | "tag-1" | "finalize-0" | "finalize-1"
+    )));
     Ok(())
 }
 
@@ -359,8 +358,7 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 }
 
 #[test]
-fn release_yml_each_tag_job_exports_the_released_tag_of_the_binary_packages_of_its_root()
--> TestResult {
+fn release_yml_each_tag_job_exports_the_released_tag_of_the_packages_of_its_root() -> TestResult {
     let (_, tree) = two_binaries()?;
     for package in ["app", "tools"] {
         let outputs = job(&tree, tag_of(package))?
@@ -373,8 +371,14 @@ fn release_yml_each_tag_job_exports_the_released_tag_of_the_binary_packages_of_i
         );
     }
     let (_, without) = two_roots()?;
-    assert!(job(&without, "tag-0")?.get("outputs").is_none());
-    assert!(job(&without, "tag-1")?.get("outputs").is_none());
+    assert_eq!(
+        job(&without, "tag-0")?.get("outputs").map(Node::keys),
+        Some(vec!["app"])
+    );
+    assert_eq!(
+        job(&without, "tag-1")?.get("outputs").map(Node::keys),
+        Some(vec!["tools"])
+    );
     Ok(())
 }
 

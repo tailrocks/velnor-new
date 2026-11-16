@@ -8,6 +8,7 @@ mod gate;
 mod header;
 mod release;
 mod release_binaries;
+mod release_finalize;
 mod release_steps;
 mod rules;
 mod steps;

@@ -7,6 +7,7 @@ use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::{ReleasePlan, RootPlan};
 
 use crate::release_binaries::binary_jobs;
+use crate::release_finalize::{finalize_jobs, without_binary};
 use crate::release_steps::{
     app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
     release_plz_arguments, release_plz_step, variables,
@@ -41,6 +42,7 @@ pub fn render_release(
     let mut jobs = vec![gate(helper), release_pr(plan, helper)];
     jobs.extend(tags(plan, helper));
     jobs.extend(binary_jobs(plan, helper));
+    jobs.extend(finalize_jobs(plan));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
     let workflow = [
@@ -245,10 +247,12 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease, index: usize, root: &RootPlan
             .binaries
             .iter()
             .filter(|binary| binary.root == root.root)
-            .map(|binary| {
+            .map(|binary| &binary.package)
+            .chain(&without_binary(plan, root))
+            .map(|package| {
                 (
-                    binary.package.clone(),
-                    format!("${{{{ steps.record.outputs.{} }}}}", binary.package),
+                    package.clone(),
+                    format!("${{{{ steps.record.outputs.{package} }}}}"),
                 )
             })
             .collect(),

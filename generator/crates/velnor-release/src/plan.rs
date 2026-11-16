@@ -7,7 +7,7 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
-use crate::members::{check_inventory, check_registries};
+use crate::members::{check_inventory, check_registries, inherited_packages};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
@@ -36,6 +36,7 @@ pub struct RootPlan {
     pub pr_branch_prefix: String,
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
+    pub inherited: Vec<String>,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -293,6 +294,7 @@ impl ReleasePlan {
             roots: configs
                 .into_iter()
                 .map(|config| RootPlan {
+                    inherited: inherited_packages(&config, files.rust_metadata.as_ref()),
                     root: config.root,
                     pr_branch_prefix: config.pr_branch_prefix,
                     publishes_to_crates_io: config.publishes_to_crates_io,
