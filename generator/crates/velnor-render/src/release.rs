@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
@@ -41,7 +41,12 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![gate(helper), release_pr(plan, helper), tag(plan, helper)];
+    let tag_job = tag(plan, helper);
+    let collisions = output_collisions(&tag_job);
+    if !collisions.is_empty() {
+        return Err(collisions);
+    }
+    let mut jobs = vec![gate(helper), release_pr(plan, helper), tag_job];
     jobs.extend(binary_jobs(plan, helper));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
@@ -251,6 +256,19 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         steps,
         ..after_the_gate("tag")
     }
+}
+
+fn output_collisions(tag: &RenderedJob) -> Vec<RuleViolation> {
+    let mut seen = BTreeSet::new();
+    tag.outputs
+        .iter()
+        .filter(|(name, _)| !seen.insert(name.as_str()))
+        .map(|(name, _)| RuleViolation {
+            job: tag.id.clone(),
+            step: 0,
+            rule: Rule::OutputNameCollision(name.clone()),
+        })
+        .collect()
 }
 
 fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {

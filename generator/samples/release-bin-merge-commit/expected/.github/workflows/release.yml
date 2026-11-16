@@ -237,7 +237,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -282,7 +282,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -327,7 +327,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
