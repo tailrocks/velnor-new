@@ -181,21 +181,7 @@ JS
 }
 
 rebuild_oracle_manifest() {
-  local directory="$1/cases" output="$1/MANIFEST.sha256"
-  (
-    cd "$directory" || exit 2
-    files="$(find . -type f -print | LC_ALL=C sort)" || exit 2
-    if [ -n "$files" ]; then
-      if command -v sha256sum >/dev/null 2>&1; then
-        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 2
-      else
-        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 2
-      fi
-    fi
-    find . -type l -print | LC_ALL=C sort | while IFS= read -r link; do
-      printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
-    done
-  ) >"$output"
+  hash_tree "$1/cases" "$1/MANIFEST.sha256"
 }
 
 ORACLE_BEFORE="$(golden_fingerprint "$ORACLE")" || exit 2
