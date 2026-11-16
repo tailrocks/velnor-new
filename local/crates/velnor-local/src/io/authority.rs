@@ -77,7 +77,10 @@ struct Reserved<'a> {
 
 impl Drop for Reserved<'_> {
     fn drop(&mut self) {
-        let mut minting = self.minting.lock().unwrap_or_else(|e| e.into_inner());
+        let mut minting = self
+            .minting
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         minting.remove(&self.key);
     }
 }
@@ -203,7 +206,7 @@ impl<B: Backend> Authority<B> {
         if !self
             .minting
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(key.clone())
         {
             return Err(taken());
