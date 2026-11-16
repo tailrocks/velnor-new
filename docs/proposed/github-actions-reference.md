@@ -671,6 +671,13 @@ changes cannot select different attestation subjects.
 
 ### Artifact download extraction
 
+The pinned [upload-artifact implementation](https://github.com/actions/upload-artifact/blob/cf430e030ddbb5b0abf93d22962f4752f3646cd9/src/shared/upload-artifact.ts)
+uploads through `@actions/artifact`. The toolkit's
+[runtime credential reader](https://github.com/actions/toolkit/blob/main/packages/artifact/src/internal/shared/config.ts)
+uses `ACTIONS_RUNTIME_TOKEN`. Same-run uploads do not require `actions: write`
+on `GITHUB_TOKEN`. Release build jobs grant only `contents: read`; the candidate
+manifest job also grants `actions: read` for artifact downloads.
+
 The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
 records the download action's extraction and digest boundary. Verify artifact
 producer and identity before download; the digest check runs after extraction.
