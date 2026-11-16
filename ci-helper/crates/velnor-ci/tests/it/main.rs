@@ -4,6 +4,7 @@
 mod audit;
 mod cache;
 mod cache_budget;
+mod cache_trim;
 mod check_configurations;
 mod check_metadata;
 mod check_metadata_gen;
