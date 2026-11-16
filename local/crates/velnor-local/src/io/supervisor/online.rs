@@ -32,31 +32,46 @@ async fn online<B: Backend>(backend: &B, side: Side, name: &str) -> bool {
     serde_json::from_slice::<Value>(&answer).is_ok_and(|answer| answer["online"] == true)
 }
 
+async fn ready<B: Backend>(backend: &B, side: Side) -> io::Result<usize> {
+    let mut ready = 0;
+    for name in &names(backend, side).await? {
+        ready += usize::from(online(backend, side, name).await);
+    }
+    Ok(ready)
+}
+
 pub async fn await_online<B: Backend>(
     backend: &B,
     sides: &[(Side, u16)],
     timeout: Duration,
 ) -> io::Result<()> {
     let deadline = tokio::time::Instant::now() + timeout;
-    for &(side, pairs) in sides.iter().filter(|(_, pairs)| *pairs > 0) {
-        loop {
-            let listed = names(backend, side).await?;
-            let mut ready = 0;
-            for name in &listed {
-                ready += usize::from(online(backend, side, name).await);
-            }
-            if ready >= usize::from(pairs) {
-                break;
-            }
-            if tokio::time::Instant::now() >= deadline {
+    let sides: Vec<_> = sides.iter().filter(|(_, pairs)| *pairs > 0).collect();
+    loop {
+        let mut short = None;
+        for &&(side, pairs) in &sides {
+            let Ok(ready) = tokio::time::timeout_at(deadline, ready(backend, side)).await else {
                 return Err(io::Error::other(format!(
-                    "{ready} of {pairs} {} runners were online at runner.server within {} s",
+                    "{} runner.server did not answer within {} s",
                     side.name(),
                     timeout.as_secs()
                 )));
+            };
+            let ready = ready?;
+            if ready < usize::from(pairs) && short.is_none() {
+                short = Some((side, pairs, ready));
             }
-            tokio::time::sleep(POLL).await;
         }
+        let Some((side, pairs, ready)) = short else {
+            return Ok(());
+        };
+        if tokio::time::Instant::now() >= deadline {
+            return Err(io::Error::other(format!(
+                "{ready} of {pairs} {} runners were online at runner.server within {} s",
+                side.name(),
+                timeout.as_secs()
+            )));
+        }
+        tokio::time::sleep(POLL).await;
     }
-    Ok(())
 }
