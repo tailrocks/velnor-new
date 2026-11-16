@@ -7,6 +7,7 @@ use crate::error::ReleaseError;
 use crate::git_ref;
 use crate::settings::{Document, Settings, executable_key};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
+use crate::timeout;
 
 const DEFAULT_PR_BRANCH_PREFIX: &str = "release-plz-";
 
@@ -26,6 +27,7 @@ pub(crate) struct RootConfig {
     entries: BTreeMap<String, bool>,
     unreleased: BTreeSet<String>,
     unlisted_publish: bool,
+    pub(crate) publish_timeout_minutes: Option<u64>,
 }
 
 impl RootConfig {
@@ -48,6 +50,14 @@ fn check_package(
     package: Option<&str>,
     settings: &Settings,
 ) -> Result<(), ReleaseError> {
+    if let Some(value) = &settings.publish_timeout
+        && timeout::minutes(value).is_none()
+    {
+        return Err(ReleaseError::InvalidPublishTimeout {
+            root: root.to_owned(),
+            value: value.clone(),
+        });
+    }
     let owned = || (root.to_owned(), package.map(str::to_owned));
     if settings.release_always != Some(false) {
         return Err(ReleaseError::ReleaseAlwaysNotFalse {
@@ -235,7 +245,16 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .filter(|entry| entry.settings.over(workspace).release == Some(false))
         .map(|entry| entry.name.clone())
         .collect();
+    let publish_timeout_minutes = released
+        .iter()
+        .map(|(_, settings)| settings)
+        .chain(std::iter::once(workspace).filter(|_| !workspace_tags.is_empty()))
+        .filter(|settings| settings.publishes_to_crates_io())
+        .filter_map(|settings| settings.publish_timeout.as_deref())
+        .filter_map(timeout::minutes)
+        .max();
     Ok(RootConfig {
+        publish_timeout_minutes,
         entries,
         unreleased,
         unlisted_publish: workspace.release != Some(false) && workspace.publishes_to_crates_io(),

@@ -25,6 +25,7 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
+pub(crate) const MAX_WORKFLOW_BYTES: usize = 512_000;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
@@ -92,6 +93,7 @@ pub enum Rule {
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
+    WorkflowTooLarge(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +105,12 @@ pub struct RuleViolation {
 
 impl fmt::Display for RuleViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Rule::WorkflowTooLarge(bytes) = &self.rule {
+            return write!(
+                f,
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+            );
+        }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
         match &self.rule {
             Rule::MultiLineRun => f.write_str("a run value has more than one line"),
@@ -130,6 +138,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
+            Rule::WorkflowTooLarge(_) => Ok(()),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"

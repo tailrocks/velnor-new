@@ -12,6 +12,7 @@ use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
+use crate::timeout::{MAX_JOB_MINUTES, TAG_JOB_BASE_MINUTES};
 use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -37,6 +38,7 @@ pub struct RootPlan {
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
     pub inherited: Vec<String>,
+    pub publish_budget_minutes: u64,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -239,6 +241,26 @@ fn plan_binaries(
     Ok(binaries)
 }
 
+fn publish_budget(config: &RootConfig, inherited: usize) -> Result<u64, ReleaseError> {
+    let Some(each) = config.publish_timeout_minutes else {
+        return Ok(0);
+    };
+    let publishing = config
+        .packages
+        .iter()
+        .filter(|package| config.publishes(&package.name))
+        .count()
+        + inherited;
+    let budget = each.saturating_mul(publishing.max(1) as u64);
+    if TAG_JOB_BASE_MINUTES.saturating_add(budget) > MAX_JOB_MINUTES {
+        return Err(ReleaseError::PublishTimeoutTooLong {
+            root: config.root.clone(),
+            minutes: TAG_JOB_BASE_MINUTES.saturating_add(budget),
+        });
+    }
+    Ok(budget)
+}
+
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
@@ -290,11 +312,14 @@ impl ReleasePlan {
             }
         }
         let binaries = plan_binaries(&config, &configs, files)?;
-        Ok(ReleasePlan {
-            roots: configs
-                .into_iter()
-                .map(|config| RootPlan {
-                    inherited: inherited_packages(&config, files.rust_metadata.as_ref()),
+        let roots = configs
+            .into_iter()
+            .map(|config| {
+                let inherited = inherited_packages(&config, files.rust_metadata.as_ref());
+                let budget = publish_budget(&config, inherited.len())?;
+                Ok(RootPlan {
+                    inherited,
+                    publish_budget_minutes: budget,
                     root: config.root,
                     pr_branch_prefix: config.pr_branch_prefix,
                     publishes_to_crates_io: config.publishes_to_crates_io,
@@ -305,7 +330,10 @@ impl ReleasePlan {
                         .collect(),
                     workspace_tags: config.workspace_tags,
                 })
-                .collect(),
+            })
+            .collect::<Result<Vec<_>, ReleaseError>>()?;
+        Ok(ReleasePlan {
+            roots,
             after: config.after,
             binaries,
             release_plz_version: release_plz.version,

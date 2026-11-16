@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::{ReleasePlan, RootPlan};
+use velnor_release::{ReleasePlan, RootPlan, TAG_JOB_BASE_MINUTES};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_jobs, without_binary};
@@ -13,7 +13,8 @@ use crate::release_steps::{
     release_plz_arguments, release_plz_step, variables,
 };
 use crate::rules::{
-    RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, RuleViolation, check_rules,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    RuleViolation, check_rules,
 };
 use crate::steps::install_helper;
 use crate::workflow::yaml_job;
@@ -32,7 +33,7 @@ const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 const NEWEST_OUTPUT: &str = "steps.newest.outputs.newest == 'true'";
 pub(crate) const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
-const RELEASE_TIMEOUT_MINUTES: u16 = 30;
+const RELEASE_TIMEOUT_MINUTES: u16 = TAG_JOB_BASE_MINUTES as u16;
 
 pub fn render_release(
     plan: &ReleasePlan,
@@ -70,10 +71,15 @@ pub fn render_release(
             ),
         ),
     ];
-    Ok(BTreeMap::from([(
-        RELEASE_WORKFLOW_PATH,
-        format!("{RELEASE_HEADER}{}", emit(&workflow)),
-    )]))
+    let file = format!("{RELEASE_HEADER}{}", emit(&workflow));
+    if file.len() > MAX_WORKFLOW_BYTES {
+        return Err(vec![RuleViolation {
+            job: String::new(),
+            step: 0,
+            rule: Rule::WorkflowTooLarge(file.len()),
+        }]);
+    }
+    Ok(BTreeMap::from([(RELEASE_WORKFLOW_PATH, file)]))
 }
 
 fn trigger(plan: &ReleasePlan, branch: &str) -> Yaml {
@@ -256,6 +262,8 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease, index: usize, root: &RootPlan
                 )
             })
             .collect(),
+        timeout_minutes: u16::try_from(TAG_JOB_BASE_MINUTES + root.publish_budget_minutes)
+            .unwrap_or(u16::MAX),
         steps,
         ..after_the_gate(&tag_id(index))
     }

@@ -16,6 +16,7 @@ pub(crate) struct Settings {
     pub(crate) release: Option<bool>,
     pub(crate) git_tag_enable: Option<bool>,
     pub(crate) git_release_enable: Option<bool>,
+    pub(crate) publish_timeout: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,6 +71,10 @@ impl Settings {
             release: self.release.or(base.release),
             git_tag_enable: self.git_tag_enable.or(base.git_tag_enable),
             git_release_enable: self.git_release_enable.or(base.git_release_enable),
+            publish_timeout: self
+                .publish_timeout
+                .clone()
+                .or_else(|| base.publish_timeout.clone()),
         }
     }
 }
