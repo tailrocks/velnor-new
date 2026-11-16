@@ -96,3 +96,13 @@ pub(super) fn response(reply: Reply) -> Response<Body> {
     }
     response
 }
+
+pub(super) fn created() -> Response<Body> {
+    let mut response = Response::new(
+        Full::new(Bytes::new())
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    *response.status_mut() = StatusCode::CREATED;
+    response
+}

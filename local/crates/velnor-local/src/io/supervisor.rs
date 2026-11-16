@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod host;
+mod online;
 
 use std::io;
 use std::net::SocketAddr;
@@ -20,6 +21,7 @@ use tokio::signal::unix::{SignalKind, signal};
 
 pub(super) use host::{Pairs, pairs};
 pub use host::{default_host, write_plan};
+pub use online::await_online;
 
 use super::authority::{Authority, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};
@@ -28,10 +30,12 @@ use super::pair::{private_folder, write_private};
 use super::run::accept;
 use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
+use crate::side::Side;
 use host::{LOG, PID, runner_dir};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
+const ONLINE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
 pub struct Endpoint {
@@ -82,7 +86,16 @@ pub async fn start_binary(dir: &Path, binary: &Path) -> io::Result<Endpoint> {
 }
 
 pub(super) async fn start_with(dir: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
-    launch(dir, &std::env::current_exe()?, pairs).await
+    let endpoint = launch(dir, &std::env::current_exe()?, pairs).await?;
+    if let Some(pairs) = pairs {
+        let runners = Runners::open(Environment::at(dir, DockerCli).await?).await?;
+        let sides = [
+            (Side::Trusted, pairs.trusted),
+            (Side::Untrusted, pairs.untrusted),
+        ];
+        await_online(&runners, &sides, ONLINE_TIMEOUT).await?;
+    }
+    Ok(endpoint)
 }
 
 async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {

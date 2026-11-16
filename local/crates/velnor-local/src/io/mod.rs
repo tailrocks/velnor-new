@@ -18,6 +18,7 @@ mod run;
 pub mod status;
 pub mod supervisor;
 
+use reply::created;
 pub use run::{RestoreOnly, guarded, open};
 
 use std::path::{Path, PathBuf};
@@ -369,16 +370,6 @@ fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())
-}
-
-fn created() -> Response<Body> {
-    let mut response = Response::new(
-        Full::new(Bytes::new())
-            .map_err(|never| match never {})
-            .boxed_unsync(),
-    );
-    *response.status_mut() = StatusCode::CREATED;
-    response
 }
 
 fn json_response(status: u16, body: &Value) -> Response<Body> {
