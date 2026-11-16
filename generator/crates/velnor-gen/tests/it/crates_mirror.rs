@@ -95,6 +95,7 @@ fn assert_cargo_scope(steps: &[serde_json::Value], mirror: Option<usize>, runner
             .is_some_and(|run| run.starts_with("velnor-ci run "))
     });
     assert_eq!(mirror.is_some(), has_cargo, "{runner}: {job}");
+    assert_mirror_before_tools(steps, mirror);
     if let Some(index) = mirror {
         assert_eq!(
             steps[index]["if"].as_str(),
@@ -103,6 +104,95 @@ fn assert_cargo_scope(steps: &[serde_json::Value], mirror: Option<usize>, runner
             steps[index]
         );
     }
+}
+
+fn assert_mirror_before_tools(steps: &[serde_json::Value], mirror: Option<usize>) {
+    if let Some(restore) = steps
+        .iter()
+        .position(|step| step["name"] == "Restore the tools cache")
+    {
+        assert!(mirror.is_some_and(|index| index < restore));
+    }
+}
+
+#[test]
+fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
+    for shape in ["one-job", "lint-test", "groups"] {
+        let config = format!("runner = 'mirror-box'\nshape = '{shape}'\n{MIRROR}");
+        let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        repo.files
+            .get_mut(&path("mise.toml")?)
+            .ok_or("mise.toml missing")?
+            .extend_from_slice(b"cargo-machete = '0.9.1'\n");
+        let lock = repo
+            .files
+            .get_mut(&path(".velnor/rust-ci.lock")?)
+            .ok_or("helper lock missing")?;
+        *lock = String::from_utf8(lock.clone())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes();
+        let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
+        let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
+        assert!(jobs.contains_key("policy"));
+        if shape == "one-job" {
+            assert!(jobs.contains_key("rust"));
+        }
+        for (job_id, job) in jobs {
+            let steps = job["steps"].as_array().ok_or("steps missing")?;
+            let plan = steps.iter().position(|step| step["id"] == "plan");
+            let selection = if shape == "one-job" && job_id == "rust" {
+                Some(
+                    "steps.plan.outcome == 'success' && steps.plan.outputs.rust_root_mode != 'none'",
+                )
+            } else if shape == "one-job" && job_id == "policy" {
+                Some(
+                    "steps.plan.outcome == 'success' && (steps.plan.outputs.rust_deny == 'run' || steps.plan.outputs.rust_machete == 'run')",
+                )
+            } else {
+                None
+            };
+            let expected = selection.map_or_else(
+                || MIRROR_GUARD.to_owned(),
+                |selected| {
+                    format!(
+                        "${{{{ ({}) && ({selected}) }}}}",
+                        MIRROR_GUARD
+                            .trim_start_matches("${{ ")
+                            .trim_end_matches(" }}")
+                    )
+                },
+            );
+            let mut saw_mirror = false;
+            assert_mirror_before_tools(
+                steps,
+                steps.iter().position(|step| {
+                    step["run"]
+                        .as_str()
+                        .is_some_and(|run| run.starts_with("velnor-ci crates-mirror"))
+                }),
+            );
+            for (index, step) in steps.iter().enumerate().filter(|(_, step)| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.starts_with("velnor-ci crates-mirror"))
+            }) {
+                saw_mirror = true;
+                if let Some(plan) = plan {
+                    assert!(index > plan, "{shape}: {job_id}: mirror precedes plan");
+                }
+                assert_eq!(
+                    step["if"].as_str(),
+                    Some(expected.as_str()),
+                    "{shape}: {job_id}"
+                );
+            }
+            if selection.is_some() {
+                assert!(plan.is_some(), "{shape}: {job_id}: plan missing");
+                assert!(saw_mirror, "{shape}: {job_id}: mirror missing");
+            }
+        }
+    }
+    Ok(())
 }
 
 #[test]

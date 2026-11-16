@@ -138,12 +138,15 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         },
         lane.from_source,
     );
-    steps.extend(mirror_step(facts));
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
+    let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
+    steps.extend(mirror_step(facts).map(|step| Step {
+        gate: policy_gate.clone(),
+        ..step
+    }));
     if !facts.tools.tools.is_empty() {
-        let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
         steps.extend(
             [
                 tools_restore(facts),
@@ -154,11 +157,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             .into_iter()
             .flatten()
             .map(|step| Step {
-                gate: if matches!(step.kind, StepKind::CratesMirror(_)) {
-                    None
-                } else {
-                    policy_gate.clone()
-                },
+                gate: policy_gate.clone(),
                 ..step
             }),
         );

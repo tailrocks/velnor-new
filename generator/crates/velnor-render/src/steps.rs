@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
+use crate::gate::{PLAN_STEP, TOOLS_STEP, all_conditions, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -95,11 +95,10 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         });
     }
     for body in &mut rendered {
-        if let Some(condition) =
-            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft)
-        {
-            body.condition = Some(condition);
-        }
+        body.condition = all_conditions(
+            body.condition.take(),
+            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft),
+        );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =

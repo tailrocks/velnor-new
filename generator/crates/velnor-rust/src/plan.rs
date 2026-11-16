@@ -213,15 +213,18 @@ pub(crate) fn setup_roots(
         },
         lane.from_source,
     );
-    steps.extend(mirror_step(facts));
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
-        .into_iter()
-        .flatten()
-        .collect();
-    if !toolchain.is_empty() {
+    let mut toolchain: Vec<Step> = [
+        mirror_step(facts),
+        tools_restore(facts),
+        tools_install(facts),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !facts.tools.tools.is_empty() {
         toolchain.extend(mirror_step(facts));
     }
     let declared = facts.toolchain.as_ref();
@@ -275,11 +278,7 @@ pub(crate) fn setup_roots(
     }
     toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     steps.extend(toolchain.into_iter().map(|step| Step {
-        gate: if matches!(step.kind, StepKind::CratesMirror(_)) {
-            None
-        } else {
-            lane.steps()
-        },
+        gate: lane.steps(),
         ..step
     }));
     steps

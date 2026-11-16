@@ -258,7 +258,7 @@ impl RootJobs<'_> {
         );
         build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
-        group.extend(mirror_step(self.facts));
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
             ..restore
@@ -266,7 +266,7 @@ impl RootJobs<'_> {
         group.push(self.gated(StepKind::InstallTools {
             only: nextest_tool(&self.facts.tools).map(str::to_owned),
         }));
-        group.extend(mirror_step(self.facts));
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.push(self.gated(StepKind::DownloadArchive {
             name: artifact,
             into: self.root.manifest.parent(),
