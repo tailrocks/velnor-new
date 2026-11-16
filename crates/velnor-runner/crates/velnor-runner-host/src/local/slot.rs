@@ -46,6 +46,7 @@ const PAIR_RETRY: Duration = Duration::from_secs(2);
 struct PairFailure {
     error: HostError,
     leftover: Option<String>,
+    unretired: Option<String>,
 }
 
 impl From<HostError> for PairFailure {
@@ -53,8 +54,15 @@ impl From<HostError> for PairFailure {
         Self {
             error,
             leftover: None,
+            unretired: None,
         }
     }
+}
+
+struct Pending {
+    error: HostError,
+    leftover: Option<String>,
+    unretired: Option<(Side, String)>,
 }
 
 async fn pause(stop: &mut watch::Receiver<bool>) {
@@ -71,25 +79,23 @@ impl Supervisor {
         mut stop: watch::Receiver<bool>,
     ) -> Result<(), HostError> {
         let mut failed = 0;
-        let mut leftover: Option<String> = None;
+        let mut pending: Option<Pending> = None;
         while !*stop.borrow() {
-            if let Some(name) = leftover.take() {
-                if remove_pair_named(&self.docker, &name).await.is_err() {
-                    failed += 1;
-                    if failed >= PAIR_ATTEMPTS {
-                        return Err(HostError::Docker);
-                    }
-                    eprintln!("pair {} was not removed, attempt {failed}", slot.label);
-                    leftover = Some(name);
-                    pause(&mut stop).await;
-                    continue;
+            if let Some(mut left) = pending.take()
+                && self.clean(&slot, &mut left).await.is_err()
+            {
+                failed += 1;
+                if failed >= PAIR_ATTEMPTS {
+                    return Err(left.error);
                 }
-                self.pairs_removed.fetch_add(1, Ordering::SeqCst);
-                println!("pair {} removed", slot.label);
+                pending = Some(left);
+                pause(&mut stop).await;
+                continue;
             }
             match self.one_pair(&slot, &mut stop).await {
                 Err(failure)
-                    if matches!(failure.error, HostError::Docker | HostError::Endpoint)
+                    if (matches!(failure.error, HostError::Docker | HostError::Endpoint)
+                        || failure.unretired.is_some())
                         && failed + 1 < PAIR_ATTEMPTS =>
                 {
                     failed += 1;
@@ -97,12 +103,39 @@ impl Supervisor {
                         "pair {} failed: {}, attempt {failed}",
                         slot.label, failure.error
                     );
-                    leftover = failure.leftover;
+                    pending = Some(Pending {
+                        error: failure.error,
+                        leftover: failure.leftover,
+                        unretired: failure.unretired.map(|name| (slot.side, name)),
+                    });
                     pause(&mut stop).await;
                 }
                 Err(failure) => return Err(failure.error),
                 Ok(()) => failed = 0,
             }
+        }
+        match pending {
+            Some(mut left) => self.clean(&slot, &mut left).await.map_err(|()| left.error),
+            None => Ok(()),
+        }
+    }
+
+    async fn clean(&self, slot: &Slot, left: &mut Pending) -> Result<(), ()> {
+        if let Some(name) = left.leftover.take() {
+            if remove_pair_named(&self.docker, &name).await.is_err() {
+                eprintln!("pair {} ({name}) was not removed", slot.label);
+                left.leftover = Some(name);
+                return Err(());
+            }
+            self.pairs_removed.fetch_add(1, Ordering::SeqCst);
+            println!("pair {} removed", slot.label);
+        }
+        if let Some((side, name)) = left.unretired.take()
+            && self.retire_agent(side, &name).await.is_err()
+        {
+            eprintln!("agent {name} was not retired at runner.server");
+            left.unretired = Some((side, name));
+            return Err(());
         }
         Ok(())
     }
@@ -135,10 +168,14 @@ impl Supervisor {
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
             Err(failure) => {
-                self.retire_agent(slot.side, &minted.name).await?;
+                if let Some(name) = &failure.leftover {
+                    eprintln!("pair {} ({name}) was not cleaned", slot.label);
+                }
+                let retired = self.retire_agent(slot.side, &minted.name).await;
                 return Err(PairFailure {
                     error: failure.error,
                     leftover: failure.leftover,
+                    unretired: retired.is_err().then(|| minted.name.clone()),
                 });
             }
         };
@@ -150,11 +187,18 @@ impl Supervisor {
             println!("pair {} removed", slot.label);
         }
         let retired = self.retire_agent(slot.side, &minted.name).await;
+        let unretired = retired.is_err().then(|| minted.name.clone());
         let error = served
             .err()
             .or_else(|| removed.err())
             .or_else(|| retired.err());
-        error.map_or(Ok(()), |error| Err(PairFailure { error, leftover }))
+        error.map_or(Ok(()), |error| {
+            Err(PairFailure {
+                error,
+                leftover,
+                unretired,
+            })
+        })
     }
 
     fn agent_name(&self, sequence: u32) -> String {

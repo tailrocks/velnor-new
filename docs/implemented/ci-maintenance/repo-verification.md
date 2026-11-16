@@ -81,18 +81,61 @@ cargo deny check
 The local script also runs `scripts/check-freshness.sh` and covers the nested
 runner workspace.
 
-On macOS, `scripts/verify-local.sh` provisions the process-group test fixture in
-a private temporary directory unless `VELNOR_GROUP_PROBE_RECEIPT` is nonempty.
-For a standalone Nextest run that includes `velnor-actions-mise`, provision the
-fixture before running tests:
+Tests that need a fixture or an environment variable that only the verification
+entry points set are run with the recipe in
+[Local recipe for fixture-dependent tests](#local-recipe-for-fixture-dependent-tests).
+
+## Local recipe for fixture-dependent tests
+
+A plain `cargo nextest run --workspace` fails the tests of `velnor-actions-cli`,
+`velnor-actions-mise` and `velnor-archive-guard` when their fixture variable is
+missing. Each such failure names this section. Run a crate with its recipe
+below, or run `bash scripts/verify-local.sh`, which sets every variable and runs
+the whole suite.
+
+| Variable | Value | Set by | Read by |
+|---|---|---|---|
+| `VELNOR_IMAGE_PUBLICATION_FIXTURE` | Absolute path to the `image-publication-fixture` example executable | `scripts/verify-local.sh`, CI | `velnor-actions-cli` `image_publication_public` |
+| `VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE` | Absolute path to the `qualification-diagnostics` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
+| `VELNOR_QUALIFICATION_CLOCK_DRIVER` | Absolute path to the `golden_collector_clock` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
+| `VELNOR_GROUP_PROBE_RECEIPT` | Receipt written by `scripts/provision-group-signal-interposer.sh` (macOS) | `scripts/verify-local.sh` on macOS | `velnor-actions-mise` `permission_retry_darwin` |
+
+The example paths must be canonical, so each recipe resolves the examples
+directory with `cd -P`. It uses `CARGO_TARGET_DIR` when it is set, and `target`
+otherwise.
+
+### velnor-actions-cli
 
 ```bash
-set -euo pipefail
-probe_root="$(mktemp -d)"
+cargo build --locked -p velnor-actions-cli --example image-publication-fixture && \
+VELNOR_IMAGE_PUBLICATION_FIXTURE="$(cd -P "${CARGO_TARGET_DIR:-target}/debug/examples" && pwd)/image-publication-fixture" \
+  cargo nextest run --locked --no-fail-fast -p velnor-actions-cli
+```
+
+### velnor-archive-guard
+
+```bash
+cargo build --locked -p velnor-actions-cli --example qualification-diagnostics && \
+cargo build --locked -p velnor-archive-guard --example golden_collector_clock && \
+examples="$(cd -P "${CARGO_TARGET_DIR:-target}/debug/examples" && pwd)" && \
+VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$examples/qualification-diagnostics" \
+VELNOR_QUALIFICATION_CLOCK_DRIVER="$examples/golden_collector_clock" \
+  cargo nextest run --locked --no-fail-fast -p velnor-archive-guard
+```
+
+### velnor-actions-mise (macOS)
+
+The receipt names a private interposer library. The recipe provisions it in a
+temporary directory, resolved to its canonical path, that is removed when the
+command exits:
+
+```bash
+set -eu
+probe_root="$(cd -P "$(mktemp -d)" && pwd)"
 trap 'rm -rf "$probe_root"' EXIT
 bash scripts/provision-group-signal-interposer.sh "$probe_root/fixture"
-export VELNOR_GROUP_PROBE_RECEIPT="$probe_root/fixture/group_signal_zero_interpose.json"
-cargo nextest run --locked -p velnor-actions-mise --no-tests fail
+VELNOR_GROUP_PROBE_RECEIPT="$probe_root/fixture/group_signal_zero_interpose.json" \
+  cargo nextest run --locked --no-fail-fast -p velnor-actions-mise
 ```
 
 The tests verify the receipt, fixture source, and library before use.

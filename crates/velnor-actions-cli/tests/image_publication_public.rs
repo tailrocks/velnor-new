@@ -390,5 +390,7 @@ mod stored_zip;
 
 #[path = "image_publication_public/context_fixture.rs"]
 mod context_fixture;
+#[path = "image_publication_public/fixture_recipe.rs"]
+mod fixture_recipe;
 #[path = "image_publication_public/publication_context.rs"]
 mod publication_context;
