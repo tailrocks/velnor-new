@@ -24,8 +24,8 @@ impl TempRoot {
             .duration_since(UNIX_EPOCH)
             .map_err(io::Error::other)?
             .as_nanos();
-        let path =
-            env::temp_dir().join(format!("velnor-tap-capture-{}-{stamp}", std::process::id()));
+        let path = fs::canonicalize(env::temp_dir())?
+            .join(format!("velnor-tap-capture-{}-{stamp}", std::process::id()));
         fs::create_dir(&path)?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o700))?;
         Ok(Self(path))
