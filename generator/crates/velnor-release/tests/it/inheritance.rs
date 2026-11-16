@@ -170,3 +170,23 @@ fn a_literal_workspace_tag_shared_by_two_unlisted_members_is_refused_naming_both
         .insert(".".to_owned(), WORKSPACE_ONLY.to_owned());
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn templated_workspace_tags_that_render_the_same_for_two_unlisted_members_are_refused() {
+    let mut files = files();
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        WORKSPACE_ONLY.replace("v{{ version }}", "{{ package }}{{ version }}"),
+    );
+    crate::fixture::with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("a", "Cargo.toml"), ("a1", "a1/Cargo.toml")],
+        )],
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicateTagPattern { packages, .. }) if packages == ["a", "a1"]
+    ));
+}

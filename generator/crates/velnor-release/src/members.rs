@@ -9,7 +9,7 @@ use crate::error::ReleaseError;
 use crate::plan::{manifest_of, read_all};
 use crate::registry::check_publish_registries;
 use crate::release_plz::RootConfig;
-use crate::tag::PACKAGE_WILDCARD;
+use crate::tag::{TagPattern, render};
 
 type Metadata = BTreeMap<RepoPath, RustMetadata>;
 
@@ -76,16 +76,25 @@ pub(crate) fn check_inventory(
             .filter(|name| !listed.contains(name))
             .map(str::to_owned)
             .collect();
-        if unlisted.len() > 1
-            && let Some(pattern) = config
-                .workspace_tags
+        if let Some((pattern, packages)) = config.workspace_tags.iter().find_map(|pattern| {
+            let rendered: Vec<(&String, TagPattern)> = unlisted
                 .iter()
-                .find(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
-        {
-            return Err(ReleaseError::DuplicateTagPattern {
-                pattern: pattern.as_str().to_owned(),
-                packages: unlisted,
-            });
+                .filter_map(|name| Some((name, render(pattern.as_str(), name)?)))
+                .collect();
+            let clashing: Vec<String> = rendered
+                .iter()
+                .enumerate()
+                .filter(|(index, (_, tag))| {
+                    rendered
+                        .iter()
+                        .enumerate()
+                        .any(|(other, (_, rival))| other != *index && tag.may_collide(rival))
+                })
+                .map(|(_, (name, _))| (*name).clone())
+                .collect();
+            (!clashing.is_empty()).then(|| (pattern.as_str().to_owned(), clashing))
+        }) {
+            return Err(ReleaseError::DuplicateTagPattern { pattern, packages });
         }
         for name in listed.into_iter().chain(inherited) {
             if let Some(first) = released.insert(name, config.root.as_str())
