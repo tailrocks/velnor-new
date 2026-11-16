@@ -40,7 +40,17 @@ pub(super) fn publication_name() -> String {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    bytes
+        .iter()
+        .flat_map(|byte| {
+            [
+                DIGITS[usize::from(byte >> 4)],
+                DIGITS[usize::from(byte & 0x0f)],
+            ]
+        })
+        .map(char::from)
+        .collect()
 }
 
 fn sha256(text: &str) -> String {

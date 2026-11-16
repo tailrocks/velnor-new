@@ -237,7 +237,7 @@ fn write_route_response(
     path: &str,
     state: &mut StubState,
 ) -> std::io::Result<()> {
-    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64", "NCPU": 4, "MemTotal": 8589934592_i64});
+    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64", "NCPU": 4, "MemTotal": 8_589_934_592_i64});
     match (method, path) {
         ("GET", "info") => write_json(stream, 200, "OK", &info),
         ("GET", p) if p.starts_with("images/") && p.ends_with("/json") => {

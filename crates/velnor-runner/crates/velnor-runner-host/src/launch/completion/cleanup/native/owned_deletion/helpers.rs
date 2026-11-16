@@ -18,6 +18,7 @@ use crate::{
 
 use super::super::super::super::{Context, EffectBudget, Failure, MAX_HELPERS_PER_VOLUME};
 use super::{inspect_container, remove_container_and_check, request_effect, within};
+use crate::journal::UnboundInitializer;
 use crate::launch::bootstrap::{InitializerPlan, plan_initializer_removal};
 
 pub(super) fn docker_error(phase: &str, object: &str, error: &DockerError) -> HostError {
@@ -77,8 +78,42 @@ pub(super) async fn remove_volume_helpers(
         },
     )
     .await?;
+    let plan = classify_users(
+        context,
+        launch,
+        claim,
+        budget,
+        identity,
+        volume,
+        (users, publication, initializer),
+    )
+    .await?;
+    for retirement in plan {
+        retire(context, launch, claim, budget, identity, retirement).await?;
+    }
+    let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
+    if remaining.is_empty() {
+        Ok(())
+    } else {
+        Err(Failure::not_proven("volume helper retirement"))
+    }
+}
+
+async fn classify_users(
+    context: &Context<'_>,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+    budget: &mut EffectBudget<'_>,
+    identity: &StorageCleanupIdentity,
+    volume: &str,
+    owned: (
+        Vec<String>,
+        Option<crate::launch::resource_probe::OwnedPublication>,
+        Option<UnboundInitializer>,
+    ),
+) -> Result<Vec<Retirement>, Failure> {
+    let (users, mut publication, initializer) = owned;
     let mut plan = Vec::new();
-    let mut publication = publication;
     for id in users {
         let inspected = request_effect(
             context,
@@ -113,15 +148,7 @@ pub(super) async fn remove_volume_helpers(
             return Err(Failure::not_proven("volume helper ownership"));
         }
     }
-    for retirement in plan {
-        retire(context, launch, claim, budget, identity, retirement).await?;
-    }
-    let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
-    if remaining.is_empty() {
-        Ok(())
-    } else {
-        Err(Failure::not_proven("volume helper retirement"))
-    }
+    Ok(plan)
 }
 
 async fn retire(

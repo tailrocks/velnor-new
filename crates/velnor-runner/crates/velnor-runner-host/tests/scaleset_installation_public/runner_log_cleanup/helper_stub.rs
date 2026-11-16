@@ -79,7 +79,7 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
         Kind::Publication => {
             let engine = spec
                 .engine
-                .map_or_else(|| helper_seed::publication_engine_label(), str::to_owned);
+                .map_or_else(helper_seed::publication_engine_label, str::to_owned);
             (
                 PUBLICATION_ID.to_owned(),
                 helper_seed::publication_name(),
@@ -192,7 +192,7 @@ fn volume_body(name: &str, role: &str) -> Value {
     json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": {"velnor.connection": "conn-test-1", "velnor.reservation": "2", "velnor.operation": "1", "velnor.role": role}, "Scope": "local", "Options": {}})
 }
 
-pub(super) fn write_volume_response(
+fn write_container_response(
     stream: &mut UnixStream,
     method: &str,
     path: &str,
@@ -256,6 +256,24 @@ pub(super) fn write_volume_response(
                 None => write_json(stream, 404, "Not Found", &missing),
             }
         }
+        _ => {
+            eprintln!("UNROUTED {method} {path}");
+            write_json(stream, 404, "Not Found", &missing)
+        }
+    }
+}
+
+pub(super) fn write_volume_response(
+    stream: &mut UnixStream,
+    method: &str,
+    path: &str,
+    state: &mut VolumeState,
+) -> std::io::Result<()> {
+    let missing = json!({"message": "No such object"});
+    if path.starts_with("containers/") {
+        return write_container_response(stream, method, path, state);
+    }
+    match (method, path.split('/').collect::<Vec<_>>().as_slice()) {
         ("GET", ["volumes", name]) => {
             let role = ROLES
                 .iter()
