@@ -13,6 +13,8 @@ pub enum DetectError {
     Invalid { path: RepoPath, reason: Reason },
     MissingLockfile { path: RepoPath, manifest: RepoPath },
     MiseRequired { path: RepoPath },
+    MiseLockRequired { path: RepoPath },
+    ToolNotPrebuilt { tool: String, platform: String },
     NextestRequired { path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
@@ -211,6 +213,14 @@ impl fmt::Display for DetectError {
             Self::MiseRequired { path } => write!(
                 f,
                 "a mise configuration is required; commit {path} with the tool versions the project uses"
+            ),
+            Self::MiseLockRequired { path } => write!(
+                f,
+                "{path} is required: the tools cache key is the hash of it, so a changed tool version could not change the key; run `mise lock` and commit it"
+            ),
+            Self::ToolNotPrebuilt { tool, platform } => write!(
+                f,
+                "mise.lock has no prebuilt binary of {tool} for {platform}; the tools cache holds prebuilt binaries only, so pin a tool that publishes one (or run `mise lock`) instead of building it from source"
             ),
             Self::NextestRequired { path } => write!(
                 f,

@@ -50,6 +50,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
         b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
             .to_vec(),
     );
+    crate::facts::lock_pinned_tools(&mut view)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     view.tracked_paths.insert(lock.clone());
     view.files.insert(lock, HELPER_LOCK.to_vec());
@@ -62,7 +63,9 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
 }
 
 pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
-    let mut files = expected_with_notes(view).map(|(files, _)| files)?;
+    let mut locked = view.clone();
+    crate::facts::lock_pinned_tools(&mut locked)?;
+    let mut files = expected_with_notes(&locked).map(|(files, _)| files)?;
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;

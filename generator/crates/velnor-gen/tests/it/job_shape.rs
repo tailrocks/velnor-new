@@ -244,7 +244,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
                 .count()
         })
         .collect();
-    assert_eq!(components, [1, 1, 0]);
+    assert_eq!(components, [1, 1, 1]);
 
     let invalid = |path: RepoPath| {
         move |result: Result<BTreeMap<RepoPath, String>, GenerateError>| matches!(result, Err(GenerateError::Detect(DetectError::Invalid { path: p, .. })) if p == path)

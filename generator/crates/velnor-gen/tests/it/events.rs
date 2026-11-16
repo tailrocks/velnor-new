@@ -41,6 +41,7 @@ fn with(files: &[(&str, &str)], config: Option<&[u8]>) -> TestResult2 {
         view.tracked_paths.insert(path.clone());
         view.files.insert(path, text.as_bytes().to_vec());
     }
+    crate::facts::lock_pinned_tools(&mut view)?;
     workflow(&view)
 }
 

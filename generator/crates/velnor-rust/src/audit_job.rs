@@ -16,7 +16,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, from_source: bool) -> Option<Job> {
         plan: Some(PLAN_JOB),
         from_source,
     };
-    let mut steps = setup_roots(facts, &facts.rust_roots, false, &lane, &AUDIT_JOB);
+    let mut steps = setup_roots(facts, &facts.rust_roots, &lane, &AUDIT_JOB);
     steps.extend(
         facts
             .rust_roots
