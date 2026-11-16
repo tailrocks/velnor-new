@@ -14,6 +14,7 @@ mod io_edges;
 mod pair;
 mod pair_inputs;
 mod pairs;
+mod pairs_host;
 mod report;
 mod restore;
 mod runners;
