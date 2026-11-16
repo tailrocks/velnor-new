@@ -182,7 +182,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
         StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
-        StepKind::DeltaStage { root, packages } => crate::delta_steps::delta_stage(root, packages),
+        StepKind::DeltaStage(root, packages) => crate::delta_steps::delta_stage(root, packages),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),

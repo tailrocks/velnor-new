@@ -44,14 +44,13 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         },
         Step {
             when: When::SaveDelta,
-            ..step(StepKind::DeltaStage {
-                root: cache_root.clone(),
-                packages: root
-                    .members
+            ..step(StepKind::DeltaStage(
+                cache_root.clone(),
+                root.members
                     .iter()
                     .map(|member| member.name.clone())
                     .collect(),
-            })
+            ))
         },
         Step {
             when: When::SaveDeltaDecided,

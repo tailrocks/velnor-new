@@ -210,10 +210,7 @@ pub enum StepKind {
     },
     DeltaPrepare(CacheRoot),
     DeltaApply(CacheRoot),
-    DeltaStage {
-        root: CacheRoot,
-        packages: Vec<PackageName>,
-    },
+    DeltaStage(CacheRoot, Vec<PackageName>),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
