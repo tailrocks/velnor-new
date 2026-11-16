@@ -143,8 +143,8 @@ impl ApprovedJobAuthorityPolicy {
     }
 
     #[cfg(all(test, feature = "local-mode"))]
-    pub(crate) fn expected_policy_sha256(&self) -> String {
-        sha256(&serde_json::to_vec(&self.content()).expect("content"))
+    pub(crate) fn expected_policy_sha256(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_vec(&self.content()).map(|bytes| sha256(&bytes))
     }
 
     pub(crate) fn canonicalize(&mut self) {

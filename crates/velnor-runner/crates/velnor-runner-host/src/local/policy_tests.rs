@@ -32,7 +32,11 @@ fn document(calls: &Value, jobs: &[Value]) -> Value {
     let mut parsed: ApprovedJobAuthorityPolicy =
         serde_json::from_value(value.clone()).expect("document");
     parsed.canonicalize();
-    value["policy_sha256"] = json!(parsed.expected_policy_sha256());
+    value["policy_sha256"] = json!(
+        parsed
+            .expected_policy_sha256()
+            .expect("policy content serializes")
+    );
     value
 }
 
@@ -154,7 +158,11 @@ fn a_workflow_that_calls_others_is_refused_because_the_called_files_are_not_hash
     value["workflows"] = json!([lib, value["workflows"][0].clone()]);
     let mut parsed: ApprovedJobAuthorityPolicy = serde_json::from_value(value.clone()).expect("d");
     parsed.canonicalize();
-    value["policy_sha256"] = json!(parsed.expected_policy_sha256());
+    value["policy_sha256"] = json!(
+        parsed
+            .expected_policy_sha256()
+            .expect("policy content serializes")
+    );
     let policy = Policy::parse(value.to_string().as_bytes()).expect("loads");
     assert!(!policy.approves(&push(), Side::Trusted, Some(CONTENT)));
 }
@@ -284,8 +292,8 @@ fn a_policy_with_a_bad_digest_or_cross_wired_entries_does_not_load() {
 
     let mut writes = ci;
     writes["permissions"] = json!({"contents": "write"});
-    let writer = document(&json!([]), &[writes]);
-    assert!(Policy::parse(writer.to_string().as_bytes()).is_err());
+    let writing = document(&json!([]), &[writes]);
+    assert!(Policy::parse(writing.to_string().as_bytes()).is_err());
 }
 
 #[test]
