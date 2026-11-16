@@ -172,3 +172,35 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
     assert!(required(&text)?.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     Ok(())
 }
+
+#[test]
+fn an_env_value_over_the_limit_is_a_rule_violation() {
+    use velnor_render::{
+        MAX_ENV_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules,
+    };
+    let step = |length| RenderedStep {
+        name: "step".to_owned(),
+        run: Some("echo hi".to_owned()),
+        env: vec![("SPEC".to_owned(), Value::Text("a".repeat(length)))],
+        ..RenderedStep::default()
+    };
+    let violations = |length| {
+        check_rules(&RenderedWorkflow {
+            jobs: vec![RenderedJob {
+                id: "required".to_owned(),
+                runs_on: "ubuntu-latest".to_owned(),
+                timeout_minutes: 10,
+                steps: vec![step(length)],
+                ..RenderedJob::default()
+            }],
+        })
+        .err()
+        .map(|found| found.into_iter().map(|violation| violation.rule).collect())
+        .unwrap_or_else(Vec::<Rule>::new)
+    };
+    assert!(violations(MAX_ENV_CHARACTERS).is_empty());
+    assert_eq!(
+        violations(MAX_ENV_CHARACTERS + 1),
+        vec![Rule::EnvTooLong(MAX_ENV_CHARACTERS + 1)]
+    );
+}
