@@ -18,11 +18,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && github.event.pull_request.state != ''closed'' }}'
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust:
+    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') }}'
     permissions:
       contents: read
     outputs:
@@ -129,6 +130,7 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' -p single-crate '') || contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         run: velnor-ci run -- cargo check -p single-crate --locked
   policy:
+    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -183,7 +185,7 @@ jobs:
     needs:
       - rust
       - policy
-    if: '${{ !cancelled() }}'
+    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (!cancelled()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
