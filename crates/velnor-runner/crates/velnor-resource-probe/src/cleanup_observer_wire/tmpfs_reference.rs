@@ -3,8 +3,6 @@
 
 use std::{collections::HashSet, path::Path};
 
-use super::CleanupObserverBinding;
-
 const TMPFS_MAGIC: i64 = 0x0102_1994;
 
 #[must_use]
@@ -21,28 +19,17 @@ pub fn parse_mountinfo_device(value: &str) -> Option<u64> {
 #[must_use]
 pub fn observer_outside_pair_namespaces(
     observer_namespace: Option<([u32; 2], u64)>,
-    binding: &CleanupObserverBinding,
+    protected_namespaces: &[([u32; 2], u64)],
 ) -> Option<([u32; 2], u64)> {
-    let protected = [&binding.daemon, &binding.runner, &binding.dind]
-        .map(|process| (process.namespace_device, process.namespace_inode));
-    observer_namespace.filter(|namespace| !protected.contains(namespace))
+    observer_namespace.filter(|namespace| !protected_namespaces.contains(namespace))
 }
 
 #[must_use]
 pub fn observer_runtime_tmpfs_devices(
-    observer_pid: u32,
     observer_namespace: Option<([u32; 2], u64)>,
-    binding: &CleanupObserverBinding,
     self_mountinfo: &[u8],
 ) -> HashSet<u64> {
     if observer_namespace.is_none() {
-        return HashSet::new();
-    }
-    if observer_pid == 0
-        || observer_pid == binding.daemon.pid
-        || observer_pid == binding.runner.pid
-        || observer_pid == binding.dind.pid
-    {
         return HashSet::new();
     }
     let Ok(text) = std::str::from_utf8(self_mountinfo) else {
