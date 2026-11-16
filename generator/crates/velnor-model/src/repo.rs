@@ -212,6 +212,7 @@ pub struct ToolPins {
 pub struct ToolPin {
     pub requested: Vec<String>,
     pub locked: Vec<String>,
+    pub os_filters: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

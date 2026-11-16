@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
-use velnor_model::{ToolPins, Toolchain};
+use velnor_model::{ToolPin, ToolPins, Toolchain};
 use velnor_rust::BuildProfile;
 
 use crate::error::CiError;
@@ -26,7 +26,10 @@ impl Installed {
         if locked {
             return self.version == wanted;
         }
-        same_version(wanted, &self.version) || self.requested_version.as_deref() == Some(wanted)
+        match self.requested_version.as_deref() {
+            Some(request) => request == wanted,
+            None => same_version(wanted, &self.version),
+        }
     }
 }
 
@@ -53,36 +56,65 @@ pub fn output_lines(compat: &str) -> String {
     format!("{COMPAT}={compat}\n")
 }
 
-pub fn check_tools(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> {
+fn applies_on(pin: &ToolPin, request: &str, os: &str) -> bool {
+    pin.os_filters.get(request).is_none_or(|filters| {
+        filters.iter().any(|filter| {
+            let name = filter.split('/').next().unwrap_or_default();
+            name == os || (name == "darwin" && os == "macos")
+        })
+    })
+}
+
+fn required(pin: &ToolPin, os: &str) -> Vec<String> {
+    let (here, elsewhere): (Vec<&String>, Vec<&String>) = pin
+        .requested
+        .iter()
+        .partition(|request| applies_on(pin, request, os));
+    if pin.locked.is_empty() {
+        return here.into_iter().cloned().collect();
+    }
+    let matches =
+        |group: &[&String], locked: &str| group.iter().any(|request| same_version(request, locked));
+    pin.locked
+        .iter()
+        .filter(|locked| matches(&here, locked) || !matches(&elsewhere, locked))
+        .cloned()
+        .collect()
+}
+
+pub fn check_tools(pins: &ToolPins, reported: &Reported, os: &str) -> Result<(), CiError> {
     let wrong: Vec<String> = pins
         .tools
         .iter()
         .filter_map(|(name, pin)| {
-            let wanted = if pin.locked.is_empty() {
-                &pin.requested
-            } else {
-                &pin.locked
-            };
+            let wanted = &required(pin, os);
             let found: Vec<&Installed> = reported
                 .get(name)
                 .into_iter()
                 .flatten()
                 .filter(|entry| entry.present)
                 .collect();
-            let agrees = found.iter().any(|entry| {
-                wanted
-                    .iter()
-                    .any(|want| entry.satisfies(want, !pin.locked.is_empty()))
-            });
-            if agrees {
+            let locked = !pin.locked.is_empty();
+            let missing: Vec<&str> = wanted
+                .iter()
+                .filter(|want| !found.iter().any(|entry| entry.satisfies(want, locked)))
+                .map(String::as_str)
+                .collect();
+            if missing.is_empty() {
                 None
             } else {
                 let got = found
-                    .first()
-                    .map_or("nothing installed", |e| e.version.as_str());
+                    .iter()
+                    .map(|entry| entry.version.as_str())
+                    .collect::<Vec<_>>();
+                let got = if got.is_empty() {
+                    "nothing installed".to_owned()
+                } else {
+                    got.join(", ")
+                };
                 Some(format!(
                     "{name}: pinned {}, mise reports {got}",
-                    wanted.join(" or ")
+                    missing.join(" and ")
                 ))
             }
         })
