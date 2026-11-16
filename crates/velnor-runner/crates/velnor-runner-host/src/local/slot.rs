@@ -113,16 +113,24 @@ impl Supervisor {
         stop: &mut watch::Receiver<bool>,
     ) -> Result<(), PairFailure> {
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst) + 1;
+        let name = self.agent_name(sequence);
+        self.minted.intent(slot.side.name(), &name).await?;
         let minted = tokio::select! {
             () = stopped(stop) => return Ok(()),
-            minted = self.client.mint(slot.side) => {
-                minted.map_err(|_| PairFailure::from(HostError::Endpoint))?
+            minted = self.client.mint(slot.side, &name) => match minted {
+                Ok(minted) if minted.name == name => minted,
+                Ok(other) => {
+                    self.minted.intent(slot.side.name(), &other.name).await?;
+                    self.retire_agent(slot.side, &other.name).await?;
+                    self.abandon(slot.side, &name).await;
+                    return Err(PairFailure::from(HostError::Endpoint));
+                }
+                Err(_) => {
+                    self.abandon(slot.side, &name).await;
+                    return Err(PairFailure::from(HostError::Endpoint));
+                }
             }
         };
-        if let Err(error) = self.minted.minted(slot.side.name(), &minted.name).await {
-            self.retire_agent(slot.side, &minted.name).await?;
-            return Err(PairFailure::from(error));
-        }
         let request = self.request(slot, &minted.name, sequence);
         let pair = match start_pair(&self.docker, &request).await {
             Ok(pair) => pair,
@@ -147,6 +155,19 @@ impl Supervisor {
             .or_else(|| removed.err())
             .or_else(|| retired.err());
         error.map_or(Ok(()), |error| Err(PairFailure { error, leftover }))
+    }
+
+    fn agent_name(&self, sequence: u32) -> String {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        format!("{}-jit-{nanos:x}-{sequence}", self.plan.environment)
+    }
+
+    async fn abandon(&self, side: Side, name: &str) {
+        if self.client.delete_agent(side, name).await.is_ok() {
+            let _kept = self.minted.retired(side.name(), name).await;
+        }
     }
 
     async fn retire_agent(&self, side: Side, name: &str) -> Result<(), HostError> {

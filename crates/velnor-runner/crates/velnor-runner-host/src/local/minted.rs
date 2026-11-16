@@ -5,59 +5,109 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 
 use crate::error::HostError;
 
+use super::plan::Side;
+
 pub(super) const MINTED_FILE: &str = "minted-agents.log";
 
-const MINTED: &str = "+";
+const INTENT: &str = "+";
 const RETIRED: &str = "-";
+const COMPACT_SLACK: usize = 32;
+
+type Entry = (String, String);
+
+#[derive(Debug, Default)]
+struct Journal {
+    open: BTreeSet<Entry>,
+    lines: usize,
+}
 
 #[derive(Debug)]
 pub(super) struct MintedAgents {
     path: PathBuf,
+    journal: Mutex<Journal>,
+}
+
+fn valid_name(name: &str) -> bool {
+    (1..=128).contains(&name.len())
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
+    let mut open = BTreeSet::new();
+    let mut lines = 0;
+    for line in text.split_inclusive('\n') {
+        let Some(line) = line.strip_suffix('\n') else {
+            continue;
+        };
+        let fields: Vec<&str> = line.split(' ').collect();
+        let [kind, side, name] = fields.as_slice() else {
+            continue;
+        };
+        if Side::parse(side).is_none() || !valid_name(name) {
+            continue;
+        }
+        let key = ((*side).to_owned(), (*name).to_owned());
+        match *kind {
+            INTENT => {
+                open.insert(key);
+            }
+            RETIRED => {
+                open.remove(&key);
+            }
+            _ => continue,
+        }
+        lines += 1;
+    }
+    (open, lines)
 }
 
 impl MintedAgents {
     pub(super) fn new(state: &Path) -> Self {
         Self {
             path: state.join(MINTED_FILE),
+            journal: Mutex::new(Journal::default()),
         }
     }
 
-    pub(super) async fn minted(&self, side: &str, name: &str) -> Result<(), HostError> {
-        self.append(MINTED, side, name).await
+    pub(super) async fn intent(&self, side: &str, name: &str) -> Result<(), HostError> {
+        let mut journal = self.journal.lock().await;
+        self.append(INTENT, side, name).await?;
+        journal.open.insert((side.to_owned(), name.to_owned()));
+        journal.lines += 1;
+        self.compact(&mut journal).await
     }
 
     pub(super) async fn retired(&self, side: &str, name: &str) -> Result<(), HostError> {
-        self.append(RETIRED, side, name).await
+        let mut journal = self.journal.lock().await;
+        self.append(RETIRED, side, name).await?;
+        journal.open.remove(&(side.to_owned(), name.to_owned()));
+        journal.lines += 1;
+        self.compact(&mut journal).await
     }
 
-    pub(super) async fn unretired(&self) -> Result<Vec<(String, String)>, HostError> {
+    pub(super) async fn load(&self) -> Result<Vec<Entry>, HostError> {
+        let mut journal = self.journal.lock().await;
         let text = match tokio::fs::read_to_string(&self.path).await {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(_) => return Err(HostError::Path),
         };
-        let mut open = BTreeSet::new();
-        for line in text.lines() {
-            let mut fields = line.splitn(3, ' ');
-            let (Some(kind), Some(side), Some(name)) =
-                (fields.next(), fields.next(), fields.next())
-            else {
-                continue;
-            };
-            let key = (side.to_owned(), name.to_owned());
-            if kind == MINTED {
-                open.insert(key);
-            } else if kind == RETIRED {
-                open.remove(&key);
-            }
-        }
-        Ok(open.into_iter().collect())
+        let (open, lines) = parse(&text);
+        journal.open = open;
+        journal.lines = lines;
+        self.rewrite(&journal).await?;
+        Ok(journal.open.iter().cloned().collect())
     }
 
     pub(super) async fn clear(&self) -> Result<(), HostError> {
+        let mut journal = self.journal.lock().await;
+        *journal = Journal::default();
         match tokio::fs::remove_file(&self.path).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -65,9 +115,46 @@ impl MintedAgents {
         }
     }
 
+    async fn compact(&self, journal: &mut Journal) -> Result<(), HostError> {
+        if journal.lines <= journal.open.len() * 2 + COMPACT_SLACK {
+            return Ok(());
+        }
+        self.rewrite(journal).await?;
+        journal.lines = journal.open.len();
+        Ok(())
+    }
+
+    async fn rewrite(&self, journal: &Journal) -> Result<(), HostError> {
+        if journal.open.is_empty() {
+            return match tokio::fs::remove_file(&self.path).await {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(_) => Err(HostError::Path),
+            };
+        }
+        let text: String = journal
+            .open
+            .iter()
+            .map(|(side, name)| format!("{INTENT} {side} {name}\n"))
+            .collect();
+        let fresh = self.path.with_extension("new");
+        let mut file = private_options()
+            .truncate(true)
+            .open(&fresh)
+            .await
+            .map_err(|_| HostError::Path)?;
+        file.write_all(text.as_bytes())
+            .await
+            .map_err(|_| HostError::Path)?;
+        file.sync_data().await.map_err(|_| HostError::Path)?;
+        drop(file);
+        tokio::fs::rename(&fresh, &self.path)
+            .await
+            .map_err(|_| HostError::Path)
+    }
+
     async fn append(&self, kind: &str, side: &str, name: &str) -> Result<(), HostError> {
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
+        let mut file = private_options()
             .append(true)
             .open(&self.path)
             .await
@@ -78,3 +165,13 @@ impl MintedAgents {
         file.sync_data().await.map_err(|_| HostError::Path)
     }
 }
+
+fn private_options() -> tokio::fs::OpenOptions {
+    let mut options = tokio::fs::OpenOptions::new();
+    options.create(true).write(true).mode(0o600);
+    options
+}
+
+#[cfg(test)]
+#[path = "minted_tests.rs"]
+mod tests;

@@ -82,7 +82,7 @@ impl Supervisor {
     async fn sweep(&self) -> Result<(), HostError> {
         let label = format!("{ENVIRONMENT_LABEL}={}", self.plan.environment);
         let mut agents = labelled_agents(&self.docker, &label).await?;
-        agents.extend(self.minted.unretired().await?);
+        agents.extend(self.minted.load().await?);
         agents.sort();
         agents.dedup();
         let pairs = [label.clone(), PAIR_LABEL.to_owned()];

@@ -73,8 +73,8 @@ impl Client {
         }
     }
 
-    pub(super) async fn mint(&self, side: Side) -> Result<Minted, CallError> {
-        let body = format!("{{\"side\":\"{}\"}}", side.name()).into_bytes();
+    pub(super) async fn mint(&self, side: Side, name: &str) -> Result<Minted, CallError> {
+        let body = format!("{{\"side\":\"{}\",\"name\":\"{name}\"}}", side.name()).into_bytes();
         let answer = self
             .send(Method::POST, "/jit".to_owned(), body, MINT_TIMEOUT)
             .await?;

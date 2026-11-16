@@ -85,10 +85,10 @@ impl Fake {
             .map_or(usize::MAX, |containers| containers.len())
     }
 
-    async fn answer(&self, method: &str, path: &str) -> (u16, String) {
+    async fn answer(&self, method: &str, path: &str, body: &str) -> (u16, String) {
         let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
         match (method, parts.as_slice()) {
-            ("POST", ["jit"]) => self.mint().await,
+            ("POST", ["jit"]) => self.mint(body).await,
             ("GET", ["runs", side, id, attempt]) => self.run(side, id, attempt),
             ("DELETE", ["agents", side, name]) => {
                 self.log(format!("delete:{side}:{name}"));
@@ -98,9 +98,10 @@ impl Fake {
         }
     }
 
-    async fn mint(&self) -> (u16, String) {
+    async fn mint(&self, body: &str) -> (u16, String) {
         if self.stall_mint.load(Ordering::SeqCst) {
             self.log("mint-stalled".to_owned());
+            self.log(format!("registered:{}", requested_name(body)));
             tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
         }
         let failing = self
@@ -113,12 +114,11 @@ impl Fake {
             self.log("mint-failed".to_owned());
             return (500, "{}".to_owned());
         }
-        (200, self.jit().await)
+        (200, self.jit(&requested_name(body)).await)
     }
 
-    async fn jit(&self) -> String {
-        let number = self.minted.fetch_add(1, Ordering::SeqCst) + 1;
-        let name = format!("agent-{number}");
+    async fn jit(&self, name: &str) -> String {
+        self.minted.fetch_add(1, Ordering::SeqCst);
         for side in ["trusted", "untrusted"] {
             let live = self.live(side).await;
             self.log(format!("mint:{name}:live_{side}={live}"));
@@ -157,7 +157,14 @@ impl Fake {
     }
 }
 
-async fn read_request(stream: &mut TcpStream) -> TestResult<(String, String, bool)> {
+fn requested_name(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| value["name"].as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+async fn read_request(stream: &mut TcpStream) -> TestResult<(String, String, bool, String)> {
     let mut buffer = Vec::new();
     let mut chunk = [0_u8; 1024];
     let (head_end, length) = loop {
@@ -184,6 +191,7 @@ async fn read_request(stream: &mut TcpStream) -> TestResult<(String, String, boo
         buffer.extend_from_slice(&chunk[..read]);
     }
     let head = String::from_utf8_lossy(&buffer[..head_end]).into_owned();
+    let body = String::from_utf8_lossy(&buffer[head_end..]).into_owned();
     let mut first = head.lines().next().unwrap_or_default().split(' ');
     let method = first.next().unwrap_or_default().to_owned();
     let path = first.next().unwrap_or_default().to_owned();
@@ -193,16 +201,16 @@ async fn read_request(stream: &mut TcpStream) -> TestResult<(String, String, boo
             name.eq_ignore_ascii_case("authorization") && value == bearer
         })
     });
-    Ok((method, path, authorized))
+    Ok((method, path, authorized, body))
 }
 
 async fn serve_one(fake: &Fake, mut stream: TcpStream) -> TestResult<()> {
     if !fake.reachable.load(Ordering::SeqCst) {
         return Ok(());
     }
-    let (method, path, authorized) = read_request(&mut stream).await?;
+    let (method, path, authorized, body) = read_request(&mut stream).await?;
     let (status, body) = if authorized {
-        fake.answer(&method, &path).await
+        fake.answer(&method, &path, &body).await
     } else {
         fake.unauthorized.fetch_add(1, Ordering::SeqCst);
         (401, "{}".to_owned())

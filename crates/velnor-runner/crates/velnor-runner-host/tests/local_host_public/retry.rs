@@ -12,6 +12,16 @@ use super::runner;
 use super::scenario::Scenario;
 use super::support::{TestResult, labelled};
 
+fn minted_names(events: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = events
+        .iter()
+        .filter_map(|event| event.strip_prefix("mint:"))
+        .filter_map(|rest| rest.split(':').next().map(str::to_owned))
+        .collect();
+    names.dedup();
+    names
+}
+
 fn mints(events: &[String]) -> usize {
     events
         .iter()
@@ -67,7 +77,8 @@ async fn local_pair_docker_failures_are_retried_three_times_before_the_host_give
         .count();
     assert_eq!(ended?, Err(HostError::Docker));
     assert_eq!(mints, 2 * 3, "{events:?}");
-    for agent in ["agent-1", "agent-2", "agent-3"] {
+    assert_eq!(minted_names(&events).len(), 3, "{events:?}");
+    for agent in minted_names(&events) {
         let deleted = format!("delete:trusted:{agent}");
         assert!(events.contains(&deleted), "{events:?}");
     }
@@ -176,9 +187,20 @@ async fn local_shutdown_does_not_wait_for_a_stalled_mint() -> TestResult<()> {
     let stopped = tokio::time::timeout(Duration::from_secs(30), scenario.stop()).await;
     let seconds = requested.elapsed().as_secs();
     let events = scenario.fake().events();
+    let cleared = !scenario.state.path().join("minted-agents.log").exists();
     scenario.finish().await?;
     assert!(events.contains(&"mint-stalled".to_owned()), "{events:?}");
     assert_eq!(stopped??, Ok(()), "{seconds}s");
+    let registered: Vec<&str> = events
+        .iter()
+        .filter_map(|event| event.strip_prefix("registered:"))
+        .collect();
+    assert_eq!(registered.len(), 1, "{events:?}");
+    assert!(
+        events.contains(&format!("delete:trusted:{}", registered[0])),
+        "{events:?}"
+    );
+    assert!(cleared, "{events:?}");
     Ok(())
 }
 
@@ -201,7 +223,7 @@ async fn local_agent_minted_before_any_container_exists_is_deleted_by_the_next_s
         .fake()
         .events()
         .iter()
-        .any(|event| event.starts_with("mint:agent-1"))
+        .any(|event| event.starts_with("mint:"))
         && started.elapsed() < Duration::from_secs(60)
     {
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -221,9 +243,13 @@ async fn local_agent_minted_before_any_container_exists_is_deleted_by_the_next_s
     scenario.finish().await?;
     assert_eq!(unlabelled, (0, 0), "{before:?}");
     assert_eq!(ended?, Ok(()), "{events:?}");
-    assert!(
-        events.contains(&"delete:trusted:agent-1".to_owned()),
-        "{events:?}"
-    );
+    let names = minted_names(&events);
+    assert!(!names.is_empty(), "{events:?}");
+    for name in names {
+        assert!(
+            events.contains(&format!("delete:trusted:{name}")),
+            "{events:?}"
+        );
+    }
     Ok(())
 }
