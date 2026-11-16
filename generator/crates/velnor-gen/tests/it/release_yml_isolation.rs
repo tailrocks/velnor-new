@@ -15,7 +15,7 @@ const RELEASE_PLZ_URL: &str = "https://github.com/release-plz/release-plz/releas
 type TokenJob<'a> = (&'static str, &'a [Node]);
 
 fn token_jobs(tree: &Node) -> Result<Vec<TokenJob<'_>>, Box<dyn Error>> {
-    ["release-pr", "tag"]
+    ["release-pr", "tag-0"]
         .into_iter()
         .map(|id| Ok((id, steps(tree.at(&["jobs", id]).ok_or("no job")?))))
         .collect()

@@ -114,7 +114,7 @@ jobs:
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
         run: '"$RUNNER_TEMP/release-plz" release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml'
-  tag:
+  tag-0:
     needs:
       - gate
     if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch }}'
@@ -122,7 +122,7 @@ jobs:
     permissions:
       contents: read
     concurrency:
-      group: release-tag
+      group: release-tag-0
       cancel-in-progress: false
     outputs:
       app: '${{ steps.record.outputs.app }}'
@@ -185,16 +185,16 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release-0.json"'
+        run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release.json"'
       - id: record
         name: Record the released packages
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        run: 'velnor-ci release record "$RUNNER_TEMP/release-0.json"'
+        run: 'velnor-ci release record "$RUNNER_TEMP/release.json"'
   build-app-linux-x64:
     needs:
       - gate
-      - tag
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
+      - tag-0
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag-0.outputs.app != '''' }}'
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -204,7 +204,7 @@ jobs:
         name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 'refs/tags/${{ needs.tag.outputs.app }}'
+          ref: 'refs/tags/${{ needs.tag-0.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
       - name: Check that the tag is the commit the gate verified
@@ -238,8 +238,8 @@ jobs:
   build-app-linux-arm64:
     needs:
       - gate
-      - tag
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
+      - tag-0
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag-0.outputs.app != '''' }}'
     permissions:
       contents: read
     runs-on: ubuntu-24.04-arm
@@ -249,7 +249,7 @@ jobs:
         name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 'refs/tags/${{ needs.tag.outputs.app }}'
+          ref: 'refs/tags/${{ needs.tag-0.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
       - name: Check that the tag is the commit the gate verified
@@ -283,8 +283,8 @@ jobs:
   build-app-macos-arm64:
     needs:
       - gate
-      - tag
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
+      - tag-0
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag-0.outputs.app != '''' }}'
     permissions:
       contents: read
     runs-on: macos-15
@@ -294,7 +294,7 @@ jobs:
         name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 'refs/tags/${{ needs.tag.outputs.app }}'
+          ref: 'refs/tags/${{ needs.tag-0.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
       - name: Check that the tag is the commit the gate verified
@@ -324,11 +324,11 @@ jobs:
   sums-app:
     needs:
       - gate
-      - tag
+      - tag-0
       - build-app-linux-x64
       - build-app-linux-arm64
       - build-app-macos-arm64
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag-0.outputs.app != '''' }}'
     permissions: {}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -366,9 +366,9 @@ jobs:
   publish-app:
     needs:
       - gate
-      - tag
+      - tag-0
       - sums-app
-    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
+    if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag-0.outputs.app != '''' }}'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -405,5 +405,5 @@ jobs:
         env:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
-          TAG: '${{ needs.tag.outputs.app }}'
+          TAG: '${{ needs.tag-0.outputs.app }}'
         run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'

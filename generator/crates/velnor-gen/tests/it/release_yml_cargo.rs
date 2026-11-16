@@ -163,25 +163,27 @@ fn an_after_name_of_a_generator_owned_workflow_that_generation_retires_is_refuse
 fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_refuse_commands()
 -> TestResult {
     let (_, tree) = two_binaries()?;
-    let tag = job(&tree, "tag")?;
+    let tag = job(&tree, "tag-0")?;
     assert_eq!(
         tag.at(&["concurrency", "group"]).and_then(Node::text),
-        Some("release-tag")
+        Some("release-tag-0")
     );
     assert_eq!(
         tag.at(&["concurrency", "cancel-in-progress"])
             .and_then(Node::text),
         Some("false")
     );
-    for id in ["release-pr", "tag"] {
+    for (id, files) in [
+        ("release-pr", "release-plz.toml tools/release-plz.toml"),
+        ("tag-0", "release-plz.toml"),
+        ("tag-1", "tools/release-plz.toml"),
+    ] {
         let all = steps(job(&tree, id)?);
         let refuse = all
             .iter()
             .position(|step| {
                 step.get("run").and_then(Node::text)
-                    == Some(
-                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
-                    )
+                    == Some(format!("velnor-ci release check-config {files}").as_str())
             })
             .ok_or("no refuse step")?;
         let helper = all
