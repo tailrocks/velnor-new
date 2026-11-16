@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
+runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
 
 [crates_mirror]

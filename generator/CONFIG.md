@@ -7,6 +7,8 @@ The new Rust generator reads `.velnor/rust-ci.toml`.
 The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Every emitted mirror step requires the actual runner context to report `runner.environment == 'self-hosted'` and excludes fork pull requests. Hosted runners do not use the mirror, regardless of their label; a missing or unrecognized runner environment also skips setup.
 
 ```toml
+runner = "ubuntu-26.04-scale-set"
+
 [crates_mirror]
 runner = "ubuntu-26.04-scale-set"
 registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"
@@ -21,4 +23,4 @@ A Cargo wrapper on `PATH`, also exported as `CARGO`, passes the absolute configu
 
 Writing the configuration only above the checkout misses temporary directories. Writing it only in Cargo's home misses a changed home. A configuration at `/.cargo/config.toml` would reach unrelated directories but needs filesystem-root access and changes unrelated jobs. The wrapper uses a per-job configuration instead.
 
-The repository's mirror table names its scale-set runner. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Activating a generated Rust workflow requires the compatible helper release and a matching `runner` setting.
+This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
