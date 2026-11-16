@@ -4,6 +4,7 @@
 pub mod cli;
 pub mod collect;
 pub mod compare;
+mod configurations;
 pub mod coverage;
 pub mod error;
 pub mod escape;

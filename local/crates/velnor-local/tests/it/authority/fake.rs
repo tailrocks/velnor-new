@@ -30,6 +30,8 @@ pub(super) struct FakeRunners {
     pub(super) stubborn: bool,
     pub(super) mint_fails: bool,
     pub(super) mint_stalls: bool,
+    pub(super) stalled_mint_calls: u32,
+    pub(super) mint_entered: tokio::sync::Notify,
     pub(super) minted: Mutex<u32>,
 }
 
@@ -129,8 +131,13 @@ impl Backend for &FakeRunners {
     ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
         let name = name.unwrap_or("velnor-x-jit-1").to_owned();
         async move {
-            *self.minted.lock().unwrap_or_else(|e| unreachable!("{e}")) += 1;
-            if self.mint_stalls {
+            let call = {
+                let mut minted = self.minted.lock().unwrap_or_else(|e| unreachable!("{e}"));
+                *minted += 1;
+                *minted
+            };
+            self.mint_entered.notify_one();
+            if self.mint_stalls || call <= self.stalled_mint_calls {
                 std::future::pending::<()>().await;
             }
             if self.mint_fails {
