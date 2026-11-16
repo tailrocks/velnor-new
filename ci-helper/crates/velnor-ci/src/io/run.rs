@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::OpenOptions;
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nix::sys::signal::{Signal, killpg};
+use nix::sys::signal::{Signal, kill, killpg};
 use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -18,7 +18,7 @@ use signal_hook::iterator::Signals;
 use super::append_outputs;
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
-use crate::stream::{Pumped, pump_counted};
+use crate::stream::{Pumped, pump_counted, separate_group};
 use crate::tests_run::{output_line, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -78,20 +78,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     .map_err(write_error)?;
     let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
-    let mut child = Command::new(&args.command[0])
-        .args(&args.command[1..])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .map_err(|e| {
-            let code = if e.kind() == std::io::ErrorKind::NotFound {
-                NOT_FOUND
-            } else {
-                NOT_RUNNABLE
-            };
-            (code, format!("cannot run {}: {e}", args.command[0]))
-        })?;
+    let (mut child, own_group) = spawn_child(&args.command)?;
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
@@ -108,7 +95,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
     drop(sender);
     let handle = signals.handle();
-    forward(signals, pid);
+    forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
@@ -144,11 +131,36 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
 }
 
-fn forward(mut signals: Signals, pid: Option<Pid>) {
+fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, String)> {
+    let own_group = separate_group(std::io::stdin().is_terminal());
+    let mut command = Command::new(&argv[0]);
+    command
+        .args(&argv[1..])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if own_group {
+        command.process_group(0);
+    }
+    let child = command.spawn().map_err(|e| {
+        let code = if e.kind() == std::io::ErrorKind::NotFound {
+            NOT_FOUND
+        } else {
+            NOT_RUNNABLE
+        };
+        (code, format!("cannot run {}: {e}", argv[0]))
+    })?;
+    Ok((child, own_group))
+}
+
+fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     thread::spawn(move || {
         for received in signals.forever() {
             if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
-                killpg(pid, signal).ok();
+                if own_group {
+                    killpg(pid, signal).ok();
+                } else {
+                    kill(pid, signal).ok();
+                }
             }
         }
     });
