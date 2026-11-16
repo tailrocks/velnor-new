@@ -5,6 +5,7 @@ on:
   workflow_run:
     workflows:
       - CI
+      - Rust CI
     types:
       - completed
     branches:
