@@ -181,24 +181,29 @@ fn a_publish_timeout_that_is_not_a_duration_is_refused() -> TestResult {
 
 #[test]
 fn a_release_workflow_above_the_github_file_size_limit_is_refused() -> TestResult {
-    let roots: Vec<Root> = (0..60)
-        .map(|index| Root {
-            dir: Box::leak(format!("crate-{index}").into_boxed_str()),
-            package: Box::leak(format!("package-{index}").into_boxed_str()),
-            prefix: Box::leak(format!("release-plz-{index}-").into_boxed_str()),
-            publishes: false,
-        })
+    // Every root and package adds to the check-config and tag-pattern runs, which
+    // are capped at 2000 characters, so many roots hit that cap before they reach
+    // the file limit. The trigger's `after` list grows the file without a run.
+    let names: Vec<String> = (0..100)
+        .map(|index| format!("Workflow {index:03} {}", "w".repeat(6000)))
         .collect();
-    let list: Vec<String> = roots
-        .iter()
-        .map(|root| format!("\"{}\"", root.dir))
-        .collect();
-    let binaries: Vec<String> = roots
-        .iter()
-        .map(|root| format!("[[binaries]]\npackage = \"{}\"\n", root.package))
-        .collect();
-    let config = format!("roots = [{}]\n{}", list.join(", "), binaries.concat());
-    let error = expected_files(&release_view(&roots, Some(&config))?).err();
+    let roots = [APP];
+    let config = format!(
+        "roots = [\".\"]\nafter = [\"Rust CI\", {}]\n[[binaries]]\npackage = \"app\"\n",
+        names
+            .iter()
+            .map(|name| format!("\"{name}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let mut view = release_view(&roots, Some(&config))?;
+    for (index, name) in names.iter().enumerate() {
+        view.files.insert(
+            RepoPath::new(format!(".github/workflows/after-{index}.yml"))?,
+            format!("name: {name}\non: push\n").into_bytes(),
+        );
+    }
+    let error = expected_files(&view).err();
     let Some(GenerateError::Rules(violations)) = error else {
         return Err("rendered".into());
     };
