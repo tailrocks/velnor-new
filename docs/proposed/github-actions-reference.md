@@ -694,6 +694,11 @@ inventories do not list GNU coreutils as a guaranteed tool. Source qualification
 uses the platform `shasum -a 256` command for lock identities instead of relying
 on `sha256sum`.
 
+## Tag ruleset drift
+
+The maintenance drift job uses the [pinned github-script API client](https://github.com/actions/github-script/blob/3a2844b7e9c422d3c10d287c895573f7108da1b3/README.md#this-action) and its pagination plugin without checkout.
+The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
+
 ## Generated Rust CI workflow events and concurrency
 
 The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
@@ -708,5 +713,6 @@ These behaviors are GitHub service semantics, so the runner source does not defi
 - Pull-request activity types: the [`pull_request` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) lists `opened`, `synchronize`, `reopened`, `ready_for_review`, `edited` and `converted_to_draft`. The generator lists the first five always (`edited` also fires when the base branch is retargeted, so a green result for the old base is replaced, as docs/implemented/affected-selection.md requires). It adds `converted_to_draft` only with `skip_draft_pull_requests`, so a running non-draft run is cancelled by the replacement run that skips its jobs.
 - Draft state: `github.event.pull_request.draft` is the pull-request payload field. A `ready_for_review` run carries `draft == false`.
 - Conditionally skipped jobs: [GitHub reports a job skipped by a condition as successful](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions), so a required check cannot rely on `needs` results to notice skipped lanes. With `skip_draft_pull_requests`, the verdict job fails on a draft run and only a non-draft run can pass it.
-- Concurrency: [group names must be unique across workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) to avoid cross-workflow cancellation. The group uses `github.workflow_ref`, the workflow file path, not the display name. Only `pull_request` runs cancel in progress; other events get a per-run group.
+- Pull-request state: CI jobs exclude a `pull_request` event when `github.event.pull_request.state == 'closed'` or `github.ref` is outside `refs/pull/`. The [GitHub context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context) assigns merged PR events the destination branch ref, independently of the possibly empty PR payload. Open edits still run so base retargeting replaces the previous result. Missing state with a PR ref retains the conservative planning path and Required execution, including for forks.
+- Concurrency: [group names must be unique across workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) to avoid cross-workflow cancellation. The group uses `github.workflow_ref`, the workflow file path, not the display name. Only `pull_request` runs with a PR ref and a state other than `closed` share the PR group and cancel in progress. Other events get a per-run group. GitHub also replaces a pending run in the same group regardless of `cancel-in-progress`, so excluded PR edits require a separate group.
 - `merge_group` and `push` to the configured default branch start the same workflow; `default_branch` is a validated config key and a push to any other branch starts no run.
