@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RepoPath, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
+    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -22,7 +22,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const HELPER_BINARY: RepoPath = RepoPath::from_static("target/debug/velnor-ci");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
@@ -120,7 +119,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         }))
     });
     steps.push(step(StepKind::PublishHelper {
-        binary: root.manifest.sibling(&HELPER_BINARY),
+        binary: root.target_dir.child("debug/velnor-ci"),
     }));
     Job {
         steps,
