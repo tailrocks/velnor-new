@@ -32,11 +32,13 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 10] = [
+const LANE_SETUP: [&str; 11] = [
     "Check out",
     "Install velnor-ci 0.1.79",
+    "Restore the tools cache",
     "Install tools",
     "Add Rust components",
+    "Save the tools cache",
     "velnor-ci prepare",
     "velnor-ci check-metadata",
     "Restore the sources cache",
@@ -110,8 +112,8 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     }
     assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
-    assert_eq!(lane[..10], LANE_SETUP);
-    assert!(lane[10].starts_with("Format"), "{lane:?}");
+    assert_eq!(lane[..11], LANE_SETUP);
+    assert!(lane[11].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
         "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
     ));

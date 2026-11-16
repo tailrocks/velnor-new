@@ -170,6 +170,7 @@ pub enum When {
     Scheduled,
     ScheduledOrPush,
     CacheDebug,
+    SaveToolsOnDefaultBranch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -75,6 +75,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -84,6 +92,14 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools cache
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
@@ -181,6 +197,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -190,6 +214,14 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools cache
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
@@ -271,6 +303,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -318,6 +358,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -329,6 +377,14 @@ jobs:
       - name: Add Rust targets
         working-directory: lab
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools cache
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
@@ -412,6 +468,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -423,6 +487,14 @@ jobs:
       - name: Add Rust targets
         working-directory: lab
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools cache
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
@@ -501,6 +573,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -549,6 +629,14 @@ jobs:
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
           sha256-linux-arm64: '05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b'
           sha256-macos-arm64: '91b0214fc2a5713bf7c962842636eecb899bbb052646a396818526e528a713f4'
+      - id: tools
+        name: Restore the tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -558,6 +646,14 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools cache
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.rustup
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: velnor-ci prepare
