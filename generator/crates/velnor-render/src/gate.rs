@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, Visibility, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -46,6 +46,17 @@ fn need_name(need: GateNeed) -> &'static str {
         GateNeed::Deny => "deny",
         GateNeed::Machete => "machete",
         GateNeed::Policy => "policy",
+    }
+}
+
+pub(crate) const PRIVATE_REPOSITORY: &str = "github.event.repository.private == true";
+const PUBLIC_REPOSITORY: &str = "github.event.repository.private != true";
+
+pub(crate) fn visibility_part(visibility: Visibility) -> Option<String> {
+    match visibility {
+        Visibility::Any => None,
+        Visibility::PrivateOnly => Some(PRIVATE_REPOSITORY.to_owned()),
+        Visibility::PublicOnly => Some(PUBLIC_REPOSITORY.to_owned()),
     }
 }
 

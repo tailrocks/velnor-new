@@ -28,7 +28,7 @@ pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<Str
         .filter_map(|(path, bytes)| configured_source(path, bytes));
     locks.chain(configs).next().map(|cause| {
         format!(
-            "private or non-crates.io dependencies ({cause}): the target and sources caches are not saved, so nothing built from them reaches a cache a fork can read"
+            "private or non-crates.io dependencies ({cause}): saves run only in private repositories, so nothing built from them reaches a cache a fork can read"
         )
     })
 }

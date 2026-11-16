@@ -92,43 +92,64 @@ fn a_lockfile_with_only_crates_io_sources_saves_the_base_caches() -> TestResult 
     Ok(())
 }
 
+const PRIVATE_ONLY: &str = "github.event.repository.private == true";
+
 #[test]
-fn a_git_or_private_registry_dependency_saves_neither_the_target_nor_the_sources_cache()
+fn a_git_or_private_registry_dependency_saves_the_base_caches_only_in_private_repositories()
 -> TestResult {
     for source in [GIT, PRIVATE_REGISTRY] {
         let view = with_lock_file(source)?;
         let text = text_of(&view)?;
-        for absent in [
+        let lane = block(&text, "rust").ok_or("no lane")?;
+        for name in [
             "Save the target cache",
             "Save the sources cache",
-            "cache decide",
-            "rust-trim",
-            "inputs save",
+            "Decide whether to save the build directory",
+            "Build the tests",
         ] {
-            assert!(!text.contains(absent), "{source}: {absent}");
+            let saved = step(&lane, name).ok_or_else(|| format!("{source}: no {name}"))?;
+            assert!(saved.contains(PRIVATE_ONLY), "{source}: {name}: {saved}");
         }
         let (_, notes) = expected_with_notes(&view)?;
         assert!(
-            notes
-                .iter()
-                .any(|note| note.contains("private") && note.contains("not saved")),
+            notes.iter().any(|note| note.contains("private")
+                && note.contains("saves run only in private repositories")),
             "{notes:?}"
         );
+        let notice = step(&lane, "Explain the skipped base cache saves").ok_or("no notice")?;
+        assert!(
+            notice.contains("github.event.repository.private != true"),
+            "{notice}"
+        );
+        assert!(notice.contains("::notice::"), "{notice}");
     }
     Ok(())
 }
 
 #[test]
-fn a_registry_declared_in_the_cargo_config_also_stops_the_saves() -> TestResult {
-    let mut view = pinned("0.1.81", "")?;
-    let config = RepoPath::new(".cargo/config.toml")?;
-    view.tracked_paths.insert(config.clone());
-    view.files.insert(
-        config,
-        b"[registries.corp]\nindex = \"sparse+https://registry.example.invalid/\"\n".to_vec(),
-    );
-    let text = text_of(&view)?;
-    assert!(!text.contains("Save the target cache"), "{text}");
+fn the_trim_job_of_a_private_dependency_repository_keeps_its_guard_and_adds_the_visibility()
+-> TestResult {
+    let text = text_of(&with_lock_file(GIT)?)?;
+    let trim = block(&text, "rust-trim").ok_or("no trim job")?;
+    let condition = trim
+        .lines()
+        .find(|line| line.trim_start().starts_with("if: "))
+        .ok_or("no job condition")?;
+    for needle in [
+        "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)",
+        "github.event_name == ''push''",
+        PRIVATE_ONLY,
+    ] {
+        assert!(condition.contains(needle), "{condition}");
+    }
+    assert!(trim.contains("actions: write"), "{trim}");
+    Ok(())
+}
+
+#[test]
+fn a_repository_without_private_dependencies_renders_no_visibility_condition() -> TestResult {
+    let text = text_of(&with_lock_file(CRATES_IO)?)?;
+    assert!(!text.contains("repository.private"), "{text}");
     Ok(())
 }
 

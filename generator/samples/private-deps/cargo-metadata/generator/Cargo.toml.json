@@ -1,0 +1,371 @@
+{
+  "build_directory": "/repo/generator/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/generator/crates/velnor-model#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/generator/crates/velnor-model/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-model",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_model",
+          "src_path": "/repo/generator/crates/velnor-model/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.229",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-model",
+          "optional": false,
+          "path": "/repo/generator/crates/velnor-model",
+          "registry": null,
+          "rename": null,
+          "req": "=0.0.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/generator/crates/velnor-rust#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/generator/crates/velnor-rust/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-rust",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_rust",
+          "src_path": "/repo/generator/crates/velnor-rust/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-model",
+          "optional": false,
+          "path": "/repo/generator/crates/velnor-model",
+          "registry": null,
+          "rename": null,
+          "req": "=0.0.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/generator/crates/velnor-render#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/generator/crates/velnor-render/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-render",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_render",
+          "src_path": "/repo/generator/crates/velnor-render/src/lib.rs",
+          "test": false
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "derive",
+            "string"
+          ],
+          "kind": null,
+          "name": "clap",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=4.6.7",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.0.154",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-model",
+          "optional": false,
+          "path": "/repo/generator/crates/velnor-model",
+          "registry": null,
+          "rename": null,
+          "req": "=0.0.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-render",
+          "optional": false,
+          "path": "/repo/generator/crates/velnor-render",
+          "registry": null,
+          "rename": null,
+          "req": "=0.0.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "velnor-rust",
+          "optional": false,
+          "path": "/repo/generator/crates/velnor-rust",
+          "registry": null,
+          "rename": null,
+          "req": "=0.0.0",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "similar",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=3.2.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": "dev",
+          "name": "toml",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=1.1.8",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/generator/crates/velnor-gen#0.1.79",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/generator/crates/velnor-gen/Cargo.toml",
+      "metadata": null,
+      "name": "velnor-gen",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "velnor_gen",
+          "src_path": "/repo/generator/crates/velnor-gen/src/lib.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "velnor-gen",
+          "src_path": "/repo/generator/crates/velnor-gen/src/main.rs",
+          "test": false
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "it",
+          "src_path": "/repo/generator/crates/velnor-gen/tests/it/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.79"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/generator/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo/generator/crates/velnor-model#0.0.0",
+    "path+file:///repo/generator/crates/velnor-rust#0.0.0",
+    "path+file:///repo/generator/crates/velnor-render#0.0.0",
+    "path+file:///repo/generator/crates/velnor-gen#0.1.79"
+  ],
+  "workspace_members": [
+    "path+file:///repo/generator/crates/velnor-model#0.0.0",
+    "path+file:///repo/generator/crates/velnor-rust#0.0.0",
+    "path+file:///repo/generator/crates/velnor-render#0.0.0",
+    "path+file:///repo/generator/crates/velnor-gen#0.1.79"
+  ],
+  "workspace_root": "/repo/generator"
+}
