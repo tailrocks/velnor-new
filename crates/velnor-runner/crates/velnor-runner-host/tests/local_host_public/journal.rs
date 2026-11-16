@@ -148,7 +148,13 @@ async fn local_failed_mint_keeps_its_name_while_the_agent_is_not_visible_yet() -
         .filter_map(|event| event.strip_prefix("mint-refused:"))
         .collect();
     assert_eq!(refused.len(), 1, "{events:?}");
-    assert!(kept.contains(&format!("+ trusted {}", refused[0])), "{kept}");
-    assert!(!kept.contains(&format!("- trusted {}", refused[0])), "{kept}");
+    assert!(
+        kept.contains(&format!("+ trusted {}", refused[0])),
+        "{kept}"
+    );
+    assert!(
+        !kept.contains(&format!("- trusted {}", refused[0])),
+        "{kept}"
+    );
     Ok(())
 }
