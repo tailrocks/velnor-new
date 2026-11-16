@@ -6,11 +6,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, Triggers, Visibility, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{expiry, trim_job};
+use crate::base_cache::{restored, trim_job};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -75,7 +75,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     upload_cargo_logs(&mut jobs);
     let verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
-    let trim = trim_job(facts, &jobs, helper_root.is_some());
+    let trim = trim_job(facts, &jobs);
     jobs.extend(trim);
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
@@ -264,9 +264,7 @@ pub(crate) fn setup_roots(
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
-    toolchain.push(step(StepKind::Helper(HelperCommand::Restored(expiry(
-        facts, lane,
-    )))));
+    toolchain.push(step(StepKind::Helper(restored(facts, lane))));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
@@ -284,7 +282,7 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             let gate = job
                 .steps
                 .iter()
-                .find(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(_))))
+                .find(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))))
                 .and_then(|step| step.gate.clone());
             job.steps.push(Step {
                 when: When::CacheDebug,
@@ -316,6 +314,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         comment: None,
         needs: Vec::new(),
         when: When::Success,
+        visibility: Visibility::Any,
         skip_on_draft: facts.config.skip_draft_pull_requests,
         runs_on: facts.config.runner.clone(),
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
@@ -331,6 +330,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         when: When::Success,
+        visibility: Visibility::Any,
         skip_on_draft: false,
         gate: None,
         reads: None,

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, Visibility, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -49,6 +49,17 @@ fn need_name(need: GateNeed) -> &'static str {
     }
 }
 
+pub(crate) const PRIVATE_REPOSITORY: &str = "github.event.repository.private == true";
+const PUBLIC_REPOSITORY: &str = "github.event.repository.private != true";
+
+pub(crate) fn visibility_part(visibility: Visibility) -> Option<String> {
+    match visibility {
+        Visibility::Any => None,
+        Visibility::PrivateOnly => Some(PRIVATE_REPOSITORY.to_owned()),
+        Visibility::PublicOnly => Some(PUBLIC_REPOSITORY.to_owned()),
+    }
+}
+
 pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
@@ -86,6 +97,10 @@ pub(crate) fn condition(
             if when == When::SaveBaseDecided {
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
+        }
+        When::SavingRun => {
+            parts.push(ON_DEFAULT_BRANCH.to_owned());
+            parts.push(SAVING_EVENTS.to_owned());
         }
         When::SaveToolsOnDefaultBranch => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());

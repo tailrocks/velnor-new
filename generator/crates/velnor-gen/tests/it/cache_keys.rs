@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PullRequestType, RepoPath,
-    RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    RootSlug, RunnerLabel, Step, StepKind, Triggers, Visibility, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -186,6 +186,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             comment: None,
             needs: Vec::new(),
             when: When::Success,
+            visibility: Visibility::Any,
             skip_on_draft: false,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
@@ -196,6 +197,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 kind: StepKind::CacheSave(key.clone()),
                 directory: None,
                 when: When::Success,
+                visibility: Visibility::Any,
                 skip_on_draft: false,
                 gate: None,
                 reads: None,
