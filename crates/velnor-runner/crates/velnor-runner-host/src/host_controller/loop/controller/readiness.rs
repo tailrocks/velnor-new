@@ -48,8 +48,6 @@ async fn refresh(
     .await
 }
 
-/// Fails closed: any error while re-proving readiness withdraws the proof
-/// published by an earlier refresh before the error propagates.
 async fn refresh_with_dependencies(
     state: &std::path::Path,
     docker: &Docker,
