@@ -5,3 +5,10 @@ retries = 0
 test-threads = "num-cpus"
 status-level = "all"
 final-status-level = "flaky"
+
+[test-groups]
+docker-networks = { max-threads = 4 }
+
+[[profile.default.overrides]]
+filter = "binary(local_host_public) | binary(local_pair_public)"
+test-group = "docker-networks"

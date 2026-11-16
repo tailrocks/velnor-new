@@ -5,9 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_model::{
-    OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, TargetKind,
+    OptionalSteps, RepoFacts, RepoPath, RustRoot, SkipReason, StepNeed, Target, TargetKind,
 };
 
+mod markdown;
 mod scan;
 mod tokens;
 
@@ -129,6 +130,7 @@ pub fn optional_steps(
 ) -> OptionalSteps {
     let mut found = Found::default();
     let rust = target_sources(root);
+    let other_kinds = undocumented_sources(root);
     let generates = root
         .members
         .iter()
@@ -138,7 +140,26 @@ pub fn optional_steps(
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
-            found.scan_rust(&text);
+            let counts = !other_kinds.contains(path);
+            let mut pending = vec![(path.clone(), found.scan_rust(&text, counts))];
+            let mut visited = BTreeSet::new();
+            while let Some((from, reached)) = pending.pop() {
+                for include in &reached.includes {
+                    if let Some(read) = included(sources, &from, include) {
+                        found.scan_included(&String::from_utf8_lossy(read));
+                    }
+                }
+                for module in &reached.modules {
+                    let Some((module_path, bytes)) = included_entry(sources, &from, module) else {
+                        continue;
+                    };
+                    if is_rust(module_path, &rust) || !visited.insert(module_path.clone()) {
+                        continue;
+                    }
+                    let text = String::from_utf8_lossy(bytes);
+                    pending.push((module_path.clone(), found.scan_rust(&text, counts)));
+                }
+            }
         } else {
             found.scan_text(&text);
         }
@@ -156,7 +177,7 @@ pub fn optional_steps(
     } else {
         StepNeed::Skip(SkipReason::NoDocs)
     };
-    let doctests_known = has_doctest_library(root) && found.fenced;
+    let doctests_known = has_doctest_library(root) && found.written;
     OptionalSteps {
         doctests,
         doctests_known,
@@ -179,9 +200,60 @@ fn target_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {
         .collect()
 }
 
+fn undocumented_sources(root: &RustRoot) -> BTreeSet<&RepoPath> {
+    let targets = || root.members.iter().flat_map(|member| &member.targets);
+    let doctested = |target: &&Target| {
+        target.doctest
+            && target
+                .kinds
+                .iter()
+                .any(|kind| matches!(kind, TargetKind::Lib | TargetKind::ProcMacro))
+    };
+    let counted: BTreeSet<_> = targets()
+        .filter(doctested)
+        .filter_map(|t| t.source.as_ref())
+        .collect();
+    targets()
+        .filter(|target| !doctested(target))
+        .filter_map(|target| target.source.as_ref())
+        .filter(|source| !counted.contains(source))
+        .collect()
+}
+
 fn is_rust(path: &RepoPath, targets: &BTreeSet<&RepoPath>) -> bool {
     targets.contains(path)
         || Path::new(path.as_str())
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+}
+
+fn included<'a>(
+    sources: &'a BTreeMap<RepoPath, Vec<u8>>,
+    from: &RepoPath,
+    include: &str,
+) -> Option<&'a Vec<u8>> {
+    included_entry(sources, from, include).map(|(_, bytes)| bytes)
+}
+
+fn included_entry<'a>(
+    sources: &'a BTreeMap<RepoPath, Vec<u8>>,
+    from: &RepoPath,
+    include: &str,
+) -> Option<(&'a RepoPath, &'a Vec<u8>)> {
+    if include.starts_with('/') {
+        return None;
+    }
+    let mut parts: Vec<&str> = from.as_str().split('/').collect();
+    parts.pop();
+    for part in include.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            part => parts.push(part),
+        }
+    }
+    let wanted = parts.join("/");
+    sources.iter().find(|(path, _)| path.as_str() == wanted)
 }

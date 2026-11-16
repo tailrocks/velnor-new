@@ -144,7 +144,7 @@ async fn migrates_genuine_v41_journal_and_preserves_completed_intent() -> TestRe
     let mut rows = conn.query("PRAGMA user_version", ()).await?;
     assert_eq!(
         rows.next().await?.ok_or("missing version")?.get::<i64>(0)?,
-        44
+        45
     );
     Ok(())
 }

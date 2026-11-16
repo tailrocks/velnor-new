@@ -1,18 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use bollard::Docker;
-
 use super::{
-    ScopedRuntimeOutcome,
+    ScopedPrepareContext, ScopedRuntimeOutcome,
     binding::{bind_started, cleanup_failed_pair},
     pending, pending_with_initialization,
 };
 use crate::{
     error::HostError,
-    journal::{ConnectionJournal, Journal, RecordedStorageNetwork},
+    journal::RecordedStorageNetwork,
     launch::{
-        SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::{self, PreparedAcquiredBootstrap, StartedBootstrapPair},
         resource_probe::ImageProvider,
     },
@@ -20,26 +17,17 @@ use crate::{
 
 pub(super) async fn prepare_started_and_bound<P: ImageProvider>(
     prepared: PreparedAcquiredBootstrap,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: ScopedPrepareContext<'_, P>,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
+    let ScopedPrepareContext { docker, scoped, .. } = context;
     let StartedPairPreparation {
         mut prepared,
         network,
         started,
-    } = match Box::pin(prepare_network_and_started_pair(
-        prepared, docker, scoped, host, provider, engine, images,
-    ))
-    .await
-    {
+    } = match Box::pin(prepare_network_and_started_pair(prepared, context)).await {
         Ok(preparation) => preparation,
         Err(pending) => return Ok(*pending),
     };
-    let context = super::scoped_prepare_context(docker, scoped, host, provider, engine, images);
     let reservation_id = prepared.acquired().reservation_id();
     let initialization = match Box::pin(
         crate::worker::storage_initialization::finish_after_pair_mounts(
@@ -96,13 +84,15 @@ struct StartedPairPreparation {
 
 async fn prepare_network_and_started_pair<P: ImageProvider>(
     prepared: PreparedAcquiredBootstrap,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: ScopedPrepareContext<'_, P>,
 ) -> Result<StartedPairPreparation, Box<ScopedRuntimeOutcome>> {
+    let ScopedPrepareContext {
+        docker,
+        scoped,
+        engine,
+        images,
+        ..
+    } = context;
     let reservation_id = prepared.acquired().reservation_id();
     let Some(initializer) = prepared.storage().pending_initialization() else {
         return Err(Box::new(pending(
@@ -148,7 +138,7 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
                     error,
                     pending_pair,
                     reservation_id,
-                    super::scoped_prepare_context(docker, scoped, host, provider, engine, images),
+                    context,
                 )
                 .await,
             ));

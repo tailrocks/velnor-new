@@ -117,12 +117,13 @@ Workflow to generate
     - rust-velnor-runner-core (28 steps)
     - rust-velnor-runner-github (29 steps)
     - rust-velnor-runner-host (29 steps)
+    - rust-velnor-runner-host-local-mode (29 steps)
     - rust-velnor-runner-image-manifest (29 steps)
     - rust-velnor-runner-qualification (29 steps)
     - rust-velnor-rust (28 steps)
     - sources-producer (15 steps)
     - state-producer-ci-helper (35 steps)
-    - state-producer-crates-velnor-runner (77 steps)
+    - state-producer-crates-velnor-runner (83 steps)
     - state-producer-generator (59 steps)
     - state-producer-local (41 steps)
     - state-producer-root (101 steps)
@@ -135,7 +136,7 @@ Workflow to generate
     - tools-producer-924ced60 (11 steps)
     - tools-producer-c957c0bd (8 steps)
     - tools-producer-caf63d48 (9 steps)
-    - 28 Rust crate jobs
+    - 29 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
       Entries:
@@ -164,6 +165,7 @@ Workflow to generate
         - rust-velnor-runner-core
         - rust-velnor-runner-github
         - rust-velnor-runner-host
+        - rust-velnor-runner-host-local-mode
         - rust-velnor-runner-image-manifest
         - rust-velnor-runner-qualification
         - rust-velnor-rust
@@ -251,10 +253,15 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/local-mode
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/local-mode
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/local-mode
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/local-mode
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/local-mode
         - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/doc/default
@@ -297,9 +304,9 @@ Workflow to generate
         - stack/rust/local/crates/velnor-local/doc/default
         - stack/rust/local/crates/velnor-local/fmt/default
         - stack/rust/local/crates/velnor-local/nextest/default
-  Parallel: 28 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 29 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
-  Clippy memory groups: 1; barriers: 0
+  Clippy memory groups: 2; barriers: 1
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Jactionlint: 2.4.0 pinned, profile default
   Action pins: 9
@@ -339,6 +346,7 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/local-mode has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-gen/doctest/default has no test targets; no test command emitted
