@@ -20,6 +20,13 @@ pub(crate) fn tag_of(package: &str) -> &'static str {
     if package == "tools" { "tag-1" } else { "tag-0" }
 }
 
+fn tagged_ref(package: &str) -> String {
+    format!(
+        "refs/tags/${{{{ needs.{}.outputs.{package} }}}}",
+        tag_of(package)
+    )
+}
+
 pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
     Ok(tree
         .at(&["jobs", id])
@@ -139,13 +146,9 @@ fn release_yml_build_holds_contents_read_only_and_builds_locked_without_secrets_
             "{id}"
         );
         let checkout = &steps(build)[0];
-        let refs = format!(
-            "refs/tags/${{{{ needs.{}.outputs.{package} }}}}",
-            tag_of(package)
-        );
         assert_eq!(
             checkout.at(&["with", "ref"]).and_then(Node::text),
-            Some(refs.as_str()),
+            Some(tagged_ref(package).as_str()),
             "{id}"
         );
         assert_eq!(

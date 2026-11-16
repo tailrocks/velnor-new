@@ -91,11 +91,11 @@ fn a_release_workflow_above_the_github_file_size_limit_is_refused() -> TestResul
         .iter()
         .map(|root| format!("\"{}\"", root.dir))
         .collect();
-    let binaries: String = roots
+    let binaries: Vec<String> = roots
         .iter()
         .map(|root| format!("[[binaries]]\npackage = \"{}\"\n", root.package))
         .collect();
-    let config = format!("roots = [{}]\n{binaries}", list.join(", "));
+    let config = format!("roots = [{}]\n{}", list.join(", "), binaries.concat());
     let error = expected_files(&release_view(&roots, Some(&config))?).err();
     assert!(matches!(
         error,
