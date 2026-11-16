@@ -57,6 +57,8 @@ pub(crate) struct Toolchain {
     pub rustup: Option<String>,
 }
 
+pub(crate) type Populate = Box<dyn Fn(&Path) + Send + Sync>;
+
 pub(crate) struct Setup {
     pub json: String,
     pub mise_toml: String,
@@ -68,7 +70,7 @@ pub(crate) struct Setup {
     pub repo_cargo_config: Option<&'static str>,
     pub ignored: bool,
     pub plain: bool,
-    pub populate: Option<Box<dyn Fn(&Path) + Send + Sync>>,
+    pub populate: Option<Populate>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
 }
