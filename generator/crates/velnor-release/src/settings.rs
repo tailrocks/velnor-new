@@ -59,18 +59,15 @@ impl Settings {
             .unwrap_or(crate::timeout::DEFAULT_PUBLISH_MINUTES)
     }
 
+    /// release-plz 0.4.3 checks the registry and then publishes a package that
+    /// publishes; `publish = false` and `git_only` packages take the git-only
+    /// path, which does neither.
     pub(crate) fn registry_minutes(&self) -> u64 {
-        let check = if self.git_only == Some(true) {
-            0
-        } else {
-            self.publish_minutes()
-        };
-        let publish = if self.publishes_to_crates_io() {
-            self.publish_minutes()
+        if self.publishes_to_crates_io() {
+            self.publish_minutes().saturating_mul(2)
         } else {
             0
-        };
-        check + publish
+        }
     }
 
     pub(crate) fn over(&self, base: &Settings) -> Settings {

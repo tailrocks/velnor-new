@@ -257,10 +257,9 @@ fn publish_budget(config: &RootConfig, inherited: &[String]) -> u64 {
         .count();
     let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
     let publishing = publishing.max(usize::from(none_known)) as u64;
-    let checked = (inherited.len() as u64).max(publishing);
     config
         .listed_minutes
-        .saturating_add(checked.saturating_mul(config.unlisted_check_minutes))
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_minutes))
         .saturating_add(publishing.saturating_mul(config.unlisted_publish_minutes))
 }
 

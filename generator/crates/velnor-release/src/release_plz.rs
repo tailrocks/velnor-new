@@ -260,7 +260,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         listed_minutes,
         unlisted_publish_minutes: workspace.publish_minutes(),
         unlisted_check_minutes: if workspace.release != Some(false)
-            && workspace.git_only != Some(true)
+            && workspace.publishes_to_crates_io()
         {
             workspace.publish_minutes()
         } else {

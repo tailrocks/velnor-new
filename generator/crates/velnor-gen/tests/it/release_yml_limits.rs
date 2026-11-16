@@ -126,15 +126,24 @@ fn each_package_is_budgeted_at_its_own_effective_timeout_not_the_largest_one_tim
 }
 
 #[test]
-fn a_package_that_does_not_publish_is_still_budgeted_for_its_registry_check() -> TestResult {
-    let unpublished = |timeouts: &[(&str, &str)]| packages("publish = false\n", timeouts);
-    let tree = with_packages(&unpublished(&[("app", "25m")]), &[])??;
-    assert_eq!(minutes(&tree)?.as_deref(), Some("55"));
-    let two = unpublished(&[("app", ""), ("second", "")]);
-    assert_eq!(outlives(with_packages(&two, &["second"])?), Some(60));
-    let git_only = packages("git_only = true\n", &[("app", "")]);
-    let tree = with_packages(&git_only, &[])??;
-    assert_eq!(minutes(&tree)?.as_deref(), Some("30"));
+fn a_package_that_does_not_publish_costs_no_registry_budget() -> TestResult {
+    let unpublished = packages("publish = false\n", &[("app", "25m"), ("second", "")]);
+    assert!(with_packages(&unpublished, &["second"])?.is_ok());
+    let git_only = packages("git_only = true\n", &[("app", "25m"), ("second", "")]);
+    assert!(with_packages(&git_only, &["second"])?.is_ok());
+    let mixed = packages("", &[("app", "25m"), ("second", "")]);
+    let mixed = mixed.replace(
+        "name = \"second\"\n",
+        "name = \"second\"\npublish = false\n",
+    );
+    assert!(with_packages(&mixed, &["second"])?.is_ok());
+    Ok(())
+}
+
+#[test]
+fn an_inherited_package_without_a_package_entry_is_budgeted_at_the_default_twice() -> TestResult {
+    let text = packages("", &[]);
+    assert_eq!(outlives(with_packages(&text, &[])?), Some(60));
     Ok(())
 }
 
