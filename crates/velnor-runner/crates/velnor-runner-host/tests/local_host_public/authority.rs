@@ -34,6 +34,7 @@ pub(crate) struct Fake {
     pub(crate) reachable: AtomicBool,
     unauthorized: AtomicUsize,
     minted: AtomicUsize,
+    pub(crate) delete_failures: AtomicUsize,
 }
 
 pub(crate) struct Served {
@@ -89,6 +90,20 @@ impl Fake {
             ("POST", ["jit"]) => (200, self.jit().await),
             ("GET", ["runs", side, id, attempt]) => self.run(side, id, attempt),
             ("DELETE", ["agents", side, name]) => {
+                let failing = self
+                    .delete_failures
+                    .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                        Some(if left == usize::MAX {
+                            left
+                        } else {
+                            left.saturating_sub(1)
+                        })
+                    })
+                    .is_ok_and(|left| left > 0);
+                if failing {
+                    self.log(format!("delete_failed:{side}:{name}"));
+                    return (500, "{}".to_owned());
+                }
                 self.log(format!("delete:{side}:{name}"));
                 (200, format!("{{\"name\":\"{name}\",\"deleted\":true}}"))
             }
@@ -207,6 +222,7 @@ pub(crate) async fn serve(docker: Docker, environment: &str) -> TestResult<Serve
         reachable: AtomicBool::new(true),
         unauthorized: AtomicUsize::new(0),
         minted: AtomicUsize::new(0),
+        delete_failures: AtomicUsize::new(0),
     });
     let handler = Arc::clone(&fake);
     tokio::spawn(async move {

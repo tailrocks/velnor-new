@@ -297,6 +297,7 @@ pub enum CargoCommand {
     Build {
         package: PackageName,
     },
+    BuildAll,
     NextestRun {
         filter: FilterRef,
     },

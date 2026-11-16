@@ -168,8 +168,12 @@ impl Repository<'_> {
         let mut head = side(pull.head);
         if pull.fork {
             let name = self.full_name.split('/').nth(1).unwrap_or_default();
-            head["repo"]["full_name"] = json!(format!("{FORK_OWNER}/{name}"));
-            head["repo"]["owner"]["login"] = json!(FORK_OWNER);
+            let full_name = format!("{FORK_OWNER}/{name}");
+            let fork = Repository {
+                full_name: &full_name,
+                default_branch: self.default_branch,
+            };
+            head["repo"] = fork.json();
             head["repo"]["fork"] = json!(true);
             head["label"] = json!(format!("{FORK_OWNER}:{}", pull.head.0));
         }
