@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, Visibility, When, WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -314,7 +314,6 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         comment: None,
         needs: Vec::new(),
         when: When::Success,
-        visibility: Visibility::Any,
         skip_on_draft: facts.config.skip_draft_pull_requests,
         runs_on: facts.config.runner.clone(),
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
@@ -330,7 +329,6 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         when: When::Success,
-        visibility: Visibility::Any,
         skip_on_draft: false,
         gate: None,
         reads: None,

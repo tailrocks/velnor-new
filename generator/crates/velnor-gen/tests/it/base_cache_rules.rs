@@ -92,57 +92,88 @@ fn a_lockfile_with_only_crates_io_sources_saves_the_base_caches() -> TestResult 
     Ok(())
 }
 
-const PRIVATE_ONLY: &str = "github.event.repository.private == true";
+const NO_BASE_SAVE: &str =
+    "base caches are not saved because this repository has private dependencies";
+
+fn saves_nothing(source: &str, view: &RepoView) -> TestResult {
+    let (text, notes) = {
+        let (mut files, notes) = expected_with_notes(view)?;
+        let text = files
+            .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+            .ok_or("no workflow")?;
+        (text, notes)
+    };
+    for absent in [
+        "Save the target cache",
+        "Save the sources cache",
+        "cache decide",
+        "Build the tests",
+        "rust-trim",
+        "repository.private",
+        "actions: write",
+        "Explain the skipped base cache saves",
+    ] {
+        assert!(!text.contains(absent), "{source}: still has {absent}");
+    }
+    assert!(
+        notes.iter().any(|note| note.contains(NO_BASE_SAVE)),
+        "{source}: {notes:?}"
+    );
+    Ok(())
+}
 
 #[test]
-fn a_git_or_private_registry_dependency_saves_the_base_caches_only_in_private_repositories()
--> TestResult {
+fn a_git_or_private_registry_dependency_saves_no_base_cache() -> TestResult {
     for source in [GIT, PRIVATE_REGISTRY] {
         let view = with_lock_file(source)?;
-        let text = text_of(&view)?;
-        let lane = block(&text, "rust").ok_or("no lane")?;
-        for name in [
-            "Save the target cache",
-            "Save the sources cache",
-            "Decide whether to save the build directory",
-            "Build the tests",
-        ] {
-            let saved = step(&lane, name).ok_or_else(|| format!("{source}: no {name}"))?;
-            assert!(saved.contains(PRIVATE_ONLY), "{source}: {name}: {saved}");
-        }
+        saves_nothing(source, &view)?;
         let (_, notes) = expected_with_notes(&view)?;
         assert!(
-            notes.iter().any(|note| note.contains("private")
-                && note.contains("saves run only in private repositories")),
+            notes
+                .iter()
+                .any(|note| note.contains("Cargo.lock") && note.contains(source)),
             "{notes:?}"
         );
-        let notice = step(&lane, "Explain the skipped base cache saves").ok_or("no notice")?;
-        assert!(
-            notice.contains("github.event.repository.private != true"),
-            "{notice}"
-        );
-        assert!(notice.contains("::notice::"), "{notice}");
     }
     Ok(())
 }
 
 #[test]
-fn the_trim_job_of_a_private_dependency_repository_keeps_its_guard_and_adds_the_visibility()
--> TestResult {
-    let text = text_of(&with_lock_file(GIT)?)?;
-    let trim = block(&text, "rust-trim").ok_or("no trim job")?;
-    let condition = trim
-        .lines()
-        .find(|line| line.trim_start().starts_with("if: "))
-        .ok_or("no job condition")?;
-    for needle in [
-        "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)",
-        "github.event_name == ''push''",
-        PRIVATE_ONLY,
+fn a_cargo_config_registry_or_source_saves_no_base_cache() -> TestResult {
+    for (config, section) in [
+        (
+            "[registries.private]\nindex = \"sparse+https://registry.example.invalid/\"\n",
+            "[registries]",
+        ),
+        (
+            "[source.mirror]\nregistry = \"https://registry.example.invalid/\"\n",
+            "[source]",
+        ),
     ] {
-        assert!(condition.contains(needle), "{condition}");
+        let mut view = with_lock_file(CRATES_IO)?;
+        view.files
+            .insert(RepoPath::new(".cargo/config.toml")?, config.into());
+        saves_nothing(section, &view)?;
+        let (_, notes) = expected_with_notes(&view)?;
+        assert!(
+            notes
+                .iter()
+                .any(|note| note.contains(".cargo/config.toml") && note.contains(section)),
+            "{section}: {notes:?}"
+        );
     }
-    assert!(trim.contains("actions: write"), "{trim}");
+    for config in ["[registries]\n", "[source]\n", "[build]\njobs = 2\n"] {
+        let mut view = with_lock_file(CRATES_IO)?;
+        view.files
+            .insert(RepoPath::new(".cargo/config.toml")?, config.into());
+        let text = text_of(&view)?;
+        assert!(text.contains("Save the target cache"), "{config}: {text}");
+        let (_, notes) = expected_with_notes(&view)?;
+        assert!(
+            notes.iter().all(|note| !note.contains(NO_BASE_SAVE)),
+            "{config}: {notes:?}"
+        );
+    }
     Ok(())
 }
 
