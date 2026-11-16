@@ -16,7 +16,7 @@ fn gone(pid: Pid) -> bool {
     kill(pid, None) == Err(Errno::ESRCH)
 }
 
-const SPAWN_GRANDCHILD: &str = r#"sh -c 'echo $$; exec sleep 300'; echo done"#;
+const SPAWN_GRANDCHILD: &str = r"sh -c 'echo $$; exec sleep 300'; echo done";
 
 struct GroupGuard(Pid);
 
