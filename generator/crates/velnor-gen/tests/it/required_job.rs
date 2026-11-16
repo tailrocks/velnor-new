@@ -195,10 +195,12 @@ fn an_env_value_over_the_limit_is_a_rule_violation() {
             }],
         })
         .err()
-        .map(|found| found.into_iter().map(|violation| violation.rule).collect())
-        .unwrap_or_else(Vec::<Rule>::new)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|violation| violation.rule)
+        .collect::<Vec<Rule>>()
     };
-    assert!(violations(MAX_ENV_CHARACTERS).is_empty());
+    assert_eq!(violations(MAX_ENV_CHARACTERS), Vec::<Rule>::new());
     assert_eq!(
         violations(MAX_ENV_CHARACTERS + 1),
         vec![Rule::EnvTooLong(MAX_ENV_CHARACTERS + 1)]
