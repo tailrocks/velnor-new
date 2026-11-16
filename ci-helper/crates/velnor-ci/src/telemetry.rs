@@ -50,7 +50,7 @@ pub fn configuration(argv: &[String]) -> String {
     let mut features = BTreeSet::new();
     let mut targets = BTreeSet::new();
     let mut configs = Vec::new();
-    let mut words = argv.iter();
+    let mut words = argv.iter().take_while(|word| word.as_str() != "--");
     while let Some(word) = words.next() {
         let (flag, inline) = word
             .split_once('=')

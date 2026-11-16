@@ -42,15 +42,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         tests: Vec::new(),
         rejected: 0,
         execution: execution(argv),
-        target_directory: Some(
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map_or_else(
-                    || super::current_dir().map(|cwd| cwd.join("target")),
-                    |path| super::current_dir().map(|cwd| cwd.join(path)),
-                )?
-                .to_string_lossy()
-                .into_owned(),
-        ),
+        target_directory: target_directory(argv)?,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
@@ -65,6 +57,24 @@ pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
             .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?
     )
     .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))
+}
+
+fn target_directory(argv: &[String]) -> Result<Option<String>, CiError> {
+    let mut target = std::env::var_os("CARGO_TARGET_DIR").map(std::path::PathBuf::from);
+    let mut words = argv.iter().take_while(|word| word.as_str() != "--");
+    while let Some(word) = words.next() {
+        let value = word.strip_prefix("--target-dir=").or_else(|| {
+            (word == "--target-dir")
+                .then(|| words.next().map(String::as_str))
+                .flatten()
+        });
+        if let Some(value) = value {
+            target = Some(value.into());
+        }
+    }
+    target
+        .map(|path| super::current_dir().map(|cwd| cwd.join(path).to_string_lossy().into_owned()))
+        .transpose()
 }
 
 fn execution(argv: &[String]) -> BTreeMap<String, String> {
@@ -92,7 +102,7 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
         "host-platform".to_owned(),
         format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
     );
-    let mut words = argv.iter();
+    let mut words = argv.iter().take_while(|word| word.as_str() != "--");
     let mut configs = Vec::new();
     while let Some(word) = words.next() {
         if let Some(config) = word.strip_prefix("--config=") {

@@ -81,3 +81,23 @@ fn configuration_ignores_command_purpose_and_normalizes_features() {
         ])),
     );
 }
+
+#[test]
+fn configuration_ignores_test_arguments_after_the_separator() {
+    let base = ["cargo", "test"].map(str::to_owned);
+    for options in [
+        vec!["--features", "extra"],
+        vec!["--profile=release"],
+        vec!["--target", "aarch64-unknown-linux-gnu"],
+        vec!["--config=build.jobs=2"],
+    ] {
+        let options: Vec<_> = options.into_iter().map(str::to_owned).collect();
+        let mut cargo = base.to_vec();
+        cargo.extend(options.clone());
+        assert_ne!(configuration(&base), configuration(&cargo));
+        let mut test = base.to_vec();
+        test.push("--".to_owned());
+        test.extend(options);
+        assert_eq!(configuration(&base), configuration(&test));
+    }
+}
