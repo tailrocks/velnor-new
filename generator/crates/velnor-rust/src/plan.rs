@@ -162,7 +162,6 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
                 .map(|release| step(StepKind::InstallHelper(release.clone()))),
         );
     }
-    steps.extend(mirror_step(facts));
     steps
 }
 
@@ -214,6 +213,7 @@ pub(crate) fn setup_roots(
         },
         lane.from_source,
     );
+    steps.extend(mirror_step(facts));
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }

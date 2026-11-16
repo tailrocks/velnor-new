@@ -9,6 +9,8 @@ use crate::error::CiError;
 use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
+const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
+
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
     let wrapper = PathBuf::from(
         std::env::var_os(WRAPPER_ENV)
@@ -43,21 +45,24 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     } else {
         None
     };
-    let cargo = match phase {
+    let mut cargo = match phase {
         LaunchPhase::Pinned(executable) if selected.is_none() => ResolvedCargo {
             executable,
             toolchain: None,
+            rustup: std::env::var_os(RUSTUP_ENV).map(PathBuf::from),
         },
-        LaunchPhase::Pinned(executable) => actual_cargo(executable, selected.as_deref())?,
+        LaunchPhase::Pinned(executable) => actual_cargo(
+            executable,
+            selected.as_deref(),
+            std::env::var_os(RUSTUP_ENV).map(PathBuf::from),
+        )?,
         _ => actual_cargo(
             initial.map_or_else(|| find_cargo(&paths, &wrapper, &phase), Ok)?,
             selected.as_deref(),
+            None,
         )?,
     };
-    let cargo = ResolvedCargo {
-        executable: std::fs::canonicalize(cargo.executable).map_err(|error| failed(&error))?,
-        toolchain: cargo.toolchain,
-    };
+    cargo.executable = std::fs::canonicalize(cargo.executable).map_err(|error| failed(&error))?;
     let executable = linked_cargo(&cargo.executable, &wrapper)?;
     let path = std::env::join_paths(
         wrapper
@@ -69,6 +74,11 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     let mut command = Command::new(executable);
     if let Some(toolchain) = cargo.toolchain {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
+    }
+    if let Some(rustup) = cargo.rustup {
+        command.env(RUSTUP_ENV, rustup);
+    } else {
+        command.env_remove(RUSTUP_ENV);
     }
     mise::native_environment(&mut command);
     command
@@ -128,27 +138,37 @@ fn linked_cargo(cargo: &Path, wrapper: &Path) -> Result<PathBuf, CiError> {
 struct ResolvedCargo {
     executable: PathBuf,
     toolchain: Option<std::ffi::OsString>,
+    rustup: Option<PathBuf>,
 }
 
 fn actual_cargo(
     cargo: PathBuf,
     selected: Option<&std::ffi::OsStr>,
+    saved_rustup: Option<PathBuf>,
 ) -> Result<ResolvedCargo, CiError> {
-    let rustup = proxy(&cargo, "rustup")?;
+    let rustup = proxy(&cargo, "rustup")?.or(saved_rustup);
     if selected.is_none() && rustup.is_none() {
         return Ok(ResolvedCargo {
             executable: cargo,
             toolchain: None,
+            rustup: None,
         });
     }
-    let rustup = rustup.unwrap_or_else(|| PathBuf::from("rustup"));
+    let rustup = rustup
+        .or_else(|| {
+            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+                .map(|path| path.join("rustup"))
+                .find(|path| path.is_file() && is_executable(path))
+        })
+        .ok_or_else(|| CiError::new("cannot find Rustup to resolve Cargo toolchain"))?;
+    let rustup = std::path::absolute(rustup).map_err(|error| failed(&error))?;
     let selected = selected.map(|selected| {
         selected
             .to_string_lossy()
             .trim_start_matches('+')
             .to_owned()
     });
-    let mut command = Command::new(rustup);
+    let mut command = Command::new(&rustup);
     if let Some(selected) = &selected {
         command.env("RUSTUP_TOOLCHAIN", selected);
     }
@@ -165,6 +185,7 @@ fn actual_cargo(
     Ok(ResolvedCargo {
         executable,
         toolchain: Some(toolchain),
+        rustup: Some(rustup),
     })
 }
 

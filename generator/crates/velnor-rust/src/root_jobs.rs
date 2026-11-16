@@ -258,6 +258,7 @@ impl RootJobs<'_> {
         );
         build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        group.extend(mirror_step(self.facts));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
             ..restore

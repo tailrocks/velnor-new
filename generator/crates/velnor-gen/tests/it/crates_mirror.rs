@@ -20,6 +20,10 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     ] {
         for shape in ["", "shape = 'groups'\n"] {
             let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+            repo.files
+                .get_mut(&path("mise.toml")?)
+                .ok_or("mise.toml missing")?
+                .extend_from_slice(b"cargo-machete = '0.9.1'\n");
             repo.files.insert(
                 path(".velnor/rust-ci.toml")?,
                 format!(
@@ -37,17 +41,20 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
             if enabled {
                 let yaml: serde_json::Value = serde_saphyr::from_str(&text)?;
                 let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
+                assert!(jobs.contains_key("policy"));
                 if !shape.is_empty() {
                     assert!(text.contains("install_args: 'aqua:nextest-rs/nextest/cargo-nextest'"));
+                    assert!(jobs.contains_key("rust-test-default-root"));
                 }
                 let mut saw_mise = false;
-                for (_, job) in jobs {
+                for (job_id, job) in jobs {
                     let steps = job["steps"].as_array().ok_or("steps missing")?;
                     let mirror = steps.iter().position(|step| {
                         step["run"]
                             .as_str()
                             .is_some_and(|run| run.starts_with("velnor-ci crates-mirror"))
                     });
+                    assert_cargo_scope(steps, mirror, runner, job_id);
                     for (tools, _) in steps.iter().enumerate().filter(|(_, step)| {
                         step["uses"]
                             .as_str()
@@ -68,14 +75,6 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                             "{runner}: {repeated}"
                         );
                     }
-                    if let Some(index) = mirror {
-                        assert_eq!(
-                            steps[index]["if"].as_str(),
-                            Some(MIRROR_GUARD),
-                            "{runner}: {}",
-                            steps[index]
-                        );
-                    }
                 }
                 assert!(saw_mise);
             }
@@ -87,6 +86,23 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
         }
     }
     Ok(())
+}
+
+fn assert_cargo_scope(steps: &[serde_json::Value], mirror: Option<usize>, runner: &str, job: &str) {
+    let has_cargo = steps.iter().any(|step| {
+        step["run"]
+            .as_str()
+            .is_some_and(|run| run.starts_with("velnor-ci run "))
+    });
+    assert_eq!(mirror.is_some(), has_cargo, "{runner}: {job}");
+    if let Some(index) = mirror {
+        assert_eq!(
+            steps[index]["if"].as_str(),
+            Some(MIRROR_GUARD),
+            "{runner}: {}",
+            steps[index]
+        );
+    }
 }
 
 #[test]

@@ -138,6 +138,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         },
         lane.from_source,
     );
+    steps.extend(mirror_step(facts));
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
