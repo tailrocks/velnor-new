@@ -15,6 +15,7 @@ git_release_draft = true
 release_always = false
 semver_check = false
 publish_no_verify = true
+publish_timeout = "5m"
 
 [[package]]
 name = "app"
