@@ -164,6 +164,10 @@ pub enum ReleaseError {
     ReleasePlzVersionNotExact {
         version: String,
     },
+    ReleasePlzVersionTooOld {
+        version: String,
+        minimum: String,
+    },
     PackageNotInRoot {
         root: String,
         package: String,

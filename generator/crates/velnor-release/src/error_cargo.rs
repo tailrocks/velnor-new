@@ -48,6 +48,10 @@ impl ReleaseError {
                 f,
                 "mise.toml: release-plz must be pinned to an exact MAJOR.MINOR.PATCH version, not {version:?}"
             ),
+            Self::ReleasePlzVersionTooOld { version, minimum } => write!(
+                f,
+                "mise.toml: release-plz {version} cannot authenticate the git fetch of a checkout without persisted credentials; pin release-plz {minimum} or newer"
+            ),
             Self::RootWithoutCargoManifest { root } => write!(
                 f,
                 ".velnor/release.toml: root {root} has no tracked Cargo.toml"
