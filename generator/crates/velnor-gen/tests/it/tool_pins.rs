@@ -11,6 +11,7 @@ fn pin(requested: &[&str], locked: &[&str]) -> ToolPin {
     ToolPin {
         requested: owned(requested),
         locked: owned(locked),
+        ..ToolPin::default()
     }
 }
 
@@ -61,6 +62,28 @@ version = \"0.9.151\"
             ("rust", &pin(&["1.99.1"], &["1.99.1"])),
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn an_os_filtered_request_keeps_its_filter_and_an_unfiltered_duplicate_drops_it() -> TestResult {
+    let config = "\
+[tools]
+go = [{ version = \"1.22\", os = [\"macos\"] }, { version = \"1.23\", os = \"linux\" }, \"1\"]
+node = [{ version = \"20\", os = [\"linux\"] }, \"20\"]
+";
+    let view = repo(
+        vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])],
+        &[("mise.toml", config)],
+    )?;
+    let tools = detect(&view)?.tools;
+    let go = tools.tools.get("go").ok_or("go is pinned")?;
+    assert_eq!(go.requested, ["1.22", "1.23", "1"]);
+    assert_eq!(go.os_filters.get("1.22"), Some(&vec!["macos".to_owned()]));
+    assert_eq!(go.os_filters.get("1.23"), Some(&vec!["linux".to_owned()]));
+    assert_eq!(go.os_filters.get("1"), None);
+    let node = tools.tools.get("node").ok_or("node is pinned")?;
+    assert!(node.os_filters.is_empty());
     Ok(())
 }
 
