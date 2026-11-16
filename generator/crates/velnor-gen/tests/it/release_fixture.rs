@@ -109,7 +109,8 @@ pub(crate) fn release_view(
         }
     }
     view.tracked_paths.insert(LOCK_PATH);
-    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.80").into_bytes());
     view.files.insert(
         RepoPath::new("mise.toml")?,
         b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
