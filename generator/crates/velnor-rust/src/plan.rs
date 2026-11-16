@@ -111,7 +111,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         plan: Some(PLAN_JOB),
         from_source: false,
     };
-    let mut steps = setup(facts, root, false, &lane, &HELPER_JOB);
+    let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
         ..step(StepKind::Cargo(CargoCommand::Build {
@@ -163,24 +163,32 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
     steps
 }
 
-fn tools_steps(facts: &RepoFacts) -> Option<Step> {
+pub(crate) fn tools_cache_key() -> CacheKey {
+    CacheKey::Tools { host: Host }
+}
+
+pub(crate) fn tools_restore(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| step(StepKind::CacheRestore(tools_cache_key())))
+}
+
+pub(crate) fn tools_save(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| Step {
+        when: When::SaveToolsOnDefaultBranch,
+        ..step(StepKind::CacheSave(tools_cache_key()))
+    })
+}
+
+pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 
-pub(crate) fn setup(
-    facts: &RepoFacts,
-    root: &RustRoot,
-    lint: bool,
-    lane: &Lane,
-    job: &JobId,
-) -> Vec<Step> {
-    setup_roots(facts, std::slice::from_ref(root), lint, lane, job)
+pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
+    setup_roots(facts, std::slice::from_ref(root), lane, job)
 }
 
 pub(crate) fn setup_roots(
     facts: &RepoFacts,
     roots: &[RustRoot],
-    lint: bool,
     lane: &Lane,
     job: &JobId,
 ) -> Vec<Step> {
@@ -197,7 +205,10 @@ pub(crate) fn setup_roots(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = tools_steps(facts).into_iter().collect();
+    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
+        .into_iter()
+        .flatten()
+        .collect();
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared
@@ -206,9 +217,7 @@ pub(crate) fn setup_roots(
         if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
             components.push("rust-docs".to_owned());
         }
-        if lint {
-            components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
-        }
+        components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
         components.sort();
         components.dedup();
         let targets = declared
@@ -226,6 +235,7 @@ pub(crate) fn setup_roots(
             }
         }
     }
+    toolchain.extend(tools_save(facts));
     toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
     for root in roots {
         let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
