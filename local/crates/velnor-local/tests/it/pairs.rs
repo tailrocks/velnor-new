@@ -32,6 +32,13 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
     }
 }
 
+fn passing(id: u64, trusted: bool) -> Outcome {
+    Outcome {
+        metrics: Ok(std::path::PathBuf::new()),
+        ..outcome(id, trusted)
+    }
+}
+
 fn read(lines: &[&str]) -> Vec<Decision> {
     decisions(&lines.join("\n")).unwrap_or_else(|e| unreachable!("{e}"))
 }
@@ -251,7 +258,7 @@ fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
 
 #[test]
 fn a_refused_job_fails_the_run_even_when_every_run_succeeded() {
-    let passed = [outcome(1, false)];
+    let passed = [passing(1, true)];
     let refused = Check::Pairs(read(&[ADMITTED, REFUSED]));
     assert_eq!(
         conclude(&refused, &passed),
@@ -259,6 +266,21 @@ fn a_refused_job_fails_the_run_even_when_every_run_succeeded() {
     );
     assert_eq!(conclude(&Check::Pairs(read(&[ADMITTED])), &passed), Ok(()));
     assert_eq!(conclude(&Check::Plain, &passed), Ok(()));
+}
+
+#[test]
+fn a_pair_run_without_an_admitted_decision_for_a_job_fails_the_run() {
+    let outcomes = [passing(1, true), passing(1, false)];
+    let missing = "a job has no job-start decision";
+    assert_eq!(conclude(&Check::Pairs(Vec::new()), &outcomes), Err(missing));
+    assert_eq!(
+        conclude(&Check::Pairs(read(&[ADMITTED])), &outcomes),
+        Err(missing)
+    );
+    assert_eq!(
+        conclude(&Check::Pairs(read(&[ADMITTED, FORK])), &outcomes),
+        Ok(())
+    );
 }
 
 #[test]
