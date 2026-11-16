@@ -13,8 +13,8 @@ use crate::launch::SelectedEngineContext;
 
 use super::TestResult;
 
-pub(super) const CONNECTION_ID: &str = "conn-test-1";
-pub(super) const ENGINE_ID: &str = "engine-test";
+pub(crate) const CONNECTION_ID: &str = "conn-test-1";
+pub(crate) const ENGINE_ID: &str = "engine-test";
 
 const BINDING: &str = "INSERT INTO connection_runtime_bindings (connection_id, scale_set_id, scale_set_name, set_ownership, engine_id, docker_endpoint, platform) VALUES ('conn-test-1', 7, 'ubuntu-26.04-scale-set', 'created', 'engine-test', 'unix:///docker.sock', 'linux/amd64')";
 
@@ -43,34 +43,34 @@ const GUARDS: [&str; 2] = [
 ];
 
 #[derive(Clone, Copy)]
-pub(super) struct Pair {
-    pub(super) reservation: i64,
-    pub(super) bound: bool,
+pub(crate) struct Pair {
+    pub(crate) reservation: i64,
+    pub(crate) bound: bool,
 }
 
 impl Pair {
-    pub(super) fn nonce(self) -> String {
+    pub(crate) fn nonce(self) -> String {
         format!("{:032x}", self.reservation)
     }
 
-    pub(super) fn container_id(self, role: &str) -> String {
+    pub(crate) fn container_id(self, role: &str) -> String {
         let digit = if role == "runner" { 'a' } else { 'd' };
         format!("{}{:063x}", digit, self.reservation)
     }
 
-    pub(super) fn helper_id(self) -> String {
+    pub(crate) fn helper_id(self) -> String {
         format!("c{:063x}", self.reservation)
     }
 
-    pub(super) fn helper_name(self) -> String {
+    pub(crate) fn helper_name(self) -> String {
         format!("velnor-init-{}-1", self.reservation - 1)
     }
 
-    pub(super) fn network_id(self) -> String {
+    pub(crate) fn network_id(self) -> String {
         format!("e{:063x}", self.reservation)
     }
 
-    pub(super) fn volumes(self) -> [(String, &'static str); 5] {
+    pub(crate) fn volumes(self) -> [(String, &'static str); 5] {
         let base = format!("w{}", self.nonce());
         [
             (base.clone(), "shared-run"),
@@ -102,7 +102,7 @@ fn binding() -> TestResult<RepositoryConnection> {
     )?)
 }
 
-pub(super) async fn started_pairs(
+pub(crate) async fn started_pairs(
     journal: &Journal,
     docker: &Docker,
     pairs: &[Pair],
@@ -164,32 +164,31 @@ pub(super) async fn started_pairs(
     Ok((scope, engine))
 }
 
-pub(super) const INITIALIZER_TABLE: &str = "CREATE TABLE capacity_reservation_storage_initialization (reservation_id INTEGER, remove_state TEXT, abort_state TEXT, helper_name TEXT, helper_id TEXT, abort_helper_id TEXT, operation_key TEXT)";
-
-pub(super) async fn initializer(
+pub(crate) async fn initializer(
     journal: &Journal,
     pair: Pair,
     remove_state: &str,
     abort_state: &str,
 ) -> TestResult<()> {
+    let metadata = format!("w{}-metadata", pair.nonce());
     unguarded(
         journal,
-        &[
-            "DROP TABLE capacity_reservation_storage_initialization".to_owned(),
-            INITIALIZER_TABLE.to_owned(),
-            format!(
-                "INSERT INTO capacity_reservation_storage_initialization VALUES ({}, '{remove_state}', '{abort_state}', '{}', '{}', NULL, '{}-1')",
-                pair.reservation,
-                pair.helper_name(),
-                pair.helper_id(),
-                pair.reservation - 1
-            ),
-        ],
+        &[format!(
+            "INSERT INTO capacity_reservation_storage_initialization (reservation_id, connection_id, operation_id, generation, engine_id, docker_root_digest, image_runtime_id, image_source_sha, nano_cpus, memory_bytes, pids_limit, home_volume, work_volume, layout_version, metadata_volume, metadata_volume_id, helper_name, helper_id, create_dispatch_state, create_state, start_state, result_state, remove_state, abort_state, operation_key) SELECT r.id, r.connection_id, r.intent_id, 1, r.engine_id, r.docker_root_digest, 'sha256:{}', '{}', 500000000, 67108864, 16, 'w{}-home', 'w{}-work', 2, '{metadata}', '{metadata}', '{}', '{}', 'dispatched', 'created', 'not_requested', 'not_requested', '{remove_state}', '{abort_state}', '{}-1' FROM capacity_reservations AS r WHERE r.id = {}",
+            "1".repeat(64),
+            "1".repeat(40),
+            pair.nonce(),
+            pair.nonce(),
+            pair.helper_name(),
+            pair.helper_id(),
+            pair.reservation - 1,
+            pair.reservation
+        )],
     )
     .await
 }
 
-pub(super) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
+pub(crate) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
     journal.connection().await?.execute(sql, ()).await?;
     Ok(())
 }
@@ -207,7 +206,7 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
     Ok(saved)
 }
 
-pub(super) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
+pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
     let connection = journal.connection().await?;
     let mut rows = connection
         .query(
@@ -240,7 +239,7 @@ const BOUND_SEED_GUARDS: [&str; 2] = [
     "cleanup_observer_witness_insert_guard",
 ];
 
-pub(super) async fn bind_resources(
+pub(crate) async fn bind_resources(
     journal: &Journal,
     pair: Pair,
     docker_root_digest: &str,
@@ -294,7 +293,7 @@ pub(super) async fn bind_resources(
 
 const BOOT_ID: &str = "00000000-0000-0000-0000-000000000001";
 
-pub(super) async fn resources_bound(journal: &Journal, reservation: i64) -> TestResult<i64> {
+pub(crate) async fn resources_bound(journal: &Journal, reservation: i64) -> TestResult<i64> {
     let connection = journal.connection().await?;
     let mut rows = connection
         .query(
@@ -306,11 +305,11 @@ pub(super) async fn resources_bound(journal: &Journal, reservation: i64) -> Test
     Ok(row.get::<i64>(0)?)
 }
 
-pub(super) async fn text(journal: &Journal, sql: &str, reservation: i64) -> TestResult<String> {
+pub(crate) async fn text(journal: &Journal, sql: &str, reservation: i64) -> TestResult<String> {
     let connection = journal.connection().await?;
     let mut rows = connection.query(sql, [reservation]).await?;
     let row = rows.next().await?.ok_or("row missing")?;
     Ok(row.get::<String>(0)?)
 }
 
-pub(super) const RESERVATION: &str = "SELECT r.state || '/' || r.remote_cleanup_proven || r.local_cleanup_proven || '/' || i.state || '/' || i.cleanup_proven || '/' || (SELECT COUNT(*) FROM physical_attempt_current AS c WHERE c.reservation_id = r.id) || '/' || COALESCE((SELECT outcome FROM physical_attempt_terminal_proofs AS p WHERE p.reservation_id = r.id), 'none') || '/' || COALESCE((SELECT group_concat(phase) FROM (SELECT phase FROM capacity_reservation_unbound_retirement_progress AS g WHERE g.reservation_id = r.id ORDER BY phase)), '') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id WHERE r.id = ?1";
+pub(crate) const RESERVATION: &str = "SELECT r.state || '/' || r.remote_cleanup_proven || r.local_cleanup_proven || '/' || i.state || '/' || i.cleanup_proven || '/' || (SELECT COUNT(*) FROM physical_attempt_current AS c WHERE c.reservation_id = r.id) || '/' || COALESCE((SELECT outcome FROM physical_attempt_terminal_proofs AS p WHERE p.reservation_id = r.id), 'none') || '/' || COALESCE((SELECT group_concat(phase) FROM (SELECT phase FROM capacity_reservation_unbound_retirement_progress AS g WHERE g.reservation_id = r.id ORDER BY phase)), '') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id WHERE r.id = ?1";

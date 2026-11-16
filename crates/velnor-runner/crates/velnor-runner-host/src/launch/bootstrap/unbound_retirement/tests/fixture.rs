@@ -29,13 +29,13 @@ struct State {
     armed: bool,
 }
 
-pub(super) struct FixtureDocker {
+pub(crate) struct FixtureDocker {
     state: Arc<Mutex<State>>,
     hung: Arc<Notify>,
 }
 
 impl FixtureDocker {
-    pub(super) fn start(socket: &Path, pairs: &[Pair]) -> TestResult<Self> {
+    pub(crate) fn start(socket: &Path, pairs: &[Pair]) -> TestResult<Self> {
         let listener = UnixListener::bind(socket)?;
         let mut state = State::default();
         for pair in pairs {
@@ -81,7 +81,7 @@ impl FixtureDocker {
         Ok(fixture)
     }
 
-    pub(super) fn add_initializer(&self, pair: Pair) {
+    pub(crate) fn add_initializer(&self, pair: Pair) {
         lock(&self.state).containers.insert(
             pair.helper_id(),
             Container {
@@ -92,58 +92,58 @@ impl FixtureDocker {
         );
     }
 
-    pub(super) fn relabel_initializer(&self, pair: Pair) {
+    pub(crate) fn relabel_initializer(&self, pair: Pair) {
         if let Some(container) = lock(&self.state).containers.get_mut(&pair.helper_id()) {
             container.labels["velnor.operation"] = json!("999-1");
         }
     }
 
-    pub(super) fn has_initializer(&self, pair: Pair) -> bool {
+    pub(crate) fn has_initializer(&self, pair: Pair) -> bool {
         lock(&self.state).containers.contains_key(&pair.helper_id())
     }
 
-    pub(super) fn hang_after(&self, request: String) {
+    pub(crate) fn hang_after(&self, request: String) {
         lock(&self.state).hang_after = Some(request);
     }
 
-    pub(super) async fn hung(&self) {
+    pub(crate) async fn hung(&self) {
         self.hung.notified().await;
     }
 
-    pub(super) fn relabel_container(&self, id: &str) {
+    pub(crate) fn relabel_container(&self, id: &str) {
         if let Some(container) = lock(&self.state).containers.get_mut(id) {
             container.labels["io.velnor.reservation-id"] = json!("999");
         }
     }
 
-    pub(super) fn rename_container(&self, id: &str, name: &str) {
+    pub(crate) fn rename_container(&self, id: &str, name: &str) {
         if let Some(container) = lock(&self.state).containers.get_mut(id) {
             name.clone_into(&mut container.name);
         }
     }
 
-    pub(super) fn reissue_container(&self, id: &str, new_id: &str) {
+    pub(crate) fn reissue_container(&self, id: &str, new_id: &str) {
         let mut state = lock(&self.state);
         if let Some(container) = state.containers.remove(id) {
             state.containers.insert(new_id.to_owned(), container);
         }
     }
 
-    pub(super) fn relabel_volume(&self, name: &str) {
+    pub(crate) fn relabel_volume(&self, name: &str) {
         if let Some(labels) = lock(&self.state).volumes.get_mut(name) {
             labels["velnor.reservation"] = json!("999");
         }
     }
 
-    pub(super) fn has_container(&self, id: &str) -> bool {
+    pub(crate) fn has_container(&self, id: &str) -> bool {
         lock(&self.state).containers.contains_key(id)
     }
 
-    pub(super) fn take_requests(&self) -> Vec<String> {
+    pub(crate) fn take_requests(&self) -> Vec<String> {
         std::mem::take(&mut lock(&self.state).requests)
     }
 
-    pub(super) fn objects(&self, pair: Pair) -> Vec<String> {
+    pub(crate) fn objects(&self, pair: Pair) -> Vec<String> {
         let state = lock(&self.state);
         let containers = ["runner", "dind"]
             .map(|role| pair.container_id(role))

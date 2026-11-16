@@ -17,9 +17,7 @@ use sha2::{Digest, Sha256};
 use crate::{
     docker_client::docker_deadline_after,
     error::HostError,
-    journal::{
-        ConnectionJournal, UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase,
-    },
+    journal::{ConnectionJournal, UnboundRetirementClaim, UnboundRetirementPhase},
     launch::SelectedEngineContext,
 };
 
@@ -28,11 +26,11 @@ mod initializer;
 
 #[cfg(test)]
 #[path = "unbound_retirement/tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(crate) async fn abandon_and_retire_unbound_pair(
+async fn abandon_and_retire_unbound_pair(
     docker: &Docker,
     scope: &ConnectionJournal,
     engine: &SelectedEngineContext,

@@ -5,6 +5,8 @@
 mod controller;
 #[path = "restart_tests/docker.rs"]
 mod docker;
+#[path = "restart_tests/removed.rs"]
+mod removed;
 #[path = "restart_tests/seed.rs"]
 mod seed;
 

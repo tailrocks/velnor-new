@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "tests/deadline.rs"]
+mod deadline;
 #[path = "tests/eligibility.rs"]
 mod eligibility;
 #[path = "tests/fixture.rs"]
-mod fixture;
+pub(crate) mod fixture;
 #[path = "tests/initializer.rs"]
 mod initializer;
 #[path = "tests/renewal.rs"]
@@ -12,7 +14,7 @@ mod renewal;
 #[path = "tests/safety.rs"]
 mod safety;
 #[path = "tests/seed.rs"]
-mod seed;
+pub(crate) mod seed;
 
 use crate::journal::Journal;
 
@@ -22,7 +24,7 @@ use seed::{Pair, RESERVATION};
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-const FAILED: Pair = Pair {
+pub(crate) const FAILED: Pair = Pair {
     reservation: 2,
     bound: false,
 };
@@ -34,7 +36,7 @@ const FRESH: Pair = Pair {
     reservation: 6,
     bound: false,
 };
-const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
+pub(crate) const RETIRED: &str = "released/11/uncertain/1/0/unbound_retired/containers_absent,volumes_absent";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pair_whose_helper_check_failed_is_removed_and_its_reservation_released() -> TestResult<()>
