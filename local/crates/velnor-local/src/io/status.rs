@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use tokio::fs;
 
 use super::env::{DockerCli, Environment};
-use super::supervisor::alive;
+use super::supervisor::authority_running;
 use crate::pairs::{DECISIONS, decisions};
 use crate::status::{Snapshot, last_refusal, pair_states, render};
 
@@ -25,8 +25,7 @@ pub(super) async fn run(dir: &Path) -> io::Result<()> {
     let env = Environment::at(&dir, DockerCli).await?;
     let authority = dir.join("authority");
     let address = authority.join("address");
-    let pid = text(&authority.join("pid")).await?;
-    let running = pid.as_deref().is_some_and(|pid| alive(pid.trim()));
+    let running = authority_running(&dir).await?;
     let Some(listening) = text(&address).await?.filter(|_| running) else {
         return Err(io::Error::other(format!(
             "{} is not up: no running authority in {}; start it with `velnor-local up --dir {}`",
@@ -45,7 +44,7 @@ pub(super) async fn run(dir: &Path) -> io::Result<()> {
     let judged = text(&runner.join(DECISIONS)).await?.unwrap_or_default();
     let judged = decisions(&judged).map_err(io::Error::other)?;
     let pairs = match &plan {
-        Some(plan) => pair_states(plan, &log, &judged).map_err(io::Error::other)?,
+        Some(plan) => pair_states(plan, &log).map_err(io::Error::other)?,
         None => Vec::new(),
     };
     let snapshot = Snapshot {

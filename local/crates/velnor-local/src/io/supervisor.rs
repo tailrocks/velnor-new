@@ -31,7 +31,7 @@ use super::run::accept;
 use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
 use crate::side::Side;
-use host::{LOG, PID, runner_dir};
+use host::{LOG, PID, PLAN, runner_dir};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -106,12 +106,18 @@ where
     O: AsyncFnOnce(&Path) -> io::Result<B>,
 {
     let endpoint = launch(dir, binary, Some(pairs)).await?;
-    let backend = open(dir).await?;
     let sides = [
         (Side::Trusted, pairs.trusted),
         (Side::Untrusted, pairs.untrusted),
     ];
-    await_online(&backend, &sides, timeout).await?;
+    let ready = async {
+        let backend = open(dir).await?;
+        await_online(&backend, &sides, timeout).await
+    };
+    if let Err(error) = ready.await {
+        let _ = stop(dir).await;
+        return Err(error);
+    }
     Ok(endpoint)
 }
 
@@ -123,7 +129,7 @@ async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<
     for file in [LEDGER, "address", "pid", "binary"] {
         forget(&authority.join(file)).await?;
     }
-    for file in [DECISIONS, LOG, PID] {
+    for file in [DECISIONS, LOG, PID, PLAN] {
         forget(&runner_dir(dir).join(file)).await?;
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
@@ -222,6 +228,18 @@ async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
         .rev()
         .find(|line| line.ends_with(" agents removed"));
     Ok(stopped.map(str::to_owned))
+}
+
+pub(super) async fn authority_running(dir: &Path) -> io::Result<bool> {
+    let authority = authority_dir(dir);
+    let (Ok(pid), Ok(binary)) = (
+        fs::read_to_string(authority.join("pid")).await,
+        fs::read_to_string(authority.join("binary")).await,
+    ) else {
+        return Ok(false);
+    };
+    let pid = pid.trim();
+    Ok(pid.parse::<u32>().is_ok() && ours(pid, dir, &binary).await?)
 }
 
 pub(super) fn alive(pid: &str) -> bool {

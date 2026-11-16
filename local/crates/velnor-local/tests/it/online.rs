@@ -41,7 +41,11 @@ impl Backend for Server {
         std::future::ready(Ok(()))
     }
 
-    fn mint(&self, _: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+    fn mint(
+        &self,
+        _: Side,
+        _: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
         std::future::ready(Ok(None))
     }
 }

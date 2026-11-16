@@ -58,10 +58,18 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
         ])
         .await
         .unwrap_or_else(|_| "unknown socket".to_owned());
+    let (plain, pair) = if info.is_ok() {
+        (
+            Some(missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),
+            Some(missing(engine, TARGETS.into_iter()).await),
+        )
+    } else {
+        (None, None)
+    };
     vec![
         docker(info.as_deref().map_err(|_| ()), &socket),
-        plain_images(&missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),
-        pair_images(&missing(engine, TARGETS.into_iter()).await),
+        plain_images(plain.as_deref()),
+        pair_images(pair.as_deref()),
         host_part(velnor_host).await,
     ]
 }

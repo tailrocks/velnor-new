@@ -21,6 +21,7 @@ pub const PLAIN_IMAGES: [(&str, &str); 3] = [
 pub struct Part {
     pub what: String,
     pub fix: Option<String>,
+    pub known: bool,
 }
 
 impl Part {
@@ -29,6 +30,16 @@ impl Part {
         Self {
             what: what.into(),
             fix: None,
+            known: true,
+        }
+    }
+
+    #[must_use]
+    pub fn unknown(what: impl Into<String>) -> Self {
+        Self {
+            what: what.into(),
+            fix: None,
+            known: false,
         }
     }
 
@@ -37,19 +48,21 @@ impl Part {
         Self {
             what: what.into(),
             fix: Some(fix.into()),
+            known: true,
         }
     }
 }
 
 #[must_use]
 pub fn healthy(parts: &[Part]) -> bool {
-    parts.iter().all(|part| part.fix.is_none())
+    parts.iter().all(|part| part.fix.is_none() && part.known)
 }
 
 #[must_use]
 pub fn render(parts: &[Part]) -> String {
     parts.iter().fold(String::new(), |mut text, part| {
         let _ = match &part.fix {
+            None if !part.known => writeln!(text, "n/a   {}", part.what),
             None => writeln!(text, "ok    {}", part.what),
             Some(fix) => writeln!(text, "miss  {}   fix: {fix}", part.what),
         };
@@ -85,8 +98,11 @@ pub fn docker(info: Result<&str, ()>, socket: &str) -> Part {
 }
 
 #[must_use]
-pub fn plain_images(missing: &[&str]) -> Part {
+pub fn plain_images(missing: Option<&[&str]>) -> Part {
     let what = "stand-in, cache server and plain runner images".to_owned();
+    let Some(missing) = missing else {
+        return Part::unknown(format!("{what}: unknown (Docker unreachable)"));
+    };
     let fixes: Vec<String> = PLAIN_IMAGES
         .iter()
         .filter(|(tag, _)| missing.contains(tag))
@@ -103,8 +119,11 @@ pub fn plain_images(missing: &[&str]) -> Part {
 }
 
 #[must_use]
-pub fn pair_images(missing: &[&str]) -> Part {
+pub fn pair_images(missing: Option<&[&str]>) -> Part {
     let what = format!("pair images: {}", TARGETS.join(", "));
+    let Some(missing) = missing else {
+        return Part::unknown(format!("{what}: unknown (Docker unreachable)"));
+    };
     if missing.is_empty() {
         Part::ok(what)
     } else {

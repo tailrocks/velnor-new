@@ -19,51 +19,62 @@ pub struct Snapshot {
 }
 
 fn plan_slots(plan: &str) -> Result<Vec<String>, String> {
-    let plan: Value =
-        serde_json::from_str(plan).map_err(|error| format!("runner/plan.json: {error}"))?;
-    let count = |side: &str| {
-        plan["sides"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|entry| entry["side"] == side)
-            .and_then(|entry| entry["pairs"].as_u64())
+    let bad = |what: &str| format!("runner/plan.json: {what}");
+    let plan: Value = serde_json::from_str(plan).map_err(|error| bad(&error.to_string()))?;
+    let sides = plan["sides"]
+        .as_array()
+        .ok_or_else(|| bad("`sides` is missing or not an array"))?;
+    let mut counts = [0_u16; 2];
+    for entry in sides {
+        let side = entry["side"]
+            .as_str()
+            .ok_or_else(|| bad("a `sides` entry has no `side` name"))?;
+        let pairs = entry["pairs"]
+            .as_u64()
             .and_then(|pairs| u16::try_from(pairs).ok())
-            .unwrap_or(0)
-    };
-    Ok(slots(count("trusted"), count("untrusted")))
+            .ok_or_else(|| bad(&format!("`pairs` of `{side}` is not a count")))?;
+        match side {
+            "trusted" => counts[0] = pairs,
+            "untrusted" => counts[1] = pairs,
+            other => return Err(bad(&format!("unknown side `{other}`"))),
+        }
+    }
+    Ok(slots(counts[0], counts[1]))
 }
 
 fn named(value: Option<impl ToString>) -> String {
     value.map_or_else(|| "unknown".to_owned(), |value| value.to_string())
 }
 
-pub fn pair_states(plan: &str, log: &str, decisions: &[Decision]) -> Result<Vec<String>, String> {
+fn current(log: &str, slot: &str) -> Option<Decision> {
+    let (listening, removed) = (
+        format!("pair {slot} listening"),
+        format!("pair {slot} removed"),
+    );
+    let mut busy = None;
+    for line in log.lines() {
+        if line == listening || line == removed {
+            busy = None;
+        } else if let Some(decision) = line
+            .strip_prefix("decision ")
+            .and_then(|json| serde_json::from_str::<Decision>(json).ok())
+            .filter(|decision| decision.pair == slot)
+        {
+            busy = Some(decision).filter(|decision| decision.allow);
+        }
+    }
+    busy
+}
+
+pub fn pair_states(plan: &str, log: &str) -> Result<Vec<String>, String> {
     Ok(plan_slots(plan)?
         .into_iter()
-        .map(|slot| {
-            let prefix = format!("pair {slot} ");
-            let listening = format!("pair {slot} listening");
-            let lines: Vec<&str> = log
-                .lines()
-                .filter(|line| line.starts_with(&prefix))
-                .collect();
-            let took: Vec<&Decision> = decisions
-                .iter()
-                .filter(|decision| decision.pair == slot)
-                .collect();
-            let waiting = lines.iter().filter(|line| **line == listening).count();
-            match took.last() {
-                Some(last)
-                    if last.allow
-                        && lines.last() == Some(&listening.as_str())
-                        && took.len() >= waiting =>
-                {
-                    let (run, job) = (named(last.run_id), named(last.job.as_deref()));
-                    format!("{slot} busy (run {run}, job {job})")
-                }
-                _ => format!("{slot} idle"),
+        .map(|slot| match current(log, &slot) {
+            Some(last) => {
+                let (run, job) = (named(last.run_id), named(last.job.as_deref()));
+                format!("{slot} busy (run {run}, job {job})")
             }
+            None => format!("{slot} idle"),
         })
         .collect())
 }

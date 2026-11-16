@@ -144,6 +144,14 @@ async fn unreachable_docker_and_other_architectures_are_misses() {
         text.contains("fix: start OrbStack or Docker Desktop"),
         "{text}"
     );
+    let fixes = text.matches("fix:").count();
+    assert_eq!(fixes, 1, "{text}");
+    assert!(!text.contains("docker build"), "{text}");
+    assert!(
+        text.contains("n/a   pair images: ") && text.contains("unknown (Docker unreachable)"),
+        "{text}"
+    );
+    assert!(!text.contains("missing"), "{text}");
     let amd = Docker {
         info: Some("Docker Desktop|x86_64"),
         ..docker(&[])
