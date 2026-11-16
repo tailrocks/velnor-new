@@ -3,14 +3,11 @@
 
 use crate::io::Repo;
 use std::fs::{self, File, FileTimes};
+use std::io::Write;
 use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
-    run_bounded(repo, command, base, false)
-}
-
-fn run_bounded(repo: &Repo, command: &str, base: &str, bounded: bool) -> (Output, String) {
     let output_file = repo.root().join("delta-output");
     fs::remove_file(&output_file).ok();
     let mut command_line = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -30,38 +27,11 @@ fn run_bounded(repo: &Repo, command: &str, base: &str, bounded: bool) -> (Output
         .env("BASE_CACHE_KEY", base)
         .env("GITHUB_OUTPUT", &output_file)
         .env("RUNNER_TEMP", repo.root());
-    let output = if bounded {
-        bounded_output(&mut command_line)
-    } else {
-        command_line
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    };
+    let output = command_line
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let written = fs::read_to_string(output_file).unwrap_or_default();
     (output, written)
-}
-
-fn bounded_output(command: &mut Command) -> Output {
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let started = Instant::now();
-    while child
-        .try_wait()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .is_none()
-    {
-        if started.elapsed() > Duration::from_millis(250) {
-            child.kill().unwrap_or_else(|e| unreachable!("{e}"));
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    child
-        .wait_with_output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn success(output: &Output) {
@@ -172,7 +142,11 @@ fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts
         assert!(repo.root().join("target/debug/base").exists());
     }
     for identity in ["oversized", "fifo"] {
-        let base = "b".repeat(513);
+        let base = if identity == "oversized" {
+            "b".repeat(513)
+        } else {
+            "base".to_owned()
+        };
         if identity == "oversized" {
             repo.write_unstaged("delta/base-key", &base);
         } else {
@@ -186,7 +160,34 @@ fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts
         }
         repo.write_unstaged("delta/files/debug/poison", "invalid identity");
         repo.write_unstaged("target/debug/base", "base artifact");
-        success(&run_bounded(&repo, "apply", &base, identity == "fifo").0);
+        let mut writer = (identity == "fifo").then(|| {
+            let mut writer = Command::new("tee")
+                .arg(repo.root().join("delta/base-key"))
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            writer
+                .stdin
+                .take()
+                .unwrap_or_else(|| unreachable!("missing FIFO writer input"))
+                .write_all(base.as_bytes())
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            writer
+        });
+        let (output, _) = run(&repo, "apply", &base);
+        if let Some(writer) = &mut writer {
+            if writer
+                .try_wait()
+                .unwrap_or_else(|e| unreachable!("{e}"))
+                .is_none()
+            {
+                writer.kill().unwrap_or_else(|e| unreachable!("{e}"));
+            }
+            writer.wait().unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        success(&output);
         assert!(!repo.root().join("delta").exists());
         assert!(!repo.root().join("target/debug/poison").exists());
         assert!(repo.root().join("target/debug/base").exists());
