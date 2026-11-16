@@ -44,6 +44,7 @@ struct Metadata {
 #[derive(Deserialize)]
 struct Package {
     name: String,
+    version: String,
     manifest_path: PathBuf,
     dependencies: Vec<Dependency>,
     targets: Vec<RawTarget>,
@@ -85,6 +86,7 @@ pub fn reduce_metadata(
         .map(|package| {
             Ok(RustPackage {
                 name: PackageName::new(package.name).map_err(invalid)?,
+                version: Some(package.version),
                 manifest: repo_path(repository, &package.manifest_path)?,
                 dependencies: package
                     .dependencies
