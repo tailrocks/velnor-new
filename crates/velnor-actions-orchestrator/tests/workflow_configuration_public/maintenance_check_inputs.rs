@@ -7,9 +7,6 @@ use std::path::Path;
 #[path = "maintenance_input_validation.rs"]
 mod validation;
 
-#[path = "freshness_inventory_selection.rs"]
-mod freshness_inventory_selection;
-
 use super::scoped_workspace::{
     A5_COMPLETE_RULE, PACKAGES, PlanRun, TestResult, commit, plan, put, scoped_workspace, set,
 };

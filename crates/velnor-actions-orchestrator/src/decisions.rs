@@ -278,17 +278,10 @@ pub(crate) fn runner_image_evidence() -> RunnerImageEvidence {
     RunnerImageEvidence::unobserved()
 }
 
-/// Only the freshness package and the maintenance check read this file, so a
-/// change to it must not broaden selection to every package.
-pub(crate) const FRESHNESS_INVENTORY_PATH: &str = ".velnor/freshness-inventory.json";
-
 #[must_use]
 pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
     if path.starts_with('/') || path.split('/').any(|segment| segment == "..") {
         return Some("outside_project_path:selecting_all");
-    }
-    if path == FRESHNESS_INVENTORY_PATH {
-        return None;
     }
     if path == ".velnor" || path.starts_with(".velnor/") || path.starts_with(".github/") {
         return Some("global_config_changed:selecting_all");
