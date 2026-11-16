@@ -136,8 +136,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     if setup.ignored {
-        fs::write(checkout.join(".gitignore"), ".cargo/\n")
-            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(checkout.join(".gitignore"), ".cargo/\n").unwrap_or_else(|e| unreachable!("{e}"));
     }
     if setup.plain {
         fs::remove_dir_all(checkout.join(".git")).unwrap_or_else(|e| unreachable!("{e}"));
