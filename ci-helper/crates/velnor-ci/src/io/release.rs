@@ -60,7 +60,12 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
             .zip(&files)
             .map(|(path, (_, text))| (relative_to(&top, path), text.clone()))
             .collect();
-        check_manifests(&relative, &known.metadata, &known.manifests)?;
+        check_manifests(
+            &relative,
+            &known.metadata,
+            &known.manifests,
+            &known.versions,
+        )?;
         Some(known)
     } else {
         None

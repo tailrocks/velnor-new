@@ -258,3 +258,33 @@ fn a_root_whose_members_all_opt_out_of_crates_io_may_set_a_proxy() {
         .package("lib", "lib", "");
     refused(&checkout, &["release-plz.toml"], "proxy");
 }
+
+#[test]
+fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_before_the_token() {
+    let checkout = Checkout::new("lock-version");
+    let version = |version: &str| {
+        checkout
+            .write("Cargo.toml", "[workspace]\nmembers = [\"app\"]\n")
+            .write(
+                "app/Cargo.toml",
+                &format!(
+                    "[package]\nname = \"app\"\nversion = \"{version}\"\nedition = \"2021\"\n"
+                ),
+            )
+            .write("app/src/lib.rs", "");
+    };
+    checkout.write("release-plz.toml", PLZ);
+    version("1.2.3-alpha.lock");
+    refused(&checkout, &["release-plz.toml"], "app-v1.2.3-alpha.lock");
+    version("1.2.3-alpha");
+    accepted(&checkout, &["release-plz.toml"]);
+    checkout.write(
+        "release-plz.toml",
+        &PLZ.replace(
+            "{{ package }}-v{{ version }}",
+            "v{{ version }}-{{ package }}",
+        ),
+    );
+    version("1.2.3-alpha.lock");
+    accepted(&checkout, &["release-plz.toml"]);
+}
