@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::yaml_scalar::scalar;
 use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
@@ -104,17 +105,8 @@ fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
 }
 
 fn workflow_name(text: &str) -> Option<String> {
-    let value = text
-        .lines()
-        .find_map(|line| line.strip_prefix("name:"))?
-        .trim();
-    for quote in ['"', '\''] {
-        if let Some(inner) = value.strip_prefix(quote) {
-            return inner.split_once(quote).map(|(name, _)| name.to_owned());
-        }
-    }
-    let plain = value.split(" #").next().unwrap_or(value);
-    Some(plain.trim().to_owned())
+    let value = text.lines().find_map(|line| line.strip_prefix("name:"))?;
+    scalar(value)
 }
 
 fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {
