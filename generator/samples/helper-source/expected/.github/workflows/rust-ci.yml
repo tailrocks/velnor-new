@@ -167,6 +167,7 @@ jobs:
       - rust-helper
     if: '${{ needs.rust-plan.outputs.rust_root_mode != ''none'' }}'
     permissions:
+      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -402,6 +403,7 @@ jobs:
       - rust-helper
     if: '${{ needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' }}'
     permissions:
+      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -583,6 +585,7 @@ jobs:
       - rust-helper
     if: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' }}'
     permissions:
+      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -806,6 +809,7 @@ jobs:
       - rust-helper
     if: '${{ needs.rust-plan.outputs.rust_generator_mode != ''none'' }}'
     permissions:
+      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -1005,6 +1009,7 @@ jobs:
       - rust-helper
     if: '${{ needs.rust-plan.outputs.rust_local_mode != ''none'' }}'
     permissions:
+      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -1191,6 +1196,7 @@ jobs:
       - rust-helper
     if: '${{ github.event_name == ''schedule'' }}'
     permissions:
+      actions: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30

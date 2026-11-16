@@ -28,10 +28,10 @@ fn lane(config: &str, id: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn a_lane_keeps_read_only_contents_and_publishes_its_trim_prefix_and_save_decision() -> TestResult {
     let block = lane("", "rust")?;
     assert!(
-        block.contains("    permissions:\n      contents: read\n    outputs:"),
+        block.contains("    permissions:\n      actions: read\n      contents: read\n    outputs:"),
         "{block}"
     );
-    assert!(!block.contains("actions:"), "{block}");
+    assert!(!block.contains("actions: write"), "{block}");
     assert!(
         block.contains("      base_save: '${{ steps.base.outputs.save }}'\n"),
         "{block}"
@@ -239,7 +239,7 @@ fn the_pull_request_check_flags_a_lane_that_holds_actions_write_and_passes_the_g
 -> TestResult {
     let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.81", "")?)?;
     let write = "  rust:\n    permissions:\n      actions: write\n";
-    let broken = text.replace("  rust:\n    permissions:\n      contents: read\n", write);
+    let broken = text.replace("  rust:\n    permissions:\n      actions: read\n", write);
     assert_ne!(broken, text);
     assert_eq!(pull_request_writers(&broken), ["rust"]);
     let unguarded = text.replace(&format!("({EVENTS})"), "true");

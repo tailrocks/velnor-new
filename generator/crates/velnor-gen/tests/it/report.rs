@@ -7,6 +7,30 @@ use velnor_model::{HelperRelease, HelperVersion, RepoPath, StepKind, When};
 use velnor_rust::{detect, plan};
 
 #[test]
+fn required_check_cannot_duplicate_the_cache_report_display_name() -> TestResult {
+    for (version, name, valid) in [
+        ("0.1.80", "Cache", true),
+        ("0.1.81", "Cache", false),
+        ("0.1.81", "Gate", true),
+    ] {
+        let config = format!("required_check = \"{name}\"\n");
+        let view = crate::base_save::pinned(version, &config)?;
+        let result = velnor_gen::expected_with_notes(&view);
+        if valid {
+            let (files, _) = result?;
+            assert!(!files.is_empty());
+        } else {
+            assert!(matches!(
+                result,
+                Err(velnor_gen::GenerateError::Detect(velnor_rust::DetectError::Invalid { path, .. }))
+                    if path == velnor_rust::CONFIG_PATH
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult {
     for helper in ["0.1.80", "0.1.81"] {
         for nextest in ["0.9.122", "0.9.123"] {
@@ -86,14 +110,29 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
             helper.digests().clone(),
         )?);
         let plan = plan(&facts);
+        let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
+        let parsed: serde_json::Value =
+            serde_saphyr::from_str(rendered.values().next().ok_or("workflow")?)?;
         let cache = plan.jobs.iter().find(|job| job.id.as_str() == "cache");
         if version == "0.1.80" {
             assert!(cache.is_none());
+            assert!(
+                parsed["jobs"]
+                    .as_object()
+                    .ok_or("jobs")?
+                    .values()
+                    .all(|job| job["permissions"]["actions"].is_null())
+            );
             continue;
         }
         let cache = cache.ok_or("Cache missing")?;
         assert_eq!(cache.name.as_deref(), Some("Cache"));
         assert_eq!(cache.when, When::Finalizer);
+        assert!(parsed["jobs"]["cache"]["permissions"]["actions"].is_null());
+        assert_eq!(
+            parsed["jobs"]["rust-trim"]["permissions"]["actions"],
+            "write"
+        );
         let required = plan
             .jobs
             .iter()
@@ -105,6 +144,10 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
                 .iter()
                 .any(|step| matches!(step.kind, StepKind::Cargo(_)))
         }) {
+            assert_eq!(
+                parsed["jobs"][lane.id.as_str()]["permissions"]["actions"],
+                "read"
+            );
             assert!(cache.needs.contains(&lane.id));
             let report = lane
                 .steps

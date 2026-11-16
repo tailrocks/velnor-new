@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::plan::{head, job, step};
-use velnor_model::{HelperVersion, Job, JobId, RepoFacts, Step, StepKind, When};
+use velnor_model::{
+    Access, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind, When,
+};
 
 pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
     let released = facts
@@ -34,6 +36,10 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         if job.id.as_str() == "rust-helper" && !released {
             continue;
         }
+        job.permissions
+            .0
+            .entry(PermissionScope::Actions)
+            .or_insert(Access::Read);
         needs.push(job.id.clone());
         let caches = job
             .steps

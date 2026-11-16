@@ -124,11 +124,9 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
         return Err(DetectError::JobIdTaken(job.id.to_string()));
     }
     let name = &facts.config.required_check;
-    if plan
-        .jobs
-        .iter()
-        .any(|job| job.name.is_none() && job.id.as_str() == name)
-    {
+    if plan.jobs.iter().any(|job| {
+        job.id.as_str() != "required" && job.name.as_deref().unwrap_or(job.id.as_str()) == name
+    }) {
         return Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::InvalidValue {
