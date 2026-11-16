@@ -22,12 +22,13 @@ docker build -t velnor-local/runner-server local/docker/runner-server
 docker build -t velnor-local/runner local/docker/runner
 docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile local
 cargo build --release --manifest-path local/Cargo.toml
-export PATH="$VELNOR/local/target/release:$PATH"
+cargo build --release --manifest-path ci-helper/Cargo.toml -p velnor-ci
+export PATH="$VELNOR/local/target/release:$VELNOR/ci-helper/target/release:$PATH"
 
 velnor-local doctor
 velnor-local build
 velnor-local doctor
-velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab
+velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab --keep
 ```
 
 `doctor` checks four parts and prints `ok` or `miss` for each, with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when all are `ok`:
@@ -39,9 +40,9 @@ velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/
 | pair images | `velnor-local/pair-runner`, `velnor-local/pair-dind` and `velnor-local/pair-probe` exist | `velnor-local build` |
 | velnor-host with local mode | the `velnor-host` that `build` left in the checkout answers `local --help`, so it was built with `local-mode` | `velnor-local build` |
 
-`doctor --velnor-host <path>` checks another binary. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` four times. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
+`doctor --velnor-host <path>` checks another binary. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` four times. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it. `--keep` leaves the environment up after the verdict, so `status` has something to show. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
 
-To look at a running environment, start it with `run --keep` (or `up`) and ask for its status from another terminal:
+To look at a running environment, ask for its status from another terminal while `run --keep` or `up` has it up:
 
 ```sh
 velnor-local status --dir "$STATE"
