@@ -89,7 +89,7 @@ fn the_tag_job_checks_the_release_source_read_only_before_the_app_token_is_minte
     let tree = binaries("0.1.81")?;
     let tag = job(&tree, "tag")?;
     let all = steps(tag);
-    let position = |pick: &dyn Fn(&Node) -> bool| all.iter().position(|step| pick(step));
+    let position = |pick: &dyn Fn(&Node) -> bool| all.iter().position(pick);
     let preflight = position(&|step| {
         step.get("run")
             .and_then(Node::text)
