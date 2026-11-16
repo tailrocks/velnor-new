@@ -9,7 +9,7 @@ use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
 use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
-use velnor_render::{Owner, owner_of, render_release};
+use velnor_render::{Owner, owner_of, render_release, unfinalized_without_binary};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
 use crate::{GenerateError, RELEASE_HELPER_MINIMUM};
@@ -19,9 +19,9 @@ pub(crate) fn release_workflow(
     facts: &RepoFacts,
     helper: &HelperRelease,
     generated: &BTreeMap<RepoPath, String>,
-) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
+) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
-        return Ok(BTreeMap::new());
+        return Ok((BTreeMap::new(), Vec::new()));
     }
     if !helper.version().at_least(RELEASE_HELPER_MINIMUM) {
         return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
@@ -50,7 +50,19 @@ pub(crate) fn release_workflow(
             reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
-    render_release(&plan, helper, &facts.config.default_branch).map_err(GenerateError::Rules)
+    let unfinalized = unfinalized_without_binary(&plan, helper);
+    let notes = if unfinalized.is_empty() {
+        Vec::new()
+    } else {
+        vec![format!(
+            "WARNING: helper {} cannot publish the draft release of {}, which has no [[binaries]] entry, so that release stays a draft; pin velnor-ci 0.1.81 or newer",
+            helper.version(),
+            unfinalized.into_iter().collect::<Vec<_>>().join(", ")
+        )]
+    };
+    let files = render_release(&plan, helper, &facts.config.default_branch)
+        .map_err(GenerateError::Rules)?;
+    Ok((files, notes))
 }
 
 pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {

@@ -5,7 +5,7 @@ use velnor_release::ReleaseError;
 
 use crate::fixture::{PLZ, files, refusal, with_metadata};
 
-const ROOT_A: &str = "[workspace]\npr_branch_prefix = \"a-\"\ngit_tag_name = \"{{ package }}{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
+const ROOT_A: &str = "[workspace]\npr_branch_prefix = \"a-\"\ngit_tag_name = \"{{ package }}{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\n";
 
 fn two_roots(tool_tag: &str) -> velnor_release::ReleaseFiles {
     let tools = PLZ.replace("name = \"app\"", "name = \"tool\"").replace(
