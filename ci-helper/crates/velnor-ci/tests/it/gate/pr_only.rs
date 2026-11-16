@@ -72,7 +72,7 @@ fn an_explicit_pr_only_required_external_check_needs_no_push_job() {
     assert!(verdict.ready);
     assert!(verdict.report.contains("check DCO is explicitly PR-only\n"));
     assert!(verdict.report.contains("check Required passed\n"));
-    assert_refused(&protected().gate(GREEN), "GitHub App 343_649");
+    assert_refused(&protected().gate(GREEN), "GitHub App 343649");
     let missing = protected().requiring(&[check("Required"), check("DCO")]);
     assert_refused(&missing.gate(GREEN), ABSENT);
 }
