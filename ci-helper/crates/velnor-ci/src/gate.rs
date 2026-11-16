@@ -28,7 +28,12 @@ enum Check {
     Failed(String),
 }
 
-pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdict, CiError> {
+pub fn release_gate(
+    github: &dyn GitHub,
+    repo: &Repo,
+    sha: &str,
+    pr_only_checks: &[String],
+) -> Result<Verdict, CiError> {
     if sha.len() != 40
         || !sha
             .bytes()
@@ -39,7 +44,7 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
         )));
     }
     let ApiRepo { id, default_branch } = parse(&github.get(&repo_path(repo))?, "repository")?;
-    let required = required_checks(github, repo, &default_branch)?;
+    let required = required_checks(github, repo, &default_branch, pr_only_checks)?;
     let compare: ApiCompare = parse(
         &github.get(&compare_path(repo, &default_branch, sha))?,
         "comparison",
@@ -77,6 +82,10 @@ pub fn release_gate(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<Verdi
     }
     let mut ready = true;
     for name in &required {
+        if pr_only_checks.contains(name) {
+            report.push(format!("check {name} is explicitly PR-only"));
+            continue;
+        }
         let named: Vec<&str> = statuses
             .iter()
             .filter(|status| status.context.to_lowercase() == name.to_lowercase())
@@ -118,13 +127,17 @@ fn required_checks(
     github: &dyn GitHub,
     repo: &Repo,
     branch: &str,
+    pr_only_checks: &[String],
 ) -> Result<BTreeSet<String>, CiError> {
     let mut checks = BTreeSet::new();
+    let mut app_checks = Vec::new();
+    let mut pull_request = false;
     for page in 1.. {
         let rules: Vec<ApiRule> = parse(
             &github.get(&rules_path(repo, branch, page))?,
             "branch rules",
         )?;
+        pull_request |= rules.iter().any(|rule| rule.kind == "pull_request");
         for rule in rules
             .iter()
             .filter(|rule| rule.kind == "required_status_checks")
@@ -139,7 +152,8 @@ fn required_checks(
                     ))
                 })?;
             for check in listed {
-                require(&mut checks, branch, check)?;
+                checks.insert(check.context.clone());
+                app_checks.push(check.clone());
             }
         }
         if rules.len() < RULES_PAGE {
@@ -151,7 +165,8 @@ fn required_checks(
     if classic.enforcement_level != "off" {
         checks.extend(classic.contexts);
         for check in &classic.checks {
-            require(&mut checks, branch, check)?;
+            checks.insert(check.context.clone());
+            app_checks.push(check.clone());
         }
     }
     if checks.is_empty() {
@@ -159,14 +174,27 @@ fn required_checks(
             "branch {branch} requires no status check in its rules or its branch protection, so no commit of it can be released"
         )));
     }
+    for name in pr_only_checks {
+        if !checks.contains(name) {
+            return Err(CiError::new(format!(
+                "PR-only check {name} is not required on branch {branch}"
+            )));
+        }
+    }
+    if !pr_only_checks.is_empty() && !pull_request {
+        return Err(CiError::new(format!(
+            "branch {branch} has no pull_request rule, so its required checks cannot be exempted as PR-only"
+        )));
+    }
+    for check in &app_checks {
+        if !pr_only_checks.contains(&check.context) {
+            require(branch, check)?;
+        }
+    }
     Ok(checks)
 }
 
-fn require(
-    checks: &mut BTreeSet<String>,
-    branch: &str,
-    check: &ApiRequiredCheck,
-) -> Result<(), CiError> {
+fn require(branch: &str, check: &ApiRequiredCheck) -> Result<(), CiError> {
     if let Some(app) = check
         .integration_id
         .filter(|app| ![ACTIONS_APP_ID, ANY_APP].contains(app))
@@ -176,7 +204,6 @@ fn require(
             check.context
         )));
     }
-    checks.insert(check.context.clone());
     Ok(())
 }
 

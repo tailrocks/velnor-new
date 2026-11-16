@@ -145,6 +145,7 @@ fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
         &http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT),
         &repo,
         &args.sha,
+        &args.pr_only_check,
     )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)
