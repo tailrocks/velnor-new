@@ -14,6 +14,8 @@ const PR_HEAD: &str = "2222222222222222222222222222222222222222";
 const TAG_OBJECT: &str = "3333333333333333333333333333333333333333";
 const OTHER: &str = "4444444444444444444444444444444444444444";
 const FIRST_PARENT: &str = "5555555555555555555555555555555555555555";
+const TREE: &str = "6666666666666666666666666666666666666666";
+const STALE_TREE: &str = "7777777777777777777777777777777777777777";
 
 fn tags(items: &[(&str, &str)]) -> BTreeMap<PlainName, PlainName> {
     items
@@ -38,7 +40,20 @@ fn merge_of(fake: &mut FakeGitHub, parents: &[&str]) {
         .collect();
     fake.respond(
         commit_path(&repo(), MERGE),
-        &format!(r#"{{"parents":[{}]}}"#, list.join(",")),
+        &format!(
+            r#"{{"parents":[{}],"commit":{{"tree":{{"sha":"{TREE}"}}}}}}"#,
+            list.join(",")
+        ),
+    );
+    if parents.len() == 2 {
+        head_tree(fake, parents[1], TREE);
+    }
+}
+
+fn head_tree(fake: &mut FakeGitHub, head: &str, tree: &str) {
+    fake.respond(
+        commit_path(&repo(), head),
+        &format!(r#"{{"parents":[],"commit":{{"tree":{{"sha":"{tree}"}}}}}}"#),
     );
 }
 
@@ -58,6 +73,20 @@ fn a_tag_on_the_pr_head_that_the_verified_merge_commit_contains_is_recorded() {
     assert_eq!(
         run(&fake, &[("app", "app-v1.0.0")]),
         Ok(format!("app_commit={PR_HEAD}\n"))
+    );
+}
+
+#[test]
+fn a_stale_release_pr_head_whose_tree_differs_from_the_verified_commit_is_refused() {
+    let mut fake = FakeGitHub::default();
+    lightweight(&mut fake, "app-v1.0.0", PR_HEAD);
+    merge_of(&mut fake, &[FIRST_PARENT, PR_HEAD]);
+    head_tree(&mut fake, PR_HEAD, STALE_TREE);
+    assert_eq!(
+        run(&fake, &[("app", "app-v1.0.0")]),
+        Err(format!(
+            "tag app-v1.0.0 is on the release pull request head {PR_HEAD}, whose tree differs from the verified commit {MERGE}; bring the release pull request up to date with the base branch before merging it, or squash it"
+        ))
     );
 }
 
