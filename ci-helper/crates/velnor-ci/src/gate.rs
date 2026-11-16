@@ -36,6 +36,11 @@ struct PushEvidence {
     running: bool,
 }
 
+struct RequiredChecks {
+    names: BTreeSet<String>,
+    exempt_sources: Vec<ApiRequiredCheck>,
+}
+
 pub fn release_gate(
     github: &dyn GitHub,
     repo: &Repo,
@@ -61,7 +66,7 @@ pub fn release_gate(
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
-    let check_names = exemptions::check_names(github, repo, sha, pr_only_checks)?;
+    let check_names = exemptions::check_names(github, repo, sha, &required.exempt_sources)?;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -73,7 +78,7 @@ pub fn release_gate(
         ));
     }
     let mut ready = true;
-    for name in &required {
+    for name in &required.names {
         if pr_only_checks.contains(name) {
             if push.names.contains(name)
                 || check_names.contains(&name.to_lowercase())
@@ -167,10 +172,10 @@ fn required_checks(
     repo: &Repo,
     branch: &str,
     pr_only_checks: &[String],
-) -> Result<BTreeSet<String>, CiError> {
+) -> Result<RequiredChecks, CiError> {
     let mut checks = BTreeSet::new();
     let mut app_checks = Vec::new();
-    let mut pull_requests = Vec::new();
+    let mut applicable = Vec::new();
     for page in 1.. {
         let rules: Vec<ApiRule> = parse(
             &github.get(&rules_path(repo, branch, page))?,
@@ -195,19 +200,14 @@ fn required_checks(
             }
         }
         let last = rules.len() < RULES_PAGE;
-        pull_requests.extend(rules.into_iter().filter(|rule| rule.kind == "pull_request"));
+        applicable.extend(rules);
         if last {
             break;
         }
     }
-    let ApiBranch { protection } = parse(&github.get(&branch_path(repo, branch))?, "branch")?;
-    let classic = protection.required_status_checks;
-    if classic.enforcement_level != "off" {
-        checks.extend(classic.contexts);
-        for check in &classic.checks {
-            checks.insert(check.context.clone());
-            app_checks.push(check.clone());
-        }
+    for check in classic_checks(github, repo, branch)? {
+        checks.insert(check.context.clone());
+        app_checks.push(check);
     }
     if checks.is_empty() {
         return Err(CiError::new(format!(
@@ -222,7 +222,14 @@ fn required_checks(
         }
     }
     if !pr_only_checks.is_empty() {
-        exemptions::require_pull_request(github, repo, branch, &pull_requests)?;
+        exemptions::require_enforcement(
+            github,
+            repo,
+            branch,
+            &applicable,
+            pr_only_checks,
+            &app_checks,
+        )?;
     }
     if checks.iter().all(|name| pr_only_checks.contains(name)) {
         return Err(CiError::new(format!(
@@ -232,6 +239,34 @@ fn required_checks(
     for check in &app_checks {
         if !pr_only_checks.contains(&check.context) {
             require(branch, check)?;
+        }
+    }
+    Ok(RequiredChecks {
+        names: checks,
+        exempt_sources: app_checks
+            .into_iter()
+            .filter(|check| pr_only_checks.contains(&check.context))
+            .collect(),
+    })
+}
+
+fn classic_checks(
+    github: &dyn GitHub,
+    repo: &Repo,
+    branch: &str,
+) -> Result<Vec<ApiRequiredCheck>, CiError> {
+    let ApiBranch { protection } = parse(&github.get(&branch_path(repo, branch))?, "branch")?;
+    let classic = protection.required_status_checks;
+    if classic.enforcement_level == "off" {
+        return Ok(Vec::new());
+    }
+    let mut checks = classic.checks;
+    for context in classic.contexts {
+        if !checks.iter().any(|check| check.context == context) {
+            checks.push(ApiRequiredCheck {
+                context,
+                integration_id: None,
+            });
         }
     }
     Ok(checks)

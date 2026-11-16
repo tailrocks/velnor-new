@@ -4,7 +4,47 @@
 use serde_json::{Value, json};
 
 use super::assert_refused;
+use super::pr_only::{CHECK_RULESET, aggregate_path, check_ruleset};
 use super::pr_only::{allowed, checks_path, protected, suites_path};
+
+#[test]
+fn unfinished_suites_from_a_possible_exempt_app_cannot_prove_absence() {
+    for status in ["queued", "in_progress"] {
+        let pending = || {
+            protected().set(suites_path(1), json!({"total_count": 1, "check_suites": [{"id": 9, "status": status, "app": {"id": 343_649}}]}))
+        };
+        assert_refused(&allowed(&pending()), "unfinished check suite 9");
+        for app in [json!(-1), Value::Null] {
+            let mut detail = check_ruleset();
+            detail["rules"][0]["parameters"]["required_status_checks"][1]["integration_id"] =
+                app.clone();
+            let mut rule = super::required(&[
+                super::check("Required"),
+                json!({"context": "DCO", "integration_id": app}),
+            ]);
+            rule["ruleset_id"] = json!(24_396_608);
+            let recorded = pending()
+                .rules(vec![super::pr_only::pr_rule(), rule])
+                .set(CHECK_RULESET.to_owned(), detail);
+            assert_refused(&allowed(&recorded), "unfinished check suite 9");
+        }
+        let unrelated = protected().set(suites_path(1), json!({"total_count": 1, "check_suites": [{"id": 9, "status": status, "app": {"id": 999}}]}));
+        assert!(allowed(&unrelated).is_ok_and(|verdict| verdict.ready));
+    }
+    assert!(allowed(&protected()).is_ok_and(|verdict| verdict.ready));
+    for suite in [
+        json!({"id": 9, "app": {"id": 343_649}}),
+        json!({"id": 9, "status": "completed"}),
+    ] {
+        assert!(
+            allowed(&protected().set(
+                suites_path(1),
+                json!({"total_count": 1, "check_suites": [suite]})
+            ))
+            .is_err()
+        );
+    }
+}
 
 #[test]
 fn external_check_runs_prevent_pr_only_exemptions_regardless_of_result_or_app() {
@@ -25,6 +65,12 @@ fn external_check_runs_prevent_pr_only_exemptions_regardless_of_result_or_app() 
 
 #[test]
 fn all_external_check_pages_are_required_even_for_historical_or_incomplete_results() {
+    for body in [
+        json!({"total_count": 1, "check_runs": [{"name": "unrelated"}]}),
+        json!({"total_count": 2, "check_runs": []}),
+    ] {
+        assert!(allowed(&protected().set(aggregate_path(1), body)).is_err());
+    }
     let first = json!({"total_count": 2, "check_runs": [{"name": "unrelated"} ]});
     let recorded = || protected().set(checks_path(1), first.clone());
     let historical = recorded().set(
@@ -44,7 +90,7 @@ fn all_external_check_pages_are_required_even_for_historical_or_incomplete_resul
     let suites = || {
         protected().set(
             suites_path(1),
-            json!({"total_count": 2, "check_suites": [{"id": 9}]}),
+            json!({"total_count": 2, "check_suites": [{"id": 9, "status": "completed", "app": {"id": 343_649}}]}),
         )
     };
     assert_refused(&allowed(&suites()), "no recorded response");
@@ -61,16 +107,25 @@ fn all_external_check_pages_are_required_even_for_historical_or_incomplete_resul
 #[test]
 fn an_external_check_in_a_suite_older_than_the_newest_thousand_prevents_exemption() {
     let history = |dco: bool| {
-        let mut recorded = protected().set(
-            format!(
-                "/repos/tailrocks/velnor-new/commits/{}/check-runs?filter=all&per_page=100&page=1",
-                super::GREEN
-            ),
-            json!({"total_count": 1, "check_runs": [{"name": "unrelated"}]}),
-        );
-        let ids: Vec<u64> = (1..=1001).rev().collect();
+        let mut recorded = protected();
+        let mut ids: Vec<u64> = (1..=1001).rev().collect();
+        for (page, ids) in (1..).zip(ids[..1000].chunks(100)) {
+            let runs: Vec<Value> = ids
+                .iter()
+                .rev()
+                .map(|id| json!({"name": "unrelated", "check_suite": {"id": id}}))
+                .collect();
+            recorded = recorded.set(
+                aggregate_path(page),
+                json!({"total_count": 1000, "check_runs": runs}),
+            );
+        }
+        ids.rotate_right(1);
         for (page, ids) in (1..).zip(ids.chunks(100)) {
-            let suites: Vec<Value> = ids.iter().map(|id| json!({"id": id})).collect();
+            let suites: Vec<Value> = ids
+                .iter()
+                .map(|id| json!({"id": id, "status": "completed", "app": {"id": 343_649}}))
+                .collect();
             recorded = recorded.set(
                 suites_path(page),
                 json!({"total_count": 1001, "check_suites": suites}),
@@ -85,8 +140,15 @@ fn an_external_check_in_a_suite_older_than_the_newest_thousand_prevents_exemptio
         }
         recorded
     };
-    assert!(allowed(&history(false)).is_ok_and(|verdict| verdict.ready));
-    assert_refused(&allowed(&history(true)), "PR-only check DCO has");
+    assert!(
+        history(false)
+            .gate_with_budget(100)
+            .is_ok_and(|verdict| verdict.ready)
+    );
+    assert_refused(
+        &history(true).gate_with_budget(100),
+        "PR-only check DCO has",
+    );
 }
 
 #[test]

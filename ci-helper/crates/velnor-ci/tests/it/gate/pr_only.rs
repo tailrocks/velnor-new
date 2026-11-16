@@ -11,11 +11,19 @@ use crate::support::repo;
 
 const ABSENT: &str = "no job of a push run on main reports it";
 
-fn dco() -> Value {
+pub(super) fn dco() -> Value {
     json!({"context": "DCO", "integration_id": 343_649})
 }
 
 pub(super) const RULESET: &str = "/repos/tailrocks/velnor-new/rulesets/7";
+pub(super) const CHECK_RULESET: &str = "/repos/tailrocks/velnor-new/rulesets/24396608";
+
+pub(super) fn check_ruleset() -> Value {
+    let mut detail = ruleset();
+    detail["id"] = json!(24_396_608);
+    detail["rules"] = json!([required(&[check("Required"), dco()])]);
+    detail
+}
 
 pub(super) fn pr_rule() -> Value {
     json!({"type": "pull_request", "ruleset_id": 7, "ruleset_source_type": "Repository", "ruleset_source": "tailrocks/velnor-new"})
@@ -39,11 +47,19 @@ pub(super) fn protected() -> Recorded {
     Recorded::new()
         .rules(vec![pr_rule(), required(&[check("Required"), dco()])])
         .set(RULESET.to_owned(), ruleset())
+        .set(CHECK_RULESET.to_owned(), check_ruleset())
         .set(
             suites_path(1),
-            json!({"total_count": 1, "check_suites": [{"id": 9}]}),
+            json!({"total_count": 1, "check_suites": [{"id": 9, "status": "completed", "app": {"id": 343_649}}]}),
         )
         .set(checks_path(1), json!({"total_count": 0, "check_runs": []}))
+        .set(aggregate_path(1), json!({"total_count": 0, "check_runs": []}))
+}
+
+pub(super) fn aggregate_path(page: u32) -> String {
+    format!(
+        "/repos/tailrocks/velnor-new/commits/{GREEN}/check-runs?filter=all&per_page=100&page={page}"
+    )
 }
 
 pub(super) fn allowed(recorded: &Recorded) -> Result<velnor_ci::gate::Verdict, String> {
@@ -56,7 +72,7 @@ fn an_explicit_pr_only_required_external_check_needs_no_push_job() {
     assert!(verdict.ready);
     assert!(verdict.report.contains("check DCO is explicitly PR-only\n"));
     assert!(verdict.report.contains("check Required passed\n"));
-    assert_refused(&protected().gate(GREEN), "GitHub App 343649");
+    assert_refused(&protected().gate(GREEN), "GitHub App 343_649");
     let missing = protected().requiring(&[check("Required"), check("DCO")]);
     assert_refused(&missing.gate(GREEN), ABSENT);
 }
