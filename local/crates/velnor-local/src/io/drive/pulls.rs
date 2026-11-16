@@ -8,8 +8,8 @@ use tokio::fs;
 
 use super::Driver;
 use crate::event::{Commit, MergeGroup, PullRequest};
-use crate::io::env::request;
 use crate::io::now;
+use crate::io::probe::request;
 use crate::rest::rfc3339;
 use crate::side::registered_on;
 
