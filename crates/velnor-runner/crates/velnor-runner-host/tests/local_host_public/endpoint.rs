@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use bollard::models::NetworkCreateRequest;
+use bollard::query_parameters::TagImageOptions;
 use velnor_runner_host::local::start_pair;
 
 use super::proxy::{Faults, Proxy, Wait};
@@ -123,6 +124,24 @@ async fn selected_fixture() -> TestResult<()> {
     let environment = fixture.environment.clone();
     let network = fixture.network.clone();
     let image = fixture.image.clone();
+    let tag = fixture.image_tag().to_owned();
+    let alias_suffix = suffix()?;
+    let alias = format!("velnor-local-test-alias:{alias_suffix}");
+    let mut alias_guard = Guard::new(
+        docker.clone(),
+        &format!("test-alias-{alias_suffix}"),
+        &alias,
+        &format!("velnor-local-test-alias-{alias_suffix}"),
+    );
+    docker
+        .tag_image(
+            &image,
+            Some(TagImageOptions {
+                repo: Some("velnor-local-test-alias".to_owned()),
+                tag: Some(alias_suffix),
+            }),
+        )
+        .await?;
     let proxy = Proxy::start(&fixture.endpoint, Faults::new(|_| Wait::Forward, 0))?;
     proxy.docker.ping().await?;
     Box::pin(start_pair(&proxy.docker, &fixture.request())).await?;
@@ -130,7 +149,19 @@ async fn selected_fixture() -> TestResult<()> {
     drop(fixture);
     assert_eq!(labelled(&docker, &environment).await?, (0, 0));
     assert!(docker.inspect_network(&network, None).await.is_err());
-    assert!(docker.inspect_image(&image).await.is_err());
+    let removed = docker.inspect_image(&tag).await;
+    let retained_alias = docker.inspect_image(&alias).await;
+    let retained_digest = docker.inspect_image(&image).await;
+    alias_guard.finish().await?;
+    assert!(matches!(
+        removed,
+        Err(bollard::errors::Error::DockerResponseServerError {
+            status_code: 404,
+            ..
+        })
+    ));
+    assert_eq!(retained_alias?.id.as_deref(), Some(image.as_str()));
+    assert_eq!(retained_digest?.id.as_deref(), Some(image.as_str()));
     Ok(())
 }
 

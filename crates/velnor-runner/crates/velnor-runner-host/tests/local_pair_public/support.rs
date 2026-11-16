@@ -179,6 +179,10 @@ impl Fixture {
         request(&self.environment, &self.network, &self.image)
     }
 
+    pub(crate) fn image_tag(&self) -> &str {
+        self.guard.image_tag()
+    }
+
     pub(crate) async fn finish(mut self) -> TestResult<()> {
         self.guard.finish().await
     }

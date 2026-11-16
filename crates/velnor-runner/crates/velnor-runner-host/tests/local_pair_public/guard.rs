@@ -37,6 +37,10 @@ impl Guard {
         }
     }
 
+    pub(crate) fn image_tag(&self) -> &str {
+        &self.image
+    }
+
     pub(crate) async fn finish(&mut self) -> super::TestResult<()> {
         let networks = self
             .networks
@@ -88,12 +92,28 @@ fn removed(result: Result<(), Error>) -> super::TestResult<()> {
     }
 }
 
+fn attempted<T>(
+    result: super::TestResult<T>,
+    first: &mut Option<Box<dyn std::error::Error>>,
+) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(error) => {
+            if first.is_none() {
+                *first = Some(error);
+            }
+            None
+        }
+    }
+}
+
 async fn cleanup(
     docker: &Docker,
     environment: &str,
     image: &str,
     networks: &[String],
 ) -> super::TestResult<()> {
+    let mut first = None;
     let filters = HashMap::from([(
         "label".to_owned(),
         vec![format!("{ENVIRONMENT_LABEL}={environment}")],
@@ -104,41 +124,54 @@ async fn cleanup(
             filters: Some(filters.clone()),
             ..Default::default()
         }))
-        .await?;
-    for container in containers.into_iter().filter_map(|container| container.id) {
-        removed(
-            docker
-                .remove_container(
-                    &container,
-                    Some(RemoveContainerOptions {
-                        force: true,
-                        v: true,
-                        ..Default::default()
-                    }),
-                )
-                .await,
-        )?;
+        .await;
+    if let Some(containers) = attempted(containers.map_err(Into::into), &mut first) {
+        for container in containers.into_iter().filter_map(|container| container.id) {
+            attempted(
+                removed(
+                    docker
+                        .remove_container(
+                            &container,
+                            Some(RemoveContainerOptions {
+                                force: true,
+                                v: true,
+                                ..Default::default()
+                            }),
+                        )
+                        .await,
+                ),
+                &mut first,
+            );
+        }
     }
     let volumes = docker
         .list_volumes(Some(ListVolumesOptions {
             filters: Some(filters),
         }))
-        .await?;
-    for volume in volumes.volumes.unwrap_or_default() {
-        removed(
-            docker
-                .remove_volume(&volume.name, None::<RemoveVolumeOptions>)
-                .await,
-        )?;
+        .await;
+    if let Some(volumes) = attempted(volumes.map_err(Into::into), &mut first) {
+        for volume in volumes.volumes.unwrap_or_default() {
+            attempted(
+                removed(
+                    docker
+                        .remove_volume(&volume.name, None::<RemoveVolumeOptions>)
+                        .await,
+                ),
+                &mut first,
+            );
+        }
     }
     for network in networks {
-        removed(docker.remove_network(network).await)?;
+        attempted(removed(docker.remove_network(network).await), &mut first);
     }
-    removed(
-        docker
-            .remove_image(image, None::<RemoveImageOptions>, None)
-            .await
-            .map(|_| ()),
-    )?;
-    Ok(())
+    attempted(
+        removed(
+            docker
+                .remove_image(image, None::<RemoveImageOptions>, None)
+                .await
+                .map(|_| ()),
+        ),
+        &mut first,
+    );
+    first.map_or(Ok(()), Err)
 }

@@ -24,6 +24,7 @@ pub(crate) struct Faults {
     waited: AtomicUsize,
     removals: AtomicUsize,
     sweep_removals: AtomicUsize,
+    retained_container: Option<String>,
     pub(crate) hang_creations: AtomicBool,
 }
 
@@ -34,6 +35,7 @@ impl Faults {
             waited: AtomicUsize::new(0),
             removals: AtomicUsize::new(removals),
             sweep_removals: AtomicUsize::new(usize::MAX),
+            retained_container: None,
             hang_creations: AtomicBool::new(false),
         })
     }
@@ -44,6 +46,18 @@ impl Faults {
             waited: AtomicUsize::new(0),
             removals: AtomicUsize::new(0),
             sweep_removals: AtomicUsize::new(0),
+            retained_container: None,
+            hang_creations: AtomicBool::new(false),
+        })
+    }
+
+    pub(crate) fn retain_container(container: &str) -> Arc<Self> {
+        Arc::new(Self {
+            waits: |_| Wait::Forward,
+            waited: AtomicUsize::new(0),
+            removals: AtomicUsize::new(0),
+            sweep_removals: AtomicUsize::new(usize::MAX),
+            retained_container: Some(container.to_owned()),
             hang_creations: AtomicBool::new(false),
         })
     }
@@ -55,6 +69,16 @@ impl Faults {
     }
 
     fn answer(&self, line: &str) -> Option<(u16, &'static str)> {
+        if line.starts_with("DELETE ")
+            && self.retained_container.as_ref().is_some_and(|container| {
+                line.split_whitespace()
+                    .nth(1)
+                    .and_then(|path| path.split('?').next())
+                    .is_some_and(|path| path.ends_with(&format!("/containers/{container}")))
+            })
+        {
+            return Some((500, "{\"message\":\"injected\"}"));
+        }
         if line.starts_with("DELETE ")
             && line.contains("/containers/")
             && self.sweep_removals.load(Ordering::SeqCst) != usize::MAX
