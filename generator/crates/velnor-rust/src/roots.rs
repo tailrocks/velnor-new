@@ -134,11 +134,17 @@ pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     })
 }
 
-fn shadowed(view: &RepoView, file: &RepoPath) -> bool {
-    file.as_str()
-        .strip_suffix(".toml")
-        .and_then(|name| RepoPath::new(name).ok())
-        .is_some_and(|name| view.files.contains_key(&name))
+pub(crate) fn effective_configs(
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+) -> impl Iterator<Item = (&RepoPath, &Vec<u8>)> {
+    files.iter().filter(|(file, _)| {
+        is_cargo_config(file)
+            && !file
+                .as_str()
+                .strip_suffix(".toml")
+                .and_then(|name| RepoPath::new(name).ok())
+                .is_some_and(|name| files.contains_key(&name))
+    })
 }
 
 pub(crate) fn patch_files<'v>(
@@ -146,13 +152,16 @@ pub(crate) fn patch_files<'v>(
     manifest: &RepoPath,
 ) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
     let folder = manifest.parent();
+    let effective: BTreeSet<&RepoPath> = effective_configs(&view.files)
+        .map(|(file, _)| file)
+        .collect();
     view.files
         .iter()
         .filter_map(|(file, bytes)| {
             if file == manifest {
                 return Some((file, bytes.as_slice(), folder.clone()));
             }
-            if !is_cargo_config(file) || shadowed(view, file) {
+            if !effective.contains(file) {
                 return None;
             }
             let base = file.parent().and_then(|cargo| cargo.parent());

@@ -3,10 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView};
 
-use crate::error::DetectError;
-use crate::roots::is_cargo_config;
+use crate::error::{DetectError, Reason};
+use crate::roots::effective_configs;
+use crate::target_dir::target_dir_source;
 use crate::toml_file::table;
 
 const CONFIG_FILES: [&str; 2] = [".cargo/config", ".cargo/config.toml"];
@@ -38,15 +39,7 @@ pub fn cargo_config_paths(roots: &[RepoPath]) -> Vec<RepoPath> {
 
 pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, DetectError> {
     let mut sections = Vec::new();
-    for (file, bytes) in files.iter().filter(|(file, _)| is_cargo_config(file)) {
-        let shadowed = file
-            .as_str()
-            .strip_suffix(".toml")
-            .and_then(|name| RepoPath::new(name).ok())
-            .is_some_and(|name| files.contains_key(&name));
-        if shadowed {
-            continue;
-        }
+    for (file, bytes) in effective_configs(files) {
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
         if let Some(profile) = parsed.get("profile") {
             let wrapped = toml::Table::from_iter([("profile".to_owned(), profile.clone())]);
@@ -54,4 +47,34 @@ pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, Detec
         }
     }
     Ok(sections.concat())
+}
+
+pub fn check_runtime_configs(
+    roots: &[RepoPath],
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+    tracked: &BTreeSet<RepoPath>,
+) -> Result<(), DetectError> {
+    let read = RepoView {
+        files: files.clone(),
+        ..RepoView::default()
+    };
+    let generated = RepoView {
+        files: files
+            .iter()
+            .filter(|(file, _)| tracked.contains(*file))
+            .map(|(file, bytes)| (file.clone(), bytes.clone()))
+            .collect(),
+        ..RepoView::default()
+    };
+    for root in roots {
+        let (used, source) = target_dir_source(&read, root)?;
+        let (rendered, _) = target_dir_source(&generated, root)?;
+        if let (true, Some(file)) = (used != rendered, source) {
+            return Err(DetectError::invalid(
+                file,
+                Reason::RuntimeTargetDir { used, rendered },
+            ));
+        }
+    }
+    Ok(())
 }

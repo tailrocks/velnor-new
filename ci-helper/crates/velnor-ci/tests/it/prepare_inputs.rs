@@ -89,3 +89,42 @@ fn rust_before_1_71_gets_numeric_debug_values() {
     );
     assert!(!run.velnor_config.contains("\"none\""));
 }
+
+fn runtime_config(name: &str, body: &'static str, track: bool) -> super::prepare::Run {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.repo_cargo_config = Some(body);
+    setup.populate = Some(Box::new(move |checkout| {
+        if track {
+            let added = std::process::Command::new("git")
+                .args(["add", ".cargo/config.toml"])
+                .current_dir(checkout)
+                .status()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert!(added.success());
+        }
+    }));
+    prepare(name, &setup)
+}
+
+#[test]
+fn prepare_refuses_an_untracked_config_that_moves_the_cached_output_paths() {
+    for body in [
+        "[build]\nbuild-dir = \"out\"\n",
+        "[build]\ntarget-dir = \"out\"\n",
+        "[build]\ntarget-dir = \"{workspace-root}/out\"\n",
+        "[build]\ntarget-dir = \"~/out\"\n",
+    ] {
+        let run = runtime_config(&format!("refuse-{}", body.len()), body, false);
+        assert!(!run.output.status.success(), "{body}");
+        let stderr = String::from_utf8_lossy(&run.output.stderr);
+        assert!(stderr.contains(".cargo/config.toml"), "{body}: {stderr}");
+    }
+}
+
+#[test]
+fn prepare_accepts_a_tracked_target_dir_and_an_untracked_unrelated_setting() {
+    let tracked = runtime_config("accept-tracked", "[build]\ntarget-dir = \"out\"\n", true);
+    assert!(tracked.output.status.success(), "{:?}", tracked.output);
+    let unrelated = runtime_config("accept-jobs", "[build]\njobs = 2\n", false);
+    assert!(unrelated.output.status.success(), "{:?}", unrelated.output);
+}

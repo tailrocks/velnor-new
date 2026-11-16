@@ -1,13 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
 use std::path::Path;
+use std::process::Command;
 
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
-use velnor_rust::{METADATA_PATH, cargo_config_paths, recorded_roots, repo_profile, rustc_release};
+use velnor_rust::{
+    METADATA_PATH, cargo_config_paths, check_runtime_configs, recorded_roots, repo_profile,
+    rustc_release,
+};
 
 use crate::error::CiError;
 
@@ -26,7 +30,27 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
             files.insert(path, bytes);
         }
     }
+    let tracked = tracked_among(root, &files);
+    check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
     repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
+}
+
+fn tracked_among(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> BTreeSet<RepoPath> {
+    let listed = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success());
+    let Some(listed) = listed else {
+        return files.keys().cloned().collect();
+    };
+    listed
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter_map(|name| std::str::from_utf8(name).ok())
+        .filter_map(|name| RepoPath::new(name).ok())
+        .collect()
 }
 
 fn read_config(root: &Path, inside: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {

@@ -13,6 +13,13 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
+    target_dir_source(view, manifest).map(|(folder, _)| folder)
+}
+
+pub(crate) fn target_dir_source<'v>(
+    view: &'v RepoView,
+    manifest: &RepoPath,
+) -> Result<(RepoPath, Option<&'v RepoPath>), DetectError> {
     if let Some((file, ..)) = nearest(view, manifest, "build-dir")? {
         return Err(DetectError::invalid(
             file,
@@ -20,7 +27,7 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
         ));
     }
     let Some((file, base, value)) = nearest(view, manifest, "target-dir")? else {
-        return Ok(manifest.sibling(&DEFAULT));
+        return Ok((manifest.sibling(&DEFAULT), None));
     };
     let text = value.as_str().map(str::to_owned).ok_or_else(|| {
         DetectError::invalid(
@@ -43,7 +50,7 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
     if holds_root {
         Err(outside())
     } else {
-        Ok(folder)
+        Ok((folder, Some(file)))
     }
 }
 

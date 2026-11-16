@@ -24,6 +24,19 @@ fn a_config_toml_shadowed_by_config_is_ignored_for_every_key() -> TestResult {
 }
 
 #[test]
+fn a_shadowed_config_toml_naming_an_unknown_build_target_does_not_block_generation() -> TestResult {
+    let mut shadowed = view(&["Cargo.toml"], None)?;
+    with_config(&mut shadowed, ".cargo/config", "[build]\njobs = 2\n")?;
+    with_config(
+        &mut shadowed,
+        ".cargo/config.toml",
+        "[build]\ntarget = \"unknown-target\"\n",
+    )?;
+    workflow(&shadowed)?;
+    Ok(())
+}
+
+#[test]
 fn build_dir_and_placeholder_target_dirs_fail_generation() -> TestResult {
     for body in [
         "[build]\nbuild-dir = \"out\"\n",
