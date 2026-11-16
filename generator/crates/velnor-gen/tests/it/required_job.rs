@@ -173,6 +173,43 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
     Ok(())
 }
 
+fn many_members(count: usize) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let mut view = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    view.files
+        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+    let metadata = view
+        .rust_metadata
+        .get_mut(&RepoPath::new("Cargo.toml")?)
+        .ok_or("no metadata")?;
+    let member = metadata.members.first().ok_or("no member")?.clone();
+    metadata.members = (0..count)
+        .map(|index| {
+            let mut member = member.clone();
+            member.name = velnor_model::PackageName::new(format!(
+                "package-with-a-long-but-valid-cargo-name-{index}"
+            ))?;
+            Ok(member)
+        })
+        .collect::<Result<_, Box<dyn std::error::Error>>>()?;
+    Ok(view)
+}
+
+#[test]
+fn a_large_plan_cannot_overflow_the_required_jobs_needs_environment() -> TestResult {
+    let small = expected_files(&many_members(10)?)?;
+    assert!(small.values().any(|text| text.contains("velnor-ci gate")));
+    let large = expected_files(&many_members(2_500)?);
+    assert!(
+        matches!(&large, Err(velnor_gen::GenerateError::Rules(violations))
+            if violations.iter().any(|violation|
+                violation.job == "required"
+                    && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
+        "generation must reject the expanded needs context before a runner starts"
+    );
+    Ok(())
+}
+
 #[test]
 fn an_env_value_over_the_limit_is_a_rule_violation() {
     use velnor_render::{
