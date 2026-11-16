@@ -43,6 +43,7 @@ mod release_symlink;
 mod release_tag_binding;
 mod release_workflow;
 mod release_yml;
+mod release_yml_bin_names;
 mod release_yml_binaries;
 mod release_yml_cargo;
 mod release_yml_finalize;
