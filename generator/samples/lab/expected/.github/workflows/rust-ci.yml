@@ -18,11 +18,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && github.event.pull_request.state != ''closed'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
 jobs:
   rust-plan:
-    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
       contents: read
     outputs:
@@ -58,7 +58,7 @@ jobs:
   rust-root:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -195,7 +195,7 @@ jobs:
   rust-lab:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -313,7 +313,7 @@ jobs:
   rust-inputs-audit:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (github.event_name == ''schedule'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''schedule'') }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -430,7 +430,7 @@ jobs:
       - rust-root
       - rust-lab
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.state != ''closed'') && (!cancelled()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest

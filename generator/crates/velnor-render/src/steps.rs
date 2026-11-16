@@ -36,8 +36,7 @@ const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e4
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
-const ACTIVE_EVENT: &str =
-    "(github.event_name != 'pull_request' || github.event.pull_request.state != 'closed')";
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
     let admission = match condition(job.when, job.gate.as_ref(), false, job.skip_on_draft) {

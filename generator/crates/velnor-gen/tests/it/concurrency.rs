@@ -25,9 +25,9 @@ fn only_a_pull_request_not_known_closed_can_cancel_an_older_run() -> TestResult 
         tree.pointer("/concurrency/cancel-in-progress")
             .and_then(serde_json::Value::as_str),
         Some(
-            "${{ github.event_name == 'pull_request' && github.event.pull_request.state != 'closed' }}"
+            "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}"
         ),
-        "closed merged and unmerged edits and non-PR events must not cancel open PR work"
+        "closed PR edits, merged PRs with empty payloads and non-PR events must not cancel open PR work"
     );
     Ok(())
 }
@@ -39,9 +39,9 @@ fn closed_pull_requests_and_non_pull_request_runs_use_their_unique_run_id() -> T
         tree.pointer("/concurrency/group")
             .and_then(serde_json::Value::as_str),
         Some(
-            "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}"
+            "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}"
         ),
-        "closed merged and unmerged edits and non-PR events must not replace pending open PR work"
+        "closed PR edits, merged PRs with empty payloads and non-PR events must not replace pending open PR work"
     );
     Ok(())
 }
