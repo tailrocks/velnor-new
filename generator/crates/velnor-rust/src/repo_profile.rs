@@ -10,7 +10,7 @@ use crate::roots::is_cargo_config;
 use crate::toml_file::table;
 
 pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, DetectError> {
-    let mut text = String::new();
+    let mut sections = Vec::new();
     for (file, bytes) in files.iter().filter(|(file, _)| is_cargo_config(file)) {
         let shadowed = file
             .as_str()
@@ -23,8 +23,8 @@ pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, Detec
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
         if let Some(profile) = parsed.get("profile") {
             let wrapped = toml::Table::from_iter([("profile".to_owned(), profile.clone())]);
-            text.push_str(&format!("{file}\n{wrapped}\n"));
+            sections.push(format!("{file}\n{wrapped}\n"));
         }
     }
-    Ok(text)
+    Ok(sections.concat())
 }

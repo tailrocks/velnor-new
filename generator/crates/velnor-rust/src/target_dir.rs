@@ -19,7 +19,7 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
         (
             base.as_ref()
                 .map_or(0, |base| base.as_str().split('/').count()),
-            !file.as_str().ends_with(".toml"),
+            file.as_str().strip_suffix(".toml").is_none(),
         )
     });
     let mut chosen = None;
@@ -36,9 +36,8 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
     if text.starts_with('/') {
         return Err(outside());
     }
-    let folder = resolve(base.as_ref(), &text)
-        .flatten()
-        .ok_or_else(outside)?;
+    let segments = resolve(base.as_ref(), &text).ok_or_else(outside)?;
+    let folder = segments.join("/");
     let folder = RepoPath::new(folder).map_err(|_| outside())?;
     let holds_root = std::iter::successors(manifest.parent(), RepoPath::parent)
         .any(|ancestor| ancestor == folder);

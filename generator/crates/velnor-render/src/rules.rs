@@ -231,10 +231,10 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if let Some(uses) = &step.uses {
         action_rules(uses, &mut rules);
     }
-    if let Some(length) = longest_cache_key(step) {
-        if length > MAX_CACHE_KEY_CHARACTERS {
-            rules.push(Rule::CacheKeyTooLong(length));
-        }
+    if let Some(length) = longest_cache_key(step)
+        && length > MAX_CACHE_KEY_CHARACTERS
+    {
+        rules.push(Rule::CacheKeyTooLong(length));
     }
     rules
 }

@@ -251,15 +251,12 @@ fn patches(
 }
 
 pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
-    resolve(base, relative).map(|folder| {
-        format!(
-            "{}Cargo.toml",
-            folder.map_or_else(String::new, |folder| format!("{folder}/"))
-        )
-    })
+    let mut segments = resolve(base, relative)?;
+    segments.push("Cargo.toml");
+    Some(segments.join("/"))
 }
 
-pub(crate) fn resolve(base: Option<&RepoPath>, relative: &str) -> Option<Option<String>> {
+pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {
@@ -271,7 +268,7 @@ pub(crate) fn resolve(base: Option<&RepoPath>, relative: &str) -> Option<Option<
             other => segments.push(other),
         }
     }
-    Some((!segments.is_empty()).then(|| segments.join("/")))
+    Some(segments)
 }
 
 fn member(
