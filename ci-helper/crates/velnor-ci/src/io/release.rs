@@ -14,6 +14,7 @@ use crate::publish::{Request, SUMS, publish};
 use crate::release::{
     CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns, record,
 };
+use crate::rulesets::check_tag_rulesets;
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -46,7 +47,15 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         check_cargo_discovery(&discovery(&top, path)?)?;
     }
     let output = check_config(&files)?;
-    check_tag_patterns(&files, &args.tag_patterns)?;
+    let patterns = args.tag_patterns();
+    check_tag_patterns(&files, &patterns)?;
+    if let Some(repo) = &args.repo {
+        check_tag_rulesets(
+            &HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT),
+            &Repo::parse(repo)?,
+            &patterns,
+        )?;
+    }
     Ok(output)
 }
 

@@ -162,7 +162,7 @@ pub enum ReleaseCommand {
     )]
     Publish(PublishArgs),
     #[command(
-        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern, when a file's release tag patterns differ from the ones listed for it, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
+        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
 }
@@ -173,17 +173,32 @@ pub struct CheckConfigArgs {
     pub files: Vec<PathBuf>,
     #[arg(
         long = "tag-pattern",
-        value_name = "FILE=PATTERN",
-        value_parser = tag_pattern,
+        num_args = 2,
+        value_names = ["FILE", "PATTERN"],
+        action = clap::ArgAction::Append,
+        requires = "repo",
         help = "A git_tag_name pattern the tag rulesets were provisioned for; when given, every file must hold exactly the patterns listed for it"
     )]
-    pub tag_patterns: Vec<(String, String)>,
+    tag_pattern_words: Vec<String>,
+    #[arg(
+        long,
+        value_name = "OWNER/NAME",
+        requires = "tag_pattern_words",
+        help = "With --tag-pattern, the repository whose active tag rulesets must hold a creation, update and deletion rule for every listed pattern"
+    )]
+    pub repo: Option<String>,
 }
 
-fn tag_pattern(text: &str) -> Result<(String, String), String> {
-    text.split_once('=')
-        .map(|(file, pattern)| (file.to_owned(), pattern.to_owned()))
-        .ok_or_else(|| format!("`{text}` is not FILE=PATTERN"))
+impl CheckConfigArgs {
+    #[must_use]
+    pub fn tag_patterns(&self) -> Vec<(String, String)> {
+        self.tag_pattern_words
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[file, pattern]| (file.clone(), pattern.clone()))
+            .collect()
+    }
 }
 
 #[derive(Debug, Args)]
