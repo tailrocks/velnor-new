@@ -155,6 +155,7 @@ crates/velnor-actions-contract/src/config/release_validation.rs
 crates/velnor-actions-contract/src/config/resources.rs
 crates/velnor-actions-contract/src/config/review_completion.rs
 crates/velnor-actions-contract/src/config/runs_on.rs
+crates/velnor-actions-contract/src/config/rust_configuration_validate.rs
 crates/velnor-actions-contract/src/config/rust_inputs.rs
 crates/velnor-actions-contract/src/config/rust_non_inputs.rs
 crates/velnor-actions-contract/src/config/rust_suites.rs
