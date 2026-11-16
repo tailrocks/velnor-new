@@ -52,3 +52,75 @@ fn a_corrupt_inputs_file_is_an_error_that_names_the_line() {
         )
     );
 }
+
+#[test]
+fn breaking_ties_never_lands_on_a_time_another_file_already_has() {
+    use velnor_ci::ties::{TIE_STEP_NS, break_ties};
+    let t = 5_000_000;
+    let files: Vec<(String, u64)> = vec![
+        ("a".into(), t),
+        ("b".into(), t),
+        ("c".into(), t - TIE_STEP_NS),
+        ("d".into(), t),
+    ];
+    let moved = break_ties(&files).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut times: Vec<u64> = files
+        .iter()
+        .filter(|(path, _)| path == "a" || path == "c")
+        .map(|(_, time)| *time)
+        .chain(moved.iter().map(|(_, time)| *time))
+        .collect();
+    times.sort_unstable();
+    times.dedup();
+    assert_eq!(times.len(), 4);
+    assert_eq!(
+        moved
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        ["b", "d"]
+    );
+}
+
+#[test]
+fn every_time_breaking_ties_moves_is_strictly_earlier_than_the_original() {
+    use std::collections::BTreeMap;
+    use velnor_ci::ties::break_ties;
+    let files: Vec<(String, u64)> = (0..6)
+        .map(|n| (format!("f{n}"), if n < 4 { 9_000_000 } else { 8_999_000 }))
+        .collect();
+    let original: BTreeMap<&str, u64> = files.iter().map(|(p, t)| (p.as_str(), *t)).collect();
+    let moved = break_ties(&files).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(moved.len(), 4);
+    for (path, time) in &moved {
+        assert!(*time < original[path.as_str()], "{path} moved up to {time}");
+    }
+}
+
+#[test]
+fn files_below_one_step_of_zero_still_end_up_with_distinct_times() {
+    use std::collections::BTreeSet;
+    use velnor_ci::ties::break_ties;
+    let files: Vec<(String, u64)> = ["a", "b", "c"]
+        .into_iter()
+        .map(|path| (path.to_owned(), 500))
+        .collect();
+    let moved = break_ties(&files).unwrap_or_else(|e| unreachable!("{e}"));
+    let times: BTreeSet<u64> = std::iter::once(500)
+        .chain(moved.iter().map(|(_, time)| *time))
+        .collect();
+    assert_eq!(moved.len(), 2);
+    assert_eq!(times.len(), 3, "{moved:?}");
+    assert!(moved.iter().all(|(_, time)| *time < 500), "{moved:?}");
+}
+
+#[test]
+fn a_tie_with_no_earlier_time_left_is_an_error_not_a_silent_tie() {
+    use velnor_ci::ties::break_ties;
+    let files: Vec<(String, u64)> = ["a", "b", "c"]
+        .into_iter()
+        .map(|path| (path.to_owned(), 1))
+        .collect();
+    let error = break_ties(&files).err().map(|e| e.to_string());
+    assert!(error.is_some_and(|text| text.contains("cannot give c")));
+}

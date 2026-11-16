@@ -12,7 +12,9 @@ pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{METADATA_PATH, manifests, metadata_roots, reduce_metadata, wanted_files};
+use velnor_rust::{
+    METADATA_PATH, build_script_sources, manifests, metadata_roots, reduce_metadata, wanted_files,
+};
 
 mod check;
 mod error;
@@ -284,6 +286,13 @@ pub fn view_of(
     }
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
+    for source in build_script_sources(&view) {
+        match read_files(root, std::slice::from_ref(&source)) {
+            Ok(files) => view.files.extend(files),
+            Err(Error::NotRegular(_)) => {}
+            Err(error) => return Err(error),
+        }
+    }
     add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))
 }
