@@ -25,6 +25,9 @@ const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d229
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const HELPER_ARTIFACT: &str = "velnor-ci";
+const CARGO_LOG_ARTIFACT: &str = "velnor-cargo-log";
+const RUN_LOG_FILE: &str = "velnor-run.log";
+const CARGO_LOG_RETENTION_DAYS: u64 = 3;
 const ARCHIVE_RETENTION_DAYS: u64 = 7;
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
@@ -174,6 +177,7 @@ StepKind::CratesMirror(mirror) => RenderedStep {
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+        StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
         StepKind::FailWhenANeedFailed => RenderedStep {
@@ -182,6 +186,33 @@ StepKind::CratesMirror(mirror) => RenderedStep {
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn upload_cargo_log() -> RenderedStep {
+    RenderedStep {
+        name: "Upload the cargo fingerprint log".to_owned(),
+        uses: Some(UPLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            (
+                "name".to_owned(),
+                Value::Expr(format!("{CARGO_LOG_ARTIFACT}-${{{{ github.job }}}}")),
+            ),
+            (
+                "path".to_owned(),
+                Value::Expr(format!("${{{{ runner.temp }}}}/{RUN_LOG_FILE}")),
+            ),
+            (
+                "if-no-files-found".to_owned(),
+                Value::Text("ignore".to_owned()),
+            ),
+            (
+                "retention-days".to_owned(),
+                Value::Int(CARGO_LOG_RETENTION_DAYS),
+            ),
+            ("overwrite".to_owned(), Value::Bool(true)),
+        ],
+        ..RenderedStep::default()
     }
 }
 

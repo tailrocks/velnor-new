@@ -17,6 +17,7 @@ mod drift;
 mod events;
 mod events_policy;
 mod facts;
+mod freshness;
 mod golden;
 mod harness;
 mod harness_kinds;
