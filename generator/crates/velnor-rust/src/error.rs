@@ -64,7 +64,7 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
-    HelperTarget(RepoPath),
+    HelperSourceRelease,
     CargoCredentialProvider(String),
     TargetDirOutside(String),
 }
@@ -89,9 +89,8 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
-            Self::HelperTarget(path) => write!(
-                f,
-                "helper.path is {path}, whose cargo configuration sets build.target; the helper is built once and run by every job on its own runner, so it must be built for the runner host: remove build.target for it"
+            Self::HelperSourceRelease => f.write_str(
+                "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
             ),
             _ => Ok(()),
         }
@@ -186,7 +185,7 @@ impl fmt::Display for Reason {
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperTarget(_) => self.fmt_setup(f),
+            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints

@@ -116,9 +116,6 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
             package: PackageName::from_static(HELPER_PACKAGE),
         }))
     });
-    steps.push(step(StepKind::PublishHelper {
-        binary: root.target_dir.child("debug/velnor-ci"),
-    }));
     Job {
         steps,
         ..job(facts, HELPER_JOB)

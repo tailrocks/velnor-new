@@ -22,7 +22,6 @@ pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d9
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
-const HELPER_ARTIFACT: &str = "velnor-ci";
 const CARGO_LOG_ARTIFACT: &str = "velnor-cargo-log";
 const RUN_LOG_FILE: &str = "velnor-run.log";
 const CARGO_LOG_RETENTION_DAYS: u64 = 3;
@@ -171,7 +170,6 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::UploadCargoLog => upload_cargo_log(),
-        StepKind::PublishHelper { binary } => publish_helper(binary),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
@@ -202,28 +200,6 @@ fn upload_cargo_log() -> RenderedStep {
                 "retention-days".to_owned(),
                 Value::Int(CARGO_LOG_RETENTION_DAYS),
             ),
-            ("overwrite".to_owned(), Value::Bool(true)),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-fn publish_helper(binary: &RepoPath) -> RenderedStep {
-    RenderedStep {
-        name: "Upload velnor-ci".to_owned(),
-        uses: Some(UPLOAD_ARTIFACT.to_owned()),
-        with: vec![
-            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            (
-                "path".to_owned(),
-                Value::Text(crate::cache::glob_literal(binary.as_str())),
-            ),
-            ("include-hidden-files".to_owned(), Value::Bool(true)),
-            (
-                "if-no-files-found".to_owned(),
-                Value::Text("error".to_owned()),
-            ),
-            ("retention-days".to_owned(), Value::Int(1)),
             ("overwrite".to_owned(), Value::Bool(true)),
         ],
         ..RenderedStep::default()

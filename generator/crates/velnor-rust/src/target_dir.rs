@@ -41,23 +41,6 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
     }
 }
 
-pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
-    for (file, bytes, _) in patch_files(view, manifest) {
-        if file == manifest {
-            continue;
-        }
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
-        if parsed
-            .get("build")
-            .and_then(|build| build.get("target"))
-            .is_some()
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
 fn nearest<'v>(
     view: &'v RepoView,
     manifest: &RepoPath,

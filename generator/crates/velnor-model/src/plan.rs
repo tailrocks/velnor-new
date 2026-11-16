@@ -197,9 +197,6 @@ pub enum StepKind {
     Helper(HelperCommand),
     GeneratorCheck,
     InstallHelper(HelperRelease),
-    PublishHelper {
-        binary: RepoPath,
-    },
     FailWhenANeedFailed,
     FailOnDraftRun,
     UploadCargoLog,

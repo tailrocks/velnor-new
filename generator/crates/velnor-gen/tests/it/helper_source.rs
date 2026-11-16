@@ -10,7 +10,7 @@ use crate::golden::{load, samples};
 use crate::pipeline::{view, workflow};
 
 const HELPER_LOCK: &[u8] =
-    include_bytes!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
+    include_bytes!("../../../../samples/helper-source/view/.velnor/rust-ci.lock");
 
 fn sample(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = load(&samples().join("helper-source"))?;
