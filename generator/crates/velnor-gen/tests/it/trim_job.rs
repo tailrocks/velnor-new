@@ -53,7 +53,9 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         trim.contains("    needs:\n      - rust-lint\n      - rust-test\n"),
         "{trim}"
     );
-    let condition = format!("    if: '${{{{ !cancelled() && {GUARD} && ({EVENTS}) }}}}'\n");
+    let active = "(github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed''))";
+    let condition =
+        format!("    if: '${{{{ {active} && (!cancelled() && {GUARD} && ({EVENTS})) }}}}'\n");
     assert!(trim.contains(&condition), "{trim}");
     assert!(
         trim.contains("    permissions:\n      actions: write\n    runs-on:"),
@@ -200,7 +202,7 @@ fn pull_request_writers(text: &str) -> Vec<String> {
                 line.starts_with("    if: ")
                     && line.contains(GUARD)
                     && line.contains(EVENTS)
-                    && !line.contains("pull_request")
+                    && !line.contains("github.event_name == ''pull_request''")
             });
             scopes.iter().any(|scope| scope == "actions: write") && !guarded
         })
@@ -236,8 +238,8 @@ fn no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_acti
 fn the_pull_request_check_flags_a_lane_that_holds_actions_write_and_passes_the_guarded_trim_job()
 -> TestResult {
     let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.81", "")?)?;
-    let write = "  rust:\n    permissions:\n      actions: write\n";
-    let broken = text.replace("  rust:\n    permissions:\n      actions: read\n", write);
+    let write = "    permissions:\n      actions: write\n";
+    let broken = text.replace("    permissions:\n      actions: read\n", write);
     assert_ne!(broken, text);
     assert_eq!(pull_request_writers(&broken), ["rust"]);
     let unguarded = text.replace(&format!("({EVENTS})"), "true");

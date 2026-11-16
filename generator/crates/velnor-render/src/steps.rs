@@ -39,6 +39,7 @@ const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e4
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
     let artifacts = job
@@ -59,6 +60,22 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         .steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
+    let admission = match condition(
+        job.when,
+        job.gate.as_ref(),
+        false,
+        job.skip_on_draft,
+        &visibility_part(job.visibility)
+            .into_iter()
+            .collect::<Vec<_>>(),
+    ) {
+        Some(predicate) => format!(
+            "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
+            predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
+        ),
+        None => format!("${{{{ {ACTIVE_EVENT} }}}}"),
+    };
+
     let restores = job
         .steps
         .iter()
@@ -68,15 +85,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(
-            job.when,
-            job.gate.as_ref(),
-            false,
-            job.skip_on_draft,
-            &visibility_part(job.visibility)
-                .into_iter()
-                .collect::<Vec<_>>(),
-        ),
+        condition: Some(admission),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
