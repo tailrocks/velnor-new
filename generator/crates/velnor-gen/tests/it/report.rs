@@ -201,6 +201,8 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
                 let caches: serde_json::Value = serde_json::from_str(raw)?;
                 for cache in caches.as_array().ok_or("caches")? {
                     assert_eq!(cache["requested_key"], "");
+                    assert_eq!(cache["save"], "not_attempted");
+                    assert!(cache.get("save_failed").is_none());
                     assert!(cache.get("lock_prefix").is_none());
                     if !cache["root"].is_null() {
                         assert_eq!(cache["root"], root);

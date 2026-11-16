@@ -247,7 +247,9 @@ jobs:
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: xtask/target
+          path: |
+            xtask/target
+            target/.velnor/inputs.tsv
           key: 'velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
@@ -382,7 +384,9 @@ jobs:
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: xtask/target
+          path: |
+            xtask/target
+            target/.velnor/inputs.tsv
           key: 'velnor-tgt-rust-inputs-audit.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''xtask/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
             velnor-tgt-rust-inputs-audit.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-

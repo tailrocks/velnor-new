@@ -262,7 +262,8 @@ fn every_lane_restores_sources_then_its_own_target_between_prepare_and_restored(
     }
     assert!(text.contains("velnor-tgt-rust-lint-root.root."));
     assert!(text.contains("velnor-tgt-rust-lint-lab.lab."));
-    assert!(text.contains("path: lab/target\n"));
+    assert!(text.contains("lab/target"));
+    assert!(text.contains("target/.velnor/inputs.tsv"));
     assert!(
         !lane_steps(&text, "rust-plan")
             .iter()
