@@ -86,6 +86,12 @@ fn classify(key: &str) -> Option<(CacheFamily, &str)> {
         rest
     };
     let (prefix, compat) = group.rsplit_once('-')?;
+    if family == CacheFamily::Target {
+        let (owner, platform) = prefix.rsplit_once('.')?;
+        let (job, root) = owner.rsplit_once('.')?;
+        return (hex(compat, 16) && host(platform) && !job.is_empty() && !root.is_empty())
+            .then_some((family, group));
+    }
     let (prefix, arch) = prefix.rsplit_once('-')?;
     let (prefix, os) = prefix.rsplit_once('-')?;
     let (job, root) = prefix.rsplit_once('-')?;
@@ -185,4 +191,15 @@ pub fn delta_pull_request(entry: &CacheEntry) -> Option<u64> {
     (cache_family(&entry.key) == CacheFamily::Delta)
         .then(|| pull_request(&entry.reference))
         .flatten()
+}
+
+pub(crate) fn configured_budget(value: Option<u64>) -> Result<u64, crate::error::Reason> {
+    let value = value.unwrap_or(DEFAULT_CACHE_BUDGET_BYTES);
+    if value > DEFAULT_CACHE_BUDGET_BYTES {
+        return Err(crate::error::Reason::InvalidValue {
+            key: "cache_budget_bytes",
+            value: value.to_string(),
+        });
+    }
+    Ok(value)
 }

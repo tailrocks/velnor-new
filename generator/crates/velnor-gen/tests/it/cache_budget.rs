@@ -2,22 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
+use velnor_render::render_key_with_mise;
 use velnor_rust::{CacheEntry, budget_plan};
 
 const DAY: i64 = 86_400;
 const NOW: i64 = 20 * DAY;
 
-fn entry(id: u64, family: &str, group: &str, age: i64) -> CacheEntry {
-    let lock = format!("{id:064x}");
+fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
     let key = match family {
-        "tgt" => format!(
-            "velnor-tgt-{group}-{}-{lock}-{}-{id}",
-            "b".repeat(16),
-            "c".repeat(40)
+        "tgt" => target_key(id, "rust-test", "Cargo.toml"),
+        "src" => resolve_cache_key(
+            &CacheKey::Sources {
+                host: Host,
+                root: cache_root("Cargo.toml"),
+            },
+            id,
         ),
-        "src" => format!("velnor-src-{group}-{lock}"),
-        "tools" => format!("velnor-tools-{group}-mise2026.1.{id}-{lock}"),
-        "dlt" => format!("velnor-dlt-{group}-{}-12345678-{id}", "b".repeat(16)),
+        "tools" => resolve_cache_key(&CacheKey::Tools { host: Host }, id),
+        "dlt" => resolve_cache_key(
+            &CacheKey::Delta {
+                job: JobId::new("rust-test").unwrap_or_else(|e| unreachable!("{e}")),
+                root: cache_root("Cargo.toml"),
+                host: Host,
+            },
+            id,
+        ),
         _ => family.to_owned(),
     };
     CacheEntry {
@@ -31,19 +41,10 @@ fn entry(id: u64, family: &str, group: &str, age: i64) -> CacheEntry {
 }
 
 fn delta(id: u64, age: i64) -> CacheEntry {
-    entry(id, "dlt", "rust-test-root-Linux-X64", age)
+    entry(id, "dlt", age)
 }
 fn base(id: u64, family: &str) -> CacheEntry {
-    entry(
-        id,
-        family,
-        match family {
-            "src" => "Linux-X64-root",
-            "tools" => "Linux-X64",
-            _ => "rust-test-root-Linux-X64",
-        },
-        10 * DAY,
-    )
+    entry(id, family, 10 * DAY)
 }
 fn plan(entries: &[CacheEntry], budget: u64) -> Vec<u64> {
     budget_plan(entries, &BTreeSet::from([1]), NOW, budget)
@@ -136,14 +137,12 @@ fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
         }
     }
     let mut isolated = base(200, "tgt");
-    for replacement in [
-        "rust-other-root-Linux-X64",
-        "rust-test-other-Linux-X64",
-        "rust-test-root-macOS-ARM64",
+    for key in [
+        target_key(200, "rust-other", "Cargo.toml"),
+        target_key(200, "rust-test", "other/Cargo.toml"),
+        target_key(200, "rust-test", "Cargo.toml").replace("Linux-X64", "macOS-ARM64"),
     ] {
-        isolated.key = base(200, "tgt")
-            .key
-            .replace("rust-test-root-Linux-X64", replacement);
+        isolated.key = key;
         entries.push(isolated.clone());
     }
     isolated.key = base(201, "tgt")
@@ -173,7 +172,7 @@ fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
         "velnor-tools-Linux-X64-mise1-bad",
         "unowned",
     ] {
-        assert_eq!(plan(&[entry(1, malformed, "", 0)], 0), Vec::<u64>::new());
+        assert_eq!(plan(&[entry(1, malformed, 0)], 0), Vec::<u64>::new());
     }
 }
 
@@ -206,4 +205,77 @@ fn pull_request_bases_cannot_displace_the_newest_default_branch_bases() {
             "{family}"
         );
     }
+}
+
+fn target_key(id: u64, job: &str, manifest: &str) -> String {
+    let key = CacheKey::Target {
+        job: JobId::new(job).unwrap_or_else(|e| unreachable!("{e}")),
+        root: cache_root(manifest),
+        host: Host,
+    };
+    resolve_cache_key(&key, id)
+}
+
+fn cache_root(manifest: &str) -> CacheRoot {
+    CacheRoot::new(
+        &RepoPath::new(manifest).unwrap_or_else(|e| unreachable!("{e}")),
+        RepoPath::from_static("target"),
+    )
+}
+
+fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
+    let rendered = render_key_with_mise(key, &format!("2026.1.{id}")).key;
+    let mut resolved = String::new();
+    let mut rest = rendered.as_str();
+    while let Some((literal, expression)) = rest.split_once("${{ ") {
+        resolved.push_str(literal);
+        let (expression, remaining) = expression
+            .split_once(" }}")
+            .unwrap_or_else(|| unreachable!());
+        let value = match expression {
+            "runner.os" => "Linux".to_owned(),
+            "runner.arch" => "X64".to_owned(),
+            "github.sha" => "c".repeat(40),
+            "github.run_id" => id.to_string(),
+            "steps.prepare.outputs.compat" => "b".repeat(16),
+            "steps.restored.outputs.base8" => "12345678".to_owned(),
+            expression if expression.starts_with("hashFiles(") => format!("{id:064x}"),
+            _ => unreachable!("{expression}"),
+        };
+        resolved.push_str(&value);
+        rest = remaining;
+    }
+    resolved.push_str(rest);
+    resolved
+}
+
+#[test]
+fn renderer_target_keys_keep_two_versions_for_every_job_and_root() {
+    for (job, manifest) in [
+        ("rust", "Cargo.toml"),
+        ("rust-test", "crates/a/Cargo.toml"),
+        ("rust-test", "tools/b/Cargo.toml"),
+    ] {
+        let entries: Vec<_> = (1..=3)
+            .map(|id| {
+                let mut entry = base(id, "tgt");
+                entry.key = target_key(id, job, manifest);
+                entry
+            })
+            .collect();
+        assert_eq!(plan(&entries, 20), [1], "{job}: {manifest}");
+    }
+    let obsolete: Vec<_> = (1..=3)
+        .map(|id| {
+            let mut entry = base(id, "tgt");
+            entry.key = format!(
+                "velnor-tgt-rust-test-root-Linux-X64-{}-{}-{}-{id}",
+                "b".repeat(16),
+                "c".repeat(64),
+                "d".repeat(40)
+            );
+            entry
+        })
+        .collect();
+    assert_eq!(plan(&obsolete, 20), Vec::<u64>::new());
 }

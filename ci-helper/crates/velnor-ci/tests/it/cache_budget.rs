@@ -12,6 +12,7 @@ struct Api {
     prs: Vec<Value>,
     fail: Option<String>,
     fail_delete: bool,
+    delete_status: Option<u16>,
     changed_total: bool,
     incomplete: bool,
     status: Value,
@@ -26,6 +27,7 @@ impl Api {
             prs: (1..=101).map(|number| json!({"number":number})).collect(),
             fail: None,
             fail_delete: false,
+            delete_status: None,
             changed_total: false,
             incomplete: false,
             status: json!({"state":"open"}),
@@ -88,6 +90,15 @@ impl GitHubWrite for Api {
             .next()
             .and_then(|id| id.parse().ok())
             .ok_or_else(|| CiError::new("invalid id"))?;
+        if let Some(status) = self.delete_status {
+            if !matches!(status, 404 | 410) {
+                return Err(CiError::new(format!("HTTP {status}")));
+            }
+            self.entries.borrow_mut().retain(|entry| entry["id"] != id);
+            if id == 1 {
+                return Err(CiError::missing(format!("HTTP {status}")));
+            }
+        }
         self.entries.borrow_mut().retain(|entry| entry["id"] != id);
         Ok(())
     }
@@ -191,4 +202,50 @@ fn omitted_open_pull_requests_are_confirmed_before_closed_deltas_are_deleted() {
     api.fail = Some("pulls/101".to_owned());
     assert!(budget(&api, &repo(), 0, 2000, false).is_err());
     assert_eq!(api.entries.borrow().len(), 101);
+}
+
+#[test]
+fn concurrent_cache_removal_does_not_stop_trim_or_budget() {
+    for status in [404, 410, 403, 500] {
+        for trimming in [false, true] {
+            let mut api = Api::new();
+            api.entries.borrow_mut().truncate(2);
+            api.delete_status = Some(status);
+            let result = if trimming {
+                trim(&api, &repo(), "refs/pull/101/merge", "velnor-dlt-", 0)
+            } else {
+                budget(&api, &repo(), 0, 0, false)
+            };
+            if matches!(status, 404 | 410) {
+                assert!(result.is_ok(), "{status}: {result:?}");
+                assert!(api.entries.borrow().is_empty());
+            } else {
+                assert!(result.is_err(), "{status}");
+                assert_eq!(api.entries.borrow().len(), 2);
+            }
+        }
+    }
+}
+
+#[test]
+fn cache_budget_cli_enforces_the_eight_gigabyte_limit() {
+    use clap::Parser;
+    use velnor_ci::cli::Cli;
+    for value in ["0", "123", "8000000000"] {
+        assert!(
+            Cli::try_parse_from(["velnor-ci", "cache", "budget", "--budget-bytes", value]).is_ok(),
+            "{value}"
+        );
+    }
+    assert!(Cli::try_parse_from(["velnor-ci", "cache", "budget"]).is_ok());
+    assert!(
+        Cli::try_parse_from([
+            "velnor-ci",
+            "cache",
+            "budget",
+            "--budget-bytes",
+            "8000000001"
+        ])
+        .is_err()
+    );
 }

@@ -67,7 +67,11 @@ fn pages<T: serde::de::DeserializeOwned>(
 
 fn delete_entries(github: &dyn GitHubWrite, repo: &Repo, ids: &[u64]) -> Result<(), CiError> {
     for id in ids {
-        github.delete(&format!("/repos/{repo}/actions/caches/{id}"))?;
+        if let Err(error) = github.delete(&format!("/repos/{repo}/actions/caches/{id}"))
+            && !error.is_missing()
+        {
+            return Err(error);
+        }
     }
     Ok(())
 }

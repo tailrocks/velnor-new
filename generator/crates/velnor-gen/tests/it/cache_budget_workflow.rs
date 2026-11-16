@@ -53,10 +53,12 @@ fn budget_runs_once_after_all_saves_with_configured_bytes_and_read_permission() 
         assert!(!required.contains("rust-trim"));
         assert!(!text.contains("rust-cache-budget:"));
     }
-    for invalid in ["-1", "\"800\"", "1.5", "18446744073709551616"] {
+    for invalid in ["-1", "\"800\"", "1.5", "18446744073709551616", "8000000001"] {
         assert!(render("0.1.81", &format!("cache_budget_bytes = {invalid}\n")).is_err());
     }
-    assert!(render("0.1.81", "cache_budget_bytes = 0\n").is_ok());
+    for value in [0_u64, 8_000_000_000] {
+        assert!(render("0.1.81", &format!("cache_budget_bytes = {value}\n")).is_ok());
+    }
     Ok(())
 }
 

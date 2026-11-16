@@ -339,7 +339,7 @@ pub struct BudgetArgs {
     pub dry_run: bool,
     #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
     pub repo: Option<String>,
-    #[arg(long, default_value_t = velnor_rust::DEFAULT_CACHE_BUDGET_BYTES)]
+    #[arg(long, default_value_t = velnor_rust::DEFAULT_CACHE_BUDGET_BYTES, value_parser = clap::value_parser!(u64).range(0..=velnor_rust::DEFAULT_CACHE_BUDGET_BYTES))]
     pub budget_bytes: u64,
 }
 
