@@ -40,7 +40,7 @@ pub fn tagged_commits(
         }
         let commit = tagged_commit(github, repo, tag)?;
         require_in_history(github, repo, tag, &commit, &verified)?;
-        lines.push_str(&format!("{output}={commit}\n"));
+        lines.push_str(&[output.as_str(), "=", commit.as_str(), "\n"].concat());
     }
     Ok(lines)
 }
