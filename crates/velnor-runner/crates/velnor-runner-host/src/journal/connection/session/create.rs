@@ -203,6 +203,12 @@ impl ConnectionJournal {
         .await
     }
 
+    pub(crate) async fn has_bound_session(&self, set_id: i64) -> Result<bool, HostError> {
+        Ok(self.session_creates().await?.iter().any(|record| {
+            record.scale_set_id() == set_id && record.state() == SessionCreateState::Bound
+        }))
+    }
+
     pub(crate) async fn session_creates(&self) -> Result<Vec<SessionCreateRecord>, HostError> {
         read_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;

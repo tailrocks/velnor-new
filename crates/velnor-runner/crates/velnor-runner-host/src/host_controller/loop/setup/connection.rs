@@ -145,6 +145,7 @@ async fn finish_connection_preparation(
         assigned_total,
         poll_cursor: 0,
         poll_retry_at: None,
+        restore_retry_at: None,
         guest_image,
         completion: Some(completion),
         credentials: Some(SessionCredentials {
