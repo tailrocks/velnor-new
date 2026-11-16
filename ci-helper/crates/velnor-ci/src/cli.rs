@@ -29,7 +29,7 @@ pub enum Command {
     )]
     Inputs(InputsCommand),
     #[command(
-        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and every check its branch rules require passed in a job of a push run on that branch, and ready=false while one has not finished; exit 1 when one did not pass or the commit is off the default branch. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
+        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
     )]
     ReleaseGate(ReleaseGateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
@@ -168,6 +168,11 @@ pub struct ReleaseGateArgs {
     pub repo: String,
     #[arg(long, help = "Full SHA of the commit that is about to be released")]
     pub sha: String,
+    #[arg(
+        long,
+        help = "Required check enforced only on pull requests; repeat for each check"
+    )]
+    pub pr_only_check: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]

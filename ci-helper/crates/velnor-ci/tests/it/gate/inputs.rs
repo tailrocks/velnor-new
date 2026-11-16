@@ -12,7 +12,8 @@ use crate::support::{FakeGitHub, repo};
 fn a_value_that_is_not_a_full_commit_sha_never_reaches_the_api() {
     let upper = GREEN.to_uppercase();
     for sha in ["", "main", "21ec8b9f", upper.as_str(), "../x"] {
-        let said = release_gate(&FakeGitHub::default(), &repo(), sha).map_err(|e| e.to_string());
+        let said =
+            release_gate(&FakeGitHub::default(), &repo(), sha, &[]).map_err(|e| e.to_string());
         assert_refused(&said, "not a full lowercase commit SHA");
     }
 }
