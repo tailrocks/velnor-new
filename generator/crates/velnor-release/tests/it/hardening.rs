@@ -233,6 +233,39 @@ fn a_toolchain_taken_from_a_path_is_refused_for_every_root() -> TestResult {
 }
 
 #[test]
+fn a_repository_that_needs_nightly_rust_is_refused() {
+    for (file, text) in [
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"nightly\"\n",
+        ),
+        (
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"nightly-2026-01-01\"\n",
+        ),
+        ("rust-toolchain", "nightly\n"),
+    ] {
+        let mut files = files();
+        files
+            .toolchain_files
+            .insert(file.to_owned(), text.to_owned());
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::NightlyOnly { .. })),
+            "{file} {text}"
+        );
+    }
+    let mut features = files();
+    features.cargo_manifest_texts.insert(
+        "Cargo.toml".to_owned(),
+        "cargo-features = [\"edition2024\"]\n[package]\nname = \"app\"\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&features),
+        Some(ReleaseError::NightlyOnly { .. })
+    ));
+}
+
+#[test]
 fn a_root_written_with_a_dot_or_an_empty_component_is_refused() {
     for root in ["./tools", "tools/", "tools//sub", "tools/./sub", ""] {
         let mut files = files();

@@ -161,6 +161,10 @@ pub enum ReleaseError {
         root: String,
         prefix: String,
     },
+    NightlyOnly {
+        file: String,
+        what: &'static str,
+    },
     ReleasePlzVersionNotExact {
         version: String,
     },

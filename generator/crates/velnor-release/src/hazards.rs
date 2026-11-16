@@ -134,7 +134,40 @@ pub(crate) fn cargo_config(
     Ok(())
 }
 
+fn names_nightly(text: &str) -> bool {
+    let channel = match text.parse::<toml::Table>() {
+        Ok(document) => document
+            .get("toolchain")
+            .and_then(Value::as_table)
+            .and_then(|toolchain| toolchain.get("channel"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        Err(_) => Some(text.trim().to_owned()),
+    };
+    channel.is_some_and(|channel| channel.starts_with("nightly"))
+}
+
+pub(crate) fn nightly_manifest(file: &str, text: &str) -> Result<(), ReleaseError> {
+    let features = text
+        .parse::<toml::Table>()
+        .is_ok_and(|document| document.contains_key("cargo-features"));
+    if features {
+        Err(ReleaseError::NightlyOnly {
+            file: file.to_owned(),
+            what: "cargo-features",
+        })
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn toolchain_path(file: &str, text: &str) -> Result<(), ReleaseError> {
+    if names_nightly(text) {
+        return Err(ReleaseError::NightlyOnly {
+            file: file.to_owned(),
+            what: "a nightly toolchain",
+        });
+    }
     let names_a_path = match text.parse::<toml::Table>() {
         Ok(document) => document
             .get("toolchain")

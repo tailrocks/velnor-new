@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
+use crate::hazards::{cargo_config, nightly_manifest, symlink_on_config_path, toolchain_path};
 use crate::members::{check_inventory, check_registries};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
@@ -276,6 +276,9 @@ impl ReleasePlan {
                     reached.any(|config| config.publishes_to_crates_io),
                 )?;
             }
+        }
+        for (file, text) in &files.cargo_manifest_texts {
+            nightly_manifest(file, text)?;
         }
         for (file, text) in &files.toolchain_files {
             let base = file.rsplit_once('/').map_or(".", |(base, _)| base);
