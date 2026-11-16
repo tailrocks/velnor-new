@@ -3,12 +3,26 @@
 
 use std::collections::BTreeMap;
 
+use serde::Deserialize;
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
-use velnor_rust::{PackageCounts, encode_package_counts};
+use velnor_rust::{PackageCounts, encode_package_counts, package_token};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
 const LINE_LIMIT: usize = 4096;
+const RUN_FLAGS: &[&str] = &[
+    "--fail-fast",
+    "--no-capture",
+    "--no-fail-fast",
+    "--nocapture",
+];
+const RUN_OPTIONS: &[&str] = &[
+    "--final-status-level",
+    "--message-format",
+    "--no-tests",
+    "--retries",
+    "--status-level",
+];
 
 #[must_use]
 pub fn runs_nextest(command: &[String]) -> bool {
@@ -26,6 +40,7 @@ pub struct TestCounts {
     pub run: u64,
     pub listed: Option<u64>,
     pub by_package: Option<BTreeMap<String, PackageCounts>>,
+    runs: Option<BTreeMap<String, u64>>,
 }
 
 #[must_use]
@@ -42,16 +57,146 @@ pub fn output_lines(counts: TestCounts) -> String {
     lines.join("\n") + "\n"
 }
 
-fn skipped(line: &str) -> Option<u64> {
-    let (_, tail) = line.split_once(" run:")?;
-    tail.split(',')
-        .find_map(|part| part.trim().strip_suffix(" skipped"))
-        .and_then(|count| count.trim().parse().ok())
+#[must_use]
+pub(crate) fn list_argv(run: &[String]) -> Option<Vec<String>> {
+    if !runs_nextest(run) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(run.len() + 2);
+    out.extend(run.iter().take(2).cloned());
+    out.push("list".to_owned());
+    let mut index = 3;
+    let mut dashed = false;
+    while index < run.len() {
+        let arg = &run[index];
+        if !dashed && arg == "--" {
+            dashed = true;
+            out.push(arg.clone());
+            index += 1;
+            continue;
+        }
+        if dashed || !drop_run_only(run, &mut index) {
+            out.push(arg.clone());
+            index += 1;
+        }
+    }
+    let at = out.iter().position(|arg| arg == "--").unwrap_or(out.len());
+    out.insert(at, "json".to_owned());
+    out.insert(at, "--message-format".to_owned());
+    Some(out)
+}
+
+fn drop_run_only(run: &[String], index: &mut usize) -> bool {
+    let arg = &run[*index];
+    if RUN_FLAGS.contains(&arg.as_str()) {
+        *index += 1;
+        return true;
+    }
+    let equals = RUN_OPTIONS
+        .iter()
+        .any(|option| arg.starts_with(option) && arg.as_bytes().get(option.len()) == Some(&b'='));
+    if equals {
+        *index += 1;
+        return true;
+    }
+    if !RUN_OPTIONS.contains(&arg.as_str()) {
+        return false;
+    }
+    *index += 1;
+    if run.get(*index).is_some_and(|value| !value.starts_with('-')) {
+        *index += 1;
+    }
+    true
+}
+
+#[must_use]
+pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
+    let listed: Listed = serde_json::from_slice(bytes).ok()?;
+    let mut packages = BTreeMap::new();
+    for suite in listed.rust_suites.into_values() {
+        if !package_token(&suite.package_name) {
+            return None;
+        }
+        let mut matched = 0u64;
+        for case in suite.testcases.into_values() {
+            match case.filter_match.status.as_str() {
+                "matches" => matched = matched.checked_add(1)?,
+                "mismatch" => {}
+                _ => return None,
+            }
+        }
+        if matched == 0 {
+            continue;
+        }
+        let total = packages.get(&suite.package_name).copied().unwrap_or(0_u64);
+        packages.insert(suite.package_name, total.checked_add(matched)?);
+    }
+    Some(packages)
+}
+
+#[must_use]
+pub(crate) fn apply_runnable(
+    mut counts: TestCounts,
+    matches: Option<BTreeMap<String, u64>>,
+) -> TestCounts {
+    let Some(matches) = matches else {
+        counts.listed = None;
+        counts.by_package = None;
+        return counts;
+    };
+    let Some(total) = matches
+        .values()
+        .try_fold(0u64, |total, count| total.checked_add(*count))
+    else {
+        counts.listed = None;
+        counts.by_package = None;
+        return counts;
+    };
+    counts.listed = Some(total);
+    counts.by_package = counts
+        .runs
+        .as_ref()
+        .and_then(|runs| combine(runs, &matches))
+        .filter(|packages| reconciled(packages, counts.run, total));
+    counts
+}
+
+fn combine(
+    runs: &BTreeMap<String, u64>,
+    matches: &BTreeMap<String, u64>,
+) -> Option<BTreeMap<String, PackageCounts>> {
+    let mut packages = BTreeMap::new();
+    for (name, listed) in matches {
+        let run = runs.get(name).copied().unwrap_or(0);
+        if run > *listed {
+            return None;
+        }
+        packages.insert(
+            name.clone(),
+            PackageCounts {
+                run,
+                listed: *listed,
+            },
+        );
+    }
+    runs.iter()
+        .all(|(name, run)| *run == 0 || matches.contains_key(name))
+        .then_some(packages)
+}
+
+fn reconciled(packages: &BTreeMap<String, PackageCounts>, run: u64, listed: u64) -> bool {
+    let summed_run = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.run));
+    let summed_listed = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.listed));
+    summed_run == Some(run) && summed_listed == Some(listed)
 }
 
 #[derive(Debug)]
 enum Seen {
-    Open(BTreeMap<String, PackageCounts>),
+    Open(BTreeMap<String, u64>),
     Poison,
 }
 
@@ -101,15 +246,13 @@ impl SummaryTap {
             let cleaned = strip_ansi(&line);
             let trimmed = cleaned.trim_start();
             if let Some(summary) = nextest_summary(trimmed) {
-                let listed =
-                    skipped(trimmed).and_then(|skipped| skipped.checked_add(summary.tests_run));
-                let by_package =
-                    listed.and_then(|listed| self.reconcile(summary.tests_run, listed));
+                let runs = self.reconcile_runs(summary.tests_run);
                 self.closed = true;
                 self.counts = Some(TestCounts {
                     run: summary.tests_run,
-                    listed,
-                    by_package,
+                    listed: None,
+                    by_package: None,
+                    runs,
                 });
             } else if !self.closed {
                 self.note(trimmed);
@@ -119,45 +262,36 @@ impl SummaryTap {
         self.overlong = false;
     }
 
-    fn reconcile(&self, run: u64, listed: u64) -> Option<BTreeMap<String, PackageCounts>> {
+    fn reconcile_runs(&self, run: u64) -> Option<BTreeMap<String, u64>> {
         let Seen::Open(packages) = &self.seen else {
             return None;
         };
-        let summed_run = packages
+        let summed = packages
             .values()
-            .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-        let summed_listed = packages
-            .values()
-            .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-        (summed_run == run && summed_listed == listed).then(|| packages.clone())
+            .try_fold(0u64, |total, count| total.checked_add(*count))?;
+        (summed == run).then(|| packages.clone())
     }
 
     fn note(&mut self, line: &str) {
         match status_line(line) {
             Status::Ignore => {}
             Status::Poison => self.seen = Seen::Poison,
-            Status::Count { package, ran } => self.count(package, ran),
+            Status::Count { package } => self.count(package),
         }
     }
 
-    fn count(&mut self, package: String, ran: bool) {
+    fn count(&mut self, package: String) {
         let overflow = {
             let Seen::Open(packages) = &mut self.seen else {
                 return;
             };
             let entry = packages.entry(package).or_default();
-            let run = if ran {
-                entry.run.checked_add(1)
-            } else {
-                Some(entry.run)
-            };
-            match (run, entry.listed.checked_add(1)) {
-                (Some(run), Some(listed)) => {
-                    entry.run = run;
-                    entry.listed = listed;
+            match entry.checked_add(1) {
+                Some(next) => {
+                    *entry = next;
                     false
                 }
-                _ => true,
+                None => true,
             }
         };
         if overflow {
@@ -169,47 +303,39 @@ impl SummaryTap {
 enum Status {
     Ignore,
     Poison,
-    Count { package: String, ran: bool },
+    Count { package: String },
 }
 
 fn status_line(line: &str) -> Status {
     let Some(word) = line.split_whitespace().next() else {
         return Status::Ignore;
     };
-    let ran = match word {
-        "PASS" | "FAIL" | "LEAK" => true,
-        "SKIP" => false,
-        _ => return Status::Ignore,
-    };
+    if !matches!(word, "PASS" | "FAIL" | "LEAK") {
+        return Status::Ignore;
+    }
     let Some(rest) = line.strip_prefix(word).map(str::trim_start) else {
         return Status::Ignore;
     };
     if !rest.starts_with('[') {
         return Status::Ignore;
     }
-    parse_status(rest, ran).map_or(Status::Poison, |(package, ran)| Status::Count {
-        package,
-        ran,
-    })
+    parse_status(rest).map_or(Status::Poison, |package| Status::Count { package })
 }
 
-fn parse_status(rest: &str, ran: bool) -> Option<(String, bool)> {
+fn parse_status(rest: &str) -> Option<String> {
     let rest = rest.strip_prefix('[')?;
     let (inside, rest) = rest.split_once(']')?;
-    if !bracket_ok(inside, ran) {
+    if !duration_ok(inside) {
         return None;
     }
     let rest = rest.trim_start().strip_prefix('(')?;
     let (_, rest) = rest.split_once(')')?;
     let binary = rest.split_whitespace().next()?;
     let package = binary.split("::").next()?;
-    package_token(package).then(|| (package.to_owned(), ran))
+    package_token(package).then(|| package.to_owned())
 }
 
-fn bracket_ok(inside: &str, ran: bool) -> bool {
-    if !ran {
-        return inside.bytes().all(|byte| byte == b' ');
-    }
+fn duration_ok(inside: &str) -> bool {
     let Some(number) = inside.trim().strip_suffix('s') else {
         return false;
     };
@@ -224,11 +350,26 @@ fn bracket_ok(inside: &str, ran: bool) -> bool {
         })
 }
 
-fn package_token(name: &str) -> bool {
-    let mut bytes = name.bytes();
-    match bytes.next() {
-        Some(byte) if byte.is_ascii_alphanumeric() || byte == b'_' => {}
-        _ => return false,
-    }
-    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+#[derive(Deserialize)]
+struct Listed {
+    #[serde(rename = "rust-suites")]
+    rust_suites: BTreeMap<String, Suite>,
+}
+
+#[derive(Deserialize)]
+struct Suite {
+    #[serde(rename = "package-name")]
+    package_name: String,
+    testcases: BTreeMap<String, Case>,
+}
+
+#[derive(Deserialize)]
+struct Case {
+    #[serde(rename = "filter-match")]
+    filter_match: FilterMatch,
+}
+
+#[derive(Deserialize)]
+struct FilterMatch {
+    status: String,
 }

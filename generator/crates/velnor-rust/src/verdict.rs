@@ -100,7 +100,8 @@ fn parse_package_counts(text: &str) -> Option<BTreeMap<String, PackageCounts>> {
     (encoded == text).then_some(packages)
 }
 
-fn package_token(name: &str) -> bool {
+#[must_use]
+pub fn package_token(name: &str) -> bool {
     let mut bytes = name.bytes();
     match bytes.next() {
         Some(byte) if byte.is_ascii_alphanumeric() || byte == b'_' => {}
