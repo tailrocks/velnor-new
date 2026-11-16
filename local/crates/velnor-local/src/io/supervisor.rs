@@ -19,11 +19,11 @@ use tokio::net::TcpListener;
 use tokio::process::{Child, Command};
 use tokio::signal::unix::{SignalKind, signal};
 
-pub(super) use host::{Pairs, pairs};
-pub use host::{default_host, write_plan};
+pub(super) use host::pairs;
+pub use host::{Pairs, default_host, write_plan};
 pub use online::await_online;
 
-use super::authority::{Authority, LEDGER, Runners};
+use super::authority::{Authority, Backend, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};
 use super::keys;
 use super::pair::{private_folder, write_private};
@@ -86,15 +86,32 @@ pub async fn start_binary(dir: &Path, binary: &Path) -> io::Result<Endpoint> {
 }
 
 pub(super) async fn start_with(dir: &Path, pairs: Option<&Pairs>) -> io::Result<Endpoint> {
-    let endpoint = launch(dir, &std::env::current_exe()?, pairs).await?;
-    if let Some(pairs) = pairs {
-        let runners = Runners::open(Environment::at(dir, DockerCli).await?).await?;
-        let sides = [
-            (Side::Trusted, pairs.trusted),
-            (Side::Untrusted, pairs.untrusted),
-        ];
-        await_online(&runners, &sides, ONLINE_TIMEOUT).await?;
-    }
+    let binary = std::env::current_exe()?;
+    let Some(pairs) = pairs else {
+        return launch(dir, &binary, None).await;
+    };
+    let open = async |dir: &Path| Runners::open(Environment::at(dir, DockerCli).await?).await;
+    start_pairs(dir, &binary, pairs, open, ONLINE_TIMEOUT).await
+}
+
+pub async fn start_pairs<B, O>(
+    dir: &Path,
+    binary: &Path,
+    pairs: &Pairs,
+    open: O,
+    timeout: Duration,
+) -> io::Result<Endpoint>
+where
+    B: Backend,
+    O: AsyncFnOnce(&Path) -> io::Result<B>,
+{
+    let endpoint = launch(dir, binary, Some(pairs)).await?;
+    let backend = open(dir).await?;
+    let sides = [
+        (Side::Trusted, pairs.trusted),
+        (Side::Untrusted, pairs.untrusted),
+    ];
+    await_online(&backend, &sides, timeout).await?;
     Ok(endpoint)
 }
 

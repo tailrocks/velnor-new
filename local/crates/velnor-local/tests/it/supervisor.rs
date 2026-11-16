@@ -7,11 +7,15 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
+use velnor_local::io::authority::Backend;
 use velnor_local::io::env::{Engine, Environment};
+use velnor_local::io::pair::{MintError, Minted};
 use velnor_local::io::supervisor;
+use velnor_local::side::Side;
 
 use crate::support::temp_dir;
 
@@ -271,4 +275,86 @@ async fn down_keeps_every_record_when_ps_cannot_tell_whether_the_pid_is_the_auth
             "{name} was deleted"
         );
     }
+}
+
+struct Server {
+    asked: Arc<AtomicUsize>,
+    online_after: usize,
+}
+
+impl Backend for Server {
+    fn get(&self, _: Side, path: &str) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send {
+        let body = if path.contains("isagentonline") {
+            let asked = self.asked.fetch_add(1, Ordering::SeqCst);
+            format!(r#"{{"online":{}}}"#, asked >= self.online_after)
+        } else {
+            r#"{"value":[{"name":"trusted-1"}],"count":1}"#.to_owned()
+        };
+        std::future::ready(Ok(Some(body.into_bytes())))
+    }
+
+    fn delete(&self, _: Side, _: &str) -> impl Future<Output = io::Result<()>> + Send {
+        std::future::ready(Ok(()))
+    }
+
+    fn mint(&self, _: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+        std::future::ready(Ok(None))
+    }
+}
+
+async fn start_listening_pair(
+    name: &str,
+    online_after: usize,
+    timeout: Duration,
+) -> (io::Result<supervisor::Endpoint>, usize) {
+    let dir = temp_dir(name);
+    let script = dir.join("fake-authority");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nmkdir -p \"$3/runner\"\necho 127.0.0.1:9 > \"$3/authority/address\"\necho 'pair trusted-1 listening' > \"$3/runner/velnor-host.log\"\nexec /bin/sleep 600\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let pairs = supervisor::Pairs {
+        host: script.clone(),
+        trusted: 1,
+        untrusted: 0,
+    };
+    let asked = Arc::new(AtomicUsize::new(0));
+    let server = Server {
+        asked: Arc::clone(&asked),
+        online_after,
+    };
+    let started = supervisor::start_pairs(
+        &dir,
+        &script,
+        &pairs,
+        async |_: &Path| Ok(server),
+        timeout,
+    )
+    .await;
+    let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
+    let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
+    (started, asked.load(Ordering::SeqCst))
+}
+
+#[tokio::test]
+async fn start_returns_only_once_the_agent_is_online_at_runner_server() {
+    let (started, asked) =
+        start_listening_pair("supervisor-online", 3, Duration::from_secs(10)).await;
+    assert!(started.is_ok(), "{started:?}");
+    assert!(asked > 3, "start returned after {asked} online checks");
+}
+
+#[tokio::test]
+async fn start_fails_at_the_deadline_when_the_agent_never_comes_online() {
+    let (started, asked) =
+        start_listening_pair("supervisor-offline", usize::MAX, Duration::from_millis(500)).await;
+    let message = started.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(asked > 0, "the agent was never asked about");
+    assert!(
+        message.contains("0 of 1 trusted runners were online"),
+        "{message}"
+    );
 }

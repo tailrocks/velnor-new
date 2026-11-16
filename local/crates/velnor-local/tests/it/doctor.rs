@@ -167,3 +167,15 @@ fn doctor_takes_an_optional_velnor_host_and_status_needs_a_dir() {
         Ok(Command::Status(_))
     ));
 }
+
+#[test]
+fn the_doctor_command_exits_1_and_prints_a_fix_when_a_part_is_missing() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-local"))
+        .args(["doctor", "--velnor-host", "/nonexistent/velnor-host"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert!(text.contains("miss  velnor-host with local mode"), "{text}");
+    assert!(text.contains("fix: velnor-local build"), "{text}");
+}

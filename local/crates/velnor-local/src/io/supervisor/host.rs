@@ -23,10 +23,10 @@ pub(super) const LOG: &str = "velnor-host.log";
 pub(super) const PID: &str = "pid";
 
 #[derive(Debug, Clone)]
-pub(crate) struct Pairs {
-    pub(super) host: PathBuf,
-    pub(super) trusted: u16,
-    pub(super) untrusted: u16,
+pub struct Pairs {
+    pub host: PathBuf,
+    pub trusted: u16,
+    pub untrusted: u16,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
