@@ -41,6 +41,7 @@ mod policy_exceptions;
 mod release_branch_prefix;
 mod release_cargo_include;
 mod release_fixture;
+mod release_hyphen_prefix;
 mod release_inputs;
 mod release_nested_toolchain;
 mod release_pr_only;

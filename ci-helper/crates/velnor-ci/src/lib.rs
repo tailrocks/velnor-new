@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cli;
+mod cli_release;
 pub mod collect;
 pub mod compare;
 mod configurations;

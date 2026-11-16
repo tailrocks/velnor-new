@@ -17,7 +17,11 @@ type TestResult = Result<(), Box<dyn Error>>;
 const CHECK: &str = "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"";
 const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n";
 
-fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<dyn Error>> {
+pub(crate) fn render_with(
+    helper: &str,
+    roots: &[Root],
+    config: &str,
+) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(roots, Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
