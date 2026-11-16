@@ -124,7 +124,11 @@ fn a_publish_list_inherited_from_a_workspace_above_the_release_root_is_refused()
 fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
     let checkout = Checkout::new("excluded");
     let marker = checkout.0.join("wrapper-ran");
-    let wrapper = checkout.0.join("wrapper.sh");
+    let cargo = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("cargo"))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| unreachable!("cargo is not on PATH"));
+    let stub = checkout.0.join("bin/cargo");
     checkout
         .write(
             "Cargo.toml",
@@ -135,15 +139,25 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .package("nested", "inner", "publish = [\"x\"]\n[workspace]\n")
         .write("release-plz.toml", PLZ)
         .write(
-            "wrapper.sh",
-            &format!("#!/bin/sh\ntouch {}\nexec \"$@\"\n", marker.display()),
+            "bin/cargo",
+            &format!(
+                "#!/bin/sh\nif [ \"${{RUSTC_WRAPPER+x}}\" = x ]; then touch '{}'; fi\nexec '{}' \"$@\"\n",
+                marker.display(), cargo.display()
+            ),
         );
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let path = std::env::join_paths(std::iter::once(checkout.0.join("bin")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"));
     let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["release", "check-config", "release-plz.toml", "--manifests"])
         .current_dir(&checkout.0)
         .env("RUSTUP_TOOLCHAIN", toolchain)
-        .env("RUSTC_WRAPPER", &wrapper)
+        .env("RUSTC_WRAPPER", "must-be-removed")
+        .env("PATH", path)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
@@ -152,7 +166,7 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(!marker.exists());
+    assert!(!marker.exists(), "RUSTC_WRAPPER reached cargo metadata");
 }
 
 #[test]
