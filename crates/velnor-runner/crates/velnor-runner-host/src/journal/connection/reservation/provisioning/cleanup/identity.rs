@@ -15,6 +15,8 @@ pub(crate) struct StorageCleanupIdentity {
     docker_root_digest: String,
     runner_container_id: String,
     dind_container_id: String,
+    runner_image_id: String,
+    dind_image_id: String,
     instance_binding_digest: String,
     topology_version: i64,
     private_volume: String,
@@ -47,6 +49,14 @@ impl StorageCleanupIdentity {
 
     pub(crate) fn dind_container_id(&self) -> &str {
         &self.dind_container_id
+    }
+
+    pub(crate) fn runner_image_id(&self) -> &str {
+        &self.runner_image_id
+    }
+
+    pub(crate) fn dind_image_id(&self) -> &str {
+        &self.dind_image_id
     }
 
     pub(crate) fn instance_binding_digest(&self) -> &str {
@@ -209,6 +219,8 @@ impl ConnectionJournal {
                 .copied()
                 .zip(inventory.volume_names)
                 .collect::<Vec<_>>();
+            let (runner_image_id, dind_image_id) =
+                read_image_ids(connection, reservation_id, &binding).await?;
             let mounts = read_mounts(connection, reservation_id, &binding).await?;
             let cgroups = read_cgroups(connection, reservation_id, &binding).await?;
             Ok(Some(StorageCleanupIdentity {
@@ -218,6 +230,8 @@ impl ConnectionJournal {
                 docker_root_digest: context.docker_root_digest,
                 runner_container_id: binding.runner_id,
                 dind_container_id: binding.dind_id,
+                runner_image_id,
+                dind_image_id,
                 instance_binding_digest: binding.instance_binding_digest,
                 topology_version: context.topology_version,
                 private_volume,
@@ -247,6 +261,35 @@ async fn read_boot_id(
         return Err(HostError::Journal);
     }
     Ok(Some(boot_id))
+}
+
+async fn read_image_ids(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    binding: &super::BoundIdentity,
+) -> Result<(String, String), HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT role, container_id, image_runtime_id FROM capacity_reservation_root_backing_mappings WHERE reservation_id = ?1 AND role IN ('runner-root', 'dind-root') ORDER BY role",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let (mut runner, mut dind) = (None, None);
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        let role: String = row.get(0).map_err(|_| HostError::Journal)?;
+        let container_id: String = row.get(1).map_err(|_| HostError::Journal)?;
+        let image_id: String = row.get(2).map_err(|_| HostError::Journal)?;
+        let (slot, expected) = match role.as_str() {
+            "runner-root" => (&mut runner, &binding.runner_id),
+            "dind-root" => (&mut dind, &binding.dind_id),
+            _ => return Err(HostError::Journal),
+        };
+        if container_id != *expected || image_id.is_empty() || slot.replace(image_id).is_some() {
+            return Err(HostError::Journal);
+        }
+    }
+    runner.zip(dind).ok_or(HostError::Journal)
 }
 
 async fn read_mounts(
