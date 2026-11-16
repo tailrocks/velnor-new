@@ -77,8 +77,8 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let saved = parse_inputs(&text)
-        .map_err(|e| CiError::new(format!("{}: {e}", path.display())))?;
+    let saved =
+        parse_inputs(&text).map_err(|e| CiError::new(format!("{}: {e}", path.display())))?;
     let (top, tracked) = worktree_files(root)?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {

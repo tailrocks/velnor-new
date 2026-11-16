@@ -5,12 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CiError;
 
-pub const INPUTS_FILE: &str = ".velnor/inputs.tsv";
-
 #[must_use]
 pub fn inputs_file(prefix: &str) -> String {
     if prefix.is_empty() {
-        INPUTS_FILE.to_owned()
+        ".velnor/inputs.tsv".to_owned()
     } else {
         format!(
             ".velnor/inputs-{}.tsv",
