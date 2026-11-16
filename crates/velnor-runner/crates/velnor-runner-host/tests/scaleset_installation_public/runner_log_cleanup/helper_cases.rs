@@ -128,7 +128,11 @@ fn public_cleanup_leaves_a_container_that_does_not_mount_the_volume() -> TestRes
     Ok(())
 }
 
-fn assert_fails_closed(case: &str, helpers: usize, volumes_left: usize) -> TestResult<()> {
+fn assert_fails_closed(
+    case: &str,
+    helpers: usize,
+    volumes_left: usize,
+) -> TestResult<CancelledObservation> {
     let (observed, stderr) = run_helper_case(case)?;
     assert!(
         stderr.contains("volume helper ownership"),
@@ -141,24 +145,23 @@ fn assert_fails_closed(case: &str, helpers: usize, volumes_left: usize) -> TestR
     );
     assert_eq!(observed.volumes_left, volumes_left, "{case}: {stderr}");
     assert_eq!(observed.stops, 0, "{case}");
-    Ok(())
+    Ok(observed)
 }
 
 #[test]
 fn public_cleanup_fails_closed_on_a_label_lookalike_publication_helper() -> TestResult<()> {
-    assert_fails_closed("lookalike_publication", 1, 1)
+    assert_fails_closed("lookalike_publication", 1, 1).map(drop)
 }
 
 #[test]
 fn public_cleanup_fails_closed_on_a_label_lookalike_storage_initializer() -> TestResult<()> {
-    assert_fails_closed("lookalike_initializer", 1, 1)
+    assert_fails_closed("lookalike_initializer", 1, 1).map(drop)
 }
 
 #[test]
 fn public_cleanup_deletes_nothing_when_a_foreign_container_sits_beside_a_journaled_helper()
 -> TestResult<()> {
-    assert_fails_closed("foreign_beside_journaled", 2, 1)?;
-    let (observed, _) = run_helper_case("foreign_beside_journaled")?;
+    let observed = assert_fails_closed("foreign_beside_journaled", 2, 1)?;
     assert_eq!(observed.phase, "container_created");
     assert_eq!(observed.lease, "active");
     Ok(())
@@ -167,18 +170,18 @@ fn public_cleanup_deletes_nothing_when_a_foreign_container_sits_beside_a_journal
 #[test]
 fn public_cleanup_fails_closed_on_a_journaled_publication_with_a_foreign_engine_label()
 -> TestResult<()> {
-    assert_fails_closed("journaled_foreign_engine", 1, 1)
+    assert_fails_closed("journaled_foreign_engine", 1, 1).map(drop)
 }
 
 #[test]
 fn public_cleanup_fails_closed_on_a_storage_initializer_with_a_foreign_operation_key()
 -> TestResult<()> {
-    assert_fails_closed("initializer_foreign_operation", 1, 4)
+    assert_fails_closed("initializer_foreign_operation", 1, 4).map(drop)
 }
 
 #[test]
 fn public_cleanup_fails_closed_on_a_listed_container_without_the_mount() -> TestResult<()> {
-    assert_fails_closed("listed_unmounted", 1, 1)
+    assert_fails_closed("listed_unmounted", 1, 1).map(drop)
 }
 
 #[test]

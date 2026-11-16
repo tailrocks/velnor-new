@@ -127,14 +127,17 @@ pub(crate) fn run_cancelled_before_start_scenario(
             &state_dir,
         )
         .await?;
-        for _ in 0..750 {
-            if scenario_done(&stub, expect_success)? {
+        let mut observer = None;
+        for _ in 0..3000 {
+            let done = scenario_done(&stub, expect_success)?
+                && (expect_success || seed::retry_committed(&state_dir, &mut observer).await?);
+            if done {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         if !expect_success {
-            tokio::time::sleep(Duration::from_millis(600)).await;
+            tokio::time::sleep(Duration::from_millis(300)).await;
         }
         let _outcome = worker.shutdown().await;
         journal_publication_state(&journal_path).await
