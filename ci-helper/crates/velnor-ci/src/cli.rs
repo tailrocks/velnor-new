@@ -322,7 +322,7 @@ pub struct AuditArgs {
 #[derive(Debug, Subcommand)]
 pub enum CacheCommand {
     #[command(
-        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise; with true, remove every incremental directory below --target-dir and the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
+        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
     )]
     Decide(DecideArgs),
     #[command(
