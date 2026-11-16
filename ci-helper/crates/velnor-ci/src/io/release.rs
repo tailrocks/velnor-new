@@ -12,8 +12,10 @@ use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-    CargoPathEntry, PlainName, check_cargo_discovery, check_config, publishes_to_crates_io, record,
+    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns,
+    publishes_to_crates_io, record,
 };
+use crate::rulesets::check_tag_rulesets;
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -51,7 +53,17 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         let publishes = publishes_to_crates_io(&root, text)?;
         check_cargo_discovery(&discovery(&top, path)?, publishes)?;
     }
-    check_config(&files)
+    let output = check_config(&files)?;
+    let patterns = args.tag_patterns();
+    check_tag_patterns(&files, &patterns)?;
+    if let Some(repo) = &args.repo {
+        check_tag_rulesets(
+            &HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT),
+            &Repo::parse(repo)?,
+            &patterns,
+        )?;
+    }
+    Ok(output)
 }
 
 const CONFIG_ENTRIES: [&str; 3] = [".cargo", ".cargo/config", ".cargo/config.toml"];

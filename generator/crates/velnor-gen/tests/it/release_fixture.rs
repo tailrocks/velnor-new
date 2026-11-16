@@ -14,7 +14,8 @@ use velnor_rust::LOCK_PATH;
 use crate::pipeline::view;
 use crate::yaml_tree::{Node, parse};
 
-const LOCK: &str = include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
+pub(crate) const LOCK: &str =
+    include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
 pub(crate) const READY: &str = "needs.gate.outputs.ready == 'true'";
 pub(crate) const PUSH: &str = "github.event.workflow_run.event == 'push'";
 pub(crate) const DEFAULT_BRANCH: &str =

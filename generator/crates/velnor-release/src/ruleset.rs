@@ -15,9 +15,18 @@ const IMMUTABLE_RULESET: &str = "release-tags-immutable";
 const VERSION_PLACEHOLDER: &str = "{{ version }}";
 
 #[must_use]
-pub fn ruleset_json(plan: &ReleasePlan) -> String {
-    let include: BTreeSet<String> = plan
-        .roots
+pub fn ruleset_ref(pattern: &str) -> String {
+    format!(
+        "refs/tags/{}",
+        pattern
+            .replace(VERSION_PLACEHOLDER, "*")
+            .replace(PACKAGE_WILDCARD, "*")
+    )
+}
+
+#[must_use]
+pub fn ruleset_refs(plan: &ReleasePlan) -> BTreeSet<String> {
+    plan.roots
         .iter()
         .flat_map(|root| {
             root.packages
@@ -25,16 +34,13 @@ pub fn ruleset_json(plan: &ReleasePlan) -> String {
                 .map(|(_, pattern)| pattern)
                 .chain(&root.workspace_tags)
         })
-        .map(|pattern| {
-            format!(
-                "refs/tags/{}",
-                pattern
-                    .as_str()
-                    .replace(VERSION_PLACEHOLDER, "*")
-                    .replace(PACKAGE_WILDCARD, "*")
-            )
-        })
-        .collect();
+        .map(|pattern| ruleset_ref(pattern.as_str()))
+        .collect()
+}
+
+#[must_use]
+pub fn ruleset_json(plan: &ReleasePlan) -> String {
+    let include = ruleset_refs(plan);
     let conditions = json!({ "ref_name": { "include": include, "exclude": [] } });
     let creation = json!({
         "name": CREATION_RULESET,

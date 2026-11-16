@@ -40,6 +40,7 @@ mod release_inputs;
 mod release_nested_toolchain;
 mod release_sample_names;
 mod release_symlink;
+mod release_tag_binding;
 mod release_workflow;
 mod release_yml;
 mod release_yml_binaries;
