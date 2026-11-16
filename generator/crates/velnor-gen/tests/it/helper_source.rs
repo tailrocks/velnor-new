@@ -46,6 +46,7 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
         .collect();
     assert_eq!(lanes.len(), 6);
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
+    assert!(!text.contains("Upload velnor-ci"));
     for lane in lanes {
         let header = format!("  {lane}:\n    needs:\n      - rust-plan\n    if:");
         assert!(text.contains(&header), "{lane}");
@@ -73,7 +74,7 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
     assert!(job_ids(&text).contains(&"policy"));
     let jobs = job_ids(&text);
     assert_eq!(
-        text.matches("Install velnor-ci 0.1.79").count(),
+        text.matches("Install velnor-ci 0.1.81").count(),
         jobs.len() - 1
     );
     for pair in jobs.windows(2) {
@@ -83,14 +84,16 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
             .find(&format!("  {}:\n", pair[1]))
             .ok_or("next job missing")?;
         let body = &text[start..end];
-        assert!(body.contains("Install velnor-ci 0.1.79"), "{job}");
+        assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
+        if matches!(job, "rust-root" | "rust-ci_helper" | "rust-inputs-audit") {
+            let restore = body
+                .find("velnor-ci inputs restore")
+                .ok_or("no inputs restore")?;
+            let restored = body.find("velnor-ci restored").ok_or("no restored")?;
+            assert!(restore < restored, "{job}");
+        }
     }
-    for forbidden in [
-        "Download velnor-ci",
-        "Make velnor-ci executable",
-        "vbin",
-        "velnor-ci inputs restore",
-    ] {
+    for forbidden in ["Download velnor-ci", "Make velnor-ci executable", "vbin"] {
         assert!(!text.contains(forbidden), "{forbidden}");
     }
     let source_lane = text
@@ -220,99 +223,32 @@ fn the_helper_key_takes_a_table_with_a_path_and_nothing_else() -> TestResult {
     Ok(())
 }
 
-fn helper_path(config: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
-    let mut view = sample(None)?;
-    if let Some(config) = config {
-        let file = path("ci-helper/.cargo/config.toml")?;
-        view.tracked_paths.insert(file.clone());
-        view.files.insert(file, config.as_bytes().to_vec());
-    }
-    let text = text_of(&view)?;
-    text.lines()
-        .find_map(|line| {
-            line.trim()
-                .strip_prefix("path: ")
-                .filter(|path| path.contains("velnor-ci"))
-        })
-        .map(str::to_owned)
-        .ok_or_else(|| "no upload path".into())
-}
-
-fn helper_with_configs(files: &[(&str, &str)]) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let mut view = sample(None)?;
-    for (name, config) in files {
-        let file = path(name)?;
-        view.tracked_paths.insert(file.clone());
-        view.files.insert(file, config.as_bytes().to_vec());
-    }
-    Ok(view)
-}
-
 #[test]
-fn the_upload_path_follows_the_repository_target_dir() -> TestResult {
-    assert_eq!(helper_path(None)?, "ci-helper/target/debug/velnor-ci");
-    assert_eq!(
-        helper_path(Some("[build]\ntarget-dir = \"out\"\n"))?,
-        "ci-helper/out/debug/velnor-ci"
-    );
-    Ok(())
-}
-
-#[test]
-fn a_build_target_in_any_config_of_the_helper_root_refuses_the_helper() -> TestResult {
-    let triple = "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n";
-    let array = "[build]\ntarget = [\"aarch64-unknown-linux-gnu\"]\n";
-    for files in [
-        vec![(".cargo/config.toml", triple)],
-        vec![("ci-helper/.cargo/config.toml", triple)],
-        vec![("ci-helper/.cargo/config.toml", array)],
-        vec![
-            (".cargo/config.toml", array),
-            (
-                "ci-helper/.cargo/config.toml",
-                "[build]\ntarget-dir = \"out\"\n",
-            ),
-        ],
-    ] {
-        let error = expected_files(&helper_with_configs(&files)?)
+fn helper_source_requires_a_released_helper_with_restoration_and_tie_breaking() -> TestResult {
+    let mut view = sample(None)?;
+    let lock = path(".velnor/rust-ci.lock")?;
+    let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
+    for candidate in [None, Some(released.replace("0.1.81", "0.1.80"))] {
+        view.files.remove(&lock);
+        if let Some(candidate) = candidate {
+            view.files.insert(lock.clone(), candidate.into_bytes());
+        }
+        let error = expected_files(&view)
             .err()
-            .ok_or("accepted")?;
-        assert!(
-            matches!(
-                error,
-                velnor_gen::GenerateError::Detect(DetectError::Invalid {
-                    reason: Reason::HelperTarget(_),
-                    ..
-                })
-            ),
-            "{files:?}: {error:?}"
-        );
+            .ok_or("accepted helper.path without 0.1.81")?;
+        let message = error.to_string();
+        assert!(message.contains("helper.path"), "{message}");
+        assert!(message.contains("0.1.81"), "{message}");
+        assert!(message.contains("pin-helper"), "{message}");
     }
-    Ok(())
-}
-
-#[test]
-fn the_helper_upload_includes_hidden_files_so_a_dot_target_dir_uploads() -> TestResult {
-    let text = text_of(&helper_with_configs(&[(
-        "ci-helper/.cargo/config.toml",
-        "[build]\ntarget-dir = \".target\"\n",
-    )])?)?;
-    assert!(text.contains("path: ci-helper/.target/debug/velnor-ci"));
-    let upload = text.split("Upload velnor-ci").nth(1).ok_or("no upload")?;
-    let upload = upload.split("- name:").next().unwrap_or_default();
-    assert!(upload.contains("include-hidden-files: true"), "{upload}");
-    Ok(())
-}
-
-#[test]
-fn a_target_dir_with_glob_characters_is_uploaded_literally() -> TestResult {
-    for (dir, literal) in [
-        ("o*t", "ci-helper/o[*]t/debug/velnor-ci"),
-        ("o?t", "ci-helper/o[?]t/debug/velnor-ci"),
-        ("o[t]", "ci-helper/o[[]t]/debug/velnor-ci"),
-    ] {
-        let config = format!("[build]\ntarget-dir = \"{dir}\"\n");
-        assert_eq!(helper_path(Some(&config))?, format!("'{literal}'"));
-    }
+    view.files.insert(lock, released.into_bytes());
+    assert!(expected_files(&view).is_ok());
+    view.files
+        .insert(CONFIG_PATH, b"exclude = [\"fixtures/**\"]\n".to_vec());
+    let lock = path(".velnor/rust-ci.lock")?;
+    let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
+    view.files
+        .insert(lock, released.replace("0.1.81", "0.1.80").into_bytes());
+    assert!(expected_files(&view).is_ok());
     Ok(())
 }
