@@ -101,6 +101,43 @@ fn invalid_mirror_settings_fail_generation() -> TestResult {
             "crates_mirror.registry",
         ),
         (
+            MIRROR.replace("crates-mirror.velnor-system.svc.cluster.local/index", "%"),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace("crates-mirror.velnor-system.svc.cluster.local/index", ""),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace("crates-mirror.velnor-system.svc.cluster.local", ":443"),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace("crates-mirror.velnor-system.svc.cluster.local", "[broken]"),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace(
+                "crates-mirror.velnor-system.svc.cluster.local",
+                "localhost:70000",
+            ),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace(
+                "crates-mirror.velnor-system.svc.cluster.local",
+                "\\localhost",
+            ),
+            "crates_mirror.registry",
+        ),
+        (
+            MIRROR.replace(
+                "crates-mirror.velnor-system.svc.cluster.local",
+                "/localhost",
+            ),
+            "crates_mirror.registry",
+        ),
+        (
             MIRROR.replace("/opt/velnor", "relative/velnor"),
             "crates_mirror.cainfo",
         ),
@@ -112,9 +149,36 @@ fn invalid_mirror_settings_fail_generation() -> TestResult {
         repo.files
             .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
         let error = workflow(&repo)
-            .expect_err("invalid mirror accepted")
+            .err()
+            .ok_or_else(|| format!("invalid mirror accepted: {config}"))?
             .to_string();
         assert!(error.contains(diagnostic), "{error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn valid_mirror_registry_hosts_preserve_the_configured_url() -> TestResult {
+    for host in [
+        "mirror.example",
+        "localhost:8443",
+        "127.0.0.1:8443",
+        "[::1]:8443",
+    ] {
+        let config = format!(
+            "runner = 'mirror-box'\n{}",
+            MIRROR.replace("crates-mirror.velnor-system.svc.cluster.local", host)
+        );
+        let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        let lock = path(".velnor/rust-ci.lock")?;
+        let old = String::from_utf8(repo.files[&lock].clone())?;
+        repo.files
+            .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+        let text = workflow(&repo)?;
+        assert!(
+            text.contains(&format!("sparse+https://{host}/index/")),
+            "{text}"
+        );
     }
     Ok(())
 }

@@ -9,8 +9,9 @@ use std::process::Command;
 use crate::io::Repo;
 
 mod fixture;
+mod setup;
 mod toolchains;
-use fixture::{TestResult, active_toolchain, mirror_fixture, rustup_binary, setup};
+use fixture::{TestResult, active_toolchain, mirror_fixture, rustup_binary};
 
 #[test]
 fn cargo_fetches_uncached_crates_with_changed_homes_and_explicit_toolchain() -> TestResult {
@@ -20,6 +21,20 @@ fn cargo_fetches_uncached_crates_with_changed_homes_and_explicit_toolchain() -> 
 #[test]
 fn build_scripts_fetch_uncached_crates_from_tmp_through_path_and_cargo_env() -> TestResult {
     mirror_fixture(child_fetches)
+}
+
+#[test]
+fn relative_path_cargo_reaches_children_in_tmp() -> TestResult {
+    mirror_fixture(|repo, wrapper, config| {
+        let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
+            .args(["which", "cargo"])
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+        let cargo = String::from_utf8(output.stdout)?;
+        fs::create_dir(repo.root().join("native"))?;
+        std::os::unix::fs::symlink(cargo.trim(), repo.root().join("native/cargo"))?;
+        child_fetches_with_path(repo, wrapper, config, Path::new("../native"), None)
+    })
 }
 
 fn mise_shim(repo: &Repo) -> TestResult {
@@ -172,10 +187,20 @@ fn child_fetches_using(
     proxy: &str,
     rustup: Option<(&Path, &str)>,
 ) -> TestResult {
+    child_fetches_with_path(repo, wrapper, config, &repo.root().join(proxy), rustup)
+}
+
+fn child_fetches_with_path(
+    repo: &Repo,
+    wrapper: &Path,
+    config: &Path,
+    proxy: &Path,
+    rustup: Option<(&Path, &str)>,
+) -> TestResult {
     child_projects(repo);
     let root = repo.root();
     let paths = [
-        root.join(proxy),
+        proxy.to_path_buf(),
         wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
         root.join("shadow"),
         std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME")?).join(".cargo/bin"),
@@ -223,21 +248,5 @@ fn child_fetches_using(
         )
         .output()?;
     assert!(output.status.success(), "{output:?}");
-    Ok(())
-}
-
-#[test]
-fn mirror_setup_preserves_unowned_cargo_configuration() -> TestResult {
-    for name in ["config", "config.toml"] {
-        let repo = Repo::empty("crates-mirror-owned");
-        repo.write_unstaged("ca.pem", "fixture");
-        repo.write_unstaged(&format!("home/{name}"), "[net]\noffline=true\n");
-        let output = setup(repo.root(), "sparse+https://mirror.example/index/");
-        assert!(!output.status.success(), "{output:?}");
-        assert_eq!(
-            fs::read_to_string(repo.root().join(format!("home/{name}")))?,
-            "[net]\noffline=true\n"
-        );
-    }
     Ok(())
 }

@@ -19,13 +19,6 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
             args.cainfo.display()
         ))
     })?;
-    let home = std::env::var_os("CARGO_HOME")
-        .map_or_else(
-            || std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")),
-            |home| Some(PathBuf::from(home)),
-        )
-        .ok_or_else(|| CiError::new("set CARGO_HOME or HOME"))?;
-    let home = std::path::absolute(home).map_err(|e| failed(&e))?;
     let directory = PathBuf::from(
         std::env::var_os("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?,
     )
@@ -33,28 +26,25 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
     let directory = std::fs::canonicalize(directory).map_err(|e| failed(&e))?;
     let wrapper = directory.join("cargo");
-    let config = home.join("config.toml");
+    let config = directory.join("config.toml");
     let quoted = |text: &str| serde_json::to_string(text).map_err(|e| CiError::new(e.to_string()));
     let text = format!(
         "{MARKER}[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = {}\n[http]\ncainfo = {}\n",
         quoted(&args.registry)?,
         quoted(&args.cainfo.display().to_string())?
     );
-    for file in [home.join("config"), config.clone()] {
-        match std::fs::read_to_string(&file) {
-            Ok(existing) if !existing.starts_with(MARKER) => {
-                return Err(CiError::new(format!(
-                    "{} exists and is not owned by velnor-ci crates-mirror",
-                    file.display()
-                )));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(failed(&error)),
+    match std::fs::read_to_string(&config) {
+        Ok(existing) if !existing.starts_with(MARKER) => {
+            return Err(CiError::new(format!(
+                "{} exists and is not owned by velnor-ci crates-mirror",
+                config.display()
+            )));
         }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(failed(&error)),
     }
-    std::fs::create_dir_all(&home).map_err(|e| failed(&e))?;
-    let staged = home.join("config.toml.velnor-crates-mirror");
+    let staged = directory.join("config.toml.velnor-crates-mirror");
     std::fs::write(&staged, &text)
         .and_then(|()| std::fs::rename(staged, &config))
         .map_err(|e| failed(&e))?;
@@ -132,6 +122,10 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
             toolchain: None,
         },
         _ => actual_cargo(cargo, selected.as_deref())?,
+    };
+    let cargo = ResolvedCargo {
+        executable: std::fs::canonicalize(cargo.executable).map_err(|e| failed(&e))?,
+        toolchain: cargo.toolchain,
     };
     let executable = linked_cargo(&cargo.executable, &wrapper)?;
     let path = std::env::join_paths(

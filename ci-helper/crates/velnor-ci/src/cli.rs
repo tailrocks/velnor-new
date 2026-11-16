@@ -48,7 +48,7 @@ pub enum Command {
     )]
     Prepare,
     #[command(
-        about = "Write the crates mirror to $CARGO_HOME/config.toml and install a Cargo wrapper for every working directory and Cargo home"
+        about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(

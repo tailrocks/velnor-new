@@ -160,7 +160,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::Cargo(command) => cargo_step(command),
         StepKind::Helper(command) => helper_step(*command),
 StepKind::CratesMirror(mirror) => RenderedStep {
-    name: "Configure the crates mirror in $CARGO_HOME/config.toml".to_owned(),
+    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
     condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
     run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
     ..RenderedStep::default()

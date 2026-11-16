@@ -21,12 +21,22 @@ pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror,
         return Err(invalid("crates_mirror.runner", runner.to_string()));
     }
     if !raw.registry.starts_with("sparse+https://")
+        || raw.registry.starts_with("sparse+https:///")
         || !raw.registry.ends_with('/')
         || raw
             .registry
             .chars()
             .any(|c| c.is_control() || c.is_whitespace())
-        || raw.registry.contains(['\'', '"', '$', '`', '#', '?', '@'])
+        || raw
+            .registry
+            .contains(['\'', '"', '$', '`', '#', '?', '@', '\\'])
+        || !raw
+            .registry
+            .strip_prefix("sparse+")
+            .is_some_and(|registry| {
+                url::Url::parse(registry)
+                    .is_ok_and(|url| url.scheme() == "https" && url.host_str().is_some())
+            })
     {
         return Err(invalid("crates_mirror.registry", raw.registry));
     }

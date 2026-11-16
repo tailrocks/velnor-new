@@ -36,14 +36,20 @@ impl Drop for Registry {
     }
 }
 
-pub(super) fn setup(root: &Path, registry: &str) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+pub(super) fn setup_command(root: &Path, registry: &str) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
         .args(["crates-mirror", "--registry", registry, "--cainfo"])
         .arg(root.join("ca.pem"))
         .env("CARGO_HOME", root.join("home"))
         .env("RUNNER_TEMP", root)
         .env("GITHUB_ENV", root.join("env"))
-        .env("GITHUB_PATH", root.join("path"))
+        .env("GITHUB_PATH", root.join("path"));
+    command
+}
+
+pub(super) fn setup(root: &Path, registry: &str) -> std::process::Output {
+    setup_command(root, registry)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
@@ -79,10 +85,14 @@ pub(super) fn mirror_fixture(exercise: fn(&Repo, &Path, &Path) -> TestResult) ->
         let output = setup(root, &registry.url);
         assert!(output.status.success(), "{output:?}");
     }
-    let config = root.join("home/config.toml");
+    let env = fs::read_to_string(root.join("env"))?;
+    let config = PathBuf::from(
+        env.lines()
+            .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
+            .ok_or("exported Cargo config")?,
+    );
     let text = fs::read_to_string(&config)?;
     assert!(text.contains(&root.join("ca.pem").display().to_string()));
-    let env = fs::read_to_string(root.join("env"))?;
     let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
     assert!(env.contains(&format!("CARGO={}", wrapper.display())));
     exercise(&repo, &wrapper, &config)?;
