@@ -56,11 +56,7 @@ pub fn pump_counted<L: Write>(
     }
 }
 
-/// A step without a terminal on stdin gets its own process group so a
-/// forwarded signal reaches grandchildren. With a terminal the child stays in
-/// the foreground group: moving it out would stop it with SIGTTIN on a read,
-/// and the terminal already signals the whole group.
 #[must_use]
-pub const fn separate_group(stdin_is_tty: bool) -> bool {
-    !stdin_is_tty
+pub const fn separate_group(has_terminal: bool) -> bool {
+    !has_terminal
 }

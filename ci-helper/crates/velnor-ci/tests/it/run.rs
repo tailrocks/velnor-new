@@ -556,7 +556,7 @@ mod tests_run {
 }
 
 #[test]
-fn the_child_gets_its_own_group_only_when_stdin_is_not_a_terminal() {
+fn the_child_gets_its_own_group_only_when_no_terminal_is_present() {
     assert!(velnor_ci::stream::separate_group(false));
     assert!(!velnor_ci::stream::separate_group(true));
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::OpenOptions;
-use std::io::{IsTerminal, Read, Write};
+use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -27,6 +27,8 @@ const NOT_FOUND: u8 = 127;
 const NOT_RUNNABLE: u8 = 126;
 const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
+const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
+const CONTROLLING_TERMINAL: &str = "/dev/tty";
 const PUMP_GRACE_VARIABLE: &str = "VELNOR_CI_RUN_PUMP_GRACE_MS";
 
 fn pump_grace() -> Duration {
@@ -131,8 +133,19 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
 }
 
+fn has_terminal() -> bool {
+    match std::env::var(TERMINAL_VARIABLE).as_deref() {
+        Ok("1") => true,
+        Ok("0") => false,
+        _ => OpenOptions::new()
+            .read(true)
+            .open(CONTROLLING_TERMINAL)
+            .is_ok(),
+    }
+}
+
 fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, String)> {
-    let own_group = separate_group(std::io::stdin().is_terminal());
+    let own_group = separate_group(has_terminal());
     let mut command = Command::new(&argv[0]);
     command
         .args(&argv[1..])
