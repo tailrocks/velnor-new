@@ -22,6 +22,7 @@ pub struct PlanInput<'a> {
     pub runner_image: &'a str,
     pub dind_image: &'a str,
     pub sides: &'a [(Side, String, u16)],
+    pub policy: Option<&'a str>,
 }
 
 #[must_use]
@@ -49,6 +50,7 @@ pub fn plan(input: &PlanInput<'_>) -> Value {
             "dind_memory_bytes": DIND_MEMORY_BYTES,
         },
         "sides": sides,
+        "policy": input.policy,
     })
 }
 
@@ -65,8 +67,10 @@ pub fn listening<'a>(log: &str, slots: &'a [String]) -> Vec<&'a str> {
     slots
         .iter()
         .filter(|slot| {
+            let prefix = format!("pair {slot} ");
             log.lines()
-                .any(|line| line == format!("pair {slot} listening"))
+                .rfind(|line| line.starts_with(&prefix))
+                .is_some_and(|line| line == format!("pair {slot} listening"))
         })
         .map(String::as_str)
         .collect()
@@ -106,6 +110,12 @@ impl Decision {
         };
         self.run_id == Some(run) && self.side == side.name()
     }
+}
+
+#[must_use]
+pub fn refused_among(all: &[Decision], trusted: bool, runs: &[u64]) -> bool {
+    all.iter()
+        .any(|line| !line.allow && runs.iter().any(|run| line.of(*run, trusted)))
 }
 
 pub fn decisions(text: &str) -> Result<Vec<Decision>, String> {

@@ -92,6 +92,8 @@ struct Raw {
     dind_image: String,
     limits: Limits,
     sides: Vec<SidePlan>,
+    #[serde(default)]
+    policy: Option<String>,
 }
 
 pub struct Plan {
@@ -104,6 +106,7 @@ pub struct Plan {
     pub dind_image: String,
     pub limits: Limits,
     pub sides: Vec<SidePlan>,
+    pub policy: Option<String>,
 }
 
 impl std::fmt::Debug for Plan {
@@ -137,7 +140,9 @@ impl Plan {
         let sides_valid = !raw.sides.is_empty()
             && raw.sides.iter().enumerate().all(|(index, side)| {
                 side.pairs <= MAX_PAIRS_PER_SIDE
-                    && raw.sides[..index].iter().all(|seen| seen.side != side.side)
+                    && raw.sides[..index]
+                        .iter()
+                        .all(|seen| seen.side != side.side && seen.network != side.network)
             })
             && raw.sides.iter().any(|side| side.pairs > 0);
         if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid {
@@ -153,6 +158,7 @@ impl Plan {
             dind_image: raw.dind_image,
             limits: raw.limits,
             sides: raw.sides,
+            policy: raw.policy,
         })
     }
 }

@@ -29,7 +29,7 @@ pub enum Command {
     )]
     Inputs(InputsCommand),
     #[command(
-        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and every check its branch rules require passed in a job of a push run on that branch, and ready=false while one has not finished; exit 1 when one did not pass or the commit is off the default branch. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
+        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
     )]
     ReleaseGate(ReleaseGateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
@@ -52,6 +52,10 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+    )]
+    CheckConfigurations(CheckConfigurationsArgs),
+    #[command(
         about = "Run after every cache is restored: every action that must follow the restores"
     )]
     Restored,
@@ -63,6 +67,21 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckConfigurationsArgs {
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Cargo manifest to resolve and check"
+    )]
+    pub manifest_path: PathBuf,
+    #[arg(
+        long,
+        help = "JSON array of named feature configurations; without a file, check the default configuration"
+    )]
+    pub configurations: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -149,6 +168,11 @@ pub struct ReleaseGateArgs {
     pub repo: String,
     #[arg(long, help = "Full SHA of the commit that is about to be released")]
     pub sha: String,
+    #[arg(
+        long,
+        help = "Required check enforced only on pull requests; repeat for each check"
+    )]
+    pub pr_only_check: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -158,11 +182,11 @@ pub enum ReleaseCommand {
     )]
     Record(RecordArgs),
     #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
     #[command(
-        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
+        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
 }
@@ -171,6 +195,45 @@ pub enum ReleaseCommand {
 pub struct CheckConfigArgs {
     #[arg(required = true, help = "release-plz.toml files to check")]
     pub files: Vec<PathBuf>,
+    #[arg(
+        long = "tag-pattern",
+        num_args = 2,
+        value_names = ["FILE", "PATTERN"],
+        action = clap::ArgAction::Append,
+        requires = "repo",
+        help = "A git_tag_name pattern the tag rulesets were provisioned for; when given, every file must hold exactly the patterns listed for it"
+    )]
+    tag_pattern_words: Vec<String>,
+    #[arg(
+        long,
+        value_name = "OWNER/NAME",
+        requires = "tag_pattern_words",
+        help = "With --tag-pattern, the repository whose active tag rulesets must hold a creation, update and deletion rule for every listed pattern"
+    )]
+    pub repo: Option<String>,
+    #[arg(
+        long,
+        help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
+    )]
+    pub manifests: bool,
+    #[arg(
+        long,
+        requires = "manifests",
+        help = "With --manifests, also refuse a package whose current version would give a tag git cannot create; only for the job that tags the version already committed"
+    )]
+    pub released_versions: bool,
+}
+
+impl CheckConfigArgs {
+    #[must_use]
+    pub fn tag_patterns(&self) -> Vec<(String, String)> {
+        self.tag_pattern_words
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[file, pattern]| (file.clone(), pattern.clone()))
+            .collect()
+    }
 }
 
 #[derive(Debug, Args)]
@@ -201,7 +264,13 @@ pub struct PublishArgs {
     )]
     pub dir: PathBuf,
     #[arg(
-        required = true,
+        long,
+        conflicts_with = "files",
+        help = "Publish a release that must hold no asset at all; no file or SHA256SUMS is read"
+    )]
+    pub no_files: bool,
+    #[arg(
+        required_unless_present = "no_files",
         value_parser = file_name,
         help = "Exact names of the files to publish besides SHA256SUMS"
     )]

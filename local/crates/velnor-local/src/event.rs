@@ -11,6 +11,7 @@ pub const NO_COMMIT: &str = "0000000000000000000000000000000000000000";
 pub struct Repository<'a> {
     pub full_name: &'a str,
     pub default_branch: &'a str,
+    pub id: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -100,6 +101,9 @@ impl Repository<'_> {
     }
 
     fn id(&self) -> u64 {
+        if let Some(id) = self.id {
+            return id;
+        }
         let digest = ring::digest::digest(&ring::digest::SHA256, self.full_name.as_bytes());
         let bytes = digest.as_ref();
         u64::from_be_bytes([
@@ -168,8 +172,13 @@ impl Repository<'_> {
         let mut head = side(pull.head);
         if pull.fork {
             let name = self.full_name.split('/').nth(1).unwrap_or_default();
-            head["repo"]["full_name"] = json!(format!("{FORK_OWNER}/{name}"));
-            head["repo"]["owner"]["login"] = json!(FORK_OWNER);
+            let full_name = format!("{FORK_OWNER}/{name}");
+            let fork = Repository {
+                full_name: &full_name,
+                default_branch: self.default_branch,
+                id: None,
+            };
+            head["repo"] = fork.json();
             head["repo"]["fork"] = json!(true);
             head["label"] = json!(format!("{FORK_OWNER}:{}", pull.head.0));
         }

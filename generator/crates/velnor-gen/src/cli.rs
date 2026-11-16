@@ -54,7 +54,14 @@ pub enum Command {
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum ReleaseCommand {
     #[command(
-        about = "Print the JSON of the tag ruleset that lets only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files; pass it to terraform or to gh api --method POST repos/<owner>/<repo>/rulesets --input -"
+        about = "Print the two tag rulesets that let only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files, as one JSON object per line; create each with one request: velnor-gen release ruleset | while IFS= read -r ruleset; do printf '%s' \"$ruleset\" | gh api --method POST repos/<owner>/<repo>/rulesets --input - || exit 1; done; then check both with release ruleset-drift"
     )]
     Ruleset,
+    #[command(
+        about = "Compare the live tag rulesets, a JSON array of the full ruleset objects that an admin read of repos/<owner>/<repo>/rulesets/<id> returns, with the generated ones, bypass actors included; exits 1 on a difference"
+    )]
+    RulesetDrift {
+        #[arg(help = "The file with the live rulesets")]
+        live: PathBuf,
+    },
 }

@@ -169,6 +169,7 @@ pub enum When {
     NotCancelled,
     Scheduled,
     ScheduledOrPush,
+    SaveToolsOnDefaultBranch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,6 +298,7 @@ pub enum CargoCommand {
     Build {
         package: PackageName,
     },
+    BuildAll,
     NextestRun {
         filter: FilterRef,
     },

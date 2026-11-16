@@ -23,10 +23,10 @@ use super::seed::{CONNECTION_ID, IMAGE_ID};
 use super::{HOST_CONFIG, PositivePollContext, TestResult};
 
 pub(super) struct Controller {
-    config: HostConfig,
-    images: VerifiedWorkerImages,
-    image_authority: Arc<ImageAuthority>,
-    state: TempDir,
+    pub(super) config: HostConfig,
+    pub(super) images: VerifiedWorkerImages,
+    pub(super) image_authority: Arc<ImageAuthority>,
+    pub(super) state: TempDir,
     pub(super) prepared: PreparedConnection,
 }
 
@@ -64,6 +64,7 @@ impl Controller {
             assigned_total: None,
             poll_cursor: 0,
             poll_retry_at: None,
+            restore_retry_at: None,
             guest_image,
             completion: None,
             credentials: None,

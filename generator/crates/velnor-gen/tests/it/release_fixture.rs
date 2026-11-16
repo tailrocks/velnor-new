@@ -14,7 +14,8 @@ use velnor_rust::LOCK_PATH;
 use crate::pipeline::view;
 use crate::yaml_tree::{Node, parse};
 
-const LOCK: &str = include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
+pub(crate) const LOCK: &str =
+    include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
 pub(crate) const READY: &str = "needs.gate.outputs.ready == 'true'";
 pub(crate) const PUSH: &str = "github.event.workflow_run.event == 'push'";
 pub(crate) const DEFAULT_BRANCH: &str =
@@ -61,7 +62,7 @@ pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
 
 pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
-        "publish_no_verify = true"
+        "publish_no_verify = true\npublish_timeout = \"5m\""
     } else {
         "git_only = true"
     };
@@ -108,18 +109,19 @@ pub(crate) fn release_view(
         }
     }
     view.tracked_paths.insert(LOCK_PATH);
-    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.80").into_bytes());
     view.files.insert(
         RepoPath::new("mise.toml")?,
         b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new("mise.lock")?,
-        b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n\n[tools.\"aqua:release-plz/release-plz\".\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_vec(),
+        b"[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n\n[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n\n[tools.\"aqua:release-plz/release-plz\".\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new(".github/workflows/lint.yml")?,
-        b"name: Lint\non: push\n".to_vec(),
+        b"name: Lint\non: pull_request\n".to_vec(),
     );
     if let Some(text) = release_toml {
         view.files
@@ -134,6 +136,13 @@ pub(crate) fn release_view(
         if let Some(metadata) = view.rust_metadata.get_mut(&manifest) {
             metadata.members[0].name = PackageName::new(root.package)?;
         }
+        view.files.entry(manifest).or_insert_with(|| {
+            format!(
+                "[package]\nname = \"{}\"\nversion = \"0.1.0\"\n",
+                root.package
+            )
+            .into_bytes()
+        });
         let path = if root.dir == "." {
             "release-plz.toml".to_owned()
         } else {

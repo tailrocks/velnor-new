@@ -10,6 +10,7 @@ const SHA: &str = "007c9fa8aac37d2aa7bc4a26876bf2654699f6bc";
 const REPOSITORY: Repository<'static> = Repository {
     full_name: "tailrocks/velnor-lab",
     default_branch: "main",
+    id: None,
 };
 
 fn pull(fork: bool) -> serde_json::Value {
@@ -25,6 +26,17 @@ fn pull(fork: bool) -> serde_json::Value {
         closed_at: None,
         changed_files: 1,
     })
+}
+
+#[test]
+fn a_fork_pull_request_head_repository_has_its_own_id() {
+    let id = |value: &serde_json::Value| value["pull_request"]["head"]["repo"]["id"].as_u64();
+    let fork = pull(true);
+    let own = pull(false);
+    assert!(id(&fork).is_some_and(|id| id > 0), "{fork}");
+    assert_ne!(id(&fork), id(&own));
+    assert_ne!(id(&fork), fork["repository"]["id"].as_u64());
+    assert_eq!(id(&own), own["repository"]["id"].as_u64());
 }
 
 #[test]
@@ -169,4 +181,28 @@ fn a_push_lists_the_files_each_commit_adds_removes_and_modifies() {
     assert_eq!(payload["commits"][0]["added"][0], "probes/new.txt");
     assert_eq!(payload["commits"][0]["removed"][0], "old.txt");
     assert_eq!(payload["commits"][0]["modified"][1], "link");
+}
+
+#[test]
+fn an_explicit_repository_id_is_the_id_events_carry_and_the_fork_keeps_its_own() {
+    let real = Repository {
+        id: Some(1_234_567),
+        ..REPOSITORY
+    };
+    let payload = real.pull_request(&PullRequest {
+        action: "opened",
+        number: 2,
+        base: ("main", SHA),
+        head: ("patch", SHA),
+        before: None,
+        merged: false,
+        merge_commit: SHA,
+        fork: true,
+        closed_at: None,
+        changed_files: 1,
+    });
+    assert_eq!(payload["repository"]["id"], 1_234_567);
+    assert_eq!(payload["pull_request"]["base"]["repo"]["id"], 1_234_567);
+    assert_ne!(payload["pull_request"]["head"]["repo"]["id"], 1_234_567);
+    assert_ne!(pull(false)["repository"]["id"], 1_234_567);
 }

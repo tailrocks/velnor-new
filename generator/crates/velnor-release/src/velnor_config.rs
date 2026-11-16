@@ -18,6 +18,7 @@ pub(crate) struct Binary {
 pub(crate) struct VelnorConfig {
     pub(crate) roots: Vec<String>,
     pub(crate) after: Vec<String>,
+    pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
 }
 
@@ -34,6 +35,8 @@ struct RawBinary {
 struct Raw {
     roots: Option<Vec<String>>,
     after: Option<Vec<String>>,
+    #[serde(default)]
+    pr_only_checks: Vec<String>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
 }
@@ -57,10 +60,12 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         None => Raw {
             roots: None,
             after: None,
+            pr_only_checks: Vec::new(),
             binaries: Vec::new(),
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
     refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
@@ -73,7 +78,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     if let Some(root) = roots.iter().find(|root| {
         root.as_str() != "."
             && (root.is_empty()
-                || root.starts_with('/')
+                || root.starts_with(['/', '-'])
                 || root.split('/').any(|part| matches!(part, "" | "." | "..")))
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
@@ -96,6 +101,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     Ok(VelnorConfig {
         roots,
         after,
+        pr_only_checks: raw.pr_only_checks,
         binaries,
     })
 }

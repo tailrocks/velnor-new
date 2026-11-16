@@ -76,6 +76,11 @@ impl RepoPath {
     }
 
     #[must_use]
+    pub fn child(&self, tail: &str) -> Self {
+        Self(Cow::Owned(format!("{}/{tail}", self.0)))
+    }
+
+    #[must_use]
     pub fn sibling(&self, name: &Self) -> Self {
         match self.parent() {
             Some(parent) => Self(Cow::Owned(format!("{parent}/{name}"))),
@@ -179,6 +184,19 @@ impl HelperVersion {
     pub fn series(&self) -> Option<(u64, u64)> {
         let mut parts = self.0.split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+    }
+
+    #[must_use]
+    pub fn at_least(&self, minimum: (u64, u64, u64)) -> bool {
+        let mut parts = self.0.split('.').map(|part| part.parse::<u64>().ok());
+        match (
+            parts.next().flatten(),
+            parts.next().flatten(),
+            parts.next().flatten(),
+        ) {
+            (Some(major), Some(minor), Some(patch)) => (major, minor, patch) >= minimum,
+            _ => false,
+        }
     }
 }
 

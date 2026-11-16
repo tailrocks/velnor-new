@@ -211,6 +211,20 @@ async fn a_jit_file_is_private_and_replaces_the_one_before() {
 }
 
 #[tokio::test]
+async fn a_jit_file_holds_its_whole_content_the_moment_the_write_returns() {
+    let dir = temp_dir("pair-whole");
+    let payload = "jit-config-payload-0123456789".repeat(8);
+    for n in 0..300 {
+        let path = dir.join(format!("jit-{n}"));
+        write_private(&path, &payload)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let read = std::fs::read_to_string(&path).unwrap_or_default();
+        assert_eq!(read, payload, "write {n} was visible before it finished");
+    }
+}
+
+#[tokio::test]
 async fn concurrent_jit_writes_to_one_path_all_succeed() {
     let dir = temp_dir("pair-concurrent");
     let path = dir.join("jit");
@@ -242,6 +256,21 @@ fn the_helpers_compile_the_source_revision_and_keep_their_download_caches() {
     assert!(helpers.contains("-v velnor-arm64-cargo:/cargo-home"));
     assert!(helpers.contains("-e CARGO_HOME=/cargo-home"));
     assert!(helpers.contains(":/usr/local/rustup"));
+}
+
+#[test]
+fn the_rustup_volume_is_named_for_the_digest_of_the_rust_image_it_holds() {
+    let helpers = steps()[0].clone();
+    let image = helpers
+        .iter()
+        .find(|arg| arg.starts_with("rust:"))
+        .unwrap_or_else(|| unreachable!("{helpers:?}"));
+    let digest = image
+        .rsplit_once("sha256:")
+        .map_or("", |(_, digest)| digest);
+    assert_eq!(digest.len(), 64, "{image}");
+    let volume = format!("velnor-arm64-rustup-{}:/usr/local/rustup", &digest[..12]);
+    assert!(helpers.contains(&volume), "{helpers:?}");
 }
 
 #[test]

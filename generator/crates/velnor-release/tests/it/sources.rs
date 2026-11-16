@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
-use crate::fixture::{PLZ, TestResult, edit, files, locked, refusal};
+use crate::fixture::{PLZ, TestResult, edit, files, locked, refusal, with_metadata};
 
 fn with_mise(text: &str) -> ReleaseFiles {
     let mut files = files();
@@ -17,7 +17,7 @@ fn names(items: &[&str]) -> BTreeSet<String> {
     items.iter().map(|item| (*item).to_owned()).collect()
 }
 
-fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
+pub(crate) fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
     let mut files = files();
     files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
     let root = edit(
@@ -67,7 +67,7 @@ fn the_plan_installs_the_exact_configured_version_whatever_key_or_options_mise_h
 
 #[test]
 fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
-    let stale = "[tools]\nrelease-plz = \"0.3.0\"\n".to_owned();
+    let stale = "[tools]\nrelease-plz = \"0.4.2\"\n".to_owned();
     let current = "[tools]\nrelease-plz = \"0.4.3\"\n".to_owned();
     let mut files = files();
     files.mise_tomls = vec![stale.clone(), current.clone()];
@@ -81,7 +81,7 @@ fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
 
 fn workspace_only(prefix: &str, tag: &str) -> String {
     format!(
-        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"{prefix}\"\n"
+        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"{prefix}\"\n"
     )
 }
 
@@ -106,7 +106,7 @@ fn workspace_wide_tag_patterns_of_two_roots_that_can_collide_are_refused() -> Te
     Ok(())
 }
 
-const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
+const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
 
 #[test]
 fn every_release_root_needs_a_tracked_cargo_manifest() -> TestResult {
@@ -159,40 +159,70 @@ fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
 
 #[test]
 fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
-    let members = |app: &[&str], tools: &[&str]| {
-        Some(std::collections::BTreeMap::from([
-            (".".to_owned(), names(app)),
-            ("tools".to_owned(), names(tools)),
-        ]))
-    };
     let mut files = two_roots(PLZ_TOOLS)?;
-    files.root_members = members(&["app"], &["app", "tools"]);
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            (
+                "tools/Cargo.toml",
+                &[
+                    ("app", "tools/app/Cargo.toml"),
+                    ("tools", "tools/Cargo.toml"),
+                ],
+            ),
+        ],
+    );
     let error = refusal(&files);
     assert!(
         matches!(&error, Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app"),
         "{error:?}"
     );
-    files.root_members = members(&["app"], &["tools"]);
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            ("tools/Cargo.toml", &[("tools", "tools/Cargo.toml")]),
+        ],
+    );
     assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn two_roots_that_share_an_ancestor_workspace_release_its_packages_twice() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("tools", "tools/Cargo.toml")],
+        )],
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { .. })),
+        "{error:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn a_package_entry_that_is_not_a_member_of_its_root_is_refused() {
     let mut files = files();
-    files.root_members = Some(std::collections::BTreeMap::from([(
-        ".".to_owned(),
-        names(&["other"]),
-    )]));
+    with_metadata(&mut files, &[("Cargo.toml", &[("other", "Cargo.toml")])]);
     let error = refusal(&files);
     assert!(
         matches!(&error, Some(ReleaseError::PackageNotInRoot { package, .. }) if package == "app"),
         "{error:?}"
     );
-    files.root_members = Some(std::collections::BTreeMap::from([(
-        ".".to_owned(),
-        names(&["app", "other"]),
-    )]));
+    with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("other", "other/Cargo.toml")],
+        )],
+    );
     assert_eq!(refusal(&files), None);
 }
 
@@ -259,6 +289,66 @@ fn cargo_proxy_and_ca_overrides_are_refused_when_publishing_to_crates_io() {
             "{config}"
         );
     }
+}
+
+#[test]
+fn a_non_crates_io_default_registry_is_refused_when_publishing_to_crates_io() {
+    for path in [".cargo/config.toml", ".cargo/config"] {
+        for config in [
+            "[registry]\ndefault = \"company\"\n[registries.company]\nindex = \"sparse+https://example.test/\"\n",
+            "[registry]\ndefault = 7\n",
+        ] {
+            let mut files = files();
+            files
+                .cargo_configs
+                .insert(path.to_owned(), config.to_owned());
+            assert!(
+                matches!(
+                    refusal(&files),
+                    Some(ReleaseError::CargoRedirectsCratesIo { .. })
+                ),
+                "{path}: {config}"
+            );
+        }
+    }
+}
+
+#[test]
+fn net_offline_is_refused_only_for_a_root_that_publishes_to_crates_io() {
+    let git_only = edit(PLZ, "publish_no_verify = true", "git_only = true");
+    let mut publishing = files();
+    publishing.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = true\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&publishing),
+        Some(ReleaseError::CargoOffline { .. })
+    ));
+    publishing.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = false\nretry = 3\n".to_owned(),
+    );
+    assert_eq!(refusal(&publishing), None);
+    let mut local = files();
+    local
+        .release_plz_toml
+        .insert(".".to_owned(), git_only.unwrap_or_default());
+    local.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = true\n".to_owned(),
+    );
+    assert_eq!(refusal(&local), None);
+}
+
+#[test]
+fn a_crates_io_default_registry_is_accepted() {
+    let mut files = files();
+    files.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[registry]\ndefault = \"crates-io\"\n".to_owned(),
+    );
+    assert!(refusal(&files).is_none());
 }
 
 #[test]

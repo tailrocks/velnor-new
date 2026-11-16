@@ -11,7 +11,11 @@ use crate::cli::{CheckConfigArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
-use crate::release::{CargoPathEntry, PlainName, check_cargo_discovery, check_config, record};
+use crate::release::{
+    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_manifests,
+    check_tag_patterns, publishes_to_crates_io, record,
+};
+use crate::rulesets::check_tag_rulesets;
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -40,13 +44,71 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         .collect::<Result<Vec<_>, CiError>>()?;
     let top = std::env::current_dir()
         .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let mut discovered = Vec::new();
     for path in &args.files {
-        check_cargo_discovery(&discovery(&top, path)?)?;
+        let entries = discovery(&top, path)?;
+        check_cargo_discovery(&entries, false)?;
+        discovered.push(entries);
     }
-    check_config(&files)
+    let output = check_config(&files)?;
+    let known = if args.manifests {
+        let roots: Vec<String> = args.files.iter().map(|path| root_of(&top, path)).collect();
+        let known = super::manifests::read(&top, &roots)?;
+        let relative: Vec<(String, String)> = args
+            .files
+            .iter()
+            .zip(&files)
+            .map(|(path, (_, text))| (relative_to(&top, path), text.clone()))
+            .collect();
+        check_manifests(
+            &relative,
+            &known.metadata,
+            &known.manifests,
+            args.released_versions.then_some(&known.versions),
+        )?;
+        Some(known)
+    } else {
+        None
+    };
+    let metadata = known.as_ref().map(|known| &known.metadata);
+    for ((path, (_, text)), entries) in args.files.iter().zip(&files).zip(&discovered) {
+        let publishes = publishes_to_crates_io(&root_of(&top, path), text, metadata)?;
+        check_cargo_discovery(entries, publishes)?;
+    }
+    let patterns = args.tag_patterns();
+    check_tag_patterns(&files, &patterns)?;
+    if let Some(repo) = &args.repo {
+        check_tag_rulesets(
+            &HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT),
+            &Repo::parse(repo)?,
+            &patterns,
+        )?;
+    }
+    Ok(output)
 }
 
-const CONFIG_ENTRIES: [&str; 3] = [".cargo", ".cargo/config", ".cargo/config.toml"];
+fn relative_to(top: &Path, file: &Path) -> String {
+    file.strip_prefix(top)
+        .unwrap_or(file)
+        .components()
+        .filter(|part| !matches!(part, Component::CurDir))
+        .collect::<std::path::PathBuf>()
+        .display()
+        .to_string()
+}
+
+fn root_of(top: &Path, file: &Path) -> String {
+    Path::new(&relative_to(top, file))
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())
+}
+
+const CONFIG_ENTRIES: [(&str, bool); 3] = [
+    (".cargo", false),
+    (".cargo/config", true),
+    (".cargo/config.toml", true),
+];
 
 fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
     let relative = file.strip_prefix(top).unwrap_or(file);
@@ -63,8 +125,8 @@ fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
         if !directory.as_os_str().is_empty() {
             entries.extend(entry(directory, &here, false)?);
         }
-        for name in CONFIG_ENTRIES {
-            entries.extend(entry(&directory.join(name), &here.join(name), true)?);
+        for (name, with_text) in CONFIG_ENTRIES {
+            entries.extend(entry(&directory.join(name), &here.join(name), with_text)?);
         }
     }
     Ok(entries)
@@ -74,7 +136,9 @@ fn entry(shown: &Path, real: &Path, with_text: bool) -> Result<Option<CargoPathE
     let fail = |e: std::io::Error| CiError::new(format!("cannot inspect {}: {e}", shown.display()));
     let meta = match fs::symlink_metadata(real) {
         Ok(meta) => meta,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+            return Ok(None);
+        }
         Err(error) => return Err(fail(error)),
     };
     let symlink = meta.file_type().is_symlink();
@@ -94,7 +158,13 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
     let token = super::token()?;
     let repo = Repo::parse(&args.repo)?;
     let mut files = BTreeMap::new();
-    for name in args.files.iter().map(PlainName::as_str).chain([SUMS]) {
+    let read: &[&str] = if args.no_files { &[] } else { &[SUMS] };
+    for name in args
+        .files
+        .iter()
+        .map(PlainName::as_str)
+        .chain(read.iter().copied())
+    {
         let path = args.dir.join(name);
         match fs::read(&path) {
             Ok(bytes) => {
@@ -114,6 +184,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         app: args.app.clone(),
         names: args.files.clone(),
         files,
+        assetless: args.no_files,
     };
     publish(
         &HttpGitHub::new(super::api_url(), token, DEFAULT_TIMEOUT),

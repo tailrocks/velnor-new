@@ -4,6 +4,7 @@
 pub mod cli;
 pub mod collect;
 pub mod compare;
+mod configurations;
 pub mod coverage;
 pub mod error;
 pub mod escape;
@@ -19,6 +20,7 @@ pub mod plan;
 pub mod platform;
 pub mod publish;
 pub mod release;
+pub mod rulesets;
 pub mod setup;
 pub mod stream;
 pub mod tests_run;

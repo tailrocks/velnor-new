@@ -6,7 +6,7 @@ use velnor_local::cli::{Cli, Command, EnvironmentArgs, RunnerMode};
 use velnor_local::images::{HOST_BINARY, HOST_BUILD, RELEASE_IDENTITY};
 use velnor_local::io::env::Environment;
 use velnor_local::io::supervisor::write_plan;
-use velnor_local::pairs::{Decision, PlanInput, decisions, listening, plan, slots};
+use velnor_local::pairs::{Decision, PlanInput, decisions, listening, plan, refused_among, slots};
 use velnor_local::scenario::Outcome;
 use velnor_local::side::Side;
 use velnor_local::verdict::{Check, conclude, verdict};
@@ -32,6 +32,13 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
     }
 }
 
+fn passing(id: u64, trusted: bool) -> Outcome {
+    Outcome {
+        metrics: Ok(std::path::PathBuf::new()),
+        ..outcome(id, trusted)
+    }
+}
+
 fn read(lines: &[&str]) -> Vec<Decision> {
     decisions(&lines.join("\n")).unwrap_or_else(|e| unreachable!("{e}"))
 }
@@ -50,6 +57,7 @@ fn the_plan_names_the_loopback_authority_the_image_ids_and_only_sides_with_pairs
         runner_image: "sha256:aa",
         dind_image: "sha256:bb",
         sides: &sides,
+        policy: None,
     };
     let planned = plan(&input);
     assert_eq!(planned["authority"], "http://127.0.0.1:5311");
@@ -85,6 +93,15 @@ fn the_pairs_are_ready_only_when_every_slot_listens() {
 }
 
 #[test]
+fn a_slot_that_logged_listening_and_then_exited_is_not_counted_ready() {
+    let slots = slots(2, 0);
+    let log = "pair trusted-1 listening\npair trusted-2 listening\npair trusted-1 removed\n";
+    assert_eq!(listening(log, &slots), ["trusted-2"]);
+    let log = format!("{log}pair trusted-1 listening\n");
+    assert_eq!(listening(&log, &slots), ["trusted-1", "trusted-2"]);
+}
+
+#[test]
 fn each_decision_reads_as_admitted_with_its_event_or_refused_with_its_reason() {
     let read = read(&[ADMITTED, REFUSED, "", MALFORMED]);
     let lines: Vec<String> = read.iter().map(Decision::line).collect();
@@ -102,7 +119,13 @@ fn each_decision_reads_as_admitted_with_its_event_or_refused_with_its_reason() {
 #[test]
 fn a_pair_verdict_puts_each_job_under_its_run_and_side_and_lists_the_rest() {
     let check = Check::Pairs(read(&[ADMITTED, FORK, MALFORMED]));
-    let text = verdict("warm", &[outcome(1, true)], (100, 9.8), &check);
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &check,
+        velnor_local::authority::WARNING,
+    );
     let lines: Vec<&str> = text.lines().collect();
     let run = lines
         .iter()
@@ -131,7 +154,13 @@ fn a_pair_verdict_puts_each_job_under_its_run_and_side_and_lists_the_rest() {
 
 #[test]
 fn a_plain_verdict_says_there_is_no_job_start_check() {
-    let text = verdict("warm", &[outcome(1, true)], (100, 9.8), &Check::Plain);
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &Check::Plain,
+        velnor_local::authority::WARNING,
+    );
     assert!(
         text.contains("job-start check: none (plain containers)"),
         "{text}"
@@ -150,7 +179,7 @@ fn pair_mode_is_the_default_and_names_the_velnor_host_it_runs() {
         unreachable!("{parsed:?}")
     };
     assert_eq!(up.environment.runner, RunnerMode::Pair);
-    assert_eq!(up.environment.velnor_host.to_str(), Some(HOST_BINARY));
+    assert_eq!(up.environment.velnor_host, None);
     assert_eq!(up.environment.containers(2), 0);
     let plain = ["velnor-local", "run", "warm", "--dir", "s", "--repo", "r"];
     let parsed = Cli::try_parse_from(plain.into_iter().chain(["--runner", "plain"]));
@@ -189,7 +218,8 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         fork_runners: 1,
         default_branch: "main".to_owned(),
         runner: RunnerMode::Pair,
-        velnor_host: HOST_BINARY.into(),
+        velnor_host: Some(HOST_BINARY.into()),
+        policy: None,
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();
@@ -226,6 +256,7 @@ fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
     let repository = |full_name| Repository {
         full_name,
         default_branch: "main",
+        id: None,
     };
     let push = Push {
         branch: "main",
@@ -242,7 +273,7 @@ fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
 
 #[test]
 fn a_refused_job_fails_the_run_even_when_every_run_succeeded() {
-    let passed = [outcome(1, false)];
+    let passed = [passing(1, true)];
     let refused = Check::Pairs(read(&[ADMITTED, REFUSED]));
     assert_eq!(
         conclude(&refused, &passed),
@@ -250,6 +281,21 @@ fn a_refused_job_fails_the_run_even_when_every_run_succeeded() {
     );
     assert_eq!(conclude(&Check::Pairs(read(&[ADMITTED])), &passed), Ok(()));
     assert_eq!(conclude(&Check::Plain, &passed), Ok(()));
+}
+
+#[test]
+fn a_pair_run_without_an_admitted_decision_for_a_job_fails_the_run() {
+    let outcomes = [passing(1, true), passing(1, false)];
+    let missing = "a job has no job-start decision";
+    assert_eq!(conclude(&Check::Pairs(Vec::new()), &outcomes), Err(missing));
+    assert_eq!(
+        conclude(&Check::Pairs(read(&[ADMITTED])), &outcomes),
+        Err(missing)
+    );
+    assert_eq!(
+        conclude(&Check::Pairs(read(&[ADMITTED, FORK])), &outcomes),
+        Ok(())
+    );
 }
 
 #[test]
@@ -279,4 +325,23 @@ async fn the_plan_file_holding_the_authority_token_is_private_to_its_owner() {
         std::fs::read_to_string(dir.join("plan.json")).unwrap_or_default(),
         "{}"
     );
+}
+
+#[test]
+fn a_refusal_counts_only_for_the_runs_the_event_created_on_its_side() {
+    let line = |side: &str, run: u64, allow: bool| Decision {
+        pair: format!("{side}-1"),
+        side: side.to_owned(),
+        allow,
+        reason: (!allow).then(|| "policy".to_owned()),
+        ledger: None,
+        run_id: Some(run),
+        job: Some("ci".to_owned()),
+    };
+    let all = [line("trusted", 4, false), line("untrusted", 9, false)];
+    assert!(refused_among(&all, true, &[4, 5]));
+    assert!(!refused_among(&all, true, &[5, 6]));
+    assert!(!refused_among(&all, true, &[9]));
+    assert!(refused_among(&all, false, &[9]));
+    assert!(!refused_among(&[line("trusted", 5, true)], true, &[5]));
 }

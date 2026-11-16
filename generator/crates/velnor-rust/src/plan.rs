@@ -5,10 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RepoPath, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
+    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
+use crate::audit_job::audit_job;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -21,7 +22,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const HELPER_BINARY: RepoPath = RepoPath::from_static("target/debug/velnor-ci");
 const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
@@ -51,6 +51,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
+    if suffixed {
+        jobs.extend(audit_job(facts, helper_root.is_some()));
+    }
     if facts.policy.any() {
         jobs.push(policy_job(
             facts,
@@ -108,7 +111,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         plan: Some(PLAN_JOB),
         from_source: false,
     };
-    let mut steps = setup(facts, root, false, &lane, &HELPER_JOB);
+    let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
         ..step(StepKind::Cargo(CargoCommand::Build {
@@ -116,7 +119,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         }))
     });
     steps.push(step(StepKind::PublishHelper {
-        binary: root.manifest.sibling(&HELPER_BINARY),
+        binary: root.target_dir.child("debug/velnor-ci"),
     }));
     Job {
         steps,
@@ -160,17 +163,36 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
     steps
 }
 
-fn tools_steps(facts: &RepoFacts) -> Option<Step> {
+pub(crate) fn tools_cache_key() -> CacheKey {
+    CacheKey::Tools { host: Host }
+}
+
+pub(crate) fn tools_restore(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| step(StepKind::CacheRestore(tools_cache_key())))
+}
+
+pub(crate) fn tools_save(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty()).then(|| Step {
+        when: When::SaveToolsOnDefaultBranch,
+        ..step(StepKind::CacheSave(tools_cache_key()))
+    })
+}
+
+pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 
-pub(crate) fn setup(
+pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
+    setup_roots(facts, std::slice::from_ref(root), lane, job)
+}
+
+pub(crate) fn setup_roots(
     facts: &RepoFacts,
-    root: &RustRoot,
-    lint: bool,
+    roots: &[RustRoot],
     lane: &Lane,
     job: &JobId,
 ) -> Vec<Step> {
+    let root = &roots[0];
     let mut steps = head(
         facts,
         if lane.plan.is_none() {
@@ -183,7 +205,10 @@ pub(crate) fn setup(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = tools_steps(facts).into_iter().collect();
+    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
+        .into_iter()
+        .flatten()
+        .collect();
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared
@@ -192,9 +217,7 @@ pub(crate) fn setup(
         if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
             components.push("rust-docs".to_owned());
         }
-        if lint {
-            components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
-        }
+        components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
         components.sort();
         components.dedup();
         let targets = declared
@@ -212,24 +235,27 @@ pub(crate) fn setup(
             }
         }
     }
-    let cache_root = CacheRoot::new(&root.manifest);
-    toolchain.extend([
-        step(StepKind::Helper(HelperCommand::Prepare)),
-        Step {
-            directory: root.manifest.parent(),
-            ..step(StepKind::Helper(HelperCommand::CheckMetadata))
-        },
-        step(StepKind::CacheRestore(CacheKey::Sources {
-            host: Host,
-            root: cache_root.clone(),
-        })),
-        step(StepKind::CacheRestore(CacheKey::Target {
-            job: job.clone(),
-            root: cache_root,
-            host: Host,
-        })),
-        step(StepKind::Helper(HelperCommand::Restored)),
-    ]);
+    toolchain.extend(tools_save(facts));
+    toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
+    for root in roots {
+        let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+        toolchain.extend([
+            Step {
+                directory: root.manifest.parent(),
+                ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+            },
+            step(StepKind::CacheRestore(CacheKey::Sources {
+                host: Host,
+                root: cache_root.clone(),
+            })),
+            step(StepKind::CacheRestore(CacheKey::Target {
+                job: job.clone(),
+                root: cache_root,
+                host: Host,
+            })),
+        ]);
+    }
+    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step

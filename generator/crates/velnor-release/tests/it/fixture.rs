@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_model::{PackageName, RepoPath, RustMetadata, RustPackage};
 use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -14,6 +15,7 @@ git_release_draft = true
 release_always = false
 semver_check = false
 publish_no_verify = true
+publish_timeout = "5m"
 
 [[package]]
 name = "app"
@@ -40,9 +42,11 @@ pub(crate) fn files() -> ReleaseFiles {
         toolchain_files: BTreeMap::new(),
         symlinks: std::collections::BTreeSet::new(),
         cargo_manifests: None,
+        cargo_manifest_texts: BTreeMap::new(),
         bin_targets: None,
-        root_members: None,
+        rust_metadata: None,
         workflow_names: None,
+        push_workflows: None,
         mise_lock: MISE_LOCK.to_owned(),
     }
 }
@@ -69,4 +73,36 @@ pub(crate) fn refusal(files: &ReleaseFiles) -> Option<ReleaseError> {
 
 pub(crate) fn plz_refusal_of(from: &str, to: &str) -> Result<Option<ReleaseError>, String> {
     Ok(refusal(&plz_edited(from, to)?))
+}
+
+pub(crate) fn metadata(workspaces: &[(&str, &[(&str, &str)])]) -> BTreeMap<RepoPath, RustMetadata> {
+    let package = |(name, manifest): &(&str, &str)| RustPackage {
+        name: PackageName::new((*name).to_owned()).unwrap_or_else(|e| unreachable!("{e}")),
+        manifest: RepoPath::new(*manifest).unwrap_or_else(|e| unreachable!("{e}")),
+        dependencies: Vec::new(),
+        targets: Vec::new(),
+    };
+    workspaces
+        .iter()
+        .map(|(workspace, members)| {
+            (
+                RepoPath::new(*workspace).unwrap_or_else(|e| unreachable!("{e}")),
+                RustMetadata {
+                    members: members.iter().map(package).collect(),
+                },
+            )
+        })
+        .collect()
+}
+
+pub(crate) fn with_metadata(files: &mut ReleaseFiles, workspaces: &[(&str, &[(&str, &str)])]) {
+    for (workspace, members) in workspaces {
+        for path in std::iter::once(workspace).chain(members.iter().map(|(_, path)| path)) {
+            files
+                .cargo_manifest_texts
+                .entry((*path).to_owned())
+                .or_insert_with(|| "[package]\nname = \"x\"\nversion = \"0.1.0\"\n".to_owned());
+        }
+    }
+    files.rust_metadata = Some(metadata(workspaces));
 }

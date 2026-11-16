@@ -21,8 +21,11 @@ use super::state::PreparedConnection;
 mod connection;
 #[path = "setup/credential.rs"]
 mod credential;
+#[path = "setup/removed.rs"]
+mod removed;
 
 pub(crate) use credential::connection_pat;
+pub(super) use removed::{REMOVED_STARTUP_BUDGET, RemovedStartup, reconcile_removed_at_startup};
 
 pub(super) struct PrepareConnectionRequest<'a> {
     pub(super) state: &'a Path,
@@ -132,6 +135,12 @@ pub(super) async fn prepare_connection(
     request: PrepareConnectionRequest<'_>,
 ) -> Result<PreparedConnection, ListenFault> {
     connection::prepare_connection(request).await
+}
+
+pub(super) async fn restore_authority(
+    request: &PrepareConnectionRequest<'_>,
+) -> Result<(crate::listen::Link, crate::listen::Secret, i64), ListenFault> {
+    connection::restore_authority(request).await
 }
 
 pub(super) async fn bind_connection(

@@ -3,13 +3,22 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::Platform;
+use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
-use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
+use crate::hazards::{
+    cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
+    toolchain_path,
+};
+use crate::lock_version::check_versions;
+use crate::members::{
+    check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
+};
 use crate::mise;
-use crate::release_plz::{RootConfig, read};
+use crate::registry::check_publish_registries_in_text;
+use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
 use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -21,9 +30,11 @@ pub struct ReleaseFiles {
     pub toolchain_files: BTreeMap<String, String>,
     pub symlinks: BTreeSet<String>,
     pub cargo_manifests: Option<BTreeSet<String>>,
+    pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
-    pub root_members: Option<BTreeMap<String, BTreeSet<String>>>,
+    pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
+    pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
 }
 
@@ -33,6 +44,8 @@ pub struct RootPlan {
     pub pr_branch_prefix: String,
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
+    pub inherited: Vec<String>,
+    pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -49,13 +62,14 @@ pub struct BinaryPlan {
 pub struct ReleasePlan {
     pub roots: Vec<RootPlan>,
     pub after: Vec<String>,
+    pub pr_only_checks: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
     pub release_plz_version: String,
     pub release_plz_url: String,
     pub release_plz_sha256: String,
 }
 
-fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
+pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
     for config in configs {
         for package in &config.packages {
@@ -143,41 +157,15 @@ fn check_prefixes(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     Ok(())
 }
 
-fn check_inventory(configs: &[RootConfig], files: &ReleaseFiles) -> Result<(), ReleaseError> {
-    let Some(members) = &files.root_members else {
-        return Ok(());
-    };
-    let mut released: BTreeMap<&str, &str> = BTreeMap::new();
-    for config in configs {
-        if let Some(known) = members.get(&config.root)
-            && let Some(package) = config
-                .packages
-                .iter()
-                .find(|package| !known.contains(&package.name))
-        {
-            return Err(ReleaseError::PackageNotInRoot {
-                root: config.root.clone(),
-                package: package.name.clone(),
-            });
-        }
-        let inherited = members
-            .get(&config.root)
-            .filter(|_| !config.workspace_tags.is_empty())
-            .into_iter()
-            .flatten();
-        let listed = config.packages.iter().map(|package| &package.name);
-        for name in listed.chain(inherited) {
-            if let Some(first) = released.insert(name.as_str(), config.root.as_str())
-                && first != config.root
-            {
-                return Err(ReleaseError::DuplicatePackageName {
-                    package: name.clone(),
-                    roots: vec![first.to_owned(), config.root.clone()],
-                });
-            }
-        }
-    }
-    Ok(())
+pub(crate) fn read_all(files: &[(String, String)]) -> Result<Vec<RootConfig>, String> {
+    files
+        .iter()
+        .map(|(file, text)| read(root_of(file), text).map_err(|error| format!("{file}: {error}")))
+        .collect()
+}
+
+pub fn check_release_plz_configs(files: &[(String, String)]) -> Result<(), String> {
+    check_unique(&read_all(files)?).map_err(|error| error.to_string())
 }
 
 fn config_reaches(file: &str, root: &str) -> bool {
@@ -188,11 +176,15 @@ fn config_reaches(file: &str, root: &str) -> bool {
     reaches(base, root)
 }
 
+fn manifest_under(directory: &str, root: &str) -> bool {
+    root == "." || directory == root || directory.starts_with(&format!("{root}/"))
+}
+
 fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
 
-fn manifest_of(root: &str) -> String {
+pub(crate) fn manifest_of(root: &str) -> String {
     if root == "." {
         "Cargo.toml".to_owned()
     } else {
@@ -216,6 +208,13 @@ fn check_reality(config: &VelnorConfig, files: &ReleaseFiles) -> Result<(), Rele
             name: unknown.clone(),
         });
     }
+    if let Some(pushed) = &files.push_workflows
+        && let Some(missing) = pushed.iter().find(|name| !config.after.contains(*name))
+    {
+        return Err(ReleaseError::AfterMissingWorkflow {
+            name: missing.clone(),
+        });
+    }
     Ok(())
 }
 
@@ -226,14 +225,21 @@ fn plan_binaries(
 ) -> Result<Vec<BinaryPlan>, ReleaseError> {
     let mut binaries = Vec::new();
     for binary in &config.binaries {
-        let (root, package) = configs
+        let (root, tag_pattern) = configs
             .iter()
             .find_map(|candidate| {
-                candidate
+                let listed = candidate
                     .packages
                     .iter()
                     .find(|package| package.name == binary.package)
-                    .map(|package| (candidate.root.clone(), package))
+                    .map(|package| package.tag_pattern.clone());
+                let inherited = || {
+                    let (_, workspace) = owner(&candidate.root, files.rust_metadata.as_ref()?)?;
+                    inherited_tag(candidate, workspace, &binary.package)
+                };
+                listed
+                    .or_else(inherited)
+                    .map(|pattern| (candidate.root.clone(), pattern))
             })
             .ok_or_else(|| ReleaseError::BinaryNotReleased {
                 package: binary.package.clone(),
@@ -255,10 +261,65 @@ fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
-            tag_pattern: package.tag_pattern.clone(),
+            tag_pattern,
         });
     }
     Ok(binaries)
+}
+
+fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
+    let publishing = inherited
+        .iter()
+        .filter(|package| config.publishes(package))
+        .count();
+    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
+    let publishing = publishing.max(usize::from(none_known)) as u128;
+    config
+        .listed_nanos
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
+}
+
+#[must_use]
+pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
+    let nanos = roots.iter().fold(0u128, |total, root| {
+        total.saturating_add(root.publish_budget_nanos)
+    });
+    crate::timeout::minutes_ceil(nanos)
+}
+
+fn plan_roots(
+    configs: Vec<RootConfig>,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<Vec<RootPlan>, ReleaseError> {
+    let roots: Vec<RootPlan> = configs
+        .into_iter()
+        .map(|config| {
+            let inherited = inherited_packages(&config, metadata);
+            let budget = publish_budget(&config, &inherited);
+            RootPlan {
+                inherited,
+                publish_budget_nanos: budget,
+                root: config.root,
+                pr_branch_prefix: config.pr_branch_prefix,
+                publishes_to_crates_io: config.publishes_to_crates_io,
+                packages: config
+                    .packages
+                    .into_iter()
+                    .map(|package| (package.name, package.tag_pattern))
+                    .collect(),
+                workspace_tags: config.workspace_tags,
+            }
+        })
+        .collect();
+    if metadata.is_some() {
+        let minutes = publish_budget_minutes(&roots);
+        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+        if minutes > limit {
+            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
+        }
+    }
+    Ok(roots)
 }
 
 impl ReleasePlan {
@@ -274,45 +335,60 @@ impl ReleasePlan {
             configs.push(read(root, text)?);
         }
         check_unique(&configs)?;
-        check_inventory(&configs, files)?;
+        check_inventory(&configs, files.rust_metadata.as_ref())?;
+        if let Some(metadata) = &files.rust_metadata {
+            settle_publishing(&mut configs, metadata);
+        }
+        check_versions(&configs, &files.cargo_manifest_texts)?;
         let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
         }
-        let publishes = configs.iter().any(|config| config.publishes_to_crates_io);
-        for (file, text) in &files.cargo_configs {
-            if config.roots.iter().any(|root| config_reaches(file, root)) {
-                cargo_config(file, text, publishes)?;
+        match &files.rust_metadata {
+            Some(metadata) => check_registries(&configs, metadata, &files.cargo_manifest_texts)?,
+            None => {
+                for config in &configs {
+                    check_publish_registries_in_text(config, &files.cargo_manifest_texts)?;
+                }
             }
         }
-        for (file, text) in &files.toolchain_files {
-            let base = file.rsplit_once('/').map_or(".", |(base, _)| base);
-            let within = |root: &str| root == "." || base.starts_with(&format!("{root}/"));
-            if config
-                .roots
+        for (file, text) in &files.cargo_configs {
+            let mut reached = configs
                 .iter()
-                .any(|root| reaches(base, root) || within(root))
-            {
-                toolchain_path(file, text)?;
+                .filter(|config| config_reaches(file, &config.root))
+                .peekable();
+            if reached.peek().is_some() {
+                cargo_config(
+                    file,
+                    text,
+                    reached.any(|config| config.publishes_to_crates_io),
+                    shadowed_by_extensionless_config(file, |other| {
+                        files.cargo_configs.contains_key(other)
+                    }),
+                )?;
             }
+        }
+        for (file, text) in &files.cargo_manifest_texts {
+            let directory = file.strip_suffix("/Cargo.toml").unwrap_or(".");
+            if configs.iter().any(|config| {
+                reaches(directory, &config.root) || manifest_under(directory, &config.root)
+            }) {
+                nightly_manifest(file, text)?;
+            }
+        }
+        for (file, text) in files
+            .toolchain_files
+            .iter()
+            .filter(|(file, _)| !file.contains('/'))
+        {
+            toolchain_path(file, text)?;
         }
         let binaries = plan_binaries(&config, &configs, files)?;
+        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
         Ok(ReleasePlan {
-            roots: configs
-                .into_iter()
-                .map(|config| RootPlan {
-                    root: config.root,
-                    pr_branch_prefix: config.pr_branch_prefix,
-                    publishes_to_crates_io: config.publishes_to_crates_io,
-                    packages: config
-                        .packages
-                        .into_iter()
-                        .map(|package| (package.name, package.tag_pattern))
-                        .collect(),
-                    workspace_tags: config.workspace_tags,
-                })
-                .collect(),
+            roots,
             after: config.after,
+            pr_only_checks: config.pr_only_checks,
             binaries,
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,

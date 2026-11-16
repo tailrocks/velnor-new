@@ -4,15 +4,17 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::ReleasePlan;
+use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
+use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_steps::{
     app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
-    release_plz_arguments, release_plz_step, variables,
+    release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
-    RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, RuleViolation, check_rules,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    RuleViolation, check_rules,
 };
 use crate::steps::install_helper;
 use crate::workflow::yaml_job;
@@ -31,15 +33,20 @@ const STILL_NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 const NEWEST_OUTPUT: &str = "steps.newest.outputs.newest == 'true'";
 pub(crate) const VERIFIED_COMMIT: &str = "${{ github.event.workflow_run.head_sha }}";
 const GATE_TIMEOUT_MINUTES: u16 = 10;
-const RELEASE_TIMEOUT_MINUTES: u16 = 30;
+const RELEASE_TIMEOUT_MINUTES: u16 = TAG_JOB_BASE_MINUTES;
 
 pub fn render_release(
     plan: &ReleasePlan,
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![gate(helper), release_pr(plan, helper), tag(plan, helper)];
+    let mut jobs = vec![
+        gate(plan, helper),
+        release_pr(plan, helper),
+        tag(plan, helper),
+    ];
     jobs.extend(binary_jobs(plan, helper));
+    jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
     let workflow = [
@@ -67,10 +74,15 @@ pub fn render_release(
             ),
         ),
     ];
-    Ok(BTreeMap::from([(
-        RELEASE_WORKFLOW_PATH,
-        format!("{RELEASE_HEADER}{}", emit(&workflow)),
-    )]))
+    let file = format!("{RELEASE_HEADER}{}", emit(&workflow));
+    if file.len() > MAX_WORKFLOW_BYTES {
+        return Err(vec![RuleViolation {
+            job: String::new(),
+            step: 0,
+            rule: Rule::WorkflowTooLarge(file.len()),
+        }]);
+    }
+    Ok(BTreeMap::from([(RELEASE_WORKFLOW_PATH, file)]))
 }
 
 fn trigger(plan: &ReleasePlan, branch: &str) -> Yaml {
@@ -99,7 +111,12 @@ fn escape_filter(name: &str) -> String {
         .collect()
 }
 
-fn gate(helper: &HelperRelease) -> RenderedJob {
+fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
+    let mut command = "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned();
+    for name in &plan.pr_only_checks {
+        command.push_str(" --pr-only-check=");
+        command.push_str(&shell_word(name));
+    }
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
@@ -124,9 +141,7 @@ fn gate(helper: &HelperRelease) -> RenderedJob {
                     ("REPOSITORY", "${{ github.repository }}"),
                     ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
                 ]),
-                run: Some(
-                    "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned(),
-                ),
+                run: Some(command),
                 ..RenderedStep::default()
             },
         ],
@@ -134,7 +149,7 @@ fn gate(helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn after_the_gate(id: &str) -> RenderedJob {
+pub(crate) fn after_the_gate(id: &str) -> RenderedJob {
     RenderedJob {
         id: id.to_owned(),
         needs: vec!["gate".to_owned()],
@@ -154,7 +169,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(on_the_default_branch());
-    steps.push(refuse_commands(&plan.roots));
+    steps.push(refuse_commands(&plan.roots, helper.version(), false));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "write"),
@@ -195,7 +210,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
-    steps.push(refuse_commands(&plan.roots));
+    steps.push(refuse_commands(&plan.roots, helper.version(), true));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -232,13 +247,17 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         outputs: plan
             .binaries
             .iter()
-            .map(|binary| {
-                (
-                    binary.package.clone(),
-                    format!("${{{{ steps.record.outputs.{} }}}}", binary.package),
-                )
+            .map(|binary| binary.package.clone())
+            .chain(without_binary(plan, helper))
+            .map(|package| {
+                let output = format!("${{{{ steps.record.outputs.{package} }}}}");
+                (package, output)
             })
             .collect(),
+        timeout_minutes: u16::try_from(
+            u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
+        )
+        .unwrap_or(u16::MAX),
         steps,
         ..after_the_gate("tag")
     }

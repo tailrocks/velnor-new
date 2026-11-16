@@ -3,7 +3,7 @@
 
 use velnor_model::{CacheKey, CachePath, RepoPath};
 
-use crate::steps::PREPARE_STEP;
+use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
@@ -24,6 +24,14 @@ struct Layout<'a> {
 
 #[must_use]
 pub fn render_key(key: &CacheKey) -> RenderedKey {
+    render_key_with_mise(key, MISE_VERSION)
+}
+
+/// The tools entry is saved only on a miss, so the mise program version that
+/// `jdx/mise-action` installs must be part of the key.
+#[must_use]
+pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
+    let mise = format!("mise{mise_version}");
     let compat = format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}");
     let lock = match key {
         CacheKey::Tools { .. } => hash_files(&MISE_LOCK),
@@ -34,7 +42,7 @@ pub fn render_key(key: &CacheKey) -> RenderedKey {
     };
     let layout = match key {
         CacheKey::Tools { .. } => Layout {
-            segments: vec!["velnor", "tools", HOST, &lock],
+            segments: vec!["velnor", "tools", HOST, &mise, &lock],
             fallbacks: &[],
         },
         CacheKey::Sources { root, .. } => Layout {
@@ -84,7 +92,27 @@ fn joined(layout: &Layout<'_>) -> RenderedKey {
 }
 
 fn hash_files(path: &RepoPath) -> String {
-    format!("${{{{ hashFiles({}) }}}}", string_expression(path.as_str()))
+    format!(
+        "${{{{ hashFiles({}) }}}}",
+        string_expression(&glob_literal(path.as_str()))
+    )
+}
+
+pub(crate) fn glob_literal(text: &str) -> String {
+    let escaped: String = text
+        .chars()
+        .flat_map(|c| match c {
+            '*' => vec!['[', '*', ']'],
+            '?' => vec!['[', '?', ']'],
+            '[' => vec!['[', '[', ']'],
+            other => vec![other],
+        })
+        .collect();
+    if escaped.starts_with(['!', '#']) {
+        format!("./{escaped}")
+    } else {
+        escaped
+    }
 }
 
 fn quoted(text: &str) -> String {

@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, condition, output, plan_source};
+use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -200,7 +200,11 @@ fn publish_helper(binary: &RepoPath) -> RenderedStep {
         uses: Some(UPLOAD_ARTIFACT.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            ("path".to_owned(), Value::Text(binary.to_string())),
+            (
+                "path".to_owned(),
+                Value::Text(crate::cache::glob_literal(binary.as_str())),
+            ),
+            ("include-hidden-files".to_owned(), Value::Bool(true)),
             (
                 "if-no-files-found".to_owned(),
                 Value::Text("error".to_owned()),
@@ -226,6 +230,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         ));
     }
     RenderedStep {
+        id: (fallbacks && matches!(key, CacheKey::Tools { .. })).then(|| TOOLS_STEP.to_owned()),
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         with,

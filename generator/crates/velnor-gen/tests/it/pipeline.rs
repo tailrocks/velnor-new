@@ -50,6 +50,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
         b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
             .to_vec(),
     );
+    crate::facts::lock_pinned_tools(&mut view)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     view.tracked_paths.insert(lock.clone());
     view.files.insert(lock, HELPER_LOCK.to_vec());
@@ -62,7 +63,9 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
 }
 
 pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
-    let mut files = expected_with_notes(view).map(|(files, _)| files)?;
+    let mut locked = view.clone();
+    crate::facts::lock_pinned_tools(&mut locked)?;
+    let mut files = expected_with_notes(&locked).map(|(files, _)| files)?;
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;
@@ -82,13 +85,19 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
         .collect();
     assert_eq!(
         jobs,
-        ["  rust-plan:", "  rust-root:", "  rust-lab:", "  required:"]
+        [
+            "  rust-plan:",
+            "  rust-root:",
+            "  rust-lab:",
+            "  rust-inputs-audit:",
+            "  required:"
+        ]
     );
     assert!(text.contains(
         "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ needs.rust-plan.outputs.rust_lab_mode != ''none'' }}'\n"
     ));
     assert!(text.contains(
-        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n    if: '${{ !cancelled() }}'\n"
+        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
     ));
     Ok(())
 }

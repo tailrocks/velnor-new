@@ -45,6 +45,14 @@ pub enum Command {
     )]
     Build(BuildArgs),
     #[command(
+        about = "Check Docker, the images and velnor-host with local mode; print ok or miss per part with the fix, and exit 1 on any miss"
+    )]
+    Doctor(DoctorArgs),
+    #[command(
+        about = "Show the mode, the authority, the ledger size, each pair and the last refusal of one state directory"
+    )]
+    Status(DownArgs),
+    #[command(
         hide = true,
         about = "Register a throwaway ephemeral runner at runner.server and write its configuration as a JIT file"
     )]
@@ -69,6 +77,13 @@ pub struct SuperviseArgs {
     pub pairs: u16,
     #[arg(long, default_value_t = 0, help = "Untrusted pairs")]
     pub fork_pairs: u16,
+    #[arg(
+        long,
+        help = "Apply runner/policy.json, which `up` copied from --policy"
+    )]
+    pub policy: bool,
+    #[arg(long, help = "Repository whose workflow files the policy hashes")]
+    pub repo: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -85,6 +100,15 @@ pub struct BuildArgs {
         help = "Repository root that holds images/ and .velnor/runner.lock"
     )]
     pub root: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct DoctorArgs {
+    #[arg(
+        long,
+        help = "velnor-host to check instead of the one built in the checkout that holds this executable"
+    )]
+    pub velnor_host: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -144,10 +168,14 @@ pub struct EnvironmentArgs {
     pub runner: RunnerMode,
     #[arg(
         long,
-        default_value = "crates/velnor-runner/target/release/velnor-host",
-        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it"
+        help = "Approved job-authority policy file (the JSON that velnor-host connect --job-authority-policy reads); turns the approved-workflows check on in pair mode: a job it does not approve is refused at job start with reason policy"
     )]
-    pub velnor_host: PathBuf,
+    pub policy: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
+    )]
+    pub velnor_host: Option<PathBuf>,
 }
 
 impl EnvironmentArgs {
@@ -212,6 +240,12 @@ pub struct RunArgs {
         help = "Repository as owner/name, as github.repository reports it"
     )]
     pub repository: String,
+    #[arg(
+        long,
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "GitHub's numeric id of the repository, which the --policy file names; events carry it instead of the id derived from --repository"
+    )]
+    pub repository_id: Option<u64>,
     #[arg(
         long,
         default_value = "velnor-ci",

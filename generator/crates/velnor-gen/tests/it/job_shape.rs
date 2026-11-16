@@ -223,12 +223,13 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
             "  rust-root:",
             "  rust-lint-lab:",
             "  rust-test-lab:",
+            "  rust-inputs-audit:",
             "  required:"
         ]
     );
     assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  rust-lint-lab:\n"), "{text}");
     assert!(text.contains("    name: CI passed\n"), "{text}");
-    assert_eq!(text.matches("      - name: Install tools\n").count(), 3);
+    assert_eq!(text.matches("      - name: Install tools\n").count(), 4);
     assert!(!text.contains("install_args"), "{text}");
     let components: Vec<usize> = ["  rust-root:", "  rust-lint-lab:", "  rust-test-lab:"]
         .iter()
@@ -243,7 +244,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
                 .count()
         })
         .collect();
-    assert_eq!(components, [1, 1, 0]);
+    assert_eq!(components, [1, 1, 1]);
 
     let invalid = |path: RepoPath| {
         move |result: Result<BTreeMap<RepoPath, String>, GenerateError>| matches!(result, Err(GenerateError::Detect(DetectError::Invalid { path: p, .. })) if p == path)

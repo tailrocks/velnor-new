@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::Deserialize;
 
+use velnor_model::{RepoPath, RustMetadata};
 use velnor_release::is_tag_name;
 
 use crate::error::CiError;
@@ -117,7 +118,15 @@ pub struct CargoPathEntry {
     pub text: Option<String>,
 }
 
-pub fn check_cargo_discovery(entries: &[CargoPathEntry]) -> Result<(), CiError> {
+pub fn check_cargo_discovery(
+    entries: &[CargoPathEntry],
+    publishes_to_crates_io: bool,
+) -> Result<(), CiError> {
+    let exists = |path: &str| {
+        entries
+            .iter()
+            .any(|entry| entry.path == path && entry.text.is_some())
+    };
     for entry in entries {
         if entry.symlink {
             return Err(CiError::new(format!(
@@ -126,16 +135,70 @@ pub fn check_cargo_discovery(entries: &[CargoPathEntry]) -> Result<(), CiError> 
             )));
         }
         if let Some(text) = &entry.text {
-            velnor_release::refuse_cargo_config(&entry.path, text).map_err(CiError::new)?;
+            velnor_release::refuse_cargo_config(
+                &entry.path,
+                text,
+                publishes_to_crates_io,
+                velnor_release::shadowed_by_extensionless_config(&entry.path, exists),
+            )
+            .map_err(CiError::new)?;
         }
     }
     Ok(())
 }
 
+pub fn publishes_to_crates_io(
+    root: &str,
+    text: &str,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<bool, CiError> {
+    velnor_release::root_publishes_to_crates_io(root, text, metadata).map_err(CiError::new)
+}
+
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
     for (file, text) in files {
         velnor_release::refuse_external_commands(file, text).map_err(CiError::new)?;
-        velnor_release::check_release_plz_config(file, text).map_err(CiError::new)?;
     }
+    velnor_release::check_release_plz_configs(files).map_err(CiError::new)?;
     Ok(String::new())
+}
+
+pub fn check_tag_patterns(
+    files: &[(String, String)],
+    expected: &[(String, String)],
+) -> Result<(), CiError> {
+    if expected.is_empty() {
+        return Ok(());
+    }
+    for (file, text) in files {
+        let want: BTreeSet<&str> = expected
+            .iter()
+            .filter(|(name, _)| name == file)
+            .map(|(_, pattern)| pattern.as_str())
+            .collect();
+        let found = velnor_release::release_tag_patterns(file, text)
+            .map_err(|e| CiError::new(e.to_string()))?;
+        let found: BTreeSet<&str> = found.iter().map(String::as_str).collect();
+        if found != want {
+            return Err(CiError::new(format!(
+                "{file}: git_tag_name patterns {found:?} differ from {want:?}, the ones the tag rulesets were provisioned for"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn check_manifests(
+    files: &[(String, String)],
+    metadata: &BTreeMap<RepoPath, RustMetadata>,
+    manifests: &BTreeMap<String, String>,
+    versions: Option<&velnor_release::Versions>,
+) -> Result<(), CiError> {
+    velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)?;
+    match versions {
+        Some(versions) => {
+            velnor_release::check_release_versions(files, metadata, versions).map_err(CiError::new)
+        }
+        None => Ok(()),
+    }
 }

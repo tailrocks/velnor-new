@@ -9,20 +9,19 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use http_body_util::{BodyExt, Full};
-use hyper::Request;
 use serde_json::Value;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
+use super::probe::wait_for;
 use super::proxy::Proxy;
+use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
 use crate::side::Side;
 
-pub(super) const STANDIN_IMAGE: &str = "velnor-local/runner-server";
-const LOCAL_IMAGE: &str = "velnor-local/cache-server";
-const RUNNER_IMAGE: &str = "velnor-local/runner";
+pub(super) use crate::doctor::STANDIN_IMAGE;
+use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub(super) const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
 const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
@@ -104,24 +103,6 @@ pub(super) async fn program(
     let error = String::from_utf8_lossy(&output.stderr);
     let failed = format!("{program} {}: {}", args.join(" "), error.trim());
     Err(io::Error::other(failed))
-}
-
-pub(super) async fn request(
-    proxy: &Proxy,
-    method: &str,
-    path: &str,
-    body: &str,
-) -> Option<Vec<u8>> {
-    let body = Full::new(bytes::Bytes::from(body.to_owned()));
-    let request = Request::builder()
-        .method(method)
-        .uri(path)
-        .body(body.map_err(|never| match never {}).boxed_unsync())
-        .ok()?;
-    let response = proxy.forward(request).await.ok()?;
-    let ok = response.status().is_success();
-    let bytes = response.into_body().collect().await.ok()?.to_bytes();
-    ok.then(|| bytes.to_vec())
 }
 
 impl<E: Engine> Environment<E> {
@@ -312,6 +293,15 @@ impl<E: Engine> Environment<E> {
             .ok_or_else(|| io::Error::other(format!("{role} publishes no port: {ports}")))
     }
 
+    pub(super) async fn published_if_present(&self, role: &str) -> io::Result<Option<String>> {
+        let filter = format!("name=^/{}-{role}$", self.name);
+        let listed = self.docker("ps -aq --filter", &[&filter]).await?;
+        if listed.trim().is_empty() {
+            return Ok(None);
+        }
+        self.published(role).await.map(Some)
+    }
+
     async fn ready(&self, args: &EnvironmentArgs) -> io::Result<Addresses> {
         let token = fs::read_to_string(self.dir.join("keys/control")).await?;
         let stub = self.published("api").await?;
@@ -331,28 +321,27 @@ impl<E: Engine> Environment<E> {
             token,
         };
         let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
-        let sides = [("", &addresses.cache, args.containers(args.runners))]
+        let sides: Vec<_> = [("", &addresses.cache, args.containers(args.runners))]
             .into_iter()
             .chain(
                 addresses
                     .fork
                     .as_ref()
                     .map(|fork| ("fork-", fork, args.containers(args.fork_runners))),
-            );
+            )
+            .collect();
+        for (prefix, proxy, _) in &sides {
+            let what = format!("{prefix}runner.server");
+            wait_for(proxy, AGENTS_PATH, deadline, &what).await?;
+        }
         for (prefix, proxy, runners) in sides {
             for number in 1..=runners {
                 let path = format!(
                     "/_apis/v1/Message/isagentonline?name={}-{prefix}runner-{number}",
                     self.name
                 );
-                while request(proxy, "GET", &path, "").await.is_none() {
-                    if tokio::time::Instant::now() > deadline {
-                        return Err(io::Error::other(format!(
-                            "{prefix}runner {number} did not connect within 60 s"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
+                let what = format!("{prefix}runner {number}");
+                wait_for(proxy, &path, deadline, &what).await?;
             }
         }
         Ok(addresses)

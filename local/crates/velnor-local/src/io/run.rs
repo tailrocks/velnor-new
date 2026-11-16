@@ -52,6 +52,8 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::Run(args) => drive::run(args).await,
         Command::Conformance(args) => conformance(args).await,
         Command::Build(args) => super::pair::build(args).await,
+        Command::Doctor(args) => super::doctor::run(args).await,
+        Command::Status(args) => super::status::run(&args.dir).await,
         Command::Jit(args) => super::pair::jit(args).await,
         Command::Supervise(args) => super::supervisor::serve(args).await,
     }
@@ -100,7 +102,7 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
     let pairs = super::supervisor::pairs(&args.environment).await?;
     println!("velnor-local: {}", runner_mode(pairs.as_ref()));
     let addresses = env.up(&repo, &args.environment).await?;
-    let authority = match super::supervisor::start_with(&env.dir, pairs.as_ref()).await {
+    let authority = match super::supervisor::start_with(&env.dir, pairs.as_ref(), &repo).await {
         Ok(authority) => authority,
         Err(error) => {
             let _ = env.down().await;
@@ -115,7 +117,10 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
         "velnor-local: {} is up, API stub at {}",
         env.name, addresses.stub_url
     );
-    println!("velnor-local: {}", crate::authority::WARNING);
+    println!(
+        "velnor-local: {}",
+        crate::authority::warning(pairs.as_ref().is_some_and(|pairs| pairs.policy.is_some()))
+    );
     Ok(())
 }
 

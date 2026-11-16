@@ -14,7 +14,7 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step,
+    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
 };
 
 const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
@@ -95,11 +95,7 @@ impl RootJobs<'_> {
         if self.facts.rust_roots.len() != 1 {
             return None;
         }
-        let when = match (self.facts.config.on_main, &self.facts.config.full_run) {
-            (OnMain::Everything, _) => When::ScheduledOrPush,
-            (OnMain::Affected, FullRun::Off) => return None,
-            (OnMain::Affected, _) => When::Scheduled,
-        };
+        let when = audit_when(self.facts)?;
         Some(Step {
             when,
             gate: self.lane.steps(),
@@ -171,7 +167,7 @@ impl RootJobs<'_> {
     fn single(&self) -> Job {
         let draft = self.facts.config.skip_draft_pull_requests;
         let job_id = self.id(RUST_JOB);
-        let mut steps = setup(self.facts, self.root, true, self.lane, &job_id);
+        let mut steps = setup(self.facts, self.root, self.lane, &job_id);
         steps.extend(
             self.cargo(lint().into_iter().chain(self.tests()).collect())
                 .map(|step| Step {
@@ -205,7 +201,7 @@ impl RootJobs<'_> {
     fn split(&self, comment: Option<String>, archive: bool) -> Vec<Job> {
         let tests = self.tests();
         let lint_id = self.id(LINT_JOB);
-        let mut steps = setup(self.facts, self.root, true, self.lane, &lint_id);
+        let mut steps = setup(self.facts, self.root, self.lane, &lint_id);
         steps.extend(
             self.cargo(
                 lint()
@@ -227,7 +223,7 @@ impl RootJobs<'_> {
             jobs.extend(self.archived_tests());
         } else if !tests.is_empty() {
             let test_id = self.id(TEST_JOB);
-            let mut steps = setup(self.facts, self.root, false, self.lane, &test_id);
+            let mut steps = setup(self.facts, self.root, self.lane, &test_id);
             steps.extend(self.cargo(tests));
             steps.extend(self.audit());
             jobs.push(self.lane_job(test_id, steps));
@@ -245,7 +241,7 @@ impl RootJobs<'_> {
     fn archived_tests(&self) -> [Job; 2] {
         let build_id = self.id(TEST_JOB);
         let artifact = self.id(ARCHIVE_ID).to_string();
-        let mut build = setup(self.facts, self.root, false, self.lane, &build_id);
+        let mut build = setup(self.facts, self.root, self.lane, &build_id);
         build.extend(self.cargo(vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }]));
         build.push(self.gated(StepKind::UploadArchive {
             name: artifact.clone(),
@@ -261,6 +257,10 @@ impl RootJobs<'_> {
         );
         build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        group.extend(tools_restore(self.facts).map(|restore| Step {
+            gate: self.lane.steps(),
+            ..restore
+        }));
         group.extend([
             self.gated(StepKind::InstallTools {
                 only: nextest_tool(&self.facts.tools).map(str::to_owned),
@@ -283,6 +283,14 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
+    }
+}
+
+pub(crate) fn audit_when(facts: &RepoFacts) -> Option<When> {
+    match (facts.config.on_main, &facts.config.full_run) {
+        (OnMain::Everything, _) => Some(When::ScheduledOrPush),
+        (OnMain::Affected, FullRun::Off) => None,
+        (OnMain::Affected, _) => Some(When::Scheduled),
     }
 }
 

@@ -3,7 +3,9 @@
 
 use velnor_release::ReleaseError;
 
-use crate::fixture::{MISE_TOML, PLZ, TestResult, edit, files, locked, plz_edited, refusal};
+use crate::fixture::{
+    MISE_LOCK, MISE_TOML, PLZ, TestResult, edit, files, locked, plz_edited, refusal,
+};
 
 #[test]
 fn release_plz_missing_from_mise_is_refused() {
@@ -54,6 +56,35 @@ fn a_binary_that_release_plz_does_not_release_is_refused() -> TestResult {
     listed.release_toml = Some(binaries.to_owned());
     assert_eq!(refusal(&listed), None);
     Ok(())
+}
+
+#[test]
+fn two_selectors_that_resolve_to_different_release_plz_versions_are_refused() {
+    let mut files = files();
+    files.mise_tomls = vec![
+        "[tools]\nrelease-plz = \"0.4.3\"\n\"aqua:release-plz/release-plz\" = \"0.4.2\"\n"
+            .to_owned(),
+    ];
+    files.mise_lock = format!(
+        "{MISE_LOCK}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.2").replace("v0.4.3", "v0.4.2")
+    );
+    assert_eq!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzVersionsConflict {
+            first: "0.4.2".to_owned(),
+            second: "0.4.3".to_owned()
+        })
+    );
+    files.mise_tomls = vec![
+        "[tools]\nrelease-plz = \"0.4.3\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n"
+            .to_owned(),
+    ];
+    files.mise_lock = format!(
+        "{MISE_LOCK}\n{}",
+        locked("aqua:release-plz/release-plz", "0.4.3")
+    );
+    assert_eq!(refusal(&files), None);
 }
 
 #[test]
@@ -120,6 +151,30 @@ fn the_locked_version_must_equal_the_configured_one() {
         refusal(&blank),
         Some(ReleaseError::ReleasePlzVersionNotExact { .. })
     ));
+}
+
+#[test]
+fn a_release_plz_that_cannot_fetch_without_persisted_credentials_is_refused() {
+    for (version, refused) in [
+        ("0.3.167", true),
+        ("0.2.99", true),
+        ("0.3.168", false),
+        ("0.3.1000", false),
+        ("0.4.0", false),
+        ("1.0.0", false),
+    ] {
+        let mut files = files();
+        files.mise_tomls = vec![format!("[tools]\nrelease-plz = \"{version}\"\n")];
+        files.mise_lock = locked("release-plz", version);
+        assert_eq!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::ReleasePlzVersionTooOld { minimum, .. }) if minimum == "0.3.168"
+            ),
+            refused,
+            "{version}"
+        );
+    }
 }
 
 #[test]
@@ -241,4 +296,21 @@ fn two_binaries_entries_for_one_package_are_refused() {
         "{error:?}"
     );
     assert!(error.is_some_and(|error| error.to_string().contains("app")));
+}
+
+#[test]
+fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() {
+    let pushed = |names: &[&str]| Some(names.iter().map(|name| (*name).to_owned()).collect());
+    let mut files = files();
+    files.release_toml = Some("after = [\"Rust CI\"]\n".to_owned());
+    files.push_workflows = pushed(&["Rust CI", "Lint"]);
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::AfterMissingWorkflow { name }) if name == "Lint"
+    ));
+    files.push_workflows = pushed(&["Rust CI"]);
+    assert_eq!(refusal(&files), None);
+    files.release_toml = Some("after = [\"Rust CI\", \"Lint\"]\n".to_owned());
+    files.push_workflows = pushed(&["Rust CI", "Lint"]);
+    assert_eq!(refusal(&files), None);
 }

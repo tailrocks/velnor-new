@@ -8,7 +8,9 @@ use serde_json::{Value, json};
 use tokio::fs;
 
 use super::Driver;
-use crate::io::env::{STANDIN_IMAGE, request, words};
+use super::refusal::CANCEL_GRACE;
+use crate::io::env::{STANDIN_IMAGE, words};
+use crate::io::probe::request;
 use crate::side::Side;
 use crate::standin;
 
@@ -64,7 +66,19 @@ impl Driver<'_> {
         };
         client.extend(call.args());
         let log = self.env.dir.join(format!("logs/{name}.log"));
-        let succeeded = self.env.client(payload, &client, &log).await?;
+        let finished = self.env.client(payload, &client, &log);
+        tokio::pin!(finished);
+        let succeeded = tokio::select! {
+            done = &mut finished => done?,
+            () = self.refused_after(side, event, &known) => {
+                self.cancel_unfinished(side, &known).await;
+                tokio::time::timeout(CANCEL_GRACE, finished)
+                    .await
+                    .ok()
+                    .and_then(Result::ok)
+                    .unwrap_or(false)
+            }
+        };
         let mut created = false;
         for run in self.get::<Vec<standin::Run>>(side, runs).await? {
             if known.iter().any(|old| old.id == run.id) {

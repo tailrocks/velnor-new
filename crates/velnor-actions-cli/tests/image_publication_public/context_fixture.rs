@@ -237,7 +237,7 @@ fn setup(root: &Path) -> Result<PathBuf, Box<dyn Error>> {
     let bin = root.join("bin");
     fs::create_dir(&bin)?;
     let fixture =
-        std::env::var_os("VELNOR_IMAGE_PUBLICATION_FIXTURE").ok_or("fixture executable missing")?;
+        std::env::var_os("VELNOR_IMAGE_PUBLICATION_FIXTURE").ok_or("VELNOR_IMAGE_PUBLICATION_FIXTURE is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests")?;
     fs::copy(fixture, bin.join("mise"))?;
     fs::set_permissions(bin.join("mise"), fs::Permissions::from_mode(0o755))?;
     let assets = root.join("assets");

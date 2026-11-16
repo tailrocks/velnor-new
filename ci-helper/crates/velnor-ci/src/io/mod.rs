@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod build_inputs;
+mod configurations;
 mod git;
 mod http;
 mod inputs;
+mod manifests;
 mod plan;
 mod release;
 mod run;
@@ -106,6 +109,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Timings(args) => timings::run_timings(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
+        Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Restored => Ok(String::new()),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
@@ -143,6 +147,7 @@ fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
         &http::HttpGitHub::new(api_url(), token, http::DEFAULT_TIMEOUT),
         &repo,
         &args.sha,
+        &args.pr_only_check,
     )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)

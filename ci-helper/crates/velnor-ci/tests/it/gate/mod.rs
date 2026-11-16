@@ -10,6 +10,7 @@ use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, ru
 use crate::support::{FakeGitHub, repo};
 
 mod inputs;
+mod pr_only;
 mod status;
 
 pub(crate) const GATE: &str = include_str!("../data/gate.json");
@@ -79,11 +80,15 @@ impl Recorded {
     }
 
     fn gate(&self, sha: &str) -> Result<Verdict, String> {
+        self.gate_with(sha, &[])
+    }
+
+    fn gate_with(&self, sha: &str, pr_only: &[String]) -> Result<Verdict, String> {
         let mut fake = FakeGitHub::default();
         for (path, body) in &self.0 {
             fake.respond(path.clone(), &body.to_string());
         }
-        release_gate(&fake, &repo(), sha).map_err(|e| e.to_string())
+        release_gate(&fake, &repo(), sha, pr_only).map_err(|e| e.to_string())
     }
 }
 

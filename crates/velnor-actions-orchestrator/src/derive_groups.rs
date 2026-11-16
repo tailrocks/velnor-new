@@ -37,20 +37,57 @@ pub(crate) fn declared_union(
     workspaces: &[PlannedWorkspace],
     index: &FileIndex,
     policy: WorkflowPolicy,
+    rust_config: &RustConfiguration,
 ) -> BTreeSet<String> {
     let mut union = BTreeSet::new();
     for workspace in workspaces {
         for package in &workspace.record.packages {
-            if package.in_workspace
-                && !package.external
-                && index.contains(&package.manifest)
-                && !repository_maintenance_member(policy, &workspace.record.workspace_root, package)
+            if eligible(policy, index, &workspace.record.workspace_root, package)
+                && rust_config.applies_to(&package.name)
             {
                 union.extend(package.features.iter().cloned());
             }
         }
     }
     union
+}
+
+fn eligible(
+    policy: WorkflowPolicy,
+    index: &FileIndex,
+    workspace_root: &str,
+    package: &velnor_actions_rust::PackageRecord,
+) -> bool {
+    package.in_workspace
+        && !package.external
+        && index.contains(&package.manifest)
+        && !repository_maintenance_member(policy, workspace_root, package)
+}
+
+pub(crate) fn check_scoped_packages(
+    configurations: &[RustConfiguration],
+    workspaces: &[PlannedWorkspace],
+) -> Result<(), OrchestratorError> {
+    let known: BTreeSet<&str> = workspaces
+        .iter()
+        .flat_map(|workspace| &workspace.record.packages)
+        .filter(|package| package.in_workspace && !package.external)
+        .map(|package| package.name.as_str())
+        .collect();
+    for configuration in configurations {
+        if let Some(unknown) = configuration
+            .packages
+            .iter()
+            .find(|package| !known.contains(package.as_str()))
+        {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.configurations.packages",
+                format!("unknown_package:{}:{unknown}", configuration.name),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn derive_for_config(
@@ -74,17 +111,28 @@ pub(crate) fn derive_for_config(
         .rust
         .as_ref()
         .is_some_and(|rust| rust.allow_empty_test_suite);
+    let policy = config.workflow.policy;
+    if !rust_config.packages.is_empty()
+        && !record.packages.iter().any(|package| {
+            eligible(policy, index, &record.workspace_root, package)
+                && rust_config.applies_to(&package.name)
+        })
+    {
+        if !rust_config.all_features {
+            check_declared(
+                &rust_config.features,
+                union,
+                &rust_config.name,
+                &rust_config.packages.join(","),
+            )?;
+        }
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
-        if !package.in_workspace
-            || package.external
-            || !index.contains(&package.manifest)
-            || repository_maintenance_member(
-                config.workflow.policy,
-                &record.workspace_root,
-                package,
-            )
+        if !eligible(policy, index, &record.workspace_root, package)
+            || !rust_config.applies_to(&package.name)
         {
             continue;
         }
@@ -138,6 +186,27 @@ fn repository_maintenance_member(
         && package.v1_task_owner == VelnorV1TaskOwner::RepositoryMaintenance
 }
 
+fn check_declared(
+    requested: &[String],
+    union: &BTreeSet<String>,
+    configuration: &str,
+    subject: &str,
+) -> Result<(), OrchestratorError> {
+    if requested.len() == 1 && requested[0] == "default" {
+        return Ok(());
+    }
+    for feature in requested {
+        if !union.contains(feature) {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.configurations.features",
+                format!("unknown_feature:{configuration}:{subject}:{feature}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn resolve_features(
     package: &velnor_actions_rust::PackageRecord,
     requested: &[String],
@@ -150,15 +219,7 @@ fn resolve_features(
     if requested.is_empty() {
         return Ok((Vec::new(), None));
     }
-    for feature in requested {
-        if !union.contains(feature) {
-            return Err(OrchestratorError::config(
-                CONFIG_REL,
-                "stacks.rust.configurations.features",
-                format!("unknown_feature:{configuration}:{}:{feature}", package.name),
-            ));
-        }
-    }
+    check_declared(requested, union, configuration, &package.name)?;
     let declared: BTreeSet<&str> = package.features.iter().map(String::as_str).collect();
     let mut applied: Vec<String> = requested
         .iter()

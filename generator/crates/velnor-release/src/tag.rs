@@ -17,31 +17,57 @@ impl TagPattern {
     }
 
     #[must_use]
-    pub(crate) fn may_collide(&self, other: &TagPattern) -> bool {
-        let (first, second) = (self.as_str(), other.as_str());
-        let prefix = |text: &str| text.split(VERSION).next().unwrap_or_default().to_owned();
-        let fixed = |text: &str| !text.contains(VERSION);
-        let (short, long) = if prefix(first).len() <= prefix(second).len() {
-            (first, second)
-        } else {
-            (second, first)
-        };
-        let (short_prefix, long_prefix) = (prefix(short), prefix(long));
-        let Some(rest) = long_prefix.strip_prefix(short_prefix.as_str()) else {
-            return false;
-        };
-        if fixed(short) {
-            return fixed(long) && short == long;
-        }
-        let version_like = |text: &str| {
-            text.is_empty()
-                || (text.starts_with(|c: char| c.is_ascii_digit())
-                    && text
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+')))
-        };
-        version_like(rest)
+    pub(crate) fn instantiate(&self, package: &str) -> TagPattern {
+        TagPattern(self.0.replace(PACKAGE_WILDCARD, package))
     }
+
+    #[must_use]
+    pub(crate) fn ends_with_version(&self) -> bool {
+        self.0.ends_with(VERSION)
+    }
+
+    #[must_use]
+    pub(crate) fn may_collide(&self, other: &TagPattern) -> bool {
+        match (self.0.split_once(VERSION), other.0.split_once(VERSION)) {
+            (None, None) => self.0 == other.0,
+            (Some(variable), None) => fixed_renders(&other.0, variable),
+            (None, Some(variable)) => fixed_renders(&self.0, variable),
+            (Some(first), Some(second)) => variable_overlap(first, second),
+        }
+    }
+}
+
+fn version_chars(text: &str) -> bool {
+    text.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+'))
+}
+
+fn version_like(text: &str) -> bool {
+    text.starts_with(|c: char| c.is_ascii_digit()) && version_chars(text)
+}
+
+fn fixed_renders(fixed: &str, (prefix, suffix): (&str, &str)) -> bool {
+    fixed
+        .strip_prefix(prefix)
+        .and_then(|rest| rest.strip_suffix(suffix))
+        .is_some_and(version_like)
+}
+
+fn variable_overlap(first: (&str, &str), second: (&str, &str)) -> bool {
+    let ((short, short_suffix), (long, long_suffix)) = if first.0.len() <= second.0.len() {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    let Some(prefix_gap) = long.strip_prefix(short) else {
+        return false;
+    };
+    let suffix_gap = long_suffix
+        .strip_suffix(short_suffix)
+        .or_else(|| short_suffix.strip_suffix(long_suffix));
+    suffix_gap.is_some_and(|gap| {
+        (prefix_gap.is_empty() || version_like(prefix_gap)) && version_chars(gap)
+    })
 }
 
 pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
@@ -60,6 +86,9 @@ pub(crate) fn render(template: &str, package: &str) -> Option<TagPattern> {
         rest = &inner[close + 2..];
     }
     out.push_str(rest);
+    if out.matches(VERSION).count() > 1 {
+        return None;
+    }
     let example = out
         .replace(VERSION, "0.0.0-0+0")
         .replace(PACKAGE_WILDCARD, "package");
@@ -95,5 +124,37 @@ pub(crate) fn checked(
             root: root.to_owned(),
             package: named.map(str::to_owned),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TagPattern;
+
+    #[test]
+    fn fixed_tags_collide_only_with_matching_version_like_values() {
+        for (first, second, collision) in [
+            ("vabc", "v{{ version }}", false),
+            ("v1.2.3", "v{{ version }}", true),
+            ("v1.2.3_z", "v{{ version }}", false),
+            ("v1.2.3_z", "v{{ version }}_z", true),
+            ("v1.2.3", "x{{ version }}", false),
+            ("v1.2.3", "v1.2.3", true),
+            ("v1.2.3", "v2.0.0", false),
+            ("v", "v{{ version }}", false),
+        ] {
+            let first = TagPattern(first.to_owned());
+            let second = TagPattern(second.to_owned());
+            assert_eq!(
+                first.may_collide(&second),
+                collision,
+                "{first:?} / {second:?}"
+            );
+            assert_eq!(
+                second.may_collide(&first),
+                collision,
+                "{second:?} / {first:?}"
+            );
+        }
     }
 }

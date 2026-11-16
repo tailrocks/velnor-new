@@ -25,7 +25,7 @@ impl Harness {
     pub(super) fn new_with_clock() -> Result<Self, Box<dyn Error>> {
         let path = PathBuf::from(
             env::var_os("VELNOR_QUALIFICATION_CLOCK_DRIVER")
-                .ok_or("qualification clock driver is missing")?,
+                .ok_or("VELNOR_QUALIFICATION_CLOCK_DRIVER is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests")?,
         );
         let metadata = fs::symlink_metadata(&path)?;
         if !path.is_absolute()
@@ -136,7 +136,7 @@ impl Harness {
 
 pub(super) fn diagnostics_candidate() -> Result<PathBuf, Box<dyn Error>> {
     let path = env::var_os("VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE")
-        .ok_or("qualification diagnostics fixture locator is missing")?;
+        .ok_or("VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests")?;
     let path = PathBuf::from(path);
     let metadata = fs::symlink_metadata(&path)?;
     if !path.is_absolute()
