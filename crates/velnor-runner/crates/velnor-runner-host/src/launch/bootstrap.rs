@@ -36,8 +36,8 @@ pub(crate) use publication::JobFactsPublication;
 #[cfg(test)]
 pub(crate) use unbound_retirement::tests as unbound_pair_fixtures;
 pub(crate) use unbound_retirement::{
-    InitializerPlan, plan_initializer_removal,
-    abandon_and_retire_unbound_pair_before, retire_unbound_pair, retire_uncertain_unbound_pairs,
+    InitializerPlan, abandon_and_retire_unbound_pair_before, plan_initializer_removal,
+    retire_unbound_pair, retire_uncertain_unbound_pairs,
 };
 pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
 

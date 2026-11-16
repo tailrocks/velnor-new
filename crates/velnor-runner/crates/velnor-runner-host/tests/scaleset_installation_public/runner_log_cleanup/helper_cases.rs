@@ -134,7 +134,11 @@ fn assert_fails_closed(case: &str, helpers: usize, volumes_left: usize) -> TestR
         stderr.contains("volume helper ownership"),
         "{case}: {stderr}"
     );
-    assert_eq!(observed.helpers_left + observed.unmounted_left, helpers, "{case}: {stderr}");
+    assert_eq!(
+        observed.helpers_left + observed.unmounted_left,
+        helpers,
+        "{case}: {stderr}"
+    );
     assert_eq!(observed.volumes_left, volumes_left, "{case}: {stderr}");
     assert_eq!(observed.stops, 0, "{case}");
     Ok(())

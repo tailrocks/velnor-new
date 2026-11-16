@@ -4,7 +4,10 @@
 use super::super::super::TestResult;
 use super::{DIND_IMAGE_ID, RUNNER_IMAGE_ID};
 
-pub(super) async fn seed_worker_images(conn: &turso::Connection, root_digest: &str) -> TestResult<()> {
+pub(super) async fn seed_worker_images(
+    conn: &turso::Connection,
+    root_digest: &str,
+) -> TestResult<()> {
     for (role, sha_ch, arch_ch, idx_ch, man_ch, cfg_id, iidx_ch, lsha_ch, lidx_ch) in [
         (
             "velnor-runner",

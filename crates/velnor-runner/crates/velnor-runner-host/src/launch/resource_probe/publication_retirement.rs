@@ -45,7 +45,10 @@ pub(crate) async fn owned_publication(
     if !is_publication_row(&row) {
         return Ok(None);
     }
-    let Some(record) = journal.execution_publication_recovery(&row.operation_id).await? else {
+    let Some(record) = journal
+        .execution_publication_recovery(&row.operation_id)
+        .await?
+    else {
         return Ok(None);
     };
     if record.operation_id != row.operation_id

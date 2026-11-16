@@ -25,10 +25,10 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use self::helper_scenario::read_diagnostics_files;
 pub(crate) use self::helper_scenario::{
     CancelledObservation, HelperSpec, Kind, run_cancelled_before_start_scenario,
 };
-use self::helper_scenario::read_diagnostics_files;
 use self::helper_stub::{VolumeState, write_volume_response};
 use serde_json::{Value, json};
 use velnor_runner_host::{
@@ -196,9 +196,7 @@ fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String
     let api_path = match stripped.split_once('/') {
         Some((ver, rest))
             if ver.starts_with('v')
-                && ver[1..]
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || b == b'.') =>
+                && ver[1..].bytes().all(|b| b.is_ascii_digit() || b == b'.') =>
         {
             rest.to_owned()
         }

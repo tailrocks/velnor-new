@@ -12,8 +12,8 @@ use velnor_runner_host::{CompletionWorker, connect_unix};
 use super::super::super::TestResult;
 use super::super::super::runtime_and_policy::sample_connection;
 use super::helper_seed;
-pub(crate) use super::helper_stub::{HelperSpec, Kind};
 use super::helper_stub::VolumeState;
+pub(crate) use super::helper_stub::{HelperSpec, Kind};
 use super::{WorkflowEvent, seed, spawn_docker_stub};
 
 pub(crate) struct CancelledObservation {
@@ -29,7 +29,12 @@ impl CancelledObservation {
     pub(crate) fn encode(&self) -> String {
         format!(
             "OBS {} {} {} {} {} {}",
-            self.helpers_left, self.unmounted_left, self.stops, self.volumes_left, self.phase, self.lease
+            self.helpers_left,
+            self.unmounted_left,
+            self.stops,
+            self.volumes_left,
+            self.phase,
+            self.lease
         )
     }
 

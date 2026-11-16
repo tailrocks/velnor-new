@@ -77,10 +77,9 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
     let metadata = helper_seed::metadata_volume();
     let (id, name, mut body, mounted) = match spec.kind {
         Kind::Publication => {
-            let engine = spec.engine.map_or_else(
-                || helper_seed::publication_engine_label(),
-                str::to_owned,
-            );
+            let engine = spec
+                .engine
+                .map_or_else(|| helper_seed::publication_engine_label(), str::to_owned);
             (
                 PUBLICATION_ID.to_owned(),
                 helper_seed::publication_name(),
@@ -93,7 +92,12 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
             let mut body = helper_seed::initializer_inspect(&mounted);
             body["Config"]["Labels"]["velnor.operation"] =
                 json!(spec.operation.unwrap_or(INITIALIZER_KEY));
-            (INITIALIZER_ID.to_owned(), INITIALIZER_NAME.to_owned(), body, mounted)
+            (
+                INITIALIZER_ID.to_owned(),
+                INITIALIZER_NAME.to_owned(),
+                body,
+                mounted,
+            )
         }
         Kind::Foreign(role) => {
             let id = format!("{index}{}", "3".repeat(63));
@@ -164,7 +168,15 @@ impl VolumeState {
     }
 
     pub(super) fn counts(&self) -> (usize, usize, usize, usize) {
-        let held = self.present().filter(|helper| helper.mount_volumes.iter().any(|name| name != "unrelated-volume")).count();
+        let held = self
+            .present()
+            .filter(|helper| {
+                helper
+                    .mount_volumes
+                    .iter()
+                    .any(|name| name != "unrelated-volume")
+            })
+            .count();
         let other = self.present().count() - held;
         (held, other, self.stops.len(), self.volumes.len())
     }
@@ -193,19 +205,28 @@ pub(super) fn write_volume_response(
             let query = state.query.clone();
             let listed: Vec<Value> = state
                 .present()
-                .filter(|helper| helper.list_volumes.iter().any(|name| query.contains(name.as_str())))
+                .filter(|helper| {
+                    helper
+                        .list_volumes
+                        .iter()
+                        .any(|name| query.contains(name.as_str()))
+                })
                 .map(|helper| json!({"Id": helper.id}))
                 .collect();
             write_json(stream, 200, "OK", &Value::Array(listed))
         }
-        ("GET", ["containers", key, "json"]) if state.present().any(|h| h.id == *key || h.name == *key) => {
+        ("GET", ["containers", key, "json"])
+            if state.present().any(|h| h.id == *key || h.name == *key) =>
+        {
             let body = state
                 .present()
                 .find(|helper| helper.id == *key || helper.name == *key)
                 .map(|helper| helper.body.clone());
             write_json(stream, 200, "OK", &body.unwrap_or(missing))
         }
-        ("POST", ["containers", key, "stop"]) if state.present().any(|h| h.id == *key || h.name == *key) => {
+        ("POST", ["containers", key, "stop"])
+            if state.present().any(|h| h.id == *key || h.name == *key) =>
+        {
             state.stops.push((*key).to_owned());
             if let Some(helper) = state.find_mut(key) {
                 helper.running = false;
@@ -218,7 +239,9 @@ pub(super) fn write_volume_response(
             state.dind_removed = true;
             no_content(stream)
         }
-        ("DELETE", ["containers", key]) if state.present().any(|h| h.id == *key || h.name == *key) => {
+        ("DELETE", ["containers", key])
+            if state.present().any(|h| h.id == *key || h.name == *key) =>
+        {
             match state.find_mut(key) {
                 Some(helper) if helper.running => write_json(
                     stream,

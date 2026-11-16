@@ -129,7 +129,8 @@ fn recovery_json(instance_id: &str, root_digest: &str) -> (String, String, Strin
     let config = json!({"Image": RUNTIME_IMAGE});
     let options = json!({"name": name, "platform": "linux/amd64"});
     let projection_digest = sha256(&canonical(&json!([options, config])));
-    let expected = json!({"Image": RUNTIME_IMAGE, "Labels": labels(instance_id), "NetworkDisabled": true});
+    let expected =
+        json!({"Image": RUNTIME_IMAGE, "Labels": labels(instance_id), "NetworkDisabled": true});
     let directory = json!({
         "target": "/opt/velnor/source-proof/control", "inode": 1, "owner_uid": 0, "owner_gid": 0,
         "mode": 0o555, "mount_id": 5, "statx_mount_id": 5, "mount_root": "/ctl",
@@ -169,7 +170,10 @@ pub(super) async fn seed_helper_rows(
         .await?;
     let conn = db.connect()?;
     let mut rows = conn
-        .query("SELECT instance_id FROM journal_meta WHERE singleton = 1", ())
+        .query(
+            "SELECT instance_id FROM journal_meta WHERE singleton = 1",
+            (),
+        )
         .await?;
     let instance_id: String = rows.next().await?.ok_or("instance id")?.get(0)?;
     drop(rows);

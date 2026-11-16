@@ -17,8 +17,8 @@ use crate::{
 };
 
 use super::super::super::super::{Context, EffectBudget, Failure, MAX_HELPERS_PER_VOLUME};
-use crate::launch::bootstrap::{InitializerPlan, plan_initializer_removal};
 use super::{inspect_container, remove_container_and_check, request_effect, within};
+use crate::launch::bootstrap::{InitializerPlan, plan_initializer_removal};
 
 pub(super) fn docker_error(phase: &str, object: &str, error: &DockerError) -> HostError {
     eprintln!("completion cleanup docker error phase={phase} object={object} error={error}");
@@ -254,7 +254,11 @@ fn is_journaled_publication(
         .config
         .as_ref()
         .and_then(|config| config.labels.as_ref());
-    let label = |key: &str| labels.and_then(|labels| labels.get(key)).map(String::as_str);
+    let label = |key: &str| {
+        labels
+            .and_then(|labels| labels.get(key))
+            .map(String::as_str)
+    };
     container.name.as_deref() == Some(format!("/{}", owned.operation_name()).as_str())
         && owned
             .container_id()
