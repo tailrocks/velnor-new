@@ -3,6 +3,7 @@
 
 mod audit;
 mod build_inputs;
+mod configurations;
 mod crates_mirror;
 mod git;
 mod http;
@@ -113,6 +114,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
+        Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Restored => Ok(String::new()),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }

@@ -122,6 +122,16 @@ fn exact_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
+const MINIMUM_VERSION: [u64; 3] = [0, 3, 168];
+
+fn at_least_minimum(version: &str) -> bool {
+    let parts: Vec<u64> = version
+        .split('.')
+        .map(|part| part.parse().unwrap_or(0))
+        .collect();
+    parts.as_slice() >= MINIMUM_VERSION.as_slice()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReleasePlzDownload {
     pub(crate) version: String,
@@ -195,6 +205,12 @@ pub(crate) fn check(
         if !exact_version(wanted) {
             return Err(ReleaseError::ReleasePlzVersionNotExact {
                 version: wanted.to_owned(),
+            });
+        }
+        if !at_least_minimum(wanted) {
+            return Err(ReleaseError::ReleasePlzVersionTooOld {
+                version: wanted.to_owned(),
+                minimum: "0.3.168".to_owned(),
             });
         }
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {

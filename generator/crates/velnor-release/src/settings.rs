@@ -16,6 +16,7 @@ pub(crate) struct Settings {
     pub(crate) release: Option<bool>,
     pub(crate) git_tag_enable: Option<bool>,
     pub(crate) git_release_enable: Option<bool>,
+    pub(crate) publish_timeout: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -51,6 +52,21 @@ impl Settings {
         self.publish != Some(false) && self.git_only != Some(true)
     }
 
+    pub(crate) fn publish_nanos(&self) -> u128 {
+        self.publish_timeout
+            .as_deref()
+            .and_then(crate::timeout::nanos)
+            .unwrap_or_else(crate::timeout::default_publish_nanos)
+    }
+
+    pub(crate) fn registry_check_and_publish_nanos(&self) -> u128 {
+        if self.publishes_to_crates_io() {
+            self.publish_nanos().saturating_mul(2)
+        } else {
+            0
+        }
+    }
+
     pub(crate) fn over(&self, base: &Settings) -> Settings {
         Settings {
             git_tag_name: self
@@ -70,6 +86,10 @@ impl Settings {
             release: self.release.or(base.release),
             git_tag_enable: self.git_tag_enable.or(base.git_tag_enable),
             git_release_enable: self.git_release_enable.or(base.git_release_enable),
+            publish_timeout: self
+                .publish_timeout
+                .clone()
+                .or_else(|| base.publish_timeout.clone()),
         }
     }
 }

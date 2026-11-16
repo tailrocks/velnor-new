@@ -1477,6 +1477,19 @@ if [ "$source_digest" != "$copy_digest" ]; then
   echo "FAIL: spaced CLI copy differs from supplied binary" >&2
   exit 1
 fi
+MANIFEST_ORACLE="$WORK/manifest oracle"
+cp -RP "$GOLDEN_DIR" "$MANIFEST_ORACLE" || exit 2
+printf 'stale\n' >"$MANIFEST_ORACLE/MANIFEST.sha256"
+status=0
+TMPDIR="$WORK/tmp workspace" VELNOR_GOLDEN_DIR="$MANIFEST_ORACLE" run_collector check "$CLI_BIN" \
+  >"$WORK/stale-manifest.log" 2>&1 || status=$?
+if [ "$status" -ne 1 ] \
+  || ! grep -Fq 'golden manifest does not match the complete cases inventory' "$WORK/stale-manifest.log"; then
+  cat "$WORK/stale-manifest.log" >&2
+  echo "FAIL: stale manifest check did not refuse the oracle (exit $status)" >&2
+  exit 1
+fi
+cp "$GOLDEN_DIR/MANIFEST.sha256" "$MANIFEST_ORACLE/MANIFEST.sha256" || exit 2
 WORKSPACES_BEFORE="$(find "$WORK/tmp workspace" -mindepth 1 -maxdepth 1 -type d \
   -name 'velnor-goldens-work.*' -print | LC_ALL=C sort)"
 : >"$GUARD_RECEIPT"
@@ -1495,6 +1508,7 @@ if (
   unset CARGO_TARGET_DIR CARGO_BUILD_TARGET || exit 2
   TMPDIR="$WORK/tmp workspace" MBX_GC_AUTO=0 PATH="$STUB_BIN:$MISE_ADAPTER_BIN:$ORIGINAL_PATH" \
     VELNOR_GOLDEN_KEEP_WORK=0 \
+    VELNOR_GOLDEN_DIR="$MANIFEST_ORACLE" \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_FILE_UTILITY_MARKER="$FILE_UTILITY_MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
@@ -1511,6 +1525,10 @@ else
   status=$?
   cat "$WORK/spaced-path.log" >&2
   echo "FAIL: spaced relative CLI check exited $status" >&2
+  exit 1
+fi
+if ! grep -Fq 'ALL GOLDENS MATCH' "$WORK/spaced-path.log"; then
+  echo 'FAIL: restored manifest check did not match the oracle' >&2
   exit 1
 fi
 if [ -e "$MARKER" ]; then

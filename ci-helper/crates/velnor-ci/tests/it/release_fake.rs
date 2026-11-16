@@ -350,6 +350,7 @@ pub(crate) fn request(files: &[(&str, &str)]) -> Request {
         tag: name(TAG),
         app: name(APP),
         names: FILES.iter().map(|(file, _)| name(file)).collect(),
+        assetless: false,
         files: files
             .iter()
             .map(|(file, text)| ((*file).to_owned(), text.as_bytes().to_vec()))

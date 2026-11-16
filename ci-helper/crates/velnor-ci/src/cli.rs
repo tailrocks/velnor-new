@@ -56,6 +56,10 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+    )]
+    CheckConfigurations(CheckConfigurationsArgs),
+    #[command(
         about = "Run after every cache is restored: every action that must follow the restores"
     )]
     Restored,
@@ -67,6 +71,21 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct CheckConfigurationsArgs {
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Cargo manifest to resolve and check"
+    )]
+    pub manifest_path: PathBuf,
+    #[arg(
+        long,
+        help = "JSON array of named feature configurations; without a file, check the default configuration"
+    )]
+    pub configurations: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -162,7 +181,7 @@ pub enum ReleaseCommand {
     )]
     Record(RecordArgs),
     #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
     #[command(
@@ -244,7 +263,13 @@ pub struct PublishArgs {
     )]
     pub dir: PathBuf,
     #[arg(
-        required = true,
+        long,
+        conflicts_with = "files",
+        help = "Publish a release that must hold no asset at all; no file or SHA256SUMS is read"
+    )]
+    pub no_files: bool,
+    #[arg(
+        required_unless_present = "no_files",
         value_parser = file_name,
         help = "Exact names of the files to publish besides SHA256SUMS"
     )]

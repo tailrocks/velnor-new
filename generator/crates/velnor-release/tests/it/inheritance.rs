@@ -5,7 +5,7 @@ use velnor_release::{ReleaseError, ReleasePlan};
 
 use crate::fixture::{PLZ, TestResult, edit, files, plz_refusal_of, refusal};
 
-const WORKSPACE_ONLY: &str = "[workspace]\ngit_tag_name = \"v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
+const WORKSPACE_ONLY: &str = "[workspace]\ngit_tag_name = \"v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\n";
 
 #[test]
 fn a_package_that_turns_release_always_back_on_is_refused() -> TestResult {
