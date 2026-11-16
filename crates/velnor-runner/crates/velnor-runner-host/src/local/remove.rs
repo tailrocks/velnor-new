@@ -22,7 +22,7 @@ pub(super) async fn remove_labelled(
     docker: &Docker,
     labels: &[String],
 ) -> Result<Removed, HostError> {
-    if labels.is_empty() || labels.iter().any(|label| label.is_empty()) {
+    if labels.is_empty() || labels.iter().any(String::is_empty) {
         return Err(HostError::Ownership);
     }
     let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
