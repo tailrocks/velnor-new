@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::HostError;
+use crate::journal::connection::ConnectionJournal;
+use crate::journal::connection::storage::read_transaction;
 
 use super::{UnboundContainer, UnboundInitializer, UnboundVolume, unbound_pair};
 
@@ -117,4 +119,37 @@ pub(super) async fn initializer(
         id: row.get(1).map_err(|_| HostError::Journal)?,
         operation_key: row.get(2).map_err(|_| HostError::Journal)?,
     }))
+}
+
+impl ConnectionJournal {
+    pub(crate) async fn unretired_storage_initializer(
+        &self,
+        reservation_id: i64,
+        engine_id: &str,
+        docker_root_digest: &str,
+    ) -> Result<Option<UnboundInitializer>, HostError> {
+        if reservation_id <= 0 {
+            return Err(HostError::Identity);
+        }
+        let connection_id = self.connection_id().as_str().to_owned();
+        read_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            let mut rows = connection
+                .query(
+                    "SELECT helper_name, COALESCE(helper_id, abort_helper_id), operation_key FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1 AND connection_id = ?2 AND engine_id = ?3 AND docker_root_digest = ?4 AND remove_state != 'removed' AND abort_state != 'absent'",
+                    (reservation_id, connection_id.as_str(), engine_id, docker_root_digest),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+                return Ok(None);
+            };
+            Ok(Some(UnboundInitializer {
+                name: row.get(0).map_err(|_| HostError::Journal)?,
+                id: row.get(1).map_err(|_| HostError::Journal)?,
+                operation_key: row.get(2).map_err(|_| HostError::Journal)?,
+            }))
+        })
+        .await
+    }
 }

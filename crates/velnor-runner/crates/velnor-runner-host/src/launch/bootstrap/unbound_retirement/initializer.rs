@@ -22,26 +22,18 @@ impl Effects<'_> {
             Some(id) => self.authorized(inspect_container(self.docker, id)).await?,
             None => None,
         };
-        let Some(inspected) = by_name else {
-            if by_id.is_some() {
-                return Err(HostError::Ownership);
+        let id = match plan_initializer_removal(helper, by_name.as_ref(), by_id.as_ref())? {
+            InitializerPlan::Absent => {
+                return Ok(observation(
+                    "storage-initializer",
+                    &helper.name,
+                    helper.id.as_deref(),
+                    "already_absent",
+                ));
             }
-            return Ok(observation(
-                "storage-initializer",
-                &helper.name,
-                helper.id.as_deref(),
-                "already_absent",
-            ));
+            InitializerPlan::Remove { id } => id,
         };
-        let id = inspected
-            .id
-            .clone()
-            .filter(|id| !id.is_empty())
-            .ok_or(HostError::Ownership)?;
-        if helper.id.as_deref().is_some_and(|saved| saved != id) {
-            return Err(HostError::Ownership);
-        }
-        validate_initializer(&inspected, helper)?;
+        let inspected = by_name.ok_or(HostError::Ownership)?;
         if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
             let stop = self.docker.stop_container(
                 &id,
@@ -81,6 +73,34 @@ impl Effects<'_> {
             "removed_and_absent",
         ))
     }
+}
+
+pub(crate) enum InitializerPlan {
+    Absent,
+    Remove { id: String },
+}
+
+pub(crate) fn plan_initializer_removal(
+    helper: &UnboundInitializer,
+    by_name: Option<&ContainerInspectResponse>,
+    by_id: Option<&ContainerInspectResponse>,
+) -> Result<InitializerPlan, HostError> {
+    let Some(inspected) = by_name else {
+        if by_id.is_some() {
+            return Err(HostError::Ownership);
+        }
+        return Ok(InitializerPlan::Absent);
+    };
+    let id = inspected
+        .id
+        .clone()
+        .filter(|id| !id.is_empty())
+        .ok_or(HostError::Ownership)?;
+    if helper.id.as_deref().is_some_and(|saved| saved != id) {
+        return Err(HostError::Ownership);
+    }
+    validate_initializer(inspected, helper)?;
+    Ok(InitializerPlan::Remove { id })
 }
 
 fn validate_initializer(

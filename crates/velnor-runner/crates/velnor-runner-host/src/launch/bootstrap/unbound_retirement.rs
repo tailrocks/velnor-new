@@ -26,6 +26,7 @@ mod bounded;
 #[path = "unbound_retirement/initializer.rs"]
 mod initializer;
 
+pub(crate) use initializer::{InitializerPlan, plan_initializer_removal};
 pub(crate) use bounded::{abandon_and_retire_unbound_pair_before, retire_uncertain_unbound_pairs};
 
 #[cfg(test)]

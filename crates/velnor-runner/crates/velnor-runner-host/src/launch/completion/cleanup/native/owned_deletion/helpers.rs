@@ -17,17 +17,17 @@ use crate::{
 };
 
 use super::super::super::super::{Context, EffectBudget, Failure, MAX_HELPERS_PER_VOLUME};
+use crate::launch::bootstrap::{InitializerPlan, plan_initializer_removal};
 use super::{inspect_container, remove_container_and_check, request_effect, within};
-
-const HELPER_ROLES: [&str; 3] = [
-    "resource-probe",
-    "execution-publication",
-    "storage-initializer",
-];
 
 pub(super) fn docker_error(phase: &str, object: &str, error: &DockerError) -> HostError {
     eprintln!("completion cleanup docker error phase={phase} object={object} error={error}");
     HostError::Docker
+}
+
+enum Retirement {
+    Publication(crate::launch::resource_probe::OwnedPublication),
+    Initializer { id: String, running: bool },
 }
 
 pub(super) async fn remove_volume_helpers(
@@ -38,19 +38,47 @@ pub(super) async fn remove_volume_helpers(
     identity: &StorageCleanupIdentity,
     volume: &str,
 ) -> Result<(), Failure> {
-    let users = request_effect(
+    let users = list_users(context, launch, claim, budget, identity, volume).await?;
+    if users.is_empty() {
+        return Ok(());
+    }
+    if u64::try_from(users.len()).map_or(true, |count| count > MAX_HELPERS_PER_VOLUME) {
+        return Err(Failure::not_proven("volume helper bound"));
+    }
+    let runtime = context
+        .native_cleanup
+        .ok_or_else(|| Failure::not_proven("native cleanup capability"))?;
+    let scope = context.journal.connection();
+    let publication = request_effect(
         context,
         launch,
         claim,
         budget,
-        "volume helper list",
+        "volume helper publication lookup",
         identity,
-        || async { list_volume_users(context.docker, volume).await },
+        || async { runtime.owned_publication(scope, identity).await },
     )
     .await?;
-    if u64::try_from(users.len()).map_or(true, |count| count > MAX_HELPERS_PER_VOLUME) {
-        return Err(Failure::not_proven("volume helper bound"));
-    }
+    let initializer = request_effect(
+        context,
+        launch,
+        claim,
+        budget,
+        "volume helper initializer lookup",
+        identity,
+        || async {
+            scope
+                .unretired_storage_initializer(
+                    identity.reservation_id(),
+                    identity.engine_id(),
+                    identity.docker_root_digest(),
+                )
+                .await
+        },
+    )
+    .await?;
+    let mut plan = Vec::new();
+    let mut publication = publication;
     for id in users {
         let inspected = request_effect(
             context,
@@ -65,29 +93,112 @@ pub(super) async fn remove_volume_helpers(
         let Some(inspected) = inspected else {
             continue;
         };
-        if !is_helper_of(
-            &inspected,
-            &id,
-            volume,
-            &engine_digest(identity.engine_id()),
-        ) {
+        if !mounts_volume(&inspected, &id, volume) {
             return Err(Failure::not_proven("volume helper ownership"));
         }
-        if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
+        if let Some(owned) = publication
+            .take_if(|owned| is_journaled_publication(&inspected, owned, identity.engine_id()))
+        {
+            plan.push(Retirement::Publication(owned));
+        } else if let Some(helper) = initializer.as_ref()
+            && let Ok(InitializerPlan::Remove { id: planned }) =
+                plan_initializer_removal(helper, Some(&inspected), None)
+            && planned == id
+        {
+            plan.push(Retirement::Initializer {
+                id,
+                running: inspected.state.as_ref().and_then(|state| state.running) == Some(true),
+            });
+        } else {
+            return Err(Failure::not_proven("volume helper ownership"));
+        }
+    }
+    for retirement in plan {
+        retire(context, launch, claim, budget, identity, retirement).await?;
+    }
+    let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
+    if remaining.is_empty() {
+        Ok(())
+    } else {
+        Err(Failure::not_proven("volume helper retirement"))
+    }
+}
+
+async fn retire(
+    context: &Context<'_>,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+    budget: &mut EffectBudget<'_>,
+    identity: &StorageCleanupIdentity,
+    retirement: Retirement,
+) -> Result<(), Failure> {
+    let runtime = context
+        .native_cleanup
+        .ok_or_else(|| Failure::not_proven("native cleanup capability"))?;
+    match retirement {
+        Retirement::Publication(owned) => {
             request_effect(
                 context,
                 launch,
                 claim,
                 budget,
-                "volume helper stop",
+                "volume helper publication retire",
                 identity,
-                || async { stop_helper(context, &id).await },
+                || async { runtime.retire_owned_publication(&owned).await },
             )
             .await?;
+            let retired = request_effect(
+                context,
+                launch,
+                claim,
+                budget,
+                "volume helper publication lease",
+                identity,
+                || async { runtime.publication_retired(&owned).await },
+            )
+            .await?;
+            if retired {
+                Ok(())
+            } else {
+                Err(Failure::not_proven("volume helper publication lease"))
+            }
         }
-        remove_container_and_check(context, launch, claim, budget, &id, identity).await?;
+        Retirement::Initializer { id, running } => {
+            if running {
+                request_effect(
+                    context,
+                    launch,
+                    claim,
+                    budget,
+                    "volume helper stop",
+                    identity,
+                    || async { stop_helper(context, &id).await },
+                )
+                .await?;
+            }
+            remove_container_and_check(context, launch, claim, budget, &id, identity).await
+        }
     }
-    Ok(())
+}
+
+async fn list_users(
+    context: &Context<'_>,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+    budget: &mut EffectBudget<'_>,
+    identity: &StorageCleanupIdentity,
+    volume: &str,
+) -> Result<Vec<String>, Failure> {
+    request_effect(
+        context,
+        launch,
+        claim,
+        budget,
+        "volume helper list",
+        identity,
+        || async { list_volume_users(context.docker, volume).await },
+    )
+    .await
 }
 
 async fn list_volume_users(docker: &Docker, volume: &str) -> Result<Vec<String>, HostError> {
@@ -117,6 +228,15 @@ async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {
     .map_err(|error| docker_error("volume helper stop", id, &error))
 }
 
+fn mounts_volume(container: &ContainerInspectResponse, id: &str, volume: &str) -> bool {
+    container.id.as_deref() == Some(id)
+        && container
+            .mounts
+            .iter()
+            .flatten()
+            .any(|mount| mount.name.as_deref() == Some(volume))
+}
+
 fn engine_digest(engine_id: &str) -> String {
     Sha256::digest(engine_id.as_bytes())
         .iter()
@@ -125,30 +245,21 @@ fn engine_digest(engine_id: &str) -> String {
         .collect()
 }
 
-fn is_helper_of(
+fn is_journaled_publication(
     container: &ContainerInspectResponse,
-    id: &str,
-    volume: &str,
-    engine_digest: &str,
+    owned: &crate::launch::resource_probe::OwnedPublication,
+    engine_id: &str,
 ) -> bool {
     let labels = container
         .config
         .as_ref()
         .and_then(|config| config.labels.as_ref());
-    let role = labels.and_then(|labels| labels.get("velnor.role"));
-    let engine = labels.and_then(|labels| labels.get("velnor.engine"));
-    let engine_bound = match role.map(String::as_str) {
-        Some("resource-probe" | "execution-publication") => {
-            engine.is_some_and(|engine| engine == engine_digest)
-        }
-        _ => true,
-    };
-    container.id.as_deref() == Some(id)
-        && engine_bound
-        && role.is_some_and(|role| HELPER_ROLES.contains(&role.as_str()))
-        && container
-            .mounts
-            .iter()
-            .flatten()
-            .any(|mount| mount.name.as_deref() == Some(volume))
+    let label = |key: &str| labels.and_then(|labels| labels.get(key)).map(String::as_str);
+    container.name.as_deref() == Some(format!("/{}", owned.operation_name()).as_str())
+        && owned
+            .container_id()
+            .is_none_or(|id| container.id.as_deref() == Some(id))
+        && label("velnor.role") == Some("execution-publication")
+        && label("velnor.operation") == Some(owned.operation_id())
+        && label("velnor.engine") == Some(engine_digest(engine_id).as_str())
 }

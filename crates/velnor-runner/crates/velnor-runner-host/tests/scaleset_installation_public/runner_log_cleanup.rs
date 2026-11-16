@@ -5,8 +5,14 @@
 mod helper_cases;
 #[path = "runner_log_cleanup/helper_scenario.rs"]
 mod helper_scenario;
+#[path = "runner_log_cleanup/helper_seed.rs"]
+mod helper_seed;
+#[path = "runner_log_cleanup/helper_stub.rs"]
+mod helper_stub;
 #[path = "runner_log_cleanup/seed.rs"]
 mod seed;
+#[path = "runner_log_cleanup/seed_images.rs"]
+mod seed_images;
 #[path = "runner_log_cleanup/state_mode.rs"]
 mod state_mode;
 
@@ -20,9 +26,10 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 pub(crate) use self::helper_scenario::{
-    CancelledObservation, HelperSpec, run_cancelled_before_start_scenario,
+    CancelledObservation, HelperSpec, Kind, run_cancelled_before_start_scenario,
 };
-use self::helper_scenario::{VolumeState, read_diagnostics_files, write_volume_response};
+use self::helper_scenario::read_diagnostics_files;
+use self::helper_stub::{VolumeState, write_volume_response};
 use serde_json::{Value, json};
 use velnor_runner_host::{
     CompletionWorker, HostError, Journal, RepositoryConnection, WorkflowEvent, connect_unix,
@@ -138,7 +145,7 @@ fn handle_connection(
     stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    let (method, path) = read_http_request(stream)?;
+    let (method, path, query) = read_http_request(stream)?;
     if method == "POST" && path == format!("containers/{DIND_ID}/stop") {
         dind_stop_entered.store(true, Ordering::Release);
         for _ in 0..400 {
@@ -155,10 +162,11 @@ fn handle_connection(
     let mut guard = state
         .lock()
         .map_err(|_| std::io::Error::other("stub state poisoned"))?;
+    guard.volumes.query = query;
     write_route_response(stream, &method, &path, &mut guard)
 }
 
-fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String)> {
+fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String, String)> {
     let mut header = Vec::with_capacity(512);
     let mut byte = [0_u8; 1];
     while !header.ends_with(b"\r\n\r\n") {
@@ -183,17 +191,20 @@ fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String
     if content_len > 0 {
         stream.read_exact(&mut vec![0_u8; content_len])?;
     }
-    let clean = raw_path.split('?').next().unwrap_or(raw_path);
+    let (clean, query) = raw_path.split_once('?').unwrap_or((raw_path, ""));
     let stripped = clean.strip_prefix('/').unwrap_or(clean);
     let api_path = match stripped.split_once('/') {
         Some((ver, rest))
-            if ver.starts_with('v') && ver[1..].bytes().all(|b| b.is_ascii_digit()) =>
+            if ver.starts_with('v')
+                && ver[1..]
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || b == b'.') =>
         {
             rest.to_owned()
         }
         _ => stripped.to_owned(),
     };
-    Ok((method, api_path))
+    Ok((method, api_path, query.to_owned()))
 }
 
 fn container_labels(role: &str) -> Value {
@@ -228,7 +239,7 @@ fn write_route_response(
     path: &str,
     state: &mut StubState,
 ) -> std::io::Result<()> {
-    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64"});
+    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64", "NCPU": 4, "MemTotal": 8589934592_i64});
     match (method, path) {
         ("GET", "info") => write_json(stream, 200, "OK", &info),
         ("GET", p) if p.starts_with("images/") && p.ends_with("/json") => {

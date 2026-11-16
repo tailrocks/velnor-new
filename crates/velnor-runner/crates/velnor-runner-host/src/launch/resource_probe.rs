@@ -41,6 +41,10 @@ pub(crate) use readiness::collect as collect_readiness_sample;
 mod image_authority;
 
 mod record;
+mod publication_retirement;
+pub(crate) use publication_retirement::{
+    OwnedPublication, owned_publication, retire_owned_publication,
+};
 
 mod recover;
 mod sample;
