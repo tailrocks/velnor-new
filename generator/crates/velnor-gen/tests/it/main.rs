@@ -17,6 +17,7 @@ mod facts;
 mod golden;
 mod harness;
 mod harness_kinds;
+mod harness_undecided;
 mod helper_source;
 mod inputs;
 mod io;
