@@ -64,7 +64,7 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
             &relative,
             &known.metadata,
             &known.manifests,
-            &known.versions,
+            args.released_versions.then_some(&known.versions),
         )?;
         Some(known)
     } else {

@@ -43,11 +43,21 @@ impl Checkout {
     }
 
     fn check(&self, files: &[&str], toolchain: Option<&str>) -> (Option<i32>, String) {
+        self.check_with(files, toolchain, &[])
+    }
+
+    fn check_with(
+        &self,
+        files: &[&str],
+        toolchain: Option<&str>,
+        extra: &[&str],
+    ) -> (Option<i32>, String) {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command
             .args(["release", "check-config"])
             .args(files)
             .arg("--manifests")
+            .args(extra)
             .current_dir(&self.0)
             .env_remove("RUSTUP_TOOLCHAIN");
         if let Some(toolchain) = toolchain {
@@ -63,6 +73,11 @@ impl Checkout {
     fn run(&self, files: &[&str]) -> (Option<i32>, String) {
         let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
         self.check(files, Some(&toolchain))
+    }
+
+    fn run_released(&self, files: &[&str]) -> (Option<i32>, String) {
+        let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| "stable".to_owned());
+        self.check_with(files, Some(&toolchain), &["--released-versions"])
     }
 }
 
@@ -293,7 +308,7 @@ fn a_root_whose_members_all_opt_out_of_crates_io_may_set_a_proxy() {
 }
 
 #[test]
-fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_before_the_token() {
+fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_only_where_it_will_be_tagged() {
     let checkout = Checkout::new("lock-version");
     let version = |version: &str| {
         checkout
@@ -308,9 +323,13 @@ fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_before_th
     };
     checkout.write("release-plz.toml", PLZ);
     version("1.2.3-alpha.lock");
-    refused(&checkout, &["release-plz.toml"], "app-v1.2.3-alpha.lock");
-    version("1.2.3-alpha");
     accepted(&checkout, &["release-plz.toml"]);
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(stderr.contains("app-v1.2.3-alpha.lock"), "{stderr}");
+    version("1.2.3-alpha");
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(0), "{stderr}");
     checkout.write(
         "release-plz.toml",
         &PLZ.replace(
@@ -319,5 +338,6 @@ fn a_released_version_that_ends_a_tag_ref_component_in_lock_is_refused_before_th
         ),
     );
     version("1.2.3-alpha.lock");
-    accepted(&checkout, &["release-plz.toml"]);
+    let (code, stderr) = checkout.run_released(&["release-plz.toml"]);
+    assert_eq!(code, Some(0), "{stderr}");
 }

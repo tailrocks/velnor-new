@@ -59,11 +59,12 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
 {
     let found = refuse_steps("0.1.80")?;
     assert_eq!(found.len(), 2);
-    for (_, step) in found {
+    for (id, step) in found {
+        let released = if id == "tag" { " --released-versions" } else { "" };
         assert_eq!(
             step,
             [
-                "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests",
+                &format!("velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --repo \"$REPOSITORY\" --manifests{released}"),
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
                 "CARGO_BUILD_RUSTC_WRAPPER=",

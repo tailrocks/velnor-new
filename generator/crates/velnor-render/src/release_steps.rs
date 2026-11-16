@@ -140,7 +140,11 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> RenderedStep {
+pub(crate) fn refuse_commands(
+    roots: &[RootPlan],
+    helper: &HelperVersion,
+    tags_released_version: bool,
+) -> RenderedStep {
     let files: Vec<String> = roots
         .iter()
         .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
@@ -195,6 +199,7 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], helper: &HelperVersion) -> Ren
             ))
             .chain(tags)
             .chain(binds_tags.then(|| "--repo \"$REPOSITORY\" --manifests".to_owned()))
+            .chain((binds_tags && tags_released_version).then(|| "--released-versions".to_owned()))
             .collect::<Vec<_>>()
             .join(" "),
         ),

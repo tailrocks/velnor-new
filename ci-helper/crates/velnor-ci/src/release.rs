@@ -192,8 +192,12 @@ pub fn check_manifests(
     files: &[(String, String)],
     metadata: &BTreeMap<RepoPath, RustMetadata>,
     manifests: &BTreeMap<String, String>,
-    versions: &velnor_release::Versions,
+    versions: Option<&velnor_release::Versions>,
 ) -> Result<(), CiError> {
     velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)?;
-    velnor_release::check_release_versions(files, metadata, versions).map_err(CiError::new)
+    match versions {
+        Some(versions) => velnor_release::check_release_versions(files, metadata, versions)
+            .map_err(CiError::new),
+        None => Ok(()),
+    }
 }
