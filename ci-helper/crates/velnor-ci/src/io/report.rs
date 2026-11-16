@@ -53,6 +53,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         downloads: Vec::new(),
         artifacts: Vec::new(),
         progress: Some(Vec::new()),
+        capture_complete: false,
         tests: Vec::new(),
         rejected: 0,
         execution: execution(argv),
@@ -283,41 +284,13 @@ fn find_metrics(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), CiErro
     Ok(())
 }
 
-pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
-    let text = match fs::read_to_string(temp(INVOCATIONS)) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(ci(error)),
-    };
-    let invocations = text
-        .lines()
-        .map(json)
-        .collect::<Result<Vec<Invocation>, _>>()?;
-    if invocations.is_empty()
-        || invocations
-            .iter()
-            .any(|invocation| invocation.progress.is_none())
-    {
-        return Ok(None);
-    }
-    let mut counts = crate::logscan::LogScan::default();
-    for event in invocations
-        .iter()
-        .filter_map(|invocation| invocation.progress.as_ref())
-        .flatten()
-    {
-        match event.kind {
-            crate::cargo_artifacts::ProgressKind::Compiling => counts.compiling += 1,
-            crate::cargo_artifacts::ProgressKind::Checking => counts.checking += 1,
-            crate::cargo_artifacts::ProgressKind::Documenting => counts.documenting += 1,
-            crate::cargo_artifacts::ProgressKind::Downloaded => counts.downloaded += 1,
-        }
-    }
-    Ok(Some(counts))
-}
-
 fn activity_metrics(metrics: &mut LaneMetrics, log: &[u8]) {
     for invocation in &metrics.invocations {
+        if !invocation.capture_complete {
+            metrics
+                .diagnostics
+                .push(format!("{}: output capture incomplete", invocation.root));
+        }
         let mut tap = crate::cargo_artifacts::ArtifactTap::default();
         tap.feed(
             log.get(invocation.log_start..invocation.log_end)

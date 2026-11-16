@@ -44,6 +44,7 @@ mod release_tag_patterns;
 mod report;
 mod rulesets;
 mod run;
+mod run_capture;
 mod run_group;
 mod setup_pure;
 mod support;

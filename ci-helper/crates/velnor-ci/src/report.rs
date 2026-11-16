@@ -26,6 +26,8 @@ pub struct Invocation {
     #[serde(default)]
     pub progress: Option<Vec<crate::cargo_artifacts::CargoProgress>>,
     #[serde(default)]
+    pub capture_complete: bool,
+    #[serde(default)]
     pub tests: Vec<(String, f64)>,
     #[serde(default)]
     pub rejected: u64,

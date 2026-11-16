@@ -334,7 +334,7 @@ fn run_keeps_reading_after_an_interrupted_read() {
     };
     let mut shown = Vec::new();
     let log = std::sync::Mutex::new(Vec::new());
-    velnor_ci::stream::pump(from, &mut shown, &log);
+    velnor_ci::io::pump::pump(from, &mut shown, &log);
     assert_eq!(shown, b"before after");
     assert_eq!(
         log.into_inner().unwrap_or_else(|e| unreachable!("{e}")),

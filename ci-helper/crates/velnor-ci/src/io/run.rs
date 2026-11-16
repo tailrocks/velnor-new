@@ -16,9 +16,10 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use super::append_outputs;
+use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
-use crate::stream::{Pumped, pump_counted, separate_group};
+use crate::stream::separate_group;
 use crate::tests_run::{output_line, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -89,25 +90,21 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
-    let (sender, receiver) = mpsc::channel();
-    let mut streams = 0;
-    if let Some(from) = child.stdout.take() {
-        streams += 1;
-        let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        spawn_pump(from, std::io::stdout(), &log, counted, sender.clone());
-    }
-    if let Some(from) = child.stderr.take() {
-        streams += 1;
-        spawn_pump(from, std::io::stderr(), &log, None, sender.clone());
-    }
-    drop(sender);
+    let capture = Arc::new(Mutex::new(Capture::default()));
+    let (receiver, streams) =
+        start_pumps(&mut child, &log, &doctests, args.require_doctests, &capture);
     let handle = signals.handle();
     forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, tests_run) = collect(&receiver, streams, &mut invocation);
+    let (mut lost, tests_run) = collect(&receiver, streams, &capture, &mut invocation);
+    if !invocation.capture_complete {
+        eprintln!(
+            "velnor-ci: output capture incomplete; a stream did not reach EOF before the deadline"
+        );
+    }
     if runs_nextest(&args.command)
         && let Some(tests_run) = tests_run
     {
@@ -194,30 +191,31 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
 }
 
 fn collect(
-    receiver: &mpsc::Receiver<Pumped>,
+    receiver: &mpsc::Receiver<bool>,
     streams: usize,
+    capture: &Mutex<Capture>,
     invocation: &mut crate::report::Invocation,
 ) -> (Option<std::io::Error>, Option<u64>) {
-    let mut lost = None;
-    let mut tests_run = None;
     let deadline = Instant::now() + pump_grace();
+    let mut completed = 0;
     for _ in 0..streams {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(pumped) => {
-                lost = lost.or(pumped.failure);
-                invocation.artifacts.extend(pumped.observations.artifacts);
-                invocation
-                    .progress
-                    .get_or_insert_default()
-                    .extend(pumped.observations.progress);
-                invocation.tests.extend(pumped.observations.tests);
-                invocation.rejected += pumped.observations.rejected;
-                tests_run = pumped.tests_run.or(tests_run);
-            }
+            Ok(true) => completed += 1,
+            Ok(false) => {}
             Err(_) => break,
         }
     }
-    (lost, tests_run)
+    invocation.capture_complete = completed == streams;
+    let captured = std::mem::take(
+        &mut *capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
+    invocation.artifacts = captured.observations.artifacts;
+    invocation.progress = Some(captured.observations.progress);
+    invocation.tests = captured.observations.tests;
+    invocation.rejected = captured.observations.rejected;
+    (captured.failure, captured.tests_run)
 }
 
 #[cfg(unix)]
@@ -239,11 +237,42 @@ fn spawn_pump(
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: mpsc::Sender<Pumped>,
+    capture: &Arc<Mutex<Capture>>,
+    done: mpsc::Sender<bool>,
 ) {
     let log = Arc::clone(log);
+    let capture = Arc::clone(capture);
     thread::spawn(move || {
-        done.send(pump_counted(from, to, &log, count.as_deref()))
+        done.send(pump_counted(from, to, &log, count.as_deref(), &capture))
             .ok();
     });
+}
+
+fn start_pumps(
+    child: &mut std::process::Child,
+    log: &Arc<Mutex<std::fs::File>>,
+    doctests: &Arc<Mutex<DoctestCount>>,
+    require_doctests: bool,
+    capture: &Arc<Mutex<Capture>>,
+) -> (mpsc::Receiver<bool>, usize) {
+    let (sender, receiver) = mpsc::channel();
+    let mut streams = 0;
+    if let Some(from) = child.stdout.take() {
+        streams += 1;
+        let counted = require_doctests.then(|| Arc::clone(doctests));
+        spawn_pump(
+            from,
+            std::io::stdout(),
+            log,
+            counted,
+            capture,
+            sender.clone(),
+        );
+    }
+    if let Some(from) = child.stderr.take() {
+        streams += 1;
+        spawn_pump(from, std::io::stderr(), log, None, capture, sender.clone());
+    }
+    drop(sender);
+    (receiver, streams)
 }
