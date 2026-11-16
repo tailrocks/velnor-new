@@ -180,9 +180,9 @@ async fn audit_started_pair(
     audit_pair_containers(
         docker,
         &OwnedPair {
-            connection_id: binding.connection_id.as_str(),
-            reservation_id: identity.reservation_id(),
-            operation_id: identity.operation_id(),
+            connection: binding.connection_id.as_str(),
+            reservation: identity.reservation_id(),
+            operation: identity.operation_id(),
         },
         &[
             ExpectedContainer {

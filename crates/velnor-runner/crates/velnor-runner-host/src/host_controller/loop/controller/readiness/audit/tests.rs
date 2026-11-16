@@ -16,13 +16,14 @@ type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const RUNNER_ID: &str = "a000000000000000000000000000000000000000000000000000000000000004";
 const DIND_ID: &str = "d000000000000000000000000000000000000000000000000000000000000004";
-const RUNNER_IMAGE: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+const RUNNER_IMAGE: &str =
+    "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const DIND_IMAGE: &str = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
 const OTHER_IMAGE: &str = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
 const OWNER: OwnedPair<'static> = OwnedPair {
-    connection_id: "lab",
-    reservation_id: 4,
-    operation_id: 3,
+    connection: "lab",
+    reservation: 4,
+    operation: 3,
 };
 
 fn container(role: &str, image: &str, kind: Option<&str>) -> Value {
@@ -156,7 +157,11 @@ async fn a_pair_with_a_container_from_another_image_is_refused() -> TestResult<(
     for (role, id) in [("runner", RUNNER_ID), ("dind", DIND_ID)] {
         let mut containers = healthy();
         containers.insert(id.to_owned(), container(role, OTHER_IMAGE, Some(role)));
-        assert_eq!(audit(containers).await?, Err(HostError::Ownership), "{role}");
+        assert_eq!(
+            audit(containers).await?,
+            Err(HostError::Ownership),
+            "{role}"
+        );
     }
     Ok(())
 }

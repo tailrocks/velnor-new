@@ -129,9 +129,9 @@ fn audit_remote_runner_with_transport<T: ReadinessTransport>(
 }
 
 pub(super) struct OwnedPair<'a> {
-    pub(super) connection_id: &'a str,
-    pub(super) reservation_id: i64,
-    pub(super) operation_id: i64,
+    pub(super) connection: &'a str,
+    pub(super) reservation: i64,
+    pub(super) operation: i64,
 }
 
 pub(super) struct ExpectedContainer<'a> {
@@ -167,9 +167,9 @@ fn validate_owned_container(
         .ok_or(HostError::Ownership)?;
     let expected_labels = std::collections::HashMap::from([
         ("io.velnor.managed", "true".to_owned()),
-        ("io.velnor.reservation-id", owner.reservation_id.to_string()),
-        ("io.velnor.operation-id", owner.operation_id.to_string()),
-        ("io.velnor.connection-id", owner.connection_id.to_owned()),
+        ("io.velnor.reservation-id", owner.reservation.to_string()),
+        ("io.velnor.operation-id", owner.operation.to_string()),
+        ("io.velnor.connection-id", owner.connection.to_owned()),
         ("io.velnor.role", expected.role.to_owned()),
         (IMAGE_KIND_LABEL, expected.role.to_owned()),
     ]);
