@@ -694,6 +694,11 @@ inventories do not list GNU coreutils as a guaranteed tool. Source qualification
 uses the platform `shasum -a 256` command for lock identities instead of relying
 on `sha256sum`.
 
+## Tag ruleset drift
+
+The maintenance drift job uses the [pinned github-script API client](https://github.com/actions/github-script/blob/3a2844b7e9c422d3c10d287c895573f7108da1b3/README.md#this-action) and its pagination plugin without checkout.
+The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
+
 ## Generated Rust CI workflow events and concurrency
 
 These behaviors are GitHub service semantics, so the runner source does not define them. The generator relies on the GitHub documentation below and tests the rendered text, not the service.
