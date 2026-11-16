@@ -122,7 +122,7 @@ fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
     );
     assert_eq!(
         job(&mixed, "tag")?.get("outputs").map(Node::keys),
-        Some(vec!["tools", "app"])
+        Some(vec!["tools", "app", "tools_commit"])
     );
     Ok(())
 }

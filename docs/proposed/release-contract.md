@@ -168,6 +168,14 @@ Rules:
   fallback or a mutable-branch input. Preflight resolves the exact source
   release-plz will publish, not merely the event SHA; release-plz may select
   the release-PR head rather than the merge result — qualify that behavior.
+  Qualified against release-plz 0.4.3 (release_plz_core 0.43.0,
+  `should_release`): when the checked-out commit belongs to a release PR whose
+  last commit is an ancestor of it, release-plz checks out that PR commit and
+  puts the tag there, so under the merge-commit strategy the tag is on the PR
+  head, not on the verified merge commit. The tag job resolves the commit of
+  each recorded tag, requires it to equal the verified commit or be in its
+  history, and exports it as `<package>_commit`; the build jobs compare their
+  checkout with that output, not with the verified commit (helper 0.1.81+).
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
