@@ -8,10 +8,10 @@ use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
+use crate::release_record::{commit_outputs, record};
 use crate::release_steps::{
-    COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, app_token, checkout, expression,
-    install_release_plz, label, permissions, refuse_commands, release_plz_arguments,
-    release_plz_step, variables,
+    app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
+    release_plz_arguments, release_plz_step, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -221,7 +221,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(record(helper, &files));
+    steps.push(record(plan, helper, &files));
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
@@ -251,51 +251,6 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         steps,
         ..after_the_gate("tag")
     }
-}
-
-fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
-    let files = files.join(" ");
-    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        return RenderedStep {
-            id: Some("record".to_owned()),
-            name: "Record the released packages".to_owned(),
-            run: Some(format!("velnor-ci release record {files}")),
-            ..RenderedStep::default()
-        };
-    }
-    RenderedStep {
-        id: Some("record".to_owned()),
-        name: "Record the released packages and the commits their tags are on".to_owned(),
-        env: variables(&[
-            ("GITHUB_TOKEN", "${{ github.token }}"),
-            ("REPOSITORY", "${{ github.repository }}"),
-            ("COMMIT", VERIFIED_COMMIT),
-        ]),
-        run: Some(format!(
-            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" {files}"
-        )),
-        ..RenderedStep::default()
-    }
-}
-
-fn commit_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<(String, String)> {
-    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        return Vec::new();
-    }
-    plan.binaries
-        .iter()
-        .map(|binary| {
-            let output = commit_output(&binary.package);
-            (
-                output.clone(),
-                format!("${{{{ steps.record.outputs.{output} }}}}"),
-            )
-        })
-        .collect()
-}
-
-pub(crate) fn commit_output(package: &str) -> String {
-    format!("{package}{COMMIT_OUTPUT_SUFFIX}")
 }
 
 fn newest_check() -> RenderedStep {

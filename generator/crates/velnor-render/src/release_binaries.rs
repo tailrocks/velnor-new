@@ -4,9 +4,8 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{
-    FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT, commit_output,
-};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_record::commit_output;
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,

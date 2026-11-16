@@ -1,0 +1,10 @@
+[workspace]
+git_tag_name = "{{ package }}-v{{ version }}"
+git_release_draft = true
+release_always = false
+semver_check = false
+git_only = true
+pr_branch_prefix = "release-plz-tools-"
+
+[[package]]
+name = "tools"

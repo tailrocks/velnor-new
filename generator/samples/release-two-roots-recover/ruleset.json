@@ -1,0 +1,2 @@
+{"bypass_actors":[{"actor_id":5762496,"actor_type":"Integration","bypass_mode":"always"}],"conditions":{"ref_name":{"exclude":[],"include":["refs/tags/*-v*","refs/tags/app-v*","refs/tags/tools-v*"]}},"enforcement":"active","name":"release-tags","rules":[{"type":"creation"}],"target":"tag"}
+{"bypass_actors":[],"conditions":{"ref_name":{"exclude":[],"include":["refs/tags/*-v*","refs/tags/app-v*","refs/tags/tools-v*"]}},"enforcement":"active","name":"release-tags-immutable","rules":[{"type":"update"},{"type":"deletion"}],"target":"tag"}

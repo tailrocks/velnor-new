@@ -49,7 +49,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
     assert_eq!(
         record.get("run").and_then(Node::text),
         Some(
-            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
+            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --app velnor-release --config release-plz.toml --config tools/release-plz.toml \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
         )
     );
     for (key, value) in [
@@ -63,7 +63,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
             "{key}"
         );
     }
-    assert_eq!(record.get("env").map(Node::keys).map(|k| k.len()), Some(3));
+    assert_eq!(record.get("env").map(Node::keys).map(|k| k.len()), Some(4));
     assert_eq!(
         record.get("if").and_then(Node::text),
         Some("${{ steps.newest.outputs.newest == 'true' }}")

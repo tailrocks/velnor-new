@@ -215,7 +215,8 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release record --repo "$REPOSITORY" --verified-commit "$COMMIT" "$RUNNER_TEMP/release-0.json"'
+          RUSTUP_TOOLCHAIN: stable
+        run: 'velnor-ci release record --repo "$REPOSITORY" --verified-commit "$COMMIT" --app velnor-release --config release-plz.toml "$RUNNER_TEMP/release-0.json"'
   build-app-linux-x64:
     needs:
       - gate
