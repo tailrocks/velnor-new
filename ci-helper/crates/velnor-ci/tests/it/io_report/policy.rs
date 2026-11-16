@@ -29,8 +29,8 @@ fn available_inventory_distinguishes_saved_missing_and_explicit_failure() -> sup
 }
 
 fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTest {
+    let repo = Repo::new("report-save-outcomes");
     for &(outcome, inventory, expected) in cases {
-        let repo = Repo::new("report-save-outcomes");
         let cache = json!([{"family":"target","root":".","restore_step":"restore","save_step":"save","requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command.arg("report").current_dir(repo.root())
@@ -94,6 +94,7 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
                 .any(|message| message.contains("GitHub telemetry unavailable")),
             inventory.is_none()
         );
+        std::fs::remove_file(repo.root().join("ci-metrics.json"))?;
     }
     Ok(())
 }
