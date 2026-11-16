@@ -262,6 +262,41 @@ fn publish_budget(config: &RootConfig, inherited: &[String]) -> u64 {
         .saturating_add(unlisted.saturating_mul(config.unlisted_publish_minutes))
 }
 
+fn plan_roots(
+    configs: Vec<RootConfig>,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<Vec<RootPlan>, ReleaseError> {
+    let roots: Vec<RootPlan> = configs
+        .into_iter()
+        .map(|config| {
+            let inherited = inherited_packages(&config, metadata);
+            let budget = publish_budget(&config, &inherited);
+            RootPlan {
+                inherited,
+                publish_budget_minutes: budget,
+                root: config.root,
+                pr_branch_prefix: config.pr_branch_prefix,
+                publishes_to_crates_io: config.publishes_to_crates_io,
+                packages: config
+                    .packages
+                    .into_iter()
+                    .map(|package| (package.name, package.tag_pattern))
+                    .collect(),
+                workspace_tags: config.workspace_tags,
+            }
+        })
+        .collect();
+    let publishing: u64 = roots.iter().map(|root| root.publish_budget_minutes).sum();
+    let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+    if publishing > limit {
+        return Err(ReleaseError::PublishBudgetOutlivesToken {
+            minutes: publishing,
+            limit,
+        });
+    }
+    Ok(roots)
+}
+
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
@@ -312,34 +347,7 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let binaries = plan_binaries(&config, &configs, files)?;
-        let roots = configs
-            .into_iter()
-            .map(|config| {
-                let inherited = inherited_packages(&config, files.rust_metadata.as_ref());
-                let budget = publish_budget(&config, &inherited);
-                RootPlan {
-                    inherited,
-                    publish_budget_minutes: budget,
-                    root: config.root,
-                    pr_branch_prefix: config.pr_branch_prefix,
-                    publishes_to_crates_io: config.publishes_to_crates_io,
-                    packages: config
-                        .packages
-                        .into_iter()
-                        .map(|package| (package.name, package.tag_pattern))
-                        .collect(),
-                    workspace_tags: config.workspace_tags,
-                }
-            })
-            .collect::<Vec<_>>();
-        let publishing: u64 = roots.iter().map(|root| root.publish_budget_minutes).sum();
-        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
-        if publishing > limit {
-            return Err(ReleaseError::PublishBudgetOutlivesToken {
-                minutes: publishing,
-                limit,
-            });
-        }
+        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
         Ok(ReleasePlan {
             roots,
             after: config.after,

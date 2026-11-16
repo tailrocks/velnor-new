@@ -19,23 +19,18 @@ const PUBLISHING: Root = Root {
 };
 
 fn packages(workspace: &str, packages: &[(&str, &str)]) -> String {
-    let entries: String = packages
-        .iter()
-        .map(|(name, timeout)| {
-            let line = if timeout.is_empty() {
-                String::new()
-            } else {
-                format!("publish_timeout = \"{timeout}\"\n")
-            };
-            format!("\n[[package]]\nname = \"{name}\"\n{line}")
-        })
-        .collect();
-    release_plz(&PUBLISHING)
+    let mut text = release_plz(&PUBLISHING)
         .split("\n[[package]]")
         .next()
         .unwrap_or_default()
-        .replace("[workspace]\n", &format!("[workspace]\n{workspace}"))
-        + &entries
+        .replace("[workspace]\n", &format!("[workspace]\n{workspace}"));
+    for (name, timeout) in packages {
+        text.extend(["\n[[package]]\nname = \"", name, "\"\n"]);
+        if !timeout.is_empty() {
+            text.extend(["publish_timeout = \"", timeout, "\"\n"]);
+        }
+    }
+    text
 }
 
 fn with_packages(
