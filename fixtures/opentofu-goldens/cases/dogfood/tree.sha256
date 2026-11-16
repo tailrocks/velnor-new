@@ -32,7 +32,7 @@
 - 0385d8f04707390694597f5636728dd3f7e49a05e79e70727f32cc7158a9fe76  ./.github/workflows/product-release-images.yml
 - 1af8f975e962729b48e793ac29bcabd2fc2a2bfad47034b1ba7e3a16b7a018c0  ./.github/workflows/product-release.yml
 - ee35331b7eeefaf1ef3247546c80d58df5571f5a1fa7171120b907f5d90c5451  ./.github/workflows/qualification.yml
-- 28c2c0cc4dccb5c8bbff40807e9158e9e4eb4fc354ffb39e406101b81690c01d  ./.github/workflows/release-rust-ci-tools.yml
+- ae861b125e3a0d662f6358405baa8f9129fea51b3dac722baeba91cee2b35b08  ./.github/workflows/release-rust-ci-tools.yml
 - a4bd0eed062eda89a30d33dd7619800786b98392de6b8c59764dcf699e4fc26e  ./.github/workflows/source-preview-mac-proof.yml
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./.github/workflows/source-preview-runtime.yml
