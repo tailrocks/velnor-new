@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::ErrorKind;
 use std::path::Path;
 use std::process::Command;
 
@@ -21,12 +20,9 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let roots = recorded_roots(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
-    let inside = root
-        .canonicalize()
-        .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", root.display())))?;
     let mut files = BTreeMap::new();
     for path in cargo_config_paths(&roots) {
-        if let Some(bytes) = read_config(root, &inside, &path)? {
+        if let Some(bytes) = read_config(root, &path)? {
             files.insert(path, bytes);
         }
     }
@@ -62,22 +58,10 @@ fn listed_configs(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> Option<Ve
     output.status.success().then_some(output.stdout)
 }
 
-fn read_config(root: &Path, inside: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {
-    let file = root.join(path.as_str());
-    let resolved = match file.canonicalize() {
-        Ok(resolved) => resolved,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(CiError::new(format!("cannot read {path}: {error}"))),
-    };
-    if !resolved.starts_with(inside) {
-        return Err(CiError::new(format!(
-            "{path} resolves to {}, outside the checkout",
-            resolved.display()
-        )));
-    }
-    std::fs::read(&resolved)
-        .map(Some)
-        .map_err(|e| CiError::new(format!("cannot read {path}: {e}")))
+fn read_config(root: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {
+    let mut read = read_files(root, std::slice::from_ref(path))
+        .map_err(|error| CiError::new(error.to_string()))?;
+    Ok(read.remove(path))
 }
 
 pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {

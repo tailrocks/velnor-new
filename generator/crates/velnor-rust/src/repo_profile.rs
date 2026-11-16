@@ -54,6 +54,13 @@ pub fn check_runtime_configs(
     files: &BTreeMap<RepoPath, Vec<u8>>,
     tracked: &BTreeSet<RepoPath>,
 ) -> Result<(), DetectError> {
+    for (file, bytes) in files {
+        if let Ok(parsed) = table(bytes)
+            && parsed.contains_key("include")
+        {
+            return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+        }
+    }
     let read = RepoView {
         files: files.clone(),
         ..RepoView::default()
