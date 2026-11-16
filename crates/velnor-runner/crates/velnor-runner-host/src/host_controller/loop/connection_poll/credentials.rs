@@ -20,6 +20,26 @@ use super::{
 };
 
 const RESTORE_RETRY: Duration = Duration::from_secs(30);
+const RESTORE_ATTEMPT_DEADLINE: Duration = Duration::from_secs(10);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RestoreMode {
+    Polling,
+    RetirementOnly,
+    Refused,
+}
+
+impl RestoreMode {
+    pub(super) const fn of(configured: bool, pending_retirement: bool) -> Self {
+        if configured {
+            Self::Polling
+        } else if pending_retirement {
+            Self::RetirementOnly
+        } else {
+            Self::Refused
+        }
+    }
+}
 
 async fn restore_missing<C, E>(
     slot: &mut Option<C>,
@@ -47,28 +67,35 @@ pub(super) fn release_suspect_credentials<C>(slot: &mut Option<C>, error: &HostE
 
 pub(super) async fn guarded_restore<C, E: Display>(
     connection_id: &str,
-    configured: bool,
-    now: Instant,
+    mode: RestoreMode,
+    clock: impl Fn() -> Instant,
+    attempt_deadline: Duration,
     retry_at: &mut Option<Instant>,
     slot: &mut Option<C>,
     restore: impl AsyncFnOnce() -> Result<C, E>,
 ) -> bool {
-    if !configured || slot.is_some() {
+    if mode == RestoreMode::Refused || slot.is_some() {
         return true;
     }
-    if retry_at.is_some_and(|at| now < at) {
+    if retry_at.is_some_and(|at| clock() < at) {
         return false;
     }
-    match restore_missing(slot, restore).await {
-        Ok(()) => {
+    let outcome = match tokio::time::timeout(attempt_deadline, restore_missing(slot, restore)).await
+    {
+        Ok(Ok(())) => None,
+        Ok(Err(error)) => Some(error.to_string()),
+        Err(_) => Some("restore attempt deadline exceeded".to_owned()),
+    };
+    match outcome {
+        None => {
             *retry_at = None;
             true
         }
-        Err(error) => {
+        Some(reason) => {
             eprintln!(
-                "host controller credential restore held connection={connection_id} reason={error}"
+                "host controller credential restore held connection={connection_id} mode={mode:?} reason={reason}"
             );
-            *retry_at = Some(now + RESTORE_RETRY);
+            *retry_at = Some(clock() + RESTORE_RETRY);
             false
         }
     }
@@ -88,19 +115,22 @@ pub(super) async fn restore_bound_session<C, E: From<HostError>>(
 pub(super) async fn restore_active_credentials(
     prepared: &mut PreparedConnection,
     context: &ConnectionPollContext<'_>,
+    pending_retirement: bool,
 ) -> bool {
     let configured = context
         .config
         .connection(&prepared.binding.connection_id)
         .is_some();
+    let mode = RestoreMode::of(configured, pending_retirement);
     let binding: &RepositoryConnection = &prepared.binding;
     let scope = &prepared.scope;
     let set_id = prepared.set_id;
     let session_intent = prepared.session_intent;
     guarded_restore(
         binding.connection_id.as_str(),
-        configured,
-        Instant::now(),
+        mode,
+        Instant::now,
+        RESTORE_ATTEMPT_DEADLINE,
         &mut prepared.restore_retry_at,
         &mut prepared.credentials,
         async || {

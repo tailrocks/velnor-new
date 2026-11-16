@@ -73,7 +73,8 @@ async fn poll_connection_inner(
     turn: &mut FairnessTurn,
 ) -> Result<Option<PollTurnResult>, HostError> {
     prepared.collect_authorization().await?;
-    if !restore_active_credentials(prepared, context).await {
+    let pending_retirement = removed::pending(prepared, context, pending_retirements);
+    if !restore_active_credentials(prepared, context, pending_retirement).await {
         return Ok(None);
     }
     if let Some(credentials) = prepared.credentials.as_ref() {

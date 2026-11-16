@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
+use std::{
+    cell::Cell,
+    time::{Duration, Instant},
+};
 
 use super::{
-    RESTORE_RETRY, guarded_restore, release_suspect_credentials, restore_bound_session,
-    restore_missing,
+    RESTORE_ATTEMPT_DEADLINE, RESTORE_RETRY, RestoreMode, guarded_restore,
+    release_suspect_credentials, restore_bound_session, restore_missing,
 };
 use crate::{
     config::HostConfig,
@@ -109,6 +112,9 @@ struct Gate {
     retry_at: Option<Instant>,
     slot: Option<u32>,
     calls: u32,
+    clock: Cell<Instant>,
+    attempt_takes: Duration,
+    deadline: Duration,
 }
 
 impl Gate {
@@ -117,23 +123,36 @@ impl Gate {
             retry_at: None,
             slot,
             calls: 0,
+            clock: Cell::new(Instant::now()),
+            attempt_takes: Duration::ZERO,
+            deadline: RESTORE_ATTEMPT_DEADLINE,
         }
     }
 
-    async fn run(&mut self, configured: bool, now: Instant, fail: bool) -> bool {
+    async fn run_mode(&mut self, mode: RestoreMode, now: Instant, fail: bool) -> bool {
+        self.clock.set(now);
         let calls = &mut self.calls;
+        let clock = &self.clock;
+        let takes = self.attempt_takes;
         guarded_restore(
             "conn",
-            configured,
-            now,
+            mode,
+            || clock.get(),
+            self.deadline,
             &mut self.retry_at,
             &mut self.slot,
             async || {
                 *calls += 1;
+                clock.set(clock.get() + takes);
                 if fail { Err("denied") } else { Ok(9) }
             },
         )
         .await
+    }
+
+    async fn run(&mut self, configured: bool, now: Instant, fail: bool) -> bool {
+        self.run_mode(RestoreMode::of(configured, false), now, fail)
+            .await
     }
 }
 
@@ -149,6 +168,31 @@ async fn missing_credentials_of_a_configured_connection_are_restored() {
 async fn a_removed_connection_is_never_restored() {
     let mut gate = Gate::new(None);
     assert!(gate.run(false, Instant::now(), false).await);
+    assert_eq!(gate.calls, 0);
+    assert!(gate.slot.is_none());
+}
+
+#[tokio::test]
+async fn a_removed_connection_pending_retirement_restores_for_retirement_only() {
+    assert_eq!(RestoreMode::of(false, true), RestoreMode::RetirementOnly);
+    assert_eq!(RestoreMode::of(false, false), RestoreMode::Refused);
+    assert_eq!(RestoreMode::of(true, true), RestoreMode::Polling);
+    let mut gate = Gate::new(None);
+    assert!(
+        gate.run_mode(RestoreMode::RetirementOnly, Instant::now(), false)
+            .await
+    );
+    assert_eq!(gate.calls, 1);
+    assert_eq!(gate.slot, Some(9));
+}
+
+#[tokio::test]
+async fn a_removed_connection_not_pending_retirement_is_not_restored() {
+    let mut gate = Gate::new(None);
+    assert!(
+        gate.run_mode(RestoreMode::of(false, false), Instant::now(), false)
+            .await
+    );
     assert_eq!(gate.calls, 0);
     assert!(gate.slot.is_none());
 }
@@ -178,6 +222,44 @@ async fn a_failed_restore_is_not_retried_until_the_backoff_passes() {
     assert!(gate.run(true, start + RESTORE_RETRY, false).await);
     assert_eq!(gate.calls, 2);
     assert!(gate.retry_at.is_none());
+}
+
+#[tokio::test]
+async fn the_backoff_starts_after_a_slow_attempt_fails() {
+    let start = Instant::now();
+    let mut gate = Gate::new(None);
+    gate.attempt_takes = Duration::from_secs(40);
+    gate.deadline = Duration::from_secs(60);
+    assert!(!gate.run(true, start, true).await);
+    assert_eq!(
+        gate.retry_at,
+        Some(start + Duration::from_secs(40) + RESTORE_RETRY)
+    );
+    let during = start + Duration::from_secs(40) + RESTORE_RETRY / 2;
+    assert!(!gate.run(true, during, false).await);
+    assert_eq!(gate.calls, 1);
+}
+
+#[tokio::test]
+async fn a_hanging_restore_returns_within_the_deadline_and_backs_off() {
+    let start = Instant::now();
+    let mut slot: Option<u32> = None;
+    let mut retry_at = None;
+    let began = Instant::now();
+    let held = !guarded_restore(
+        "conn",
+        RestoreMode::Polling,
+        || start,
+        Duration::from_millis(50),
+        &mut retry_at,
+        &mut slot,
+        async || -> Result<u32, &str> { std::future::pending().await },
+    )
+    .await;
+    assert!(held);
+    assert!(began.elapsed() < Duration::from_secs(5));
+    assert!(slot.is_none());
+    assert_eq!(retry_at, Some(start + RESTORE_RETRY));
 }
 
 async fn held_poll(gate: &mut Gate, error: &HostError, now: Instant) -> bool {
@@ -235,7 +317,7 @@ async fn repeated_local_holds_never_reopen_a_session() {
     let mut gate = Gate::new(Some(1));
     let start = Instant::now();
     for tick in 0..2000_u32 {
-        let now = start + std::time::Duration::from_secs(2 * u64::from(tick));
+        let now = start + Duration::from_secs(2 * u64::from(tick));
         assert!(held_poll(&mut gate, &HostError::Keychain, now).await);
     }
     assert_eq!(gate.calls, 0);
