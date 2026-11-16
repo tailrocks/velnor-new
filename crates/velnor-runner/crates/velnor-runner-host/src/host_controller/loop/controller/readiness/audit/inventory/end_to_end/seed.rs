@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write as _;
+
 use bollard::Docker;
 use sha2::{Digest, Sha256};
 
@@ -135,7 +137,10 @@ pub(super) async fn started_pair(
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut text, byte| {
+        write!(text, "{byte:02x}").expect("a string accepts formatted text");
+        text
+    })
 }
 
 async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
