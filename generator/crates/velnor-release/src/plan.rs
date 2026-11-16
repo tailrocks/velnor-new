@@ -7,7 +7,8 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::hazards::{
-    cargo_config, shadowed_by_extensionless_config, symlink_on_config_path, toolchain_path,
+    cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
+    toolchain_path,
 };
 use crate::members::{check_inventory, check_registries, inherited_tag, owner, settle_publishing};
 use crate::mise;
@@ -167,6 +168,10 @@ fn config_reaches(file: &str, root: &str) -> bool {
     reaches(base, root)
 }
 
+fn manifest_under(directory: &str, root: &str) -> bool {
+    root == "." || directory == root || directory.starts_with(&format!("{root}/"))
+}
+
 fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
@@ -290,6 +295,14 @@ impl ReleasePlan {
                         files.cargo_configs.contains_key(other)
                     }),
                 )?;
+            }
+        }
+        for (file, text) in &files.cargo_manifest_texts {
+            let directory = file.strip_suffix("/Cargo.toml").unwrap_or(".");
+            if configs.iter().any(|config| {
+                reaches(directory, &config.root) || manifest_under(directory, &config.root)
+            }) {
+                nightly_manifest(file, text)?;
             }
         }
         for (file, text) in files

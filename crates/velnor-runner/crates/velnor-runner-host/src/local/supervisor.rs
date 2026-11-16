@@ -13,6 +13,7 @@ use tokio::task::JoinSet;
 use crate::error::HostError;
 
 use super::authority::Client;
+use super::minted::MintedAgents;
 use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
 use super::remove::{labelled_agents, remove_labelled};
@@ -33,6 +34,7 @@ pub(super) struct Supervisor {
     pub(super) client: Client,
     pub(super) plan: Plan,
     pub(super) decisions: PathBuf,
+    pub(super) minted: MintedAgents,
     pub(super) sequence: AtomicU32,
     pub(super) pairs_removed: AtomicUsize,
     pub(super) agents_removed: AtomicUsize,
@@ -79,18 +81,29 @@ impl Supervisor {
 
     async fn sweep(&self) -> Result<(), HostError> {
         let label = format!("{ENVIRONMENT_LABEL}={}", self.plan.environment);
-        let agents = labelled_agents(&self.docker, &label).await?;
+        let mut agents = labelled_agents(&self.docker, &label).await?;
+        agents.extend(self.minted.load().await?);
+        agents.sort();
+        agents.dedup();
         let pairs = [label.clone(), PAIR_LABEL.to_owned()];
         let removed = remove_labelled(&self.docker, &pairs).await?;
         let mut cleanup = Ok(());
-        for (side, name) in agents {
-            let Some(side) = Side::parse(&side) else {
+        let mut unconfirmed = false;
+        for (side_name, name) in agents {
+            let Some(side) = Side::parse(&side_name) else {
                 continue;
             };
-            if self.client.delete_agent(side, &name).await.is_err() {
-                eprintln!("agent {name} was not deleted at runner.server");
-                cleanup = Err(HostError::Cleanup);
+            match self.client.delete_agent(side, &name).await {
+                Ok(true) => self.minted.retired(&side_name, &name).await?,
+                Ok(false) => unconfirmed = true,
+                Err(_) => {
+                    eprintln!("agent {name} was not deleted at runner.server");
+                    cleanup = Err(HostError::Cleanup);
+                }
             }
+        }
+        if cleanup.is_ok() && !unconfirmed {
+            self.minted.clear().await?;
         }
         if removed.containers + removed.volumes > 0 {
             println!(
@@ -122,6 +135,7 @@ pub async fn supervise(
         client,
         plan,
         decisions: state.join(DECISIONS_FILE),
+        minted: MintedAgents::new(state),
         sequence: AtomicU32::new(0),
         pairs_removed: AtomicUsize::new(0),
         agents_removed: AtomicUsize::new(0),

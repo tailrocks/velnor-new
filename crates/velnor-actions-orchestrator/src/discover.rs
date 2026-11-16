@@ -266,12 +266,26 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = true;
-    let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
+    if !config.stacks.ignore.iter().any(|id| id == "rust") {
+        crate::derive_groups::check_scoped_packages(&rust.configurations, workspaces)?;
+    }
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
+    let unions: Vec<_> = rust
+        .configurations
+        .iter()
+        .map(|configuration| {
+            crate::derive_groups::declared_union(
+                workspaces,
+                index,
+                config.workflow.policy,
+                configuration,
+            )
+        })
+        .collect();
     for workspace in workspaces {
-        for config_name in &rust.configurations {
+        for (config_name, union) in rust.configurations.iter().zip(&unions) {
             let (derived, narrowed) = crate::derive_groups::derive_for_config(
                 config,
                 index,
@@ -279,7 +293,7 @@ fn derive_all(
                 config_name,
                 explicit_fmt,
                 &mut archives,
-                &union,
+                union,
             )?;
             groups.extend(derived);
             fallbacks.extend(narrowed);

@@ -23,7 +23,14 @@ const DELETE_TIMEOUT: Duration = Duration::from_secs(60);
 pub(super) enum CallError {
     Unreachable,
     Refused(u16),
+    CleanedUp,
     Malformed,
+}
+
+#[derive(Deserialize)]
+struct Refusal {
+    #[serde(default)]
+    cleaned_up: bool,
 }
 
 #[derive(Deserialize)]
@@ -73,8 +80,8 @@ impl Client {
         }
     }
 
-    pub(super) async fn mint(&self, side: Side) -> Result<Minted, CallError> {
-        let body = format!("{{\"side\":\"{}\"}}", side.name()).into_bytes();
+    pub(super) async fn mint(&self, side: Side, name: &str) -> Result<Minted, CallError> {
+        let body = format!("{{\"side\":\"{}\",\"name\":\"{name}\"}}", side.name()).into_bytes();
         let answer = self
             .send(Method::POST, "/jit".to_owned(), body, MINT_TIMEOUT)
             .await?;
@@ -156,6 +163,10 @@ impl Client {
                 .to_bytes();
             if status == 200 {
                 Ok(bytes)
+            } else if status == 502
+                && serde_json::from_slice::<Refusal>(&bytes).is_ok_and(|body| body.cleaned_up)
+            {
+                Err(CallError::CleanedUp)
             } else {
                 Err(CallError::Refused(status))
             }

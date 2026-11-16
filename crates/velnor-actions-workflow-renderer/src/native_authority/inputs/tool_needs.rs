@@ -23,10 +23,26 @@ fn validate_configuration(
 ) -> Result<(), NativeAuthorityError> {
     if let Some(format) = input.workspace_format {
         admit_manifest(&format.manifest, input.cargo_workspaces, true)?;
-        if !rust_config.configurations.iter().any(|configuration| {
-            configuration.name == format.configuration && configuration.target == format.target
-        }) {
-            return Err(invalid("native_workspace_format_configuration"));
+        let configuration = rust_config
+            .configurations
+            .iter()
+            .find(|configuration| {
+                configuration.name == format.configuration && configuration.target == format.target
+            })
+            .ok_or_else(|| invalid("native_workspace_format_configuration"))?;
+        let root = format
+            .manifest
+            .strip_suffix("Cargo.toml")
+            .unwrap_or_default();
+        let root = root.strip_suffix('/').unwrap_or(root);
+        let in_scope = input
+            .cargo_workspaces
+            .iter()
+            .filter(|workspace| workspace.root == root)
+            .flat_map(|workspace| &workspace.packages)
+            .any(|package| configuration.applies_to(&package.name));
+        if !configuration.packages.is_empty() && !in_scope {
+            return Err(invalid("native_workspace_format_scope"));
         }
     }
     for task in input.rust_tasks {
@@ -38,6 +54,17 @@ fn validate_configuration(
                 .iter()
                 .find(|configuration| configuration.name == task.configuration)
                 .ok_or_else(|| invalid("native_rust_task_configuration"))?;
+            if !configuration.packages.is_empty() {
+                let in_scope = input
+                    .cargo_workspaces
+                    .iter()
+                    .flat_map(|workspace| &workspace.packages)
+                    .find(|package| package.id == task.unit && package.manifest == task.manifest)
+                    .is_some_and(|package| configuration.applies_to(&package.name));
+                if !task.unit.is_empty() && !in_scope {
+                    return Err(invalid("native_rust_task_package_scope"));
+                }
+            }
             let expected_all_features = !task.unit.is_empty()
                 && (configuration.all_features
                     || task.kind == velnor_actions_rust::TaskKind::Clippy
