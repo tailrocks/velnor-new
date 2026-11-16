@@ -123,7 +123,7 @@ fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(root.slug())
         )],
-        StepKind::CacheTrim { lane } => vec![trimmed_lane(lane)],
+        StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
     }
 }
@@ -167,7 +167,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
-        StepKind::CacheTrim { lane } => cache_trim(lane),
+        StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),

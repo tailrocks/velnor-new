@@ -174,6 +174,7 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     SaveBase,
     SaveBaseDecided,
+    SavingRun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,6 +193,7 @@ pub enum StepKind {
     },
     CacheTrim {
         lane: JobId,
+        family: TrimFamily,
     },
     CacheBudget(u64),
     RustComponents(Vec<String>),
@@ -218,9 +220,16 @@ pub enum StepKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrimFamily {
+    Target,
+    Sources,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaseExpiry {
     Never,
     OnDefaultBranch,
+    OnDispatch,
     OnDefaultBranchExceptPush,
 }
 

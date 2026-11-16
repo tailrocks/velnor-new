@@ -54,3 +54,4 @@ pub fn stale_entries(entries: &[CacheEntry], prefix: &str, keep: usize) -> Vec<u
 }
 
 pub const KEEP_NEWEST: usize = 2;
+pub const MAX_PAGES: usize = 20;

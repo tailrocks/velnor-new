@@ -75,7 +75,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     upload_cargo_logs(&mut jobs);
     let verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
-    let trim = trim_job(facts, &jobs, helper_root.is_some());
+    let trim = trim_job(facts, &jobs);
     jobs.extend(trim);
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),

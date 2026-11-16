@@ -201,7 +201,8 @@ impl RootJobs<'_> {
             steps.extend(checks());
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
-                    .map(skip_on_draft),
+                    .map(skip_on_draft)
+                    .map(on_saving_run),
             );
             steps.extend(saves.iter().cloned());
         }
@@ -247,7 +248,10 @@ impl RootJobs<'_> {
             let saves = self.saves(&test_id, None, true);
             let before_tests = self.nextest && !saves.is_empty();
             if before_tests {
-                steps.extend(self.cargo(vec![CargoCommand::NextestBuild]));
+                steps.extend(
+                    self.cargo(vec![CargoCommand::NextestBuild])
+                        .map(on_saving_run),
+                );
                 steps.extend(saves.iter().cloned());
             }
             steps.extend(self.cargo(tests));
@@ -317,6 +321,13 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
+    }
+}
+
+fn on_saving_run(step: Step) -> Step {
+    Step {
+        when: When::SavingRun,
+        ..step
     }
 }
 

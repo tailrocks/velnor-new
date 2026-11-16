@@ -249,3 +249,41 @@ fn cache_budget_cli_enforces_the_eight_gigabyte_limit() {
         .is_err()
     );
 }
+
+#[test]
+fn bounded_trim_leaves_later_pages_but_repository_budget_requires_and_uses_them() {
+    let large = || {
+        let api = Api::new();
+        let template = api.entries.borrow()[0].clone();
+        *api.entries.borrow_mut() = (1..=2001)
+            .map(|id| {
+                let mut entry = template.clone();
+                entry["id"] = json!(id);
+                entry
+            })
+            .collect();
+        api
+    };
+    for count in [2000, 2001] {
+        let api = large();
+        api.entries.borrow_mut().truncate(count);
+        let report = trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let ids: Vec<_> = api
+            .entries
+            .borrow()
+            .iter()
+            .map(|entry| entry["id"].as_u64().unwrap_or(0))
+            .collect();
+        let expected: Vec<_> = (1999..=u64::try_from(count).unwrap_or(0)).collect();
+        assert_eq!(ids, expected);
+        assert_eq!(report.contains("::warning::"), count > 2000, "{report}");
+    }
+    let api = large();
+    budget(&api, &repo(), 0, 0, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(api.entries.borrow().is_empty());
+    let mut api = large();
+    api.fail = Some("caches?&per_page=100&page=21".to_owned());
+    assert!(budget(&api, &repo(), 0, 0, false).is_err());
+    assert_eq!(api.entries.borrow().len(), 2001);
+}

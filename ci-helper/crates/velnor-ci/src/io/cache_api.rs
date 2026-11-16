@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
 
-use crate::cache::stale_entries;
+use crate::cache::{MAX_PAGES, stale_entries};
 use crate::cli::BudgetArgs;
 use crate::error::CiError;
 use crate::github::{GitHubWrite, Repo};
@@ -39,7 +39,8 @@ struct PullRequest {
 fn pages<T: serde::de::DeserializeOwned>(
     github: &dyn GitHubWrite,
     path: &str,
-) -> Result<Vec<T>, CiError> {
+    limit: Option<usize>,
+) -> Result<(Vec<T>, bool), CiError> {
     let mut entries = Vec::new();
     let mut page = 1;
     let mut expected_total = None;
@@ -56,10 +57,13 @@ fn pages<T: serde::de::DeserializeOwned>(
         let count = listing.actions_caches.len();
         entries.extend(listing.actions_caches);
         if entries.len() >= listing.total_count {
-            return Ok(entries);
+            return Ok((entries, false));
         }
         if count < PAGE {
             return Err(CiError::new("the cache listing is incomplete"));
+        }
+        if limit == Some(page) {
+            return Ok((entries, true));
         }
         page += 1;
     }
@@ -91,12 +95,21 @@ pub fn trim(
         encode(prefix),
         encode(reference)
     );
-    let entries: Vec<crate::cache::CacheEntry> = pages(github, &path)?;
+    let (entries, truncated): (Vec<crate::cache::CacheEntry>, bool) =
+        pages(github, &path, Some(MAX_PAGES))?;
     unique_ids(entries.iter().map(|entry| entry.id))?;
     let stale = stale_entries(&entries, prefix, keep);
     delete_entries(github, repo, &stale)?;
+    let warning = if truncated {
+        format!(
+            "::warning::cache trim stopped after {MAX_PAGES} pages ({} entries) for {prefix}; the rest is trimmed by the next run\n",
+            entries.len()
+        )
+    } else {
+        String::new()
+    };
     Ok(format!(
-        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n",
+        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n{warning}",
         entries
             .iter()
             .filter(|entry| entry.key.starts_with(prefix))
@@ -110,7 +123,8 @@ fn timestamp(text: &str) -> Result<i64, CiError> {
 }
 
 fn caches(github: &dyn GitHubWrite, repo: &Repo) -> Result<Vec<CacheEntry>, CiError> {
-    pages::<Entry>(github, &format!("/repos/{repo}/actions/caches?"))?
+    pages::<Entry>(github, &format!("/repos/{repo}/actions/caches?"), None)?
+        .0
         .into_iter()
         .map(|entry| {
             Ok(CacheEntry {

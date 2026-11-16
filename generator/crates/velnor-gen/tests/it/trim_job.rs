@@ -214,13 +214,11 @@ fn pull_request_writers(text: &str) -> Vec<String> {
 fn no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write()
 -> TestResult {
     let mut checked = 0;
-    let mut saw_trim = false;
     for entry in fs::read_dir(samples())? {
         let sample = entry?.path();
         let (files, _) = expected_with_notes(&load(&sample)?)?;
         for (path, text) in &files {
             checked += 1;
-            saw_trim |= text.contains("rust-trim:");
             let writers = pull_request_writers(text);
             assert!(
                 writers.is_empty(),
@@ -229,10 +227,10 @@ fn no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_acti
             );
         }
     }
-    assert!(
-        checked > 0 && saw_trim,
-        "{checked} workflows, trim seen {saw_trim}"
-    );
+    assert!(checked > 0, "{checked} workflows");
+    let saving = crate::pipeline::workflow(&crate::base_save::pinned("0.1.81", "")?)?;
+    assert!(saving.contains("rust-trim:"), "{saving}");
+    assert!(pull_request_writers(&saving).is_empty(), "{saving}");
     Ok(())
 }
 
