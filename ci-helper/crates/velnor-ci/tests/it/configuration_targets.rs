@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use crate::io::Repo;
 
 mod contexts;
+mod qualified;
 
 fn metadata(extra: bool) -> Value {
     json!({

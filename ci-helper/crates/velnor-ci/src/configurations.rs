@@ -112,6 +112,7 @@ pub(crate) enum Availability {
     Enabled,
     Unavailable,
     Unknown,
+    UnknownDependencyFeatures,
 }
 
 impl Availability {
@@ -120,6 +121,7 @@ impl Availability {
             Self::Enabled => "enabled",
             Self::Unavailable => "unavailable",
             Self::Unknown => "unknown (feature contexts)",
+            Self::UnknownDependencyFeatures => "unknown (dependency feature requirements)",
         }
     }
 }
@@ -263,7 +265,13 @@ pub(crate) fn resolved(bytes: &[u8]) -> Result<ResolvedFeatures, CiError> {
             .get(&member)
             .ok_or_else(|| CiError::new("cargo metadata workspace member has no resolve node"))?;
         for target in required_test_targets(package)? {
-            let availability = if contexts.uncertain(&member) {
+            let availability = if target
+                .required_features
+                .iter()
+                .any(|feature| feature.contains('/'))
+            {
+                Availability::UnknownDependencyFeatures
+            } else if contexts.uncertain(&member) {
                 Availability::Unknown
             } else if target.required_features.is_subset(member_features) {
                 Availability::Enabled
