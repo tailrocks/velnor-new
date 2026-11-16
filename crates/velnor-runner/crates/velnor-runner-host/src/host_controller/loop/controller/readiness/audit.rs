@@ -169,6 +169,7 @@ fn validate_owned_container(
         ("io.velnor.operation-id", operation_id.to_string()),
         ("io.velnor.connection-id", connection_id.to_owned()),
         ("io.velnor.role", role.to_owned()),
+        (IMAGE_KIND_LABEL, role.to_owned()),
     ]);
     if inspected.id.as_deref() != Some(id)
         || inspected.name.as_deref() != Some(format!("/{name}").as_str())
@@ -186,7 +187,7 @@ fn validate_owned_container(
 }
 
 fn unknown_velnor_label(key: &str, expected: &std::collections::HashMap<&str, String>) -> bool {
-    key.starts_with("io.velnor.") && key != IMAGE_KIND_LABEL && !expected.contains_key(key)
+    key.starts_with("io.velnor.") && !expected.contains_key(key)
 }
 
 async fn inspect_owned_volume(
