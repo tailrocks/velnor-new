@@ -167,6 +167,7 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Finalizer,
     Scheduled,
     ScheduledOrPush,
     CacheDebug,
@@ -213,6 +214,10 @@ pub enum StepKind {
     FailWhenANeedFailed,
     FailOnDraftRun,
     UploadCargoLog,
+    ReportCaches(Vec<CacheKey>),
+    UploadMetrics,
+    DownloadMetrics,
+    CheckMetrics,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -28,6 +28,7 @@ mod plan;
 mod policy;
 mod reads;
 mod repo_profile;
+mod report;
 mod root_jobs;
 mod roots;
 mod schedule;

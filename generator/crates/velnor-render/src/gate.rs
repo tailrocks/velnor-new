@@ -59,6 +59,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
+        When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
             if after_setup {

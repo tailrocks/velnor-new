@@ -100,7 +100,8 @@ jobs:
       - name: Add Rust targets
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -124,7 +125,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -205,7 +207,8 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -228,7 +231,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -340,13 +344,15 @@ jobs:
         name: Decide whether to save the build directory
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci cache decide --target-dir target
-      - name: Save the target cache
+      - id: save_target_root
+        name: Save the target cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
           key: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: save_sources_root
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_root.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -371,6 +377,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-root-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}","restore_step":"sources_root","root":".","save_failed":false,"save_step":"save_sources_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_root","root":".","save_failed":false,"save_step":"save_target_root","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-ci_helper:
     needs:
@@ -420,7 +443,8 @@ jobs:
       - name: Add Rust targets
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -444,7 +468,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -498,13 +523,15 @@ jobs:
         name: Decide whether to save the build directory
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci cache decide --target-dir ci-helper/target
-      - name: Save the target cache
+      - id: save_target_ci_helper
+        name: Save the target cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
           key: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: save_sources_ci_helper
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_ci_helper.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -530,6 +557,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}","restore_step":"sources_ci_helper","root":"ci-helper","save_failed":false,"save_step":"save_sources_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_ci_helper","root":"ci-helper","save_failed":false,"save_step":"save_target_ci_helper","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-crates_velnor_runner:
     needs:
@@ -579,7 +623,8 @@ jobs:
       - name: Add Rust targets
         working-directory: crates/velnor-runner
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -603,7 +648,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
-      - name: Restore the target cache
+      - id: target_crates_velnor_runner
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: crates/velnor-runner/target
@@ -699,13 +745,15 @@ jobs:
         name: Decide whether to save the build directory
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci cache decide --target-dir crates/velnor-runner/target
-      - name: Save the target cache
+      - id: save_target_crates_velnor_runner
+        name: Save the target cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: crates/velnor-runner/target
           key: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: save_sources_crates_velnor_runner
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -731,6 +779,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_failed":false,"save_step":"save_sources_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_failed":false,"save_step":"save_target_crates_velnor_runner","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-generator:
     needs:
@@ -780,7 +845,8 @@ jobs:
       - name: Add Rust targets
         working-directory: generator
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -804,7 +870,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
-      - name: Restore the target cache
+      - id: target_generator
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: generator/target
@@ -876,13 +943,15 @@ jobs:
         name: Decide whether to save the build directory
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci cache decide --target-dir generator/target
-      - name: Save the target cache
+      - id: save_target_generator
+        name: Save the target cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: generator/target
           key: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: save_sources_generator
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_generator.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -908,6 +977,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}","restore_step":"sources_generator","root":"generator","save_failed":false,"save_step":"save_sources_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_generator","root":"generator","save_failed":false,"save_step":"save_target_generator","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-local:
     needs:
@@ -957,7 +1043,8 @@ jobs:
       - name: Add Rust targets
         working-directory: local
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -981,7 +1068,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
-      - name: Restore the target cache
+      - id: target_local
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: local/target
@@ -1041,13 +1129,15 @@ jobs:
         name: Decide whether to save the build directory
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: velnor-ci cache decide --target-dir local/target
-      - name: Save the target cache
+      - id: save_target_local
+        name: Save the target cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: local/target
           key: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: save_sources_local
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_local.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -1073,6 +1163,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-local-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}","restore_step":"sources_local","root":"local","save_failed":false,"save_step":"save_sources_local","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_local","root":"local","save_failed":false,"save_step":"save_target_local","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   rust-inputs-audit:
     needs:
       - rust-plan
@@ -1114,7 +1221,8 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
-      - name: Save the tools cache
+      - id: save_tools
+        name: Save the tools cache
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -1137,7 +1245,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -1158,7 +1267,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -1179,7 +1289,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
-      - name: Restore the target cache
+      - id: target_crates_velnor_runner
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: crates/velnor-runner/target
@@ -1200,7 +1311,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
-      - name: Restore the target cache
+      - id: target_generator
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: generator/target
@@ -1221,7 +1333,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
-      - name: Restore the target cache
+      - id: target_local
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: local/target
@@ -1288,6 +1401,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+      - name: Report cache telemetry
+        if: '${{ !cancelled() }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","lock_prefix":null,"matched_key":null,"requested_key":"velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}","restore_step":"tools","root":null,"save_failed":false,"save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-root-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}","restore_step":"sources_root","root":".","save_failed":false,"save_step":"save_sources_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-inputs-audit.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-inputs-audit.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_root","root":".","save_failed":false,"save_step":"save_target_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}","restore_step":"sources_ci_helper","root":"ci-helper","save_failed":false,"save_step":"save_sources_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-inputs-audit.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-inputs-audit.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_ci_helper","root":"ci-helper","save_failed":false,"save_step":"save_target_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_failed":false,"save_step":"save_sources_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-inputs-audit.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-inputs-audit.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_failed":false,"save_step":"save_target_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}","restore_step":"sources_generator","root":"generator","save_failed":false,"save_step":"save_sources_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-inputs-audit.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-inputs-audit.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_generator","root":"generator","save_failed":false,"save_step":"save_target_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","lock_prefix":"velnor-src-${{ runner.os }}-${{ runner.arch }}-local-","matched_key":null,"requested_key":"velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}","restore_step":"sources_local","root":"local","save_failed":false,"save_step":"save_sources_local","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","lock_prefix":"velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-","matched_key":null,"requested_key":"velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}","restore_step":"target_local","root":"local","save_failed":false,"save_step":"save_target_local","usable":false,"usable_same_lock":false}]'
+          VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
+          VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
+        run: velnor-ci report
+      - name: Upload cache metrics
+        if: '${{ !cancelled() }}'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: 'ci-metrics-${{ github.job }}'
+          path: '${{ runner.temp }}/ci-metrics.json'
+          if-no-files-found: error
+          retention-days: 3
   rust-trim:
     needs:
       - rust-root
@@ -1360,3 +1490,41 @@ jobs:
       - name: Fail when a Rust job failed or was cancelled
         if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
         run: exit 1
+  cache:
+    name: Cache
+    needs:
+      - rust-root
+      - rust-ci_helper
+      - rust-crates_velnor_runner
+      - rust-generator
+      - rust-local
+      - rust-inputs-audit
+    if: '${{ !cancelled() }}'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download velnor-ci
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: velnor-ci
+          path: '${{ runner.temp }}/vbin'
+      - name: Make velnor-ci executable
+        run: |
+          chmod +x "$RUNNER_TEMP/vbin/velnor-ci"
+          echo "$RUNNER_TEMP/vbin" >> "$GITHUB_PATH"
+      - name: Download cache metrics
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: 'ci-metrics-*'
+          path: '${{ runner.temp }}/ci-metrics'
+      - name: Check cache waste
+        env:
+          VELNOR_REPORT_NEEDS: '${{ toJSON(needs) }}'
+        run: 'velnor-ci report --check "$RUNNER_TEMP/ci-metrics"'

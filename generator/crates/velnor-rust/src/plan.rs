@@ -10,7 +10,7 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{expiry, trim_job};
+use crate::base_cache::expiry;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -23,7 +23,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
@@ -74,20 +73,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root));
     }
     upload_cargo_logs(&mut jobs);
-    let verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
-    let trim = trim_job(facts, &jobs, helper_root.is_some());
-    jobs.extend(trim);
-    jobs.push(Job {
-        name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
-        needs: verdict_needs,
-        when: When::NotCancelled,
-        steps: draft_guard
-            .into_iter()
-            .chain([step(StepKind::FailWhenANeedFailed)])
-            .collect(),
-        ..job(facts, VERDICT_JOB)
-    });
+    crate::report::finish(facts, &mut jobs, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {

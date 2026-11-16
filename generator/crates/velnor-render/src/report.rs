@@ -1,0 +1,120 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::cache::render_key;
+use crate::rules::{RenderedStep, Value};
+use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
+use velnor_model::CacheKey;
+
+pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
+    let root = match key {
+        CacheKey::Tools { .. } => None,
+        CacheKey::Sources { root, .. }
+        | CacheKey::Target { root, .. }
+        | CacheKey::Delta { root, .. } => Some(root),
+    };
+    let family = if key.family() == "tools" {
+        "tools"
+    } else if key.family() == "sources" {
+        "sources"
+    } else {
+        key.family()
+    };
+    format!(
+        "{}{}{}",
+        if restore { "" } else { "save_" },
+        family,
+        root.map_or_else(String::new, |root| format!("_{}", root.slug()))
+    )
+}
+
+pub(crate) fn lane(caches: &[CacheKey]) -> RenderedStep {
+    let caches: Vec<_> = caches.iter().map(|key| {
+        let rendered = render_key(key);
+        let root = match key { CacheKey::Tools { .. } => None, CacheKey::Sources { root, .. } | CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.lock_file().parent().map_or_else(|| ".".to_owned(), |root| root.to_string())) };
+        serde_json::json!({"family":key.family(),"root":root,"restore_step":cache_id(key,true),"save_step":cache_id(key,false),"requested_key":rendered.key,"lock_prefix":rendered.restore_keys.first(),"matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save_failed":false})
+    }).collect();
+    RenderedStep {
+        name: "Report cache telemetry".to_owned(),
+        run: Some("velnor-ci report".to_owned()),
+        env: vec![
+            (
+                "GITHUB_TOKEN".to_owned(),
+                Value::Expr("${{ github.token }}".to_owned()),
+            ),
+            (
+                "VELNOR_REPORT_CACHES".to_owned(),
+                Value::Expr(serde_json::Value::Array(caches).to_string()),
+            ),
+            (
+                "VELNOR_REPORT_STEPS".to_owned(),
+                Value::Expr("${{ toJSON(steps) }}".to_owned()),
+            ),
+            (
+                "VELNOR_TESTS_RUN".to_owned(),
+                Value::Expr("${{ steps.test.outputs.tests_run }}".to_owned()),
+            ),
+            (
+                "VELNOR_REPORT_DEFAULT_BRANCH".to_owned(),
+                Value::Expr("${{ github.event.repository.default_branch }}".to_owned()),
+            ),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn artifact(upload: bool) -> RenderedStep {
+    RenderedStep {
+        name: if upload {
+            "Upload cache metrics"
+        } else {
+            "Download cache metrics"
+        }
+        .to_owned(),
+        uses: Some(
+            if upload {
+                UPLOAD_ARTIFACT
+            } else {
+                DOWNLOAD_ARTIFACT
+            }
+            .to_owned(),
+        ),
+        with: if upload {
+            vec![
+                (
+                    "name".to_owned(),
+                    Value::Expr("ci-metrics-${{ github.job }}".to_owned()),
+                ),
+                (
+                    "path".to_owned(),
+                    Value::Expr("${{ runner.temp }}/ci-metrics.json".to_owned()),
+                ),
+                (
+                    "if-no-files-found".to_owned(),
+                    Value::Text("error".to_owned()),
+                ),
+                ("retention-days".to_owned(), Value::Int(3)),
+            ]
+        } else {
+            vec![
+                ("pattern".to_owned(), Value::Text("ci-metrics-*".to_owned())),
+                (
+                    "path".to_owned(),
+                    Value::Expr("${{ runner.temp }}/ci-metrics".to_owned()),
+                ),
+            ]
+        },
+        ..RenderedStep::default()
+    }
+}
+pub(crate) fn check() -> RenderedStep {
+    RenderedStep {
+        name: "Check cache waste".to_owned(),
+        run: Some("velnor-ci report --check \"$RUNNER_TEMP/ci-metrics\"".to_owned()),
+        env: vec![(
+            "VELNOR_REPORT_NEEDS".to_owned(),
+            Value::Expr("${{ toJSON(needs) }}".to_owned()),
+        )],
+        ..RenderedStep::default()
+    }
+}

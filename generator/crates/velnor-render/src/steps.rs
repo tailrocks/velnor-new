@@ -9,7 +9,7 @@ use velnor_model::{
 use crate::base_steps::{base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step};
+use crate::gate::{PLAN_STEP, condition, output, plan_source, sources_step};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -22,8 +22,9 @@ pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTEST
 
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
-const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
-const DOWNLOAD_ARTIFACT: &str =
+pub(crate) const UPLOAD_ARTIFACT: &str =
+    "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
+pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const HELPER_ARTIFACT: &str = "velnor-ci";
 const CARGO_LOG_ARTIFACT: &str = "velnor-cargo-log";
@@ -136,6 +137,10 @@ fn variable(need: GateNeed) -> &'static str {
 
 fn step_body(kind: &StepKind) -> RenderedStep {
     match kind {
+        StepKind::ReportCaches(caches) => crate::report::lane(caches),
+        StepKind::UploadMetrics => crate::report::artifact(true),
+        StepKind::DownloadMetrics => crate::report::artifact(false),
+        StepKind::CheckMetrics => crate::report::check(),
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
             uses: Some(CHECKOUT.to_owned()),
@@ -280,11 +285,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         ));
     }
     RenderedStep {
-        id: match key {
-            CacheKey::Tools { .. } if fallbacks => Some(TOOLS_STEP.to_owned()),
-            CacheKey::Sources { root, .. } if fallbacks => Some(sources_step(root.slug())),
-            _ => None,
-        },
+        id: Some(crate::report::cache_id(key, fallbacks)),
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         with,

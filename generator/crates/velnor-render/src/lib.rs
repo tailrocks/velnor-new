@@ -99,3 +99,4 @@ pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
             .collect(),
     )
 }
+mod report;
