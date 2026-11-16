@@ -132,18 +132,20 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
 }
 
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
-    let (name, expected) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+    let (name, expected, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
         (
             "Check that the tag is the commit the tag job found it on in the verified history",
             format!(
                 "${{{{ needs.tag.outputs.{} }}}}",
                 commit_output(&binary.package)
             ),
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
         )
     } else {
         (
             "Check that the tag is the commit the gate verified",
             VERIFIED_COMMIT.to_owned(),
+            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
         )
     };
     RenderedStep {
@@ -151,10 +153,7 @@ fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
             ("COMMIT", &expected),
             ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
         ]),
-        ..command(
-            name.to_owned(),
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
-        )
+        ..command(name.to_owned(), test.to_owned())
     }
 }
 

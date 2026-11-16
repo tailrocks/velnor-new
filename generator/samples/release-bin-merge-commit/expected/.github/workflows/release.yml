@@ -212,7 +212,7 @@ jobs:
         name: Record the released packages and the commits their tags are on
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
           RUSTUP_TOOLCHAIN: stable
@@ -238,7 +238,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -283,7 +283,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -328,7 +328,7 @@ jobs:
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:

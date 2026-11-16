@@ -68,23 +68,34 @@ fn the_record_step_runs_after_every_root_and_names_every_config_so_a_rerun_recov
 }
 
 #[test]
-fn the_record_step_reads_with_the_job_token_and_the_pinned_toolchain_never_the_app_token()
--> TestResult {
+fn the_record_step_lists_drafts_with_the_release_app_token_the_job_already_minted() -> TestResult {
     let tag = tag_job("0.1.81", &[APP], "roots = [\".\"]\n")?;
     let step = record(&tag)?;
     assert_eq!(
         step.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text),
-        Some("${{ github.token }}")
+        Some("${{ steps.app.outputs.token }}")
+    );
+    let ids: Vec<Option<&str>> = steps(&tag)
+        .iter()
+        .map(|s| s.get("id").and_then(Node::text))
+        .collect();
+    let app = ids
+        .iter()
+        .position(|id| *id == Some("app"))
+        .ok_or("no app token step")?;
+    let record = ids
+        .iter()
+        .position(|id| *id == Some("record"))
+        .ok_or("no record step")?;
+    assert!(app < record);
+    assert_eq!(
+        tag.at(&["permissions", "contents"]).and_then(Node::text),
+        Some("read")
     );
     assert_eq!(
         step.at(&["env", "RUSTUP_TOOLCHAIN"]).and_then(Node::text),
         Some("stable")
     );
-    let env = step.get("env").ok_or("no env")?;
-    for key in env.keys() {
-        let value = env.get(key).and_then(Node::text).unwrap_or_default();
-        assert!(!value.contains("steps.app"), "{key}={value}");
-    }
     Ok(())
 }
 

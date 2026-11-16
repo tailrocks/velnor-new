@@ -6,7 +6,8 @@ use velnor_release::{RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::VERIFIED_COMMIT;
 use crate::release_steps::{
-    COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, TOOLCHAIN, join, shell_word, variables,
+    APP_TOKEN_OUTPUT, COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, TOOLCHAIN, join, shell_word,
+    variables,
 };
 use crate::rules::{RenderedStep, Value};
 
@@ -25,7 +26,7 @@ pub(crate) fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String
         name: "Record the released packages and the commits their tags are on".to_owned(),
         env: {
             let mut env = variables(&[
-                ("GITHUB_TOKEN", "${{ github.token }}"),
+                ("GITHUB_TOKEN", APP_TOKEN_OUTPUT),
                 ("REPOSITORY", "${{ github.repository }}"),
                 ("COMMIT", VERIFIED_COMMIT),
             ]);

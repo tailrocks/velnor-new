@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::thread;
 
-use velnor_ci::github::{compare_path, tag_ref_path};
+use velnor_ci::github::{commit_path, tag_ref_path};
 
 use crate::support::repo;
 
@@ -110,13 +110,13 @@ fn draft(author: &str, kind: &str) -> String {
 fn api(author: &str, kind: &str) -> String {
     let repo = repo();
     let mut responses = BTreeMap::new();
-    for (tag, sha) in [("app-v0.1.0", APP_COMMIT), ("tools-v0.1.0", TOOLS_COMMIT)] {
-        responses.insert(tag_ref_path(&repo, tag), commit(sha));
-        responses.insert(
-            compare_path(&repo, sha, MERGE),
-            r#"{"status":"ahead"}"#.to_owned(),
-        );
+    for tag in ["app-v0.1.0", "tools-v0.1.0"] {
+        responses.insert(tag_ref_path(&repo, tag), commit(APP_COMMIT));
     }
+    responses.insert(
+        commit_path(&repo, MERGE),
+        format!(r#"{{"parents":[{{"sha":"{TOOLS_COMMIT}"}},{{"sha":"{APP_COMMIT}"}}]}}"#),
+    );
     responses.insert(
         "/repos/tailrocks/velnor-new/releases?per_page=100&page=1".to_owned(),
         draft(author, kind),
@@ -158,7 +158,7 @@ fn a_rerun_after_a_failed_second_root_records_the_draft_the_first_root_created()
     assert_eq!(
         fs::read_to_string(&output).unwrap_or_default(),
         format!(
-            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={APP_COMMIT}\ntools_commit={TOOLS_COMMIT}\n"
+            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={APP_COMMIT}\ntools_commit={APP_COMMIT}\n"
         )
     );
 }

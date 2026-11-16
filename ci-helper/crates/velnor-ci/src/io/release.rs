@@ -35,13 +35,13 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
         let repo = Repo::parse(repo)?;
         if let Some(app) = &args.app {
-            tags.extend(recover(
-                &github,
-                &repo,
-                app,
-                &expected_tags(&args.config)?,
-                &tags,
-            )?);
+            let recovery = recover(&github, &repo, app, &expected_tags(&args.config)?, &tags)?;
+            for (package, tag) in &recovery.without_draft {
+                eprintln!(
+                    "velnor-ci: tag {tag} of {package} exists but has no draft release to recover; skipping it"
+                );
+            }
+            tags.extend(recovery.found);
         }
         lines.push_str(&tag_lines(&tags));
         lines.push_str(&tagged_commits(&github, &repo, verified, &tags)?);

@@ -10,16 +10,22 @@ use crate::release::{PlainName, output_name};
 
 const PAGE: usize = 100;
 
+#[derive(Debug, Default)]
+pub struct Recovery {
+    pub found: BTreeMap<PlainName, PlainName>,
+    pub without_draft: BTreeMap<PlainName, PlainName>,
+}
+
 pub fn recover(
     github: &dyn GitHub,
     repo: &Repo,
     app: &PlainName,
     expected: &BTreeMap<String, String>,
     recorded: &BTreeMap<PlainName, PlainName>,
-) -> Result<BTreeMap<PlainName, PlainName>, CiError> {
+) -> Result<Recovery, CiError> {
     let bot = format!("{app}[bot]");
     let mut releases: Option<Vec<ApiRelease>> = None;
-    let mut found = BTreeMap::new();
+    let mut recovery = Recovery::default();
     for (package, tag) in expected {
         let (package, tag) = (output_name(package)?, PlainName::tag(tag)?);
         if recorded.contains_key(&package) || recorded.values().any(|other| *other == tag) {
@@ -39,10 +45,14 @@ pub fn recover(
             .filter(|release| release.tag_name == tag.as_str())
             .collect();
         match tagged.as_slice() {
-            [] => {}
-            [only] if !only.draft => {}
+            [] => {
+                recovery.without_draft.insert(package, tag);
+            }
+            [only] if !only.draft => {
+                recovery.without_draft.insert(package, tag);
+            }
             [only] if only.draft && made_by(only, &bot) => {
-                found.insert(package, tag);
+                recovery.found.insert(package, tag);
             }
             [only] if only.draft => {
                 return Err(CiError::new(format!(
@@ -64,7 +74,7 @@ pub fn recover(
             }
         }
     }
-    Ok(found)
+    Ok(recovery)
 }
 
 fn absent(github: &dyn GitHub, path: &str) -> Result<bool, CiError> {

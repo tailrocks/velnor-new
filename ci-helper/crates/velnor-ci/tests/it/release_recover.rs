@@ -3,9 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_ci::github::{release_by_tag_path, tag_ref_path};
+use velnor_ci::error::CiError;
+use velnor_ci::github::{GitHub, release_by_tag_path, tag_ref_path};
 use velnor_ci::release::PlainName;
-use velnor_ci::release_recover::recover;
+use velnor_ci::release_recover::{Recovery, recover};
 
 use crate::support::{FakeGitHub, repo};
 
@@ -46,25 +47,54 @@ fn unpublished(fake: &mut FakeGitHub, tag: &str, releases: &[String]) {
     fake.respond(RELEASES.to_owned(), &format!("[{}]", releases.join(",")));
 }
 
-fn run(fake: &FakeGitHub, recorded: &[(&str, &str)]) -> Result<Vec<(String, String)>, String> {
+fn recovery_of(github: &dyn GitHub, recorded: &[(&str, &str)]) -> Result<Recovery, String> {
     let recorded = recorded
         .iter()
         .map(|(package, tag_name)| (name(package), tag(tag_name)))
         .collect();
     recover(
-        fake,
+        github,
         &repo(),
         &name("velnor-release"),
         &expected(),
         &recorded,
     )
-    .map(|found| {
-        found
+    .map_err(|e| e.to_string())
+}
+
+fn run(fake: &FakeGitHub, recorded: &[(&str, &str)]) -> Result<Vec<(String, String)>, String> {
+    recovery_of(fake, recorded).map(|recovery| {
+        recovery
+            .found
             .iter()
             .map(|(package, tag)| (package.to_string(), tag.to_string()))
             .collect()
     })
-    .map_err(|e| e.to_string())
+}
+
+struct ReadOnlyToken<'a>(&'a FakeGitHub);
+
+impl GitHub for ReadOnlyToken<'_> {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        let body = self.0.get(path)?;
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) else {
+            return Ok(body);
+        };
+        match value {
+            serde_json::Value::Array(releases) => Ok(serde_json::Value::Array(
+                releases.into_iter().filter(|r| !is_draft(r)).collect(),
+            )
+            .to_string()),
+            release if is_draft(&release) => {
+                Err(CiError::missing(format!("GET {path}: http status: 404")))
+            }
+            _ => Ok(body),
+        }
+    }
+}
+
+fn is_draft(release: &serde_json::Value) -> bool {
+    release.get("draft").and_then(serde_json::Value::as_bool) == Some(true)
 }
 
 fn app_draft(tag: &str) -> String {
@@ -158,4 +188,33 @@ fn a_failed_lookup_that_is_not_a_missing_page_is_refused() {
         .err()
         .unwrap_or_default();
     assert!(said.contains("no recorded response"), "{said}");
+}
+
+#[test]
+fn a_tag_with_no_draft_is_reported_so_the_skip_is_visible() {
+    let mut fake = FakeGitHub::default();
+    unpublished(&mut fake, "app-v1.0.0", &[]);
+    let recovery = recovery_of(&fake, &[("tools", "tools-v2.0.0")]).unwrap_or_default();
+    assert!(recovery.found.is_empty());
+    assert_eq!(
+        recovery
+            .without_draft
+            .iter()
+            .map(|(package, tag)| (package.to_string(), tag.to_string()))
+            .collect::<Vec<_>>(),
+        vec![("app".to_owned(), "app-v1.0.0".to_owned())]
+    );
+}
+
+#[test]
+fn a_token_that_cannot_see_drafts_recovers_nothing_while_one_with_push_access_does() {
+    let mut fake = FakeGitHub::default();
+    unpublished(&mut fake, "app-v1.0.0", &[app_draft("app-v1.0.0")]);
+    let with_push = recovery_of(&fake, &[("tools", "tools-v2.0.0")]).unwrap_or_default();
+    assert_eq!(with_push.found.len(), 1);
+    assert!(with_push.without_draft.is_empty());
+    let read_only =
+        recovery_of(&ReadOnlyToken(&fake), &[("tools", "tools-v2.0.0")]).unwrap_or_default();
+    assert!(read_only.found.is_empty());
+    assert_eq!(read_only.without_draft.len(), 1);
 }

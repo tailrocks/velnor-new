@@ -210,6 +210,11 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 }
 
 #[must_use]
+pub fn commit_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/commits/{}", encode(sha))
+}
+
+#[must_use]
 pub fn tag_ref_path(repo: &Repo, tag: &str) -> String {
     format!("/repos/{repo}/git/ref/tags/{}", encode(tag))
 }

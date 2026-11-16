@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::github::{ApiCompare, GitHub, Repo, compare_path, parse, tag_object_path, tag_ref_path};
+use crate::github::{GitHub, Repo, commit_path, parse, tag_object_path, tag_ref_path};
 use crate::release::PlainName;
 
 const COMMIT_SUFFIX: &str = "_commit";
@@ -23,6 +23,16 @@ struct ApiObject {
     sha: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ApiCommit {
+    parents: Vec<ApiParent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiParent {
+    sha: String,
+}
+
 pub fn tagged_commits(
     github: &dyn GitHub,
     repo: &Repo,
@@ -31,6 +41,7 @@ pub fn tagged_commits(
 ) -> Result<String, CiError> {
     let verified = full_sha("the verified commit", verified)?;
     let mut lines = String::new();
+    let mut second_parent: Option<Option<String>> = None;
     for (package, tag) in tags {
         let output = format!("{package}{COMMIT_SUFFIX}");
         if tags.keys().any(|other| other.as_str() == output) {
@@ -39,7 +50,17 @@ pub fn tagged_commits(
             )));
         }
         let commit = tagged_commit(github, repo, tag)?;
-        require_in_history(github, repo, tag, &commit, &verified)?;
+        if commit != verified {
+            if second_parent.is_none() {
+                second_parent = Some(merge_second_parent(github, repo, &verified)?);
+            }
+            let parent = second_parent.as_ref().and_then(|known| known.as_deref());
+            if parent != Some(commit.as_str()) {
+                return Err(CiError::new(format!(
+                    "tag {tag} is on {commit}, which is neither the verified commit {verified} nor the release pull request head merged into it"
+                )));
+            }
+        }
         lines.push_str(&[output.as_str(), "=", commit.as_str(), "\n"].concat());
     }
     Ok(lines)
@@ -68,24 +89,15 @@ fn not_a_commit(tag: &PlainName, kind: &str) -> CiError {
     CiError::new(format!("tag {tag} names a {kind}, not a commit"))
 }
 
-fn require_in_history(
+fn merge_second_parent(
     github: &dyn GitHub,
     repo: &Repo,
-    tag: &PlainName,
-    commit: &str,
     verified: &str,
-) -> Result<(), CiError> {
-    let compare: ApiCompare = parse(
-        &github.get(&compare_path(repo, commit, verified))?,
-        "comparison",
-    )?;
-    if matches!(compare.status.as_str(), "identical" | "ahead") {
-        Ok(())
-    } else {
-        Err(CiError::new(format!(
-            "tag {tag} is on {commit}, which is not in the history of the verified commit {verified} (comparison: {})",
-            compare.status
-        )))
+) -> Result<Option<String>, CiError> {
+    let commit: ApiCommit = parse(&github.get(&commit_path(repo, verified))?, "commit")?;
+    match commit.parents.as_slice() {
+        [_, second] => Ok(Some(second.sha.clone())),
+        _ => Ok(None),
     }
 }
 

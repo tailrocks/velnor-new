@@ -99,6 +99,7 @@ pub enum Rule {
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
+    OutputNameCollision(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +115,12 @@ impl fmt::Display for RuleViolation {
             return write!(
                 f,
                 "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+            );
+        }
+        if let Rule::OutputNameCollision(name) = &self.rule {
+            return write!(
+                f,
+                "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -143,7 +150,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
-            Rule::WorkflowTooLarge(_) => Ok(()),
+            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"

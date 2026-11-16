@@ -10,10 +10,11 @@ use velnor_rust::LOCK_PATH;
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::{Node, parse};
+use velnor_gen::GenerateError;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const CHECK: &str = "test \"$CHECKED_OUT\" = \"$COMMIT\"";
+const CHECK: &str = "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"";
 const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n";
 
 fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<dyn Error>> {
@@ -31,9 +32,13 @@ fn binaries(helper: &str) -> Result<Node, Box<dyn Error>> {
 }
 
 fn the_check(build: &Node) -> Result<&Node, Box<dyn Error>> {
+    find_check(build, CHECK)
+}
+
+fn find_check<'a>(build: &'a Node, check: &str) -> Result<&'a Node, Box<dyn Error>> {
     steps(build)
         .iter()
-        .find(|step| step.get("run").and_then(Node::text) == Some(CHECK))
+        .find(|step| step.get("run").and_then(Node::text) == Some(check))
         .ok_or_else(|| "no commit check".into())
 }
 
@@ -53,7 +58,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
         )
     );
     for (key, value) in [
-        ("GITHUB_TOKEN", "${{ github.token }}"),
+        ("GITHUB_TOKEN", "${{ steps.app.outputs.token }}"),
         ("REPOSITORY", "${{ github.repository }}"),
         ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
     ] {
@@ -122,10 +127,58 @@ fn a_helper_without_the_commit_flags_keeps_the_head_sha_check_which_a_merge_comm
         tag.get("outputs").map(Node::keys),
         Some(vec!["app", "tools"])
     );
-    let check = the_check(job(&tree, "build-app-linux-x64")?)?;
+    let check = find_check(
+        job(&tree, "build-app-linux-x64")?,
+        "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+    )?;
     assert_eq!(
         check.at(&["env", "COMMIT"]).and_then(Node::text),
         Some("${{ github.event.workflow_run.head_sha }}")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_build_refuses_an_empty_commit_output_instead_of_comparing_two_empty_strings() -> TestResult {
+    let tree = binaries("0.1.81")?;
+    let check = the_check(job(&tree, "build-app-linux-x64")?)?;
+    let run = check.get("run").and_then(Node::text).ok_or("no run")?;
+    let status = std::process::Command::new("/bin/bash")
+        .args(["-ec", run])
+        .env("COMMIT", "")
+        .env("CHECKED_OUT", "")
+        .status()?;
+    assert!(!status.success());
+    let status = std::process::Command::new("/bin/bash")
+        .args(["-ec", run])
+        .env("COMMIT", "abc")
+        .env("CHECKED_OUT", "abc")
+        .status()?;
+    assert!(status.success());
+    Ok(())
+}
+
+#[test]
+fn a_package_named_like_another_packages_commit_output_is_refused_at_generation() -> TestResult {
+    const SHADOW: Root = Root {
+        dir: "tools",
+        package: "app_commit",
+        prefix: "release-plz-shadow-",
+        publishes: false,
+    };
+    let mut view = release_view(
+        &[APP, SHADOW],
+        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
+    )?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
+    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+        return Err("rendered".into());
+    };
+    assert_eq!(violations.len(), 1);
+    assert_eq!(
+        violations[0].to_string(),
+        "the tag job would define the output app_commit twice: it is both a released package and the commit output of another package; rename the package"
     );
     Ok(())
 }
