@@ -20,14 +20,6 @@ impl ReleaseError {
                 f,
                 "{file}: a cargo proxy, CA override or non-crates.io default registry would redirect the crates.io publish token"
             ),
-            Self::CargoOffline { file } => write!(
-                f,
-                "{file}: net.offline stops cargo publish from reaching crates.io"
-            ),
-            Self::ReleasePlzVersionsConflict { first, second } => write!(
-                f,
-                "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
-            ),
             Self::PublishNamesOtherRegistry {
                 root,
                 manifest,
@@ -102,6 +94,14 @@ impl ReleaseError {
             Self::CargoConfigKeyNotAllowed { file, key } => write!(
                 f,
                 "{file}: cargo config key {key} is not on the list known to be harmless while release-plz holds the release App token"
+            ),
+            Self::CargoOffline { file } => write!(
+                f,
+                "{file}: net.offline stops cargo publish from reaching crates.io"
+            ),
+            Self::ReleasePlzVersionsConflict { first, second } => write!(
+                f,
+                "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
             ),
             _ => Ok(()),
         }
