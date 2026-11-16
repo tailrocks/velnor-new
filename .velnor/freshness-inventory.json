@@ -192,7 +192,7 @@
       "held_version": "v0.21.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.22.1 published 2026-11-11T20:16:13Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
+      "reason": "v0.22.1 published 2026-11-11T20:16:13Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
       "granted": "2026-11-06",
       "expires": "2026-11-20"
     },
@@ -210,7 +210,7 @@
       "held_version": "1.29.2",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.30.0 published 2026-11-09T20:42:25Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml) and the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
+      "reason": "v1.30.0 published 2026-11-09T20:42:25Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
       "granted": "2026-11-12",
       "expires": "2026-11-26"
     },
