@@ -95,15 +95,13 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let (sender, receiver) = mpsc::channel();
-    let mut streams = 0;
+    let mut slots = Vec::new();
     if let Some(from) = child.stdout.take() {
-        streams += 1;
         let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        spawn_pump(from, std::io::stdout(), &log, counted, sender.clone());
+        watch_stream(&mut slots, from, std::io::stdout(), &log, counted, &sender);
     }
     if let Some(from) = child.stderr.take() {
-        streams += 1;
-        spawn_pump(from, std::io::stderr(), &log, None, sender.clone());
+        watch_stream(&mut slots, from, std::io::stderr(), &log, None, &sender);
     }
     drop(sender);
     let handle = signals.handle();
@@ -112,7 +110,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, counts) = collect(&receiver, streams);
+    let (mut lost, counts) = collect(&receiver, &slots);
     if runs_nextest(&args.command)
         && let Some(counts) = counts
     {
@@ -213,20 +211,39 @@ fn list_matches(argv: &[String]) -> Option<BTreeMap<String, u64>> {
     runnable_matches(&output.stdout)
 }
 
+struct Finished {
+    pumped: Pumped,
+    index: usize,
+}
+
 fn collect(
-    receiver: &mpsc::Receiver<Pumped>,
-    streams: usize,
+    receiver: &mpsc::Receiver<Finished>,
+    slots: &[Arc<Mutex<Option<TestCounts>>>],
 ) -> (Option<std::io::Error>, Option<TestCounts>) {
     let mut lost = None;
     let mut counts = None;
+    let mut open = vec![true; slots.len()];
+    let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
-    for _ in 0..streams {
+    while waiting > 0 {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(pumped) => {
-                lost = lost.or(pumped.failure);
-                counts = pumped.counts.or(counts);
+            Ok(finished) => {
+                lost = lost.or(finished.pumped.failure);
+                counts = finished.pumped.counts.or(counts);
+                open[finished.index] = false;
+                waiting -= 1;
             }
             Err(_) => break,
+        }
+    }
+    for (index, slot) in slots.iter().enumerate() {
+        if open[index]
+            && let Some(parsed) = slot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        {
+            counts = Some(parsed);
         }
     }
     (lost, counts)
@@ -246,16 +263,32 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
+fn watch_stream(
+    slots: &mut Vec<Arc<Mutex<Option<TestCounts>>>>,
+    from: impl Read + Send + 'static,
+    to: impl Write + Send + 'static,
+    log: &Arc<Mutex<std::fs::File>>,
+    count: Option<Arc<Mutex<DoctestCount>>>,
+    done: &mpsc::Sender<Finished>,
+) {
+    let slot = Arc::new(Mutex::new(None));
+    let index = slots.len();
+    slots.push(Arc::clone(&slot));
+    spawn_pump(from, to, log, count, slot, index, done.clone());
+}
+
 fn spawn_pump(
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: mpsc::Sender<Pumped>,
+    parsed: Arc<Mutex<Option<TestCounts>>>,
+    index: usize,
+    done: mpsc::Sender<Finished>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
-        done.send(pump_counted(from, to, &log, count.as_deref()))
-            .ok();
+        let pumped = pump_counted(from, to, &log, count.as_deref(), Some(&parsed));
+        done.send(Finished { pumped, index }).ok();
     });
 }

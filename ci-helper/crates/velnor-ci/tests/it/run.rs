@@ -508,6 +508,18 @@ mod tests_run {
         list_json: &str,
         command: &[&str],
     ) -> (Output, String, PathBuf) {
+        let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
+        (output, written, temp)
+    }
+
+    fn execute_nextest(
+        name: &str,
+        run: &str,
+        list_json: &str,
+        command: &[&str],
+        grace_ms: Option<&str>,
+    ) -> (Output, String, PathBuf, std::time::Duration) {
+        let started = std::time::Instant::now();
         let temp = scratch(name);
         fake_nextest(&temp, run, list_json);
         let outputs = temp.join("github-output");
@@ -517,17 +529,20 @@ mod tests_run {
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        child
             .arg("run")
             .arg("--")
             .args(command)
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_OUTPUT", &outputs)
-            .env("PATH", path)
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"));
+            .env("PATH", path);
+        if let Some(grace_ms) = grace_ms {
+            child.env("VELNOR_CI_RUN_PUMP_GRACE_MS", grace_ms);
+        }
+        let output = child.output().unwrap_or_else(|e| unreachable!("{e}"));
         let written = fs::read_to_string(&outputs).unwrap_or_default();
-        (output, written, temp)
+        (output, written, temp, started.elapsed())
     }
 
     const NEXTEST_RUN: [&str; 6] = [
@@ -830,6 +845,34 @@ END";
             ],
             &["--locked", "--workspace"],
         );
+    }
+
+    #[test]
+    fn run_writes_the_counts_when_a_descendant_keeps_the_summary_pipe_open() {
+        let script = "echo '     Summary [   0.001s] 3 tests run: 3 passed, 0 skipped' >&2\n\
+sleep 30 &\n\
+exit 0";
+        let three = listed(&[("kept", &["a", "b", "c"])]);
+        let (output, written, _, elapsed) =
+            execute_nextest("tests-run-held", script, &three, &NEXTEST_RUN, Some("300"));
+        assert_eq!(output.status.code(), Some(0), "{output:?}");
+        assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=3\n");
+        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
+    }
+
+    #[test]
+    fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
+        let script = "sleep 30 &\nexit 9";
+        let (output, written, _, elapsed) = execute_nextest(
+            "tests-run-held-empty",
+            script,
+            "",
+            &NEXTEST_RUN,
+            Some("300"),
+        );
+        assert_eq!(output.status.code(), Some(9), "{output:?}");
+        assert_eq!(written, "existing=1\n");
+        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
     }
 
     #[test]

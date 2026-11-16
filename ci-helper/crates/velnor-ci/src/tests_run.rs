@@ -235,6 +235,11 @@ impl SummaryTap {
     }
 
     #[must_use]
+    pub fn counts(&self) -> Option<TestCounts> {
+        self.counts.clone()
+    }
+
+    #[must_use]
     pub fn finish(mut self) -> Option<TestCounts> {
         self.end_line();
         self.counts
