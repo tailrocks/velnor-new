@@ -30,6 +30,8 @@ pub const TOOLS_CACHE_SCRUB_USES: &str = "./.github/actions/velnor-tools-cache-s
 
 pub const TOOLS_CACHE_VERIFY_USES: &str = "./.github/actions/velnor-tools-cache-verify";
 
+pub const REPOSITORY_NONRUST_FIXTURE_OPERATION: &str = "repository-nonrust-fixture-v1";
+
 pub const TOOLS_CACHE_RESTORE_ACTION_USES: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 
@@ -147,6 +149,9 @@ impl StepRole {
             }
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
+            Self::RepositoryNonrustFixture => {
+                internal_operation(kind, REPOSITORY_NONRUST_FIXTURE_OPERATION)
+            }
             Self::BunAssetsHandoff => valid_bun_assets_handoff(kind),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),

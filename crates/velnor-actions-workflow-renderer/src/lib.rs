@@ -94,6 +94,7 @@ pub mod release_tree;
 pub mod render;
 mod render_cache_files;
 mod render_state_seal;
+mod repository_nonrust_fixture;
 mod required_gate;
 mod runs_on;
 mod rust_job_env;

@@ -211,6 +211,7 @@ fn validate_final_jobs(
     phase: ValidationPhase,
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
+    crate::repository_nonrust_fixture::validate_jobs(jobs, policy, &ir.permissions)?;
     execution_boundaries::validate_preview_acquisition(
         jobs,
         policy,
