@@ -4,8 +4,10 @@
 use clap::Parser;
 use serde_json::{Value, json};
 use velnor_ci::cli::{Cli, Command};
+use velnor_ci::github::{run_jobs_path, runs_path, statuses_path};
 
 use super::{GREEN, Recorded, assert_refused, check, required};
+use crate::support::repo;
 
 const ABSENT: &str = "no job of a push run on main reports it";
 
@@ -33,6 +35,73 @@ fn an_explicit_pr_only_required_external_check_needs_no_push_job() {
     assert_refused(&protected().gate(GREEN), "GitHub App 343649");
     let missing = protected().requiring(&[check("Required"), check("DCO")]);
     assert_refused(&missing.gate(GREEN), ABSENT);
+}
+
+#[test]
+fn pr_only_checks_with_push_jobs_are_refused_regardless_of_their_result() {
+    for (status, conclusion) in [
+        ("completed", json!("success")),
+        ("completed", json!("failure")),
+        ("completed", json!("skipped")),
+        ("in_progress", Value::Null),
+    ] {
+        let recorded = protected().green_job("Required verdict", |job| {
+            job["name"] = json!("DCO");
+            job["status"] = json!(status);
+            job["conclusion"] = conclusion.clone();
+        });
+        assert_refused(
+            &allowed(&recorded),
+            "PR-only check DCO has a push job or commit status",
+        );
+    }
+}
+
+#[test]
+fn pr_only_checks_with_commit_statuses_are_refused_regardless_of_their_state() {
+    for state in ["success", "failure", "pending"] {
+        for context in ["DCO", "dco"] {
+            let recorded = protected().set(
+                statuses_path(&repo(), GREEN, 1),
+                json!({"total_count": 1, "statuses": [{"context": context, "state": state}]}),
+            );
+            assert_refused(
+                &allowed(&recorded),
+                "PR-only check DCO has a push job or commit status",
+            );
+        }
+    }
+}
+
+#[test]
+fn pr_only_checks_with_push_jobs_on_other_branches_of_the_commit_are_refused() {
+    for branch in [json!("other"), Value::Null] {
+        let recorded = protected()
+            .total(&runs_path(&repo(), GREEN, 1), 7)
+            .set(
+                runs_path(&repo(), GREEN, 2),
+                json!({"total_count": 7, "workflow_runs": [{"id": 7, "event": "push", "status": "completed", "head_branch": branch, "head_sha": GREEN, "head_repository": {"id": 1_390_620_900}}]}),
+            )
+            .set(
+                run_jobs_path(&repo(), 7, 1),
+                json!({"total_count": 1, "jobs": [{"name": "DCO", "status": "completed", "conclusion": "success"}]}),
+            );
+        assert_refused(
+            &allowed(&recorded),
+            "PR-only check DCO has a push job or commit status",
+        );
+    }
+}
+
+#[test]
+fn pr_only_exemptions_require_literal_case_and_whitespace_in_required_names() {
+    for name in ["dco", " DCO", "DCO "] {
+        let result = protected().gate_with(GREEN, &[name.to_owned()]);
+        assert_refused(
+            &result,
+            &format!("PR-only check {name} is not required on branch main"),
+        );
+    }
 }
 
 #[test]
