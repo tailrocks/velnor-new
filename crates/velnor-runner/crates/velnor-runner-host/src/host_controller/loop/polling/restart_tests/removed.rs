@@ -27,6 +27,9 @@ use super::{HOST_CONFIG, TestResult};
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const UNCERTAIN: &str = "uncertain/00/uncertain/0/1/none/";
 
+#[path = "removed/deadline.rs"]
+mod deadline;
+
 impl Controller {
     fn remove_connection(&mut self) -> TestResult<()> {
         let kept = HOST_CONFIG.replace("conn-test-1", "conn-other-1");
@@ -66,6 +69,7 @@ impl Controller {
             image_authority: &self.image_authority,
             admission_ready: true,
             control_state: &control_state,
+            retirement_budget: Duration::from_secs(120),
         };
         let pending = vec![self.prepared.binding.clone()];
         let mut connections = vec![self.prepared];
