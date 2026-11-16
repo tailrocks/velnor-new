@@ -38,13 +38,17 @@ fn repository_fixture_launcher_restricts_credentials_to_direct_provisioner()
             pair("GITHUB_REPOSITORY", repository),
             pair(
                 "GITHUB_WORKSPACE",
-                &super::repository_fixture::root()?.display().to_string(),
+                &runner.workspace.path().display().to_string(),
             ),
             pair(
                 "PATH",
                 &format!("{}:/usr/bin:/bin:/usr/sbin:/sbin", bin.display()),
             ),
             pair("VELNOR_PROBE_LOG", &log.display().to_string()),
+            pair(
+                "VELNOR_CHILD_PROBE",
+                &runner.home.path().join("child.ts").display().to_string(),
+            ),
             pair("GH_TOKEN", SENTINEL),
             pair("GITHUB_TOKEN", SENTINEL),
             pair(
@@ -84,8 +88,10 @@ fn probe(fixture: &Fixture, runner: &Sandbox) -> Result<(PathBuf, PathBuf), Box<
     let log = runner.home.path().join("probe.jsonl");
     let preload = runner.home.path().join("probe.ts");
     fs::write(&preload, PRELOAD)?;
+    fs::write(runner.home.path().join("child.ts"), CHILD)?;
     fs::write(runner.home.path().join("startup.ts"), STARTUP)?;
     startup_control(fixture, runner)?;
+    workspace_control(fixture, runner)?;
     let bun = bin.join("bun");
     executable(
         &bun,
@@ -128,6 +134,13 @@ fn inspect(log: &str) -> Result<(), Box<dyn Error>> {
     assert!(entries.iter().any(
         |entry| entry["stage"] == "direct" && entry["digest"].as_str() == Some(digest.as_str())
     ));
+    assert!(
+        entries
+            .iter()
+            .filter(|entry| entry["stage"] == "direct")
+            .all(|entry| entry["dotenv"].is_null()),
+        "{log}"
+    );
     let children = entries
         .iter()
         .filter(|entry| entry["stage"] == "child")
@@ -136,6 +149,13 @@ fn inspect(log: &str) -> Result<(), Box<dyn Error>> {
     for child in children {
         assert_eq!(child["hadCredential"], false, "{log}");
     }
+    let observed = entries
+        .iter()
+        .filter(|entry| entry["stage"] == "codec-observed")
+        .collect::<Vec<_>>();
+    assert_eq!(observed.len(), 1, "{log}");
+    assert_eq!(observed[0]["hadCredential"], false, "{log}");
+    assert!(observed[0]["dotenv"].is_null(), "{log}");
     Ok(())
 }
 
@@ -178,6 +198,73 @@ fn executable(path: &Path, text: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn workspace_control(fixture: &Fixture, runner: &Sandbox) -> Result<(), Box<dyn Error>> {
+    let root = super::repository_fixture::root()?;
+    std::os::unix::fs::symlink(root.join("crates"), runner.workspace.path().join("crates"))?;
+    fs::create_dir(runner.workspace.path().join("scripts"))?;
+    for script in [
+        "provision-nonrust-tools-fixture.ts",
+        "nonrust-tools-transport.ts",
+        "nonrust-bundle-snappy.ts",
+        "nonrust-bundle-snappy.test.ts",
+    ] {
+        fs::copy(
+            root.join("scripts").join(script),
+            runner.workspace.path().join("scripts").join(script),
+        )?;
+    }
+    fs::write(
+        runner.workspace.path().join("bunfig.toml"),
+        format!(
+            "preload = [{0}]\n[test]\npreload = [{0}]\n",
+            serde_json::to_string(&runner.home.path().join("startup.ts"))?
+        ),
+    )?;
+    let global_preload = serde_json::to_string(&runner.home.path().join("startup.ts"))?;
+    fs::write(
+        runner.home.path().join(".bunfig.toml"),
+        format!("preload = [{global_preload}]\n[test]\npreload = [{global_preload}]\n"),
+    )?;
+    fs::write(
+        runner.workspace.path().join(".env"),
+        "VELNOR_PROBE_DOTENV_VALUE=loaded\n",
+    )?;
+    fs::write(
+        runner.workspace.path().join("control.ts"),
+        "\"use strict\"; import {appendFileSync} from \"node:fs\"; const log=process.env.VELNOR_PROBE_LOG;if(!log)throw new Error(\"missing log\");appendFileSync(log,JSON.stringify({stage:\"file-control\",dotenv:process.env.VELNOR_PROBE_DOTENV_VALUE??null})+\"\\n\");\n",
+    )?;
+    let log = runner.home.path().join("file-control.jsonl");
+    let output = super::nonrust_process::output(
+        Command::new(&fixture.bun)
+            .arg(runner.workspace.path().join("control.ts"))
+            .env_clear()
+            .env("HOME", runner.home.path())
+            .env("VELNOR_PROBE_LOG", &log)
+            .env("VELNOR_FIXTURE_ORIGIN_TOKEN", SENTINEL)
+            .current_dir(runner.workspace.path()),
+    )?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries = fs::read_to_string(log)?
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<Value>, _>>()?;
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry["stage"] == "startup" && entry["hadCredential"] == true)
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry["stage"] == "file-control" && entry["dotenv"] == "loaded")
+    );
+    Ok(())
+}
+
 fn quote(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
 }
@@ -203,7 +290,7 @@ import { appendFileSync } from "node:fs";
 const log = process.env.VELNOR_PROBE_LOG;
 if (!log) throw new Error("probe log missing");
 const credential = process.env.VELNOR_FIXTURE_ORIGIN_TOKEN;
-appendFileSync(log, JSON.stringify({stage:"direct",digest:credential ? new Bun.CryptoHasher("sha256").update(credential).digest("hex") : null})+"\n");
+appendFileSync(log, JSON.stringify({stage:"direct",digest:credential ? new Bun.CryptoHasher("sha256").update(credential).digest("hex") : null,dotenv:process.env.VELNOR_PROBE_DOTENV_VALUE??null})+"\n");
 const spawn = Bun.spawn;
 Object.defineProperty(Bun,"spawn",{value:(...args:unknown[]):unknown=>{
   const argv = Array.isArray(args[0]) ? args[0] : [];
@@ -212,6 +299,11 @@ Object.defineProperty(Bun,"spawn",{value:(...args:unknown[]):unknown=>{
   const hadCredential = typeof env === "object" && env !== null && "VELNOR_FIXTURE_ORIGIN_TOKEN" in env && env.VELNOR_FIXTURE_ORIGIN_TOKEN !== undefined;
   appendFileSync(log,JSON.stringify({stage:"child",argv,hadCredential})+"\n");
   if (argv.includes("install")) throw new Error("probe reached credential-free installer");
+  if (argv.includes("test")) {
+    const child = process.env.VELNOR_CHILD_PROBE;
+    if (!child || typeof argv[0] !== "string") throw new Error("missing codec probe");
+    return Reflect.apply(spawn,Bun,[[argv[0],"test","--preload",child,...argv.slice(2)],...args.slice(1)]);
+  }
   return Reflect.apply(spawn,Bun,args);
 }});
 "#;
@@ -221,4 +313,11 @@ import { appendFileSync } from "node:fs";
 const log = process.env.VELNOR_PROBE_LOG;
 if (!log) throw new Error("probe log missing");
 appendFileSync(log,JSON.stringify({stage:"startup",hadCredential:process.env.VELNOR_FIXTURE_ORIGIN_TOKEN!==undefined})+"\n");
+"#;
+
+const CHILD: &str = r#""use strict";
+import { appendFileSync } from "node:fs";
+const log = process.env.VELNOR_PROBE_LOG;
+if (!log) throw new Error("probe log missing");
+appendFileSync(log,JSON.stringify({stage:"codec-observed",hadCredential:process.env.VELNOR_FIXTURE_ORIGIN_TOKEN!==undefined,dotenv:process.env.VELNOR_PROBE_DOTENV_VALUE??null})+"\n");
 "#;

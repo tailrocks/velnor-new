@@ -131,14 +131,15 @@ while genuine Mise validates the installation and signatures. The test executes
 the generated producer from an empty install directory and restores its declared
 payload into a fresh home. The replay transport denies executable archive
 requests during the healthy reader check and reports metadata requests separately.
-Missing fixture state fails the test with the provisioning command.
+Missing fixture state fails the test with a link to this provisioning recipe.
 
 ```bash
 MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install aqua:jdx/mise@2026.11.1 bun@1.4.4
 fixture_mise="$(mise --no-config --no-env --no-hooks which mise --tool aqua:jdx/mise@2026.11.1)"
 fixture_bun="$(mise --no-config --no-env --no-hooks which bun --tool bun@1.4.4)"
 export VELNOR_NONRUST_TOOLS_FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/velnor-nonrust-tools.XXXXXX")"
-"$fixture_bun" scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$fixture_mise"
+env -u BUN_OPTIONS -u NODE_OPTIONS -u NODE_PATH "$fixture_bun" --config=/dev/null --no-env-file scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$fixture_mise"
+unset VELNOR_FIXTURE_ORIGIN_TOKEN
 fixture_cargo="$(rustup which --toolchain 1.99.1 cargo)"
 PATH="$(dirname "$fixture_cargo"):$PATH" RUSTUP_TOOLCHAIN=1.99.1 \
   "$fixture_cargo" nextest run --locked -p velnor-actions-orchestrator \
@@ -152,8 +153,11 @@ provisioning command avoids the shared anonymous GitHub API quota during local
 retries. The recorder sends it only to canonical GitHub API origins and removes
 it from the environment before spawning children. Own CI uses its standard
 read-only `github.token`; no personal access token secret is required.
+The local verification script holds an inherited optional token outside its
+child environment and passes it only to the provisioner.
 
 The replay fixture retains the original API responses and signed bundles. It
+starts Bun with an empty explicit config and dotenv loading disabled. It
 inlines an authentic bundle when GitHub supplies only an expiring download URL.
 Readers deny upstream access, count metadata and archive requests separately,
 and fail on missing replay data. The supplemental Python case selects Mise's

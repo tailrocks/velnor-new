@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -uo pipefail
+set +a
+set +x
+
+unset fixture_origin_credential
+fixture_origin_credential=${VELNOR_FIXTURE_ORIGIN_TOKEN-}
+unset VELNOR_FIXTURE_ORIGIN_TOKEN BUN_OPTIONS NODE_OPTIONS NODE_PATH
 
 ROOT=""
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -138,7 +144,7 @@ if [ -z "$BUN_BIN" ]; then
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-BUN_VER="$("$BUN_BIN" --version 2>>"$TOOLCHAIN_LOG" || true)"
+BUN_VER="$("$BUN_BIN" --config=/dev/null --no-env-file --version 2>>"$TOOLCHAIN_LOG" || true)"
 if [ "$BUN_VER" != "$BUN_PIN" ]; then
   fail "toolchain (effective Bun $BUN_VER != pin $BUN_PIN; log: $TOOLCHAIN_LOG)"
   echo "verify-local: FAIL:$FAILURES"
@@ -262,10 +268,12 @@ if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "aqua:jdx/mise
 fi
 NONRUST_FIXTURE_MISE="$(MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which mise --tool "aqua:jdx/mise@$POLICY_MISE")" || exit 1
 VELNOR_NONRUST_TOOLS_FIXTURE="$LOG_DIR/nonrust-tools-fixture"
-if ! "$BUN_BIN" scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$NONRUST_FIXTURE_MISE" >>"$TOOLCHAIN_LOG" 2>&1; then
+if ! VELNOR_FIXTURE_ORIGIN_TOKEN="$fixture_origin_credential" "$BUN_BIN" --config=/dev/null --no-env-file scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$NONRUST_FIXTURE_MISE" >>"$TOOLCHAIN_LOG" 2>&1; then
+  unset fixture_origin_credential
   fail "nonrust-tools-fixture (provision failed; log: $TOOLCHAIN_LOG)"
   exit 1
 fi
+unset fixture_origin_credential
 export VELNOR_NONRUST_TOOLS_FIXTURE
 
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check

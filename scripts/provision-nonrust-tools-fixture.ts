@@ -10,7 +10,7 @@ import { transport } from "./nonrust-tools-transport";
 const root = resolve(import.meta.dir, "..");
 const originToken = process.env.VELNOR_FIXTURE_ORIGIN_TOKEN;
 delete process.env.VELNOR_FIXTURE_ORIGIN_TOKEN;
-const codecTests = Bun.spawn([process.execPath, "test", resolve(import.meta.dir, "nonrust-bundle-snappy.test.ts")], { stdout: "inherit", stderr: "inherit" });
+const codecTests = Bun.spawn([process.execPath, "test", "--config=/dev/null", "--no-env-file", resolve(import.meta.dir, "nonrust-bundle-snappy.test.ts")], { env: { ...process.env }, stdout: "inherit", stderr: "inherit" });
 if (await codecTests.exited !== 0) throw new Error("fixture bundle decoder checks failed");
 const destination = process.argv[2];
 const executable = process.argv[3] ?? Bun.which("mise");
